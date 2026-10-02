@@ -326,7 +326,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Args => {
                             get_fltreg_for_arg(call_conv, next_vreg, next_param_idx)
                         }
-                        ArgsOrRets::Rets => get_fltreg_for_retval(call_conv, next_vreg, last_slot),
+                        ArgsOrRets::Rets => {
+                            get_fltreg_for_retval(call_conv, flags, next_vreg, last_slot)
+                        }
                     }
                 };
                 next_param_idx += 1;
@@ -1092,7 +1094,7 @@ fn get_intreg_for_retval(
         },
         CallConv::WindowsFastcall => match intreg_idx {
             0 => Some(regs::rax()),
-            1 => Some(regs::rdx()), // The Rust ABI for i128s needs this.
+            1 if flags.enable_llvm_abi_extensions() => Some(regs::rdx()),
             _ => None,
         },
 
@@ -1102,7 +1104,12 @@ fn get_intreg_for_retval(
     }
 }
 
-fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) -> Option<Reg> {
+fn get_fltreg_for_retval(
+    call_conv: CallConv,
+    flags: &settings::Flags,
+    fltreg_idx: usize,
+    is_last: bool,
+) -> Option<Reg> {
     match call_conv {
         CallConv::Tail => match fltreg_idx {
             0 => Some(regs::xmm0()),
@@ -1122,7 +1129,7 @@ fn get_fltreg_for_retval(call_conv: CallConv, fltreg_idx: usize, is_last: bool) 
         },
         CallConv::WindowsFastcall => match fltreg_idx {
             0 => Some(regs::xmm0()),
-            1 => Some(regs::xmm1()), // The Rust ABI for float scalar pairs needs this.
+            1 if flags.enable_llvm_abi_extensions() => Some(regs::xmm1()),
             _ => None,
         },
         CallConv::Winch => is_last.then(|| regs::xmm0()),
