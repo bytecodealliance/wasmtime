@@ -1347,7 +1347,7 @@ impl wasmtime_wasi::p2::OutputStream for LogStream {
     }
 
     fn check_write(&mut self) -> StreamResult<usize> {
-        Ok(1024 * 1024)
+        Ok(64 * 1024)
     }
 }
 

@@ -36,6 +36,49 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             ),
             "expected connection timeout: {err:?}"
         );
+
+        const BODY: &[u8] = b"{\"foo\": \"bar\"}";
+        let addr = test_programs::p3::wasi::cli::environment::get_environment()
+            .into_iter()
+            .find_map(|(k, v)| k.eq("HTTP_SERVER").then_some(v))
+            .unwrap();
+        let _ = test_programs::p3::http::request(
+            Method::Post,
+            Scheme::Http,
+            &addr,
+            "/post",
+            Some(BODY),
+            None,
+            Some(0),
+            None,
+            None,
+        )
+        .await;
+        let _ = test_programs::p3::http::request(
+            Method::Post,
+            Scheme::Http,
+            &addr,
+            "/post",
+            Some(BODY),
+            None,
+            None,
+            Some(0),
+            None,
+        )
+        .await;
+        let _ = test_programs::p3::http::request(
+            Method::Post,
+            Scheme::Http,
+            &addr,
+            "/post",
+            Some(BODY),
+            None,
+            None,
+            None,
+            Some(0),
+        )
+        .await;
+
         Ok(())
     }
 }
