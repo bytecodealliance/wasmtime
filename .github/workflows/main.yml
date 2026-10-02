@@ -1294,6 +1294,11 @@ jobs:
       with:
         toolchain: wasmtime-ci-pinned-nightly
     - run: rustup component add rust-src miri
+    # There's a seemingly bug on nightly right now where miri's assembly of
+    # the sysroot generates a Cargo warning about an unused `sysroot`
+    # dependency. Turn off deny-warnings for now entirely and rely on other
+    # jobs in CI to catch warnings.
+    - run: echo CARGO_BUILD_WARNINGS=allow >> "$GITHUB_ENV"
     - uses: ./.github/actions/cargo-install
       with:
         crate: cargo-nextest

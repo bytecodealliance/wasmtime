@@ -1394,13 +1394,13 @@ impl HeapType {
             WasmHeapType::Struct => HeapType::Struct,
             WasmHeapType::None => HeapType::None,
             WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Engine(idx)) => {
-                HeapType::ConcreteFunc(FuncType::from_shared_type_index(engine, *idx))
+                HeapType::ConcreteFunc(FuncType::from_shared_type_index(engine, *idx).unwrap())
             }
             WasmHeapType::ConcreteArray(EngineOrModuleTypeIndex::Engine(idx)) => {
-                HeapType::ConcreteArray(ArrayType::from_shared_type_index(engine, *idx))
+                HeapType::ConcreteArray(ArrayType::from_shared_type_index(engine, *idx).unwrap())
             }
             WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::Engine(idx)) => {
-                HeapType::ConcreteStruct(StructType::from_shared_type_index(engine, *idx))
+                HeapType::ConcreteStruct(StructType::from_shared_type_index(engine, *idx).unwrap())
             }
 
             WasmHeapType::ConcreteFunc(EngineOrModuleTypeIndex::Module(_))
@@ -1418,12 +1418,12 @@ impl HeapType {
             WasmHeapType::Cont => HeapType::Cont,
             WasmHeapType::NoCont => HeapType::NoCont,
             WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::Engine(idx)) => {
-                HeapType::ConcreteCont(ContType::from_shared_type_index(engine, *idx))
+                HeapType::ConcreteCont(ContType::from_shared_type_index(engine, *idx).unwrap())
             }
             WasmHeapType::Exn => HeapType::Exn,
             WasmHeapType::NoExn => HeapType::NoExn,
             WasmHeapType::ConcreteExn(EngineOrModuleTypeIndex::Engine(idx)) => {
-                HeapType::ConcreteExn(ExnType::from_shared_type_index(engine, *idx))
+                HeapType::ConcreteExn(ExnType::from_shared_type_index(engine, *idx).unwrap())
             }
         }
     }
@@ -1548,7 +1548,7 @@ impl ExternType {
         match ty {
             EntityType::Function(idx) => match idx {
                 EngineOrModuleTypeIndex::Engine(e) => {
-                    FuncType::from_shared_type_index(engine, *e).into()
+                    FuncType::from_shared_type_index(engine, *e).unwrap().into()
                 }
                 EngineOrModuleTypeIndex::Module(m) => {
                     let subty = &types[*m];
@@ -2012,9 +2012,9 @@ impl StructType {
 
     /// Get the supertype of this struct type, if any.
     pub fn supertype(&self) -> Option<Self> {
-        self.registered_type
-            .supertype
-            .map(|ty| Self::from_shared_type_index(self.engine(), ty.unwrap_engine_type_index()))
+        self.registered_type.supertype.map(|ty| {
+            Self::from_shared_type_index(self.engine(), ty.unwrap_engine_type_index()).unwrap()
+        })
     }
 
     /// Get the `i`th field type.
@@ -2133,9 +2133,19 @@ impl StructType {
         })
     }
 
-    pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> StructType {
-        let ty = RegisteredType::root(engine, index);
-        Self::from_registered_type(ty)
+    /// Get the type registered for `index`.
+    ///
+    /// Returns `None` if `index` does not name a registered type of this
+    /// shape, since indices may come from the untrusted GC heap.
+    pub(crate) fn from_shared_type_index(
+        engine: &Engine,
+        index: VMSharedTypeIndex,
+    ) -> Option<StructType> {
+        let ty = RegisteredType::try_root(engine, index)?;
+        if !ty.is_struct() {
+            return None;
+        }
+        Some(Self::from_registered_type(ty))
     }
 
     pub(crate) fn from_registered_type(registered_type: RegisteredType) -> Self {
@@ -2258,9 +2268,9 @@ impl ArrayType {
 
     /// Get the supertype of this array type, if any.
     pub fn supertype(&self) -> Option<Self> {
-        self.registered_type
-            .supertype
-            .map(|ty| Self::from_shared_type_index(self.engine(), ty.unwrap_engine_type_index()))
+        self.registered_type.supertype.map(|ty| {
+            Self::from_shared_type_index(self.engine(), ty.unwrap_engine_type_index()).unwrap()
+        })
     }
 
     /// Get this array's underlying field type.
@@ -2374,9 +2384,19 @@ impl ArrayType {
         })
     }
 
-    pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ArrayType {
-        let ty = RegisteredType::root(engine, index);
-        Self::from_registered_type(ty)
+    /// Get the type registered for `index`.
+    ///
+    /// Returns `None` if `index` does not name a registered type of this
+    /// shape, since indices may come from the untrusted GC heap.
+    pub(crate) fn from_shared_type_index(
+        engine: &Engine,
+        index: VMSharedTypeIndex,
+    ) -> Option<ArrayType> {
+        let ty = RegisteredType::try_root(engine, index)?;
+        if !ty.is_array() {
+            return None;
+        }
+        Some(Self::from_registered_type(ty))
     }
 
     pub(crate) fn from_registered_type(registered_type: RegisteredType) -> Self {
@@ -2594,9 +2614,9 @@ impl FuncType {
 
     /// Get the supertype of this function type, if any.
     pub fn supertype(&self) -> Option<Self> {
-        self.registered_type
-            .supertype
-            .map(|ty| Self::from_shared_type_index(self.engine(), ty.unwrap_engine_type_index()))
+        self.registered_type.supertype.map(|ty| {
+            Self::from_shared_type_index(self.engine(), ty.unwrap_engine_type_index()).unwrap()
+        })
     }
 
     /// Get the `i`th parameter type.
@@ -2747,9 +2767,19 @@ impl FuncType {
         })
     }
 
-    pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> FuncType {
-        let ty = RegisteredType::root(engine, index);
-        Self::from_registered_type(ty)
+    /// Get the type registered for `index`.
+    ///
+    /// Returns `None` if `index` does not name a registered type of this
+    /// shape, since indices may come from the untrusted GC heap.
+    pub(crate) fn from_shared_type_index(
+        engine: &Engine,
+        index: VMSharedTypeIndex,
+    ) -> Option<FuncType> {
+        let ty = RegisteredType::try_root(engine, index)?;
+        if !ty.is_func() {
+            return None;
+        }
+        Some(Self::from_registered_type(ty))
     }
 
     pub(crate) fn from_registered_type(registered_type: RegisteredType) -> Self {
@@ -2812,12 +2842,21 @@ impl ContType {
         self.type_index() == other.type_index()
     }
 
-    pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ContType {
-        let ty = RegisteredType::root(engine, index);
-        assert!(ty.is_cont());
-        Self {
-            registered_type: ty,
+    /// Get the type registered for `index`.
+    ///
+    /// Returns `None` if `index` does not name a registered type of this
+    /// shape, since indices may come from the untrusted GC heap.
+    pub(crate) fn from_shared_type_index(
+        engine: &Engine,
+        index: VMSharedTypeIndex,
+    ) -> Option<ContType> {
+        let ty = RegisteredType::try_root(engine, index)?;
+        if !ty.is_cont() {
+            return None;
         }
+        Some(Self {
+            registered_type: ty,
+        })
     }
 }
 
@@ -2992,17 +3031,26 @@ impl ExnType {
         &self.registered_type
     }
 
-    pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ExnType {
-        let ty = RegisteredType::root(engine, index);
-        assert!(ty.is_exn());
+    /// Get the type registered for `index`.
+    ///
+    /// Returns `None` if `index` does not name a registered type of this
+    /// shape, since indices may come from the untrusted GC heap.
+    pub(crate) fn from_shared_type_index(
+        engine: &Engine,
+        index: VMSharedTypeIndex,
+    ) -> Option<ExnType> {
+        let ty = RegisteredType::try_root(engine, index)?;
+        if !ty.is_exn() {
+            return None;
+        }
         let func_ty = FuncType::from_shared_type_index(
             engine,
-            ty.unwrap_exn().func_ty.unwrap_engine_type_index(),
-        );
-        Self {
+            ty.unwrap_exn().func_ty.as_engine_type_index()?,
+        )?;
+        Some(Self {
             func_ty,
             registered_type: ty,
-        }
+        })
     }
 }
 
@@ -3093,7 +3141,8 @@ impl TagType {
     }
 
     pub(crate) fn from_wasmtime_tag(engine: &Engine, tag: &Tag) -> TagType {
-        let ty = FuncType::from_shared_type_index(engine, tag.signature.unwrap_engine_type_index());
+        let ty = FuncType::from_shared_type_index(engine, tag.signature.unwrap_engine_type_index())
+            .unwrap();
         TagType { ty }
     }
 

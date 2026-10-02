@@ -196,15 +196,18 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(record)]
             #[derive(Clone, Copy)]
-            pub struct Empty {}
+            pub struct Empty {
+                #[component(name = "a")]
+                pub a: u32,
+            }
             impl core::fmt::Debug for Empty {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_struct("Empty").finish()
+                    f.debug_struct("Empty").field("a", &self.a).finish()
                 }
             }
             const _: () = {
-                assert!(0 == < Empty as wasmtime::component::ComponentType >::SIZE32);
-                assert!(1 == < Empty as wasmtime::component::ComponentType >::ALIGN32);
+                assert!(4 == < Empty as wasmtime::component::ComponentType >::SIZE32);
+                assert!(4 == < Empty as wasmtime::component::ComponentType >::ALIGN32);
             };
             /// A record containing two scalar fields
             /// that both have the same type
@@ -313,7 +316,7 @@ pub mod foo {
             }
             const _: () = {
                 assert!(
-                    32 == < Aggregates as wasmtime::component::ComponentType >::SIZE32
+                    36 == < Aggregates as wasmtime::component::ComponentType >::SIZE32
                 );
                 assert!(
                     4 == < Aggregates as wasmtime::component::ComponentType >::ALIGN32
@@ -667,21 +670,24 @@ pub mod exports {
                 #[derive(wasmtime::component::Lower)]
                 #[component(record)]
                 #[derive(Clone, Copy)]
-                pub struct Empty {}
+                pub struct Empty {
+                    #[component(name = "a")]
+                    pub a: u32,
+                }
                 impl core::fmt::Debug for Empty {
                     fn fmt(
                         &self,
                         f: &mut core::fmt::Formatter<'_>,
                     ) -> core::fmt::Result {
-                        f.debug_struct("Empty").finish()
+                        f.debug_struct("Empty").field("a", &self.a).finish()
                     }
                 }
                 const _: () = {
                     assert!(
-                        0 == < Empty as wasmtime::component::ComponentType >::SIZE32
+                        4 == < Empty as wasmtime::component::ComponentType >::SIZE32
                     );
                     assert!(
-                        1 == < Empty as wasmtime::component::ComponentType >::ALIGN32
+                        4 == < Empty as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
                 /// A record containing two scalar fields
@@ -806,7 +812,7 @@ pub mod exports {
                 }
                 const _: () = {
                     assert!(
-                        32 == < Aggregates as wasmtime::component::ComponentType
+                        36 == < Aggregates as wasmtime::component::ComponentType
                         >::SIZE32
                     );
                     assert!(
