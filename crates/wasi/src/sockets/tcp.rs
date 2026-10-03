@@ -403,9 +403,9 @@ impl TcpSocket {
         #[cfg(unix)]
         if let TcpState::Connected { stream, .. } = &self.tcp_state {
             if matches!(rustix::io::ioctl_fionread(&**stream), Ok(unread) if unread > 0) {
-                // Linger alone waits for the last descriptor reference to
-                // close. Disconnect as well, before the streams can send FIN
-                // or discard unread data with their shutdowns.
+                // Zero linger alone takes effect when the native descriptor closes.
+                // Disconnect now, before stream shutdowns can signal a clean EOF
+                // or discard unread data.
                 _ = sockopt::set_socket_linger(&**stream, Some(Duration::ZERO));
                 abort_connection(stream);
             }

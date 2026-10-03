@@ -27,9 +27,9 @@ pub struct TcpSocket {
 
 impl Drop for TcpSocket {
     fn drop(&mut self) {
-        // Reset before the retained streams shut down: shutting down the
-        // writer sends a FIN, and on macOS shutting down the reader discards
-        // the unread bytes that would otherwise make the close abortive.
+        // Reset before the retained streams shut down. Shutting down the
+        // writer can make the peer observe a clean EOF, and on macOS shutting
+        // down the reader discards unread data that would otherwise cause a reset.
         self.inner.abort_if_unread();
     }
 }
@@ -379,8 +379,8 @@ mod tests {
 
             if matches!(mode, CloseMode::ShutdownSend) {
                 socket.shutdown(Shutdown::Write).unwrap();
-                // An explicit half-close must still send FIN even when
-                // incoming data is unread. Observe it before dropping.
+                // An explicit send shutdown must still give the peer a clean EOF
+                // even with unread incoming data. Observe it before dropping the socket.
                 assert_eq!(peer.read(&mut [0]).await.unwrap(), 0);
             }
 
