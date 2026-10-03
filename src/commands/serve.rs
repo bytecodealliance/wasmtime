@@ -226,7 +226,10 @@ impl ServeCommand {
             .enable_io()
             .build()?;
 
-        runtime.block_on(self.serve(inherited_socket))?;
+        let component = self.component.to_string_lossy().into_owned();
+        runtime
+            .block_on(self.serve(inherited_socket))
+            .with_context(|| format!("failed to serve component `{component}`"))?;
 
         Ok(())
     }
@@ -619,12 +622,39 @@ impl ServeCommand {
         let request_headers = RequestHeaders::parse(&self.headers)?;
         let instance = linker.instantiate_pre(&component)?;
         #[cfg(feature = "component-model-async")]
-        let instance = match wasmtime_wasi_http::p3::bindings::ServicePre::new(instance.clone()) {
-            Ok(pre) => ProxyPre::P3(pre),
-            Err(_) => ProxyPre::P2(wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance)?),
+        let p3_supported = self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT);
+        #[cfg(not(feature = "component-model-async"))]
+        let p3_supported = false;
+
+        #[cfg(feature = "component-model-async")]
+        let p3_instance = if p3_supported {
+            match wasmtime_wasi_http::p3::bindings::ServicePre::new(instance.clone()) {
+                Ok(pre) => Some(ProxyPre::P3(pre)),
+                Err(_) => None,
+            }
+        } else {
+            None
         };
         #[cfg(not(feature = "component-model-async"))]
-        let instance = ProxyPre::P2(wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance)?);
+        let p3_instance = None;
+
+        let instance = match p3_instance {
+            Some(instance) => instance,
+            None => match wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance) {
+                Ok(pre) => ProxyPre::P2(pre),
+                Err(_) => {
+                    let mut msg = String::from(
+                        "The component doesn't export any of the supported handlers. The component must export at least one of:\n    an instance of the interface `wasi:http/incoming-handler@0.2`",
+                    );
+                    if p3_supported {
+                        msg.push_str(
+                            "\n    an instance of the interface `wasi:http/incoming-handler@0.3`",
+                        );
+                    }
+                    bail!("{msg}");
+                }
+            },
+        };
 
         // Spawn background task(s) waiting for graceful shutdown signals. This
         // always listens for ctrl-c but additionally can listen for a TCP

@@ -466,11 +466,16 @@ impl RunCommand {
                 }
             }
 
+            let target_kind = match &main {
+                #[cfg(feature = "component-model")]
+                RunTarget::Component(_) => "component",
+                _ => "main module",
+            };
             self.load_main_module(store, linker, &main, profiled_modules)
                 .await
                 .with_context(|| {
                     format!(
-                        "failed to run main module `{}`",
+                        "failed to run {target_kind} `{}`",
                         self.module_and_args[0].to_string_lossy()
                     )
                 })
@@ -855,7 +860,12 @@ impl RunCommand {
         // If WASIp3 is enabled at compile time, enabled at runtime, and found
         // in this component then use that to generate the result.
         #[cfg(feature = "component-model-async")]
-        if self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT) {
+        let p3_supported = self.run.common.wasi.p3.unwrap_or(crate::common::P3_DEFAULT);
+        #[cfg(not(feature = "component-model-async"))]
+        let p3_supported = false;
+
+        #[cfg(feature = "component-model-async")]
+        if p3_supported {
             if let Ok(command) = wasmtime_wasi::p3::bindings::Command::new(&mut *store, &instance) {
                 result = Some(
                     store
@@ -869,12 +879,18 @@ impl RunCommand {
             Some(result) => result,
             // If WASIp3 wasn't found then fall back to requiring WASIp2 and
             // this'll report an error if the right export doesn't exist.
-            None => {
-                wasmtime_wasi::p2::bindings::Command::new(&mut *store, &instance)?
-                    .wasi_cli_run()
-                    .call_run(&mut *store)
-                    .await
-            }
+            None => match wasmtime_wasi::p2::bindings::Command::new(&mut *store, &instance) {
+                Ok(command) => command.wasi_cli_run().call_run(&mut *store).await,
+                Err(_) => {
+                    let mut msg = String::from(
+                        "The component doesn't export any of the supported handlers. The component must export at least one of:\n    an instance of the interface `wasi:cli/run@0.2`",
+                    );
+                    if p3_supported {
+                        msg.push_str("\n    an instance of the interface `wasi:cli/run@0.3`");
+                    }
+                    bail!("{msg}");
+                }
+            },
         };
         let wasm_result = result.context("failed to invoke `run` function")?;
 

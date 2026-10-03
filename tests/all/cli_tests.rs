@@ -615,6 +615,102 @@ fn component_missing_feature() -> Result<()> {
 
 #[test]
 #[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_missing_run_exports_error() -> Result<()> {
+    let path = "tests/all/cli_tests/empty-component.wat";
+
+    let output = get_wasmtime_command()?.arg("run").arg(path).output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("failed to run component"),
+        "bad stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("The component doesn't export any of the supported handlers. The component must export at least one of:"),
+        "bad stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("an instance of the interface `wasi:cli/run@0.2`"),
+        "bad stderr: {stderr}"
+    );
+    if cfg!(feature = "component-model-async") {
+        assert!(
+            stderr.contains("an instance of the interface `wasi:cli/run@0.3`"),
+            "bad stderr: {stderr}"
+        );
+    }
+
+    // With p3 disabled, only 0.2 should be listed.
+    let output = get_wasmtime_command()?
+        .arg("run")
+        .arg("--wasi")
+        .arg("p3=n")
+        .arg(path)
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("an instance of the interface `wasi:cli/run@0.2`"),
+        "bad stderr: {stderr}"
+    );
+    assert!(
+        !stderr.contains("an instance of the interface `wasi:cli/run@0.3`"),
+        "bad stderr: {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_missing_serve_exports_error() -> Result<()> {
+    let path = "tests/all/cli_tests/empty-component.wat";
+
+    let output = get_wasmtime_command()?.arg("serve").arg(path).output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("failed to serve component"),
+        "bad stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("The component doesn't export any of the supported handlers. The component must export at least one of:"),
+        "bad stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("an instance of the interface `wasi:http/incoming-handler@0.2`"),
+        "bad stderr: {stderr}"
+    );
+    if cfg!(feature = "component-model-async") {
+        assert!(
+            stderr.contains("an instance of the interface `wasi:http/incoming-handler@0.3`"),
+            "bad stderr: {stderr}"
+        );
+    }
+
+    // With p3 disabled, only 0.2 should be listed.
+    let output = get_wasmtime_command()?
+        .arg("serve")
+        .arg("--wasi")
+        .arg("p3=n")
+        .arg(path)
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("an instance of the interface `wasi:http/incoming-handler@0.2`"),
+        "bad stderr: {stderr}"
+    );
+    assert!(
+        !stderr.contains("an instance of the interface `wasi:http/incoming-handler@0.3`"),
+        "bad stderr: {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
 fn component_enabled_by_default() -> Result<()> {
     let path = "tests/all/cli_tests/component-basic.wat";
     let wasm = build_wasm(path)?;
