@@ -4164,3 +4164,22 @@ fn wasi_snapshot0_poll_oneoff_hostcall_fuel() -> Result<()> {
     assert_eq!(stdout, "48\n"); // `errno::nomem`
     Ok(())
 }
+
+// The CLI derives the async stack size from `-Wmax-wasm-stack` when the latter
+// is set on its own, and that derivation used to overflow for very large
+// values. A stack that large may legitimately fail to be allocated, but the
+// CLI must not panic while computing the async stack size.
+#[test]
+fn max_wasm_stack_large_value_does_not_overflow() -> Result<()> {
+    let output = run_wasmtime(&[
+        "run",
+        "-W",
+        &format!("max-wasm-stack={}", usize::MAX),
+        "tests/all/cli_tests/simple.wat",
+    ]);
+    assert!(
+        !format!("{output:?}").contains("panicked"),
+        "unexpected panic: {output:?}"
+    );
+    Ok(())
+}
