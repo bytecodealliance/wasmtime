@@ -525,25 +525,27 @@ impl Masm for MacroAssembler {
             writable!(regs::lr()),
         )?;
 
-        let entry_sp_offset = plan.callee_args_from_fp.unsigned_abs();
-        if let Some(imm) = Imm12::maybe_from_u64(entry_sp_offset) {
+        self.with_scratch::<IntScratch, _>(|masm, work| {
+            let entry_sp_offset = plan.callee_args_from_fp.unsigned_abs();
             assert!(plan.callee_args_from_fp >= 0);
-            self.asm
-                .add_ir(imm, regs::fp(), writable!(regs::sp()), OperandSize::S64);
-        } else {
-            self.with_scratch::<IntScratch, _>(|masm, work| {
+            if let Some(imm) = Imm12::maybe_from_u64(entry_sp_offset) {
+                masm.asm
+                    .add_ir(imm, regs::fp(), work.writable(), OperandSize::S64);
+            } else {
                 masm.asm
                     .mov_ir(work.writable(), I::I64(entry_sp_offset), OperandSize::S64);
-                masm.asm.add_rrr(
-                    regs::fp(),
-                    work.inner(),
-                    writable!(regs::sp()),
-                    OperandSize::S64,
-                );
-            });
-        }
+                masm.asm
+                    .add_rrr(regs::fp(), work.inner(), work.writable(), OperandSize::S64);
+            }
 
-        self.load_ptr(Address::offset(regs::fp(), 0), writable!(regs::fp()))
+            // Restore FP before advancing SP: signal handlers may overwrite
+            // the old frame as soon as it is below SP.
+            masm.load_ptr(Address::offset(regs::fp(), 0), writable!(regs::fp()))?;
+            let zero = Imm12::maybe_from_u64(0).unwrap();
+            masm.asm
+                .add_ir(zero, work.inner(), writable!(regs::sp()), OperandSize::S64);
+            wasmtime_environ::error::Ok(())
+        })
     }
 
     fn with_tail_call_resize(
