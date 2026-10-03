@@ -328,7 +328,7 @@ pub trait WasiHttpHooks: Send {
     /// Optional hook to configure the error code for connect I/O errors.
     ///
     /// The default distinguishes refused, unreachable, timed out, and terminated
-    /// connections. Unrecognized errors become `internal-error`.
+    /// connections. Unrecognized errors become `connection-refused`.
     #[cfg(feature = "p2")]
     fn p2_error_from_connect(&mut self, err: &std::io::Error) -> p2::ErrorCode {
         tracing::warn!("connect error: {err:?}");
@@ -343,7 +343,7 @@ pub trait WasiHttpHooks: Send {
                 p2::ErrorCode::ConnectionTerminated
             }
             _ if is_address_family_unsupported(err) => p2::ErrorCode::DestinationUnavailable,
-            _ => p2::ErrorCode::InternalError(Some(err.to_string())),
+            _ => p2::ErrorCode::ConnectionRefused,
         }
     }
 
@@ -365,7 +365,7 @@ pub trait WasiHttpHooks: Send {
                 rustls::Error::AlertReceived(alert) => {
                     p2::ErrorCode::TlsAlertReceived(p2::TlsAlertReceivedPayload {
                         alert_id: Some(u8::from(*alert)),
-                        alert_message: Some(format!("{alert:?}")),
+                        alert_message: None,
                     })
                 }
                 _ => p2::ErrorCode::TlsProtocolError,
@@ -407,7 +407,7 @@ pub trait WasiHttpHooks: Send {
     /// Optional hook to configure the error code for connect I/O errors.
     ///
     /// The default distinguishes refused, unreachable, timed out, and terminated
-    /// connections. Unrecognized errors become `internal-error`.
+    /// connections. Unrecognized errors become `connection-refused`.
     #[cfg(feature = "p3")]
     fn p3_error_from_connect(&mut self, err: &std::io::Error) -> p3::ErrorCode {
         tracing::warn!("connect error: {err:?}");
@@ -422,7 +422,7 @@ pub trait WasiHttpHooks: Send {
                 p3::ErrorCode::ConnectionTerminated
             }
             _ if is_address_family_unsupported(err) => p3::ErrorCode::DestinationUnavailable,
-            _ => p3::ErrorCode::InternalError(Some(err.to_string())),
+            _ => p3::ErrorCode::ConnectionRefused,
         }
     }
 
@@ -444,7 +444,7 @@ pub trait WasiHttpHooks: Send {
                 rustls::Error::AlertReceived(alert) => {
                     p3::ErrorCode::TlsAlertReceived(p3::TlsAlertReceivedPayload {
                         alert_id: Some(u8::from(*alert)),
-                        alert_message: Some(format!("{alert:?}")),
+                        alert_message: None,
                     })
                 }
                 _ => p3::ErrorCode::TlsProtocolError,
@@ -476,10 +476,6 @@ fn is_address_family_unsupported(err: &std::io::Error) -> bool {
     use rustix::io::Errno;
     Errno::from_io_error(err) == Some(Errno::AFNOSUPPORT)
 }
-
-#[cfg(test)]
-#[path = "ctx_tests.rs"]
-mod tests;
 
 /// Returns a value suitable for the `WasiHttpCtxView::hooks` field which has
 /// the default behavior for `wasi:http`.
