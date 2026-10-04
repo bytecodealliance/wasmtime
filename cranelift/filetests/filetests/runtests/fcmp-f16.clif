@@ -1,0 +1,64 @@
+test run
+target aarch64
+target aarch64 has_fp16
+
+function %brif_fcmp_f16(f16, f16) -> i32 {
+block0(v0: f16, v1: f16):
+    v2 = fcmp eq v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i32 1
+    return v3
+block2:
+    v4 = iconst.i32 0
+    return v4
+}
+; run: %brif_fcmp_f16(0x1.0p0, 0x1.0p0) == 1
+; run: %brif_fcmp_f16(0x1.0p0, 0x2.0p0) == 0
+; run: %brif_fcmp_f16(0x0.0, -0x0.0) == 1
+; run: %brif_fcmp_f16(Inf, Inf) == 1
+; run: %brif_fcmp_f16(Inf, -Inf) == 0
+; run: %brif_fcmp_f16(0x1.0p-24, 0x0.0) == 0
+; run: %brif_fcmp_f16(NaN:0x1, 0x1.0p0) == 0
+; run: %brif_fcmp_f16(0x1.0p0, +sNaN:0x1) == 0
+
+function %select_fcmp_f16(f16, f16, i32, i32) -> i32 {
+block0(v0: f16, v1: f16, v2: i32, v3: i32):
+    v4 = fcmp lt v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+; run: %select_fcmp_f16(0x1.0p0, 0x2.0p0, 10, 20) == 10
+; run: %select_fcmp_f16(0x2.0p0, 0x1.0p0, 10, 20) == 20
+; run: %select_fcmp_f16(0x0.0, 0x1.0p-24, 10, 20) == 10
+; run: %select_fcmp_f16(-0x1.0p-24, -0x0.0, 10, 20) == 10
+; run: %select_fcmp_f16(0x1.ffcp15, Inf, 10, 20) == 10
+; run: %select_fcmp_f16(NaN:0x1, 0x1.0p0, 10, 20) == 20
+
+function %brif_fcmp_one_f16(f16, f16) -> i32 {
+block0(v0: f16, v1: f16):
+    v2 = fcmp one v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i32 1
+    return v3
+block2:
+    v4 = iconst.i32 0
+    return v4
+}
+; run: %brif_fcmp_one_f16(0x1.0p0, 0x1.0p0) == 0
+; run: %brif_fcmp_one_f16(0x1.0p0, 0x2.0p0) == 1
+; run: %brif_fcmp_one_f16(0x2.0p0, 0x1.0p0) == 1
+; run: %brif_fcmp_one_f16(NaN:0x1, 0x1.0p0) == 0
+; run: %brif_fcmp_one_f16(0x1.0p0, +sNaN:0x1) == 0
+
+function %select_fcmp_ueq_f16(f16, f16, i32, i32) -> i32 {
+block0(v0: f16, v1: f16, v2: i32, v3: i32):
+    v4 = fcmp ueq v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+; run: %select_fcmp_ueq_f16(0x1.0p0, 0x1.0p0, 10, 20) == 10
+; run: %select_fcmp_ueq_f16(0x1.0p0, 0x2.0p0, 10, 20) == 20
+; run: %select_fcmp_ueq_f16(NaN:0x1, 0x1.0p0, 10, 20) == 10
+; run: %select_fcmp_ueq_f16(0x1.0p0, +sNaN:0x1, 10, 20) == 10

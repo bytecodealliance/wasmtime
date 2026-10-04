@@ -1715,6 +1715,7 @@
     (Abs)
     (Neg)
     (Sqrt)
+    (Cvt16To32)
     (Cvt32To64)
     (Cvt64To32)
 ))
@@ -2606,6 +2607,14 @@
 (rule (fpu_cmp size rn rm)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.FpuCmp size rn rm)))
+
+;; Half-precision conversions are available even without FEAT_FP16 arithmetic.
+(rule 1 (fpu_cmp (ScalarSize.Size16) rn rm)
+      (if-let false (use_fp16))
+      (ProducesFlags.ProducesFlagsSideEffect
+        (MInst.FpuCmp (ScalarSize.Size32)
+          (fpu_rr (FPUOp1.Cvt16To32) rn (ScalarSize.Size16))
+          (fpu_rr (FPUOp1.Cvt16To32) rm (ScalarSize.Size16)))))
 
 ;; Helper for emitting `MInst.VecLanes` instructions.
 (decl vec_lanes (VecLanesOp Reg VectorSize) Reg)

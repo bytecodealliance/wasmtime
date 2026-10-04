@@ -6249,6 +6249,17 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::FpuRR {
+            fpu_op: FPUOp1::Cvt16To32,
+            size: ScalarSize::Size16,
+            rd: writable_vreg(15),
+            rn: vreg(30),
+        },
+        "CF43E21E",
+        "fcvt s15, h30",
+    ));
+
+    insns.push((
+        Inst::FpuRR {
             fpu_op: FPUOp1::Cvt32To64,
             size: ScalarSize::Size32,
             rd: writable_vreg(15),

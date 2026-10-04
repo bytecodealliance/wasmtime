@@ -1853,6 +1853,10 @@ impl MachInstEmit for Inst {
                     FPUOp1::Abs => 0b000_11110_00_1_000001_10000,
                     FPUOp1::Neg => 0b000_11110_00_1_000010_10000,
                     FPUOp1::Sqrt => 0b000_11110_00_1_000011_10000,
+                    FPUOp1::Cvt16To32 => {
+                        debug_assert_eq!(size, ScalarSize::Size16);
+                        0b000_11110_11_1_000100_10000
+                    }
                     FPUOp1::Cvt32To64 => {
                         debug_assert_eq!(size, ScalarSize::Size32);
                         0b000_11110_00_1_000101_10000
