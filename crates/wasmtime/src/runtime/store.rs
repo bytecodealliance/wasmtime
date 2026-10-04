@@ -2259,7 +2259,7 @@ at https://bytecodealliance.org/security.
         // return into it.
         let current_epoch = self.engine().current_epoch();
         let epoch_deadline = self.vm_store_context.epoch_deadline.get_mut();
-        *epoch_deadline = current_epoch + delta;
+        *epoch_deadline = current_epoch.saturating_add(delta).min(u64::MAX - 1);
     }
 
     pub(crate) fn get_epoch_deadline(&mut self) -> u64 {

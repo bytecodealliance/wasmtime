@@ -496,3 +496,72 @@ async fn drop_future_on_epoch_yield(config: &mut Config) -> Result<()> {
     assert_eq!(true, alive_flag.load(Ordering::Acquire));
     Ok(())
 }
+
+/// A deadline of `u64::MAX` must mean "effectively never", not "immediately".
+///
+/// Once the epoch has advanced, computing `current_epoch + delta` overflows for
+/// a deadline of `u64::MAX`: debug builds panic and release builds wrap the
+/// deadline into the past, which interrupts execution at the first check point.
+#[wasmtime_test]
+fn epoch_deadline_does_not_overflow(config: &mut Config) -> Result<()> {
+    let engine = build_engine(config)?;
+    // A loop gives the engine check points to interrupt at, so a deadline that
+    // wrapped into the past would trap here rather than running to completion.
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (func (export "run")
+                    (local i32)
+                    (loop $l
+                        (local.set 0 (i32.add (local.get 0) (i32.const 1)))
+                        (br_if $l (i32.lt_u (local.get 0) (i32.const 1000))))
+                )
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_trap();
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+    // Advance the epoch so that adding `u64::MAX` below would overflow.
+    engine.increment_epoch();
+    store.set_epoch_deadline(u64::MAX);
+
+    run.call(&mut store, ())?;
+    Ok(())
+}
+
+/// `u64::MAX` is not a free value for a deadline: `new_epoch` hands the deadline back to
+/// wasm as a `u64` and reserves exactly that value for the unwinding sentinel. A deadline
+/// that lands on it would be reported to wasm as an unwinding host call.
+#[wasmtime_test]
+fn epoch_deadline_never_equals_sentinel(config: &mut Config) -> Result<()> {
+    let engine = build_engine(config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (func (export "run")
+                    (local i32)
+                    (loop $l
+                        (local.set 0 (i32.add (local.get 0) (i32.const 1)))
+                        (br_if $l (i32.lt_u (local.get 0) (i32.const 1000))))
+                )
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    engine.increment_epoch(); // current_epoch = 1
+    store.set_epoch_deadline(1); // deadline = 2
+    // Ask for the next deadline to land exactly on `u64::MAX`.
+    store.epoch_deadline_callback(|_| Ok(UpdateDeadline::Continue(u64::MAX - 2)));
+    engine.increment_epoch(); // current_epoch = 2, which reaches the deadline above
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call(&mut store, ())?;
+    Ok(())
+}
