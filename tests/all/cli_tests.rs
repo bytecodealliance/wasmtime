@@ -3221,6 +3221,27 @@ start a print 1234
     }
 
     #[test]
+    fn p2_cli_stdout_write_too_much() -> Result<()> {
+        // With `-Sinherit-stdout=n` the guest's stdout is a stream that does not
+        // enforce the permit its own `check-write` reports, so writing one byte
+        // more than that permit has to trap.
+        let output = super::wasmtime(&[
+            "run",
+            "-Sinherit-stdout=n",
+            P2_CLI_STDOUT_WRITE_TOO_MUCH_COMPONENT,
+        ])?
+        .output()?;
+        // The stdout stream is a sink, so nothing is expected on stdout.
+        assert_eq!(output.stdout, b"");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("write exceeded budget"),
+            "bad stderr: {stderr}"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn p2_cli_stdout_write_zeros_to_sink() -> Result<()> {
         for n in ["0", "100", "10000"] {
             run_wasmtime(&[

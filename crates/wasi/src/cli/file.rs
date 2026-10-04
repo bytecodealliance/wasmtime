@@ -48,6 +48,11 @@ impl Pollable for OutputFile {
 
 impl OutputStream for OutputFile {
     fn write(&mut self, bytes: Bytes) -> StreamResult<()> {
+        if bytes.len() > crate::MAX_READ_SIZE_ALLOC {
+            return Err(StreamError::Trap(wasmtime::format_err!(
+                "write exceeded budget"
+            )));
+        }
         (&*self.file)
             .write_all(&bytes)
             .map_err(|e| StreamError::LastOperationFailed(wasmtime::format_err!(e)))
@@ -150,5 +155,25 @@ impl AsyncRead for InputFile {
             }
             Err(e) => Poll::Ready(Err(e)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A write larger than the budget `check_write` reports has to trap instead
+    /// of being written out.
+    #[test]
+    fn write_larger_than_budget_traps() {
+        let path = std::env::temp_dir().join("wasmtime-output-file-write-permit");
+        let file = std::fs::File::create(&path).unwrap();
+        let mut stream = OutputFile::new(file);
+        assert_eq!(stream.check_write().unwrap(), crate::MAX_READ_SIZE_ALLOC);
+
+        let err = stream
+            .write(Bytes::from(vec![0; crate::MAX_READ_SIZE_ALLOC + 1]))
+            .unwrap_err();
+        assert!(matches!(err, StreamError::Trap(_)), "{err:?}");
     }
 }

@@ -275,7 +275,10 @@ pub struct SinkOutputStream;
 
 #[async_trait::async_trait]
 impl OutputStream for SinkOutputStream {
-    fn write(&mut self, _buf: Bytes) -> Result<(), StreamError> {
+    fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
+        if buf.len() > crate::MAX_READ_SIZE_ALLOC {
+            return Err(StreamError::Trap(format_err!("write exceeded budget")));
+        }
         Ok(())
     }
     fn flush(&mut self) -> Result<(), StreamError> {
@@ -903,5 +906,28 @@ mod test {
             .await
             .expect("ready is ok");
         assert_eq!(permit, 1024);
+    }
+}
+
+#[cfg(test)]
+mod write_permit_tests {
+    use super::*;
+
+    /// A write larger than the budget `check_write` reports has to trap instead
+    /// of being silently discarded.
+    #[test]
+    fn sink_write_larger_than_budget_traps() {
+        let mut stream = SinkOutputStream;
+        assert_eq!(stream.check_write().unwrap(), crate::MAX_READ_SIZE_ALLOC);
+
+        // Exactly the reported permit is fine.
+        stream
+            .write(Bytes::from(vec![0; crate::MAX_READ_SIZE_ALLOC]))
+            .unwrap();
+
+        let err = stream
+            .write(Bytes::from(vec![0; crate::MAX_READ_SIZE_ALLOC + 1]))
+            .unwrap_err();
+        assert!(matches!(err, StreamError::Trap(_)), "{err:?}");
     }
 }
