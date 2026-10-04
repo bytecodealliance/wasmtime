@@ -389,6 +389,16 @@ impl CopyingHeap {
         debug_assert!(self.bump_ptr().is_multiple_of(ALIGN));
     }
 
+    /// Returns by how many bytes the GC heap needs to grow so that an
+    /// allocation of `size` bytes is guaranteed to succeed afterwards.
+    fn bytes_needed_for(&self, size: u32) -> u64 {
+        let next_object =
+            u64::from(self.bump_ptr() - self.active_space_start).max(u64::from(ALIGN));
+        // Multiply by two because we need capacity in both semi-spaces.
+        let needed_capacity = (next_object + u64::from(size)) * 2;
+        needed_capacity.saturating_sub(u64::from(self.capacity()))
+    }
+
     /// Allocate `size` bytes from the active semi-space bump pointer.
     ///
     /// Returns `None` if there isn't enough room.
@@ -846,11 +856,7 @@ unsafe impl GcHeap for CopyingHeap {
             .ok_or_else(|| crate::Trap::AllocationTooLarge)?;
 
         let gc_ref = match self.allocate(size) {
-            None => {
-                // Multiply by two because we need capacity in both semi-spaces.
-                let bytes_needed = u64::try_from(layout.size()).unwrap().saturating_mul(2);
-                return Ok(Err(bytes_needed));
-            }
+            None => return Ok(Err(self.bytes_needed_for(size))),
             Some(index) => {
                 debug_assert_ne!(index, 0, "index 0 is reserved; bump_ptr should skip it");
                 VMGcRef::from_heap_index(NonZeroU32::new(index).unwrap()).unwrap()
