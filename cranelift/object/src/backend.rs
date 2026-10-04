@@ -592,21 +592,6 @@ impl Module for ObjectModule {
             section
         };
 
-        if used {
-            match self.object.format() {
-                object::BinaryFormat::Elf => match self.object.section_flags_mut(section) {
-                    SectionFlags::Elf { sh_flags, .. } => *sh_flags |= elf::SHF_GNU_RETAIN,
-                    _ => unreachable!(),
-                },
-                object::BinaryFormat::Coff => {}
-                object::BinaryFormat::MachO => match self.object.symbol_flags_mut(symbol) {
-                    SymbolFlags::MachO { n_desc, .. } => *n_desc |= macho::N_NO_DEAD_STRIP,
-                    _ => unreachable!(),
-                },
-                _ => unreachable!(),
-            }
-        }
-
         let align = std::cmp::max(align.unwrap_or(1), self.isa.symbol_alignment());
         let offset = match *init {
             Init::Uninitialized => {
@@ -625,6 +610,21 @@ impl Module for ObjectModule {
                 offset,
                 relocs,
             });
+        }
+
+        if used {
+            match self.object.format() {
+                object::BinaryFormat::Elf => match self.object.section_flags_mut(section) {
+                    SectionFlags::Elf { sh_flags, .. } => *sh_flags |= elf::SHF_GNU_RETAIN,
+                    _ => unreachable!(),
+                },
+                object::BinaryFormat::Coff => {}
+                object::BinaryFormat::MachO => match self.object.symbol_flags_mut(symbol) {
+                    SymbolFlags::MachO { n_desc, .. } => *n_desc |= macho::N_NO_DEAD_STRIP,
+                    _ => unreachable!(),
+                },
+                _ => unreachable!(),
+            }
         }
         Ok(())
     }
