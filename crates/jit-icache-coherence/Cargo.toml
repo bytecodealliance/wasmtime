@@ -29,6 +29,10 @@ libc = { workspace = true }
 [target.'cfg(all(not(miri), target_arch = "riscv64", target_os = "linux"))'.dependencies]
 libc = { workspace = true }
 
+# For the test that runs rewritten code.
+[target.'cfg(all(not(miri), target_arch = "aarch64", any(target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "macos")))'.dev-dependencies]
+libc = { workspace = true }
+
 [features]
 # Most modern CPUs are SMP (multicore). However, when only one core is present,
 # some aspects of coherence are much cheaper. For example, RISC-V can use
