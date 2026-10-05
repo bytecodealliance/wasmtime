@@ -2912,14 +2912,29 @@ impl<T> StoreContextMut<'_, T> {
                 };
             }
             &WriteState::GuestReady { .. } => {
-                let future = consume();
-                transmit.read = ReadState::HostReady {
+                // If the guest writer has a pending event, then don't start
+                // another read event here even if there's some partial data
+                // available. Wait for that to be delivered and wait for the
+                // writer to do something else before a read is triggered.
+                let write_handle = transmit.write_handle;
+                let write_has_event = Waitable::Transmit(write_handle)
+                    .common(state)?
+                    .event
+                    .is_some();
+                let future = if write_has_event {
+                    None
+                } else {
+                    Some(consume())
+                };
+                state.get_mut(id)?.read = ReadState::HostReady {
                     consume,
                     guest_offset: ItemCount::ZERO,
                     cancel: false,
                     cancel_waker: None,
                 };
-                self.0.pipe_from_guest(kind, id, future);
+                if let Some(future) = future {
+                    self.0.pipe_from_guest(kind, id, future);
+                }
             }
             WriteState::HostReady { .. } => {
                 let WriteState::HostReady { produce, .. } = mem::replace(
