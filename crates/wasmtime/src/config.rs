@@ -1326,6 +1326,16 @@ impl Config {
         self
     }
 
+    /// This corresponds to the ➡️ emoji in the component model specification,
+    /// enabling the `stream.forward` and `future.forward` built-ins.
+    ///
+    /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md
+    #[cfg(feature = "component-model-async")]
+    pub fn wasm_component_model_forward(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_FORWARD, enable);
+        self
+    }
+
     /// This corresponds to the 🚟 emoji in the component model specification.
     ///
     /// Please note that Wasmtime's support for this feature is _very_
@@ -2470,6 +2480,7 @@ impl Config {
             | WasmFeatures::CM_ASYNC
             | WasmFeatures::CM_ASYNC_STACKFUL
             | WasmFeatures::CM_MORE_ASYNC_BUILTINS
+            | WasmFeatures::CM_FORWARD
             | WasmFeatures::CM_THREADING
             | WasmFeatures::CM_ERROR_CONTEXT
             | WasmFeatures::CM_GC
@@ -2841,6 +2852,7 @@ impl Config {
         // Concurrency support is required for some component model features.
         let requires_concurrency = WasmFeatures::CM_ASYNC
             | WasmFeatures::CM_MORE_ASYNC_BUILTINS
+            | WasmFeatures::CM_FORWARD
             | WasmFeatures::CM_ASYNC_STACKFUL
             | WasmFeatures::CM_THREADING
             | WasmFeatures::CM_ERROR_CONTEXT;

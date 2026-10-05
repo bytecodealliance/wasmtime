@@ -394,6 +394,10 @@ pub enum Trampoline {
         ty: TypeStreamTableIndex,
         options: OptionsId,
     },
+    StreamForward {
+        instance: RuntimeComponentInstanceIndex,
+        ty: TypeStreamTableIndex,
+    },
     StreamCancelRead {
         instance: RuntimeComponentInstanceIndex,
         ty: TypeStreamTableIndex,
@@ -425,6 +429,10 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
         ty: TypeFutureTableIndex,
         options: OptionsId,
+    },
+    FutureForward {
+        instance: RuntimeComponentInstanceIndex,
+        ty: TypeFutureTableIndex,
     },
     FutureCancelRead {
         instance: RuntimeComponentInstanceIndex,
@@ -1028,6 +1036,10 @@ impl LinearizeDfg<'_> {
                 ty: *ty,
                 options: self.options(*options),
             },
+            Trampoline::StreamForward { instance, ty } => info::Trampoline::StreamForward {
+                instance: *instance,
+                ty: *ty,
+            },
             Trampoline::StreamCancelRead {
                 instance,
                 ty,
@@ -1079,6 +1091,10 @@ impl LinearizeDfg<'_> {
                 instance: *instance,
                 ty: *ty,
                 options: self.options(*options),
+            },
+            Trampoline::FutureForward { instance, ty } => info::Trampoline::FutureForward {
+                instance: *instance,
+                ty: *ty,
             },
             Trampoline::FutureCancelRead {
                 instance,

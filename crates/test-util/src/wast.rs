@@ -270,6 +270,7 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.bulk_memory = Some(true);
     ret.component_model_async = Some(true);
     ret.component_model_more_async_builtins = Some(true);
+    ret.component_model_forward = Some(true);
     ret.component_model_async_stackful = Some(true);
     ret.component_model_threading = Some(true);
     ret.gc = Some(true);
@@ -355,6 +356,7 @@ macro_rules! foreach_config_option {
             nan_canonicalization
             component_model_async
             component_model_more_async_builtins
+            component_model_forward
             component_model_async_stackful
             component_model_threading
             component_model_error_context
@@ -715,20 +717,6 @@ impl WastTest {
             if happens_to_work.iter().any(|part| self.path.ends_with(part)) {
                 return false;
             }
-            return true;
-        }
-
-        // `stream.forward` not yet implemented:
-        let uses_stream_forward = [
-            "component-model/test/values/post-return.wast",
-            "component-model/test/async/big-interleaving-test.wast",
-            "component-model/test/async/forward.wast",
-        ];
-
-        if uses_stream_forward
-            .iter()
-            .any(|part| self.path.ends_with(part))
-        {
             return true;
         }
 
