@@ -205,6 +205,46 @@ block0(v0: f16x8, v1: f16x8):
 ;   addi sp, sp, 0x10
 ;   ret
 
+function %band_const_f16x8(f16x8) -> f16x8 {
+block0(v0: f16x8):
+    v1 = vconst.f16x8 0x00050005000500050005000500050005
+    v2 = band v0, v1
+    return v2
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v8,-16(incoming_arg) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vand.vi v8,v8,5 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v8,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, sp, 0x10
+;   .byte 0x07, 0x84, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x84, 0xcc
+;   .byte 0x57, 0xb4, 0x82, 0x26
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x04, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
 function %bor_f16x8(f16x8, f16x8) -> f16x8 {
 block0(v0: f16x8, v1: f16x8):
     v2 = bor v0, v1
