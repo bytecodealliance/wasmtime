@@ -57,7 +57,8 @@ fn main() {
         }
     }
 
-    let generated = format!("pub const GDBSTUB_COMPONENT: Option<&[u8]> = Some(include_bytes!({wasm:?}));\n");
+    let generated =
+        format!("pub const GDBSTUB_COMPONENT: Option<&[u8]> = Some(include_bytes!({wasm:?}));\n");
     std::fs::write(out_dir.join("gen.rs"), generated).unwrap();
 }
 
