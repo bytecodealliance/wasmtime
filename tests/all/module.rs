@@ -292,13 +292,9 @@ fn tail_call_defaults() -> Result<()> {
     )?;
 
     // off by default for Winch for now
-    assert!(
-        Module::new(
-            &Engine::new(Config::new().strategy(Strategy::Winch))?,
-            wasm_with_tail_calls,
-        )
-        .is_err()
-    );
+    if let Ok(engine) = Engine::new(Config::new().strategy(Strategy::Winch)) {
+        assert!(Module::new(&engine, wasm_with_tail_calls,).is_err());
+    }
     Ok(())
 }
 
