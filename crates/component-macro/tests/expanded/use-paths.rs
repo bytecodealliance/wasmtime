@@ -195,8 +195,11 @@ pub mod foo {
                 #[component(name = "a")]
                 pub a: u32,
             }
-            impl core::fmt::Debug for Foo {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Foo {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("Foo").field("a", &self.a).finish()
                 }
             }
