@@ -57,6 +57,7 @@ features = [
   "Win32_System_IO",
   "Win32_System_Ioctl",
   "Win32_System_Performance",
+  "Win32_System_SystemServices",
 ]
 
 [features]

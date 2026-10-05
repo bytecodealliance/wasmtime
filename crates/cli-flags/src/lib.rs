@@ -1255,7 +1255,7 @@ impl CommonOptions {
             #[cfg(any(feature = "async", feature = "stack-switching"))]
             if self.wasm.async_stack_size.is_none() {
                 const DEFAULT_HOST_STACK: usize = 512 << 10;
-                config.async_stack_size(max + DEFAULT_HOST_STACK);
+                config.async_stack_size(max.saturating_add(DEFAULT_HOST_STACK));
             }
         }
 
