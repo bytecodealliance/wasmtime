@@ -721,6 +721,16 @@ public:
   }
 
   /**
+   * \brief Configures whether the `stream.forward` and `future.forward`
+   * built-ins are enabled for the component model.
+   *
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_forward
+   */
+  void wasm_component_model_forward(bool enable) {
+    wasmtime_config_wasm_component_model_forward_set(ptr.get(), enable);
+  }
+
+  /**
    * \brief Configures whether stackful coroutine support is enabled for async
    * components.
    *

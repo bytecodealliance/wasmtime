@@ -849,6 +849,21 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
+            StreamForward { ty, func } => {
+                let InterfaceType::Stream(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::StreamForward {
+                        instance: frame.instance,
+                        ty,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+            }
             StreamCancelRead { ty, func, async_ } => {
                 let InterfaceType::Stream(ty) =
                     types.defined_type(frame.translation.types_ref(), *ty)?
@@ -965,6 +980,21 @@ impl<'a> Inliner<'a> {
                     },
                 ));
                 frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
+            }
+            FutureForward { ty, func } => {
+                let InterfaceType::Future(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::FutureForward {
+                        instance: frame.instance,
+                        ty,
+                    },
+                ));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             FutureCancelRead { ty, func, async_ } => {
                 let InterfaceType::Future(ty) =
