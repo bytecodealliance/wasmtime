@@ -191,7 +191,12 @@ macro_rules! foreach_builtin_function {
             // Helpers used around stack switch instructions in
             // ASan-instrumented builds.
             #[cfg(feature = "stack-switching")]
-            asan_start_switch_fiber(vmctx: vmctx, fake_stack_save: pointer, target_csi: pointer);
+            asan_start_switch_fiber(
+                vmctx: vmctx,
+                fake_stack_save: pointer,
+                source_csi: pointer,
+                target_csi: pointer
+            );
             #[cfg(feature = "stack-switching")]
             asan_finish_switch_fiber(vmctx: vmctx, fake_stack: pointer);
         }

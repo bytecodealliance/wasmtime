@@ -30,10 +30,10 @@ fn emit_stack_switch<'a>(
     store_context_ptr: ir::Value,
     load_context_ptr: ir::Value,
     payload: ir::Value,
-    asan_target_csi: impl FnOnce(
+    asan_stack_information: impl FnOnce(
         &mut crate::func_environ::FuncEnvironment<'a>,
         &mut FunctionBuilder,
-    ) -> ir::Value,
+    ) -> (ir::Value, ir::Value),
 ) -> ir::Value {
     if !env.compiler.tunables().asan_stack_switching {
         return builder
@@ -42,9 +42,9 @@ fn emit_stack_switch<'a>(
     }
 
     // ASan-aware stack switching.
-    // The `asan_target_csi` is provided as a function to lazily load
-    // the necessary ASan bookkeeping.
-    let target_csi = asan_target_csi(env, builder);
+    // The stack information is provided as a function to lazily load the
+    // necessary ASan bookkeeping.
+    let (source_csi, target_csi) = asan_stack_information(env, builder);
     let pointer_type = env.pointer_type();
     let slot = env.get_or_create_asan_fake_stack_slot(builder);
     let fake_stack_save = builder.ins().stack_addr(pointer_type, slot, 0);
@@ -60,7 +60,7 @@ fn emit_stack_switch<'a>(
     );
     builder.ins().call(
         asan_start_switch_fiber,
-        &[vmctx, fake_stack_save, target_csi],
+        &[vmctx, fake_stack_save, source_csi, target_csi],
     );
 
     let result = builder
@@ -1914,7 +1914,12 @@ fn translate_resume_impl<'a>(
             control_context_ptr,
             control_context_ptr,
             resume_payload,
-            |env, builder| last_ancestor.common_stack_information(env, builder).address,
+            |env, builder| {
+                (
+                    parent_csi.address,
+                    last_ancestor.common_stack_information(env, builder).address,
+                )
+            },
         );
 
         // At this point we know nothing about the continuation that just
@@ -2234,9 +2239,12 @@ pub(crate) fn translate_suspend<'a>(
         control_context_ptr,
         suspend_payload,
         |env, builder| {
-            handler_stack_chain
-                .get_common_stack_information(env, builder)
-                .address
+            (
+                active_contref_csi.address,
+                handler_stack_chain
+                    .get_common_stack_information(env, builder)
+                    .address,
+            )
         },
     );
 
@@ -2511,9 +2519,14 @@ pub(crate) fn translate_switch<'a>(
             tmp_control_context,
             switch_payload,
             |env, builder| {
-                switchee_contref_last_ancestor
-                    .common_stack_information(env, builder)
-                    .address
+                (
+                    switcher_contref
+                        .common_stack_information(env, builder)
+                        .address,
+                    switchee_contref_last_ancestor
+                        .common_stack_information(env, builder)
+                        .address,
+                )
             },
         )
     };
