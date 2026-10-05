@@ -333,6 +333,7 @@ where
 {
     /// How to determine whether lowering this function's result might call the
     /// guest's `realloc` function. True is the conservative choice.
+    #[cfg(feature = "component-model-async")]
     const RESULT_MAY_REQUIRE_REALLOC: bool = true;
 
     type Output: HostOutput<R>;
@@ -673,6 +674,7 @@ where
     P: ComponentNamedList + Lift + 'static,
     R: ComponentNamedList + Lower + 'static,
 {
+    #[cfg(feature = "component-model-async")]
     const RESULT_MAY_REQUIRE_REALLOC: bool = R::MAY_REQUIRE_REALLOC;
 
     type Output = O;
