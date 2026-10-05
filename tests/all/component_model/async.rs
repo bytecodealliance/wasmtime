@@ -1661,6 +1661,212 @@ async fn join_handle_used_from_other_threads() -> Result<()> {
     for thread in threads {
         thread.join().unwrap();
     }
+    Ok(())
+}
 
+/// Yields to the executor `n` times.
+async fn yield_times(n: usize) {
+    for _ in 0..n {
+        let mut yielded = false;
+        std::future::poll_fn(|cx| {
+            if yielded {
+                Poll::Ready(())
+            } else {
+                yielded = true;
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+        })
+        .await
+    }
+}
+
+/// Starts a guest task which yields forever (calling the host's `tick` each
+/// time it runs) concurrently with one which fails, then checks that once the
+/// store is poisoned the event loop refuses to run any further guest code.
+async fn no_guest_code_after_trap(boom_calls_failing_host: bool) -> Result<()> {
+    let boom = if boom_calls_failing_host {
+        "(call $fail) unreachable"
+    } else {
+        "unreachable"
+    };
+    let wat = format!(
+        r#"
+(component
+  (import "tick" (func $tick))
+  (import "fail" (func $fail))
+  (component $Spin
+    (import "tick" (func $tick))
+    (core func $tick (canon lower (func $tick)))
+    (core module $m
+      (import "" "tick" (func $tick))
+      (func (export "run") (result i32) (call $tick) (i32.const 1)) ;; YIELD
+      (func (export "cb") (param i32 i32 i32) (result i32)
+        (call $tick) (i32.const 1))) ;; YIELD
+    (core instance $i (instantiate $m (with "" (instance (export "tick" (func $tick))))))
+    (func (export "run") async
+      (canon lift (core func $i "run") async (callback (core func $i "cb")))))
+  (component $Boom
+    (import "fail" (func $fail))
+    (core func $fail (canon lower (func $fail)))
+    (core module $m
+      (import "" "fail" (func $fail))
+      (func (export "run") (result i32) {boom})
+      (func (export "cb") (param i32 i32 i32) (result i32) unreachable))
+    (core instance $i (instantiate $m (with "" (instance (export "fail" (func $fail))))))
+    (func (export "run") async
+      (canon lift (core func $i "run") async (callback (core func $i "cb")))))
+  (instance $s (instantiate $Spin (with "tick" (func $tick))))
+  (instance $b (instantiate $Boom (with "fail" (func $fail))))
+  (export "spin" (func $s "run"))
+  (export "boom" (func $b "run")))
+"#
+    );
+
+    let engine = Engine::default();
+    let component = Component::new(&engine, wat)?;
+    let mut linker = Linker::<u32>::new(&engine);
+    linker
+        .root()
+        .func_wrap("tick", |mut store: StoreContextMut<'_, u32>, (): ()| {
+            *store.data_mut() += 1;
+            Ok(())
+        })?;
+    linker.root().func_wrap(
+        "fail",
+        |_: StoreContextMut<'_, u32>, (): ()| -> Result<()> { wasmtime::bail!("host error") },
+    )?;
+    let mut store = Store::new(&engine, 0);
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let spin = instance.get_typed_func::<(), ()>(&mut store, "spin")?;
+    let boom = instance.get_typed_func::<(), ()>(&mut store, "boom")?;
+
+    let result = store
+        .run_concurrent(async |a| {
+            let s = spin.call_concurrent(a, ());
+            let b = boom.call_concurrent(a, ());
+            tokio::join!(s, b)
+        })
+        .await;
+    assert!(result.is_err());
+    let ticks = *store.data();
+
+    // Neither running the event loop for a host-only future nor entering the
+    // guest may run any more guest code.
+    let result = store.run_concurrent(async |_| yield_times(10).await).await;
+    assert_eq!(*store.data(), ticks);
+    assert_eq!(
+        result.unwrap_err().downcast::<Trap>()?,
+        Trap::CannotEnterComponent,
+    );
+    let result = store
+        .run_concurrent(async |a| spin.call_concurrent(a, ()).await)
+        .await
+        .and_then(|r| r);
+    assert_eq!(*store.data(), ticks);
+    assert_eq!(
+        result.unwrap_err().downcast::<Trap>()?,
+        Trap::CannotEnterComponent,
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn no_guest_code_after_trap_in_run_concurrent() -> Result<()> {
+    no_guest_code_after_trap(false).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn no_guest_code_after_host_error_in_run_concurrent() -> Result<()> {
+    no_guest_code_after_trap(true).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn event_loop_after_realloc_trap_during_host_stream_write() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (type $st (stream string))
+  (core module $libc
+    (memory (export "mem") 1)
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable))
+  (core instance $libc (instantiate $libc))
+  (core func $stream.read (canon stream.read $st async (memory (core memory $libc "mem"))
+    (realloc (core func $libc "realloc"))))
+  (core func $waitable-set.new (canon waitable-set.new))
+  (core func $waitable.join (canon waitable.join))
+  (core func $task.return (canon task.return (result u32)))
+  (core module $m
+    (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+    (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+    (import "" "waitable.join" (func $waitable.join (param i32 i32)))
+    (import "" "task.return" (func $task.return (param i32)))
+    (func (export "consume") (param $s i32) (result i32)
+      (local $set i32)
+      (drop (call $stream.read (local.get $s) (i32.const 0) (i32.const 4)))
+      (local.set $set (call $waitable-set.new))
+      (call $waitable.join (local.get $s) (local.get $set))
+      ;; WAIT on $set
+      (i32.or (i32.const 2) (i32.shl (local.get $set) (i32.const 4))))
+    (func (export "cb") (param i32 i32 i32) (result i32)
+      (call $task.return (i32.const 0))
+      (i32.const 0))) ;; EXIT
+  (core instance $i (instantiate $m (with "" (instance
+    (export "stream.read" (func $stream.read))
+    (export "waitable-set.new" (func $waitable-set.new))
+    (export "waitable.join" (func $waitable.join))
+    (export "task.return" (func $task.return))))))
+  (func (export "consume") async (param "s" $st) (result u32)
+    (canon lift (core func $i "consume") async (callback (core func $i "cb"))))
+)
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let consume =
+        instance.get_typed_func::<(StreamReader<String>,), (u32,)>(&mut store, "consume")?;
+
+    let stream = StreamReader::new(&mut store, vec!["hello".to_string()])?;
+    let err = consume.call_async(&mut store, (stream,)).await.unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::UnreachableCodeReached)
+    );
+
+    let result = store.run_concurrent(async |_| yield_times(5).await).await;
+    assert_eq!(
+        result.unwrap_err().downcast::<Trap>()?,
+        Trap::CannotEnterComponent,
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn start_function_trap_reported_faithfully() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $m (func $s unreachable) (start $s))
+  (core instance (instantiate $m)))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let err = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await
+        .unwrap_err();
+    assert_eq!(err.downcast::<Trap>()?, Trap::UnreachableCodeReached);
     Ok(())
 }

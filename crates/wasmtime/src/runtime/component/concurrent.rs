@@ -1384,6 +1384,18 @@ impl<T> StoreContextMut<'_, T> {
                     return Poll::Ready(Ok(PollResult::Complete(value)));
                 }
 
+                // If the store has been poisoned by a trap, either before this
+                // event loop started or while it was running, then refuse to
+                // make any further progress. Any work items, suspended fibers,
+                // or pending futures left over from the trap might otherwise
+                // resume guest code or observe scheduler state which was never
+                // unwound. Note that this is checked after polling `future`
+                // above so that it can observe the original error, e.g. a
+                // trap delivered over a oneshot channel by a work item.
+                if reset.store.0.trapped() {
+                    return Poll::Ready(Err(Trap::CannotEnterComponent.into()));
+                }
+
                 // Next, poll `ConcurrentState::futures` (which includes any
                 // pending host tasks and/or background tasks), returning
                 // immediately if one of them fails.
