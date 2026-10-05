@@ -74,6 +74,7 @@ trait HostOutput<R> {
         store: StoreContextMut<'_, T>,
         instance: Instance,
         host_task: EnteredHostTask,
+        may_require_realloc: bool,
         lower: impl FnOnce(StoreContextMut<T>, Option<R>, bool, Option<TableId<HostTask>>) -> Result<()>
         + Send
         + 'static,
@@ -91,6 +92,7 @@ impl<R> HostOutput<R> for Result<R> {
         store: StoreContextMut<'_, T>,
         _instance: Instance,
         _host_task: EnteredHostTask,
+        _may_require_realloc: bool,
         lower: impl FnOnce(StoreContextMut<T>, Option<R>, bool, Option<TableId<HostTask>>) -> Result<()>
         + Send
         + 'static,
@@ -113,11 +115,12 @@ impl<R: Send + Sync + 'static> HostOutput<R> for HostFuture<R> {
         store: StoreContextMut<'_, T>,
         instance: Instance,
         host_task: EnteredHostTask,
+        may_require_realloc: bool,
         lower: impl FnOnce(StoreContextMut<T>, Option<R>, bool, Option<TableId<HostTask>>) -> Result<()>
         + Send
         + 'static,
     ) -> Result<u32> {
-        instance.first_poll(store, host_task, self, lower)
+        instance.first_poll(store, host_task, may_require_realloc, self, lower)
     }
 }
 
@@ -328,6 +331,11 @@ where
     T: 'static,
     R: Send + Sync + 'static,
 {
+    /// How to determine whether lowering this function's result might call the
+    /// guest's `realloc` function. True is the conservative choice.
+    #[cfg(feature = "component-model-async")]
+    const RESULT_MAY_REQUIRE_REALLOC: bool = true;
+
     type Output: HostOutput<R>;
 
     /// Performs a type-check to ensure that this host function can be imported
@@ -518,8 +526,13 @@ where
             store.as_context_mut(),
             instance,
             entered_host_task,
+            Self::RESULT_MAY_REQUIRE_REALLOC,
             move |store, ret, immediate, materialized_host_task| {
-                let mut lower = LowerContext::new(store, options, instance);
+                let mut lower = if Self::RESULT_MAY_REQUIRE_REALLOC {
+                    LowerContext::new(store, options, instance)
+                } else {
+                    LowerContext::new_without_realloc(store, options, instance)
+                };
                 lower.validate_scope_exit()?;
                 if immediate {
                     lower
@@ -661,6 +674,9 @@ where
     P: ComponentNamedList + Lift + 'static,
     R: ComponentNamedList + Lower + 'static,
 {
+    #[cfg(feature = "component-model-async")]
+    const RESULT_MAY_REQUIRE_REALLOC: bool = R::MAY_REQUIRE_REALLOC;
+
     type Output = O;
 
     fn typecheck(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()> {
