@@ -95,6 +95,34 @@ fn aot_compiles() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn memory_copy_without_riscv_v() -> Result<()> {
+    let mut config = Config::new();
+    config
+        .strategy(Strategy::Cranelift)
+        .target("riscv64")?
+        .wasm_simd(false)
+        .wasm_relaxed_simd(false);
+    unsafe {
+        config.cranelift_flag_set("has_v", "false");
+    }
+    let engine = Engine::new(&config)?;
+
+    // Inline copies must not require vector instructions when SIMD is unavailable.
+    engine.precompile_module(
+        br#"
+            (module
+                (memory 1)
+                (func (export "copy") (param i32 i32)
+                    (memory.copy (local.get 0) (local.get 1) (i32.const 16)))
+            )
+        "#,
+    )?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn serialize_deterministic() {
     let engine = Engine::default();
 
