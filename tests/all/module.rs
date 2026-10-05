@@ -319,12 +319,9 @@ fn tail_call_defaults() -> Result<()> {
         wasm_with_tail_calls,
     )?;
 
-    if cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
-        // on by default for Winch on its supported targets
-        Module::new(
-            &Engine::new(Config::new().strategy(Strategy::Winch))?,
-            wasm_with_tail_calls,
-        )?;
+    // off by default for Winch for now
+    if let Ok(engine) = Engine::new(Config::new().strategy(Strategy::Winch)) {
+        assert!(Module::new(&engine, wasm_with_tail_calls,).is_err());
     }
     Ok(())
 }
