@@ -1,4 +1,6 @@
-use wasmtime::component::{Component, FutureAny, FutureReader, Linker, StreamAny, StreamReader};
+use wasmtime::component::{
+    Component, FutureAny, FutureReader, Linker, StreamAny, StreamReader, Val,
+};
 use wasmtime::{Config, Engine, Result, Store};
 
 #[test]
@@ -278,5 +280,139 @@ async fn stream_any_smoke() -> Result<()> {
             wasmtime::error::Ok(())
         })
         .await??;
+    Ok(())
+}
+
+const TAKE_FUTURES_AND_STREAMS: &str = r#"
+(component
+    (type $f (future u32))
+    (type $s (stream u32))
+    (core module $m
+        (func (export "take1") (param i32))
+        (func (export "take2") (param i32 i32)))
+    (core instance $i (instantiate $m))
+    (func (export "take1-f") (param "a" $f)
+        (canon lift (core func $i "take1")))
+    (func (export "take2-f") (param "a" $f) (param "b" $f)
+        (canon lift (core func $i "take2")))
+    (func (export "take1-s") (param "a" $s)
+        (canon lift (core func $i "take1")))
+    (func (export "take2-s") (param "a" $s) (param "b" $s)
+        (canon lift (core func $i "take2")))
+)
+"#;
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn future_and_stream_lowered_at_most_once() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, TAKE_FUTURES_AND_STREAMS)?;
+    let linker = Linker::new(&engine);
+    let new_store = || Store::new(&engine, ());
+
+    // Two clones of one `FutureAny` passed to the same call.
+    {
+        let mut store = new_store();
+        let instance = linker.instantiate(&mut store, &component)?;
+        let take2 = instance.get_typed_func::<(FutureAny, FutureAny), ()>(&mut store, "take2-f")?;
+        let f = FutureReader::new(&mut store, async { wasmtime::error::Ok(7_u32) })?
+            .try_into_future_any(&mut store)?;
+        let mut g = f.clone();
+        assert!(take2.call(&mut store, (f, g.clone())).is_err());
+        assert!(g.close(&mut store).is_err());
+    }
+
+    // Two clones of one `StreamAny` passed to the same call.
+    {
+        let mut store = new_store();
+        let instance = linker.instantiate(&mut store, &component)?;
+        let take2 = instance.get_typed_func::<(StreamAny, StreamAny), ()>(&mut store, "take2-s")?;
+        let s = StreamReader::new(&mut store, vec![7_u32])?.try_into_stream_any(&mut store)?;
+        let mut t = s.clone();
+        assert!(take2.call(&mut store, (s, t.clone())).is_err());
+        assert!(t.close(&mut store).is_err());
+    }
+
+    // The same `Val::Future` lowered in two calls.
+    {
+        let mut store = new_store();
+        let instance = linker.instantiate(&mut store, &component)?;
+        let take1 = instance.get_func(&mut store, "take1-f").unwrap();
+        let f = FutureReader::new(&mut store, async { wasmtime::error::Ok(7_u32) })?
+            .try_into_future_any(&mut store)?;
+        let f = Val::Future(f);
+        take1.call(&mut store, &[f.clone()], &mut [])?;
+        assert!(take1.call(&mut store, &[f.clone()], &mut []).is_err());
+        let Val::Future(mut f) = f else {
+            unreachable!()
+        };
+        assert!(f.close(&mut store).is_err());
+    }
+
+    // The same `Val::Stream` lowered in two calls.
+    {
+        let mut store = new_store();
+        let instance = linker.instantiate(&mut store, &component)?;
+        let take1 = instance.get_func(&mut store, "take1-s").unwrap();
+        let s = StreamReader::new(&mut store, vec![7_u32])?.try_into_stream_any(&mut store)?;
+        let s = Val::Stream(s);
+        take1.call(&mut store, &[s.clone()], &mut [])?;
+        assert!(take1.call(&mut store, &[s.clone()], &mut []).is_err());
+        let Val::Stream(mut s) = s else {
+            unreachable!()
+        };
+        assert!(s.close(&mut store).is_err());
+    }
+
+    // A `FutureReader` lowered twice by reference.
+    {
+        let mut store = new_store();
+        let instance = linker.instantiate(&mut store, &component)?;
+        let take1 = instance.get_typed_func::<(&FutureReader<u32>,), ()>(&mut store, "take1-f")?;
+        let mut f = FutureReader::new(&mut store, async { wasmtime::error::Ok(7_u32) })?;
+        take1.call(&mut store, (&f,))?;
+        assert!(take1.call(&mut store, (&f,)).is_err());
+        assert!(f.close(&mut store).is_err());
+    }
+
+    // A `StreamReader` lowered twice by reference.
+    {
+        let mut store = new_store();
+        let instance = linker.instantiate(&mut store, &component)?;
+        let take1 = instance.get_typed_func::<(&StreamReader<u32>,), ()>(&mut store, "take1-s")?;
+        let mut s = StreamReader::new(&mut store, vec![7_u32])?;
+        take1.call(&mut store, (&s,))?;
+        assert!(take1.call(&mut store, (&s,)).is_err());
+        assert!(s.close(&mut store).is_err());
+    }
+
+    // Closing clones more than once.
+    {
+        let mut store = new_store();
+        let mut f = FutureReader::new(&mut store, async { wasmtime::error::Ok(7_u32) })?
+            .try_into_future_any(&mut store)?;
+        let mut g = f.clone();
+        f.close(&mut store)?;
+        assert!(g.close(&mut store).is_err());
+        assert!(f.close(&mut store).is_err());
+    }
+
+    // A stale clone must not alias a new future which reuses the old one's
+    // table slot.
+    {
+        let mut store = new_store();
+        let instance = linker.instantiate(&mut store, &component)?;
+        let take1 = instance.get_typed_func::<(&FutureAny,), ()>(&mut store, "take1-f")?;
+        let f = FutureReader::new(&mut store, async { wasmtime::error::Ok(7_u32) })?
+            .try_into_future_any(&mut store)?;
+        f.clone().close(&mut store)?;
+        let mut g = FutureReader::new(&mut store, async { wasmtime::error::Ok(8_u32) })?
+            .try_into_future_any(&mut store)?;
+        assert!(take1.call(&mut store, (&f,)).is_err());
+        g.close(&mut store)?;
+    }
+
     Ok(())
 }
