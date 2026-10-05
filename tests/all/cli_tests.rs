@@ -2694,7 +2694,6 @@ start a print 1234
     #[cfg(unix)]
     #[tokio::test]
     async fn serve_inherit() -> Result<()> {
-        use rustix::fd::AsRawFd;
         use std::mem::ManuallyDrop;
         use std::net::TcpListener;
         use std::os::fd::{FromRawFd, OwnedFd};
@@ -2708,29 +2707,25 @@ start a print 1234
             return Ok(());
         }
 
-        // This socket is required to be inherited to the child process as fd 3.
-        // This is done with a `dup2` below. If this socket is itself 3,
-        // however, then the `dup2` will be a noop. This `socket` is CLOEXEC,
-        // however, so if `dup2` is a noop then nothing will be inherited. Force
-        // this socket to NOT be fd 3 in this case by `dup`-ing it.
-        let tcp_socket = {
-            let mut socket = TcpListener::bind("localhost:0")?;
-            if socket.as_raw_fd() == 3 {
-                socket = socket.try_clone()?;
-                assert!(socket.as_raw_fd() != 3);
-            }
-            socket.set_nonblocking(true)?;
-            socket
-        };
+        // These sockets are required to be inherited to the child process as
+        // fds 3 and 4, which is done with `dup2` below. If either socket
+        // already lives at fd 3 or 4, however, then the `dup2` calls can
+        // clobber one another (e.g. if the unix socket is fd 3 then the first
+        // `dup2` closes it) or be a noop leaving a CLOEXEC fd in place. Tests
+        // run in parallel so fds 3/4 may be freed by another thread at any
+        // time, so unconditionally move both sockets to fds >= 5 to avoid
+        // this.
+        let tcp_socket = TcpListener::from(rustix::io::fcntl_dupfd_cloexec(
+            TcpListener::bind("localhost:0")?,
+            5,
+        )?);
+        tcp_socket.set_nonblocking(true)?;
 
         let addr = tcp_socket.local_addr()?;
-        let (mut unix_socket, unix_path) = tempfile::Builder::new()
+        let (unix_socket, unix_path) = tempfile::Builder::new()
             .make(|path| UnixListener::bind(path))?
             .into_parts();
-        if unix_socket.as_raw_fd() == 4 {
-            unix_socket = unix_socket.try_clone()?;
-            assert!(unix_socket.as_raw_fd() != 4);
-        }
+        let unix_socket = UnixListener::from(rustix::io::fcntl_dupfd_cloexec(unix_socket, 5)?);
 
         // Using a shell script as a launcher since that uses exec, allowing us to provide the
         // LISTEN_PID variable.
