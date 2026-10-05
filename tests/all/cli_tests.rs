@@ -4229,3 +4229,15 @@ fn max_wasm_stack_large_value_does_not_overflow() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn p3_partial_write_then_stdout() -> Result<()> {
+    let output = run_wasmtime(&[
+        "run",
+        "-Wcomponent-model-async",
+        "-Sp3",
+        "tests/all/cli_tests/p3-partial-write-then-stdout.wat",
+    ])?;
+    assert_eq!(output, "456789\n");
+    Ok(())
+}
