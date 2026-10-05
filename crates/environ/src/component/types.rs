@@ -387,57 +387,6 @@ impl ComponentTypes {
         }
     }
 
-    /// Returns whether lowering a value of `ty` may need to call the canonical
-    /// ABI `realloc` function.
-    pub fn may_require_realloc(&self, ty: &InterfaceType) -> bool {
-        match ty {
-            InterfaceType::String | InterfaceType::List(_) | InterfaceType::Map(_) => true,
-
-            InterfaceType::Record(ty) => self[*ty]
-                .fields
-                .iter()
-                .any(|field| self.may_require_realloc(&field.ty)),
-            InterfaceType::Variant(ty) => self[*ty]
-                .cases
-                .values()
-                .flatten()
-                .any(|ty| self.may_require_realloc(ty)),
-            InterfaceType::Tuple(ty) => self[*ty]
-                .types
-                .iter()
-                .any(|ty| self.may_require_realloc(ty)),
-            InterfaceType::Option(ty) => self.may_require_realloc(&self[*ty].ty),
-            InterfaceType::Result(ty) => self[*ty]
-                .ok
-                .iter()
-                .chain(self[*ty].err.iter())
-                .any(|ty| self.may_require_realloc(ty)),
-            InterfaceType::FixedLengthList(ty) => {
-                self[*ty].size != 0 && self.may_require_realloc(&self[*ty].element)
-            }
-
-            InterfaceType::Bool
-            | InterfaceType::S8
-            | InterfaceType::U8
-            | InterfaceType::S16
-            | InterfaceType::U16
-            | InterfaceType::S32
-            | InterfaceType::U32
-            | InterfaceType::S64
-            | InterfaceType::U64
-            | InterfaceType::Float32
-            | InterfaceType::Float64
-            | InterfaceType::Char
-            | InterfaceType::Flags(_)
-            | InterfaceType::Enum(_)
-            | InterfaceType::Own(_)
-            | InterfaceType::Borrow(_)
-            | InterfaceType::Future(_)
-            | InterfaceType::Stream(_)
-            | InterfaceType::ErrorContext(_) => false,
-        }
-    }
-
     /// Adds a new `table` to the list of resource tables for this component.
     pub fn push_resource_table(&mut self, table: TypeResourceTable) -> TypeResourceTableIndex {
         self.resource_tables.push(table)
@@ -1503,38 +1452,5 @@ mod tests {
 
         assert_ne!(a, b);
         assert_eq!(a, a.clone());
-    }
-
-    #[test]
-    fn test_may_require_realloc() {
-        let mut types = ComponentTypes::default();
-
-        assert!(!types.may_require_realloc(&InterfaceType::U32));
-        assert!(types.may_require_realloc(&InterfaceType::String));
-
-        let safe_tuple = types.tuples.push(TypeTuple {
-            types: Box::new([InterfaceType::U32, InterfaceType::Bool]),
-            abi: CanonicalAbiInfo::default(),
-        });
-        assert!(!types.may_require_realloc(&InterfaceType::Tuple(safe_tuple)));
-
-        let list = types.lists.push(TypeList {
-            element: InterfaceType::U8,
-        });
-        let record = types.records.push(TypeRecord {
-            fields: Box::new([RecordField {
-                name: "items".into(),
-                ty: InterfaceType::List(list),
-            }]),
-            abi: CanonicalAbiInfo::default(),
-        });
-        assert!(types.may_require_realloc(&InterfaceType::Record(record)));
-
-        let empty_list = types.fixed_length_lists.push(TypeFixedLengthList {
-            element: InterfaceType::String,
-            size: 0,
-            abi: CanonicalAbiInfo::default(),
-        });
-        assert!(!types.may_require_realloc(&InterfaceType::FixedLengthList(empty_list)));
     }
 }
