@@ -1,9 +1,9 @@
 //! Implementation of [`FutureAny`] and [`StreamAny`].
 
 use crate::component::concurrent::futures_and_streams::{self, TransmitOrigin};
-use crate::component::concurrent::{TableId, TransmitHandle};
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
+use crate::component::resources::HostResourceIndex;
 use crate::component::types::{self, FutureType, StreamType};
 use crate::component::{
     ComponentInstanceId, ComponentType, FutureReader, Lift, Lower, StreamReader,
@@ -33,10 +33,17 @@ use wasmtime_environ::component::{
 /// called then memory will not be leaked once the owning [`Store`] is dropped,
 /// but the resource handle will be leaked until the [`Store`] is dropped.
 ///
+/// # Cloning
+///
+/// Cloning a [`FutureAny`] does not duplicate the underlying future: all clones
+/// refer to the same read end, whose ownership can only be transferred once.
+/// After one clone has been lowered into a guest, piped, or closed, attempting
+/// any of those with another clone returns an error.
+///
 /// [`Store`]: crate::Store
 #[derive(Debug, Clone, PartialEq)]
 pub struct FutureAny {
-    id: TableId<TransmitHandle>,
+    idx: HostResourceIndex,
     ty: PayloadType<FutureType>,
 }
 
@@ -59,7 +66,7 @@ impl FutureAny {
         )?;
 
         // Like `FutureReader<T>`, however, lowering "just" gets a u32.
-        futures_and_streams::lower_future_to_index(self.id, cx, ty)
+        futures_and_streams::lower_future_to_index(self.idx, cx, ty)
     }
 
     /// Attempts to convert this [`FutureAny`] to a [`FutureReader<T>`]
@@ -75,7 +82,7 @@ impl FutureAny {
     {
         self.ty
             .typecheck_host::<T>(FutureType::equivalent_payload_host::<T>)?;
-        Ok(FutureReader::new_(self.id))
+        Ok(FutureReader::new_(self.idx))
     }
 
     /// Attempts to convert `reader` to a [`FutureAny`], erasing its statically
@@ -93,25 +100,25 @@ impl FutureAny {
         T: ComponentType + 'static,
     {
         let store = store.as_context_mut();
-        let ty = match store.0.transmit_origin(reader.id())? {
+        let ty = match store.0.transmit_origin(reader.idx())? {
             TransmitOrigin::Host => PayloadType::new_host::<T>(),
             TransmitOrigin::GuestFuture(id, ty) => PayloadType::new_guest_future(store.0, id, ty),
             TransmitOrigin::GuestStream(..) => bail!("not a future"),
         };
         Ok(FutureAny {
-            id: reader.id(),
+            idx: reader.idx(),
             ty,
         })
     }
 
     fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
-        let id = futures_and_streams::lift_index_to_future(cx, ty, index)?;
+        let idx = futures_and_streams::lift_index_to_future(cx, ty, index)?;
         let InterfaceType::Future(ty) = ty else {
             unreachable!()
         };
         let ty = cx.types[ty].ty;
         Ok(FutureAny {
-            id,
+            idx,
             // Note that this future might actually be a host-originating
             // future which means that this ascription of "the type is the
             // guest" may be slightly in accurate. The guest, however, has the
@@ -128,13 +135,11 @@ impl FutureAny {
     ///
     /// # Errors
     ///
-    /// Returns an error if this future has already been closed.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `store` does not own this future.
+    /// Returns an error if this future has already been closed or otherwise
+    /// transferred (e.g. lowered into a guest), or if it does not belong to
+    /// `store`.
     pub fn close(&mut self, mut store: impl AsContextMut) -> Result<()> {
-        futures_and_streams::future_close(store.as_context_mut().0, &mut self.id)
+        futures_and_streams::future_close(store.as_context_mut().0, self.idx)
     }
 }
 
@@ -210,10 +215,17 @@ unsafe impl Lift for FutureAny {
 /// called then memory will not be leaked once the owning [`Store`] is dropped,
 /// but the resource handle will be leaked until the [`Store`] is dropped.
 ///
+/// # Cloning
+///
+/// Cloning a [`StreamAny`] does not duplicate the underlying stream: all clones
+/// refer to the same read end, whose ownership can only be transferred once.
+/// After one clone has been lowered into a guest, piped, or closed, attempting
+/// any of those with another clone returns an error.
+///
 /// [`Store`]: crate::Store
 #[derive(Debug, Clone, PartialEq)]
 pub struct StreamAny {
-    id: TableId<TransmitHandle>,
+    idx: HostResourceIndex,
     ty: PayloadType<StreamType>,
 }
 
@@ -231,7 +243,7 @@ impl StreamAny {
             payload,
             StreamType::equivalent_payload_guest,
         )?;
-        futures_and_streams::lower_stream_to_index(self.id, cx, ty)
+        futures_and_streams::lower_stream_to_index(self.idx, cx, ty)
     }
 
     /// Attempts to convert this [`StreamAny`] to a [`StreamReader<T>`]
@@ -247,7 +259,7 @@ impl StreamAny {
     {
         self.ty
             .typecheck_host::<T>(StreamType::equivalent_payload_host::<T>)?;
-        Ok(StreamReader::new_(self.id))
+        Ok(StreamReader::new_(self.idx))
     }
 
     /// Attempts to convert `reader` to a [`StreamAny`], erasing its statically
@@ -265,25 +277,25 @@ impl StreamAny {
         T: ComponentType + 'static,
     {
         let store = store.as_context_mut();
-        let ty = match store.0.transmit_origin(reader.id())? {
+        let ty = match store.0.transmit_origin(reader.idx())? {
             TransmitOrigin::Host => PayloadType::new_host::<T>(),
             TransmitOrigin::GuestStream(id, ty) => PayloadType::new_guest_stream(store.0, id, ty),
             TransmitOrigin::GuestFuture(..) => bail!("not a stream"),
         };
         Ok(StreamAny {
-            id: reader.id(),
+            idx: reader.idx(),
             ty,
         })
     }
 
     fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
-        let id = futures_and_streams::lift_index_to_stream(cx, ty, index)?;
+        let idx = futures_and_streams::lift_index_to_stream(cx, ty, index)?;
         let InterfaceType::Stream(ty) = ty else {
             unreachable!()
         };
         let ty = cx.types[ty].ty;
         Ok(StreamAny {
-            id,
+            idx,
             // Note that this stream might actually be a host-originating, but
             // see the documentation in `FutureAny::lift_from_index` for why
             // this should be ok.
@@ -298,13 +310,11 @@ impl StreamAny {
     ///
     /// # Errors
     ///
-    /// Returns an error if this stream has already been closed.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `store` does not own this stream.
+    /// Returns an error if this stream has already been closed or otherwise
+    /// transferred (e.g. lowered into a guest), or if it does not belong to
+    /// `store`.
     pub fn close(&mut self, mut store: impl AsContextMut) -> Result<()> {
-        futures_and_streams::stream_close(store.as_context_mut().0, &mut self.id)
+        futures_and_streams::stream_close(store.as_context_mut().0, self.idx)
     }
 }
 

@@ -123,6 +123,14 @@ impl<'a> HostResourceTables<'a> {
         self.tables.resource_lift_own(TypedResourceIndex::Host(idx))
     }
 
+    /// Validates that `idx` still refers to a live host-owned resource and
+    /// returns its `rep`, without consuming it or lending it out.
+    #[cfg(feature = "component-model-async")]
+    pub fn host_resource_rep(&mut self, idx: HostResourceIndex) -> Result<u32> {
+        let (idx, _) = self.validate_host_index(idx, false)?;
+        self.tables.resource_rep(TypedResourceIndex::Host(idx))
+    }
+
     /// See [`HostResourceTables::host_resource_lift_own`].
     pub fn host_resource_lift_borrow(&mut self, idx: HostResourceIndex) -> Result<u32> {
         let (idx, _) = self.validate_host_index(idx, false)?;
