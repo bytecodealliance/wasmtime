@@ -1645,6 +1645,7 @@ mod unix {
     use super::SocketServer;
     use rustix::fs::{FileType, fstat};
     use rustix::net::{AddressFamily, SocketType, getsockname, sockopt::socket_type};
+    use std::mem::ManuallyDrop;
     use std::net::TcpListener;
     use std::os::fd::{FromRawFd, OwnedFd, RawFd};
     use std::os::unix::net::UnixListener;
@@ -1701,25 +1702,33 @@ mod unix {
             // We want to take ownership of all file descriptors here, but only use the first socket to
             // listen on it.
             for fd in first_fd..last_fd {
-                let fd = unsafe {
-                    // Safety: We're calling this first in Self::execute(), before any other file
-                    // descriptors part from stdin, stdout and stderr are opened.
-                    OwnedFd::from_raw_fd(fd)
-                };
+                // SAFETY: CLI configuration has indicated that `fd` is probably
+                // owned by us, but we're also not entirely sure of that yet.
+                // The `OwnedFd` is wrapped in `ManuallyDrop` to avoid dropping
+                // it while it's tested below.
+                let mut fd = ManuallyDrop::new(unsafe { OwnedFd::from_raw_fd(fd) });
 
                 // Set the close-on-exec flag, matching libsystemd.
                 #[cfg(any(target_vendor = "apple", target_os = "linux", target_os = "android"))]
-                rustix::io::ioctl_fioclex(&fd)?;
+                rustix::io::ioctl_fioclex(&*fd)?;
 
                 // Check if this file descriptor is a TCP socket.
-                let stat = fstat(&fd)?;
+                let stat = fstat(&*fd)?;
                 if !FileType::from_raw_mode(stat.st_mode).is_socket() {
                     continue;
                 }
 
-                if socket_type(&fd)? != SocketType::STREAM {
+                if socket_type(&*fd)? != SocketType::STREAM {
                     continue;
                 }
+
+                // SAFETY: we've done all the checks we can to determine that
+                // `fd` is indeed valid. This function's own unsafe contract
+                // means that we're running very early on in the program, so at
+                // this point it by all means should be safe to take this fd. If
+                // it's not then that's a bug of the CLI configuration
+                // effectively.
+                let fd = unsafe { ManuallyDrop::take(&mut fd) };
 
                 let address_family = getsockname(&fd)?.address_family();
                 let this_listener = if address_family == AddressFamily::INET
