@@ -244,6 +244,26 @@ mod interface_name_with_rust_keyword {
     });
 }
 
+mod interface_types_with_rust_types {
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            interface a {
+                type %result = bool;
+                type %option = bool;
+
+                r: func() -> %result;
+                o: func() -> %option;
+            }
+
+            world foo {
+                export a;
+            }
+        "
+    });
+}
+
 mod with_works_with_hierarchy {
     mod bindings {
         wasmtime::component::bindgen!({

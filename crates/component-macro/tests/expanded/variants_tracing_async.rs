@@ -201,8 +201,11 @@ pub mod foo {
                 #[component(name = "a")]
                 A,
             }
-            impl core::fmt::Debug for E1 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for E1 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         E1::A => f.debug_tuple("E1::A").finish(),
                     }
@@ -221,8 +224,11 @@ pub mod foo {
                 #[component(name = "a")]
                 pub a: u32,
             }
-            impl core::fmt::Debug for Empty {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Empty {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("Empty").field("a", &self.a).finish()
                 }
             }
@@ -249,8 +255,11 @@ pub mod foo {
                 #[component(name = "g")]
                 G(u32),
             }
-            impl core::fmt::Debug for V1 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for V1 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         V1::A => f.debug_tuple("V1::A").finish(),
                         V1::C(e) => f.debug_tuple("V1::C").field(e).finish(),
@@ -276,8 +285,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B(f32),
             }
-            impl core::fmt::Debug for Casts1 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts1 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts1::A(e) => f.debug_tuple("Casts1::A").field(e).finish(),
                         Casts1::B(e) => f.debug_tuple("Casts1::B").field(e).finish(),
@@ -299,8 +311,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B(f32),
             }
-            impl core::fmt::Debug for Casts2 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts2 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts2::A(e) => f.debug_tuple("Casts2::A").field(e).finish(),
                         Casts2::B(e) => f.debug_tuple("Casts2::B").field(e).finish(),
@@ -322,8 +337,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B(u64),
             }
-            impl core::fmt::Debug for Casts3 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts3 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts3::A(e) => f.debug_tuple("Casts3::A").field(e).finish(),
                         Casts3::B(e) => f.debug_tuple("Casts3::B").field(e).finish(),
@@ -345,8 +363,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B(i64),
             }
-            impl core::fmt::Debug for Casts4 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts4 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts4::A(e) => f.debug_tuple("Casts4::A").field(e).finish(),
                         Casts4::B(e) => f.debug_tuple("Casts4::B").field(e).finish(),
@@ -368,8 +389,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B(i64),
             }
-            impl core::fmt::Debug for Casts5 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts5 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts5::A(e) => f.debug_tuple("Casts5::A").field(e).finish(),
                         Casts5::B(e) => f.debug_tuple("Casts5::B").field(e).finish(),
@@ -391,8 +415,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B((u32, u32)),
             }
-            impl core::fmt::Debug for Casts6 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts6 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts6::A(e) => f.debug_tuple("Casts6::A").field(e).finish(),
                         Casts6::B(e) => f.debug_tuple("Casts6::B").field(e).finish(),
@@ -429,8 +456,11 @@ pub mod foo {
                     }
                 }
             }
-            impl core::fmt::Debug for MyErrno {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for MyErrno {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("MyErrno")
                         .field("code", &(*self as i32))
                         .field("name", &self.name())
@@ -438,12 +468,15 @@ pub mod foo {
                         .finish()
                 }
             }
-            impl core::fmt::Display for MyErrno {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Display for MyErrno {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     write!(f, "{} (error {})", self.name(), * self as i32)
                 }
             }
-            impl core::error::Error for MyErrno {}
+            impl ::core::error::Error for MyErrno {}
             const _: () = {
                 assert!(1 == < MyErrno as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < MyErrno as wasmtime::component::ComponentType >::ALIGN32);
@@ -457,8 +490,11 @@ pub mod foo {
                 #[component(name = "v1")]
                 pub v1: V1,
             }
-            impl core::fmt::Debug for IsClone {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for IsClone {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("IsClone").field("v1", &self.v1).finish()
                 }
             }
@@ -1352,11 +1388,11 @@ pub mod exports {
                     #[component(name = "a")]
                     A,
                 }
-                impl core::fmt::Debug for E1 {
+                impl ::core::fmt::Debug for E1 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             E1::A => f.debug_tuple("E1::A").finish(),
                         }
@@ -1375,11 +1411,11 @@ pub mod exports {
                     #[component(name = "a")]
                     pub a: u32,
                 }
-                impl core::fmt::Debug for Empty {
+                impl ::core::fmt::Debug for Empty {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("Empty").field("a", &self.a).finish()
                     }
                 }
@@ -1410,11 +1446,11 @@ pub mod exports {
                     #[component(name = "g")]
                     G(u32),
                 }
-                impl core::fmt::Debug for V1 {
+                impl ::core::fmt::Debug for V1 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             V1::A => f.debug_tuple("V1::A").finish(),
                             V1::C(e) => f.debug_tuple("V1::C").field(e).finish(),
@@ -1440,11 +1476,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B(f32),
                 }
-                impl core::fmt::Debug for Casts1 {
+                impl ::core::fmt::Debug for Casts1 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts1::A(e) => f.debug_tuple("Casts1::A").field(e).finish(),
                             Casts1::B(e) => f.debug_tuple("Casts1::B").field(e).finish(),
@@ -1470,11 +1506,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B(f32),
                 }
-                impl core::fmt::Debug for Casts2 {
+                impl ::core::fmt::Debug for Casts2 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts2::A(e) => f.debug_tuple("Casts2::A").field(e).finish(),
                             Casts2::B(e) => f.debug_tuple("Casts2::B").field(e).finish(),
@@ -1500,11 +1536,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B(u64),
                 }
-                impl core::fmt::Debug for Casts3 {
+                impl ::core::fmt::Debug for Casts3 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts3::A(e) => f.debug_tuple("Casts3::A").field(e).finish(),
                             Casts3::B(e) => f.debug_tuple("Casts3::B").field(e).finish(),
@@ -1530,11 +1566,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B(i64),
                 }
-                impl core::fmt::Debug for Casts4 {
+                impl ::core::fmt::Debug for Casts4 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts4::A(e) => f.debug_tuple("Casts4::A").field(e).finish(),
                             Casts4::B(e) => f.debug_tuple("Casts4::B").field(e).finish(),
@@ -1560,11 +1596,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B(i64),
                 }
-                impl core::fmt::Debug for Casts5 {
+                impl ::core::fmt::Debug for Casts5 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts5::A(e) => f.debug_tuple("Casts5::A").field(e).finish(),
                             Casts5::B(e) => f.debug_tuple("Casts5::B").field(e).finish(),
@@ -1590,11 +1626,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B((u32, u32)),
                 }
-                impl core::fmt::Debug for Casts6 {
+                impl ::core::fmt::Debug for Casts6 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts6::A(e) => f.debug_tuple("Casts6::A").field(e).finish(),
                             Casts6::B(e) => f.debug_tuple("Casts6::B").field(e).finish(),
@@ -1635,11 +1671,11 @@ pub mod exports {
                         }
                     }
                 }
-                impl core::fmt::Debug for MyErrno {
+                impl ::core::fmt::Debug for MyErrno {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("MyErrno")
                             .field("code", &(*self as i32))
                             .field("name", &self.name())
@@ -1647,15 +1683,15 @@ pub mod exports {
                             .finish()
                     }
                 }
-                impl core::fmt::Display for MyErrno {
+                impl ::core::fmt::Display for MyErrno {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         write!(f, "{} (error {})", self.name(), * self as i32)
                     }
                 }
-                impl core::error::Error for MyErrno {}
+                impl ::core::error::Error for MyErrno {}
                 const _: () = {
                     assert!(
                         1 == < MyErrno as wasmtime::component::ComponentType >::SIZE32
@@ -1673,11 +1709,11 @@ pub mod exports {
                     #[component(name = "v1")]
                     pub v1: V1,
                 }
-                impl core::fmt::Debug for IsClone {
+                impl ::core::fmt::Debug for IsClone {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("IsClone").field("v1", &self.v1).finish()
                     }
                 }

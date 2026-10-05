@@ -238,8 +238,11 @@ pub mod foo {
                 #[component(name = "a20")]
                 pub a20: wasmtime::component::__internal::String,
             }
-            impl core::fmt::Debug for BigStruct {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for BigStruct {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("BigStruct")
                         .field("a1", &self.a1)
                         .field("a2", &self.a2)
@@ -554,11 +557,11 @@ pub mod exports {
                     #[component(name = "a20")]
                     pub a20: wasmtime::component::__internal::String,
                 }
-                impl core::fmt::Debug for BigStruct {
+                impl ::core::fmt::Debug for BigStruct {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("BigStruct")
                             .field("a1", &self.a1)
                             .field("a2", &self.a2)

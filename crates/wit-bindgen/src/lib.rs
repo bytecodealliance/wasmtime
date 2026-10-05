@@ -1973,12 +1973,12 @@ impl<'a> InterfaceGenerator<'a> {
 
             self.push_str("impl");
             self.print_generics(lt);
-            self.push_str(" core::fmt::Debug for ");
+            self.push_str(" ::core::fmt::Debug for ");
             self.push_str(&name);
             self.print_generics(lt);
             self.push_str(" {\n");
             self.push_str(
-                "fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {\n",
+                "fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {\n",
             );
             self.push_str(&format!("f.debug_struct(\"{name}\")"));
             for field in record.fields.iter() {
@@ -1995,18 +1995,18 @@ impl<'a> InterfaceGenerator<'a> {
             if info.error {
                 self.push_str("impl");
                 self.print_generics(lt);
-                self.push_str(" core::fmt::Display for ");
+                self.push_str(" ::core::fmt::Display for ");
                 self.push_str(&name);
                 self.print_generics(lt);
                 self.push_str(" {\n");
                 self.push_str(
-                    "fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {\n",
+                    "fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {\n",
                 );
                 self.push_str("write!(f, \"{:?}\", self)\n");
                 self.push_str("}\n");
                 self.push_str("}\n");
 
-                self.push_str("impl core::error::Error for ");
+                self.push_str("impl ::core::error::Error for ");
                 self.push_str(&name);
                 self.push_str("{}\n");
             }
@@ -2098,7 +2098,7 @@ impl<'a> InterfaceGenerator<'a> {
             let lt = self.lifetime_for(&info, mode);
             self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
-            self.push_str("= Option<");
+            self.push_str("= ::core::option::Option<");
             self.print_ty(payload, mode);
             self.push_str(">;\n");
             self.assert_type(id, &name);
@@ -2203,12 +2203,12 @@ impl<'a> InterfaceGenerator<'a> {
             if info.error {
                 self.push_str("impl");
                 self.print_generics(lt);
-                self.push_str(" core::fmt::Display for ");
+                self.push_str(" ::core::fmt::Display for ");
                 self.push_str(&name);
                 self.print_generics(lt);
                 self.push_str(" {\n");
                 self.push_str(
-                    "fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {\n",
+                    "fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {\n",
                 );
                 self.push_str("write!(f, \"{:?}\", self)\n");
                 self.push_str("}\n");
@@ -2216,7 +2216,7 @@ impl<'a> InterfaceGenerator<'a> {
 
                 self.push_str("impl");
                 self.print_generics(lt);
-                self.push_str(" core::error::Error for ");
+                self.push_str(" ::core::error::Error for ");
                 self.push_str(&name);
                 self.print_generics(lt);
                 self.push_str(" {}\n");
@@ -2239,11 +2239,13 @@ impl<'a> InterfaceGenerator<'a> {
         let lt = self.lifetime_for(&info, mode);
         self.push_str("impl");
         self.print_generics(lt);
-        self.push_str(" core::fmt::Debug for ");
+        self.push_str(" ::core::fmt::Debug for ");
         self.push_str(name);
         self.print_generics(lt);
         self.push_str(" {\n");
-        self.push_str("fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {\n");
+        self.push_str(
+            "fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {\n",
+        );
         self.push_str("match self {\n");
         for (case_name, payload) in cases {
             self.push_str(name);
@@ -2273,7 +2275,7 @@ impl<'a> InterfaceGenerator<'a> {
             let lt = self.lifetime_for(&info, mode);
             self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
-            self.push_str("= Result<");
+            self.push_str("= ::core::result::Result<");
             self.print_optional_ty(result.ok.as_ref(), mode);
             self.push_str(",");
             self.print_optional_ty(result.err.as_ref(), mode);
@@ -2368,10 +2370,10 @@ impl<'a> InterfaceGenerator<'a> {
 
             self.push_str("}\n");
 
-            self.push_str("impl core::fmt::Debug for ");
+            self.push_str("impl ::core::fmt::Debug for ");
             self.push_str(&name);
             self.push_str(
-                "{\nfn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {\n",
+                "{\nfn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {\n",
             );
             self.push_str("f.debug_struct(\"");
             self.push_str(&name);
@@ -2383,16 +2385,16 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str("}\n");
             self.push_str("}\n");
 
-            self.push_str("impl core::fmt::Display for ");
+            self.push_str("impl ::core::fmt::Display for ");
             self.push_str(&name);
             self.push_str(
-                "{\nfn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {\n",
+                "{\nfn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {\n",
             );
             self.push_str("write!(f, \"{} (error {})\", self.name(), *self as i32)");
             self.push_str("}\n");
             self.push_str("}\n");
             self.push_str("\n");
-            self.push_str("impl core::error::Error for ");
+            self.push_str("impl ::core::error::Error for ");
             self.push_str(&name);
             self.push_str("{}\n");
         } else {
@@ -3118,7 +3120,7 @@ pub fn add_to_linker<T, D>(
             // Functions which have a single result `result<ok,err>` get special
             // cased to use the host_wasmtime_rust::Error<err>, making it possible
             // for them to trap or use `?` to propagate their errors
-            self.push_str("Result<");
+            self.push_str("::core::result::Result<");
             if let Some(ok) = r.ok {
                 self.print_ty(&ok, TypeMode::Owned);
             } else {
@@ -3796,13 +3798,13 @@ impl LinkOptionsBuilder {
         uwriteln!(
             src,
             "
-            impl core::convert::From<LinkOptions> for {path}::LinkOptions {{
+            impl ::core::convert::From<LinkOptions> for {path}::LinkOptions {{
                 fn from(src: LinkOptions) -> Self {{
                     (&src).into()
                 }}
             }}
 
-            impl core::convert::From<&LinkOptions> for {path}::LinkOptions {{
+            impl ::core::convert::From<&LinkOptions> for {path}::LinkOptions {{
                 fn from(src: &LinkOptions) -> Self {{
                     let mut dest = Self::default();
         "

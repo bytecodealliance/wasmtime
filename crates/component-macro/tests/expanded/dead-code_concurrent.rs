@@ -194,8 +194,11 @@ pub mod a {
                 #[component(name = "a")]
                 pub a: u32,
             }
-            impl core::fmt::Debug for LiveType {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for LiveType {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("LiveType").field("a", &self.a).finish()
                 }
             }
@@ -272,8 +275,11 @@ pub mod a {
                 #[component(name = "a")]
                 pub a: u32,
             }
-            impl core::fmt::Debug for DeadType {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for DeadType {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("DeadType").field("a", &self.a).finish()
                 }
             }
@@ -294,8 +300,11 @@ pub mod a {
                 #[component(name = "b")]
                 B(DeadType),
             }
-            impl core::fmt::Debug for V {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for V {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         V::A(e) => f.debug_tuple("V::A").field(e).finish(),
                         V::B(e) => f.debug_tuple("V::B").field(e).finish(),

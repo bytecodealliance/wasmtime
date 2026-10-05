@@ -200,8 +200,11 @@ pub mod foo {
                 #[component(name = "a")]
                 pub a: u32,
             }
-            impl core::fmt::Debug for Empty {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Empty {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("Empty").field("a", &self.a).finish()
                 }
             }
@@ -224,8 +227,11 @@ pub mod foo {
                 #[component(name = "b")]
                 pub b: u32,
             }
-            impl core::fmt::Debug for Scalars {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Scalars {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("Scalars")
                         .field("a", &self.a)
                         .field("b", &self.b)
@@ -263,8 +269,11 @@ pub mod foo {
                 #[component(name = "i")]
                 pub i: bool,
             }
-            impl core::fmt::Debug for ReallyFlags {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for ReallyFlags {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("ReallyFlags")
                         .field("a", &self.a)
                         .field("b", &self.b)
@@ -303,8 +312,11 @@ pub mod foo {
                 #[component(name = "e")]
                 pub e: ReallyFlags,
             }
-            impl core::fmt::Debug for Aggregates {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Aggregates {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("Aggregates")
                         .field("a", &self.a)
                         .field("b", &self.b)
@@ -371,8 +383,11 @@ pub mod foo {
                     >,
                 >,
             }
-            impl core::fmt::Debug for FuturesAndStreams {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for FuturesAndStreams {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("FuturesAndStreams")
                         .field("a", &self.a)
                         .field("b", &self.b)
@@ -674,11 +689,11 @@ pub mod exports {
                     #[component(name = "a")]
                     pub a: u32,
                 }
-                impl core::fmt::Debug for Empty {
+                impl ::core::fmt::Debug for Empty {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("Empty").field("a", &self.a).finish()
                     }
                 }
@@ -705,11 +720,11 @@ pub mod exports {
                     #[component(name = "b")]
                     pub b: u32,
                 }
-                impl core::fmt::Debug for Scalars {
+                impl ::core::fmt::Debug for Scalars {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("Scalars")
                             .field("a", &self.a)
                             .field("b", &self.b)
@@ -751,11 +766,11 @@ pub mod exports {
                     #[component(name = "i")]
                     pub i: bool,
                 }
-                impl core::fmt::Debug for ReallyFlags {
+                impl ::core::fmt::Debug for ReallyFlags {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("ReallyFlags")
                             .field("a", &self.a)
                             .field("b", &self.b)
@@ -796,11 +811,11 @@ pub mod exports {
                     #[component(name = "e")]
                     pub e: ReallyFlags,
                 }
-                impl core::fmt::Debug for Aggregates {
+                impl ::core::fmt::Debug for Aggregates {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("Aggregates")
                             .field("a", &self.a)
                             .field("b", &self.b)
@@ -874,11 +889,11 @@ pub mod exports {
                         >,
                     >,
                 }
-                impl core::fmt::Debug for FuturesAndStreams {
+                impl ::core::fmt::Debug for FuturesAndStreams {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("FuturesAndStreams")
                             .field("a", &self.a)
                             .field("b", &self.b)
