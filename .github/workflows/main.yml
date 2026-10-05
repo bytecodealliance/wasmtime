@@ -40,7 +40,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -53,7 +53,7 @@ jobs:
     name: Check JS
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - run: npm install
       working-directory: ./crates/explorer
     - run: npm run lint
@@ -68,7 +68,7 @@ jobs:
     name: Clang format
     runs-on: ubuntu-26.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - run: |
@@ -89,7 +89,7 @@ jobs:
     if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -115,7 +115,7 @@ jobs:
     outputs:
       outcome: ${{ steps.vet.outcome }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -191,7 +191,7 @@ jobs:
       test-gc-zeal: ${{ steps.calculate.outputs.test-gc-zeal }}
       run-isle-veri: ${{ steps.calculate.outputs.run-isle-veri }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - id: calculate
       env:
         GH_TOKEN: ${{ github.token }}
@@ -288,7 +288,7 @@ jobs:
       RUSTDOCFLAGS: --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -488,7 +488,7 @@ jobs:
               -p wasmtime-cli-flags --no-default-features --all-features
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -507,7 +507,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-full
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -521,7 +521,7 @@ jobs:
     env:
       CARGO_NDK_VERSION: 2.12.2
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -538,7 +538,7 @@ jobs:
     name: MSRV check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -570,7 +570,7 @@ jobs:
     env:
       CARGO_NDK_VERSION: 2.12.2
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -685,7 +685,7 @@ jobs:
             CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_GNU_LINKER: loongarch64-linux-gnu-gcc-14
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -710,7 +710,7 @@ jobs:
     name: Nightly tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -772,7 +772,7 @@ jobs:
     name: GC Zeal Tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -830,7 +830,7 @@ jobs:
             flags: -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON
             name: Linux (ASAN)
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -865,7 +865,7 @@ jobs:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1031,7 +1031,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1058,7 +1058,7 @@ jobs:
     name: Test wasmtime-fuzzing
     runs-on: 'ubuntu-latest'
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1074,7 +1074,7 @@ jobs:
     name: Test DWARF debugging
     runs-on: ubuntu-26.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1105,7 +1105,7 @@ jobs:
     name: Test guest debugging
     runs-on: ubuntu-26.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1130,7 +1130,7 @@ jobs:
       deployments: write
       contents: write
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1157,7 +1157,7 @@ jobs:
     needs: build-preview1-component-adapter
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1172,7 +1172,7 @@ jobs:
     if: needs.determine.outputs.run-full
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1213,7 +1213,7 @@ jobs:
     name: Run benchmarks
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1227,7 +1227,7 @@ jobs:
     name: Meta deterministic check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1239,7 +1239,7 @@ jobs:
     if: github.repository == 'bytecodealliance/wasmtime' && needs.determine.outputs.run-full
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1287,7 +1287,7 @@ jobs:
     env:
       MIRIFLAGS: -Zmiri-permissive-provenance
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1337,7 +1337,7 @@ jobs:
     # Runs can be cold and take a long time; most will not take this long.
     timeout-minutes: 360
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -1395,7 +1395,7 @@ jobs:
       matrix: ${{ fromJson(needs.determine.outputs.build-matrix) }}
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
 
@@ -1527,7 +1527,7 @@ jobs:
       && startsWith(github.ref, 'refs/heads/release-')
       && github.repository == 'bytecodealliance/wasmtime'
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: true
         fetch-depth: 0
