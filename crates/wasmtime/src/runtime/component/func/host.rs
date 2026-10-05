@@ -273,15 +273,6 @@ enum Destination<'a> {
     Memory(usize),
 }
 
-#[derive(Clone, Copy)]
-enum ResultMayRequireRealloc {
-    /// It is statically known if the return type can realloc.
-    Static(bool),
-    /// The return type is dynamic and so the import result type needs to be
-    /// checked to determine if lowering might realloc.
-    Dynamic,
-}
-
 /// Consolidation of functionality of invoking a host function.
 ///
 /// This trait primarily serves as a deduplication of the "static" and
@@ -293,8 +284,8 @@ where
     R: Send + Sync + 'static,
 {
     /// How to determine whether lowering this function's result might call the
-    /// guest's `realloc` function.
-    const RESULT_MAY_REQUIRE_REALLOC: ResultMayRequireRealloc;
+    /// guest's `realloc` function. True is the conservative choice.
+    const RESULT_MAY_REQUIRE_REALLOC: bool = true;
 
     /// Performs a type-check to ensure that this host function can be imported
     /// with the provided signature that a component is using.
@@ -461,13 +452,7 @@ where
         let mut store = StoreContextMut(store);
         let types = component.types();
         let fty = &types[ty];
-        let result_may_require_realloc = match Self::RESULT_MAY_REQUIRE_REALLOC {
-            ResultMayRequireRealloc::Static(value) => value,
-            ResultMayRequireRealloc::Dynamic => types[fty.results]
-                .types
-                .iter()
-                .any(|ty| types.may_require_realloc(ty)),
-        };
+        let result_may_require_realloc = Self::RESULT_MAY_REQUIRE_REALLOC;
         let entered_host_task = store.0.host_task_create()?;
 
         // Lift the parameters, either from flat storage or from linear
@@ -658,8 +643,7 @@ where
     P: ComponentNamedList + Lift + 'static,
     R: ComponentNamedList + Lower + 'static,
 {
-    const RESULT_MAY_REQUIRE_REALLOC: ResultMayRequireRealloc =
-        ResultMayRequireRealloc::Static(R::MAY_REQUIRE_REALLOC);
+    const RESULT_MAY_REQUIRE_REALLOC: bool = R::MAY_REQUIRE_REALLOC;
 
     fn typecheck(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()> {
         let ty = &types.types[ty];
@@ -737,8 +721,6 @@ where
     T: 'static,
     F: Fn(StoreContextMut<'_, T>, ComponentFunc, Vec<Val>, usize) -> HostResult<Vec<Val>>,
 {
-    const RESULT_MAY_REQUIRE_REALLOC: ResultMayRequireRealloc = ResultMayRequireRealloc::Dynamic;
-
     /// This function performs dynamic type checks on its parameters and
     /// results and subsequently does not need to perform up-front type
     /// checks. However, we _do_ verify async-ness here.
