@@ -452,7 +452,6 @@ where
         let mut store = StoreContextMut(store);
         let types = component.types();
         let fty = &types[ty];
-        let result_may_require_realloc = Self::RESULT_MAY_REQUIRE_REALLOC;
         let entered_host_task = store.0.host_task_create()?;
 
         // Lift the parameters, either from flat storage or from linear
@@ -495,10 +494,10 @@ where
             HostResult::Future(future) => instance.first_poll(
                 store.as_context_mut(),
                 entered_host_task,
-                result_may_require_realloc,
+                Self::RESULT_MAY_REQUIRE_REALLOC,
                 future,
                 move |store, ret, immediate, materialized_host_task| {
-                    let mut lower = if result_may_require_realloc {
+                    let mut lower = if Self::RESULT_MAY_REQUIRE_REALLOC {
                         LowerContext::new(store, options, instance)
                     } else {
                         LowerContext::new_without_realloc(store, options, instance)
