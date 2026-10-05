@@ -8,11 +8,16 @@ runs:
       shell: bash
       run: |
         run_id=$(
-          gh api -H 'Accept: application/vnd.github+json' \
-              /repos/${{ github.repository }}/actions/workflows/main.yml/runs\?exclude_pull_requests=true \
-              | jq '.workflow_runs' \
-              | jq "map(select(.head_commit.id == \"${{ github.sha }}\"))[0].id" \
+          gh api -X GET \
+              /repos/${{ github.repository }}/actions/workflows/main.yml/runs \
+              -f head_sha=${{ github.sha }} \
+              -f status=success \
+              --jq '.workflow_runs[0].id // empty'
         )
+        if [ -z "$run_id" ]; then
+          echo "no successful main.yml run found for ${{ github.sha }}"
+          exit 1
+        fi
         echo COMMIT_RUN_ID=${run_id} >> "$GITHUB_ENV"
       env:
         GH_TOKEN: ${{ github.token }}
