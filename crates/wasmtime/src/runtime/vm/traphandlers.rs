@@ -459,6 +459,7 @@ pub enum UncaughtException {
     /// Propagate the exception to the host as a `ThrownException`.
     Propagate,
     /// Convert the escaping exception into a `Trap::UncaughtException`.
+    #[cfg(feature = "component-model")]
     Trap,
 }
 
@@ -915,7 +916,7 @@ impl CallThreadState {
                 //
                 // FIXME: this throws away the entire `err` and replaces it with
                 // a `Trap`, so any context on `err` is lost.
-                #[cfg(feature = "gc")]
+                #[cfg(all(feature = "gc", feature = "component-model"))]
                 if self.uncaught_exception == UncaughtException::Trap
                     && matches!(
                         &trap.reason,
