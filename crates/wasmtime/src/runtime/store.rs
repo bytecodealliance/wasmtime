@@ -1643,6 +1643,16 @@ impl StoreOpaque {
         self.instances[id].handle.get()
     }
 
+    /// Accessor from `InstanceId` to `&vm::Instance`, if `id` is actually an
+    /// instance within this store.
+    ///
+    /// Unlike `instance`, this does not assume `id` has already been validated,
+    /// and so suits ids from an untrusted source.
+    #[inline]
+    pub fn try_instance(&self, id: InstanceId) -> Option<&vm::Instance> {
+        Some(self.instances.get(id)?.handle.get())
+    }
+
     /// Accessor from `InstanceId` to `Pin<&mut vm::Instance>`.
     ///
     /// Note that if you have a `StoreInstanceId` you should use
@@ -2249,7 +2259,7 @@ at https://bytecodealliance.org/security.
         // return into it.
         let current_epoch = self.engine().current_epoch();
         let epoch_deadline = self.vm_store_context.epoch_deadline.get_mut();
-        *epoch_deadline = current_epoch + delta;
+        *epoch_deadline = current_epoch.saturating_add(delta).min(u64::MAX - 1);
     }
 
     pub(crate) fn get_epoch_deadline(&mut self) -> u64 {

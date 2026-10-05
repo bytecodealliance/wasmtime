@@ -162,7 +162,14 @@ fn assert_trap_code(status: &ExitStatus) {
 // Run a simple WASI hello world, snapshot0 edition.
 #[test]
 fn hello_wasi_snapshot0() -> Result<()> {
-    let stdout = run_wasmtime(&["tests/all/cli_tests/hello_wasi_snapshot0.wat"])?;
+    let output = wasmtime(&["tests/all/cli_tests/hello_wasi_snapshot0.wat"])?.output()?;
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("unknown import: `wasi_unstable::proc_exit`")
+    );
+
+    let stdout = run_wasmtime(&["-Spreview0", "tests/all/cli_tests/hello_wasi_snapshot0.wat"])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -213,7 +220,8 @@ fn timeout_in_invoke() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit2_wasi_snapshot0() -> Result<()> {
-    let output = wasmtime(&["tests/all/cli_tests/exit2_wasi_snapshot0.wat"])?.output()?;
+    let output =
+        wasmtime(&["-Spreview0", "tests/all/cli_tests/exit2_wasi_snapshot0.wat"])?.output()?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
@@ -229,7 +237,11 @@ fn exit2_wasi_snapshot1() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
-    let output = wasmtime(&["tests/all/cli_tests/exit125_wasi_snapshot0.wat"])?.output()?;
+    let output = wasmtime(&[
+        "-Spreview0",
+        "tests/all/cli_tests/exit125_wasi_snapshot0.wat",
+    ])?
+    .output()?;
     dbg!(&output);
     assert_eq!(output.status.code().unwrap(), 125);
     Ok(())
@@ -246,7 +258,11 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 // Exit with an invalid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit126_wasi_snapshot0() -> Result<()> {
-    let output = wasmtime(&["tests/all/cli_tests/exit126_wasi_snapshot0.wat"])?.output()?;
+    let output = wasmtime(&[
+        "-Spreview0",
+        "tests/all/cli_tests/exit126_wasi_snapshot0.wat",
+    ])?
+    .output()?;
     assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
@@ -374,7 +390,8 @@ fn run_cwasm() -> Result<()> {
 #[test]
 fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     let stdout = run_cmd(
-        wasmtime(&["-"])?.stdin(File::open("tests/all/cli_tests/hello_wasi_snapshot0.wat")?),
+        wasmtime(&["-Spreview0", "-"])?
+            .stdin(File::open("tests/all/cli_tests/hello_wasi_snapshot0.wat")?),
     )?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
@@ -3202,6 +3219,32 @@ start a print 1234
         run_wasmtime(&["run", "-Stcp", P3_CLI_DENY_LISTEN_COMPONENT])?;
         Ok(())
     }
+
+    #[test]
+    fn p2_cli_stdout_write_zeros_to_sink() -> Result<()> {
+        for n in ["0", "100", "10000"] {
+            run_wasmtime(&[
+                "run",
+                "-Sinherit-stdout=n",
+                P2_CLI_STDOUT_WRITE_ZEROS_TO_SINK_COMPONENT,
+                n,
+            ])?;
+        }
+        let output = super::wasmtime(&[
+            "run",
+            "-Sinherit-stdout=n",
+            P2_CLI_STDOUT_WRITE_ZEROS_TO_SINK_COMPONENT,
+            "10000000000",
+        ])?
+        .output()?;
+        assert_eq!(output.stdout, b"");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("cannot write more zeroes than `check_write` allows"),
+            "bad stderr: {stderr}"
+        );
+        Ok(())
+    }
 }
 
 #[test]
@@ -4106,5 +4149,45 @@ fn hostcall_fuel() -> Result<()> {
             .is_err()
         );
     }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(target_pointer_width = "32", ignore)] // this test takes 4GiB virtual memory
+fn wasi_snapshot0_poll_oneoff_hostcall_fuel() -> Result<()> {
+    let stdout = run_wasmtime(&[
+        "run",
+        "-Shostcall-fuel=1000,preview0=y",
+        "--invoke=run",
+        "tests/all/cli_tests/poll-oneoff.wat",
+    ])?;
+    assert_eq!(stdout, "48\n"); // `errno::nomem`
+    Ok(())
+}
+
+// The CLI derives the async stack size from `-Wmax-wasm-stack` when the latter
+// is set on its own, and that derivation used to overflow for very large
+// values. A stack that large may legitimately fail to be allocated, but the
+// CLI must not panic while computing the async stack size.
+/// An enormous `-W max-wasm-stack` must not overflow the CLI's derivation of the
+/// async stack size.
+///
+/// This asserts the absence of the *overflow*, not the absence of *any* failure:
+/// on a 32-bit target `usize::MAX` asks for a ~4 GiB stack, so an allocation
+/// failure is a legitimate outcome there (the merge queue's i686 job failed once
+/// because this test demanded that the request succeed).
+#[test]
+fn max_wasm_stack_large_value_does_not_overflow() -> Result<()> {
+    let output = run_wasmtime(&[
+        "run",
+        "-W",
+        &format!("max-wasm-stack={}", usize::MAX),
+        "tests/all/cli_tests/simple.wat",
+    ]);
+    let output = format!("{output:?}");
+    assert!(
+        !output.contains("attempt to add with overflow"),
+        "the async stack size derivation overflowed: {output}"
+    );
     Ok(())
 }

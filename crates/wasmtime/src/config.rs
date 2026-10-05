@@ -1430,6 +1430,16 @@ impl Config {
         self
     }
 
+    /// This corresponds to the 📡 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is a work in
+    /// progress.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_accessors(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_ACCESSORS, enable);
+        self
+    }
+
     /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
     ///
     /// This is `true` by default, except when using [`Strategy::Winch`] where
@@ -2467,13 +2477,12 @@ impl Config {
             | WasmFeatures::CM64
             | WasmFeatures::CM_FIXED_LENGTH_LISTS
             | WasmFeatures::CM_IMPLEMENTS
-            | WasmFeatures::CM_CANON_NAMES;
+            | WasmFeatures::CM_CANON_NAMES
+            | WasmFeatures::CM_ACCESSORS;
 
-        #[allow(unused_mut, reason = "easier to avoid #[cfg]")]
         let mut unsupported = !features_known_to_wasmtime;
 
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
-        match self.compiler_config.as_ref().and_then(|c| c.strategy) {
+        match self.get_strategy() {
             None | Some(Strategy::Cranelift) => {
                 // Pulley at this time fundamentally doesn't support the
                 // `threads` proposal, notably shared memory, because Rust can't
@@ -2527,6 +2536,13 @@ impl Config {
         unsupported
     }
 
+    fn get_strategy(&self) -> Option<Strategy> {
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        return self.compiler_config.as_ref()?.strategy;
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
+        return None;
+    }
+
     /// Calculates the set of features that are enabled for this `Config`.
     ///
     /// This is a bit of a subtle function which takes into account inputs such
@@ -2550,43 +2566,63 @@ impl Config {
     /// what's going on, and users should in theory be able to understand "ok
     /// yeah that's why I can't enable that feature here".
     fn features(&self) -> WasmFeatures {
-        // Start with an empty set of wasm features. This notably decouples
-        // features in Wasmtime from features in wasmparser as the two are
-        // generally on different timelines.
-        let mut features = WasmFeatures::empty();
+        let mut features;
 
         // Next add in all on-by-default features that Wasmtime has which are
         // subject to the criteria at
         // https://docs.wasmtime.dev/contributing-implementing-wasm-proposals.html
         // and https://docs.wasmtime.dev/stability-wasm-proposals.html.
         //
-        // Note that the first entry here, `WASM3`, is a fixed feature set that
-        // won't change over time in wasmparser which represents the union of
-        // all on-by-default features in Wasmtime. Also note that this is
-        // further refined in the conditional section below based on crate
-        // features.
-        features |= WasmFeatures::WASM3;
-
-        features |= WasmFeatures::WIDE_ARITHMETIC;
-        // features |= WasmFeatures::YOUR_WASM_FEATURE;
-        // ...
-
-        // NB: if you add a feature above this line please double-check
+        // Features here are based on the currently selected compiler. Wasm
+        // features generally are tightly intertwined with compiler support, and
+        // just because we want to on-by-default support in one compiler doesn't
+        // mean we want it for another. Additionally note that each compiler
+        // here starts with a fixed, unchanging, set of wasm features (e.g.
+        // `WASM2` or `WASM3`) which insulates this from `wasmparser`'s
+        // defaults.
+        //
+        // Finally, `None` is possible here when compiler support isn't enabled
+        // at all. In that situation just assume we're using Cranelift's feature
+        // set.
+        //
+        // NB: if you add a feature to a compiler please double-check
         // https://docs.wasmtime.dev/stability-wasm-proposals.html
         // to ensure all requirements are met and/or update the documentation
         // there too.
+        match self.get_strategy() {
+            None | Some(Strategy::Cranelift) => {
+                features = WasmFeatures::WASM3;
+                features |= WasmFeatures::WIDE_ARITHMETIC;
+
+                // features |= WasmFeatures::YOUR_WASM_FEATURE;
+                // ...
+            }
+            Some(Strategy::Winch) => {
+                features = WasmFeatures::WASM2;
+                features.remove(WasmFeatures::GC_TYPES);
+                features |= WasmFeatures::EXTENDED_CONST;
+                features |= WasmFeatures::MEMORY64;
+                features |= WasmFeatures::MULTI_MEMORY;
+            }
+            Some(Strategy::Auto) => unreachable!(),
+        }
 
         // Next configure some features further based on compile-time features
         // of the wasmtime crate itself. For example if "gc" is disabled then
         // `GC_TYPES` are disabled (a wasmparser pseudo-feature) as well as
         // exceptions, but reference-types is still available (e.g. new
         // encodings/types/etc).
-        //
-        // These features are all "on by default" in effect but dependent on
-        // compile-time support being available.
-        features.set(WasmFeatures::GC_TYPES, cfg!(feature = "gc"));
-        features.set(WasmFeatures::EXCEPTIONS, cfg!(feature = "gc"));
-        features.set(WasmFeatures::THREADS, cfg!(feature = "threads"));
+        if !cfg!(feature = "gc") {
+            features.remove(WasmFeatures::GC_TYPES | WasmFeatures::EXCEPTIONS);
+        }
+        if !cfg!(feature = "threads") {
+            features.remove(WasmFeatures::THREADS);
+        }
+
+        // These features aren't included in the base sets above, so explicitly
+        // enable/disable them there based on compiler features. Note that
+        // these are pretty much exclusively runtime-related features so there's
+        // no differentiation here between compilers.
         features.set(
             WasmFeatures::COMPONENT_MODEL,
             cfg!(feature = "component-model"),
@@ -2603,13 +2639,6 @@ impl Config {
         // implement a feature yet but Cranelift does. Or maybe Cranelift only
         // supports one particular platform and not others. Things like that.
         features = features & !self.compiler_panicking_wasm_features();
-
-        // Winch can compile GC types (e.g. `externref`) but they're not enabled
-        // by default. Exceptions require a GC heap, so they're disabled too.
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
-        if self.compiler_config.as_ref().and_then(|c| c.strategy) == Some(Strategy::Winch) {
-            features.remove(WasmFeatures::GC_TYPES | WasmFeatures::EXCEPTIONS);
-        }
 
         // And, finally, process all explicitly enabled/disabled features on
         // behalf of the embedder's frobbing `Config::wasm_*`. These have the
@@ -4973,10 +5002,7 @@ impl Engine {
 
     /// Returns the configured [`Config::strategy`] value.
     pub fn get_strategy(&self) -> Option<Strategy> {
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
-        return self.config().compiler_config.as_ref()?.strategy;
-        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
-        return None;
+        self.config().get_strategy()
     }
 
     /// Returns the configured [`Config::collector`] value.

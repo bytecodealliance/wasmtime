@@ -1,23 +1,10 @@
-## 50.0.0
+## 51.0.0
 
 Unreleased.
 
 ### Added
 
-- Add `--listenfd` option to `wasmtime serve`, which allows launching wasmtime
-  with sockets inherited from a service manager (e.g. systemd socket units).
-
 ### Changed
-
-- Remove non-functional `listenfd` WASI CLI option.
-
-### Fixed
-
-- Converting a borrowed `Resource<T>` or `ResourceDynamic` created with
-  `new_borrow` into a `ResourceAny` outside of a component call no longer
-  panics. The borrow is now lowered into the guest when the call happens, and
-  `ResourceAny::resource_drop` is no longer required for such borrows.
-  [#7793](https://github.com/bytecodealliance/wasmtime/issues/7793)
 
 --------------------------------------------------------------------------------
 
@@ -25,6 +12,7 @@ Release notes for previous releases of Wasmtime can be found on the respective
 release branches of the Wasmtime repository.
 
 <!-- ARCHIVE_START -->
+* [50.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-50.0.0/RELEASES.md)
 * [49.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-49.0.0/RELEASES.md)
 * [48.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-48.0.0/RELEASES.md)
 * [47.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-47.0.0/RELEASES.md)

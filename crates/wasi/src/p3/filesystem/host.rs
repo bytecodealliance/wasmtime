@@ -59,30 +59,29 @@ fn get_writable_file(table: &ResourceTable, fd: &Resource<Descriptor>) -> Filesy
 }
 
 fn systemtime_from(t: system_clock::Instant) -> Result<std::time::SystemTime, ErrorCode> {
-    if let Ok(seconds) = <i64 as TryInto<u64>>::try_into(t.seconds) {
-        // Catch nanoseconds-into-seconds Overflow error explicitly:
-        // unfortunately, Duration::new panics when input overflows
-        let duration = core::time::Duration::new(
-            seconds
-                .checked_add(u64::from(t.nanoseconds / 1_000_000_000))
-                .ok_or(ErrorCode::Overflow)?,
-            t.nanoseconds % 1_000_000_000,
-        );
-        std::time::SystemTime::UNIX_EPOCH
+    let mut system_time = std::time::SystemTime::UNIX_EPOCH;
+
+    // Add or subtract the seconds based on sign.
+    if t.seconds >= 0 {
+        let duration =
+            core::time::Duration::new(t.seconds.try_into().map_err(|_| ErrorCode::Overflow)?, 0);
+        system_time = system_time
             .checked_add(duration)
-            .ok_or(ErrorCode::Overflow)
+            .ok_or(ErrorCode::Overflow)?;
     } else {
-        let duration = core::time::Duration::new(
-            t.seconds
-                .unsigned_abs()
-                .checked_add(u64::from(t.nanoseconds / 1_000_000_000))
-                .ok_or(ErrorCode::Overflow)?,
-            t.nanoseconds % 1_000_000_000,
-        );
-        std::time::SystemTime::UNIX_EPOCH
+        let duration = core::time::Duration::new(t.seconds.unsigned_abs(), 0);
+        system_time = system_time
             .checked_sub(duration)
-            .ok_or(ErrorCode::Overflow)
-    }
+            .ok_or(ErrorCode::Overflow)?;
+    };
+
+    // Always add the nanos
+    let duration = core::time::Duration::new(0, t.nanoseconds);
+    system_time = system_time
+        .checked_add(duration)
+        .ok_or(ErrorCode::Overflow)?;
+
+    Ok(system_time)
 }
 
 fn systemtimespec_from(t: NewTimestamp) -> Result<Option<SystemTime>, ErrorCode> {

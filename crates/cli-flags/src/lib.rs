@@ -534,6 +534,9 @@ wasmtime_option_group! {
         /// Component model support for canonical names, corresponds to the
         /// 🔗 emoji in the upstream spec.
         pub component_model_canonical_names: Option<bool>,
+        /// Component model support for `[get]` and `[set]` accessors,
+        /// corresponds to the 📡 emoji in the upstream spec.
+        pub component_model_accessors: Option<bool>,
         /// Whether or not any concurrency infrastructure in Wasmtime is
         /// enabled or not.
         pub concurrency_support: Option<bool>,
@@ -600,7 +603,7 @@ wasmtime_option_group! {
         pub udp: Option<bool>,
         /// Enable WASI APIs marked as: @unstable(feature = network-error-code)
         pub network_error_code: Option<bool>,
-        /// Allows imports from the `wasi_unstable` core wasm module.
+        /// Allows imports from the `wasi_unstable` core wasm module. Disabled by default.
         pub preview0: Option<bool>,
         /// Inherit all environment variables from the parent process.
         ///
@@ -1252,7 +1255,7 @@ impl CommonOptions {
             #[cfg(any(feature = "async", feature = "stack-switching"))]
             if self.wasm.async_stack_size.is_none() {
                 const DEFAULT_HOST_STACK: usize = 512 << 10;
-                config.async_stack_size(max + DEFAULT_HOST_STACK);
+                config.async_stack_size(max.saturating_add(DEFAULT_HOST_STACK));
             }
         }
 
@@ -1358,6 +1361,7 @@ impl CommonOptions {
             ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
             ("component-model", component_model_implements, wasm_component_model_implements)
             ("component-model", component_model_canonical_names, wasm_component_model_canonical_names)
+            ("component-model", component_model_accessors, wasm_component_model_accessors)
             ("component-model", component_model_memory64, wasm_component_model_memory64)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
@@ -1536,6 +1540,7 @@ impl CommonOptions {
                 component_model_canonical_names: Some(
                     features.contains(WasmFeatures::CM_CANON_NAMES),
                 ),
+                component_model_accessors: Some(features.contains(WasmFeatures::CM_ACCESSORS)),
                 component_model_map: Some(features.contains(WasmFeatures::CM_MAP)),
                 component_model_memory64: Some(features.contains(WasmFeatures::CM64)),
                 component_model_more_async_builtins: Some(

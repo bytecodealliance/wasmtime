@@ -142,6 +142,46 @@ impl MacroAssembler {
 
         Ok(res)
     }
+
+    /// Calculate the tail callee's entry SP, restore the old frame, and then
+    /// update SP. All old-frame reads must precede the SP update so signal
+    /// handlers cannot overwrite the frame before it is restored.
+    fn finish_tail_call_frame(
+        &mut self,
+        callee_args_from_fp: i64,
+        restore_frame: impl FnOnce(&mut Self) -> Result<()>,
+    ) -> Result<()> {
+        self.with_scratch::<IntScratch, _>(|masm, work| {
+            // Calculate the entry SP while the current FP is available.
+            let magnitude = callee_args_from_fp.unsigned_abs();
+            if let Some(imm) = Imm12::maybe_from_u64(magnitude) {
+                if callee_args_from_fp >= 0 {
+                    masm.asm
+                        .add_ir(imm, regs::fp(), work.writable(), OperandSize::S64);
+                } else {
+                    masm.asm
+                        .sub_ir(imm, regs::fp(), work.writable(), OperandSize::S64);
+                }
+            } else {
+                masm.asm
+                    .mov_ir(work.writable(), I::I64(magnitude), OperandSize::S64);
+                if callee_args_from_fp >= 0 {
+                    masm.asm
+                        .add_rrr(regs::fp(), work.inner(), work.writable(), OperandSize::S64);
+                } else {
+                    masm.asm
+                        .sub_rrr(work.inner(), regs::fp(), work.writable(), OperandSize::S64);
+                }
+            }
+
+            restore_frame(masm)?;
+
+            let zero = Imm12::maybe_from_u64(0).unwrap();
+            masm.asm
+                .add_ir(zero, work.inner(), writable!(regs::sp()), OperandSize::S64);
+            Ok(())
+        })
+    }
 }
 
 impl Masm for MacroAssembler {
@@ -525,25 +565,10 @@ impl Masm for MacroAssembler {
             writable!(regs::lr()),
         )?;
 
-        let entry_sp_offset = plan.callee_args_from_fp.unsigned_abs();
-        if let Some(imm) = Imm12::maybe_from_u64(entry_sp_offset) {
-            assert!(plan.callee_args_from_fp >= 0);
-            self.asm
-                .add_ir(imm, regs::fp(), writable!(regs::sp()), OperandSize::S64);
-        } else {
-            self.with_scratch::<IntScratch, _>(|masm, work| {
-                masm.asm
-                    .mov_ir(work.writable(), I::I64(entry_sp_offset), OperandSize::S64);
-                masm.asm.add_rrr(
-                    regs::fp(),
-                    work.inner(),
-                    writable!(regs::sp()),
-                    OperandSize::S64,
-                );
-            });
-        }
-
-        self.load_ptr(Address::offset(regs::fp(), 0), writable!(regs::fp()))
+        assert!(plan.callee_args_from_fp >= 0);
+        self.finish_tail_call_frame(plan.callee_args_from_fp, |masm| {
+            masm.load_ptr(Address::offset(regs::fp(), 0), writable!(regs::fp()))
+        })
     }
 
     fn with_tail_call_resize(
@@ -579,41 +604,13 @@ impl Masm for MacroAssembler {
 
         move_args(self, scratch_size)?;
 
-        self.with_scratch::<IntScratch, _>(|masm, work| {
-            // Calculate the callee's entry SP while the current FP is available.
-            let magnitude = plan.callee_args_from_fp.unsigned_abs();
-            if let Some(imm) = Imm12::maybe_from_u64(magnitude) {
-                if plan.callee_args_from_fp >= 0 {
-                    masm.asm
-                        .add_ir(imm, regs::fp(), work.writable(), OperandSize::S64);
-                } else {
-                    masm.asm
-                        .sub_ir(imm, regs::fp(), work.writable(), OperandSize::S64);
-                }
-            } else {
-                masm.asm
-                    .mov_ir(work.writable(), I::I64(magnitude), OperandSize::S64);
-                if plan.callee_args_from_fp >= 0 {
-                    masm.asm
-                        .add_rrr(work.inner(), regs::fp(), work.writable(), OperandSize::S64);
-                } else {
-                    masm.asm
-                        .sub_rrr(work.inner(), regs::fp(), work.writable(), OperandSize::S64);
-                }
-            }
-
-            // Finish all old-frame reads before advancing SP. The tail callee
-            // will save FP, LR, and x28 into its replacement frame.
+        self.finish_tail_call_frame(plan.callee_args_from_fp, |masm| {
+            // The tail callee will save FP, LR, and x28 into its replacement frame.
             masm.load_ptr(Address::from_shadow_sp(0), writable!(regs::fp()))?;
             masm.load_ptr(
                 Address::from_shadow_sp(i64::from(word_bytes)),
                 writable!(regs::shadow_sp()),
-            )?;
-
-            let zero = Imm12::maybe_from_u64(0).unwrap();
-            masm.asm
-                .add_ir(zero, work.inner(), writable!(regs::sp()), OperandSize::S64);
-            wasmtime_environ::error::Ok(())
+            )
         })
     }
 

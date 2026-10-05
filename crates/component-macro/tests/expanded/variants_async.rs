@@ -201,8 +201,11 @@ pub mod foo {
                 #[component(name = "a")]
                 A,
             }
-            impl core::fmt::Debug for E1 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for E1 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         E1::A => f.debug_tuple("E1::A").finish(),
                     }
@@ -217,15 +220,21 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(record)]
             #[derive(Clone, Copy)]
-            pub struct Empty {}
-            impl core::fmt::Debug for Empty {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_struct("Empty").finish()
+            pub struct Empty {
+                #[component(name = "a")]
+                pub a: u32,
+            }
+            impl ::core::fmt::Debug for Empty {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("Empty").field("a", &self.a).finish()
                 }
             }
             const _: () = {
-                assert!(0 == < Empty as wasmtime::component::ComponentType >::SIZE32);
-                assert!(1 == < Empty as wasmtime::component::ComponentType >::ALIGN32);
+                assert!(4 == < Empty as wasmtime::component::ComponentType >::SIZE32);
+                assert!(4 == < Empty as wasmtime::component::ComponentType >::ALIGN32);
             };
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
@@ -246,8 +255,11 @@ pub mod foo {
                 #[component(name = "g")]
                 G(u32),
             }
-            impl core::fmt::Debug for V1 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for V1 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         V1::A => f.debug_tuple("V1::A").finish(),
                         V1::C(e) => f.debug_tuple("V1::C").field(e).finish(),
@@ -273,8 +285,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B(f32),
             }
-            impl core::fmt::Debug for Casts1 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts1 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts1::A(e) => f.debug_tuple("Casts1::A").field(e).finish(),
                         Casts1::B(e) => f.debug_tuple("Casts1::B").field(e).finish(),
@@ -296,8 +311,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B(f32),
             }
-            impl core::fmt::Debug for Casts2 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts2 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts2::A(e) => f.debug_tuple("Casts2::A").field(e).finish(),
                         Casts2::B(e) => f.debug_tuple("Casts2::B").field(e).finish(),
@@ -319,8 +337,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B(u64),
             }
-            impl core::fmt::Debug for Casts3 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts3 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts3::A(e) => f.debug_tuple("Casts3::A").field(e).finish(),
                         Casts3::B(e) => f.debug_tuple("Casts3::B").field(e).finish(),
@@ -342,8 +363,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B(i64),
             }
-            impl core::fmt::Debug for Casts4 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts4 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts4::A(e) => f.debug_tuple("Casts4::A").field(e).finish(),
                         Casts4::B(e) => f.debug_tuple("Casts4::B").field(e).finish(),
@@ -365,8 +389,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B(i64),
             }
-            impl core::fmt::Debug for Casts5 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts5 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts5::A(e) => f.debug_tuple("Casts5::A").field(e).finish(),
                         Casts5::B(e) => f.debug_tuple("Casts5::B").field(e).finish(),
@@ -388,8 +415,11 @@ pub mod foo {
                 #[component(name = "b")]
                 B((u32, u32)),
             }
-            impl core::fmt::Debug for Casts6 {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Casts6 {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Casts6::A(e) => f.debug_tuple("Casts6::A").field(e).finish(),
                         Casts6::B(e) => f.debug_tuple("Casts6::B").field(e).finish(),
@@ -426,8 +456,11 @@ pub mod foo {
                     }
                 }
             }
-            impl core::fmt::Debug for MyErrno {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for MyErrno {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("MyErrno")
                         .field("code", &(*self as i32))
                         .field("name", &self.name())
@@ -435,12 +468,15 @@ pub mod foo {
                         .finish()
                 }
             }
-            impl core::fmt::Display for MyErrno {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Display for MyErrno {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     write!(f, "{} (error {})", self.name(), * self as i32)
                 }
             }
-            impl core::error::Error for MyErrno {}
+            impl ::core::error::Error for MyErrno {}
             const _: () = {
                 assert!(1 == < MyErrno as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < MyErrno as wasmtime::component::ComponentType >::ALIGN32);
@@ -454,8 +490,11 @@ pub mod foo {
                 #[component(name = "v1")]
                 pub v1: V1,
             }
-            impl core::fmt::Debug for IsClone {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for IsClone {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("IsClone").field("v1", &self.v1).finish()
                 }
             }
@@ -493,7 +532,7 @@ pub mod foo {
                 fn option_arg(
                     &mut self,
                     a: Option<bool>,
-                    b: Option<()>,
+                    b: Option<(u32,)>,
                     c: Option<u32>,
                     d: Option<E1>,
                     e: Option<f32>,
@@ -504,7 +543,7 @@ pub mod foo {
                 ) -> impl ::core::future::Future<
                     Output = (
                         Option<bool>,
-                        Option<()>,
+                        Option<(u32,)>,
                         Option<u32>,
                         Option<E1>,
                         Option<f32>,
@@ -527,7 +566,7 @@ pub mod foo {
                     a: Result<(), ()>,
                     b: Result<(), E1>,
                     c: Result<E1, ()>,
-                    d: Result<(), ()>,
+                    d: Result<(u32,), (u32,)>,
                     e: Result<u32, V1>,
                     f: Result<
                         wasmtime::component::__internal::String,
@@ -541,7 +580,7 @@ pub mod foo {
                         Result<(), ()>,
                         Result<(), E1>,
                         Result<E1, ()>,
-                        Result<(), ()>,
+                        Result<(u32,), (u32,)>,
                         Result<u32, V1>,
                         Result<
                             wasmtime::component::__internal::String,
@@ -619,7 +658,7 @@ pub mod foo {
                 fn option_arg(
                     &mut self,
                     a: Option<bool>,
-                    b: Option<()>,
+                    b: Option<(u32,)>,
                     c: Option<u32>,
                     d: Option<E1>,
                     e: Option<f32>,
@@ -632,7 +671,7 @@ pub mod foo {
                 ) -> impl ::core::future::Future<
                     Output = (
                         Option<bool>,
-                        Option<()>,
+                        Option<(u32,)>,
                         Option<u32>,
                         Option<E1>,
                         Option<f32>,
@@ -659,7 +698,7 @@ pub mod foo {
                     a: Result<(), ()>,
                     b: Result<(), E1>,
                     c: Result<E1, ()>,
-                    d: Result<(), ()>,
+                    d: Result<(u32,), (u32,)>,
                     e: Result<u32, V1>,
                     f: Result<
                         wasmtime::component::__internal::String,
@@ -675,7 +714,7 @@ pub mod foo {
                         Result<(), ()>,
                         Result<(), E1>,
                         Result<E1, ()>,
-                        Result<(), ()>,
+                        Result<(u32,), (u32,)>,
                         Result<u32, V1>,
                         Result<
                             wasmtime::component::__internal::String,
@@ -821,7 +860,7 @@ pub mod foo {
                             arg5,
                         ): (
                             Option<bool>,
-                            Option<()>,
+                            Option<(u32,)>,
                             Option<u32>,
                             Option<E1>,
                             Option<f32>,
@@ -890,7 +929,7 @@ pub mod foo {
                             Result<(), ()>,
                             Result<(), E1>,
                             Result<E1, ()>,
-                            Result<(), ()>,
+                            Result<(u32,), (u32,)>,
                             Result<u32, V1>,
                             Result<
                                 wasmtime::component::__internal::String,
@@ -1051,11 +1090,11 @@ pub mod exports {
                     #[component(name = "a")]
                     A,
                 }
-                impl core::fmt::Debug for E1 {
+                impl ::core::fmt::Debug for E1 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             E1::A => f.debug_tuple("E1::A").finish(),
                         }
@@ -1070,21 +1109,24 @@ pub mod exports {
                 #[derive(wasmtime::component::Lower)]
                 #[component(record)]
                 #[derive(Clone, Copy)]
-                pub struct Empty {}
-                impl core::fmt::Debug for Empty {
+                pub struct Empty {
+                    #[component(name = "a")]
+                    pub a: u32,
+                }
+                impl ::core::fmt::Debug for Empty {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
-                        f.debug_struct("Empty").finish()
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        f.debug_struct("Empty").field("a", &self.a).finish()
                     }
                 }
                 const _: () = {
                     assert!(
-                        0 == < Empty as wasmtime::component::ComponentType >::SIZE32
+                        4 == < Empty as wasmtime::component::ComponentType >::SIZE32
                     );
                     assert!(
-                        1 == < Empty as wasmtime::component::ComponentType >::ALIGN32
+                        4 == < Empty as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
                 #[derive(wasmtime::component::ComponentType)]
@@ -1106,11 +1148,11 @@ pub mod exports {
                     #[component(name = "g")]
                     G(u32),
                 }
-                impl core::fmt::Debug for V1 {
+                impl ::core::fmt::Debug for V1 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             V1::A => f.debug_tuple("V1::A").finish(),
                             V1::C(e) => f.debug_tuple("V1::C").field(e).finish(),
@@ -1136,11 +1178,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B(f32),
                 }
-                impl core::fmt::Debug for Casts1 {
+                impl ::core::fmt::Debug for Casts1 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts1::A(e) => f.debug_tuple("Casts1::A").field(e).finish(),
                             Casts1::B(e) => f.debug_tuple("Casts1::B").field(e).finish(),
@@ -1166,11 +1208,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B(f32),
                 }
-                impl core::fmt::Debug for Casts2 {
+                impl ::core::fmt::Debug for Casts2 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts2::A(e) => f.debug_tuple("Casts2::A").field(e).finish(),
                             Casts2::B(e) => f.debug_tuple("Casts2::B").field(e).finish(),
@@ -1196,11 +1238,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B(u64),
                 }
-                impl core::fmt::Debug for Casts3 {
+                impl ::core::fmt::Debug for Casts3 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts3::A(e) => f.debug_tuple("Casts3::A").field(e).finish(),
                             Casts3::B(e) => f.debug_tuple("Casts3::B").field(e).finish(),
@@ -1226,11 +1268,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B(i64),
                 }
-                impl core::fmt::Debug for Casts4 {
+                impl ::core::fmt::Debug for Casts4 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts4::A(e) => f.debug_tuple("Casts4::A").field(e).finish(),
                             Casts4::B(e) => f.debug_tuple("Casts4::B").field(e).finish(),
@@ -1256,11 +1298,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B(i64),
                 }
-                impl core::fmt::Debug for Casts5 {
+                impl ::core::fmt::Debug for Casts5 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts5::A(e) => f.debug_tuple("Casts5::A").field(e).finish(),
                             Casts5::B(e) => f.debug_tuple("Casts5::B").field(e).finish(),
@@ -1286,11 +1328,11 @@ pub mod exports {
                     #[component(name = "b")]
                     B((u32, u32)),
                 }
-                impl core::fmt::Debug for Casts6 {
+                impl ::core::fmt::Debug for Casts6 {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             Casts6::A(e) => f.debug_tuple("Casts6::A").field(e).finish(),
                             Casts6::B(e) => f.debug_tuple("Casts6::B").field(e).finish(),
@@ -1331,11 +1373,11 @@ pub mod exports {
                         }
                     }
                 }
-                impl core::fmt::Debug for MyErrno {
+                impl ::core::fmt::Debug for MyErrno {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("MyErrno")
                             .field("code", &(*self as i32))
                             .field("name", &self.name())
@@ -1343,15 +1385,15 @@ pub mod exports {
                             .finish()
                     }
                 }
-                impl core::fmt::Display for MyErrno {
+                impl ::core::fmt::Display for MyErrno {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         write!(f, "{} (error {})", self.name(), * self as i32)
                     }
                 }
-                impl core::error::Error for MyErrno {}
+                impl ::core::error::Error for MyErrno {}
                 const _: () = {
                     assert!(
                         1 == < MyErrno as wasmtime::component::ComponentType >::SIZE32
@@ -1369,11 +1411,11 @@ pub mod exports {
                     #[component(name = "v1")]
                     pub v1: V1,
                 }
-                impl core::fmt::Debug for IsClone {
+                impl ::core::fmt::Debug for IsClone {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("IsClone").field("v1", &self.v1).finish()
                     }
                 }
@@ -1539,7 +1581,7 @@ pub mod exports {
                             .get_typed_func::<
                                 (
                                     Option<bool>,
-                                    Option<()>,
+                                    Option<(u32,)>,
                                     Option<u32>,
                                     Option<E1>,
                                     Option<f32>,
@@ -1554,7 +1596,7 @@ pub mod exports {
                                 (
                                     (
                                         Option<bool>,
-                                        Option<()>,
+                                        Option<(u32,)>,
                                         Option<u32>,
                                         Option<E1>,
                                         Option<f32>,
@@ -1575,7 +1617,7 @@ pub mod exports {
                                     Result<(), ()>,
                                     Result<(), E1>,
                                     Result<E1, ()>,
-                                    Result<(), ()>,
+                                    Result<(u32,), (u32,)>,
                                     Result<u32, &V1>,
                                     Result<&str, &[u8]>,
                                 ),
@@ -1590,7 +1632,7 @@ pub mod exports {
                                         Result<(), ()>,
                                         Result<(), E1>,
                                         Result<E1, ()>,
-                                        Result<(), ()>,
+                                        Result<(u32,), (u32,)>,
                                         Result<u32, V1>,
                                         Result<
                                             wasmtime::component::__internal::String,
@@ -1825,7 +1867,7 @@ pub mod exports {
                     ) -> wasmtime::component::TypedFunc<
                         (
                             Option<bool>,
-                            Option<()>,
+                            Option<(u32,)>,
                             Option<u32>,
                             Option<E1>,
                             Option<f32>,
@@ -1837,7 +1879,7 @@ pub mod exports {
                             wasmtime::component::TypedFunc::<
                                 (
                                     Option<bool>,
-                                    Option<()>,
+                                    Option<(u32,)>,
                                     Option<u32>,
                                     Option<E1>,
                                     Option<f32>,
@@ -1851,7 +1893,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: Option<bool>,
-                        arg1: Option<()>,
+                        arg1: Option<(u32,)>,
                         arg2: Option<u32>,
                         arg3: Option<E1>,
                         arg4: Option<f32>,
@@ -1876,7 +1918,7 @@ pub mod exports {
                         (
                             (
                                 Option<bool>,
-                                Option<()>,
+                                Option<(u32,)>,
                                 Option<u32>,
                                 Option<E1>,
                                 Option<f32>,
@@ -1890,7 +1932,7 @@ pub mod exports {
                                 (
                                     (
                                         Option<bool>,
-                                        Option<()>,
+                                        Option<(u32,)>,
                                         Option<u32>,
                                         Option<E1>,
                                         Option<f32>,
@@ -1906,7 +1948,7 @@ pub mod exports {
                     ) -> wasmtime::Result<
                         (
                             Option<bool>,
-                            Option<()>,
+                            Option<(u32,)>,
                             Option<u32>,
                             Option<E1>,
                             Option<f32>,
@@ -1966,7 +2008,7 @@ pub mod exports {
                             Result<(), ()>,
                             Result<(), E1>,
                             Result<E1, ()>,
-                            Result<(), ()>,
+                            Result<(u32,), (u32,)>,
                             Result<u32, &V1>,
                             Result<&str, &[u8]>,
                         ),
@@ -1978,7 +2020,7 @@ pub mod exports {
                                     Result<(), ()>,
                                     Result<(), E1>,
                                     Result<E1, ()>,
-                                    Result<(), ()>,
+                                    Result<(u32,), (u32,)>,
                                     Result<u32, &V1>,
                                     Result<&str, &[u8]>,
                                 ),
@@ -1992,7 +2034,7 @@ pub mod exports {
                         arg0: Result<(), ()>,
                         arg1: Result<(), E1>,
                         arg2: Result<E1, ()>,
-                        arg3: Result<(), ()>,
+                        arg3: Result<(u32,), (u32,)>,
                         arg4: Result<u32, &V1>,
                         arg5: Result<&str, &[u8]>,
                     ) -> wasmtime::Result<()>
@@ -2017,7 +2059,7 @@ pub mod exports {
                                 Result<(), ()>,
                                 Result<(), E1>,
                                 Result<E1, ()>,
-                                Result<(), ()>,
+                                Result<(u32,), (u32,)>,
                                 Result<u32, V1>,
                                 Result<
                                     wasmtime::component::__internal::String,
@@ -2034,7 +2076,7 @@ pub mod exports {
                                         Result<(), ()>,
                                         Result<(), E1>,
                                         Result<E1, ()>,
-                                        Result<(), ()>,
+                                        Result<(u32,), (u32,)>,
                                         Result<u32, V1>,
                                         Result<
                                             wasmtime::component::__internal::String,
@@ -2053,7 +2095,7 @@ pub mod exports {
                             Result<(), ()>,
                             Result<(), E1>,
                             Result<E1, ()>,
-                            Result<(), ()>,
+                            Result<(u32,), (u32,)>,
                             Result<u32, V1>,
                             Result<
                                 wasmtime::component::__internal::String,

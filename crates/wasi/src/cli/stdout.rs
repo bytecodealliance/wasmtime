@@ -74,7 +74,7 @@ enum StdioOutputStream {
 
 /// The number of bytes a single `write` is permitted to carry, as reported by
 /// `check_write`.
-const WRITE_BUDGET: usize = 1024 * 1024;
+const WRITE_BUDGET: usize = crate::MAX_READ_SIZE_ALLOC;
 
 impl OutputStream for StdioOutputStream {
     fn write(&mut self, bytes: Bytes) -> p2::StreamResult<()> {

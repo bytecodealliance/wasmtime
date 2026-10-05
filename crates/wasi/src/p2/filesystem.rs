@@ -274,7 +274,7 @@ impl FileOutputStream {
 }
 
 // FIXME: configurable? determine from how much space left in file?
-const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
+const FILE_WRITE_CAPACITY: usize = crate::MAX_READ_SIZE_ALLOC;
 
 #[async_trait::async_trait]
 impl OutputStream for FileOutputStream {
@@ -285,6 +285,7 @@ impl OutputStream for FileOutputStream {
                 return Err(StreamError::Trap(format_err!("write exceeded budget")));
             }
             OutputState::Closed => return Err(StreamError::Closed),
+            OutputState::Waiting(_) if buf.is_empty() => return Ok(()),
             OutputState::Waiting(_) | OutputState::Error(_) => {
                 // a write is pending - this call was not permitted
                 return Err(StreamError::Trap(format_err!(

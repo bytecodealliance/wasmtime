@@ -254,6 +254,15 @@ macro_rules! bitop {
     };
 }
 
+/// f16 arithmetic runs in f32: `to_f32` is exact and `from_f32_rne` rounds once.
+fn f16_binop(a: Ieee16, b: Ieee16, f: impl Fn(f32, f32) -> f32) -> DataValue {
+    DataValue::F16(Ieee16::from_f32_rne(f(a.to_f32(), b.to_f32())))
+}
+
+fn f16_unop(a: Ieee16, f: impl Fn(f32) -> f32) -> DataValue {
+    DataValue::F16(Ieee16::from_f32_rne(f(a.to_f32())))
+}
+
 impl DataValueExt for DataValue {
     fn int(n: i128, ty: Type) -> ValueResult<Self> {
         if ty.is_vector() {
@@ -294,6 +303,7 @@ impl DataValueExt for DataValue {
 
     fn float(bits: u64, ty: Type) -> ValueResult<Self> {
         match ty {
+            types::F16 => Ok(DataValue::F16(Ieee16::with_bits(u16::try_from(bits)?))),
             types::F32 => Ok(DataValue::F32(Ieee32::with_bits(u32::try_from(bits)?))),
             types::F64 => Ok(DataValue::F64(Ieee64::with_bits(bits))),
             _ => Err(ValueError::InvalidType(ValueTypeClass::Float, ty)),
@@ -302,6 +312,7 @@ impl DataValueExt for DataValue {
 
     fn into_float(self) -> ValueResult<f64> {
         match self {
+            DataValue::F16(n) => Ok(n.to_f32() as f64),
             DataValue::F32(n) => Ok(n.as_f32() as f64),
             DataValue::F64(n) => Ok(n.as_f64()),
             _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
@@ -317,6 +328,7 @@ impl DataValueExt for DataValue {
 
     fn is_nan(&self) -> ValueResult<bool> {
         match self {
+            DataValue::F16(f) => Ok(f.is_nan()),
             DataValue::F32(f) => Ok(f.is_nan()),
             DataValue::F64(f) => Ok(f.is_nan()),
             _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
@@ -404,6 +416,8 @@ impl DataValueExt for DataValue {
                 (DataValue::F32(n), types::I32) => DataValue::I32(n.bits() as i32),
                 (DataValue::F64(n), types::I64) => DataValue::I64(n.bits() as i64),
                 (DataValue::F128(n), types::I128) => DataValue::I128(n.bits() as i128),
+                (DataValue::F16(n), types::F32) => DataValue::F32(n.to_f32().into()),
+                (DataValue::F16(n), types::F64) => DataValue::F64(f64::from(n.to_f32()).into()),
                 (DataValue::F32(n), types::F64) => DataValue::F64((n.as_f32() as f64).into()),
                 (dv, t) if (t.is_int() || t.is_float()) && dv.ty() == t => dv,
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
@@ -464,6 +478,8 @@ impl DataValueExt for DataValue {
             },
             ValueConversionKind::RoundNearestEven(ty) => match (self, ty) {
                 (DataValue::F64(n), types::F32) => DataValue::F32(Ieee32::from(n.as_f64() as f32)),
+                (DataValue::F32(n), types::F16) => DataValue::F16(Ieee16::from_f32_rne(n.as_f32())),
+                (DataValue::F64(n), types::F16) => DataValue::F16(Ieee16::from_f64_rne(n.as_f64())),
                 (s, _) => unimplemented!("conversion: {} -> {:?}", s.ty(), kind),
             },
             ValueConversionKind::ToBoolean => match self.ty() {
@@ -490,6 +506,7 @@ impl DataValueExt for DataValue {
 
     fn is_negative(&self) -> ValueResult<bool> {
         match self {
+            DataValue::F16(f) => Ok(f.is_negative()),
             DataValue::F32(f) => Ok(f.is_negative()),
             DataValue::F64(f) => Ok(f.is_negative()),
             _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
@@ -539,6 +556,9 @@ impl DataValueExt for DataValue {
 
     fn add(self, other: Self) -> ValueResult<Self> {
         if self.is_float() {
+            if let (DataValue::F16(a), DataValue::F16(b)) = (&self, &other) {
+                return Ok(f16_binop(*a, *b, |x, y| x + y));
+            }
             binary_match!(+(self, other); [F32, F64])
         } else {
             binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64, I128])
@@ -547,6 +567,9 @@ impl DataValueExt for DataValue {
 
     fn sub(self, other: Self) -> ValueResult<Self> {
         if self.is_float() {
+            if let (DataValue::F16(a), DataValue::F16(b)) = (&self, &other) {
+                return Ok(f16_binop(*a, *b, |x, y| x - y));
+            }
             binary_match!(-(self, other); [F32, F64])
         } else {
             binary_match!(wrapping_sub(&self, &other); [I8, I16, I32, I64, I128])
@@ -555,6 +578,9 @@ impl DataValueExt for DataValue {
 
     fn mul(self, other: Self) -> ValueResult<Self> {
         if self.is_float() {
+            if let (DataValue::F16(a), DataValue::F16(b)) = (&self, &other) {
+                return Ok(f16_binop(*a, *b, |x, y| x * y));
+            }
             binary_match!(*(self, other); [F32, F64])
         } else {
             binary_match!(wrapping_mul(&self, &other); [I8, I16, I32, I64, I128])
@@ -563,6 +589,9 @@ impl DataValueExt for DataValue {
 
     fn sdiv(self, other: Self) -> ValueResult<Self> {
         if self.is_float() {
+            if let (DataValue::F16(a), DataValue::F16(b)) = (&self, &other) {
+                return Ok(f16_binop(*a, *b, |x, y| x / y));
+            }
             return binary_match!(/(self, other); [F32, F64]);
         }
 
@@ -583,6 +612,9 @@ impl DataValueExt for DataValue {
 
     fn udiv(self, other: Self) -> ValueResult<Self> {
         if self.is_float() {
+            if let (DataValue::F16(a), DataValue::F16(b)) = (&self, &other) {
+                return Ok(f16_binop(*a, *b, |x, y| x / y));
+            }
             return binary_match!(/(self, other); [F32, F64]);
         }
 
@@ -622,11 +654,31 @@ impl DataValueExt for DataValue {
     }
 
     fn sqrt(self) -> ValueResult<Self> {
+        if let DataValue::F16(a) = &self {
+            return Ok(f16_unop(*a, f32::sqrt));
+        }
         unary_match!(sqrt(&self); [F32, F64]; [Ieee32, Ieee64])
     }
 
     fn fma(self, b: Self, c: Self) -> ValueResult<Self> {
         match (self, b, c) {
+            (DataValue::F16(a), DataValue::F16(b), DataValue::F16(c)) => {
+                // f64, not f32: a fused multiply-add must see the unrounded
+                // product and sum, which needs more than 24 bits.
+                let (x, y, z) = (a.to_f32() as f64, b.to_f32() as f64, c.to_f32() as f64);
+
+                #[cfg(all(target_arch = "x86_64", target_os = "windows", target_env = "gnu"))]
+                let res = libm::fma(x, y, z);
+
+                #[cfg(not(all(
+                    target_arch = "x86_64",
+                    target_os = "windows",
+                    target_env = "gnu"
+                )))]
+                let res = x.mul_add(y, z);
+
+                Ok(DataValue::F16(Ieee16::from_f64_rne(res)))
+            }
             (DataValue::F32(a), DataValue::F32(b), DataValue::F32(c)) => {
                 // The `fma` function for `x86_64-pc-windows-gnu` is incorrect. Use `libm`'s instead.
                 // See: https://github.com/bytecodealliance/wasmtime/issues/4512
@@ -660,7 +712,7 @@ impl DataValueExt for DataValue {
     }
 
     fn abs(self) -> ValueResult<Self> {
-        unary_match!(abs(&self); [F32, F64])
+        unary_match!(abs(&self); [F16, F32, F64])
     }
 
     fn sadd_checked(self, other: Self) -> ValueResult<Option<Self>> {
@@ -696,26 +748,38 @@ impl DataValueExt for DataValue {
     }
 
     fn neg(self) -> ValueResult<Self> {
-        unary_match!(neg(&self); [F32, F64])
+        unary_match!(neg(&self); [F16, F32, F64])
     }
 
     fn copysign(self, sign: Self) -> ValueResult<Self> {
-        binary_match!(copysign(&self, &sign); [F32, F64])
+        binary_match!(copysign(&self, &sign); [F16, F32, F64])
     }
 
     fn ceil(self) -> ValueResult<Self> {
+        if let DataValue::F16(a) = &self {
+            return Ok(f16_unop(*a, f32::ceil));
+        }
         unary_match!(ceil(&self); [F32, F64])
     }
 
     fn floor(self) -> ValueResult<Self> {
+        if let DataValue::F16(a) = &self {
+            return Ok(f16_unop(*a, f32::floor));
+        }
         unary_match!(floor(&self); [F32, F64])
     }
 
     fn trunc(self) -> ValueResult<Self> {
+        if let DataValue::F16(a) = &self {
+            return Ok(f16_unop(*a, f32::trunc));
+        }
         unary_match!(trunc(&self); [F32, F64])
     }
 
     fn nearest(self) -> ValueResult<Self> {
+        if let DataValue::F16(a) = &self {
+            return Ok(f16_unop(*a, f32::round_ties_even));
+        }
         unary_match!(round_ties_even(&self); [F32, F64])
     }
 

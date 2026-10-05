@@ -119,13 +119,21 @@ Building Cranelift
 Cranelift uses a [conventional Cargo build
 process](https://doc.rust-lang.org/cargo/guide/working-on-an-existing-project.html).
 
-Cranelift consists of a collection of crates, and uses a [Cargo
-Workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html),
-so for some cargo commands, such as `cargo test`, the `--all` is needed
-to tell cargo to visit all of the crates.
+Cranelift consists of a collection of crates.
+It has been part of the Wasmtime repository since 2020, and its crates are
+part of Wasmtime's [Cargo workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html).
+To run Cranelift's tests:
 
-`test-all.sh` at the top level is a script which runs all the cargo
-tests and also performs code format, lint, and documentation checks.
+```bash
+cargo test -p cranelift-tools
+cargo test -p cranelift-codegen
+```
+
+See [Testing Cranelift](docs/testing.md) for how the file tests work, and
+Wasmtime's [testing documentation](https://docs.wasmtime.dev/contributing-testing.html)
+for the rest of the repository.
+Cranelift is also covered by Wasmtime's CI checks, including
+code formatting (`cargo fmt`) and lints (`cargo clippy`).
 
 <details>
 <summary>Log configuration</summary>

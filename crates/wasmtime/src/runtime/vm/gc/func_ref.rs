@@ -22,18 +22,21 @@ use wasmtime_environ::VMSharedTypeIndex;
 
 /// An identifier into the `FuncRefTable`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(transparent)]
 pub struct FuncRefTableId(Id);
 
 impl FuncRefTableId {
-    /// Convert this `FuncRefTableId` into its raw `u32` ID.
+    /// Get the raw `u32` to store in the GC heap for this ID.
     pub fn into_raw(self) -> u32 {
-        self.0.into_raw()
+        self.0.into_raw() + 1
     }
 
-    /// Create a `FuncRefTableId` from a raw `u32` ID.
-    pub fn from_raw(raw: u32) -> Self {
-        Self(Id::from_raw(raw))
+    /// Resolve a raw ID loaded from the GC heap, if it is well-formed.
+    ///
+    /// A well-formed ID is not necessarily one this table has handed out;
+    /// `get_typed` and `get_untyped` still check their lookups.
+    pub fn from_raw(raw: u32) -> Option<Self> {
+        let id = raw.checked_sub(1)?;
+        Some(Self(Id::try_from_raw(id)?))
     }
 }
 

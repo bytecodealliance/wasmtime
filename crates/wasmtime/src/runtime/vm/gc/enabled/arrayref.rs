@@ -1,5 +1,5 @@
 use crate::{
-    StorageType, Val,
+    StorageType, Val, bail_bug,
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
     store::{AutoAssertNoGc, StoreOpaque},
@@ -41,7 +41,7 @@ impl VMGcRef {
         }
 
         match gc_heap.header(&self) {
-            Ok(header) => header.kind().matches(VMGcKind::ArrayRef),
+            Ok(header) => header.matches_kind(VMGcKind::ArrayRef),
             Err(_) => false,
         }
     }
@@ -137,7 +137,7 @@ impl VMArrayRef {
     /// safe, but will lead to general incorrectness such as panics and wrong
     /// results.
     ///
-    /// Panics on out-of-bounds accesses.
+    /// Returns an error on out-of-bounds accesses.
     pub fn read_elem(
         &self,
         store: &mut AutoAssertNoGc,
@@ -145,7 +145,10 @@ impl VMArrayRef {
         ty: &StorageType,
         index: u32,
     ) -> Result<Val> {
-        let offset = layout.elem_offset(index).unwrap();
+        let offset = match layout.elem_offset(index) {
+            Some(offset) => offset,
+            None => bail_bug!("out-of-bounds array element index"),
+        };
         self.as_gc_ref().read_val(store, ty, offset)
     }
 
@@ -159,7 +162,7 @@ impl VMArrayRef {
     /// Failure to do so is memory safe, but will lead to general incorrectness
     /// such as panics and wrong results.
     ///
-    /// Panics on out-of-bounds accesses.
+    /// Returns an error on out-of-bounds accesses.
     pub fn write_elem(
         &self,
         store: &mut AutoAssertNoGc,
@@ -170,7 +173,10 @@ impl VMArrayRef {
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
 
-        let offset = layout.elem_offset(index).unwrap();
+        let offset = match layout.elem_offset(index) {
+            Some(offset) => offset,
+            None => bail_bug!("out-of-bounds array element index"),
+        };
         self.as_gc_ref().write_val(store, ty, offset, val)
     }
 
@@ -197,7 +203,7 @@ impl VMArrayRef {
     /// Returns an error if `val` is a GC reference that has since been
     /// unrooted.
     ///
-    /// Panics on out-of-bounds accesses.
+    /// Returns an error on out-of-bounds accesses.
     pub fn initialize_elem(
         &self,
         store: &mut AutoAssertNoGc,
@@ -207,7 +213,10 @@ impl VMArrayRef {
         val: Val,
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
-        let offset = layout.elem_offset(index).unwrap();
+        let offset = match layout.elem_offset(index) {
+            Some(offset) => offset,
+            None => bail_bug!("out-of-bounds array element index"),
+        };
         self.as_gc_ref().initialize_val(store, ty, offset, val)
     }
 }

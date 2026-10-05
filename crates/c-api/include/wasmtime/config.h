@@ -934,6 +934,15 @@ WASMTIME_CONFIG_PROP(void, wasm_component_model_implements, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_component_model_canonical_names, bool)
 
+/**
+ * \brief Configures whether the WebAssembly component-model accessors
+ * (`[get]` and `[set]`) support will be enabled for compilation.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_accessors.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_accessors, bool)
+
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
