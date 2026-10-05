@@ -517,6 +517,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         lower_sig: &Signature,
         prepare_sync: bool,
     ) {
+        // Make sure the caller can indeed leave its instance before going
+        // further.
+        let saved = self.trap_if_not_may_leave(adapter.lower.flags, Trap::CannotLeaveComponent);
+        self.free_temp_local(saved);
+
         let prepare = self.module.import_prepare_call(
             &adapter.name,
             &lower_sig.params,
