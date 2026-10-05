@@ -815,18 +815,8 @@ impl<'a> Instantiator<'a> {
                         }
                     };
 
-                    let exit = if let Some(component_instance) = *component_instance {
-                        store.0.enter_guest_sync_call(
-                            false,
-                            RuntimeInstance {
-                                instance,
-                                index: component_instance,
-                            },
-                        )?;
-                        true
-                    } else {
-                        false
-                    };
+                    let callee =
+                        component_instance.map(|index| RuntimeInstance { instance, index });
 
                     // Note that the unsafety here should be ok because the
                     // validity of the component means that type-checks have
@@ -852,7 +842,7 @@ impl<'a> Instantiator<'a> {
 
                     if needs_startup {
                         if asyncness == Asyncness::No {
-                            instance.start_raw(store)?;
+                            start_raw(store, instance, callee)?;
                         } else {
                             #[cfg(feature = "async")]
                             {
@@ -864,15 +854,19 @@ impl<'a> Instantiator<'a> {
                                         // event loop in case it calls async
                                         // functions or intrinsics, creates and
                                         // resumes threads, etc.
-                                        instance = store.start_instance(instance).await?;
+                                        instance = store.start_instance(instance, callee).await?;
                                     } else {
-                                        store.on_fiber(|store| instance.start_raw(store)).await??;
+                                        store
+                                            .on_fiber(|store| start_raw(store, instance, callee))
+                                            .await??;
                                     }
                                 }
                                 #[cfg(not(feature = "component-model-async"))]
                                 {
                                     _ = &mut instance;
-                                    store.on_fiber(|store| instance.start_raw(store)).await??;
+                                    store
+                                        .on_fiber(|store| start_raw(store, instance, callee))
+                                        .await??;
                                 }
                             }
                             #[cfg(not(feature = "async"))]
@@ -881,10 +875,6 @@ impl<'a> Instantiator<'a> {
                                 unreachable!();
                             }
                         }
-                    }
-
-                    if exit {
-                        store.0.exit_guest_sync_call()?;
                     }
 
                     self.instance_mut(store.0).push_instance_id(instance.id())?;
@@ -1085,6 +1075,25 @@ impl<'a> Instantiator<'a> {
     ) -> &'b mut ImportedResources {
         Arc::get_mut(self.instance_mut(store).resource_types_mut()).unwrap()
     }
+}
+
+/// Runs the start function of the core wasm `instance`.
+///
+/// If `callee` is specified then the start function is run as a sync-lifted
+/// call into that component instance.
+pub(crate) fn start_raw<T>(
+    store: &mut StoreContextMut<'_, T>,
+    instance: crate::Instance,
+    callee: Option<RuntimeInstance>,
+) -> Result<()> {
+    if let Some(callee) = callee {
+        store.0.enter_guest_sync_call(false, callee)?;
+    }
+    instance.start_raw(store)?;
+    if callee.is_some() {
+        store.0.exit_guest_sync_call()?;
+    }
+    Ok(())
 }
 
 /// A "pre-instantiated" [`Instance`] which has all of its arguments already

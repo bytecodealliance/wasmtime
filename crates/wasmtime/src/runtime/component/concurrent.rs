@@ -1526,7 +1526,7 @@ impl<T> StoreContextMut<'_, T> {
                             if let Some(item) = self.ready.take() {
                                 match item {
                                     WorkItem::ResumeFiber { mut fiber, .. } => {
-                                        fiber.dispose(self.store.0)
+                                        fiber.dispose(self.store.0);
                                     }
                                     WorkItem::PushFuture(future) => {
                                         tls::set(self.store.0, move || drop(future))
@@ -1722,13 +1722,13 @@ impl<T> StoreContextMut<'_, T> {
     pub(crate) async fn start_instance(
         &mut self,
         instance: ModuleInstance,
+        callee: Option<RuntimeInstance>,
     ) -> Result<ModuleInstance> {
         let (tx, rx) = oneshot::channel();
         let token = StoreToken::new(self.as_context_mut());
         self.0.queue_task(move |store| {
             _ = tx.send(
-                instance
-                    .start_raw(&mut token.as_context_mut(store))
+                super::instance::start_raw(&mut token.as_context_mut(store), instance, callee)
                     .map(|()| instance),
             );
             Ok(())
