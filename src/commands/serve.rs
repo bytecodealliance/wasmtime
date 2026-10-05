@@ -29,12 +29,12 @@ use wasmtime::{
 use wasmtime_cli_flags::opt::WasmtimeOptionValue;
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::WasiHttpCtx;
 use wasmtime_wasi_http::handler::{
     HandlerState, Instance, Prepared, Proxy, ProxyHandler, ProxyPre, ShouldAccept,
     WorkerExpiration, WorkerState, WorkerStatus,
 };
 use wasmtime_wasi_http::io::TokioIo;
+use wasmtime_wasi_http::{ErrorResponse, WasiHttpCtx};
 
 #[cfg(feature = "debug")]
 use crate::commands::run::RunCommand;
@@ -1273,22 +1273,28 @@ async fn handle_client(
                     Ok(r) => Ok::<_, Infallible>(r),
                     Err(e) => {
                         eprintln!("error: {e:?}");
-                        let error_html = "\
+                        let status = e
+                            .downcast_ref::<ErrorResponse>()
+                            .map(|e| e.status())
+                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                        let error_html = format!(
+                            "\
 <!doctype html>
 <html>
 <head>
-    <title>500 Internal Server Error</title>
+    <title>{status}</title>
 </head>
 <body>
     <center>
-        <h1>500 Internal Server Error</h1>
+        <h1>{status}</h1>
         <hr>
         wasmtime
     </center>
 </body>
-</html>";
+</html>"
+                        );
                         Ok(Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .status(status)
                             .header("Content-Type", "text/html; charset=UTF-8")
                             .body(
                                 Full::new(bytes::Bytes::from(error_html))
