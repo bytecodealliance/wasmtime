@@ -2100,3 +2100,68 @@ async fn resource_drop_call_hook_error() -> Result<()> {
 
     Ok(())
 }
+
+/// Regression test for case which previously panicked when finishing a call
+/// which was started before an intervening, failing call.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn call_between_start_and_finish() -> wasmtime::Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core func $thread.yield (canon thread.yield))
+  (core func $task.return (canon task.return))
+  (core module $m
+    (import "" "thread.yield" (func $thread.yield (result i32)))
+    (import "" "task.return" (func $task.return))
+    ;; sync-typed export which yields
+    (func (export "s") (drop (call $thread.yield)))
+    ;; async-typed, callback-lifted export
+    (func (export "f") (result i32) (call $task.return) (i32.const 1)) ;; YIELD
+    (func (export "f-cb") (param i32 i32 i32) (result i32) (i32.const 0))
+  )
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "thread.yield" (func $thread.yield))
+      (export "task.return" (func $task.return))))))
+  (func (export "s") (canon lift (core func $i "s")))
+  (func (export "f") async
+    (canon lift (core func $i "f") async (callback (core func $i "f-cb"))))
+)
+"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let s = instance.get_typed_func::<(), ()>(&mut store, "s")?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+
+    let err = store
+        .run_concurrent(async |accessor| {
+            // Queue a call to `f`; its start is now a queued work item for the
+            // instance.
+            let call = accessor.with(|s| f.start_call_concurrent(s, ()))?;
+            // Synchronously call `s`, which yields. Since `s` is sync-typed and
+            // there's a queued work item for its instance, Wasmtime promotes it
+            // and tries to suspend, but we're not on a fiber.
+            let _r = accessor.with(|mut st| s.call(&mut st, ()));
+            // Now keep driving the event loop.
+            f.finish_call_concurrent(accessor, call).await?;
+            wasmtime::Result::<()>::Ok(())
+        })
+        .await
+        .and_then(|r| r)
+        .unwrap_err();
+
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent),
+        "unexpected error: {err:?}"
+    );
+
+    Ok(())
+}
