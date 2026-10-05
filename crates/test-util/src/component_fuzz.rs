@@ -28,7 +28,7 @@ pub const IMPORT_FUNCTION: &str = "echo-import";
 pub const EXPORT_FUNCTION: &str = "echo-export";
 
 /// Wasmtime allows up to 100 type depth so limit this to just under that.
-pub const MAX_TYPE_DEPTH: u32 = 99;
+pub const MAX_TYPE_DEPTH: u32 = 90;
 
 macro_rules! uwriteln {
     ($($arg:tt)*) => {
