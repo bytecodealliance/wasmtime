@@ -285,6 +285,7 @@ impl OutputStream for FileOutputStream {
                 return Err(StreamError::Trap(format_err!("write exceeded budget")));
             }
             OutputState::Closed => return Err(StreamError::Closed),
+            OutputState::Waiting(_) if buf.is_empty() => return Ok(()),
             OutputState::Waiting(_) | OutputState::Error(_) => {
                 // a write is pending - this call was not permitted
                 return Err(StreamError::Trap(format_err!(

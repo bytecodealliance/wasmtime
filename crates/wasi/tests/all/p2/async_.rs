@@ -399,6 +399,10 @@ async fn p2_write_too_much() {
     )
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_empty_write() {
+    run(P2_EMPTY_WRITE_COMPONENT, |_| {}).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_file_settime_overflow() {
     run(P2_FILE_SETTIME_OVERFLOW_COMPONENT, |_| {})
         .await
