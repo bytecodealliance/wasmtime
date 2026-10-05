@@ -80,6 +80,12 @@ You can also use [`binstall`](https://github.com/cargo-bins/cargo-binstall) to a
 cargo binstall wasmtime-cli
 ```
 
+Note that while the above binaries are *almost* identical, the release binaries
+installed by `binstall` include the `gdbstub` debugging feature while the
+default feature set in the `wasmtime-cli` crate, used by `cargo install`, does
+not. This is due to a Cargo limitation when building from published crates
+rather than the Wasmtime source tree.
+
 ## Compiling from Source
 
 If you'd prefer to compile the `wasmtime` CLI from source, you'll want to
