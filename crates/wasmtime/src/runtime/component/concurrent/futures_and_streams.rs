@@ -3067,7 +3067,16 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     })?;
                     match rx.await {
                         Ok(r) => r,
-                        Err(oneshot::Canceled) => bail_bug!("work cancelled"),
+                        // The worker function was dropped without sending a
+                        // result, which can happen when lowering trapped. This
+                        // isn't a bug but this specific handling here might be
+                        // the last hurray of this task in the event queue, so
+                        // don't kill anything other than our caller. The
+                        // original trap should make its way back to the best
+                        // location naturally.
+                        Err(oneshot::Canceled) => {
+                            bail!("stream write cancelled before it could complete")
+                        }
                     }
                 } else {
                     // Optimize flat payloads (i.e. those which do not
