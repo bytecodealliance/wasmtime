@@ -15,7 +15,7 @@ use crate::component::resources::host::{HostResource, HostResourceType};
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
 use crate::component::{ComponentType, Lift, Lower, Resource, ResourceDynamic, ResourceType};
 use crate::prelude::*;
-use crate::runtime::vm::ValRaw;
+use crate::runtime::vm::{UncaughtException, ValRaw};
 use crate::{AsContextMut, StoreContextMut, Trap};
 use core::mem::MaybeUninit;
 use core::ptr::NonNull;
@@ -326,7 +326,12 @@ impl ResourceAny {
         // to take one i32 argument and return no results, so the parameters
         // here should be configured correctly.
         unsafe {
-            crate::Func::call_unchecked_raw(store, dtor, NonNull::from(&mut args))?;
+            crate::Func::call_unchecked_raw(
+                store,
+                dtor,
+                NonNull::from(&mut args),
+                UncaughtException::Trap,
+            )?;
         }
 
         if slot.instance.is_some() {
