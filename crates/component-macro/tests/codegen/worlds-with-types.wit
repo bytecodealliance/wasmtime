@@ -10,6 +10,7 @@ world foo {
   type t = u32;
 
   record r {
+    a: u32,
   }
 
   export f: func() -> tuple<t, u, r>;

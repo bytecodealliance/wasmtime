@@ -30,7 +30,7 @@ use std::sync::{
 use std::task::{Context, Poll};
 use std::time::Instant;
 use tokio::sync::Notify;
-use wasmtime::component::{Accessor, GuestTaskId, Resource, TypedFuncCallConcurrent};
+use wasmtime::component::{Accessor, Resource, TaskGroupId, TypedFuncCallConcurrent};
 #[cfg(feature = "p2")]
 use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, Result, Store, StoreContextMut, format_err};
@@ -184,8 +184,9 @@ pub trait WorkerState: 'static + Send + Sync {
     /// Notification that a request has been accepted by the worker.
     ///
     /// This method can be used to record anything within `store`, if necessary.
-    /// The `task` corresponding to the component-model-level async task about
-    /// to be created is additionally passed here.
+    /// If the `task-group-hook` feature is enabled, the task group
+    /// corresponding to the component-model-level async task about to be
+    /// created is additionally passed here.
     ///
     /// If the future returned by this function resolves before the guest has
     /// produced a response, the request will be considered "expired" and the
@@ -217,7 +218,7 @@ pub trait WorkerState: 'static + Send + Sync {
         &self,
         store: StoreContextMut<'_, Self::StoreData>,
         data: Self::RequestData,
-        task: GuestTaskId,
+        task_group: TaskGroupId,
     ) -> Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>;
 
     /// Dispose of the store belonging to the now-exited worker.
@@ -508,7 +509,7 @@ where
                             let expiration = dropper.state.on_request_start(
                                 store.as_context_mut(),
                                 request_data,
-                                prepared.task(),
+                                prepared.group(),
                             );
                             Ok((prepared, expiration))
                         }
@@ -948,7 +949,7 @@ where
 }
 
 /// Representation of a "prepared" call for a guest, used to extract the
-/// `GuestTaskId` before actually executing any handlers.
+/// `TaskGroupId` before actually executing any handlers.
 ///
 /// Right now this is a bit gross since it has to type out a bunch of types by
 /// hand.
@@ -1043,12 +1044,12 @@ impl<'a, T: Send> Prepared<'a, T> {
         }
     }
 
-    fn task(&self) -> GuestTaskId {
+    fn group(&self) -> TaskGroupId {
         match self {
             #[cfg(feature = "p3")]
-            Prepared::P3 { call, .. } => call.task(),
+            Prepared::P3 { call, .. } => call.group(),
             #[cfg(feature = "p2")]
-            Prepared::P2 { call, .. } => call.task(),
+            Prepared::P2 { call, .. } => call.group(),
         }
     }
 

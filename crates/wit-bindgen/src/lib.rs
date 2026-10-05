@@ -7,7 +7,7 @@
 
 use crate::rust::{RustGenerator, TypeMode, to_rust_ident, to_rust_upper_camel_case};
 use crate::types::{TypeInfo, Types};
-use anyhow::bail;
+use anyhow::{Result, bail};
 use heck::*;
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -439,13 +439,13 @@ impl Wasmtime {
         let world = &resolve.worlds[id];
         for (name, import) in world.imports.iter() {
             if !self.opts.only_interfaces || matches!(import, WorldItem::Interface { .. }) {
-                self.import(resolve, name, import);
+                self.import(resolve, name, import)?;
             }
         }
 
         for (name, export) in world.exports.iter() {
             if !self.opts.only_interfaces || matches!(export, WorldItem::Interface { .. }) {
-                self.export(resolve, name, export);
+                self.export(resolve, name, export)?;
             }
         }
         self.generate_named_imports(resolve)?;
@@ -500,7 +500,7 @@ impl Wasmtime {
             "#[allow(unused_imports)] use {wt}::component::__internal::Box;\n"
         ));
         let key_name = resolve.name_world_key(&key);
-        generator.generate_add_to_linker(id, &key_name);
+        generator.generate_add_to_linker(id, &key_name)?;
         let body = String::from(mem::take(&mut generator.src));
         let interface_name = to_rust_ident(resolve.interfaces[id].name.as_ref().unwrap());
         let body = format!("pub mod {interface_name} {{\n{body}\n}}");
@@ -510,7 +510,7 @@ impl Wasmtime {
         Ok(())
     }
 
-    fn import(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) {
+    fn import(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) -> Result<()> {
         match item {
             WorldItem::Function(func) => {
                 self.world_import_functions.push(func.clone());
@@ -524,14 +524,14 @@ impl Wasmtime {
                         Some(id) => *id,
                         None => {
                             self.interfaces_for_implements.insert(og_interface, *id);
-                            self.import_interface(resolve, &WorldKey::Interface(*id), *id, false);
+                            self.import_interface(resolve, &WorldKey::Interface(*id), *id, false)?;
                             *id
                         }
                     };
                     self.world_implements_interfaces
                         .push((kebab.to_string(), implements));
                 } else {
-                    self.import_interface(resolve, name, *id, true);
+                    self.import_interface(resolve, name, *id, true)?;
                 }
             }
             WorldItem::Type { id, .. } => {
@@ -540,11 +540,12 @@ impl Wasmtime {
                     WorldKey::Interface(_) => unreachable!(),
                 };
                 let mut generator = InterfaceGenerator::new(self, resolve);
-                generator.define_type(name, *id);
+                generator.define_type(name, *id)?;
                 let body = mem::take(&mut generator.src);
                 self.src.push_str(&body);
             }
-        };
+        }
+        Ok(())
     }
 
     fn import_interface(
@@ -553,7 +554,7 @@ impl Wasmtime {
         name: &WorldKey,
         id: InterfaceId,
         in_world: bool,
-    ) {
+    ) -> Result<()> {
         let mut generator = InterfaceGenerator::new(self, resolve);
 
         generator.current_interface = Some((id, name, InterfaceKind::Import));
@@ -593,9 +594,9 @@ impl Wasmtime {
             // If this interface is not remapped then it's time to
             // actually generate bindings here.
             generator.generator.interface_link_options[&id].write_struct(&mut generator.src);
-            generator.types(id);
+            generator.types(id)?;
             let key_name = resolve.name_world_key(name);
-            generator.generate_add_to_linker(id, &key_name);
+            generator.generate_add_to_linker(id, &key_name)?;
 
             let module = &generator.src[..];
             let wt = generator.generator.wasmtime_path();
@@ -626,9 +627,10 @@ impl Wasmtime {
 
         let interface_path = self.import_interface_path(&id);
         self.interface_link_options[&id].write_impl_from_world(&mut self.src, &interface_path);
+        Ok(())
     }
 
-    fn export(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) {
+    fn export(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) -> Result<()> {
         let wt = self.wasmtime_path();
         let mut generator = InterfaceGenerator::new(self, resolve);
         let field;
@@ -638,13 +640,13 @@ impl Wasmtime {
         let get_index;
         match item {
             WorldItem::Function(func) => {
-                generator.define_rust_guest_export(resolve, None, func);
+                generator.define_rust_guest_export(resolve, None, func)?;
                 let body = mem::take(&mut generator.src).into();
-                load = generator.extract_typed_function(func).1;
+                load = generator.extract_typed_function(func)?.1;
                 assert!(generator.src.is_empty());
                 generator.generator.exports.funcs.push(body);
                 ty_index = format!("{wt}::component::ComponentExportIndex");
-                field = func_field_name(resolve, func);
+                field = func_field_name(resolve, func)?;
                 ty = format!("{wt}::component::Func");
                 let sig = generator.typedfunc_sig(func, TypeMode::AllBorrowed("'_"));
                 let typecheck = format!(
@@ -674,7 +676,7 @@ impl Wasmtime {
                     .generator
                     .name_interface(resolve, *id, name, InterfaceKind::Export);
                 generator.current_interface = Some((*id, name, InterfaceKind::Export));
-                generator.types(*id);
+                generator.types(*id)?;
                 let struct_name = "Guest";
                 let iface = &resolve.interfaces[*id];
                 let iface_name = match name {
@@ -687,7 +689,7 @@ impl Wasmtime {
                     uwriteln!(
                         generator.src,
                         "{}: {wt}::component::Func,",
-                        func_field_name(resolve, func)
+                        func_field_name(resolve, func)?
                     );
                 }
                 uwriteln!(generator.src, "}}");
@@ -698,7 +700,7 @@ impl Wasmtime {
                     uwriteln!(
                         generator.src,
                         "{}: {wt}::component::ComponentExportIndex,",
-                        func_field_name(resolve, func)
+                        func_field_name(resolve, func)?
                     );
                 }
                 uwriteln!(generator.src, "}}");
@@ -732,7 +734,7 @@ pub fn new<_T>(
                 );
                 let mut fields = Vec::new();
                 for (_, func) in iface.functions.iter() {
-                    let name = func_field_name(resolve, func);
+                    let name = func_field_name(resolve, func)?;
                     uwriteln!(generator.src, "let {name} = lookup(\"{}\")?;", func.name);
                     fields.push(name);
                 }
@@ -760,7 +762,7 @@ pub fn new<_T>(
                 );
                 let mut fields = Vec::new();
                 for (_, func) in iface.functions.iter() {
-                    let (name, getter) = generator.extract_typed_function(func);
+                    let (name, getter) = generator.extract_typed_function(func)?;
                     uwriteln!(generator.src, "let {name} = {getter};");
                     fields.push(name);
                 }
@@ -778,7 +780,7 @@ pub fn new<_T>(
                 for (_, func) in iface.functions.iter() {
                     match func.kind.resource() {
                         None => {
-                            generator.define_rust_guest_export(resolve, Some(name), func);
+                            generator.define_rust_guest_export(resolve, Some(name), func)?;
                         }
                         Some(id) => {
                             resource_methods.entry(id).or_insert(Vec::new()).push(func);
@@ -805,7 +807,7 @@ pub fn new<_T>(
                     let camel = resource_name.to_upper_camel_case();
                     uwriteln!(generator.src, "impl Guest{camel}<'_> {{");
                     for method in methods {
-                        generator.define_rust_guest_export(resolve, Some(name), method);
+                        generator.define_rust_guest_export(resolve, Some(name), method)?;
                     }
                     uwriteln!(generator.src, "}}");
                 }
@@ -873,9 +875,10 @@ pub fn new<_T>(
             },
         );
         assert!(prev.is_none());
+        Ok(())
     }
 
-    fn build_world_struct(&mut self, resolve: &Resolve, world: WorldId) {
+    fn build_world_struct(&mut self, resolve: &Resolve, world: WorldId) -> Result<()> {
         let wt = self.wasmtime_path();
         let world_name = &resolve.worlds[world].name;
         let camel = to_rust_upper_camel_case(&world_name);
@@ -1014,7 +1017,7 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
         }
         self.src.push_str("}\n");
 
-        let world_trait = self.world_imports_trait(resolve, world);
+        let world_trait = self.world_imports_trait(resolve, world)?;
 
         uwriteln!(self.src, "const _: () = {{");
 
@@ -1114,7 +1117,7 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
                 ",
             );
         }
-        self.world_add_to_linker(resolve, world, world_trait.as_ref());
+        self.world_add_to_linker(resolve, world, world_trait.as_ref())?;
 
         for func in self.exports.funcs.iter() {
             self.src.push_str(func);
@@ -1123,6 +1126,7 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
         uwriteln!(self.src, "}}"); // close `impl {camel}`
 
         uwriteln!(self.src, "}};"); // close `const _: () = ...
+        Ok(())
     }
 
     fn finish(&mut self, resolve: &Resolve, world: WorldId) -> anyhow::Result<String> {
@@ -1142,7 +1146,7 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
         }
 
         if !self.opts.only_interfaces {
-            self.build_world_struct(resolve, world)
+            self.build_world_struct(resolve, world)?;
         }
 
         self.opts.imports.assert_all_rules_used("imports")?;
@@ -1168,6 +1172,7 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
                 world,
                 wit_component::StringEncoding::UTF8,
                 None,
+                false,
             )?;
             uwriteln!(
                 self.src,
@@ -1437,9 +1442,13 @@ impl Wasmtime {
         !self.world_import_functions.is_empty() || get_world_resources(resolve, world).count() > 0
     }
 
-    fn world_imports_trait(&mut self, resolve: &Resolve, world: WorldId) -> Option<GeneratedTrait> {
+    fn world_imports_trait(
+        &mut self,
+        resolve: &Resolve,
+        world: WorldId,
+    ) -> Result<Option<GeneratedTrait>> {
         if !self.has_world_imports_trait(resolve, world) {
-            return None;
+            return Ok(None);
         }
 
         let world_camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
@@ -1454,10 +1463,10 @@ impl Wasmtime {
                 .collect::<Vec<_>>(),
             &[],
             &get_world_resources(resolve, world).collect::<Vec<_>>(),
-        );
+        )?;
         let src = String::from(mem::take(&mut generator.src));
         self.src.push_str(&src);
-        Some(generated_trait)
+        Ok(Some(generated_trait))
     }
 
     fn import_interface_paths(&self) -> Vec<(InterfaceId, String, Option<String>)> {
@@ -1531,10 +1540,10 @@ impl Wasmtime {
         resolve: &Resolve,
         world: WorldId,
         world_trait: Option<&GeneratedTrait>,
-    ) {
+    ) -> Result<()> {
         let has_world_imports_trait = self.has_world_imports_trait(resolve, world);
         if self.import_interfaces.is_empty() && !has_world_imports_trait {
-            return;
+            return Ok(());
         }
 
         let (options_param, options_arg) = if self.world_link_options.has_any() {
@@ -1590,7 +1599,7 @@ impl Wasmtime {
             }
             for f in self.world_import_functions.clone() {
                 let mut generator = InterfaceGenerator::new(self, resolve);
-                generator.generate_add_function_to_linker(TypeOwner::World(world), &f, "linker");
+                generator.generate_add_function_to_linker(TypeOwner::World(world), &f, "linker")?;
                 let src = String::from(generator.src);
                 self.src.push_str(&src);
                 self.src.push_str("\n");
@@ -1674,6 +1683,7 @@ impl Wasmtime {
         }
         gate.close(&mut self.src);
         uwriteln!(self.src, "Ok(())\n}}");
+        Ok(())
     }
 
     fn generate_add_resource_to_linker(
@@ -1803,13 +1813,14 @@ impl<'a> InterfaceGenerator<'a> {
         }
     }
 
-    fn types(&mut self, id: InterfaceId) {
+    fn types(&mut self, id: InterfaceId) -> Result<()> {
         for (name, id) in self.resolve.interfaces[id].types.iter() {
-            self.define_type(name, *id);
+            self.define_type(name, *id)?;
         }
+        Ok(())
     }
 
-    fn define_type(&mut self, name: &str, id: TypeId) {
+    fn define_type(&mut self, name: &str, id: TypeId) -> Result<()> {
         let ty = &self.resolve.types[id];
         match &ty.kind {
             TypeDefKind::Record(record) => self.type_record(id, name, record, &ty.docs),
@@ -1824,13 +1835,14 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Future(t) => self.type_future(id, name, t.as_ref(), &ty.docs),
             TypeDefKind::Stream(t) => self.type_stream(id, name, t.as_ref(), &ty.docs),
             TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
-            TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
+            TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs)?,
             TypeDefKind::Map(k, v) => self.type_map(id, name, k, v, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
             TypeDefKind::FixedLengthList(elem, size) => {
                 self.type_fixed_length_list(id, name, elem, *size, &ty.docs)
             }
         }
+        Ok(())
     }
 
     fn type_handle(&mut self, id: TypeId, name: &str, handle: &Handle, docs: &Docs) {
@@ -1842,7 +1854,13 @@ impl<'a> InterfaceGenerator<'a> {
         self.assert_type(id, &name);
     }
 
-    fn type_resource(&mut self, id: TypeId, name: &str, _resource: &TypeDef, docs: &Docs) {
+    fn type_resource(
+        &mut self,
+        id: TypeId,
+        name: &str,
+        _resource: &TypeDef,
+        docs: &Docs,
+    ) -> Result<()> {
         let camel = name.to_upper_camel_case();
         let wt = self.generator.wasmtime_path();
 
@@ -1880,7 +1898,7 @@ impl<'a> InterfaceGenerator<'a> {
                 &functions,
                 &[ExtraTraitMethod::ResourceDrop { name }],
                 &[],
-            );
+            )?;
             self.all_func_flags |= trait_.all_func_flags;
         } else {
             self.rustdoc(docs);
@@ -1895,6 +1913,7 @@ impl<'a> InterfaceGenerator<'a> {
                 "
             );
         }
+        Ok(())
     }
 
     fn type_record(&mut self, id: TypeId, _name: &str, record: &Record, docs: &Docs) {
@@ -2536,7 +2555,7 @@ impl<'a> InterfaceGenerator<'a> {
         (self.path_to_interface(owner), trappable_error_id)
     }
 
-    fn generate_add_to_linker(&mut self, id: InterfaceId, name: &str) {
+    fn generate_add_to_linker(&mut self, id: InterfaceId, name: &str) -> Result<()> {
         let iface = &self.resolve.interfaces[id];
         let owner = TypeOwner::Interface(id);
         let wt = self.generator.wasmtime_path();
@@ -2612,7 +2631,7 @@ impl<'a> InterfaceGenerator<'a> {
                         name: resource_name,
                     }],
                     &[],
-                );
+                )?;
                 self.all_func_flags |= trait_.all_func_flags;
             }
         }
@@ -2635,7 +2654,7 @@ impl<'a> InterfaceGenerator<'a> {
                 .collect::<Vec<_>>(),
             &extra_functions,
             &get_resources(self.resolve, id).collect::<Vec<_>>(),
-        );
+        )?;
 
         let opt_t_send_bound = if generated_trait
             .all_func_flags
@@ -2709,7 +2728,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         for (_, func) in iface.functions.iter() {
-            self.generate_add_function_to_linker(owner, func, "inst");
+            self.generate_add_function_to_linker(owner, func, "inst")?;
         }
         gate.close(&mut self.src);
         uwriteln!(self.src, "Ok(())");
@@ -2780,6 +2799,7 @@ pub fn add_to_linker<T, D>(
                 );
             }
         }
+        Ok(())
     }
 
     fn import_resource_drop_flags(&mut self, name: &str) -> FunctionFlags {
@@ -2790,7 +2810,12 @@ pub fn add_to_linker<T, D>(
         )
     }
 
-    fn generate_add_function_to_linker(&mut self, owner: TypeOwner, func: &Function, linker: &str) {
+    fn generate_add_function_to_linker(
+        &mut self,
+        owner: TypeOwner,
+        func: &Function,
+        linker: &str,
+    ) -> Result<()> {
         let flags = self.generator.opts.imports.flags(
             self.resolve,
             self.current_interface.map(|p| p.1),
@@ -2813,12 +2838,13 @@ pub fn add_to_linker<T, D>(
         if self.named_import_id.is_some() {
             self.src.push_str("{ let id = id.clone(); ");
         }
-        self.generate_guest_import_closure(owner, func, flags);
+        self.generate_guest_import_closure(owner, func, flags)?;
         if self.named_import_id.is_some() {
             self.src.push_str("}\n");
         }
         uwriteln!(self.src, ")?;");
         gate.close(&mut self.src);
+        Ok(())
     }
 
     fn generate_guest_import_closure(
@@ -2826,7 +2852,7 @@ pub fn add_to_linker<T, D>(
         owner: TypeOwner,
         func: &Function,
         flags: FunctionFlags,
-    ) {
+    ) -> Result<()> {
         // Generate the closure that's passed to a `Linker`, the final piece of
         // codegen here.
 
@@ -2933,7 +2959,7 @@ pub fn add_to_linker<T, D>(
             self.src
                 .push_str("let host = &mut host_getter(caller.data_mut());\n");
         }
-        let func_name = rust_function_name(func);
+        let func_name = rust_function_name(func)?;
         let host_trait = match func.kind.resource() {
             None => match owner {
                 TypeOwner::World(id) => format!(
@@ -3030,14 +3056,15 @@ pub fn add_to_linker<T, D>(
         }
 
         self.src.push_str("}\n");
+        Ok(())
     }
 
-    fn generate_function_trait_sig(&mut self, func: &Function, flags: FunctionFlags) {
+    fn generate_function_trait_sig(&mut self, func: &Function, flags: FunctionFlags) -> Result<()> {
         let wt = self.generator.wasmtime_path();
         self.rustdoc(&func.docs);
 
         self.push_str("fn ");
-        self.push_str(&rust_function_name(func));
+        self.push_str(&rust_function_name(func)?);
         if func.kind.is_async() {
             uwrite!(self.src, "(accessor: &{wt}::component::Accessor<T, Self>, ");
         } else if flags.contains(FunctionFlags::STORE) {
@@ -3062,6 +3089,7 @@ pub fn add_to_linker<T, D>(
         if flags.contains(FunctionFlags::ASYNC) {
             self.push_str("> + Send");
         }
+        Ok(())
     }
 
     fn generate_function_params(&mut self, func: &Function) {
@@ -3109,12 +3137,12 @@ pub fn add_to_linker<T, D>(
         }
     }
 
-    fn extract_typed_function(&mut self, func: &Function) -> (String, String) {
-        let snake = func_field_name(self.resolve, func);
+    fn extract_typed_function(&mut self, func: &Function) -> Result<(String, String)> {
+        let snake = func_field_name(self.resolve, func)?;
         let sig = self.typedfunc_sig(func, TypeMode::AllBorrowed("'_"));
         let extract =
             format!("*_instance.get_typed_func::<{sig}>(&mut store, &self.{snake})?.func()");
-        (snake, extract)
+        Ok((snake, extract))
     }
 
     fn define_rust_guest_export(
@@ -3122,7 +3150,7 @@ pub fn add_to_linker<T, D>(
         resolve: &Resolve,
         ns: Option<&WorldKey>,
         func: &Function,
-    ) {
+    ) -> Result<()> {
         let flags = self.generator.opts.exports.flags(resolve, ns, func);
         let (async_, async__, await_) = if flags.contains(FunctionFlags::ASYNC) {
             ("async", "_async", ".await")
@@ -3158,7 +3186,7 @@ pub fn add_to_linker<T, D>(
         uwriteln!(
             self.src,
             "::new_unchecked(self{projection_to_func}.{})",
-            func_field_name(self.resolve, func),
+            func_field_name(self.resolve, func)?,
         );
         self.src.push_str("}\n");
         self.src.push_str("}\n");
@@ -3267,6 +3295,7 @@ pub fn add_to_linker<T, D>(
 
         // End function body
         self.src.push_str("}\n");
+        Ok(())
     }
 
     fn rustdoc(&mut self, docs: &Docs) {
@@ -3324,7 +3353,7 @@ pub fn add_to_linker<T, D>(
         functions: &[&Function],
         extra_functions: &[ExtraTraitMethod<'_>],
         resources: &[(TypeId, &str)],
-    ) -> GeneratedTrait {
+    ) -> Result<GeneratedTrait> {
         let mut ret = GeneratedTrait::default();
         let wt = self.generator.wasmtime_path();
         let partition = self.partition_concurrent_funcs(functions.iter().copied());
@@ -3410,7 +3439,7 @@ fn drop(accessor: {wt}::component::Access<T, Self>, {id_param}rep: {wt}::compone
         }
 
         for (func, flags) in partition.with_store.iter() {
-            self.generate_function_trait_sig(func, *flags);
+            self.generate_function_trait_sig(func, *flags)?;
             self.push_str(";\n");
         }
         uwriteln!(self.src, "}}");
@@ -3434,7 +3463,7 @@ fn drop(accessor: {wt}::component::Access<T, Self>, {id_param}rep: {wt}::compone
         );
         ret.name = trait_name.to_string();
         for (func, flags) in partition.without_store.iter() {
-            self.generate_function_trait_sig(func, *flags);
+            self.generate_function_trait_sig(func, *flags)?;
             self.push_str(";\n");
         }
 
@@ -3485,7 +3514,7 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
         uwriteln!(self.src, "}}");
 
         if self.generator.opts.skip_mut_forwarding_impls {
-            return ret;
+            return Ok(ret);
         }
 
         // Generate impl HostResource for &mut HostResource
@@ -3499,7 +3528,7 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
             "impl <_T: {trait_name} + ?Sized {maybe_send}> {trait_name} for &mut _T {{"
         );
         for (func, flags) in partition.without_store.iter() {
-            self.generate_function_trait_sig(func, *flags);
+            self.generate_function_trait_sig(func, *flags)?;
             uwriteln!(self.src, "{{");
             if flags.contains(FunctionFlags::ASYNC) {
                 uwriteln!(self.src, "async move {{");
@@ -3507,7 +3536,7 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
             uwrite!(
                 self.src,
                 "{trait_name}::{}(*self,",
-                rust_function_name(func)
+                rust_function_name(func)?,
             );
             if self.named_import_id.is_some() {
                 self.src.push_str("id,");
@@ -3573,7 +3602,7 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
         }
         uwriteln!(self.src, "}}");
 
-        ret
+        Ok(ret)
     }
 }
 
@@ -3911,19 +3940,25 @@ fn resolve_type_definition_id(resolve: &Resolve, mut id: TypeId) -> TypeId {
     }
 }
 
-fn rust_function_name(func: &Function) -> String {
+fn rust_function_name(func: &Function) -> Result<String> {
     match func.kind {
-        FunctionKind::Constructor(_) => "new".to_string(),
+        FunctionKind::Constructor(_) => Ok("new".to_string()),
         FunctionKind::Method(_)
         | FunctionKind::Static(_)
         | FunctionKind::AsyncMethod(_)
         | FunctionKind::AsyncStatic(_)
         | FunctionKind::Freestanding
-        | FunctionKind::AsyncFreestanding => to_rust_ident(func.item_name()),
+        | FunctionKind::AsyncFreestanding => Ok(to_rust_ident(func.item_name())),
+        FunctionKind::Getter
+        | FunctionKind::Setter
+        | FunctionKind::MethodGetter(_)
+        | FunctionKind::MethodSetter(_)
+        | FunctionKind::StaticGetter(_)
+        | FunctionKind::StaticSetter(_) => bail!("unimplemented getter/setter"),
     }
 }
 
-fn func_field_name(resolve: &Resolve, func: &Function) -> String {
+fn func_field_name(resolve: &Resolve, func: &Function) -> Result<String> {
     let mut name = String::new();
     match func.kind {
         FunctionKind::Method(id) | FunctionKind::AsyncMethod(id) => {
@@ -3942,9 +3977,15 @@ fn func_field_name(resolve: &Resolve, func: &Function) -> String {
             name.push_str("-");
         }
         FunctionKind::Freestanding | FunctionKind::AsyncFreestanding => {}
+        FunctionKind::Getter
+        | FunctionKind::Setter
+        | FunctionKind::MethodGetter(_)
+        | FunctionKind::MethodSetter(_)
+        | FunctionKind::StaticGetter(_)
+        | FunctionKind::StaticSetter(_) => bail!("unimplemented getter/setter"),
     }
     name.push_str(func.item_name());
-    name.to_snake_case()
+    Ok(name.to_snake_case())
 }
 
 fn get_resources<'a>(

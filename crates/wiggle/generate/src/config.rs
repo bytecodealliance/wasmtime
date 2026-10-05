@@ -175,7 +175,7 @@ impl Parse for Config {
     }
 }
 
-/// The witx document(s) that will be loaded from a [`Config`](struct.Config.html).
+/// The witx document(s) that will be loaded from a [`Config`].
 ///
 /// A witx interface definition can be provided either as a collection of relative paths to
 /// documents, or as a single inlined string literal. Note that `(use ...)` directives are not

@@ -76,7 +76,7 @@
 ;;  108: sub     x28, x28, #0xc
 ;;       mov     sp, x28
 ;;       mov     x0, x9
-;;       bl      #0x29c
+;;       bl      #0x2a4
 ;;  118: add     x28, x28, #0xc
 ;;       ╰─╼ stack_map: frame_size=48, frame_offsets=[12]
 ;;       mov     sp, x28

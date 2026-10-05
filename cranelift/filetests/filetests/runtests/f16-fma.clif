@@ -1,3 +1,4 @@
+test interpret
 test run
 target riscv64 has_zfhmin has_zfh
 
@@ -7,6 +8,8 @@ block0(v0: f16, v1: f16, v2: f16):
   return v3
 }
 ; run: %fmadd(0x7.0, 0x8.0, 0x9.0) == 0x1.040p6
+; Rounding to f32 before narrowing would give 0x1.0000p-3 here.
+; run: %fmadd(0x1.82cp5, 0x1.d20p-17, 0x1.fd8p-4) == 0x1.004p-3
 
 
 

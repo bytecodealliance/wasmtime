@@ -7,6 +7,7 @@ use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::value::{DataValueExt, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
+use cranelift_codegen::ir::immediates::Ieee16;
 use cranelift_codegen::ir::{
     AbiParam, AtomicRmwOp, Block, BlockArg, BlockCall, Endianness, ExternalName, FuncRef, Function,
     InstructionData, Opcode, TrapCode, Type, Value as ValueRef, types,
@@ -1125,6 +1126,14 @@ where
             )?;
             let bits = |x: DataValue| -> ValueResult<u64> {
                 Ok(match ctrl_ty.lane_type() {
+                    types::F16 => {
+                        let v = if inst.opcode() == Opcode::FcvtFromUint {
+                            x.into_int_unsigned()? as f32
+                        } else {
+                            x.into_int_signed()? as f32
+                        };
+                        Ieee16::from_f32_rne(v).bits() as u64
+                    }
                     types::F32 => (if inst.opcode() == Opcode::FcvtFromUint {
                         x.into_int_unsigned()? as f32
                     } else {

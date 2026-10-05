@@ -56,6 +56,28 @@ fn get_content_length(headers: &http::HeaderMap) -> wasmtime::Result<Option<u64>
     Ok(Some(v))
 }
 
+/// Parse the specified string as an `http::uri::PathAndQuery`, if possible.
+///
+/// As of `http` v1.4.1, `PathAndQuery::from_str` will return an error if given
+/// an empty string per https://github.com/hyperium/http/pull/826.  However,
+/// https://datatracker.ietf.org/doc/html/rfc3986#section-3.3 says an empty path
+/// is okay:
+///
+/// > If a URI contains an authority component, then the path component must
+/// > either be empty or begin with a slash ("/") character.
+///
+/// ...and they are still allowed when using
+/// `http::uri::Builder::path_and_query` per
+/// https://github.com/hyperium/http/pull/853, so we use that here:
+#[cfg(any(feature = "p2", feature = "p3"))]
+fn parse_path_with_query(path_with_query: &str) -> Option<http::uri::PathAndQuery> {
+    http::uri::Builder::new()
+        .path_and_query(path_with_query)
+        .build()
+        .ok()
+        .and_then(|uri| uri.path_and_query().cloned())
+}
+
 #[cfg(all(test, any(feature = "p2", feature = "p3")))]
 mod content_length_tests {
     use super::get_content_length;

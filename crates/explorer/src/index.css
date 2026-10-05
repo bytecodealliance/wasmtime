@@ -29,20 +29,26 @@ body {
   color: #101010;
 }
 
-#wat {
-  flex: 1;
-  height: 100%;
-  overflow: scroll;
-}
-
-#clif {
-  flex: 1;
-  height: 100%;
-  overflow: scroll;
-}
-
+#wat,
+#clif,
 #asm {
   flex: 1;
+  min-width: 0;
   height: 100%;
   overflow: scroll;
+}
+
+.resize-handle {
+  flex: 0 0 5px;
+  cursor: col-resize;
+  background: #dddddd;
+}
+
+.resize-handle:hover {
+  background: #999999;
+}
+
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
 }

@@ -155,6 +155,13 @@ pub async fn default_send_request(
             .await
             .map_err(|_| Error::ConnectionReadTimeout)?
             .map_err(Error::from)?;
+        // Tokio panics on an `interval` with a zero duration, so clamp it to a
+        // 1ns timeout which is sort of effectively zero anyway.
+        let between_bytes_timeout = if between_bytes_timeout == Duration::ZERO {
+            Duration::new(0, 1)
+        } else {
+            between_bytes_timeout
+        };
         let mut timeout = tokio::time::interval(between_bytes_timeout);
         timeout.reset();
         Ok(res.map(|incoming| IncomingResponseBody { incoming, timeout }))

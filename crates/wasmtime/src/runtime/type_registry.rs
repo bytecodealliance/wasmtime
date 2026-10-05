@@ -273,8 +273,16 @@ impl Drop for TypeCollection {
 
 #[inline]
 fn shared_type_index_to_slab_id(index: VMSharedTypeIndex) -> SlabId {
-    assert!(!index.is_reserved_value());
-    SlabId::from_raw(index.bits())
+    try_shared_type_index_to_slab_id(index).unwrap()
+}
+
+/// Like `shared_type_index_to_slab_id`, but for untrusted indices.
+#[inline]
+fn try_shared_type_index_to_slab_id(index: VMSharedTypeIndex) -> Option<SlabId> {
+    if index.is_reserved_value() {
+        return None;
+    }
+    SlabId::try_from_raw(index.bits())
 }
 
 #[inline]
@@ -423,19 +431,19 @@ impl RegisteredType {
         ))
     }
 
-    /// Create an owning handle to the given index's associated type.
+    /// Create an owning handle to the given index's associated type, if that
+    /// index names a registered type.
     ///
     /// This will prevent the associated type from being unregistered as long as
-    /// the returned `RegisteredType` is kept alive.
-    pub fn root(engine: &Engine, index: VMSharedTypeIndex) -> RegisteredType {
-        engine.signatures().debug_assert_contains(index);
-
+    /// the returned `RegisteredType` is kept alive. `index` may come from an
+    /// untrusted source, such as the GC heap.
+    pub fn try_root(engine: &Engine, index: VMSharedTypeIndex) -> Option<RegisteredType> {
         let (entry, ty, layout) = {
-            let id = shared_type_index_to_slab_id(index);
+            let id = try_shared_type_index_to_slab_id(index)?;
             let inner = engine.signatures().0.read();
 
-            let ty = inner.types[id].clone().unwrap();
-            let entry = inner.type_to_rec_group[index].clone().unwrap();
+            let ty = inner.types.get(id)?.clone()?;
+            let entry = inner.type_to_rec_group.get(index)?.clone()?;
             let layout = inner.type_to_gc_layout.get(index).and_then(|l| l.clone());
 
             // NB: make sure to incref while the lock is held to prevent:
@@ -444,12 +452,18 @@ impl RegisteredType {
             // * Other thread: drops `RegisteredType` for entry E, decref
             //   reaches zero, write locks registry, unregisters entry
             // * This thread: increfs entry, but it isn't in the registry anymore
-            entry.incref("RegisteredType::root");
+            entry.incref("RegisteredType::try_root");
 
             (entry, ty, layout)
         };
 
-        RegisteredType::from_parts(engine.clone(), entry, index, ty, layout)
+        Some(RegisteredType::from_parts(
+            engine.clone(),
+            entry,
+            index,
+            ty,
+            layout,
+        ))
     }
 
     /// Construct a new `RegisteredType`.
@@ -1677,7 +1691,7 @@ impl TypeRegistry {
     /// Looks up a function type from a shared type index.
     ///
     /// This does *NOT* prevent the type from being unregistered while you are
-    /// still using the resulting value! Use the `RegisteredType::root`
+    /// still using the resulting value! Use the `RegisteredType::try_root`
     /// constructor if you need to ensure that property and you don't have some
     /// other mechanism already keeping the type registered.
     pub fn borrow(&self, index: VMSharedTypeIndex) -> Option<Arc<WasmSubType>> {

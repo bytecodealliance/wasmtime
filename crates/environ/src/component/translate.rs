@@ -1327,6 +1327,12 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ThreadYieldThenPromote { func }
                         }
+                        wasmparser::CanonicalFunction::StreamForward { .. } => {
+                            bail!("unimplemented stream.forward")
+                        }
+                        wasmparser::CanonicalFunction::FutureForward { .. } => {
+                            bail!("unimplemented stream.forward")
+                        }
                     };
                     self.result.initializers.push(init);
                 }

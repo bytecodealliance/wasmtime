@@ -2572,9 +2572,16 @@ pub trait TypeConvert {
     }
 
     fn convert_sub_type(&self, ty: &wasmparser::SubType) -> WasmResult<WasmSubType> {
+        let supertype = match &ty.supertype_idxs[..] {
+            [] => None,
+            [i] => Some(self.lookup_type_index(i.unpack())),
+            [_, _, ..] => {
+                return Err(wasm_unsupported!("multiple supertypes"));
+            }
+        };
         Ok(WasmSubType {
             is_final: ty.is_final,
-            supertype: ty.supertype_idx.map(|i| self.lookup_type_index(i.unpack())),
+            supertype,
             composite_type: self.convert_composite_type(&ty.composite_type)?,
         })
     }

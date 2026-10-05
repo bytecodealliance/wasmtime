@@ -1,0 +1,70 @@
+test compile precise-output
+set unwind_info=false
+target aarch64 has_fp16
+
+function %fadd_f16(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+    v2 = fadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   fadd h0, h0, h1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fadd h0, h0, h1
+;   ret
+
+function %fmul_f16(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+    v2 = fmul v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   fmul h0, h0, h1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmul h0, h0, h1
+;   ret
+
+function %fabs_f16(f16) -> f16 {
+block0(v0: f16):
+    v1 = fabs v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   fabs h0, h0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fabs h0, h0
+;   ret
+
+function %fcmp_f16(f16, f16) -> i8 {
+block0(v0: f16, v1: f16):
+    v2 = fcmp ne v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   fcmp h0, h1
+;   cset x0, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp h0, h1
+;   cset x0, ne
+;   ret
+
