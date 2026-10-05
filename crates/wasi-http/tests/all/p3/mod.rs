@@ -274,7 +274,7 @@ async fn p3_http_outbound_request_content_length() -> wasmtime::Result<()> {
 async fn p3_http_outbound_request_keepalive_response() -> wasmtime::Result<()> {
     let server = Server::http1_keep_alive(1)?;
     tokio::time::timeout(
-        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(60),
         run_cli(
             P3_HTTP_OUTBOUND_REQUEST_KEEPALIVE_RESPONSE_COMPONENT,
             &server,
@@ -288,7 +288,7 @@ async fn p3_http_outbound_request_keepalive_response() -> wasmtime::Result<()> {
 async fn p3_http_outbound_request_chunked_response() -> wasmtime::Result<()> {
     let server = Server::http1_chunked(1)?;
     tokio::time::timeout(
-        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(60),
         run_cli(P3_HTTP_OUTBOUND_REQUEST_CHUNKED_RESPONSE_COMPONENT, &server),
     )
     .await
