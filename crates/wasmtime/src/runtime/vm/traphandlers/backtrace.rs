@@ -238,6 +238,10 @@ impl Backtrace {
         // chain. This is justified because only the most recent execution of
         // wasm may execute off the initial stack (see comments in
         // `wasmtime::invoke_wasm_and_catch_traps` for details).
+        //
+        // An activation with a zero PC entered no Wasm (e.g. `Func::call` of a
+        // host function) and is skipped, but older activations may still hold
+        // Wasm frames.
         let activations =
             core::iter::once((stack_chain, last_wasm_exit_pc, last_wasm_exit_fp, unsafe {
                 *(*vm_store_context).last_wasm_entry_fp.get()
@@ -245,7 +249,6 @@ impl Backtrace {
             .chain(
                 state
                     .iter()
-                    .flat_map(|state| state.iter())
                     .filter(|state| {
                         core::ptr::eq(vm_store_context, state.vm_store_context.get().as_ptr())
                     })
@@ -258,7 +261,7 @@ impl Backtrace {
                         )
                     }),
             )
-            .take_while(|(chain, pc, fp, sp)| {
+            .filter(|(chain, pc, fp, sp)| {
                 if *pc == 0 {
                     debug_assert_eq!(*fp, 0);
                     debug_assert_eq!(*sp, 0);

@@ -1318,6 +1318,13 @@ pub(crate) mod tls {
             let mut ptr = self.state;
             unsafe {
                 while let Some(state) = ptr.as_ref() {
+                    ptr = state.prev.get();
+
+                    // Skip activations that entered no Wasm.
+                    if state.old_last_wasm_exit_pc() == 0 {
+                        continue;
+                    }
+
                     let _ = wasmtime_unwinder::visit_frames::<()>(
                         unwind,
                         state.old_last_wasm_exit_pc(),
@@ -1328,8 +1335,6 @@ pub(crate) mod tls {
                             core::ops::ControlFlow::Continue(())
                         },
                     );
-
-                    ptr = state.prev.get();
                 }
             }
         }

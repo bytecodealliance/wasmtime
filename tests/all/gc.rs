@@ -2219,6 +2219,56 @@ fn copying_collector_externref_survives_gc() -> Result<()> {
     Ok(())
 }
 
+/// A host function that calls, via `Func::call`, another host function that
+/// collects must not cause the Wasm frames beneath them to be traced twice.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn issue_14463_nested_host_call_gc_moves_object_once() -> Result<()> {
+    let _ = env_logger::try_init();
+    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+        let mut config = Config::new();
+        config.wasm_gc(true);
+        config.wasm_function_references(true);
+        config.collector(collector);
+
+        let engine = Engine::new(&config)?;
+
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (type $s (struct (field i32)))
+                    (type $f (func))
+                    (table (export "t") 1 funcref)
+                    (global $g (mut (ref null $s)) (ref.null $s))
+                    (func (export "run") (result i32) (local $x (ref null $s))
+                        (local.set $x (struct.new $s (i32.const 7)))
+                        (global.set $g (local.get $x))
+                        (call_indirect (type $f) (i32.const 0))
+                        (ref.eq (local.get $x) (global.get $g))
+                    )
+                )
+            "#,
+        )?;
+
+        let mut store = Store::new(&engine, ());
+
+        let inner = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| caller.gc(None));
+        let outer = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>| {
+            inner.call(&mut caller, &[], &mut [])
+        });
+
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        let table = instance.get_table(&mut store, "t").unwrap();
+        table.set(&mut store, 0, Ref::Func(Some(outer)))?;
+
+        let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+        assert_eq!(run.call(&mut store, ())?, 1, "collector = {collector:?}");
+    }
+    Ok(())
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn issue_13173_gc_heap_uses_gc_tunables_no_signals() -> Result<()> {

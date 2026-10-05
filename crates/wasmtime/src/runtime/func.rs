@@ -1594,17 +1594,20 @@ impl EntryStoreContext {
             let stack_chain =
                 mem::replace(&mut *vm_store_context.stack_chain.get(), new_stack_chain);
 
+            // Zero these out, rather than leave the previous activation's
+            // values behind, so that if we call into a host function callee
+            // (which never runs an entry trampoline to overwrite them) and it
+            // walks the stack, we don't see these values both while walking
+            // activations and in the saved state.
+            let take = |field: &core::cell::UnsafeCell<usize>| mem::replace(&mut *field.get(), 0);
+
             Self {
                 stack_limit,
-                last_wasm_exit_pc: *(*vm_store_context).last_wasm_exit_pc.get(),
-                last_wasm_exit_trampoline_fp: *(*vm_store_context)
-                    .last_wasm_exit_trampoline_fp
-                    .get(),
-                last_wasm_entry_fp: *(*vm_store_context).last_wasm_entry_fp.get(),
-                last_wasm_entry_sp: *(*vm_store_context).last_wasm_entry_sp.get(),
-                last_wasm_entry_trap_handler: *(*vm_store_context)
-                    .last_wasm_entry_trap_handler
-                    .get(),
+                last_wasm_exit_pc: take(&vm_store_context.last_wasm_exit_pc),
+                last_wasm_exit_trampoline_fp: take(&vm_store_context.last_wasm_exit_trampoline_fp),
+                last_wasm_entry_fp: take(&vm_store_context.last_wasm_entry_fp),
+                last_wasm_entry_sp: take(&vm_store_context.last_wasm_entry_sp),
+                last_wasm_entry_trap_handler: take(&vm_store_context.last_wasm_entry_trap_handler),
                 stack_chain,
                 vm_store_context,
             }
