@@ -101,7 +101,15 @@ where
         let mut store = store.as_context_mut();
         store.0.validate_sync_call()?;
         let func = self.func.vm_func_ref(store.0);
-        unsafe { Self::call_raw(&mut store, &self.ty, func, params, UncaughtException::Propagate) }
+        unsafe {
+            Self::call_raw(
+                &mut store,
+                &self.ty,
+                func,
+                params,
+                UncaughtException::Propagate,
+            )
+        }
     }
 
     /// Invokes this WebAssembly function with the specified parameters.

@@ -924,6 +924,7 @@ impl CallThreadState {
                 {
                     trap.reason = TrapReason::User(crate::Trap::UncaughtException.into());
                 }
+                let _ = &self.uncaught_exception;
             }
 
             // If this wasn't a wasm-caught exception, then catch the exception
