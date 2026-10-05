@@ -17,8 +17,8 @@ pub struct R {
     #[component(name = "a")]
     pub a: u32,
 }
-impl core::fmt::Debug for R {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl ::core::fmt::Debug for R {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
         f.debug_struct("R").field("a", &self.a).finish()
     }
 }
