@@ -1,6 +1,10 @@
+use bytes::Bytes;
 use http::header::CONTENT_LENGTH;
+use http_body::Frame;
+use http_body_util::StreamBody;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
+use std::convert::Infallible;
 use std::future::Future;
 use std::net::{SocketAddr, TcpStream};
 use std::thread::JoinHandle;
@@ -88,6 +92,52 @@ impl Server {
 
             debug!("preparing to bind connection to service");
             let conn = http.serve_connection(io, service_fn(test)).await;
+            trace!("connection result {:?}", conn);
+            conn?;
+            Ok(())
+        })
+    }
+
+    pub fn http1_keep_alive(conns: usize) -> Result<Self> {
+        debug!("initializing keep-alive http1 server");
+        Self::new(conns, |io| async move {
+            let mut builder = hyper::server::conn::http1::Builder::new();
+            let http = builder.keep_alive(true).pipeline_flush(true);
+
+            let service = service_fn(|req: Request<hyper::body::Incoming>| async move {
+                debug!(?req, "preparing pending response for request");
+                let body = futures::stream::pending::<Result<Frame<Bytes>, Infallible>>();
+                Response::builder().body(StreamBody::new(body))
+            });
+
+            debug!("preparing to bind connection to service");
+            let conn = http.serve_connection(io, service).await;
+            trace!("connection result {:?}", conn);
+            conn?;
+            Ok(())
+        })
+    }
+
+    pub fn http1_chunked(conns: usize) -> Result<Self> {
+        debug!("initializing chunked http1 server");
+        Self::new(conns, |io| async move {
+            let mut builder = hyper::server::conn::http1::Builder::new();
+            let http = builder.keep_alive(true).pipeline_flush(true);
+
+            let service = service_fn(|req: Request<hyper::body::Incoming>| async move {
+                debug!(?req, "preparing chunked response for request");
+                let chunks = [
+                    Ok::<_, Infallible>(Frame::data(Bytes::from_static(b"hello "))),
+                    Ok(Frame::data(Bytes::from_static(b"from a "))),
+                    Ok(Frame::data(Bytes::from_static(b"chunked response"))),
+                ];
+                Response::builder()
+                    .header(http::header::TRANSFER_ENCODING, "chunked")
+                    .body(StreamBody::new(futures::stream::iter(chunks)))
+            });
+
+            debug!("preparing to bind connection to chunked service");
+            let conn = http.serve_connection(io, service).await;
             trace!("connection result {:?}", conn);
             conn?;
             Ok(())
