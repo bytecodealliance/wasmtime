@@ -1,4 +1,4 @@
-use wasmtime_core::{Error, Result, format_err};
+use wasmtime_core::{error::Result, format_err};
 
 include!(concat!(env!("OUT_DIR"), "/gen.rs"));
 
