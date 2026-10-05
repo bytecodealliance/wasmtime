@@ -131,7 +131,7 @@ impl RunCommand {
             };
             self.run.common.debug.debugger = Some("<built-in gdbstub>".into());
             self.run.common.debug.arg.push(addr);
-            Some(gdbstub_component_artifact::GDBSTUB_COMPONENT)
+            Some(gdbstub_component_artifact::gdbstub()?)
         } else {
             None
         };

@@ -4998,6 +4998,9 @@ dependencies = [
 [[package]]
 name = "wasmtime-internal-gdbstub-component-artifact"
 version = "51.0.0-dev"
+dependencies = [
+ "wasmtime-internal-core",
+]
 
 [[package]]
 name = "wasmtime-internal-jit-debug"
