@@ -273,6 +273,14 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.ty_supported(ty).filter(|ty| ty.is_vector())
     }
 
+    fn ty_supported_vec_repr(&mut self, ty: Type) -> Option<Type> {
+        if ty.is_vector() && self.ty_supported_vec(ty.as_int()).is_some() {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+
     fn ty_reg_pair(&mut self, ty: Type) -> Option<Type> {
         match ty {
             I128 | F128 => Some(ty),

@@ -11,7 +11,7 @@
 
 ;; ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (vconst (ty_supported_vec ty) n))
+(rule (lower (vconst (ty_supported_vec_repr ty) n))
   (gen_constant ty (const_to_vconst n)))
 
 ;;;; Rules for `f16const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -766,11 +766,11 @@
     (value_regs low high)))
 
 ;; Zvbb: band(x, bnot(y)) -> vandn.vv
-(rule 18 (lower (band (ty_supported_vec ty) x (bnot _ y)))
+(rule 18 (lower (band (ty_supported_vec_repr ty) x (bnot _ y)))
   (if-let true (has_zvbb))
   (rv_vandn_vv x y (unmasked) ty))
 
-(rule 19 (lower (band (ty_supported_vec ty) (bnot _ y) x))
+(rule 19 (lower (band (ty_supported_vec_repr ty) (bnot _ y) x))
   (if-let true (has_zvbb))
   (rv_vandn_vv x y (unmasked) ty))
 
@@ -784,7 +784,7 @@
   (if (ty_vector_not_float ty))
   (rv_vandn_vx x y (unmasked) ty))
 
-(rule 9 (lower (band (ty_supported_vec ty) x y))
+(rule 9 (lower (band (ty_supported_vec_repr ty) x y))
   (rv_vand_vv x y (unmasked) ty))
 
 (rule 10 (lower (band (ty_supported_vec ty) x (splat _ y)))
@@ -795,11 +795,11 @@
   (if (ty_vector_not_float ty))
   (rv_vand_vx y x (unmasked) ty))
 
-(rule 12 (lower (band (ty_supported_vec ty) x y))
+(rule 12 (lower (band (ty_supported_vec_repr ty) x y))
   (if-let y_imm (replicated_imm5 y))
   (rv_vand_vi x y_imm (unmasked) ty))
 
-(rule 13 (lower (band (ty_supported_vec ty) x y))
+(rule 13 (lower (band (ty_supported_vec_repr ty) x y))
   (if-let x_imm (replicated_imm5 x))
   (rv_vand_vi y x_imm (unmasked) ty))
 
@@ -919,7 +919,7 @@
         (high XReg (rv_orn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
 
-(rule 9 (lower (bor (ty_supported_vec ty) x y))
+(rule 9 (lower (bor (ty_supported_vec_repr ty) x y))
   (rv_vor_vv x y (unmasked) ty))
 
 (rule 10 (lower (bor (ty_supported_vec ty) x (splat _ y)))
@@ -930,11 +930,11 @@
   (if (ty_vector_not_float ty))
   (rv_vor_vx y x (unmasked) ty))
 
-(rule 12 (lower (bor (ty_supported_vec ty) x y))
+(rule 12 (lower (bor (ty_supported_vec_repr ty) x y))
   (if-let y_imm (replicated_imm5 y))
   (rv_vor_vi x y_imm (unmasked) ty))
 
-(rule 13 (lower (bor (ty_supported_vec ty) x y))
+(rule 13 (lower (bor (ty_supported_vec_repr ty) x y))
   (if-let x_imm (replicated_imm5 x))
   (rv_vor_vi y x_imm (unmasked) ty))
 
@@ -983,7 +983,7 @@
 (rule 4 (lower (bxor (ty_supported_float_size ty) x y))
   (lower_float_binary (AluOPRRR.Xor) x y ty))
 
-(rule 5 (lower (bxor (ty_supported_vec ty) x y))
+(rule 5 (lower (bxor (ty_supported_vec_repr ty) x y))
   (rv_vxor_vv x y (unmasked) ty))
 
 (rule 6 (lower (bxor (ty_supported_vec ty) x (splat _ y)))
@@ -994,11 +994,11 @@
   (if (ty_vector_not_float ty))
   (rv_vxor_vx y x (unmasked) ty))
 
-(rule 8 (lower (bxor (ty_supported_vec ty) x y))
+(rule 8 (lower (bxor (ty_supported_vec_repr ty) x y))
   (if-let y_imm (replicated_imm5 y))
   (rv_vxor_vi x y_imm (unmasked) ty))
 
-(rule 9 (lower (bxor (ty_supported_vec ty) x y))
+(rule 9 (lower (bxor (ty_supported_vec_repr ty) x y))
   (if-let x_imm (replicated_imm5 x))
   (rv_vxor_vi y x_imm (unmasked) ty))
 
@@ -1043,7 +1043,7 @@
     (rv_not (value_regs_get x 0))
     (rv_not (value_regs_get x 1))))
 
-(rule 3 (lower (bnot (ty_supported_vec ty) x))
+(rule 3 (lower (bnot (ty_supported_vec_repr ty) x))
   (rv_vnot_v x (unmasked) ty))
 
 (rule 4 (lower (bnot (ty_int_ref_scalar_64_extract _) (bxor _ x y)))
@@ -1994,7 +1994,7 @@
 (rule 2 (lower (select (ty_reg_pair _) c x y))
   (gen_select_regs (is_nonzero_cmp c) x y))
 
-(rule 1 (lower (select (ty_supported_vec _) c x y))
+(rule 1 (lower (select (ty_supported_vec_repr _) c x y))
   (gen_select_vreg (is_nonzero_cmp c) x y))
 
 (rule 0 (lower (select (ty_supported_float_size _) c x y))
@@ -2212,7 +2212,7 @@
         (hi XReg (gen_load (amode addr offset_plus_8) (LoadOP.Ld) flags)))
     (value_regs lo hi)))
 
-(rule 2 (lower (load (ty_supported_vec ty) (little_or_native_endian flags) addr offset))
+(rule 2 (lower (load (ty_supported_vec_repr ty) (little_or_native_endian flags) addr offset))
   (let ((eew VecElementWidth (element_width_from_type ty))
         (amode AMode (amode addr offset)))
     (vec_load eew (VecAMode.UnitStride amode) flags (unmasked) ty)))
@@ -2283,7 +2283,7 @@
   (let ((_ InstOutput (rv_store (amode addr offset) (StoreOP.Sd) flags (value_regs_get src 0))))
     (rv_store (amode addr offset_plus_8) (StoreOP.Sd) flags (value_regs_get src 1))))
 
-(rule 2 (lower (store (little_or_native_endian flags) src @ (value_type (ty_supported_vec ty)) addr offset))
+(rule 2 (lower (store (little_or_native_endian flags) src @ (value_type (ty_supported_vec_repr ty)) addr offset))
   (let ((eew VecElementWidth (element_width_from_type ty))
         (amode AMode (amode addr offset)))
     (vec_store eew (VecAMode.UnitStride amode) src flags (unmasked) ty)))
@@ -2625,14 +2625,14 @@
 
 ;; These rules should probably be handled in `gen_bitcast`, but it's convenient to have that return
 ;; a single register, instead of a `ValueRegs`
-(rule 3 (lower (bitcast (ty_reg_pair _) _ v @ (value_type (ty_supported_vec _))))
+(rule 3 (lower (bitcast (ty_reg_pair _) _ v @ (value_type (ty_supported_vec_repr _))))
     (value_regs
       (gen_extractlane $I64X2 v 0)
       (gen_extractlane $I64X2 v 1)))
 
 ;; Move the high half into a vector register, and then use vslide1up to move it up and
 ;; insert the lower half in one instruction.
-(rule 2 (lower (bitcast (ty_supported_vec _) _ v @ (value_type (ty_reg_pair _))))
+(rule 2 (lower (bitcast (ty_supported_vec_repr _) _ v @ (value_type (ty_reg_pair _))))
     (let ((lo XReg (value_regs_get v 0))
           (hi XReg (value_regs_get v 1))
           (vstate VState (vstate_from_type $I64X2))
