@@ -1,6 +1,6 @@
 use super::invoke_wasm_and_catch_traps;
 use crate::prelude::*;
-use crate::runtime::vm::VMFuncRef;
+use crate::runtime::vm::{UncaughtException, VMFuncRef};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     AsContext, AsContextMut, Engine, Func, FuncType, HeapType, NoFunc, RefType, StoreContextMut,
@@ -101,7 +101,15 @@ where
         let mut store = store.as_context_mut();
         store.0.validate_sync_call()?;
         let func = self.func.vm_func_ref(store.0);
-        unsafe { Self::call_raw(&mut store, &self.ty, func, params) }
+        unsafe {
+            Self::call_raw(
+                &mut store,
+                &self.ty,
+                func,
+                params,
+                UncaughtException::Propagate,
+            )
+        }
     }
 
     /// Invokes this WebAssembly function with the specified parameters.
@@ -140,7 +148,9 @@ where
         store
             .on_fiber(|store| {
                 let func = self.func.vm_func_ref(store.0);
-                unsafe { Self::call_raw(store, &self.ty, func, params) }
+                unsafe {
+                    Self::call_raw(store, &self.ty, func, params, UncaughtException::Propagate)
+                }
             })
             .await?
     }
@@ -156,6 +166,7 @@ where
         ty: &FuncType,
         func: ptr::NonNull<VMFuncRef>,
         params: Params,
+        uncaught_exception: UncaughtException,
     ) -> Result<Results> {
         // double-check that params/results match for this function's type in
         // debug mode.
@@ -197,7 +208,7 @@ where
         // the memory go away, so the size matters here for performance.
         let mut captures = (func, storage);
 
-        let result = invoke_wasm_and_catch_traps(store, |caller, vm| {
+        let result = invoke_wasm_and_catch_traps(store, uncaught_exception, |caller, vm| {
             let (func_ref, storage) = &mut captures;
             let storage_len = mem::size_of_val::<Storage<_, _>>(storage) / mem::size_of::<ValRaw>();
             let storage: *mut Storage<_, _> = storage;

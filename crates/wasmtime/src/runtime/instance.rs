@@ -1,8 +1,8 @@
 use crate::linker::{Definition, DefinitionType};
 use crate::prelude::*;
 use crate::runtime::vm::{
-    self, Imports, ModuleRuntimeInfo, VMFuncRef, VMFunctionImport, VMGlobalImport, VMMemoryImport,
-    VMStore, VMTableImport, VMTagImport,
+    self, Imports, ModuleRuntimeInfo, UncaughtException, VMFuncRef, VMFunctionImport,
+    VMGlobalImport, VMMemoryImport, VMStore, VMTableImport, VMTagImport,
 };
 use crate::store::{
     AllocateInstanceKind, Asyncness, InstanceId, StoreInstanceId, StoreOpaque, StoreResourceLimiter,
@@ -362,9 +362,13 @@ impl Instance {
         let caller_vmctx = instance.vmctx();
         unsafe {
             let funcref = f.vm_func_ref(store.0);
-            super::func::invoke_wasm_and_catch_traps(store, |_default_caller, vm| {
-                VMFuncRef::array_call(funcref, vm, caller_vmctx, NonNull::from(&mut []))
-            })?;
+            super::func::invoke_wasm_and_catch_traps(
+                store,
+                UncaughtException::Propagate,
+                |_default_caller, vm| {
+                    VMFuncRef::array_call(funcref, vm, caller_vmctx, NonNull::from(&mut []))
+                },
+            )?;
         }
         Ok(())
     }

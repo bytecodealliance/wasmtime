@@ -1,7 +1,7 @@
 use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::runtime::vm::{
-    self, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
+    self, InterpreterRef, SendSyncPtr, StoreBox, UncaughtException, VMArrayCallHostFuncContext,
     VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
     VMStoreContext, VmPtr,
 };
@@ -1018,17 +1018,25 @@ impl Func {
 
         // SAFETY: the safety of this function call is the same as the contract
         // of this function.
-        unsafe { Self::call_unchecked_raw(&mut store, func_ref, params_and_returns) }
+        unsafe {
+            Self::call_unchecked_raw(
+                &mut store,
+                func_ref,
+                params_and_returns,
+                UncaughtException::Propagate,
+            )
+        }
     }
 
     pub(crate) unsafe fn call_unchecked_raw<T>(
         store: &mut StoreContextMut<'_, T>,
         func_ref: NonNull<VMFuncRef>,
         params_and_returns: NonNull<[ValRaw]>,
+        uncaught_exception: UncaughtException,
     ) -> Result<()> {
         // SAFETY: the safety of this function call is the same as the contract
         // of this function.
-        invoke_wasm_and_catch_traps(store, |caller, vm| unsafe {
+        invoke_wasm_and_catch_traps(store, uncaught_exception, |caller, vm| unsafe {
             VMFuncRef::array_call(func_ref, vm, caller, params_and_returns)
         })
     }
@@ -1456,6 +1464,7 @@ impl Func {
 /// can pass to the called wasm function, if desired.
 pub(crate) fn invoke_wasm_and_catch_traps<T>(
     store: &mut StoreContextMut<'_, T>,
+    uncaught_exception: crate::runtime::vm::UncaughtException,
     closure: impl FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 ) -> Result<()> {
     // The `enter_wasm` call below will reset the store context's
@@ -1472,7 +1481,12 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         // `previous_runtime_state` implicitly dropped here
         return Err(trap);
     }
-    let result = crate::runtime::vm::catch_traps(store, &mut previous_runtime_state, closure);
+    let result = crate::runtime::vm::catch_traps(
+        store,
+        &mut previous_runtime_state,
+        uncaught_exception,
+        closure,
+    );
     #[cfg(feature = "component-model")]
     if result.is_err() {
         store.0.set_trapped();

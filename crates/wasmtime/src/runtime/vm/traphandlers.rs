@@ -452,11 +452,23 @@ where
     }
 }
 
+/// Controls what happens when a Wasm exception escapes a `catch_traps`
+/// activation without being caught by a handler on its stack.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum UncaughtException {
+    /// Propagate the exception to the host as a `ThrownException`.
+    Propagate,
+    /// Convert the escaping exception into a `Trap::UncaughtException`.
+    #[cfg(feature = "component-model")]
+    Trap,
+}
+
 /// Catches any wasm traps that happen within the execution of `closure`,
 /// returning them as a `Result`.
 pub fn catch_traps<T, F>(
     store: &mut StoreContextMut<'_, T>,
     old_state: &mut EntryStoreContext,
+    uncaught_exception: UncaughtException,
     mut closure: F,
 ) -> Result<()>
 where
@@ -464,11 +476,14 @@ where
 {
     let caller = store.0.default_caller();
 
-    let result = CallThreadState::new(store.0, old_state).with(|_cx| match store.0.executor() {
-        ExecutorRef::Interpreter(r) => closure(caller, Some(r)),
-        #[cfg(has_host_compiler_backend)]
-        ExecutorRef::Native => closure(caller, None),
-    });
+    let result =
+        CallThreadState::new(store.0, old_state, uncaught_exception).with(|_cx| {
+            match store.0.executor() {
+                ExecutorRef::Interpreter(r) => closure(caller, Some(r)),
+                #[cfg(has_host_compiler_backend)]
+                ExecutorRef::Native => closure(caller, None),
+            }
+        });
 
     match result {
         Ok(x) => Ok(x),
@@ -512,6 +527,7 @@ mod call_thread_state {
         /// reached for host-code destinations and right when
         /// performing the jump for Wasm-code destinations).
         pub(super) unwind: Cell<Option<UnwindReason>>,
+        pub(super) uncaught_exception: UncaughtException,
         #[cfg(all(has_native_signals))]
         pub(super) signal_handler: Option<*const SignalHandler>,
         pub(super) capture_backtrace: bool,
@@ -547,9 +563,11 @@ mod call_thread_state {
         pub(super) fn new(
             store: &mut StoreOpaque,
             old_state: *mut EntryStoreContext,
+            uncaught_exception: UncaughtException,
         ) -> CallThreadState {
             CallThreadState {
                 unwind: Cell::new(None),
+                uncaught_exception,
                 unwinder: store.unwinder(),
                 #[cfg(all(has_native_signals))]
                 signal_handler: store.signal_handler(),
@@ -892,6 +910,22 @@ impl CallThreadState {
                     trap.backtrace = self.capture_backtrace(store.vm_store_context_mut(), None);
                     trap.coredumpstack = self.capture_coredump(store.vm_store_context_mut(), None);
                 }
+
+                // Handle `UncaughtException` if we've come this far (as caught
+                // exceptions are handled above).
+                //
+                // FIXME: this throws away the entire `err` and replaces it with
+                // a `Trap`, so any context on `err` is lost.
+                #[cfg(all(feature = "gc", feature = "component-model"))]
+                if self.uncaught_exception == UncaughtException::Trap
+                    && matches!(
+                        &trap.reason,
+                        TrapReason::User(err) if err.is::<ThrownException>()
+                    )
+                {
+                    trap.reason = TrapReason::User(crate::Trap::UncaughtException.into());
+                }
+                let _ = &self.uncaught_exception;
             }
 
             // If this wasn't a wasm-caught exception, then catch the exception

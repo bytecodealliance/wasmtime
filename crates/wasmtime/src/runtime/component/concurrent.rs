@@ -64,7 +64,9 @@ use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 #[cfg(feature = "gc")]
 use crate::vm::GcRootsList;
 use crate::vm::component::{CallContext, ComponentInstance, CurrentScope, InstanceState, Scope};
-use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMLazyThread, VMMemoryDefinition, VMStore};
+use crate::vm::{
+    AlwaysMut, SendSyncPtr, UncaughtException, VMFuncRef, VMLazyThread, VMMemoryDefinition, VMStore,
+};
 use crate::{
     AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType, bail,
 };
@@ -2855,6 +2857,7 @@ impl Instance {
                                 as *mut [MaybeUninit<ValRaw>] as _,
                         )
                         .unwrap(),
+                        UncaughtException::Trap,
                     )?;
                 }
 
@@ -3170,6 +3173,7 @@ impl Instance {
                             &mut src[..count.max(dst.len())] as *mut [MaybeUninit<ValRaw>] as _,
                         )
                         .unwrap(),
+                        UncaughtException::Trap,
                     )?;
                 }
                 dst.copy_from_slice(&src[..dst.len()]);
@@ -3204,6 +3208,7 @@ impl Instance {
                             &mut store,
                             return_.as_non_null(),
                             my_src.as_mut_slice().into(),
+                            UncaughtException::Trap,
                         )?;
                     }
 
@@ -3271,6 +3276,7 @@ impl Instance {
                 &mut store,
                 function.as_non_null(),
                 params.as_mut_slice().into(),
+                UncaughtException::Trap,
             )?;
         }
         Ok(params[0].get_u32())
