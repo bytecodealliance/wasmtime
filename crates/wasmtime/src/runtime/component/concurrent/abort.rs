@@ -1,4 +1,4 @@
-use crate::try_mutex::TryMutex;
+use crate::sync::Mutex;
 use alloc::sync::Arc;
 use core::mem::{self, ManuallyDrop};
 use core::pin::Pin;
@@ -14,12 +14,12 @@ use core::task::{Context, Poll, Waker};
 /// connected to. A manual invocation of [`JoinHandle::abort`] is required to
 /// affect the task.
 pub struct JoinHandle {
-    // Note that at this time the usage of this type within Wasmtime's async
-    // implementation is not expected to ever expose the ability to expose
-    // a situation where this lock can be contended. Everything's bound to the
-    // store and this is largely just used to satisfy compiler bounds. Hence,
-    // lock operations in this module all unwrap.
-    state: Arc<TryMutex<JoinState>>,
+    // Note that this handle is `Send` and `Sync` and may be used from any
+    // thread, concurrently with the store's event loop polling or dropping the
+    // task on another thread. This lock is only ever held for short critical
+    // sections which don't run any external code (e.g. wakers are always
+    // invoked after the lock is released).
+    state: Arc<Mutex<JoinState>>,
 }
 
 enum JoinState {
@@ -57,29 +57,33 @@ impl JoinHandle {
     /// await the result and destruction of the task that this is associated
     /// with.
     pub fn abort(&self) {
-        let mut state = self.state.try_lock().expect("should not be contended");
+        let task = {
+            let mut state = self.state.lock();
 
-        match &mut *state {
-            // If this task is still running, then fall through to below to
-            // transition it into the `AbortRequested` state. If present the
-            // waker for the running task is notified to indicate that an abort
-            // signal has been received.
-            JoinState::Running {
-                waiting_for_abort_signal,
-                waiting_for_abort_to_complete,
-            } => {
-                if let Some(task) = waiting_for_abort_signal.take() {
-                    task.wake();
+            match &mut *state {
+                // If this task is still running, then transition it into the
+                // `AbortRequested` state. If present the waker for the running
+                // task is notified, after the lock is released, to indicate
+                // that an abort signal has been received.
+                JoinState::Running {
+                    waiting_for_abort_signal,
+                    waiting_for_abort_to_complete,
+                } => {
+                    let task = waiting_for_abort_signal.take();
+                    *state = JoinState::AbortRequested {
+                        waiting_for_abort_to_complete: waiting_for_abort_to_complete.take(),
+                    };
+                    task
                 }
 
-                *state = JoinState::AbortRequested {
-                    waiting_for_abort_to_complete: waiting_for_abort_to_complete.take(),
-                };
+                // If this task has already been aborted or has completed,
+                // nothing is left to do.
+                JoinState::AbortRequested { .. } | JoinState::Complete => None,
             }
+        };
 
-            // If this task has already been aborted or has completed, nothing
-            // is left to do.
-            JoinState::AbortRequested { .. } | JoinState::Complete => {}
+        if let Some(task) = task {
+            task.wake();
         }
     }
 
@@ -91,7 +95,7 @@ impl JoinHandle {
         F: Future,
     {
         let handle = JoinHandle {
-            state: Arc::new(TryMutex::new(JoinState::Running {
+            state: Arc::new(Mutex::new(JoinState::Running {
                 waiting_for_abort_signal: None,
                 waiting_for_abort_to_complete: None,
             })),
@@ -108,10 +112,7 @@ impl Future for JoinHandle {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut state = self
-            .state
-            .try_lock()
-            .expect("this lock should not be contended");
+        let mut state = self.state.lock();
         match &mut *state {
             // If this task is running or still only has requested an abort,
             // wait further for the task to get dropped.
@@ -122,7 +123,12 @@ impl Future for JoinHandle {
             | JoinState::AbortRequested {
                 waiting_for_abort_to_complete,
             } => {
-                *waiting_for_abort_to_complete = Some(cx.waker().clone());
+                // Note that the previous waker, if any, is dropped after the
+                // lock is released to avoid running arbitrary code while the
+                // lock is held.
+                let prev = waiting_for_abort_to_complete.replace(cx.waker().clone());
+                drop(state);
+                drop(prev);
                 Poll::Pending
             }
 
@@ -134,7 +140,7 @@ impl Future for JoinHandle {
 
 struct JoinHandleFuture<F> {
     future: ManuallyDrop<F>,
-    state: Arc<TryMutex<JoinState>>,
+    state: Arc<Mutex<JoinState>>,
 }
 
 impl<F> Future for JoinHandleFuture<F>
@@ -155,13 +161,15 @@ where
         // First, before polling the future, check to see if we've been
         // aborted. If not register our task as awaiting such an abort.
         {
-            let mut state = state.try_lock().expect("this lock should not be contended");
+            let mut state = state.lock();
             match &mut *state {
                 JoinState::Running {
                     waiting_for_abort_signal,
                     ..
                 } => {
-                    *waiting_for_abort_signal = Some(cx.waker().clone());
+                    let prev = waiting_for_abort_signal.replace(cx.waker().clone());
+                    drop(state);
+                    drop(prev);
                 }
                 JoinState::AbortRequested { .. } | JoinState::Complete => {
                     return Poll::Ready(None);
@@ -186,11 +194,10 @@ impl<F> Drop for JoinHandleFuture<F> {
         }
 
         // After the future dropped see if there was a task awaiting its
-        // destruction. Simultaneously flag this state as complete.
-        let prev = mem::replace(
-            &mut *self.state.try_lock().expect("should not be contended"),
-            JoinState::Complete,
-        );
+        // destruction. Simultaneously flag this state as complete. Note that
+        // the previous state, and its wakers, are dropped/invoked after the
+        // lock is released.
+        let prev = mem::replace(&mut *self.state.lock(), JoinState::Complete);
         let task = match prev {
             JoinState::Running {
                 waiting_for_abort_to_complete,

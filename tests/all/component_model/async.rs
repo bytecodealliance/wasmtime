@@ -1612,3 +1612,55 @@ fn inter_component_stream_is_not_intra_component() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn join_handle_used_from_other_threads() -> Result<()> {
+    use std::task::Waker;
+    use std::time::Duration;
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    // Spawn some tasks and hand each `JoinHandle` to its own thread, which
+    // polls, aborts, and drops it while the event loop (below) is driving and
+    // dropping the same tasks. The two race, so this doesn't reproduce the
+    // underlying lock-contention bug on every run.
+    let remaining = Arc::new(AtomicUsize::new(4));
+    let mut threads = Vec::new();
+    for _ in 0..4 {
+        let mut handle = store.spawn(async |_| std::future::pending::<Result<()>>().await)?;
+        let remaining = remaining.clone();
+        threads.push(std::thread::spawn(move || {
+            let mut cx = Context::from_waker(Waker::noop());
+            assert!(Pin::new(&mut handle).poll(&mut cx).is_pending());
+            handle.abort();
+            // Wait for the event loop to drop the aborted task, racing it.
+            while Pin::new(&mut handle).poll(&mut cx).is_pending() {
+                std::hint::spin_loop();
+            }
+            remaining.fetch_sub(1, Ordering::Relaxed);
+        }));
+    }
+
+    // Drive the event loop until every thread is done, bounded by a timeout so
+    // a hang fails the test rather than blocking forever.
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        store.run_concurrent(async |_| {
+            while remaining.load(Ordering::Relaxed) != 0 {
+                tokio::task::yield_now().await;
+            }
+        }),
+    )
+    .await
+    .expect("timed out driving the event loop")?;
+
+    for thread in threads {
+        thread.join().unwrap();
+    }
+
+    Ok(())
+}
