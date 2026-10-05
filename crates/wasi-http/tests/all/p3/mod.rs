@@ -271,6 +271,31 @@ async fn p3_http_outbound_request_content_length() -> wasmtime::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_keepalive_response() -> wasmtime::Result<()> {
+    let server = Server::http1_keep_alive(1)?;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        run_cli(
+            P3_HTTP_OUTBOUND_REQUEST_KEEPALIVE_RESPONSE_COMPONENT,
+            &server,
+        ),
+    )
+    .await
+    .context("request transmission did not complete")?
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_chunked_response() -> wasmtime::Result<()> {
+    let server = Server::http1_chunked(1)?;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        run_cli(P3_HTTP_OUTBOUND_REQUEST_CHUNKED_RESPONSE_COMPONENT, &server),
+    )
+    .await
+    .context("request transmission did not complete")?
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_missing_path_and_query() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(

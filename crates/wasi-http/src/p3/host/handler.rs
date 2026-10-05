@@ -27,47 +27,25 @@ impl Drop for AbortOnDropJoinHandle {
 const DROPPED_FUTURE_ERROR: &str =
     "Future indicating transmission result dropped without being resolved.";
 
-async fn io_task_result(
-    rx: oneshot::Receiver<(
-        Option<Arc<AbortOnDropJoinHandle>>,
-        oneshot::Receiver<Result<(), Error>>,
-    )>,
-) -> Result<(), Error> {
-    let Ok((_io, io_result_rx)) = rx.await else {
+async fn transmission_result(rx: oneshot::Receiver<Result<(), Error>>) -> Result<(), Error> {
+    let Ok(transmission_result) = rx.await else {
         return Err(Error::InternalError(Some(DROPPED_FUTURE_ERROR.to_string())));
     };
-    io_result_rx
-        .await
-        .unwrap_or_else(|_| Err(Error::InternalError(Some(DROPPED_FUTURE_ERROR.to_string()))))
+    transmission_result
 }
 
-fn send_dummy_io(
-    result: Result<(), Error>,
-    io_result_tx: oneshot::Sender<(
-        Option<Arc<AbortOnDropJoinHandle>>,
-        oneshot::Receiver<Result<(), Error>>,
-    )>,
-) {
-    let (tx, rx) = oneshot::channel();
-    let _ = tx.send(result);
-    let _ = io_result_tx.send((None, rx));
-}
-
-fn send_dummy_io_err<T, D>(
+fn send_transmission_err<T, D>(
     store: &Accessor<T, D>,
     mut getter: impl FnMut(&mut T) -> WasiHttpCtxView<'_>,
     e: Error,
-    io_result_tx: oneshot::Sender<(
-        Option<Arc<AbortOnDropJoinHandle>>,
-        oneshot::Receiver<Result<(), Error>>,
-    )>,
+    transmission_result_tx: oneshot::Sender<Result<(), Error>>,
 ) -> HttpError
 where
     D: HasData,
 {
     let err_code =
         store.with(|mut store| getter(store.as_context_mut().data_mut()).error_to_p3(&e));
-    send_dummy_io(Err(e), io_result_tx);
+    let _ = transmission_result_tx.send(Err(e));
     err_code.into()
 }
 
@@ -94,9 +72,8 @@ where
     // and kept as part of request body state
     let (io_task_tx, io_task_rx) = oneshot::channel();
 
-    // A handle to the I/O task, if spawned, will be sent on this channel
-    // along with the result receiver
-    let (io_result_tx, io_result_rx) = oneshot::channel();
+    // The result of sending the request will be sent on this channel.
+    let (transmission_result_tx, transmission_result_rx) = oneshot::channel();
 
     // Response processing result will be sent on this channel
     let (res_result_tx, res_result_rx) = oneshot::channel();
@@ -107,8 +84,11 @@ where
             .delete(req)
             .context("failed to delete request from table")
             .map_err(HttpError::trap)?;
-        let (req, options) =
-            req.into_http_with_getter(&mut store, io_task_result(io_result_rx), getter)?;
+        let (req, options) = req.into_http_with_getter(
+            &mut store,
+            transmission_result(transmission_result_rx),
+            getter,
+        )?;
         HttpResult::Ok(getter(store.data_mut()).hooks.send_request(
             // Attach a reference to the io task to the body so that it
             // isn't cancelled if the body is dropped.
@@ -127,19 +107,34 @@ where
         Ok(fut) => fut,
         Err(e) => match e.downcast() {
             Ok(err_code) => {
-                send_dummy_io(Err(err_code.clone().into()), io_result_tx);
+                let _ = transmission_result_tx.send(Err(err_code.clone().into()));
                 return Err(err_code.into());
             }
             Err(e) => {
                 let e = Error::InternalError(Some(format!("{e}")));
-                return Err(send_dummy_io_err(store, getter, e, io_result_tx));
+                return Err(send_transmission_err(
+                    store,
+                    getter,
+                    e,
+                    transmission_result_tx,
+                ));
             }
         },
     };
     let (res, io) = match Box::into_pin(fut).await {
-        Ok(r) => r,
+        Ok(r) => {
+            // Receiving response headers means the request was successfully
+            // transmitted.
+            let _ = transmission_result_tx.send(Ok(()));
+            r
+        }
         Err(e) => {
-            return Err(send_dummy_io_err(store, getter, e, io_result_tx));
+            return Err(send_transmission_err(
+                store,
+                getter,
+                e,
+                transmission_result_tx,
+            ));
         }
     };
     let (
@@ -151,22 +146,18 @@ where
 
     let mut io = Box::into_pin(io);
     let body = match io.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
-        Poll::Ready(Ok(())) => {
-            send_dummy_io(Ok(()), io_result_tx);
-            body
-        }
+        Poll::Ready(Ok(())) => body,
         Poll::Ready(Err(e)) => {
-            return Err(send_dummy_io_err(store, getter, e, io_result_tx));
+            return Err(store
+                .with(|mut store| getter(store.as_context_mut().data_mut()).error_to_p3(&e))
+                .into());
         }
         Poll::Pending => {
             // I/O driver still needs to be polled, spawn a task and send handles to it
-            let (tx, rx) = oneshot::channel();
             let io = Arc::new(AbortOnDropJoinHandle(task::spawn(async move {
                 let res = io.await;
                 debug!(?res, "`send_request` I/O future finished");
-                _ = tx.send(res);
             })));
-            _ = io_result_tx.send((Some(Arc::clone(&io)), rx));
             _ = io_task_tx.send(Arc::clone(&io));
             // Attach a reference to the io task to the body so that it
             // isn't cancelled if the body is dropped.
