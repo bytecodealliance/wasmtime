@@ -162,8 +162,13 @@ impl types::HostIncomingRequest for WasiHttpCtxView<'_> {
         &mut self,
         id: Resource<HostIncomingRequest>,
     ) -> wasmtime::Result<Resource<FieldMap>> {
-        let req = self.table.get(&id)?;
-        Ok(self.table.push(req.headers.clone())?)
+        // `incoming-request.headers` is a child resource: the parent must not be
+        // dropped while this handle is alive (`wit/deps/http.wit:267-269` says that
+        // "dropping this `incoming-request` before all children are dropped will trap").
+        // Register the parent/child relationship so the resource table enforces it,
+        // matching `incoming-body.stream` and `outgoing-body.write` below.
+        let headers = self.table.get(&id)?.headers.clone();
+        Ok(self.table.push_child(headers, &id)?)
     }
 
     fn consume(
