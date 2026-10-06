@@ -295,6 +295,10 @@ generate_trap_type! {
         /// writable end was dropped.
         LiftDroppedStream = "cannot lift stream after being notified that the writable end dropped",
 
+        /// `task.return` or `task.cancel` was called by a task which was not
+        /// created by an `async`-lifted export.
+        TaskReturnOrCancelSyncLifted = "`task.return` or `task.cancel` called by a task which was not lifted with `async`",
+
         // if adding a variant here be sure to update `trap.rs` and `trap.h` as
         // mentioned above
     }
