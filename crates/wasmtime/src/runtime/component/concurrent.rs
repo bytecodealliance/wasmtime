@@ -980,9 +980,32 @@ pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
 fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
     match call.kind {
         GuestCallKind::DeliverEvent { instance, set } => {
+            // This thread's wait on `set`, if any, which started in
+            // `Instance::wait_with_callback`, ends here.
+            if let Some(set) = set {
+                store.concurrent_state_mut()?.get_mut(set)?.stop_waiting()?;
+            }
             let (event, waitable) = match instance.get_event(store, call.thread.task, set, true)? {
                 Some(pair) => pair,
-                None => bail_bug!("delivering non-present event"),
+                None => match set {
+                    // The event which woke this thread up was taken by another
+                    // thread (e.g. via `waitable-set.poll`) or its waitable was
+                    // removed from the set before this thread had a chance to
+                    // run. Regardless, keep waiting.
+                    Some(set) => {
+                        log::trace!(
+                            "event for {:?} on {set:?} no longer present; waiting again",
+                            call.thread
+                        );
+                        let state = store.concurrent_state_mut()?;
+                        return instance.wait_with_callback(state, call.thread, set);
+                    }
+                    // When a thread yields it doesn't wait on a set and the
+                    // event to be delivered isn't stored anywhere, and this is
+                    // just handling that case so indicate that the yield is
+                    // complete.
+                    None => (Event::None, None),
+                },
             };
             let state = store.concurrent_state_mut()?;
             let task = state.get_mut(call.thread.task)?;
@@ -2358,6 +2381,11 @@ impl StoreOpaque {
             CurrentThread::None
         };
 
+        let waiting_set = match &reason {
+            SuspendReason::Waiting { set, .. } => Some(*set),
+            _ => None,
+        };
+
         let suspend_reason = &mut self.concurrent_state_mut()?.suspend_reason;
         assert!(suspend_reason.is_none());
         *suspend_reason = Some(reason);
@@ -2368,7 +2396,17 @@ impl StoreOpaque {
             return Err(format_err!("future dropped"));
         }
 
+        // Count this thread as waiting on `waiting_set`, if any, for as long as
+        // it's suspended.
+        if let Some(set) = waiting_set {
+            self.concurrent_state_mut()?.get_mut(set)?.num_waiting += 1;
+        }
+
         self.with_blocking(|_, cx| cx.suspend(StoreFiberYield::ReleaseStore))?;
+
+        if let Some(set) = waiting_set {
+            self.concurrent_state_mut()?.get_mut(set)?.stop_waiting()?;
+        }
 
         if save_and_restore_thread {
             self.set_thread(old_guest_thread)?;
@@ -2725,16 +2763,12 @@ impl Instance {
                     bail_bug!("thread unexpectedly had wake_on_cancel set");
                 }
 
-                let task = state.get_mut(guest_thread.task)?;
-                // If an `Event::Cancelled` is pending, we'll deliver that;
-                // otherwise, we'll deliver `Event::None`.  Note that
-                // `GuestTask::event` is only ever set to one of those two
-                // `Event` variants.
-                if let Some(event) = task.event {
-                    assert!(matches!(event, Event::None | Event::Cancelled));
-                } else {
-                    task.event = Some(Event::None);
-                }
+                // If an `Event::Cancelled` is pending in `GuestTask::event`
+                // when this call is delivered, we'll deliver that; otherwise,
+                // we'll deliver `Event::None`.  Note that the `Event::None` is
+                // deliberately not stored in `GuestTask::event` since that's
+                // shared by all threads of the task and the `Event::None` is
+                // only for this thread.
                 let call = GuestCall {
                     thread: guest_thread,
                     kind: GuestCallKind::DeliverEvent {
@@ -2752,48 +2786,66 @@ impl Instance {
             callback_code::WAIT => {
                 let set = get_set(store, set)?;
                 let state = store.concurrent_state_mut()?;
-
-                if state.get_mut(guest_thread.task)?.event.is_some()
-                    || !state.get_mut(set)?.ready.is_empty()
-                {
-                    // An event is immediately available; deliver it ASAP.
-                    state.push_high_priority(WorkItem::GuestCall {
-                        instance: self.runtime_instance(runtime_instance),
-                        call: GuestCall {
-                            thread: guest_thread,
-                            kind: GuestCallKind::DeliverEvent {
-                                instance: self,
-                                set: Some(set),
-                            },
-                        },
-                    });
-                } else {
-                    // No event is immediately available.
-                    //
-                    // We're waiting, so register to be woken up when an event
-                    // is published for this waitable set.
-                    //
-                    // Here we also set `GuestTask::wake_on_cancel` which allows
-                    // `subtask.cancel` to interrupt the wait.
-                    let old = state
-                        .get_mut(guest_thread.thread)?
-                        .wake_on_cancel
-                        .replace(WakeOnCancel::Waiting(set));
-                    if !old.is_none() {
-                        bail_bug!("thread unexpectedly had wake_on_cancel set");
-                    }
-                    let old = state
-                        .get_mut(set)?
-                        .waiting
-                        .insert(guest_thread, WaitMode::Callback(self));
-                    if !old.is_none() {
-                        bail_bug!("set's waiting set already had this thread registered");
-                    }
-                }
+                self.wait_with_callback(state, guest_thread, set)?;
             }
             _ => bail!(Trap::UnsupportedCallbackCode),
         }
 
+        Ok(())
+    }
+
+    /// Start waiting on `set` with `guest_thread`, which uses a callback.
+    ///
+    /// The thread will receive an event from `set` via a
+    /// `GuestCallKind::DeliverEvent` work item, either immediately if one is
+    /// already available, or once one is published.
+    fn wait_with_callback(
+        self,
+        state: &mut ConcurrentState,
+        guest_thread: QualifiedThreadId,
+        set: TableId<WaitableSet>,
+    ) -> Result<()> {
+        // This thread's wait ends when that work item is handled in
+        // `handle_guest_call`.
+        state.get_mut(set)?.num_waiting += 1;
+
+        if state.get_mut(guest_thread.task)?.event.is_some()
+            || !state.get_mut(set)?.ready.is_empty()
+        {
+            // An event is immediately available; deliver it ASAP.
+            let instance = state.get_mut(guest_thread.task)?.instance;
+            state.push_high_priority(WorkItem::GuestCall {
+                instance,
+                call: GuestCall {
+                    thread: guest_thread,
+                    kind: GuestCallKind::DeliverEvent {
+                        instance: self,
+                        set: Some(set),
+                    },
+                },
+            });
+            return Ok(());
+        }
+
+        // No event is immediately available, so register to be woken up when
+        // one is published for this waitable set.
+        //
+        // Here we also set `GuestTask::wake_on_cancel` which allows
+        // `subtask.cancel` to interrupt the wait.
+        let old = state
+            .get_mut(guest_thread.thread)?
+            .wake_on_cancel
+            .replace(WakeOnCancel::Waiting(set));
+        if !old.is_none() {
+            bail_bug!("thread unexpectedly had wake_on_cancel set");
+        }
+        let old = state
+            .get_mut(set)?
+            .waiting
+            .insert(guest_thread, WaitMode::Callback(self));
+        if !old.is_none() {
+            bail_bug!("set's waiting set already had this thread registered");
+        }
         Ok(())
     }
 
@@ -3800,12 +3852,10 @@ impl Instance {
         // Note that we're careful to check for waiters _before_ deleting the
         // set to avoid dropping any waiters in `WaitMode::Fiber(_)`, which
         // would panic.  See `drop-waitable-set-with-waiters.wast` for details.
-        if !store
+        let set = store
             .concurrent_state_mut()?
-            .get_mut(TableId::<WaitableSet>::new(rep))?
-            .waiting
-            .is_empty()
-        {
+            .get_mut(TableId::<WaitableSet>::new(rep))?;
+        if set.num_waiting > 0 {
             bail!(Trap::WaitableSetDropHasWaiters);
         }
 
@@ -4217,18 +4267,25 @@ impl Instance {
 
         log::trace!("waitable check for {guest_thread:?}; set {:?}", params.set);
 
-        let state = store.concurrent_state_mut()?;
-        let task = state.get_mut(guest_thread.task)?;
-
         // If we're waiting, and there are no events immediately available,
         // suspend the fiber until that changes.
         match &check {
             WaitableCheck::Wait => {
                 let set = params.set;
 
-                if (task.event.is_none() || matches!(task.event, Some(Event::Cancelled)))
-                    && state.get_mut(set)?.ready.is_empty()
-                {
+                // Note that this is a loop since, by the time this fiber is
+                // resumed after being woken up, another thread may have already
+                // taken the event (e.g. via `waitable-set.poll`), in which case
+                // we keep waiting.
+                loop {
+                    let state = store.concurrent_state_mut()?;
+                    let task = state.get_mut(guest_thread.task)?;
+                    if !(task.event.is_none() || matches!(task.event, Some(Event::Cancelled)))
+                        || !state.get_mut(set)?.ready.is_empty()
+                    {
+                        break;
+                    }
+
                     store.switch_or_trap_if_may_not_suspend(caller)?;
 
                     store.suspend(SuspendReason::Waiting {
@@ -4412,7 +4469,7 @@ impl Instance {
                                         thread,
                                         kind: GuestCallKind::DeliverEvent {
                                             instance,
-                                            set: None,
+                                            set: Some(set),
                                         },
                                     },
                                 },
@@ -5332,8 +5389,7 @@ pub(crate) struct GuestTask {
     /// results in that task executing code in a different instance, and it may
     /// call host functions and intrinsics from that other instance.
     instance: RuntimeInstance,
-    /// If present, a pending `Event::None` or `Event::Cancelled` to be
-    /// delivered to this task.
+    /// If present, a pending `Event::Cancelled` to be delivered to this task.
     event: Option<Event>,
     /// Whether or not the task has exited.
     exited: bool,
@@ -5673,9 +5729,23 @@ struct WaitableSet {
     ready: BTreeSet<Waitable>,
     /// Which guest threads are currently waiting on this set, if any.
     waiting: BTreeMap<QualifiedThreadId, WaitMode>,
+    /// How many guest threads are waiting on this set, mirroring the spec's
+    /// `WaitableSet.num_waiting`.
+    num_waiting: usize,
     /// Whether this set is a synthetic, internal one meant for handling
     /// synchronous calls.
     is_sync_call_set: bool,
+}
+
+impl WaitableSet {
+    /// Records that a thread counted in `num_waiting` is no longer waiting.
+    fn stop_waiting(&mut self) -> Result<()> {
+        self.num_waiting = match self.num_waiting.checked_sub(1) {
+            Some(n) => n,
+            None => bail_bug!("waiter not accounted for in waitable set"),
+        };
+        Ok(())
+    }
 }
 
 impl TableDebug for WaitableSet {
