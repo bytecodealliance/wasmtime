@@ -130,6 +130,9 @@ impl ResourceAny {
     ///
     /// # Errors
     ///
+    /// See [`Resource::try_from_resource_any`] for the conditions under which
+    /// this conversion fails.
+    ///
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
@@ -143,6 +146,11 @@ impl ResourceAny {
     /// This conversion accepts only host-defined resources. Guest-defined
     /// resources must remain [`ResourceAny`] values and be used through their
     /// generated functions and resource projection.
+    ///
+    /// # Errors
+    ///
+    /// See [`Resource::try_from_resource_any`] for the conditions under which
+    /// this conversion fails.
     pub fn try_into_resource_dynamic(self, store: impl AsContextMut) -> Result<ResourceDynamic> {
         ResourceDynamic::try_from_resource_any(self, store)
     }
@@ -171,8 +179,8 @@ impl ResourceAny {
                     Ok(HostResource::new_own(rep, ty))
                 } else {
                     // Typed borrows have no dynamic state. Remove the table
-                    // entry after lifting its representation.
-                    let rep = tables.host_resource_lift_borrow(idx)?;
+                    // entry after reading its representation.
+                    let rep = tables.host_resource_rep(idx)?;
                     let res = tables.host_resource_drop(idx)?;
                     assert!(res.is_none());
                     Ok(HostResource::new_borrow(rep, ty))
