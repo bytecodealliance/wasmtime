@@ -2033,3 +2033,165 @@ mod host_call_cleans_up_borrow {
         Ok(())
     }
 }
+
+mod multiple_host_borrows {
+    use super::*;
+
+    struct R;
+
+    #[derive(Clone, Copy, Debug)]
+    enum Kind {
+        Wrap,
+        New,
+    }
+
+    // `run` creates two borrows and passes several of them to host imports in a
+    // single call: two `borrow` params (`two`) and a `list<borrow>` (`list`).
+    // Lifting the second `borrow` as a `ResourceAny` used to trip
+    // `bail_bug!("deferred host scope has no call context")`. The export is
+    // async-lifted so the call runs through the event loop.
+    const COMPONENT: &str = r#"
+        (component
+            (import "r" (type $r (sub resource)))
+            (import "mk" (func $mk (result (own $r))))
+            (import "two" (func $two (param "a" (borrow $r)) (param "b" (borrow $r))))
+            (import "list" (func $list (param "a" (list (borrow $r)))))
+
+            (core module $libc (memory (export "memory") 1))
+            (core instance $libc (instantiate $libc))
+
+            (core func $mk (canon lower (func $mk)))
+            (core func $two (canon lower (func $two)))
+            (core func $list (canon lower (func $list) (memory (core memory $libc "memory"))))
+            (core func $drop (canon resource.drop $r))
+
+            (core module $m
+                (import "" "mk" (func $mk (result i32)))
+                (import "" "two" (func $two (param i32 i32)))
+                (import "" "list" (func $list (param i32 i32)))
+                (import "" "drop" (func $drop (param i32)))
+                (import "libc" "memory" (memory 1))
+
+                (func (export "run")
+                    (local $a i32)
+                    (local $b i32)
+                    (local.set $a (call $mk))
+                    (local.set $b (call $mk))
+
+                    (call $two (local.get $a) (local.get $b))
+
+                    ;; list<borrow<r>> of length 3 at address 8
+                    (i32.store offset=8 (i32.const 0) (local.get $a))
+                    (i32.store offset=12 (i32.const 0) (local.get $b))
+                    (i32.store offset=16 (i32.const 0) (local.get $a))
+                    (call $list (i32.const 8) (i32.const 3))
+
+                    (call $drop (local.get $a))
+                    (call $drop (local.get $b))
+                )
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "mk" (func $mk))
+                    (export "two" (func $two))
+                    (export "list" (func $list))
+                    (export "drop" (func $drop))
+                ))
+                (with "libc" (instance $libc))
+            ))
+
+            ;; Wrap `run` in an async-lifted export.
+            (alias core export $i "run" (core func $inner-run))
+            (core func $task-return (canon task.return))
+            (core module $w
+                (import "" "run" (func $run))
+                (import "" "task.return" (func $task-return))
+                (func (export "run") (result i32)
+                    (call $run)
+                    (call $task-return)
+                    (i32.const 0)) ;; EXIT
+                (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+            )
+            (core instance $w (instantiate $w
+                (with "" (instance
+                    (export "run" (func $inner-run))
+                    (export "task.return" (func $task-return))
+                ))
+            ))
+            (func (export "run") async
+                (canon lift (core func $w "run") async (callback (core func $w "cb"))))
+        )
+    "#;
+
+    #[tokio::test]
+    async fn wrap() -> Result<()> {
+        run(Kind::Wrap).await
+    }
+
+    #[tokio::test]
+    async fn new() -> Result<()> {
+        run(Kind::New).await
+    }
+
+    fn drop_val(store: &mut wasmtime::StoreContextMut<'_, ()>, val: &Val) -> Result<()> {
+        match val {
+            Val::Resource(r) => {
+                assert!(!r.owned());
+                r.resource_drop(&mut *store)
+            }
+            Val::List(vals) => {
+                for v in vals {
+                    drop_val(store, v)?;
+                }
+                Ok(())
+            }
+            _ => panic!("unexpected value {val:?}"),
+        }
+    }
+
+    async fn run(kind: Kind) -> Result<()> {
+        let mut config = Config::new();
+        config.wasm_component_model_async(true);
+        let engine = Engine::new(&config)?;
+        let component = Component::new(&engine, COMPONENT)?;
+
+        let mut linker = Linker::<()>::new(&engine);
+        let mut root = linker.root();
+        root.resource("r", ResourceType::host::<R>(), |_, _| Ok(()))?;
+        root.func_wrap("mk", |_, (): ()| Ok((Resource::<R>::new_own(42),)))?;
+
+        match kind {
+            Kind::Wrap => {
+                root.func_wrap("two", |mut store, (a, b): (ResourceAny, ResourceAny)| {
+                    a.resource_drop(&mut store)?;
+                    b.resource_drop(&mut store)?;
+                    Ok(())
+                })?;
+                root.func_wrap("list", |mut store, (list,): (Vec<ResourceAny>,)| {
+                    assert_eq!(list.len(), 3);
+                    for r in list {
+                        r.resource_drop(&mut store)?;
+                    }
+                    Ok(())
+                })?;
+            }
+            Kind::New => {
+                for name in ["two", "list"] {
+                    root.func_new(name, |mut store, _ty, params, _results| {
+                        for p in params {
+                            drop_val(&mut store, p)?;
+                        }
+                        Ok(())
+                    })?;
+                }
+            }
+        }
+
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+        let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+        run.call_async(&mut store, ()).await?;
+        store.assert_concurrent_state_empty();
+        Ok(())
+    }
+}

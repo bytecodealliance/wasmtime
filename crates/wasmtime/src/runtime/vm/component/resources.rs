@@ -306,16 +306,30 @@ impl ResourceTables<'_> {
     /// Unlike [`Self::materialize_current_scope`], this does not materialize a
     /// deferred host task.
     fn current_scope(&mut self) -> Result<&mut CallContext> {
-        match self.current_scope {
-            Some(CurrentScope::Id(id)) => self.task_state.call_context(id),
+        let id = match self.current_scope {
+            Some(CurrentScope::Id(id)) => id,
             Some(CurrentScope::DeferredHost) => {
-                match self.task_state.deferred_host_call_context() {
-                    Some(cx) => Ok(cx),
-                    None => bail_bug!("deferred host scope has no call context"),
+                // With a deferred host task the `CallContext` for this task
+                // could be stored in one of two locations. The primary location
+                // is `task_state.deferred_host_call_context()` but that stops
+                // being used once the host task is actually materialized. On
+                // materialization this over here isn't updated necessarily, so
+                // this'll only lazily pick up when the host task is actually
+                // materialized. In such a situation that's detected here and
+                // `self.current_scope` is mutated to match.
+                //
+                // NB: this should use `if let` when rustc is smarter about
+                // borrows.
+                if self.task_state.deferred_host_call_context().is_some() {
+                    return Ok(self.task_state.deferred_host_call_context().unwrap());
                 }
+                let id = self.task_state.materialize_current_scope()?;
+                self.current_scope = Some(CurrentScope::Id(id));
+                id
             }
             None => bail_bug!("no current scope"),
-        }
+        };
+        self.task_state.call_context(id)
     }
 
     /// Extracts the underlying resource representation by lifting a "borrow"
