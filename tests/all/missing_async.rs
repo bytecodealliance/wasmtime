@@ -332,7 +332,7 @@ fn start_sync_then_configure_async_then_do_async() -> Result<()> {
 #[tokio::test]
 async fn async_limiter_disallows_table_new() -> Result<()> {
     let mut store = async_limiter_store();
-    let ty = TableType::new(RefType::FUNCREF, 1, None);
+    let ty = TableType::new(RefType::FUNCREF, 1, None)?;
     assert!(Table::new(&mut store, ty.clone(), Ref::Func(None)).is_err());
     Table::new_async(&mut store, ty, Ref::Func(None)).await?;
     Ok(())
@@ -341,7 +341,7 @@ async fn async_limiter_disallows_table_new() -> Result<()> {
 #[tokio::test]
 async fn async_limiter_disallows_table_grow() -> Result<()> {
     let mut store = async_limiter_store();
-    let ty = TableType::new(RefType::FUNCREF, 1, None);
+    let ty = TableType::new(RefType::FUNCREF, 1, None)?;
     let table = Table::new_async(&mut store, ty, Ref::Func(None)).await?;
     assert!(table.grow(&mut store, 1, Ref::Func(None)).is_err());
     table.grow_async(&mut store, 1, Ref::Func(None)).await?;
@@ -351,7 +351,7 @@ async fn async_limiter_disallows_table_grow() -> Result<()> {
 #[tokio::test]
 async fn async_limiter_disallows_memory_new() -> Result<()> {
     let mut store = async_limiter_store();
-    let ty = MemoryType::new(1, None);
+    let ty = MemoryType::new(1, None)?;
     assert!(Memory::new(&mut store, ty.clone()).is_err());
     Memory::new_async(&mut store, ty).await?;
     Ok(())
@@ -360,7 +360,7 @@ async fn async_limiter_disallows_memory_new() -> Result<()> {
 #[tokio::test]
 async fn async_limiter_disallows_memory_grow() -> Result<()> {
     let mut store = async_limiter_store();
-    let ty = MemoryType::new(1, None);
+    let ty = MemoryType::new(1, None)?;
     let mem = Memory::new_async(&mut store, ty).await?;
     assert!(mem.grow(&mut store, 1).is_err());
     mem.grow_async(&mut store, 1).await?;

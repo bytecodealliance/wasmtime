@@ -287,7 +287,7 @@ fn call_indirect_native_from_wasm_import_table(config: &mut Config) -> Result<()
     let func = Func::wrap(&mut store, || -> (i32, i32, i32) { (10, 20, 30) });
     let table = Table::new(
         &mut store,
-        TableType::new(RefType::FUNCREF, 1, Some(1)),
+        TableType::new(RefType::FUNCREF, 1, Some(1))?,
         Ref::Func(Some(func)),
     )?;
     let instance = Instance::new(&mut store, &module, &[table.into()])?;

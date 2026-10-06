@@ -77,7 +77,7 @@ impl Table {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
-    /// let ty = TableType::new(RefType::FUNCREF, 2, None);
+    /// let ty = TableType::new(RefType::FUNCREF, 2, None)?;
     /// let table = Table::new(&mut store, ty, Ref::Func(None))?;
     ///
     /// let module = Module::new(

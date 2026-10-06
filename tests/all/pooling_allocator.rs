@@ -506,7 +506,7 @@ fn multi_memory_with_imported_memories() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
 
-    let m1 = Memory::new(&mut store, MemoryType::new(0, None))?;
+    let m1 = Memory::new(&mut store, MemoryType::new(0, None)?)?;
     let instance = Instance::new(&mut store, &module, &[m1.into()])?;
 
     let m2 = instance.get_memory(&mut store, "m2").unwrap();

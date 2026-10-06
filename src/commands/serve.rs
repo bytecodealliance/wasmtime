@@ -1636,7 +1636,7 @@ fn use_pooling_allocator_by_default() -> Result<Option<bool>> {
     let mut store = Store::new(&engine, ());
     // NB: the maximum size is in wasm pages to take out the 16-bits of wasm
     // page size here from the maximum size.
-    let ty = MemoryType::new64(0, Some(1 << (BITS_TO_TEST - 16)));
+    let ty = MemoryType::new64(0, Some(1 << (BITS_TO_TEST - 16)))?;
     if Memory::new(&mut store, ty).is_ok() {
         Ok(Some(true))
     } else {

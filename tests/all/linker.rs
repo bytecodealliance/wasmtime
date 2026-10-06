@@ -73,20 +73,20 @@ fn link_twice_bad() -> Result<()> {
     assert!(linker.define(&mut store, "g", "3", global).is_err());
 
     // memories
-    let ty = MemoryType::new(1, None);
+    let ty = MemoryType::new(1, None)?;
     let memory = Memory::new(&mut store, ty)?;
     linker.define(&mut store, "m", "", memory)?;
     assert!(linker.define(&mut store, "m", "", memory).is_err());
-    let ty = MemoryType::new(2, None);
+    let ty = MemoryType::new(2, None)?;
     let memory = Memory::new(&mut store, ty)?;
     assert!(linker.define(&mut store, "m", "", memory).is_err());
 
     // tables
-    let ty = TableType::new(RefType::FUNCREF, 1, None);
+    let ty = TableType::new(RefType::FUNCREF, 1, None)?;
     let table = Table::new(&mut store, ty, Ref::Func(None))?;
     linker.define(&mut store, "t", "", table)?;
     assert!(linker.define(&mut store, "t", "", table).is_err());
-    let ty = TableType::new(RefType::FUNCREF, 2, None);
+    let ty = TableType::new(RefType::FUNCREF, 2, None)?;
     let table = Table::new(&mut store, ty, Ref::Func(None))?;
     assert!(linker.define(&mut store, "t", "", table).is_err());
     Ok(())
@@ -754,7 +754,7 @@ fn linker_defines_table_subtype_err() -> Result<()> {
     let mut linker = Linker::new(&engine);
     let t = Table::new(
         &mut store,
-        TableType::new(RefType::FUNCREF, 0, None),
+        TableType::new(RefType::FUNCREF, 0, None)?,
         Ref::Func(None),
     )?;
     linker.define(&store, "env", "t", t)?;
@@ -765,7 +765,7 @@ fn linker_defines_table_subtype_err() -> Result<()> {
     let mut linker = Linker::new(&engine);
     let t = Table::new(
         &mut store,
-        TableType::new(RefType::NULLFUNCREF, 0, None),
+        TableType::new(RefType::NULLFUNCREF, 0, None)?,
         Ref::Func(None),
     )?;
     linker.define(&store, "env", "t", t)?;
