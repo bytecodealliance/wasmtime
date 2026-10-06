@@ -117,7 +117,7 @@ impl Server {
     }
 
     pub fn addr(&self) -> String {
-        format!("localhost:{}", self.addr.port())
+        self.addr.to_string()
     }
 }
 
