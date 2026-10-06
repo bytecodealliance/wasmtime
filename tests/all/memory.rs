@@ -451,6 +451,29 @@ fn static_forced_max() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn reservation_plus_guard_size_overflow() {
+    let mut config = Config::new();
+    config.memory_guard_size(u64::MAX);
+    assert!(Engine::new(&config).is_err());
+
+    let mut config = Config::new();
+    config.memory_reservation(1 << 63);
+    config.memory_guard_size(1 << 63);
+    assert!(Engine::new(&config).is_err());
+
+    let mut config = Config::new();
+    config.memory_reservation(0);
+    config.memory_guard_size(1 << 63);
+    config.guard_before_linear_memory(true);
+    assert!(Engine::new(&config).is_err());
+
+    let mut config = Config::new();
+    config.gc_heap_reservation(1 << 63);
+    config.gc_heap_guard_size(1 << 63);
+    assert!(Engine::new(&config).is_err());
+}
+
 #[wasmtime_test]
 fn dynamic_extra_growth_unchanged_pointer(config: &mut Config) -> Result<()> {
     const EXTRA_PAGES: u64 = 5;
