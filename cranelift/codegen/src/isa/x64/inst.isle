@@ -52,7 +52,7 @@
        ;; =========================================
        ;; Stack manipulation.
 
-      ;; Emits a inline stack probe loop.
+      ;; Emits an inline stack probe loop.
       (StackProbeLoop (tmp WritableReg)
                       (frame_size u32)
                       (guard_size u32))
