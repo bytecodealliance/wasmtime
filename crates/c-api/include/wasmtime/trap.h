@@ -156,6 +156,9 @@ enum wasmtime_trap_code_enum {
   /// Guest attempted to lift a stream after being notified that the writable
   /// end was dropped.
   WASMTIME_TRAP_LIFT_DROPPED_STREAM = 53,
+  /// `task.return` or `task.cancel` was called by a task which was not
+  /// created by an `async`-lifted export.
+  WASMTIME_TRAP_CODE_TASK_RETURN_OR_CANCEL_SYNC_LIFTED = 54,
 };
 
 /**

@@ -1945,7 +1945,7 @@ impl StoreOpaque {
             None,
             callee,
             callee_async_typed,
-            true,
+            false,
         )?;
 
         Instance::from_wasmtime(self, callee.instance).add_guest_thread_to_instance_table(
@@ -3668,6 +3668,9 @@ impl Instance {
     ) -> Result<()> {
         let guest_thread = store.current_guest_thread()?;
         let state = store.concurrent_state_mut()?;
+        if !state.get_mut(guest_thread.task)?.async_lifted {
+            bail!(Trap::TaskReturnOrCancelSyncLifted);
+        }
         let lift = state
             .get_mut(guest_thread.task)?
             .lift_result
@@ -3715,6 +3718,9 @@ impl Instance {
         let guest_thread = store.current_guest_thread()?;
         let state = store.concurrent_state_mut()?;
         let task = state.get_mut(guest_thread.task)?;
+        if !task.async_lifted {
+            bail!(Trap::TaskReturnOrCancelSyncLifted);
+        }
         if !task.cancel_request_delivered {
             bail!(Trap::TaskCancelNotCancelled);
         }
