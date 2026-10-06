@@ -97,6 +97,12 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
     let test_hogs_memory = test_config.hogs_memory();
     let relaxed_simd = test_config.relaxed_simd();
 
+    // Skip memory-intensive tests on ASAN. Some of these require gracefully
+    // handling OOM but ASAN hard-aborts on OOM.
+    if test_hogs_memory && cfg!(asan) {
+        return Ok(());
+    }
+
     let is_cranelift = match config.compiler {
         Compiler::CraneliftNative | Compiler::CraneliftPulley => true,
         _ => false,
