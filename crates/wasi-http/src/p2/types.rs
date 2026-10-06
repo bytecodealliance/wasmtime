@@ -9,8 +9,8 @@ use crate::{Error, ErrorResponse, FieldMap, WasiHttpCtxView};
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::body::Body;
-use wasmtime::Result;
 use wasmtime::component::Resource;
+use wasmtime::error::{Context, Result};
 use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
 
@@ -66,7 +66,6 @@ pub struct HostIncomingRequest {
     pub(crate) uri: http::uri::Uri,
     pub(crate) headers: FieldMap,
     pub(crate) scheme: Scheme,
-    pub(crate) authority: String,
     /// The body of the incoming request.
     pub body: Option<HostIncomingBody>,
 }
@@ -83,33 +82,67 @@ impl WasiHttpCtxView<'_> {
         B::Error: Into<Error>,
     {
         let (parts, body) = req.into_parts();
+        let parts = normalize_authority(parts, &scheme)
+            .with_context(|| ErrorResponse::new(http::StatusCode::BAD_REQUEST))?;
         let body = body.map_err(Into::into).boxed_unsync();
         let body = HostIncomingBody::new(body);
-        let authority = match parts.uri.authority() {
-            Some(authority) => authority.to_string(),
-            None => match parts.headers.get(http::header::HOST) {
-                Some(host) => host.to_str()?.to_string(),
-                None => {
-                    return Err(wasmtime::Error::msg(
-                        "invalid HTTP request missing authority in URI and host header",
-                    )
-                    .context(ErrorResponse::new(http::StatusCode::BAD_REQUEST)));
-                }
-            },
-        };
 
+        let mut validator = crate::request_strings::RequestStringsValidator::new(self.ctx);
+        validator.host_parts(
+            &parts.method,
+            parts.uri.scheme(),
+            parts.uri.authority(),
+            parts.uri.path_and_query(),
+        )?;
         let headers = FieldMap::new_immutable(self.hooks, parts.headers);
 
         let req = HostIncomingRequest {
             method: parts.method,
             uri: parts.uri,
             headers,
-            authority,
             scheme,
             body: Some(body),
         };
         Ok(self.table.push(req)?)
     }
+}
+
+/// Ensure `parts.uri` has an authority, taking it from the `Host` header if
+/// necessary. A URI with an authority must also have a scheme, so `scheme`
+/// fills it in when the URI lacks one.
+///
+/// All failures in this function get propogated as a BAD_REQUEST error from the
+/// call site.
+fn normalize_authority(
+    parts: http::request::Parts,
+    scheme: &Scheme,
+) -> Result<http::request::Parts> {
+    if parts.uri.authority().is_some() {
+        return Ok(parts);
+    }
+    if parts.headers.get(http::header::HOST).is_none() {
+        return Err(wasmtime::Error::msg(
+            "invalid HTTP request missing authority in URI and host header",
+        ));
+    }
+    let host: http::uri::Authority = parts
+        .headers
+        .get(http::header::HOST)
+        .unwrap()
+        .to_str()?
+        .parse()?;
+    let mut parts = parts;
+    let mut uri = parts.uri.into_parts();
+    uri.authority = Some(host);
+    if uri.scheme.is_none() {
+        uri.scheme = Some(match scheme {
+            Scheme::Http => http::uri::Scheme::HTTP,
+            Scheme::Https => http::uri::Scheme::HTTPS,
+            Scheme::Other(s) => s.parse()?,
+        });
+    }
+    parts.uri = http::uri::Uri::from_parts(uri)?;
+    Ok(parts)
 }
 
 /// The concrete type behind a `wasi:http/types.response-outparam` resource.
@@ -202,6 +235,8 @@ pub struct HostOutgoingRequest {
     pub headers: FieldMap,
     /// The request body.
     pub body: Option<HyperOutgoingBody>,
+    /// Accounting for the size of the method, scheme, authority, and path.
+    pub(crate) strings: crate::request_strings::RequestStringsValidator,
 }
 
 /// The concrete type behind a `wasi:http/types.incoming-response` resource.

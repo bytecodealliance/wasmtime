@@ -248,6 +248,40 @@ pub extern "C" fn wasmtime_context_set_wasi_http(mut context: WasmtimeStoreConte
     context.data_mut().wasi_http = Some(wasmtime_wasi_http::WasiHttpCtx::new());
 }
 
+#[cfg(feature = "wasi-http")]
+fn with_wasi_http(
+    mut context: WasmtimeStoreContextMut<'_>,
+    f: impl FnOnce(&mut wasmtime_wasi_http::WasiHttpCtx),
+) -> Option<Box<wasmtime_error_t>> {
+    match context.data_mut().wasi_http.as_mut() {
+        Some(http) => {
+            f(http);
+            None
+        }
+        None => Some(Box::new(wasmtime_error_t::from(wasmtime::format_err!(
+            "wasi-http context not set; call `wasmtime_context_set_wasi_http` first"
+        )))),
+    }
+}
+
+#[cfg(feature = "wasi-http")]
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_context_set_wasi_http_field_size_limit(
+    context: WasmtimeStoreContextMut<'_>,
+    limit: usize,
+) -> Option<Box<wasmtime_error_t>> {
+    with_wasi_http(context, |http| http.set_field_size_limit(limit))
+}
+
+#[cfg(feature = "wasi-http")]
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_context_set_wasi_http_request_strings_size_limit(
+    context: WasmtimeStoreContextMut<'_>,
+    limit: usize,
+) -> Option<Box<wasmtime_error_t>> {
+    with_wasi_http(context, |http| http.set_request_strings_size_limit(limit))
+}
+
 #[unsafe(no_mangle)]
 #[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_context_gc(

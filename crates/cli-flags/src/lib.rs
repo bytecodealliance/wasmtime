@@ -637,6 +637,12 @@ wasmtime_option_group! {
         /// `fields` resource (aka `headers` and `trailers`). `fields` methods
         /// which cause the contents to exceed this size limit will trap.
         pub max_http_fields_size: Option<usize>,
+        /// Maximum combined size, in bytes, of a wasi-http request's method,
+        /// scheme, authority, and path-with-query strings. Built-in methods
+        /// and the `http`/`https` schemes don't count. Guest setters that
+        /// would exceed this return an error, and `wasmtime serve` answers
+        /// incoming requests that exceed it with `400 Bad Request`.
+        pub max_http_request_strings_size: Option<usize>,
     }
 
     enum Wasi {

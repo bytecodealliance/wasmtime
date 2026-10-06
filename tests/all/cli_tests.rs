@@ -2141,6 +2141,81 @@ start a print 1234
         Ok(())
     }
 
+    async fn cli_serve_request_strings_limit(
+        component: &str,
+        configure: impl FnOnce(&mut Command),
+    ) -> Result<()> {
+        let server = WasmtimeServe::new(component, |cmd| {
+            cmd.arg("-Smax-http-request-strings-size=32");
+            configure(cmd);
+        })?;
+
+        let req = |method: &str, uri: String| {
+            hyper::Request::builder()
+                .method(method)
+                .uri(uri)
+                .body(String::new())
+                .context("failed to make request")
+        };
+
+        // The limit applies to the sum of the method, scheme, authority, and
+        // path. `GET` and `http` are built-ins and don't count.
+        let authority = "a".repeat(16);
+        let path = format!("/{}", "b".repeat(15));
+        let method = "X".repeat(15);
+
+        // At the limit, every request reaches the guest.
+        for req in [
+            req("GET", format!("http://{authority}{path}"))?,
+            req(&method, format!("http://{authority}/"))?,
+        ] {
+            let resp = server.send_request(req).await?;
+            assert!(resp.status().is_success(), "{resp:?}");
+            assert_eq!(resp.body(), "Hello, WASI!");
+        }
+
+        // One byte over the limit, each request is rejected with a 400 before
+        // the guest runs.
+        for req in [
+            req("GET", format!("http://{authority}{path}b"))?,
+            req("GET", format!("http://{authority}a{path}"))?,
+            req(&format!("{method}X"), format!("http://{authority}/"))?,
+        ] {
+            let desc = format!("{} {}", req.method(), req.uri());
+            let resp = server.send_request(req).await?;
+            assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST, "{desc}");
+            assert!(
+                resp.body().contains("<h1>400 Bad Request</h1>"),
+                "{desc}: {resp:?}"
+            );
+        }
+
+        let (_, stderr) = server.finish()?;
+        assert!(
+            stderr.contains("exceeding the size limit of 32 bytes"),
+            "{stderr}"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_request_strings_limit() -> Result<()> {
+        cli_serve_request_strings_limit(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })
+        .await
+    }
+
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_request_strings_limit() -> Result<()> {
+        cli_serve_request_strings_limit(P3_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })
+        .await
+    }
+
     #[test]
     fn p2_cli_argv0() -> Result<()> {
         run_wasmtime(&["run", "--argv0=a", P2_CLI_ARGV0, "a"])?;
@@ -2522,6 +2597,118 @@ start a print 1234
             "p3-append (large limit): guest should have received an error"
         );
         Ok(())
+    }
+
+    fn run_http_request_strings(component: &str, flags: &[&str]) -> Result<()> {
+        let td = tempfile::TempDir::new()?;
+        let cwasm = td.path().join("http_request_strings.cwasm");
+        let cwasm = cwasm.to_str().unwrap();
+        let mut compile = vec!["compile"];
+        compile.extend(flags.iter().filter(|f| f.starts_with("-W")));
+        compile.extend([component, "-o", cwasm]);
+        run_wasmtime(&compile)?;
+
+        let run = |limit: Option<usize>, sets: &[&str]| -> Result<String> {
+            let limit = limit.map(|l| format!("-Smax-http-request-strings-size={l}"));
+            let mut args = vec!["run"];
+            args.extend(flags);
+            args.extend(limit.as_deref());
+            args.extend(["--allow-precompiled", cwasm]);
+            args.extend(sets);
+            run_wasmtime(&args)
+        };
+        let expect = |out: String, results: &[bool], ctx: &str| {
+            let want: String = results
+                .iter()
+                .map(|ok| if *ok { "ok\n" } else { "error received\n" })
+                .collect();
+            assert_eq!(out, want, "{ctx}");
+        };
+
+        for field in ["method", "path", "scheme", "authority"] {
+            // A single field: equal to the limit passes, one over fails. The
+            // `http` crate caps non-standard schemes at 64 bytes, so stay below.
+            let at = format!("{field}=32");
+            let over = format!("{field}=33");
+            expect(
+                run(Some(32), &[&at])?,
+                &[true],
+                &format!("{field}: at limit"),
+            );
+            expect(
+                run(Some(32), &[&over])?,
+                &[false],
+                &format!("{field}: over limit"),
+            );
+
+            // Replacing a field releases the size of its previous value.
+            let small = format!("{field}=8");
+            expect(
+                run(Some(32), &[&at, &small, &at])?,
+                &[true, true, true],
+                &format!("{field}: replaced"),
+            );
+        }
+
+        // The limit applies to the sum of all four fields.
+        expect(
+            run(Some(32), &["method=8", "scheme=8", "authority=8", "path=8"])?,
+            &[true, true, true, true],
+            "sum at limit",
+        );
+        expect(
+            run(Some(32), &["method=8", "scheme=8", "authority=8", "path=9"])?,
+            &[true, true, true, false],
+            "sum over limit",
+        );
+        // A rejected value isn't counted, so a smaller one still fits.
+        expect(
+            run(
+                Some(32),
+                &["method=8", "scheme=8", "authority=8", "path=9", "path=8"],
+            )?,
+            &[true, true, true, false, true],
+            "sum after rejection",
+        );
+
+        for field in ["method", "path", "authority"] {
+            // Gated by default too.
+            let at = format!("{field}=16384");
+            let over = format!("{field}=16385");
+            expect(run(None, &[&at])?, &[true], &format!("{field}: at default"));
+            expect(
+                run(None, &[&over])?,
+                &[false],
+                &format!("{field}: over default"),
+            );
+
+            // Raising the limit allows longer strings.
+            expect(
+                run(Some(1 << 20), &[&over])?,
+                &[true],
+                &format!("{field}: large limit"),
+            );
+        }
+        expect(
+            run(None, &["method=8192", "path=8193"])?,
+            &[true, false],
+            "sum over default",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn p2_cli_http_request_strings() -> Result<()> {
+        run_http_request_strings(P2_CLI_HTTP_REQUEST_STRINGS_COMPONENT, &["-Shttp"])
+    }
+
+    #[test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    fn p3_cli_http_request_strings() -> Result<()> {
+        run_http_request_strings(
+            P3_CLI_HTTP_REQUEST_STRINGS_COMPONENT,
+            &["-Shttp,p3", "-Wcomponent-model-async"],
+        )
     }
 
     #[test]

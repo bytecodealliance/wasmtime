@@ -29,6 +29,8 @@ pub mod p2;
 #[cfg(feature = "p3")]
 pub mod p3;
 mod request_options;
+#[cfg(any(feature = "p2", feature = "p3"))]
+mod request_strings;
 
 pub use ctx::*;
 #[cfg(feature = "default-send-request")]
