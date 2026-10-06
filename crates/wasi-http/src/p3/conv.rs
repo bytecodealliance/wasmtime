@@ -64,7 +64,7 @@ impl From<ErrorCode> for Error {
             ErrorCode::HttpResponseHeaderSectionSize(payload) => {
                 Self::HttpResponseHeaderSectionSize(payload)
             }
-            ErrorCode::HttpResponseHeaderSize(payload) => Self::HttpRequestHeaderSize {
+            ErrorCode::HttpResponseHeaderSize(payload) => Self::HttpResponseHeaderSize {
                 field_name: payload.field_name,
                 field_size: payload.field_size,
             },
