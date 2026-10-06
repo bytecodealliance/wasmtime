@@ -1045,3 +1045,38 @@ fn host_arrayref_has_trace_info_for_gc() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_new_type_mismatch_does_not_leak() -> Result<()> {
+    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+        println!("Using GC collector: {collector:?}");
+
+        let mut config = Config::new();
+        config.wasm_gc(true);
+        config.collector(collector);
+        config.gc_heap_may_move(false);
+        config.gc_heap_reservation(64 << 10);
+        config.gc_heap_reservation_for_growth(0);
+        let engine = Engine::new(&config)?;
+        let mut store = Store::new(&engine, ());
+
+        let array_ty = ArrayType::new(
+            &engine,
+            FieldType::new(Mutability::Var, ValType::I32.into()),
+        );
+        let pre = ArrayRefPre::new(&mut store, array_ty);
+        let bad_elems = vec![Val::I64(0); 1000];
+
+        for _ in 0..100 {
+            let err = ArrayRef::new_fixed(&mut store, &pre, &bad_elems).unwrap_err();
+            err.assert_contains("element type mismatch");
+            let err = ArrayRef::new(&mut store, &pre, &Val::I64(0), 1000).unwrap_err();
+            err.assert_contains("element type mismatch");
+
+            let mut scope = RootScope::new(&mut store);
+            ArrayRef::new(&mut scope, &pre, &Val::I32(0), 1000)?;
+        }
+    }
+    Ok(())
+}
