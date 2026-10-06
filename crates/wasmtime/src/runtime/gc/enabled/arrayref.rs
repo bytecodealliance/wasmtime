@@ -407,18 +407,19 @@ impl ArrayRef {
             .context("unrecoverable error when allocating new `arrayref`")?
             .map_err(|n| GcHeapOutOfMemory::new((), n))?;
 
-        // Type check the elements against the element type.
-        for elem in elems.clone() {
-            elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
-                .context("element type mismatch")?;
-        }
-
         // From this point on, if we get any errors, then the array is not
         // fully initialized, so we need to eagerly deallocate it before the
         // next GC where the collector might try to interpret one of the
         // uninitialized fields as a GC reference.
         let mut store = AutoAssertNoGc::new(store);
         match (|| {
+            // Type check the elements here, rather than before allocating, so
+            // that oversized arrays fail without visiting every element.
+            for elem in elems.clone() {
+                elem.ensure_matches_ty(&store, allocator.ty.element_type().unpack())
+                    .context("element type mismatch")?;
+            }
+
             let elem_ty = allocator.ty.element_type();
             for (i, elem) in elems.enumerate() {
                 let i = u32::try_from(i)?;
@@ -679,15 +680,15 @@ impl ArrayRef {
             .context("unrecoverable error when allocating new `arrayref`")?
             .map_err(|n| GcHeapOutOfMemory::new((), n))?;
 
-        let mut store = AutoAssertNoGc::new(store);
-        let data = store
-            .require_gc_store_mut()?
-            .gc_object_data(arrayref.as_gc_ref())?;
-        let copied = data.copy_from_slice(layout.base_size, elems);
-
         // If the copy failed then the array is not fully initialized, so we
         // must eagerly deallocate it before the next GC.
-        match copied {
+        let mut store = AutoAssertNoGc::new(store);
+        match (|| {
+            store
+                .require_gc_store_mut()?
+                .gc_object_data(arrayref.as_gc_ref())?
+                .copy_from_slice(layout.base_size, elems)
+        })() {
             Ok(()) => Ok(Rooted::new(&mut store, arrayref.into())),
             Err(e) => {
                 store
