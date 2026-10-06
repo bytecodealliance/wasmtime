@@ -324,6 +324,36 @@ error while executing at wasm backtrace:
 }
 
 #[test]
+fn trap_display_demangled_names() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let wat = r#"
+        (module $m
+            (func $c unreachable)
+            (func $i call $c)
+            (func $_Z3foov call $i)
+            (func (export "bar") call $_Z3foov)
+        )
+    "#;
+
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "bar")?;
+
+    // Short names like `c` and `i` shouldn't be "demangled" as C++ types, but
+    // C++ mangled names should still be demangled.
+    let e = run_func.call(&mut store, ()).unwrap_err();
+    e.assert_contains(
+        "\
+error while executing at wasm backtrace:
+    0:     0x23 - m!c
+    1:     0x27 - m!i
+    2:     0x2c - m!foo()
+    3:     0x31 - m!<wasm function 3>",
+    );
+    Ok(())
+}
+
+#[test]
 fn trap_display_multi_module() -> Result<()> {
     let mut store = Store::<()>::default();
     let wat = r#"
