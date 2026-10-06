@@ -269,7 +269,7 @@ pub fn make_api_calls(api: ApiCalls) {
             ApiCall::TableTypeNew { id, nullable } => {
                 log::trace!("creating table type {id}");
                 let element = RefType::new(nullable, HeapType::Func);
-                let old = table_types.insert(id, TableType::new(element, 0, None));
+                let old = table_types.insert(id, TableType::new(element, 0, None).unwrap());
                 assert!(old.is_none());
             }
 
@@ -404,7 +404,7 @@ pub fn make_api_calls(api: ApiCalls) {
                 maximum,
             } => {
                 log::trace!("creating memory type {id}");
-                let old = memory_types.insert(id, MemoryType::new(minimum, maximum));
+                let old = memory_types.insert(id, MemoryType::new(minimum, maximum).unwrap());
                 assert!(old.is_none());
             }
 

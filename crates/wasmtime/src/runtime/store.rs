@@ -900,6 +900,7 @@ impl<T> Store<T> {
     ///     limits: StoreLimits,
     /// }
     ///
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let my_state = MyApplicationState {
     ///     my_state: 42,
@@ -912,18 +913,20 @@ impl<T> Store<T> {
     /// store.limiter(|state| &mut state.limits);
     ///
     /// // Creation of smaller memories is allowed
-    /// Memory::new(&mut store, MemoryType::new(1, None)).unwrap();
+    /// Memory::new(&mut store, MemoryType::new(1, None)?)?;
     ///
     /// // Creation of a larger memory, however, will exceed the 1MB limit we've
     /// // configured
-    /// assert!(Memory::new(&mut store, MemoryType::new(1000, None)).is_err());
+    /// assert!(Memory::new(&mut store, MemoryType::new(1000, None)?).is_err());
     ///
     /// // The number of instances in this store is limited to 2, so the third
     /// // instance here should fail.
-    /// let module = Module::new(&engine, "(module)").unwrap();
-    /// assert!(Instance::new(&mut store, &module, &[]).is_ok());
-    /// assert!(Instance::new(&mut store, &module, &[]).is_ok());
+    /// let module = Module::new(&engine, "(module)")?;
+    /// Instance::new(&mut store, &module, &[])?;
+    /// Instance::new(&mut store, &module, &[])?;
     /// assert!(Instance::new(&mut store, &module, &[]).is_err());
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// [`ResourceLimiter`]: crate::ResourceLimiter

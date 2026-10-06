@@ -22,32 +22,32 @@ fn bad_tables() {
     let mut store = Store::<()>::default();
 
     // mismatched initializer
-    let ty = TableType::new(RefType::FUNCREF, 0, Some(1));
+    let ty = TableType::new(RefType::FUNCREF, 0, Some(1)).unwrap();
     assert!(Table::new(&mut store, ty.clone(), Ref::Extern(None)).is_err());
 
     // get out of bounds
-    let ty = TableType::new(RefType::FUNCREF, 0, Some(1));
+    let ty = TableType::new(RefType::FUNCREF, 0, Some(1)).unwrap();
     let t = Table::new(&mut store, ty.clone(), Ref::Func(None)).unwrap();
     assert!(t.get(&mut store, 0).is_none());
     assert!(t.get(&mut store, u64::from(u32::MAX)).is_none());
     assert!(t.get(&mut store, u64::MAX).is_none());
 
     // set out of bounds or wrong type
-    let ty = TableType::new(RefType::FUNCREF, 1, Some(1));
+    let ty = TableType::new(RefType::FUNCREF, 1, Some(1)).unwrap();
     let t = Table::new(&mut store, ty.clone(), Ref::Func(None)).unwrap();
     assert!(t.set(&mut store, 0, Ref::Extern(None)).is_err());
     assert!(t.set(&mut store, 0, Ref::Func(None)).is_ok());
     assert!(t.set(&mut store, 1, Ref::Func(None)).is_err());
 
     // grow beyond max
-    let ty = TableType::new(RefType::FUNCREF, 1, Some(1));
+    let ty = TableType::new(RefType::FUNCREF, 1, Some(1)).unwrap();
     let t = Table::new(&mut store, ty.clone(), Ref::Func(None)).unwrap();
     assert!(t.grow(&mut store, 0, Ref::Func(None)).is_ok());
     assert!(t.grow(&mut store, 1, Ref::Func(None)).is_err());
     assert_eq!(t.size(&store), 1);
 
     // grow wrong type
-    let ty = TableType::new(RefType::FUNCREF, 1, Some(2));
+    let ty = TableType::new(RefType::FUNCREF, 1, Some(2)).unwrap();
     let t = Table::new(&mut store, ty.clone(), Ref::Func(None)).unwrap();
     assert!(t.grow(&mut store, 1, Ref::Extern(None)).is_err());
     assert_eq!(t.size(&store), 1);
@@ -67,9 +67,9 @@ fn cross_store() -> wasmtime::Result<()> {
     let func = Func::wrap(&mut store2, || {});
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
     let global = Global::new(&mut store2, ty, Val::I32(0))?;
-    let ty = MemoryType::new(1, None);
+    let ty = MemoryType::new(1, None)?;
     let memory = Memory::new(&mut store2, ty)?;
-    let ty = TableType::new(RefType::FUNCREF, 1, None);
+    let ty = TableType::new(RefType::FUNCREF, 1, None)?;
     let table = Table::new(&mut store2, ty, Ref::Func(None))?;
 
     let need_func = Module::new(&engine, r#"(module (import "" "" (func)))"#)?;
@@ -99,7 +99,7 @@ fn cross_store() -> wasmtime::Result<()> {
 
     eprintln!("============ Cross-store tables ==============");
 
-    let ty = TableType::new(RefType::FUNCREF, 1, None);
+    let ty = TableType::new(RefType::FUNCREF, 1, None)?;
     assert!(Table::new(&mut store2, ty.clone(), store1ref.clone()).is_err());
     let t1 = Table::new(&mut store2, ty.clone(), store2ref.clone())?;
     assert!(t1.set(&mut store2, 0, store1ref.clone()).is_err());
@@ -248,7 +248,7 @@ fn create_get_set_funcref_tables_via_api() -> wasmtime::Result<()> {
     let engine = Engine::new(&cfg)?;
     let mut store = Store::new(&engine, ());
 
-    let table_ty = TableType::new(RefType::FUNCREF, 10, None);
+    let table_ty = TableType::new(RefType::FUNCREF, 10, None)?;
     let init = Ref::Func(Some(Func::wrap(&mut store, || {})));
     let table = Table::new(&mut store, table_ty, init)?;
 
@@ -266,7 +266,7 @@ fn fill_funcref_tables_via_api() -> wasmtime::Result<()> {
     let engine = Engine::new(&cfg)?;
     let mut store = Store::new(&engine, ());
 
-    let table_ty = TableType::new(RefType::FUNCREF, 10, None);
+    let table_ty = TableType::new(RefType::FUNCREF, 10, None)?;
     let table = Table::new(&mut store, table_ty, Ref::Func(None))?;
 
     for i in 0..10 {
@@ -293,7 +293,7 @@ fn grow_funcref_tables_via_api() -> wasmtime::Result<()> {
     let engine = Engine::new(&cfg)?;
     let mut store = Store::new(&engine, ());
 
-    let table_ty = TableType::new(RefType::FUNCREF, 10, None);
+    let table_ty = TableType::new(RefType::FUNCREF, 10, None)?;
     let table = Table::new(&mut store, table_ty, Ref::Func(None))?;
 
     assert_eq!(table.size(&store), 10);
@@ -310,7 +310,7 @@ fn create_get_set_externref_tables_via_api() -> wasmtime::Result<()> {
     let engine = Engine::new(&cfg)?;
     let mut store = Store::new(&engine, ());
 
-    let table_ty = TableType::new(RefType::EXTERNREF, 10, None);
+    let table_ty = TableType::new(RefType::EXTERNREF, 10, None)?;
     let init = ExternRef::new(&mut store, 42_usize)?;
     let table = Table::new(&mut store, table_ty, init.into())?;
 
@@ -339,7 +339,7 @@ fn fill_externref_tables_via_api() -> wasmtime::Result<()> {
     let engine = Engine::new(&cfg)?;
     let mut store = Store::new(&engine, ());
 
-    let table_ty = TableType::new(RefType::EXTERNREF, 10, None);
+    let table_ty = TableType::new(RefType::EXTERNREF, 10, None)?;
     let table = Table::new(&mut store, table_ty, Ref::Extern(None))?;
 
     for i in 0..10 {
@@ -377,7 +377,7 @@ fn grow_externref_tables_via_api() -> wasmtime::Result<()> {
     let engine = Engine::new(&cfg)?;
     let mut store = Store::new(&engine, ());
 
-    let table_ty = TableType::new(RefType::EXTERNREF, 10, None);
+    let table_ty = TableType::new(RefType::EXTERNREF, 10, None)?;
     let table = Table::new(&mut store, table_ty, Ref::Extern(None))?;
 
     assert_eq!(table.size(&store), 10);
@@ -391,7 +391,7 @@ fn grow_externref_tables_via_api() -> wasmtime::Result<()> {
 fn read_write_memory_via_api() {
     let cfg = Config::new();
     let mut store = Store::new(&Engine::new(&cfg).unwrap(), ());
-    let ty = MemoryType::new(1, None);
+    let ty = MemoryType::new(1, None).unwrap();
     let mem = Memory::new(&mut store, ty).unwrap();
     mem.grow(&mut store, 1).unwrap();
 
@@ -607,7 +607,7 @@ fn new_table_func_subtyping() {
         for (val, expected) in [(a, a_expected), (b, b_expected), (c, c_expected)] {
             match Table::new(
                 &mut store,
-                TableType::new(RefType::new(true, table_ty.clone().into()), 0, None),
+                TableType::new(RefType::new(true, table_ty.clone().into()), 0, None).unwrap(),
                 val.into(),
             ) {
                 Ok(_) if expected => {}
@@ -637,7 +637,7 @@ fn table_set_func_subtyping() {
     ] {
         let table = Table::new(
             &mut store,
-            TableType::new(RefType::new(true, table_ty.clone().into()), 3, None),
+            TableType::new(RefType::new(true, table_ty.clone().into()), 3, None).unwrap(),
             Ref::Func(None),
         )
         .unwrap();
@@ -680,7 +680,7 @@ fn table_grow_func_subtyping() {
     ] {
         let table = Table::new(
             &mut store,
-            TableType::new(RefType::new(true, table_ty.clone().into()), 3, None),
+            TableType::new(RefType::new(true, table_ty.clone().into()), 3, None).unwrap(),
             Ref::Func(None),
         )
         .unwrap();
@@ -725,7 +725,7 @@ fn table_fill_func_subtyping() {
         for (val, expected) in [(a, a_expected), (b, b_expected), (c, c_expected)] {
             let table = Table::new(
                 &mut store,
-                TableType::new(RefType::new(true, table_ty.clone().into()), 10, None),
+                TableType::new(RefType::new(true, table_ty.clone().into()), 10, None).unwrap(),
                 Ref::Func(None),
             )
             .unwrap();
@@ -766,7 +766,7 @@ fn table_copy_func_subtyping() {
     ] {
         let dest_table = Table::new(
             &mut store,
-            TableType::new(RefType::new(true, dst_ty.clone().into()), 10, None),
+            TableType::new(RefType::new(true, dst_ty.clone().into()), 10, None).unwrap(),
             Ref::Func(None),
         )
         .unwrap();
@@ -780,7 +780,7 @@ fn table_copy_func_subtyping() {
 
             let src_table = Table::new(
                 &mut store,
-                TableType::new(RefType::new(true, src_ty.into()), 10, None),
+                TableType::new(RefType::new(true, src_ty.into()), 10, None).unwrap(),
                 val.into(),
             )
             .unwrap();
