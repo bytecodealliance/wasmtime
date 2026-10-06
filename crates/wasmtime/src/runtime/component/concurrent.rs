@@ -3814,6 +3814,11 @@ impl Instance {
         let state = store.concurrent_state_mut()?;
         let task = state.get_mut(guest_task)?;
 
+        // A cancellation request is only delivered to a task which hasn't yet
+        // resolved, so drop any pending, undelivered `Event::Cancelled` now
+        // that this task has resolved.
+        task.event = None;
+
         if let Caller::Host { tx, .. } = &mut task.caller {
             if let Some(tx) = tx.take() {
                 _ = tx.send(result);
