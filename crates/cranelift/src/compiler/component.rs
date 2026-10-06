@@ -622,7 +622,10 @@ impl<'a> TrampolineCompiler<'a> {
                     },
                 );
             }
-            Trampoline::SyncStartCall { callback } => {
+            Trampoline::StartCall {
+                callback,
+                post_return,
+            } => {
                 let pointer_type = self.isa.pointer_type();
                 let (values_vec_ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
                     &mut self.alias_regions,
@@ -632,7 +635,7 @@ impl<'a> TrampolineCompiler<'a> {
                 );
                 let values_vec_len = self.builder.ins().iconst(pointer_type, i64::from(len));
                 self.translate_libcall(
-                    host::sync_start,
+                    host::start_call,
                     HostResult::MultiValue {
                         ptr: Some(values_vec_ptr),
                         len: Some(values_vec_len),
@@ -641,25 +644,9 @@ impl<'a> TrampolineCompiler<'a> {
                     |me, params| {
                         let vmctx = params[0];
                         params.push(me.load_callback(vmctx, *callback));
+                        params.push(me.load_post_return(vmctx, *post_return));
                         params.push(values_vec_ptr);
                         params.push(values_vec_len);
-                    },
-                );
-            }
-            Trampoline::AsyncStartCall {
-                callback,
-                post_return,
-            } => {
-                self.translate_libcall(
-                    host::async_start,
-                    TrapSentinel::NegativeOne,
-                    WasmArgs::InRegisters,
-                    |me, params| {
-                        let vmctx = params[0];
-                        params.extend([
-                            me.load_callback(vmctx, *callback),
-                            me.load_post_return(vmctx, *post_return),
-                        ]);
                     },
                 );
             }
@@ -1423,8 +1410,7 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::ResourceTransferOwn
             | Trampoline::ResourceTransferBorrow
             | Trampoline::PrepareCall { .. }
-            | Trampoline::SyncStartCall { .. }
-            | Trampoline::AsyncStartCall { .. }
+            | Trampoline::StartCall { .. }
             | Trampoline::FutureTransfer
             | Trampoline::StreamTransfer
             | Trampoline::ErrorContextTransfer
