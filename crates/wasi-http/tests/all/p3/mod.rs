@@ -6,11 +6,19 @@ use futures::SinkExt;
 use futures::channel::oneshot;
 use http::HeaderValue;
 use http_body::Body;
-use http_body_util::{BodyExt as _, Collected, Empty};
+use http_body_util::{BodyExt as _, Collected, Empty, StreamBody, combinators::BoxBody};
+use hyper::server::conn::http1;
+use hyper::service::service_fn;
+use std::convert::Infallible;
 use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 use std::task::{Context, Poll};
+use std::time::Duration;
 use test_programs_artifacts::*;
 use tokio::{fs, try_join};
 use wasm_compose::composer::ComponentComposer;
@@ -951,6 +959,169 @@ async fn p3_http_outbound_request_chunk_size() -> Result<()> {
 async fn p3_http_drop_transmit() -> Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_DROP_TRANSMIT_COMPONENT, &server).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_pipe() -> Result<()> {
+    test_outbound_request_pipe(false).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_pipe_response() -> Result<()> {
+    test_outbound_request_pipe(true).await
+}
+
+async fn test_outbound_request_pipe(return_response: bool) -> Result<()> {
+    const REQUESTS: usize = 10;
+
+    struct OpenRequest(Arc<AtomicUsize>);
+
+    impl Drop for OpenRequest {
+        fn drop(&mut self) {
+            self.0.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+
+    async fn wait_for_open_requests(open: &AtomicUsize, expected: usize) -> Result<()> {
+        tokio::time::timeout(Duration::from_secs(30), async {
+            while open.load(Ordering::SeqCst) != expected {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .with_context(|| {
+            format!(
+                "timed out waiting for {expected} open requests; found {}",
+                open.load(Ordering::SeqCst)
+            )
+        })
+    }
+
+    // This server has two routes /a and /b.
+    // /a is handled by never completing the body to leave the connection open.
+    // /b increments `open` on seeing a request, then reads the body and
+    // decrements `open`. When reaching the end of the body or hitting an error.
+    let open = Arc::new(AtomicUsize::new(0));
+    let connections = Arc::new(AtomicUsize::new(0));
+    let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
+    let address = listener.local_addr()?;
+    let server = tokio::spawn({
+        let open = Arc::clone(&open);
+        let connections = Arc::clone(&connections);
+        async move {
+            loop {
+                let (stream, _) = listener.accept().await?;
+                let open = Arc::clone(&open);
+                connections.fetch_add(1, Ordering::SeqCst);
+                let connection = OpenRequest(Arc::clone(&connections));
+                tokio::spawn(async move {
+                    let _connection = connection;
+                    let service =
+                        service_fn(move |mut request: hyper::Request<hyper::body::Incoming>| {
+                            let open = Arc::clone(&open);
+                            async move {
+                                let body: BoxBody<Bytes, Infallible> = match request.uri().path() {
+                                    "/a" => StreamBody::new(futures::stream::pending::<
+                                        std::result::Result<http_body::Frame<Bytes>, Infallible>,
+                                    >(
+                                    ))
+                                    .boxed(),
+                                    "/b" => {
+                                        open.fetch_add(1, Ordering::SeqCst);
+                                        tokio::spawn(async move {
+                                            let _request = OpenRequest(open);
+                                            while let Some(frame) = request.body_mut().frame().await
+                                            {
+                                                if frame.is_err() {
+                                                    break;
+                                                }
+                                            }
+                                        });
+                                        Empty::new().boxed()
+                                    }
+                                    path => panic!("unexpected request path: {path}"),
+                                };
+                                Ok::<_, Infallible>(hyper::Response::new(body))
+                            }
+                        });
+                    _ = http1::Builder::new()
+                        .serve_connection(wasmtime_wasi_http::io::TokioIo::new(stream), service)
+                        .await;
+                });
+            }
+
+            #[allow(unreachable_code)]
+            Ok::<_, std::io::Error>(())
+        }
+    });
+
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_component_model_async(true);
+    });
+    let component = Component::from_file(&engine, P3_HTTP_OUTBOUND_REQUEST_PIPE_COMPONENT)?;
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new()
+                .env("HTTP_SERVER", address.to_string())
+                .build(),
+            ..Ctx::new(oneshot::channel().0)
+        },
+    );
+    let mut linker = Linker::new(&engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+    wasmtime_wasi::p3::add_to_linker(&mut linker)?;
+    wasmtime_wasi_http::p3::add_to_linker(&mut linker)?;
+    let mut responses = Vec::new();
+    if return_response {
+        let service = Service::instantiate_async(&mut store, &component, &linker).await?;
+        for _ in 0..REQUESTS {
+            let (request, _io) = Request::from_http(
+                &mut store.data_mut().hooks,
+                http::Request::new(Empty::<Bytes>::new()),
+            );
+            let response = store
+                .run_concurrent(async |accessor| {
+                    let response = service.handle(accessor, request).await?.unwrap();
+                    accessor.with(|store| response.into_http(store, async { Ok(()) }))
+                })
+                .await??;
+            responses.push(response);
+        }
+        wait_for_open_requests(&connections, REQUESTS).await?;
+        // The returned bodies are owned by the host now. They still need the
+        // outbound connections, but must not prevent Store destruction from
+        // cancelling those connections.
+        for response in &mut responses {
+            assert!(futures::poll!(response.body_mut().frame()).is_pending());
+        }
+    } else {
+        let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+        // Each call pipes /a's response body into a new request to /b.
+        // The upload continues after the guest call returns.
+        for _ in 0..REQUESTS {
+            store
+                .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
+                .await?
+                .context("guest trapped")?
+                .map_err(|()| format_err!("`wasi:cli/run#run` failed"))?;
+        }
+        wait_for_open_requests(&open, REQUESTS).await?;
+    }
+
+    // Dropping the store should cancel the pipe tasks.
+    drop(store);
+    wait_for_open_requests(&open, 0).await?;
+    wait_for_open_requests(&connections, 0).await?;
+    for response in responses {
+        // Aborting the local connection driver can produce EOF or an error.
+        // In either case the otherwise endless body must stop waiting.
+        let _result =
+            tokio::time::timeout(Duration::from_secs(30), response.into_body().collect()).await?;
+    }
+
+    server.abort();
+    Ok(())
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
