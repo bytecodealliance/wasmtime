@@ -73,13 +73,20 @@ pub trait ResourceLimiter: Send {
         maximum: Option<usize>,
     ) -> Result<bool>;
 
-    /// Notifies the resource limiter that growing a linear memory, permitted by
-    /// the `memory_growing` method, has failed.
+    /// Notifies the resource limiter that growing a linear memory has failed.
+    ///
+    /// This is typically called after `memory_growing` has permitted a growth
+    /// which then failed. It may also be called without a preceding call to
+    /// `memory_growing` when the requested size is invalid for the linear
+    /// memory, for example when it cannot be represented by the memory's type
+    /// (such as a 32-bit memory with a page size of 1 byte growing to 4GiB or
+    /// beyond).
     ///
     /// Note that this method is not called if `memory_growing` returns an
-    /// error.
+    /// error, nor if it returns `Ok(false)`.
     ///
-    /// Reasons for failure include: the growth exceeds the `maximum` passed to
+    /// Reasons for failure include: the requested size is not valid for the
+    /// memory's type, the growth exceeds the `maximum` passed to
     /// `memory_growing`, or the operating system failed to allocate additional
     /// memory. In that case, `error` might be downcastable to a `std::io::Error`.
     ///
@@ -110,13 +117,19 @@ pub trait ResourceLimiter: Send {
         maximum: Option<usize>,
     ) -> Result<bool>;
 
-    /// Notifies the resource limiter that growing a linear memory, permitted by
-    /// the `table_growing` method, has failed.
+    /// Notifies the resource limiter that growing a table has failed.
     ///
-    /// Note that this method is not called if `table_growing` returns an error.
+    /// This is typically called after `table_growing` has permitted a growth
+    /// which then failed. It may also be called without a preceding call to
+    /// `table_growing` when the requested size cannot be represented, for
+    /// example when computing the new size overflows.
     ///
-    /// Reasons for failure include: the growth exceeds the `maximum` passed to
-    /// `table_growing`. This could expand in the future.
+    /// Note that this method is not called if `table_growing` returns an
+    /// error, nor if it returns `Ok(false)`.
+    ///
+    /// Reasons for failure include: the requested size overflows, the growth
+    /// exceeds the `maximum` passed to `table_growing`, or allocating the
+    /// table's additional storage failed. This could expand in the future.
     ///
     /// See the details on the return values for `memory_growing` for what the
     /// return value of this function indicates.
