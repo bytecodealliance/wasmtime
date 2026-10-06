@@ -670,24 +670,27 @@ impl Table {
         }
 
         // First resize the storage and then fill with the init value
-        match self {
+        let result = match self {
             Table::Static(StaticTable::Func(StaticFuncTable { data, size, .. })) => {
                 unsafe {
                     debug_assert!(data.as_ref()[*size..new_size].iter().all(|x| x.is_none()));
                 }
                 *size = new_size;
+                Ok(())
             }
             Table::Static(StaticTable::GcRef(StaticGcRefTable { data, size })) => {
                 unsafe {
                     debug_assert!(data.as_ref()[*size..new_size].iter().all(|x| x.is_none()));
                 }
                 *size = new_size;
+                Ok(())
             }
             Table::Static(StaticTable::Cont(StaticContTable { data, size })) => {
                 unsafe {
                     debug_assert!(data.as_ref()[*size..new_size].iter().all(|x| x.is_none()));
                 }
                 *size = new_size;
+                Ok(())
             }
 
             // These calls to `resize` could move the base address of
@@ -698,14 +701,23 @@ impl Table {
             // that delta is non-zero and the new size doesn't exceed the
             // maximum mean we can't get here.
             Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
-                elements.resize_with(new_size, || None)?;
+                elements.resize_with(new_size, || None)
             }
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
-                elements.resize_with(new_size, || None)?;
+                elements.resize_with(new_size, || None)
             }
             Table::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => {
-                elements.resize_with(new_size, || None)?;
+                elements.resize_with(new_size, || None)
             }
+        };
+
+        // Failure to grow the table is reported as a -1 value to wasm as
+        // opposed to a trap (e.g. just using `?` on this).
+        if let Err(e) = result {
+            if let Some(limiter) = limiter {
+                limiter.table_grow_failed(e.into())?;
+            }
+            return Ok(None);
         }
 
         Ok(Some(old_size))
