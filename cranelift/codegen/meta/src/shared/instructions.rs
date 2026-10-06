@@ -370,6 +370,73 @@ fn define_control_flow(
         .call()
         .branches(),
     );
+
+    ig.push(
+        Inst::new(
+            "interrupt_poll",
+            r#"
+        Load from a memory location to possibly trigger a resumeable
+        interruption.
+
+        - Load a pointer-sized value from memory at `load_ptr`, and throw it
+          away.
+        - Keep `context` in a fixed register.
+        - Reserve a second register as scratch space. (Exact choices of
+          registers are ISA-specific; see each backend's `get_operands` for
+          which registers and the reasoning behind them.)
+        - Record the address of the load instruction in the binary's trap table.
+
+        This instruction aids in implementing virtual-memory-triggered
+        interrupts, with the load trapping if the loaded location is
+        inaccessible. The trap handler can then take further action, first using
+        the trap table to confirm that this instruction was the cause. The
+        handler receives further arbitrary input in `context`. It can use the
+        second reserved register as scratch space: for example, to record the
+        original resumption address so it can arrange to "return to" a
+        trampoline first, which can ultimately then jump to the original
+        address. (Such gymnastics are necessary on platforms where signal
+        handlers cannot push stack frames directly.) It is expected that
+        execution will ultimately resume at the load, re-running it; care must
+        be taken to ensure it succeeds the second time, lest the whole process
+        repeat. This is where the output `next_load_ptr` comes in, carrying a
+        new location to load from. All current backends (x64 and aarch64) pin
+        `load_ptr` and `next_load_ptr` to the same register so a move from the
+        latter to the former does not even need to be emitted.
+        "#,
+            &formats.int_add_trap,
+        )
+        .operands_in(&[
+            Operand::new("load_ptr", iAddr).with_doc("memory location to load from"),
+            Operand::new("context", iAddr)
+                .with_doc("arbitrary address-sized context to pass to signal handler"),
+            Operand::new("code", &imm.trapcode)
+                .with_doc("trap code to record at the load's address"),
+        ])
+        .operands_out(&[
+            Operand::new("next_load_ptr", iAddr).with_doc("memory location to load from next time")
+        ])
+        // As with `stack_switch`, this instruction is a call, in that "it
+        // continues execution elsewhere". See reasoning at
+        // https://github.com/bytecodealliance/wasmtime/pull/9078#issuecomment-2273869774.
+        .call()
+        .can_load()
+        // It may transfer control to something that may store. Declaring this
+        // makes us a memory fence.
+        .can_store()
+        // The universe of possible side effects is wide open. Control may never
+        // even return to this point. When this instruction is used to trigger
+        // preemption, we certainly do not want it hoisted or deduplicated via
+        // GVN.
+        .other_side_effects(),
+        // If `load` is not `can_trap()`, this isn't either.
+        //
+        // This cannot use `side_effects_idempotent()`: its purpose is to allow
+        // deduplication or LICM of redundant instructions. The decision made by
+        // `interrupt_poll` (implicitly, via trap) is determined by the flags on
+        // the page of memory loaded, which change at runtime, outside the
+        // purview of the compiler. Thus, the tuple formed by the instruction
+        // and its input operands is not sufficient to decide redundancy.
+    );
 }
 
 #[inline(never)]

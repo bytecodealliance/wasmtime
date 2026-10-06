@@ -194,6 +194,14 @@
                     (offset i64)
                     (distance RelocDistance))
 
+       ;; A load whose result is discarded; `context` is pinned to rdi, `dst`
+       ;; to r10, and `load_ptr`/`next_load_ptr` share r11.
+       (InterruptPoll (dst WritableGpr)
+                            (load_ptr Gpr)
+                            (context Gpr)
+                            (trap_code TrapCode)
+                            (next_load_ptr WritableGpr))
+
        ;; =========================================
        ;; Instructions pertaining to atomic memory accesses.
 

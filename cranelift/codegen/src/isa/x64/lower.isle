@@ -3620,6 +3620,20 @@
             (in_payload0 Gpr (put_in_gpr in_payload0)))
         (x64_stack_switch_basic store_context_ptr load_context_ptr in_payload0)))
 
+;;;; Rules for `interrupt_poll` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (interrupt_poll _ load_ptr context trap_code))
+      (let ((load_ptr Gpr (put_in_gpr load_ptr))
+            (context Gpr (put_in_gpr context))
+            (dst WritableGpr (temp_writable_gpr))
+            (next_load_ptr WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.InterruptPoll dst
+                                                     load_ptr
+                                                     context
+                                                     trap_code
+                                                     next_load_ptr))))
+       (output_gpr next_load_ptr)))
+
 ;;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;
 
 (rule (lower (get_frame_pointer _))

@@ -2560,6 +2560,20 @@
 (rule (lower (symbol_value _ (symbol_value_data extname dist offset)))
       (load_ext_name (box_external_name extname) offset dist))
 
+;;;; Rules for `interrupt_poll` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (interrupt_poll _ load_ptr context trap_code))
+      (let ((load_ptr Reg (put_in_reg load_ptr))
+            (context Reg (put_in_reg context))
+            (dst WritableReg (temp_writable_reg $I64))
+            (next_load_ptr WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.InterruptPoll dst
+                                                     load_ptr
+                                                     context
+                                                     trap_code
+                                                     next_load_ptr))))
+       (output_reg next_load_ptr)))
+
 ;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
 
 (rule (lower (get_frame_pointer _))
