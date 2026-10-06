@@ -1487,7 +1487,6 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         uncaught_exception,
         closure,
     );
-    #[cfg(feature = "component-model")]
     if result.is_err() {
         store.0.set_trapped();
     }

@@ -2300,6 +2300,9 @@ at https://bytecodealliance.org/security.
         // otherwise fall back to the runtime-agnostic code.
         yield_now().await
     }
+
+    #[cfg(not(feature = "component-model"))]
+    pub(crate) fn set_trapped(&mut self) {}
 }
 
 #[cfg(any(feature = "async", feature = "gc"))]

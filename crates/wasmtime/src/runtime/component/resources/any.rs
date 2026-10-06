@@ -325,14 +325,18 @@ impl ResourceAny {
         // destructors have al been previously type-checked and are guaranteed
         // to take one i32 argument and return no results, so the parameters
         // here should be configured correctly.
-        unsafe {
+        let result = unsafe {
             crate::Func::call_unchecked_raw(
                 store,
                 dtor,
                 NonNull::from(&mut args),
                 UncaughtException::Trap,
-            )?;
+            )
+        };
+        if result.is_err() {
+            store.0.set_trapped();
         }
+        result?;
 
         if slot.instance.is_some() {
             store.0.exit_guest_sync_call()?;

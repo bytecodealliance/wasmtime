@@ -1870,3 +1870,233 @@ async fn start_function_trap_reported_faithfully() -> Result<()> {
     assert_eq!(err.downcast::<Trap>()?, Trap::UnreachableCodeReached);
     Ok(())
 }
+
+const DROP_MID_FLIGHT_WAT: &str = r#"
+(component
+  (core func $task.return (canon task.return))
+  (core module $m
+    (import "" "task.return" (func $tr))
+    (memory 1)
+    (func (export "run") (result i32) (call $tr) (i32.const 0 (; EXIT ;)))
+    (func (export "cb") (param i32 i32 i32) (result i32) unreachable))
+  (core instance $i (instantiate $m (with "" (instance (export "task.return" (func $task.return))))))
+  (func (export "run") async (canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+"#;
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_instantiate_async_blocked_in_limiter() -> Result<()> {
+    struct Limiter {
+        block: bool,
+    }
+
+    #[async_trait::async_trait]
+    impl wasmtime::ResourceLimiterAsync for Limiter {
+        async fn memory_growing(&mut self, _: usize, _: usize, _: Option<usize>) -> Result<bool> {
+            if self.block {
+                std::future::pending::<()>().await;
+            }
+            Ok(true)
+        }
+        async fn table_growing(&mut self, _: usize, _: usize, _: Option<usize>) -> Result<bool> {
+            Ok(true)
+        }
+    }
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, DROP_MID_FLIGHT_WAT)?;
+    let linker = Linker::new(&engine);
+    let mut store = Store::new(&engine, Limiter { block: true });
+    store.limiter_async(|l| l);
+
+    let future = Box::pin(linker.instantiate_async(&mut store, &component));
+    assert!(PollOnce::new(future).await.is_err());
+
+    // Using the store afterwards shouldn't panic...
+    store.data_mut().block = false;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    store
+        .run_concurrent(async |a| run.call_concurrent(a, ()).await)
+        .await??;
+    run.call_async(&mut store, ()).await?;
+
+    Ok(())
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum BlockingCallHook {
+    Calling,
+    Returning,
+}
+
+struct BlockingCallHookHandler(Arc<Mutex<Option<BlockingCallHook>>>);
+
+#[async_trait::async_trait]
+impl<T: Send> wasmtime::CallHookHandler<T> for BlockingCallHookHandler {
+    async fn handle_call_event(
+        &self,
+        _: wasmtime::StoreHookState<'_, T>,
+        ch: wasmtime::CallHook,
+    ) -> Result<()> {
+        let which = match ch {
+            wasmtime::CallHook::CallingWasm => BlockingCallHook::Calling,
+            wasmtime::CallHook::ReturningFromWasm => BlockingCallHook::Returning,
+            _ => return Ok(()),
+        };
+        if *self.0.lock().unwrap() == Some(which) {
+            std::future::pending::<()>().await;
+        }
+        Ok(())
+    }
+}
+
+// Dropping `run_concurrent` while a guest call is blocked in an async call
+// hook abandons that call partway through, so the store must be poisoned
+// rather than left with a stale current guest task.
+async fn drop_run_concurrent_blocked_in_call_hook(which: BlockingCallHook) -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, DROP_MID_FLIGHT_WAT)?;
+    let mut store = Store::new(&engine, ());
+    let block = Arc::new(Mutex::new(None));
+    store.call_hook_async(BlockingCallHookHandler(block.clone()));
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+    *block.lock().unwrap() = Some(which);
+    let future = Box::pin(store.run_concurrent(async |a| run.call_concurrent(a, ()).await));
+    assert!(PollOnce::new(future).await.is_err());
+    *block.lock().unwrap() = None;
+
+    let err = store
+        .run_concurrent(async |a| run.call_concurrent(a, ()).await)
+        .await?
+        .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_run_concurrent_blocked_in_calling_hook() -> Result<()> {
+    drop_run_concurrent_blocked_in_call_hook(BlockingCallHook::Calling).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_run_concurrent_blocked_in_returning_hook() -> Result<()> {
+    drop_run_concurrent_blocked_in_call_hook(BlockingCallHook::Returning).await
+}
+
+// Dropping `instantiate_async` while a core module's start function is blocked
+// in an async call hook abandons the start function partway through, so the
+// store must be poisoned.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_instantiate_async_blocked_in_start_call_hook() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let with_start = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $m
+    (func $start)
+    (start $start))
+  (core instance $i (instantiate $m))
+)
+        "#,
+    )?;
+    let component = Component::new(&engine, DROP_MID_FLIGHT_WAT)?;
+    let mut store = Store::new(&engine, ());
+    let block = Arc::new(Mutex::new(Some(BlockingCallHook::Calling)));
+    store.call_hook_async(BlockingCallHookHandler(block.clone()));
+    let linker = Linker::new(&engine);
+
+    let future = Box::pin(linker.instantiate_async(&mut store, &with_start));
+    assert!(PollOnce::new(future).await.is_err());
+    *block.lock().unwrap() = None;
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    let err = store
+        .run_concurrent(async |a| run.call_concurrent(a, ()).await)
+        .await?
+        .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent)
+    );
+
+    Ok(())
+}
+
+// A call hook failing while `ResourceAny::resource_drop_async` enters the
+// guest to run a destructor must poison the store.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn resource_drop_call_hook_error() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $d (func (export "dtor") (param i32)))
+  (core instance $d (instantiate $d))
+  (type $r (resource (rep i32) (dtor (core func $d "dtor"))))
+  (core func $new (canon resource.new $r))
+  (core module $m
+    (import "" "new" (func $new (param i32) (result i32)))
+    (func (export "mk") (result i32) (call $new (i32.const 7)))
+    (func (export "nop")))
+  (core instance $i (instantiate $m
+    (with "" (instance (export "new" (func $new))))))
+  (export $r2 "r" (type $r))
+  (func (export "mk") (result (own $r2)) (canon lift (core func $i "mk")))
+  (func (export "nop") (canon lift (core func $i "nop")))
+)
+        "#,
+    )?;
+    let mut store = Store::new(&engine, false);
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let mk = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, "mk")?;
+    let nop = instance.get_typed_func::<(), ()>(&mut store, "nop")?;
+    let (r,) = mk.call_async(&mut store, ()).await?;
+
+    store.call_hook(|store, hook| {
+        if *store.data() && matches!(hook, wasmtime::CallHook::CallingWasm) {
+            wasmtime::bail!("hook error");
+        }
+        Ok(())
+    });
+    *store.data_mut() = true;
+    let err = r.resource_drop_async(&mut store).await.unwrap_err();
+    assert_eq!(err.to_string(), "hook error");
+    *store.data_mut() = false;
+
+    let err = store
+        .run_concurrent(async |a| nop.call_concurrent(a, ()).await)
+        .await
+        .and_then(|r| r)
+        .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent),
+        "unexpected error: {err:?}"
+    );
+
+    Ok(())
+}
