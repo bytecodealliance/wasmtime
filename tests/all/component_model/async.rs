@@ -2100,3 +2100,262 @@ async fn resource_drop_call_hook_error() -> Result<()> {
 
     Ok(())
 }
+
+/// Instantiates `wat` and calls its `run: async func() -> u32` export from a
+/// task spawned in the store, but first drops a `run_concurrent` future after
+/// polling it once, which leaves it suspended in the event loop's yield to the
+/// executor prior to handling a low-priority work item queued by `run`. That
+/// work item must not be lost, so the call should still complete afterwards.
+async fn drop_run_concurrent_while_yielding(config: &Config, wat: &str) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let component = Component::new(&engine, wat)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let run = instance.get_typed_func::<(), (u32,)>(&mut store, "run")?;
+
+    let result = Arc::new(Mutex::new(None));
+    let handle = store.spawn({
+        let result = result.clone();
+        async move |accessor| {
+            let ret = run.call_concurrent(accessor, ()).await?;
+            *result.lock().unwrap() = Some(ret);
+            Ok(())
+        }
+    })?;
+
+    let future = Box::pin(store.run_concurrent(async |_| std::future::pending::<()>().await));
+    assert!(PollOnce::new(future).await.is_err());
+
+    store.run_concurrent(async |_| handle.await).await?;
+    assert_eq!(*result.lock().unwrap(), Some((42,)));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_run_concurrent_with_queued_callback_yield() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    drop_run_concurrent_while_yielding(
+        &config,
+        r#"
+(component
+  (core func $task.return (canon task.return (result u32)))
+  (core module $m
+    (import "" "task.return" (func $task.return (param i32)))
+    (func (export "run") (result i32)
+      (i32.const 1 (; YIELD ;)))
+    (func (export "cb") (param i32 i32 i32) (result i32)
+      (call $task.return (i32.const 42))
+      (i32.const 0 (; EXIT ;))))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "task.return" (func $task.return))))))
+  (func (export "run") async (result u32)
+    (canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+        "#,
+    )
+    .await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_run_concurrent_with_queued_thread_yield() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    drop_run_concurrent_while_yielding(
+        &config,
+        r#"
+(component
+  (core func $task.return (canon task.return (result u32)))
+  (core func $thread.yield (canon thread.yield))
+  (core module $m
+    (import "" "task.return" (func $task.return (param i32)))
+    (import "" "thread.yield" (func $thread.yield (result i32)))
+    (func (export "run") (result i32)
+      (drop (call $thread.yield))
+      (call $task.return (i32.const 42))
+      (i32.const 0 (; EXIT ;)))
+    (func (export "cb") (param i32 i32 i32) (result i32) unreachable))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "task.return" (func $task.return))
+    (export "thread.yield" (func $thread.yield))))))
+  (func (export "run") async (result u32)
+    (canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+        "#,
+    )
+    .await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_run_concurrent_with_queued_thread_resume_later() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_threading(true);
+    drop_run_concurrent_while_yielding(
+        &config,
+        r#"
+(component
+  (core module $libc
+    (table (export "t") 1 funcref))
+  (core instance $libc (instantiate $libc))
+  (core type $start-func-ty (func (param i32)))
+  (core func $task.return (canon task.return (result u32)))
+  (core func $thread.new-indirect
+    (canon thread.new-indirect $start-func-ty (core table $libc "t")))
+  (core func $thread.resume-later (canon thread.resume-later))
+  (core module $m
+    (import "" "t" (table 1 funcref))
+    (import "" "task.return" (func $task.return (param i32)))
+    (import "" "thread.new-indirect" (func $thread.new-indirect (param i32 i32) (result i32)))
+    (import "" "thread.resume-later" (func $thread.resume-later (param i32)))
+    (global $done (mut i32) (i32.const 0))
+    (func $thread (param i32)
+      (global.set $done (i32.const 1)))
+    (elem (i32.const 0) func $thread)
+    (func (export "run") (result i32)
+      (call $thread.resume-later (call $thread.new-indirect (i32.const 0) (i32.const 0)))
+      (i32.const 1 (; YIELD ;)))
+    (func (export "cb") (param i32 i32 i32) (result i32)
+      (if (i32.eqz (global.get $done))
+        (then (return (i32.const 1 (; YIELD ;)))))
+      (call $task.return (i32.const 42))
+      (i32.const 0 (; EXIT ;))))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "t" (table $libc "t"))
+    (export "task.return" (func $task.return))
+    (export "thread.new-indirect" (func $thread.new-indirect))
+    (export "thread.resume-later" (func $thread.resume-later))))))
+  (func (export "run") async (result u32)
+    (canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+        "#,
+    )
+    .await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_run_concurrent_with_queued_callback_yield_then_cancel() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    drop_run_concurrent_while_yielding(
+        &config,
+        r#"
+(component
+  (component $A
+    (core func $task.cancel (canon task.cancel))
+    (core module $m
+      (import "" "task.cancel" (func $task.cancel))
+      (func (export "f") (result i32)
+        (i32.const 1 (; YIELD ;)))
+      (func (export "cb") (param $event i32) (param i32 i32) (result i32)
+        (if (i32.eq (local.get $event) (i32.const 6 (; TASK_CANCELLED ;)))
+          (then
+            (call $task.cancel)
+            (return (i32.const 0 (; EXIT ;)))))
+        (i32.const 1 (; YIELD ;))))
+    (core instance $i (instantiate $m (with "" (instance
+      (export "task.cancel" (func $task.cancel))))))
+    (func (export "f") async
+      (canon lift (core func $i "f") async (callback (core func $i "cb"))))
+  )
+  (component $B
+    (import "f" (func $f async))
+    (core func $f (canon lower (func $f) async))
+    (core func $subtask.cancel (canon subtask.cancel))
+    (core func $subtask.drop (canon subtask.drop))
+    (core func $task.return (canon task.return (result u32)))
+    (core module $m
+      (import "" "f" (func $f (result i32)))
+      (import "" "subtask.cancel" (func $subtask.cancel (param i32) (result i32)))
+      (import "" "subtask.drop" (func $subtask.drop (param i32)))
+      (import "" "task.return" (func $task.return (param i32)))
+      (global $s (mut i32) (i32.const 0))
+      (func (export "run") (result i32)
+        (local $s i32)
+        (local.set $s (call $f))
+        (if (i32.ne (i32.and (local.get $s) (i32.const 0xf))
+              (i32.const 1 (; STARTED ;)))
+          (then unreachable))
+        (global.set $s (i32.shr_u (local.get $s) (i32.const 4)))
+        (i32.const 1 (; YIELD ;)))
+      (func (export "cb") (param i32 i32 i32) (result i32)
+        (if (i32.ne (call $subtask.cancel (global.get $s))
+              (i32.const 4 (; RETURN_CANCELLED ;)))
+          (then unreachable))
+        (call $subtask.drop (global.get $s))
+        (call $task.return (i32.const 42))
+        (i32.const 0 (; EXIT ;))))
+    (core instance $i (instantiate $m (with "" (instance
+      (export "f" (func $f))
+      (export "subtask.cancel" (func $subtask.cancel))
+      (export "subtask.drop" (func $subtask.drop))
+      (export "task.return" (func $task.return))))))
+    (func (export "run") async (result u32)
+      (canon lift (core func $i "run") async (callback (core func $i "cb"))))
+  )
+  (instance $a (instantiate $A))
+  (instance $b (instantiate $B (with "f" (func $a "f"))))
+  (export "run" (func $b "run"))
+)
+        "#,
+    )
+    .await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_run_concurrent_with_queued_fiber_resume_later() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_async_stackful(true);
+    config.wasm_component_model_threading(true);
+    drop_run_concurrent_while_yielding(
+        &config,
+        r#"
+(component
+  (core module $libc
+    (table (export "t") 1 funcref))
+  (core instance $libc (instantiate $libc))
+  (core type $start-func-ty (func (param i32)))
+  (core func $task.return (canon task.return (result u32)))
+  (core func $thread.index (canon thread.index))
+  (core func $thread.new-indirect
+    (canon thread.new-indirect $start-func-ty (core table $libc "t")))
+  (core func $thread.suspend-then-resume (canon thread.suspend-then-resume))
+  (core func $thread.resume-later (canon thread.resume-later))
+  (core module $m
+    (import "" "t" (table 1 funcref))
+    (import "" "task.return" (func $task.return (param i32)))
+    (import "" "thread.index" (func $thread.index (result i32)))
+    (import "" "thread.new-indirect"
+      (func $thread.new-indirect (param i32 i32) (result i32)))
+    (import "" "thread.suspend-then-resume"
+      (func $thread.suspend-then-resume (param i32) (result i32)))
+    (import "" "thread.resume-later" (func $thread.resume-later (param i32)))
+    (func $thread (param $main i32)
+      (call $thread.resume-later (local.get $main)))
+    (elem (i32.const 0) func $thread)
+    (func (export "run")
+      (drop (call $thread.suspend-then-resume
+        (call $thread.new-indirect (i32.const 0) (call $thread.index))))
+      (call $task.return (i32.const 42))))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "t" (table $libc "t"))
+    (export "task.return" (func $task.return))
+    (export "thread.index" (func $thread.index))
+    (export "thread.new-indirect" (func $thread.new-indirect))
+    (export "thread.suspend-then-resume" (func $thread.suspend-then-resume))
+    (export "thread.resume-later" (func $thread.resume-later))))))
+  (func (export "run") async (result u32)
+    (canon lift (core func $i "run") async))
+)
+        "#,
+    )
+    .await
+}
