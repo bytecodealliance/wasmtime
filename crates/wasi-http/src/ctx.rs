@@ -125,6 +125,8 @@ const DEFAULT_FIELD_SIZE_LIMIT: usize = 128 * 1024;
 #[derive(Debug, Clone)]
 pub struct WasiHttpCtx {
     pub(crate) field_size_limit: usize,
+    #[cfg(feature = "p3")]
+    pub(crate) spawned_task_shutdown_grace_period: std::time::Duration,
 }
 
 impl WasiHttpCtx {
@@ -132,6 +134,8 @@ impl WasiHttpCtx {
     pub fn new() -> Self {
         Self {
             field_size_limit: DEFAULT_FIELD_SIZE_LIMIT,
+            #[cfg(feature = "p3")]
+            spawned_task_shutdown_grace_period: std::time::Duration::from_secs(10),
         }
     }
 
@@ -144,6 +148,14 @@ impl WasiHttpCtx {
     /// names/values/etc.
     pub fn set_field_size_limit(&mut self, limit: usize) {
         self.field_size_limit = limit;
+    }
+
+    /// Set how long spawned HTTP I/O tasks may continue after their Store is
+    /// dropped. The default is ten seconds. A zero duration cancels pending I/O
+    /// immediately when the Store is dropped.
+    #[cfg(feature = "p3")]
+    pub fn set_spawned_task_shutdown_grace_period(&mut self, timeout: std::time::Duration) {
+        self.spawned_task_shutdown_grace_period = timeout;
     }
 }
 

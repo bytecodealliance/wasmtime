@@ -24,6 +24,13 @@ struct Component;
 
 bindings::export!(Component);
 
+///! This component can be run as an HTTP server or a cli. In either case it
+///! will first make a query to `/a`. When run as a server the body of that
+///! response will be spliced into the returned response. When run as a CLI the
+///! body will be spliced into a new request to `/b`. In both cases, the function
+///! will then return. This test the behavior of the host when response bodies
+///! have been spliced into new bodies and the Instance or Store is then dropped.
+
 async fn get_body() -> (
     wit_bindgen::StreamReader<u8>,
     wit_bindgen::FutureReader<Result<Option<Fields>, ErrorCode>>,
@@ -45,6 +52,10 @@ impl bindings::exports::wasi::http::handler::Guest for Component {
     async fn handle(request: Request) -> Result<Response, ErrorCode> {
         drop(request);
         let (body, trailers) = get_body().await;
+        // After returning we have given up ownership of all requests and
+        // responses, as well as the request transmission future.
+        // The host may continue piping the first response body into the second
+        // request body, but that should still not leak resources.
         Ok(Response::new(Fields::new(), Some(body), trailers).0)
     }
 }

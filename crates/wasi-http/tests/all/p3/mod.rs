@@ -1090,8 +1090,8 @@ async fn test_outbound_request_pipe(return_response: bool) -> Result<()> {
         }
         wait_for_open_requests(&connections, REQUESTS).await?;
         // The returned bodies are owned by the host now. They still need the
-        // outbound connections, but must not prevent Store destruction from
-        // cancelling those connections.
+        // outbound connections, but must not prevent cancellation after the
+        // Store's shutdown grace period.
         for response in &mut responses {
             assert!(futures::poll!(response.body_mut().frame()).is_pending());
         }
@@ -1109,7 +1109,8 @@ async fn test_outbound_request_pipe(return_response: bool) -> Result<()> {
         wait_for_open_requests(&open, REQUESTS).await?;
     }
 
-    // Dropping the store should cancel the pipe tasks.
+    // Dropping the Store starts the default ten-second shutdown grace period;
+    // the otherwise endless pipe tasks must be cancelled when it expires.
     drop(store);
     wait_for_open_requests(&open, 0).await?;
     wait_for_open_requests(&connections, 0).await?;

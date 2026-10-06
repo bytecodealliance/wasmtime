@@ -6,21 +6,68 @@ use crate::p3::{HttpError, HttpResult};
 use crate::{Error, WasiHttp, WasiHttpCtxView};
 use core::task::{Context, Poll, Waker};
 use http_body_util::BodyExt as _;
+use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::oneshot;
-use tokio::task::{self, JoinHandle};
+use tokio::task::AbortHandle;
 use tracing::debug;
 use wasmtime::AsContextMut as _;
 use wasmtime::component::{Accessor, HasData, Resource};
 use wasmtime::error::Context as _;
 
-/// A wrapper around [`JoinHandle`], which will [`JoinHandle::abort`] the task
+/// A wrapper around [`AbortHandle`], which will [`AbortHandle::abort`] the task
 /// when dropped
-struct AbortOnDropJoinHandle(JoinHandle<()>);
+struct AbortOnDropHandle(AbortHandle);
 
-impl Drop for AbortOnDropJoinHandle {
+impl Drop for AbortOnDropHandle {
     fn drop(&mut self) {
         self.0.abort();
+    }
+}
+
+/// Own an I/O task and allow it to finish during the Store's shutdown grace period.
+struct DelayedAbortOnDropHandle {
+    inner: Option<wasmtime_wasi::runtime::AbortOnDropJoinHandle<()>>,
+    timeout: std::time::Duration,
+}
+
+impl Future for DelayedAbortOnDropHandle {
+    type Output = Result<(), tokio::task::JoinError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let Some(task) = self.inner.as_mut() else {
+            return Poll::Ready(Ok(()));
+        };
+        let result = Pin::new(&mut **task).poll(cx);
+        if result.is_ready() {
+            // The task has finished, so dropping this wrapper needs no timer.
+            drop(self.inner.take());
+        }
+        result
+    }
+}
+
+impl Drop for DelayedAbortOnDropHandle {
+    fn drop(&mut self) {
+        let Some(mut inner) = self.inner.take() else {
+            return;
+        };
+        if self.timeout.is_zero() || inner.is_finished() {
+            drop(inner);
+            return;
+        }
+        wasmtime_wasi::runtime::with_ambient_tokio_runtime(|| {
+            let completion = tokio::time::timeout(self.timeout, async move { (&mut *inner).await });
+            tokio::spawn(async move {
+                match completion.await {
+                    // Error just means that the timout was hit befare the task
+                    // completed.
+                    Ok(Ok(())) | Err(_) => {}
+                    Ok(Err(e)) if e.is_cancelled() => {}
+                    Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
+                }
+            });
+        });
     }
 }
 
@@ -29,7 +76,7 @@ const DROPPED_FUTURE_ERROR: &str =
 
 async fn io_task_result(
     rx: oneshot::Receiver<(
-        Option<Arc<AbortOnDropJoinHandle>>,
+        Option<Arc<AbortOnDropHandle>>,
         oneshot::Receiver<Result<(), Error>>,
     )>,
 ) -> Result<(), Error> {
@@ -44,7 +91,7 @@ async fn io_task_result(
 fn send_dummy_io(
     result: Result<(), Error>,
     io_result_tx: oneshot::Sender<(
-        Option<Arc<AbortOnDropJoinHandle>>,
+        Option<Arc<AbortOnDropHandle>>,
         oneshot::Receiver<Result<(), Error>>,
     )>,
 ) {
@@ -58,7 +105,7 @@ fn send_dummy_io_err<T, D>(
     mut getter: impl FnMut(&mut T) -> WasiHttpCtxView<'_>,
     e: Error,
     io_result_tx: oneshot::Sender<(
-        Option<Arc<AbortOnDropJoinHandle>>,
+        Option<Arc<AbortOnDropHandle>>,
         oneshot::Receiver<Result<(), Error>>,
     )>,
 ) -> HttpError
@@ -90,13 +137,13 @@ where
     D: HasData,
     T: 'static,
 {
-    // A handle to the I/O task, if spawned, will be sent on this channel
+    // An abort handle to the I/O task, if spawned, will be sent on this channel
     // and kept as part of request body state
-    let (io_task_tx, io_task_rx) = oneshot::channel();
+    let (request_body_io_tx, request_body_io_rx) = oneshot::channel();
 
-    // A handle to the I/O task, if spawned, will be sent on this channel
+    // An abort handle to the I/O task, if spawned, will be sent on this channel
     // along with the result receiver
-    let (io_result_tx, io_result_rx) = oneshot::channel();
+    let (transmission_fut_io_tx, transmission_fut_io_rx) = oneshot::channel();
 
     // Response processing result will be sent on this channel
     let (res_result_tx, res_result_rx) = oneshot::channel();
@@ -108,11 +155,12 @@ where
             .context("failed to delete request from table")
             .map_err(HttpError::trap)?;
         let (req, options) =
-            req.into_http_with_getter(&mut store, io_task_result(io_result_rx), getter)?;
+            req.into_http_with_getter(&mut store, io_task_result(transmission_fut_io_rx), getter)?;
         HttpResult::Ok(getter(store.data_mut()).hooks.send_request(
-            // Attach a reference to the io task to the body so that it
-            // isn't cancelled if the body is dropped.
-            req.map(|body| body.with_state(io_task_rx).boxed_unsync()),
+            // Attach a reference to the io task to the body so that the task
+            // can be canceled if the body is dropped and all other references
+            // are dropped.
+            req.map(|body| body.with_state(request_body_io_rx).boxed_unsync()),
             options.as_deref().copied(),
             Box::new(async {
                 // Forward the response processing result to `WasiHttpCtx` implementation
@@ -127,19 +175,19 @@ where
         Ok(fut) => fut,
         Err(e) => match e.downcast() {
             Ok(err_code) => {
-                send_dummy_io(Err(err_code.clone().into()), io_result_tx);
+                send_dummy_io(Err(err_code.clone().into()), transmission_fut_io_tx);
                 return Err(err_code.into());
             }
             Err(e) => {
                 let e = Error::InternalError(Some(format!("{e}")));
-                return Err(send_dummy_io_err(store, getter, e, io_result_tx));
+                return Err(send_dummy_io_err(store, getter, e, transmission_fut_io_tx));
             }
         },
     };
     let (res, io) = match Box::into_pin(fut).await {
         Ok(r) => r,
         Err(e) => {
-            return Err(send_dummy_io_err(store, getter, e, io_result_tx));
+            return Err(send_dummy_io_err(store, getter, e, transmission_fut_io_tx));
         }
     };
     let (
@@ -152,24 +200,56 @@ where
     let mut io = Box::into_pin(io);
     let body = match io.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
         Poll::Ready(Ok(())) => {
-            send_dummy_io(Ok(()), io_result_tx);
+            send_dummy_io(Ok(()), transmission_fut_io_tx);
             body
         }
         Poll::Ready(Err(e)) => {
-            return Err(send_dummy_io_err(store, getter, e, io_result_tx));
+            return Err(send_dummy_io_err(store, getter, e, transmission_fut_io_tx));
         }
         Poll::Pending => {
             // I/O driver still needs to be polled, spawn a task and send handles to it
             let (tx, rx) = oneshot::channel();
-            let io = Arc::new(AbortOnDropJoinHandle(task::spawn(async move {
+            let shutdown_timeout = store.with(|mut store| {
+                getter(store.data_mut())
+                    .ctx
+                    .spawned_task_shutdown_grace_period
+            });
+            // `task` is a tokio task which will be owned by the `Store` so
+            // that the task is cancelled if the `Store` is dropped. The
+            // outgoing body, transmission future, and incoming response body
+            // will all hold reference references to an abort handle on the task
+            // so that it is aborted when all three are dropped. But they will
+            // not retain owneship of the task, so they cannot keep it alive
+            // after the `Store` has dropped.
+            let task = wasmtime_wasi::runtime::spawn(async move {
                 let res = io.await;
                 debug!(?res, "`send_request` I/O future finished");
                 _ = tx.send(res);
-            })));
-            _ = io_result_tx.send((Some(Arc::clone(&io)), rx));
-            _ = io_task_tx.send(Arc::clone(&io));
-            // Attach a reference to the io task to the body so that it
-            // isn't cancelled if the body is dropped.
+            });
+            // `task` will be aborted when there are no more references to `io`.
+            let io = Arc::new(AbortOnDropHandle(task.abort_handle()));
+            let task = DelayedAbortOnDropHandle {
+                inner: Some(task),
+                timeout: shutdown_timeout,
+            };
+            // Pass ownership of `task` to `store`.
+            store
+                .spawn(async move |_| {
+                    match task.await {
+                        Ok(()) => {}
+                        Err(e) if e.is_cancelled() => {}
+                        Err(e) => std::panic::resume_unwind(e.into_panic()),
+                    }
+                    Ok(())
+                })
+                .map_err(HttpError::trap)?;
+            // Send one copy of `io` to the transmission future.
+            _ = transmission_fut_io_tx.send((Some(Arc::clone(&io)), rx));
+            // Send one copy of `io` to the request body.
+            _ = request_body_io_tx.send(Arc::clone(&io));
+            // Attach a reference to the io task to the response body so that
+            // the `task` can be cancelled if the body is dropped and no other
+            // references remain.
             body.with_state(io).boxed_unsync()
         }
     };
