@@ -4366,6 +4366,7 @@ impl Instance {
                         task: guest_task,
                         thread,
                     };
+                    let concurrent_state = store.concurrent_state_mut()?;
                     let thread_mut = concurrent_state.get_mut(thread.thread)?;
 
                     let yield_ = |store: &mut StoreOpaque| {
@@ -4429,6 +4430,25 @@ impl Instance {
                             if concurrent_state.promote_thread_work_item(thread)? {
                                 yield_(store)?;
                                 break;
+                            } else if store
+                                .instance_state(runtime_instance)
+                                .concurrent_state()
+                                .pending
+                                .contains_key(&thread)
+                            {
+                                // The thread's work item was parked in
+                                // `pending` because its instance can't be
+                                // entered right now, so the cancellation
+                                // can't be delivered yet. It'll be delivered
+                                // via `GuestTask::event` once the instance
+                                // becomes enterable and the work item runs.
+                                // Until then the thread is still yielding, so
+                                // restore `wake_on_cancel` and move on to the
+                                // next thread.
+                                store
+                                    .concurrent_state_mut()?
+                                    .get_mut(thread.thread)?
+                                    .wake_on_cancel = WakeOnCancel::Yielding;
                             } else {
                                 bail_bug!("thread with `WakeOnCancel::Yielding` not promotable");
                             }
