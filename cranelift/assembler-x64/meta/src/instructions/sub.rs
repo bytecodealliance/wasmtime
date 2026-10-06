@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
+use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{align, evex, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -22,6 +22,13 @@ pub fn list() -> Vec<Inst> {
         inst("subw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x2B]).r(), _64b | compat),
         inst("subl", fmt("RM", [rw(r32), r(rm32)]), rex(0x2B).r(), _64b | compat),
         inst("subq", fmt("RM", [rw(r64), r(rm64)]), rex(0x2B).w().r(), _64b),
+        // APX: NDD (new data destination) form of `SUB`, promoted into EVEX
+        // "map 4" via the extended-EVEX prefix. With `ND = 1` the architectural
+        // destination is the `vvvv`-encoded register, so the written operand is
+        // placed in the `V` slot (the middle operand of the `RVM` format) while
+        // the two sources occupy ModRM.reg and ModRM.rm. `subq` is 64-bit so
+        // the `W` bit is set (`.w1()`); use `.w0()` for the 32-bit `subl` form.
+        inst("subq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x29).r(), _64b & apx),
         // Subtract with borrow.
         inst("sbbb", fmt("I", [rw(al), r(imm8)]), rex(0x1C).ib(), _64b | compat),
         inst("sbbw", fmt("I", [rw(ax), r(imm16)]), rex([0x66, 0x1D]).iw(), _64b | compat),

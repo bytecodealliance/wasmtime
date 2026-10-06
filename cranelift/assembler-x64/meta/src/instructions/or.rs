@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
+use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{align, evex, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -22,6 +22,8 @@ pub fn list() -> Vec<Inst> {
         inst("orw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x0B]).r(), _64b | compat),
         inst("orl", fmt("RM", [rw(r32), r(rm32)]), rex(0x0B).r(), _64b | compat),
         inst("orq", fmt("RM", [rw(r64), r(rm64)]), rex(0x0B).w().r(), _64b),
+        // APX: NDD form of `OR`, promoted into EVEX map 4.
+        inst("orq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x09).r(), _64b & apx),
         // `LOCK`-prefixed memory-writing instructions.
         inst("lock_orb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(1).ib(), _64b | compat).custom(Mnemonic),
         inst("lock_orw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(1).iw(), _64b | compat).custom(Mnemonic),
