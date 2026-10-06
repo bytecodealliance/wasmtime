@@ -1073,6 +1073,13 @@ impl<T> Store<T> {
     /// [`Engine::increment_epoch()`] has been invoked at least
     /// `ticks_beyond_current` times.
     ///
+    /// Note that when this method is called while WebAssembly is already
+    /// executing, for example from within a host function called by wasm,
+    /// raising the deadline takes effect immediately but lowering it is
+    /// unsupported. Lowering the deadline does not affect WebAssembly frames
+    /// already executing and only takes effect for new WebAssembly stack frames
+    /// made after this function was called.
+    ///
     /// By default a store will trap immediately with an epoch deadline of 0
     /// (which has always "elapsed"). This method is required to be configured
     /// for stores with epochs enabled to some future epoch deadline.
