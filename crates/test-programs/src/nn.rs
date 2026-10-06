@@ -22,7 +22,7 @@ pub mod wit {
     use self::wasi::nn::errors;
     use self::wasi::nn::graph::{self, Graph};
     pub use self::wasi::nn::graph::{ExecutionTarget, GraphEncoding}; // Used by tests.
-    use self::wasi::nn::tensor::{Tensor, TensorType};
+    pub use self::wasi::nn::tensor::{Tensor, TensorType}; // Used by tests.
 
     /// Load a wasi-nn graph from a set of bytes.
     pub fn load(
@@ -85,8 +85,8 @@ pub mod wit {
 pub mod witx {
     use anyhow::Result;
     use std::time::Instant;
-    pub use wasi_nn::{ExecutionTarget, GraphEncoding};
-    use wasi_nn::{Graph, GraphBuilder, TensorType};
+    pub use wasi_nn::{ExecutionTarget, GraphEncoding, TensorType};
+    use wasi_nn::{Graph, GraphBuilder};
 
     /// Load a wasi-nn graph from a set of bytes.
     pub fn load(
