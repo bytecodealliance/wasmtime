@@ -1,6 +1,7 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::future::Future;
+use std::pin::{Pin, pin};
+use std::task::{Context, Poll, Waker};
 use wasmtime::Result;
 use wasmtime::{AsContextMut, Config, Engine, Store, StoreContextMut, Trap, component::*};
 use wasmtime_component_util::REALLOC_AND_FREE;
@@ -1179,6 +1180,155 @@ fn inter_component_stream_is_not_intra_component() -> Result<()> {
     let (stream,) = mk.call(&mut store, ())?;
     write.call(&mut store, ())?;
     assert_eq!(read.call(&mut store, (stream,))?, ("hello".to_string(),));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn cancel_not_started() -> Result<()> {
+    _ = env_logger::try_init();
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+        (component
+            (import "a" (func $a))
+            (core func $a (canon lower (func $a)))
+
+            (core module $a
+                (import "" "a" (func $a))
+                (import "" "task.return" (func $task.return))
+                (func (export "a") (result i32)
+                    (call $a)
+                    (call $task.return)
+                    (i32.const 0 (; EXIT ;))
+                )
+
+                (func (export "a-callback") (param i32 i32 i32) (result i32)
+                    unreachable
+                )
+            )
+            (canon task.return (core func $task.return))
+            (core instance $a (instantiate $a
+                (with "" (instance
+                    (export "a" (func $a))
+                    (export "task.return" (func $task.return))
+                ))
+            ))
+            (func (export "a") async (canon lift (core func $a "a") async (callback (core func $a "a-callback"))))
+        )
+    "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap_async("a", move |_, ()| {
+        Box::new(async move {
+            for _ in 0..5 {
+                tokio::task::yield_now().await;
+            }
+
+            Ok(())
+        })
+    })?;
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
+
+    // Start a call, which will push a work item on the high-priority task
+    // queue:
+    func.start_call_concurrent(&mut store, ())?;
+
+    // Start and poll an async call once, which will push another work item on
+    // the high-priority task queue, then try to drain the queue.  However, the
+    // above call will call our host function, which will yield back to us here.
+    // Then we'll drop the future for the second call, which will not have
+    // started because it's still waiting in the queue.
+    //
+    // Previously, that would have caused a panic in the runtime.
+    let mut call = pin!(func.call_async(&mut store, ()));
+    assert!(
+        call.as_mut()
+            .poll(&mut Context::from_waker(Waker::noop()))
+            .is_pending()
+    );
+    drop(call);
+    Ok(())
+}
+
+// Dropping a `call_async` future while the start of its task is queued in the
+// event loop's run queue (rather than blocked in the instance's pending set)
+// must cancel the task cleanly rather than panicking in the drop guard.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_call_async_with_queued_start() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (type $f (future))
+  (core func $future.new (canon future.new $f))
+  (core func $future.read (canon future.read $f async))
+  (core func $future.write (canon future.write $f async))
+  (core func $new (canon waitable-set.new))
+  (core func $join (canon waitable.join))
+  (core func $task-return (canon task.return))
+  (core module $m
+    (import "" "future.new" (func $future.new (result i64)))
+    (import "" "future.read" (func $future.read (param i32 i32) (result i32)))
+    (import "" "future.write" (func $future.write (param i32 i32) (result i32)))
+    (import "" "new" (func $new (result i32)))
+    (import "" "join" (func $join (param i32 i32)))
+    (import "" "task-return" (func $task-return))
+    (func (export "a") (result i32)
+      (local $t i64) (local $r i32) (local $w i32) (local $s i32)
+      (call $task-return)
+      (local.set $t (call $future.new))
+      (local.set $r (i32.wrap_i64 (local.get $t)))
+      (local.set $w (i32.wrap_i64 (i64.shr_u (local.get $t) (i64.const 32))))
+      (drop (call $future.read (local.get $r) (i32.const 0)))
+      (local.set $s (call $new))
+      (call $join (local.get $r) (local.get $s))
+      (drop (call $future.write (local.get $w) (i32.const 0)))
+      ;; WAIT on a set which already has a ready event, queueing a callback
+      ;; invocation in the event loop.
+      (i32.or (i32.const 2) (i32.shl (local.get $s) (i32.const 4))))
+    (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+    (func (export "b") (result i32)
+      (call $task-return)
+      (i32.const 0)))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "future.new" (func $future.new))
+    (export "future.read" (func $future.read))
+    (export "future.write" (func $future.write))
+    (export "new" (func $new))
+    (export "join" (func $join))
+    (export "task-return" (func $task-return))))))
+  (func (export "a") async (canon lift (core func $i "a") async (callback (core func $i "cb"))))
+  (func (export "b") async (canon lift (core func $i "b") async (callback (core func $i "cb"))))
+)
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let a = instance.get_typed_func::<(), ()>(&mut store, "a")?;
+    let b = instance.get_typed_func::<(), ()>(&mut store, "b")?;
+    a.call_async(&mut store, ()).await?;
+
+    // The start of `b` is queued behind the pending callback for `a`, which
+    // traps, so `b` never starts and its task is cancelled when the future
+    // returned by `call_async` is dropped.
+    let err = b.call_async(&mut store, ()).await.unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::UnreachableCodeReached)
+    );
 
     Ok(())
 }

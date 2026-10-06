@@ -1327,7 +1327,10 @@ impl<T> StoreContextMut<'_, T> {
                 // any.  This will be either all of the high-priority work
                 // items, or if there are none, a single low-priority work item.
                 let state = reset.store.0.concurrent_state_mut()?;
-                let mut ready = mem::take(&mut state.high_priority);
+                let mut ready = Vec::new();
+                if let Some(item) = state.high_priority.pop_back() {
+                    ready.push(item);
+                }
                 let mut low_priority = false;
                 if ready.is_empty() {
                     if let Some(item) = state.low_priority.pop_back() {
@@ -2338,9 +2341,30 @@ impl StoreOpaque {
         let pending = &mut self.instance_state(instance).concurrent_state().pending;
         let pending_count = pending.len();
         pending.retain(|thread, _| thread.task != guest_task);
-        // If there were no pending threads for this task, we're in an error state
+
         if pending.len() == pending_count {
-            bail!(Trap::SubtaskCancelAfterTerminal);
+            // If it wasn't found in the pending set, it might be waiting in one
+            // of the task queues or switch items:
+            let matches = |item: &WorkItem| match item {
+                WorkItem::ResumeThread(_, thread)
+                | WorkItem::GuestCall(_, GuestCall { thread, .. }) => thread.task == guest_task,
+                _ => false,
+            };
+
+            let remove = |queue: &mut VecDeque<WorkItem>| {
+                let count = queue.len();
+                queue.retain(|item| !matches(item));
+                count != queue.len()
+            };
+
+            let state = self.concurrent_state_mut()?;
+            let mut found = remove(&mut state.high_priority);
+
+            found |= remove(&mut state.low_priority);
+
+            if !found {
+                bail!(Trap::SubtaskCancelAfterTerminal);
+            }
         }
         Ok(())
     }
@@ -5308,7 +5332,7 @@ pub struct ConcurrentState {
     /// The table of waitables, waitable sets, etc.
     table: AlwaysMut<ResourceTable>,
     /// The "high priority" work queue for this store's event loop.
-    high_priority: Vec<WorkItem>,
+    high_priority: VecDeque<WorkItem>,
     /// The "low priority" work queue for this store's event loop.
     low_priority: VecDeque<WorkItem>,
     /// A place to stash the reason a fiber is suspending so that the code which
@@ -5369,7 +5393,7 @@ impl Default for ConcurrentState {
             unforced_current_thread: CurrentThread::None,
             table: AlwaysMut::new(ResourceTable::new()),
             futures: AlwaysMut::new(Some(FuturesUnordered::new())),
-            high_priority: Vec::new(),
+            high_priority: VecDeque::new(),
             low_priority: VecDeque::new(),
             suspend_reason: None,
             worker: None,
@@ -5566,7 +5590,7 @@ impl ConcurrentState {
 
     fn push_high_priority(&mut self, item: WorkItem) {
         log::trace!("push high priority: {item:?}");
-        self.high_priority.push(item);
+        self.high_priority.push_front(item);
     }
 
     fn push_low_priority(&mut self, item: WorkItem) {
