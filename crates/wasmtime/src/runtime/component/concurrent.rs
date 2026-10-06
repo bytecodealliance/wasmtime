@@ -2436,9 +2436,37 @@ impl StoreOpaque {
         let pending = &mut self.instance_state(instance).concurrent_state().pending;
         let pending_count = pending.len();
         pending.retain(|thread, _| thread.task != guest_task);
-        // If there were no pending threads for this task, we're in an error state
+
         if pending.len() == pending_count {
-            bail!(Trap::SubtaskCancelAfterTerminal);
+            // If it wasn't found in the pending set, it might be waiting in one
+            // of the task queues or switch items:
+            let matches = |item: &WorkItem| match item {
+                WorkItem::ResumeThread { thread, .. }
+                | WorkItem::GuestCall {
+                    call: GuestCall { thread, .. },
+                    ..
+                } => thread.task == guest_task,
+                _ => false,
+            };
+
+            let remove = |queue: &mut VecDeque<WorkItem>| {
+                let count = queue.len();
+                queue.retain(|item| !matches(item));
+                count != queue.len()
+            };
+
+            let state = self.concurrent_state_mut()?;
+            let mut found = remove(&mut state.high_priority);
+            found |= remove(&mut state.low_priority);
+
+            if matches!(&state.switch_item, Some(item) if matches(item)) {
+                found = true;
+                state.switch_item = None;
+            }
+
+            if !found {
+                bail!(Trap::SubtaskCancelAfterTerminal);
+            }
         }
         Ok(())
     }
