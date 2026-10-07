@@ -202,8 +202,11 @@ pub mod foo {
                 #[component(name = "i-am-going-extremely-slow")]
                 pub i_am_going_extremely_slow: u64,
             }
-            impl core::fmt::Debug for LudicrousSpeed {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for LudicrousSpeed {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("LudicrousSpeed")
                         .field("how-fast-are-you-going", &self.how_fast_are_you_going)
                         .field(
@@ -653,11 +656,11 @@ pub mod exports {
                     #[component(name = "i-am-going-extremely-slow")]
                     pub i_am_going_extremely_slow: u64,
                 }
-                impl core::fmt::Debug for LudicrousSpeed {
+                impl ::core::fmt::Debug for LudicrousSpeed {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("LudicrousSpeed")
                             .field(
                                 "how-fast-are-you-going",

@@ -189,8 +189,11 @@ pub mod foo {
                 #[component(name = "other")]
                 Other(wasmtime::component::__internal::String),
             }
-            impl core::fmt::Debug for Error {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Error {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         Error::Other(e) => {
                             f.debug_tuple("Error::Other").field(e).finish()
@@ -198,12 +201,15 @@ pub mod foo {
                     }
                 }
             }
-            impl core::fmt::Display for Error {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Display for Error {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     write!(f, "{:?}", self)
                 }
             }
-            impl core::error::Error for Error {}
+            impl ::core::error::Error for Error {}
             const _: () = {
                 assert!(12 == < Error as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Error as wasmtime::component::ComponentType >::ALIGN32);

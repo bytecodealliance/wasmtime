@@ -481,8 +481,11 @@ pub mod foo {
                 #[component(name = "nested-bar")]
                 pub nested_bar: wasmtime::component::Resource<Bar>,
             }
-            impl core::fmt::Debug for NestedOwn {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for NestedOwn {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("NestedOwn")
                         .field("nested-bar", &self.nested_bar)
                         .finish()
@@ -504,8 +507,11 @@ pub mod foo {
                 #[component(name = "nested-bar")]
                 pub nested_bar: wasmtime::component::Resource<Bar>,
             }
-            impl core::fmt::Debug for NestedBorrow {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for NestedBorrow {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("NestedBorrow")
                         .field("nested-bar", &self.nested_bar)
                         .finish()

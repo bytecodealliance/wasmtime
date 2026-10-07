@@ -193,8 +193,11 @@ pub mod foo {
                 #[component(name = "a")]
                 pub a: u32,
             }
-            impl core::fmt::Debug for DescriptorStat {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for DescriptorStat {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("DescriptorStat").field("a", &self.a).finish()
                 }
             }
@@ -229,8 +232,11 @@ pub mod foo {
                     }
                 }
             }
-            impl core::fmt::Debug for Errno {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Errno {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("Errno")
                         .field("code", &(*self as i32))
                         .field("name", &self.name())
@@ -238,12 +244,15 @@ pub mod foo {
                         .finish()
                 }
             }
-            impl core::fmt::Display for Errno {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Display for Errno {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     write!(f, "{} (error {})", self.name(), * self as i32)
                 }
             }
-            impl core::error::Error for Errno {}
+            impl ::core::error::Error for Errno {}
             const _: () = {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
@@ -330,8 +339,11 @@ pub mod foo {
                 #[component(name = "a")]
                 pub a: u32,
             }
-            impl core::fmt::Debug for WallClock {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for WallClock {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("WallClock").field("a", &self.a).finish()
                 }
             }
