@@ -198,7 +198,7 @@ macro_rules! foreach_builtin_function {
                 target_csi: pointer
             );
             #[cfg(feature = "stack-switching")]
-            asan_finish_switch_fiber(vmctx: vmctx, fake_stack: pointer);
+            asan_finish_switch_fiber(vmctx: vmctx, fake_stack: pointer, current_csi: pointer);
         }
     };
 }

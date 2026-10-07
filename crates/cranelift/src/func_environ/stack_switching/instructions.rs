@@ -42,8 +42,8 @@ fn emit_stack_switch<'a>(
     }
 
     // ASan-aware stack switching.
-    // The stack information is provided as a function to lazily load the
-    // necessary ASan bookkeeping.
+    // The `asan_target_csi` is provided as a function to lazily load
+    // the necessary ASan bookkeeping.
     let (source_csi, target_csi) = asan_stack_information(env, builder);
     let pointer_type = env.pointer_type();
     let slot = env.get_or_create_asan_fake_stack_slot(builder);
@@ -74,7 +74,7 @@ fn emit_stack_switch<'a>(
     );
     builder
         .ins()
-        .call(asan_finish_switch_fiber, &[vmctx, fake_stack]);
+        .call(asan_finish_switch_fiber, &[vmctx, fake_stack, source_csi]);
 
     result
 }
@@ -2240,7 +2240,9 @@ pub(crate) fn translate_suspend<'a>(
         suspend_payload,
         |env, builder| {
             (
-                active_contref_csi.address,
+                end_of_chain_contref
+                    .common_stack_information(env, builder)
+                    .address,
                 handler_stack_chain
                     .get_common_stack_information(env, builder)
                     .address,
@@ -2520,7 +2522,7 @@ pub(crate) fn translate_switch<'a>(
             switch_payload,
             |env, builder| {
                 (
-                    switcher_contref
+                    switcher_contref_last_ancestor
                         .common_stack_information(env, builder)
                         .address,
                     switchee_contref_last_ancestor

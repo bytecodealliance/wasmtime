@@ -1212,8 +1212,9 @@ unsafe fn asan_finish_switch_fiber(
     _store: &mut dyn VMStore,
     _instance: InstanceId,
     fake_stack: *mut u8,
+    current_csi: *mut u8,
 ) {
-    unsafe { crate::vm::stack_switching::asan::finish_switch_fiber(fake_stack) }
+    unsafe { crate::vm::stack_switching::asan::finish_switch_fiber(fake_stack, current_csi) }
 }
 
 #[cfg(feature = "gc")]

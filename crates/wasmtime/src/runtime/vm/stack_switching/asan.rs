@@ -7,26 +7,27 @@
 //! ```text
 //!       stack A                                      stack B
 //!       -------                                      -------
-//!       start_switch_fiber(&save_a, A's CSI, B's bounds)
+//!       start_switch_fiber(&save_a, A's CSI, B's CSI)
+//!         B.CSI.asan.pending_source_csi = A's CSI
 //!       stack_switch(A -> B) ----------------------> resumes
-//!                                                    finish_switch_fiber(save_b)
+//!                                                    finish_switch_fiber(save_b, B's CSI)
+//!                                                      source = take(B.CSI.asan.pending_source_csi)
 //!                                                      records A's bounds
 //!                                                    ... runs on B ...
-//!                                                    start_switch_fiber(
-//!                                                      &save_b,
-//!                                                      B's CSI,
-//!                                                      A's bounds)
+//!                                                    start_switch_fiber(&save_b, B's CSI, A's CSI)
+//!                                                      A.CSI.asan.pending_source_csi = B's CSI
 //!       resumes <----------------------------------- stack_switch(B -> A)
-//!       finish_switch_fiber(save_a)
+//!       finish_switch_fiber(save_a, A's CSI)
+//!         source = take(A.CSI.asan.pending_source_csi)
 //!         records B's bounds
 //! ```
 //!
 //! Here `save_a` and `save_b` are stack slots in the generated Wasm
 //! frames.  The `start_switch_fiber` writes an opaque ASan fake-stack
 //! token into the slot belonging to the stack being suspended. This
-//! token is exclusively for ASan bookkeeping. We separately remember
-//! the suspended stack's `VMCommonStackInformation` until the matching
-//! `finish_switch_fiber`, which reports that stack's bounds.
+//! token is exclusively for ASan bookkeeping. The target stack's
+//! `VMCommonStackInformation` separately remembers the source stack
+//! until the matching `finish_switch_fiber` reports its bounds.
 //!
 //! A fresh continuation has no suspended generated frame at which to
 //! execute the right-hand `finish_switch_fiber`. Its entry trampoline
@@ -39,15 +40,7 @@
 mod enabled {
 
     use crate::vm::{VMCommonStackInformation, VMContRef, VMStackChain, VmPtr};
-    use core::cell::Cell;
     use core::ptr::NonNull;
-
-    std::thread_local! {
-        /// The stack whose bounds ASan will report at the next matching
-        /// `__sanitizer_finish_switch_fiber` call.
-        static PENDING_SOURCE_CSI: Cell<*mut VMCommonStackInformation> =
-            const { Cell::new(core::ptr::null_mut()) };
-    }
 
     unsafe fn continuation_from_args(args: *mut crate::vm::VMHostArray) -> *mut VMContRef {
         unsafe {
@@ -71,9 +64,10 @@ mod enabled {
     unsafe fn stack_range(csi: *const VMCommonStackInformation) -> (*const u8, usize) {
         let csi = unsafe { &*csi };
         let bottom = csi
-            .asan_stack_bottom
+            .asan
+            .stack_bottom
             .expect("ASan requires the destination stack's bounds");
-        (bottom.as_ptr(), csi.asan_stack_size)
+        (bottom.as_ptr(), csi.asan.stack_size)
     }
 
     #[cfg_attr(asan, sanitize(address = "off"))]
@@ -82,38 +76,47 @@ mod enabled {
         bottom: *const u8,
         size: usize,
         source_csi: *mut VMCommonStackInformation,
+        target_csi: *mut VMCommonStackInformation,
     ) {
-        assert!(!source_csi.is_null());
-        PENDING_SOURCE_CSI.with(|pending| {
-            let previous = pending.replace(source_csi);
+        unsafe {
+            let source_csi =
+                NonNull::new(source_csi).expect("ASan stack-switch start requires a source stack");
+            let target_csi = &mut *NonNull::new(target_csi)
+                .expect("ASan stack-switch start requires a target stack")
+                .as_ptr();
+            let previous = target_csi
+                .asan
+                .pending_source_csi
+                .replace(VmPtr::from(source_csi));
             assert!(
-                previous.is_null(),
-                "ASan stack-switch handshakes must not overlap"
+                previous.is_none(),
+                "target stack already has a pending ASan stack-switch handshake"
             );
-        });
-        unsafe { __sanitizer_start_switch_fiber(fake_stack_save, bottom, size) };
+            __sanitizer_start_switch_fiber(fake_stack_save, bottom, size);
+        }
     }
 
     #[cfg_attr(asan, sanitize(address = "off"))]
-    unsafe fn finish_switch(fake_stack: *mut u8) {
+    unsafe fn finish_switch(fake_stack: *mut u8, current_csi: *mut VMCommonStackInformation) {
         unsafe {
             let mut bottom = core::ptr::null();
             let mut size = 0;
             __sanitizer_finish_switch_fiber(fake_stack, &mut bottom, &mut size);
 
-            let source_csi = PENDING_SOURCE_CSI.with(|pending| {
-                let source_csi = pending.get();
-                pending.set(core::ptr::null_mut());
-                source_csi
-            });
-            let source_csi = &mut *NonNull::new(source_csi)
-                .expect("ASan stack-switch completion requires a source stack")
+            let current_csi = &mut *NonNull::new(current_csi)
+                .expect("ASan stack-switch completion requires the current stack")
                 .as_ptr();
-            source_csi.asan_stack_bottom = Some(VmPtr::from(
+            let source_csi = current_csi
+                .asan
+                .pending_source_csi
+                .take()
+                .expect("ASan stack-switch completion requires a source stack");
+            let source_csi = &mut *source_csi.as_ptr();
+            source_csi.asan.stack_bottom = Some(VmPtr::from(
                 NonNull::new(bottom.cast_mut())
                     .expect("ASan must report the previous stack's bounds"),
             ));
-            source_csi.asan_stack_size = size;
+            source_csi.asan.stack_size = size;
         }
     }
 
@@ -133,22 +136,27 @@ mod enabled {
                 bottom,
                 size,
                 source_csi.cast(),
+                target_csi.cast(),
             );
         }
     }
 
     /// Completes ASan's stack-switch handshake after this stack is
     /// resumed.
-    pub unsafe extern "C" fn finish_switch_fiber(fake_stack: *mut u8) {
-        unsafe { finish_switch(fake_stack) }
+    pub unsafe extern "C" fn finish_switch_fiber(fake_stack: *mut u8, current_csi: *mut u8) {
+        unsafe { finish_switch(fake_stack, current_csi.cast()) }
     }
 
     /// Completes the first switch onto a newly-created continuation stack
     /// and records the parent stack's bounds.
     #[cfg_attr(asan, sanitize(address = "off"))]
     #[cfg(all(feature = "stack-switching"))]
-    pub unsafe fn fiber_start_complete(_args: *mut crate::vm::VMHostArray) {
-        unsafe { finish_switch(core::ptr::null_mut()) }
+    pub unsafe fn fiber_start_complete(args: *mut crate::vm::VMHostArray) {
+        unsafe {
+            let contref = continuation_from_args(args);
+            let current = core::ptr::addr_of_mut!((*contref).common_stack_information);
+            finish_switch(core::ptr::null_mut(), current);
+        }
     }
 
     /// Begins a non-returning switch from a completed or trapped
@@ -161,7 +169,7 @@ mod enabled {
             let parent = parent_csi(contref);
             let (bottom, size) = stack_range(parent);
             let source = core::ptr::addr_of_mut!((*contref).common_stack_information);
-            begin_switch(None, bottom, size, source);
+            begin_switch(None, bottom, size, source, parent);
         }
     }
 
@@ -192,7 +200,7 @@ mod disabled {
     /// Completes ASan's stack-switch handshake after this stack is
     /// resumed.
     #[allow(dead_code, reason = "Used by ASan builds")]
-    pub unsafe extern "C" fn finish_switch_fiber(_fake_stack: *mut u8) {}
+    pub unsafe extern "C" fn finish_switch_fiber(_fake_stack: *mut u8, _current_csi: *mut u8) {}
 }
 
 #[cfg(not(asan))]
