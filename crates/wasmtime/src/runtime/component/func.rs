@@ -498,7 +498,6 @@ impl Func {
             self.instance,
             store.as_context_mut(),
             options_idx,
-            flags,
             ty,
             |cx, ty| lower(cx, ty, map_maybe_uninit!(space.params)),
         )?;
@@ -681,21 +680,12 @@ impl Func {
         instance: Instance,
         mut store: StoreContextMut<T>,
         options: OptionsIndex,
-        mut flags: InstanceFlags,
         ty: TypeFuncIndex,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
-        // Perform the actual lowering, where while this is running the
-        // component is forbidden from calling imports.
-        unsafe {
-            debug_assert!(flags.may_leave());
-            flags.set_may_leave(false);
-        }
         let mut cx = LowerContext::new(store.as_context_mut(), options, instance);
         let param_ty = InterfaceType::Tuple(cx.types[ty].params);
-        let result = lower(&mut cx, param_ty);
-        unsafe { flags.set_may_leave(true) };
-        result
+        lower(&mut cx, param_ty)
     }
 
     /// Creates a `LiftContext` using the provided configuration values and runs

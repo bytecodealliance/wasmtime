@@ -166,6 +166,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             CanonicalOptionsDataModel::LinearMemory(m) => m.realloc.unwrap(),
         };
         let realloc = instance.runtime_realloc(realloc);
+        let mut flags = instance.instance_flags(options.instance);
 
         let params = (
             u32::try_from(old)?,
@@ -178,14 +179,21 @@ impl<'a, T: 'static> LowerContext<'a, T> {
 
         // Invoke the wasm malloc function using its raw and statically known
         // signature.
+        //
+        // Per the canonical ABI `realloc` always runs with `may_leave` cleared
+        // so it can't call imports or intrinsics.
         let result = unsafe {
-            ReallocFunc::call_raw(
+            let prev_may_leave = flags.may_leave();
+            flags.set_may_leave(false);
+            let result = ReallocFunc::call_raw(
                 &mut StoreContextMut(store),
                 &realloc_ty,
                 realloc,
                 params,
                 UncaughtException::Trap,
-            )?
+            );
+            flags.set_may_leave(prev_may_leave);
+            result?
         };
 
         if result % old_align != 0 {
