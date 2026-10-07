@@ -15,7 +15,7 @@ block0(v0: i128, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldxp xzr, x4, [x2] ; trap: heap_oob
-;   stlxp w4, x0, x1, [x2]
+;   stlxp w4, x0, x1, [x2] ; trap: heap_oob
 ;   cbnz x4, #0
 ;   ret
 

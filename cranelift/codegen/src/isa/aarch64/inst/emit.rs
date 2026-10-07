@@ -417,19 +417,6 @@ fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) 
         | nzcv.bits()
 }
 
-fn enc_csinc(size: OperandSize, rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond) -> u32 {
-    0b0_0_0_11010100_00000_0000_0_1_00000_00000
-        | size.sf_bit() << 31
-        | (machreg_to_gpr(rm) << 16)
-        | (cond.bits() << 12)
-        | (machreg_to_gpr(rn) << 5)
-        | (machreg_to_gpr(rd.to_reg()))
-}
-
-fn enc_cinc(size: OperandSize, rd: Writable<Reg>, rn: Reg, cond: Cond) -> u32 {
-    enc_csinc(size, rd, rn, rn, cond.invert())
-}
-
 impl BfmOp {
     fn opc(self) -> u8 {
         match self {
@@ -1532,15 +1519,6 @@ impl MachInstEmit for Inst {
             } => {
                 sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
             }
-            &Inst::CSInc {
-                size,
-                rd,
-                rn,
-                rm,
-                cond,
-            } => {
-                sink.put4(enc_csinc(size, rd, rn, rm, cond));
-            }
             &Inst::AtomicRMW {
                 ty,
                 op,
@@ -2045,15 +2023,14 @@ impl MachInstEmit for Inst {
                     again:
                      ldaxp       x27, x21, [x25]
                      cmp         x27, x26
-                     cset        w24, ne
+                     b.ne        keep
                      cmp         x21, x23
-                     cinc        w24, w24, ne
-                     cbz         w24, swap
-                     stlxp       w24, x27, x21, [x25]
+                     b.ne        keep
+                     stlxp       w24, x28, x22, [x25]
                      cbnz        w24, again
                      b           out
-                    swap:
-                     stlxp       w24, x28, x22, [x25]
+                    keep:
+                     stlxp       w24, x27, x21, [x25]
                      cbnz        w24, again
                     out:
 
@@ -2074,7 +2051,7 @@ impl MachInstEmit for Inst {
                 let x24wr = writable_xreg(24);
                 let x27wr = writable_xreg(27);
                 let again_label = sink.get_label();
-                let swap_label = sink.get_label();
+                let keep_label = sink.get_label();
                 let out_label = sink.get_label();
 
                 // again:
@@ -2097,12 +2074,13 @@ impl MachInstEmit for Inst {
                 }
                 .emit(sink, emit_info, state);
 
-                // cset w24, ne
-                Inst::CSet {
-                    rd: x24wr,
-                    cond: Cond::Ne,
-                }
-                .emit(sink, emit_info, state);
+                // b.ne keep
+                let br_keep_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(keep_label),
+                    CondBrKind::Cond(Cond::Ne),
+                ));
+                sink.use_label_at_offset(br_keep_offset, keep_label, LabelUse::Branch19);
 
                 // cmp x21, x23
                 Inst::AluRRR {
@@ -2114,23 +2092,20 @@ impl MachInstEmit for Inst {
                 }
                 .emit(sink, emit_info, state);
 
-                // cinc w24, w24, ne
-                sink.put4(enc_cinc(OperandSize::Size32, x24wr, x24, Cond::Ne));
-
-                // cbz w24, swap
-                let br_swap_offset = sink.cur_offset();
+                // b.ne keep
+                let br_keep_offset = sink.cur_offset();
                 sink.put4(enc_conditional_br(
-                    BranchTarget::Label(swap_label),
-                    CondBrKind::Zero(x24, OperandSize::Size64),
+                    BranchTarget::Label(keep_label),
+                    CondBrKind::Cond(Cond::Ne),
                 ));
-                sink.use_label_at_offset(br_swap_offset, swap_label, LabelUse::Branch19);
+                sink.use_label_at_offset(br_keep_offset, keep_label, LabelUse::Branch19);
 
                 if let Some(trap_code) = flags.trap_code() {
                     sink.add_trap(trap_code);
                 }
 
-                // stlxp w24, x27, x21, [x25]
-                sink.put4(enc_stlxp(I64, x24wr, x27, x21, x25));
+                // stlxp w24, x28, x22, [x25]
+                sink.put4(enc_stlxp(I64, x24wr, x28, x22, x25));
 
                 // cbnz w24, again
                 let br_again_offset = sink.cur_offset();
@@ -2148,15 +2123,15 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(b_out_offset, out_label, LabelUse::Branch26);
 
-                // swap:
-                sink.bind_label(swap_label, &mut state.ctrl_plane);
+                // keep:
+                sink.bind_label(keep_label, &mut state.ctrl_plane);
 
                 if let Some(trap_code) = flags.trap_code() {
                     sink.add_trap(trap_code);
                 }
 
-                // stlxp w24, x28, x22, [x25]
-                sink.put4(enc_stlxp(I64, x24wr, x28, x22, x25));
+                // stlxp w24, x27, x21, [x25]
+                sink.put4(enc_stlxp(I64, x24wr, x27, x21, x25));
 
                 // cbnz w24, again
                 let br_again_offset = sink.cur_offset();
@@ -2189,7 +2164,6 @@ impl MachInstEmit for Inst {
                 flags,
             } => {
                 let again_label = sink.get_label();
-                let out_label = sink.get_label();
 
                 // again:
                 sink.bind_label(again_label, &mut state.ctrl_plane);
@@ -2198,9 +2172,14 @@ impl MachInstEmit for Inst {
                     sink.add_trap(trap_code);
                 }
 
-                // ldaxp rt1, rt2, rn
+                // ldaxp rt1, rt2, [rn]
                 sink.put4(enc_ldaxp(I64, rt1, rt2, rn));
-                // stxp scratch, rt1, rt2, rn
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                // stxp scratch, rt1, rt2, [rn]
                 sink.put4(enc_stxp(I64, scratch, rt1.to_reg(), rt2.to_reg(), rn));
 
                 // cbnz scratch, again.
@@ -2210,9 +2189,6 @@ impl MachInstEmit for Inst {
                     CondBrKind::NotZero(scratch.to_reg(), OperandSize::Size64),
                 ));
                 sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
-
-                // out:
-                sink.bind_label(out_label, &mut state.ctrl_plane);
             }
             &Inst::StoreRelease {
                 access_ty,
@@ -2234,7 +2210,6 @@ impl MachInstEmit for Inst {
                 flags,
             } => {
                 let again_label = sink.get_label();
-                let out_label = sink.get_label();
 
                 // again:
                 sink.bind_label(again_label, &mut state.ctrl_plane);
@@ -2243,9 +2218,14 @@ impl MachInstEmit for Inst {
                     sink.add_trap(trap_code);
                 }
 
-                // ldxp xzr, scratch, rn
+                // ldxp xzr, scratch, [rn]
                 sink.put4(enc_ldxp(I64, writable_zero_reg(), scratch, rn));
-                // stlxp scratch, rt1, rt2, rn
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                // stlxp scratch, rt1, rt2, [rn]
                 sink.put4(enc_stlxp(I64, scratch, rt1, rt2, rn));
 
                 // cbnz scratch, again.
@@ -2255,9 +2235,6 @@ impl MachInstEmit for Inst {
                     CondBrKind::NotZero(scratch.to_reg(), OperandSize::Size64),
                 ));
                 sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
-
-                // out:
-                sink.bind_label(out_label, &mut state.ctrl_plane);
             }
             &Inst::Fence {} => {
                 sink.put4(enc_dmb_ish()); // dmb ish

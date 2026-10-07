@@ -2467,50 +2467,6 @@ fn test_aarch64_binemit() {
         "ccmp w3, #30, #NZCV, gt",
     ));
     insns.push((
-        Inst::CSInc {
-            size: OperandSize::Size32,
-            rd: writable_xreg(8),
-            rn: xreg(28),
-            rm: xreg(13),
-            cond: Cond::Eq,
-        },
-        "88078D1A",
-        "csinc w8, w28, w13, eq",
-    ));
-    insns.push((
-        Inst::CSInc {
-            size: OperandSize::Size64,
-            rd: writable_xreg(25),
-            rn: xreg(0),
-            rm: xreg(3),
-            cond: Cond::Gt,
-        },
-        "19C4839A",
-        "csinc x25, x0, x3, gt",
-    ));
-    insns.push((
-        Inst::CSInc {
-            size: OperandSize::Size64,
-            rd: writable_xreg(2),
-            rn: xreg(2),
-            rm: xreg(2),
-            cond: Cond::Ne,
-        },
-        "4214829A",
-        "cinc x2, x2, eq",
-    ));
-    insns.push((
-        Inst::CSInc {
-            size: OperandSize::Size32,
-            rd: writable_xreg(1),
-            rn: xreg(5),
-            rm: xreg(5),
-            cond: Cond::Lt,
-        },
-        "A1B4851A",
-        "cinc w1, w5, ge",
-    ));
-    insns.push((
         Inst::MovToFpu {
             rd: writable_vreg(31),
             rn: xreg(0),

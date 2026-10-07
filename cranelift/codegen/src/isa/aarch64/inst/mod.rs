@@ -470,11 +470,6 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::CCmpImm { rn, .. } => {
             collector.reg_use(rn);
         }
-        Inst::CSInc { rd, rn, rm, .. } => {
-            collector.reg_def(rd);
-            collector.reg_use(rn);
-            collector.reg_use(rm);
-        }
         Inst::AtomicRMWLoop {
             op,
             addr,
@@ -1658,25 +1653,6 @@ impl Inst {
                 let nzcv = nzcv.pretty_print(0);
                 let cond = cond.pretty_print(0);
                 format!("ccmp {rn}, {imm}, {nzcv}, {cond}")
-            }
-            &Inst::CSInc {
-                size,
-                rd,
-                rn,
-                rm,
-                cond,
-            } => {
-                let rd = pretty_print_ireg(rd.to_reg(), size);
-                let rn = pretty_print_ireg(rn, size);
-                let rm = pretty_print_ireg(rm, size);
-
-                if rn == rm {
-                    let cond = cond.invert().pretty_print(0);
-                    format!("cinc {rd}, {rn}, {cond}")
-                } else {
-                    let cond = cond.pretty_print(0);
-                    format!("csinc {rd}, {rn}, {rm}, {cond}")
-                }
             }
             &Inst::AtomicRMW {
                 rs, rt, rn, ty, op, ..

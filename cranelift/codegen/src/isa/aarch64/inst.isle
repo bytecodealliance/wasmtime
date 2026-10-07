@@ -270,14 +270,6 @@
         (nzcv NZCV)
         (cond Cond))
 
-       ;; A conditional select increment operation.
-       (CSInc
-        (size OperandSize)
-        (rd WritableReg)
-        (rn Reg)
-        (rm Reg)
-        (cond Cond))
-
        ;; A synthetic insn, which is a load-linked store-conditional loop, that has the overall
        ;; effect of atomically modifying a memory location in a particular way.  Because we have
        ;; no way to explain to the regalloc about earlyclobber registers, this instruction has
