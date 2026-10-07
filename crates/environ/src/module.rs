@@ -295,6 +295,35 @@ pub enum Initializer {
     },
 }
 
+/// The position of each of a module's imports, suitable for indexing an
+/// instantiation's argument list.
+#[derive(Debug, Default)]
+pub struct ImportPositions {
+    functions: Vec<u32>,
+    tables: Vec<u32>,
+    memories: Vec<u32>,
+    globals: Vec<u32>,
+    tags: Vec<u32>,
+}
+
+impl ImportPositions {
+    /// Get the position of the import that defines the given entity.
+    ///
+    /// Returns `None` when the module defines the entity itself, rather than
+    /// importing it.
+    pub fn get(&self, entity: EntityIndex) -> Option<usize> {
+        let (positions, i) = match entity {
+            EntityIndex::Function(i) => (&self.functions, i.index()),
+            EntityIndex::Table(i) => (&self.tables, i.index()),
+            EntityIndex::Memory(i) => (&self.memories, i.index()),
+            EntityIndex::Global(i) => (&self.globals, i.index()),
+            EntityIndex::Tag(i) => (&self.tags, i.index()),
+        };
+        let position = *positions.get(i)?;
+        Some(usize::try_from(position).unwrap())
+    }
+}
+
 impl Module {
     /// Allocates the module data structures.
     pub fn new(module_index: StaticModuleIndex) -> Self {
@@ -530,22 +559,24 @@ impl Module {
         }
     }
 
-    /// Get the position of the import that defines the given entity, suitable
-    /// for indexing an instantiation's argument list.
-    ///
-    /// Returns `None` when this module defines the entity itself, rather than
-    /// importing it.
-    ///
-    /// Note that this has to scan the initializers: imports of different kinds
-    /// are interleaved in declaration order, so an import's position is not
-    /// recoverable from the `num_imported_*` counts alone.
-    pub fn import_position(&self, entity: EntityIndex) -> Option<usize> {
-        if !self.is_imported(entity) {
-            return None;
+    /// Compute the position of every import, suitable for indexing an
+    /// instantiation's argument list.
+    pub fn import_positions(&self) -> ImportPositions {
+        let mut positions = ImportPositions::default();
+        for (position, initializer) in self.initializers.iter().enumerate() {
+            let Initializer::Import { index, .. } = initializer;
+            let position = u32::try_from(position).unwrap();
+            let (vec, i) = match *index {
+                EntityIndex::Function(i) => (&mut positions.functions, i.index()),
+                EntityIndex::Table(i) => (&mut positions.tables, i.index()),
+                EntityIndex::Memory(i) => (&mut positions.memories, i.index()),
+                EntityIndex::Global(i) => (&mut positions.globals, i.index()),
+                EntityIndex::Tag(i) => (&mut positions.tags, i.index()),
+            };
+            debug_assert_eq!(vec.len(), i);
+            vec.push(position);
         }
-        self.initializers.iter().position(|i| match i {
-            Initializer::Import { index, .. } => *index == entity,
-        })
+        positions
     }
 
     /// Returns the type of an item based on its index
