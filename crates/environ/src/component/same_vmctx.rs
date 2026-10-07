@@ -31,7 +31,9 @@ use crate::component::dfg::{
 };
 use crate::prelude::*;
 use crate::union_find::UnionFind;
-use crate::{EntityIndex, EntityRef, FuncIndex, PrimaryMap, SecondaryMap, StaticModuleIndex};
+use crate::{
+    EntityIndex, EntityRef, FuncIndex, ImportPositions, PrimaryMap, SecondaryMap, StaticModuleIndex,
+};
 use core::mem;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -239,10 +241,16 @@ pub fn analyze_same_vmctx_imports(
     static_modules: &mut PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
 ) {
     let mut builder = SameVmctxBuilder::default();
+    let mut keys = VmctxKeys::new(static_modules);
 
     // Scratch space, reused across the calls below.
-    let mut keys = Vec::new();
+    let mut func_keys = Vec::new();
     let mut stack = Vec::new();
+
+    // Resolve every core instance's arguments, in order.
+    for (id, instance) in dfg.instances.iter() {
+        keys.push(dfg, id, instance);
+    }
 
     // Observe every core module instantiation that the component itself
     // performs.
@@ -251,18 +259,30 @@ pub fn analyze_same_vmctx_imports(
             continue;
         };
 
-        let Instance::Static(module, args) = &dfg.instances[*id] else {
+        let Instance::Static(module, _) = &dfg.instances[*id] else {
             // A module imported from the host is not one we are compiling.
             continue;
         };
 
-        observe_instantiation(&mut keys, &mut builder, dfg, static_modules, *module, args);
+        observe_instantiation(
+            &mut func_keys,
+            &mut builder,
+            static_modules,
+            *module,
+            keys.args[*id].iter().copied(),
+        );
     }
 
     // Adapter modules do not appear in `side_effects`; they are instantiated
     // lazily, at most once each, as their adapters are referenced.
     for (_, (module, args)) in dfg.adapter_modules.iter() {
-        observe_instantiation(&mut keys, &mut builder, dfg, static_modules, *module, args);
+        observe_instantiation(
+            &mut func_keys,
+            &mut builder,
+            static_modules,
+            *module,
+            args.iter().map(|arg| keys.vmctx_key(dfg, arg)),
+        );
     }
 
     // The host may instantiate an exported module with anything at all.
@@ -283,30 +303,30 @@ pub fn analyze_same_vmctx_imports(
     }
 }
 
-/// Observe an instantiation of `module` with the given positional arguments.
+/// Observe an instantiation of `module`, where `args` yields the `vmctx` key
+/// of each of its positional arguments.
 ///
-/// `keys` is scratch space, reused across calls to avoid reallocating a vector
-/// per instantiation. Its contents on entry are ignored.
+/// `func_keys` is scratch space, reused across calls to avoid reallocating a
+/// vector per instantiation. Its contents on entry are ignored.
 fn observe_instantiation(
-    keys: &mut Vec<Option<VmctxKey>>,
+    func_keys: &mut Vec<Option<VmctxKey>>,
     builder: &mut SameVmctxBuilder,
-    dfg: &ComponentDfg,
     static_modules: &PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
     module: StaticModuleIndex,
-    args: &[CoreDef],
+    args: impl Iterator<Item = Option<VmctxKey>>,
 ) {
     let translation = &static_modules[module];
-    keys.clear();
-    keys.resize(translation.module.num_imported_funcs, None);
+    func_keys.clear();
+    func_keys.resize(translation.module.num_imported_funcs, None);
 
-    for (position, arg) in args.iter().enumerate() {
+    for (position, key) in args.enumerate() {
         let Some(EntityIndex::Function(func)) = translation.module.import_index(position) else {
             continue;
         };
-        keys[func.index()] = vmctx_key(dfg, static_modules, arg);
+        func_keys[func.index()] = key;
     }
 
-    builder.observe_instantiation(module, keys);
+    builder.observe_instantiation(module, func_keys);
 }
 
 /// Observe every static module reachable from `export`, any of which the host
@@ -335,24 +355,48 @@ fn observe_exported_modules<'a>(
     }
 }
 
-/// The `vmctx` that `def`'s `VMFuncRef` carries, when we can see it
-/// statically.
-fn vmctx_key(
-    dfg: &ComponentDfg,
-    static_modules: &PrimaryMap<StaticModuleIndex, ModuleTranslation<'_>>,
-    def: &CoreDef,
-) -> Option<VmctxKey> {
-    // A module may import a function and re-export it, in which case the
-    // `vmctx` belongs to whichever instance actually defines the function, so
-    // follow such chains back to the definition. This mirrors
-    // `translate::resolve_core_export`.
-    let mut def = def;
+/// The `vmctx` key of every core instance's arguments, memoized so that
+/// resolving a re-export takes a single step rather than walking the whole
+/// chain of re-exports back to the definition.
+struct VmctxKeys<'a> {
+    /// The `vmctx` key of each instance's arguments, by import position.
+    ///
+    /// Empty for instances of host modules, which have no import positions
+    /// that we can see into.
+    args: PrimaryMap<InstanceId, Vec<Option<VmctxKey>>>,
 
-    // The instance most recently looked at. The walk strictly decreases
-    // through this, which is what makes it terminate.
-    let mut previous: Option<InstanceId> = None;
+    /// The static modules being instantiated.
+    static_modules: &'a PrimaryMap<StaticModuleIndex, ModuleTranslation<'a>>,
 
-    loop {
+    /// The position of each import of each static module.
+    import_positions: PrimaryMap<StaticModuleIndex, ImportPositions>,
+}
+
+impl<'a> VmctxKeys<'a> {
+    fn new(static_modules: &'a PrimaryMap<StaticModuleIndex, ModuleTranslation<'a>>) -> Self {
+        VmctxKeys {
+            args: PrimaryMap::new(),
+            static_modules,
+            import_positions: static_modules
+                .values()
+                .map(|translation| translation.module.import_positions())
+                .collect(),
+        }
+    }
+
+    /// Resolve the arguments of the next instance, `id`.
+    fn push(&mut self, dfg: &ComponentDfg, id: InstanceId, instance: &Instance) {
+        let keys = match instance {
+            Instance::Static(_, args) => args.iter().map(|arg| self.vmctx_key(dfg, arg)).collect(),
+            Instance::Import(..) => Vec::new(),
+        };
+        let pushed = self.args.push(keys);
+        debug_assert_eq!(pushed, id);
+    }
+
+    /// The `vmctx` that `def`'s `VMFuncRef` carries, when we can see it
+    /// statically.
+    fn vmctx_key(&self, dfg: &ComponentDfg, def: &CoreDef) -> Option<VmctxKey> {
         // NB: deliberately exhaustive so that new variants must be classified
         // here.
         let export = match def {
@@ -362,7 +406,7 @@ fn vmctx_key(
                 return Some(VmctxKey::Component);
             }
 
-            CoreDef::Adapter(id) => return adapter_vmctx_key(dfg, static_modules, *id),
+            CoreDef::Adapter(id) => return adapter_vmctx_key(dfg, self.static_modules, *id),
 
             // Not a function, so it never satisfies a function import. Be
             // conservative anyway.
@@ -371,14 +415,7 @@ fn vmctx_key(
             CoreDef::Export(export) => export,
         };
 
-        if previous.is_some_and(|p| export.instance.index() >= p.index()) {
-            // Unreachable, since an instantiation's arguments are exports of
-            // earlier instances. Give up rather than loop forever.
-            return None;
-        }
-        previous = Some(export.instance);
-
-        let Instance::Static(module, args) = &dfg.instances[export.instance] else {
+        let Instance::Static(module, _) = &dfg.instances[export.instance] else {
             // An instance of a host module, whose exports we cannot see into.
             return None;
         };
@@ -386,23 +423,18 @@ fn vmctx_key(
         let ExportItem::Index(index) = &export.item else {
             // Names are only used for instances of modules whose shape is not
             // statically known, which the arm above filtered out.
-            return None;
+            unreachable!()
         };
-
-        let module = &static_modules[*module].module;
 
         // The common case: this instance's module defines the function, so
         // the function's context is this instance's context.
-        if !module.is_imported(*index) {
+        let Some(position) = self.import_positions[*module].get(*index) else {
             return Some(VmctxKey::CoreInstance(export.instance));
-        }
+        };
 
-        // Otherwise it is a re-export of one of the module's imports, so keep
-        // walking through whichever argument satisfied that import.
-        let position = module
-            .import_position(*index)
-            .expect("imported entities always have an associated import initializer");
-        def = &args[position];
+        // Otherwise it is a re-export of one of the module's imports, so it has
+        // the same context as whichever argument satisfied that import.
+        *self.args.get(export.instance)?.get(position)?
     }
 }
 
