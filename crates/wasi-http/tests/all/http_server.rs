@@ -116,8 +116,7 @@ impl Server {
     /// Exercises `between-bytes-timeout`.
     pub fn http1_stalled_body(conns: usize, stall: std::time::Duration) -> Result<Self> {
         debug!("initializing stalled-body http1 server");
-        Self::new(conns, move |stream| async move {
-            let io = TokioIo::new(stream);
+        Self::new(conns, move |io| async move {
             let service = service_fn(move |_req| async move {
                 use futures::StreamExt as _;
                 let stream = futures::stream::once(async {
