@@ -86,7 +86,7 @@ pub struct Module<'a> {
     imported_resource_transfer_borrow: Option<FuncIndex>,
 
     // Cached versions of imported trampolines for working with the async ABI.
-    imported_async_start_calls: HashMap<(Option<FuncIndex>, Option<FuncIndex>), FuncIndex>,
+    imported_start_calls: HashMap<(Option<FuncIndex>, Option<FuncIndex>, Vec<ValType>), FuncIndex>,
 
     // Cached versions of imported trampolines for working with `stream`s,
     // `future`s, and `error-context`s.
@@ -290,7 +290,7 @@ impl<'a> Module<'a> {
             helper_worklist: Vec::new(),
             imported_resource_transfer_own: None,
             imported_resource_transfer_borrow: None,
-            imported_async_start_calls: HashMap::new(),
+            imported_start_calls: HashMap::new(),
             imported_future_transfer: None,
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
@@ -594,59 +594,31 @@ impl<'a> Module<'a> {
         self.imported_funcs.push(None)
     }
 
-    /// Import a host built-in function to start a subtask for a sync-lowered
-    /// import call to an async-lifted export.
+    /// Import a host built-in function to start a subtask previously set up
+    /// with `prepare-call`.
     ///
-    /// This call with block until the subtask has produced result(s) via the
-    /// `task.return` intrinsic.
+    /// For async-lowered imports `results` will be `[i32]`, and for
+    /// sync-lowered imports it'll be the function's normal return type.
     ///
-    /// Note that this could potentially be combined with the `sync-prepare`
-    /// built-in into a single built-in function that does both jobs.  However,
+    /// Note that this could potentially be combined with the `prepare-call`
+    /// built-in into a single built-in function that does both jobs. However,
     /// we've kept them separate to allow a future optimization where the caller
-    /// calls the callee directly rather than using `sync-start` to have the host
-    /// do it.
-    fn import_sync_start_call(
-        &mut self,
-        suffix: &str,
-        callback: Option<FuncIndex>,
-        results: &[ValType],
-    ) -> FuncIndex {
-        let ty = self
-            .core_types
-            .function(&[ValType::FUNCREF, ValType::I32], results);
-        self.core_imports.import(
-            "sync",
-            &format!("[start-call]{suffix}"),
-            EntityType::Function(ty),
-        );
-        let import = Import::SyncStartCall {
-            callback: callback
-                .map(|callback| self.imported_funcs.get(callback).unwrap().clone().unwrap()),
-        };
-        self.imports.push(import);
-        self.imported_funcs.push(None)
-    }
-
-    /// Import a host built-in function to start a subtask for an async-lowered
-    /// import call to an async- or sync-lifted export.
-    ///
-    /// Note that this could potentially be combined with the `async-prepare`
-    /// built-in into a single built-in function that does both jobs.  However,
-    /// we've kept them separate to allow a future optimization where the caller
-    /// calls the callee directly rather than using `async-start` to have the
+    /// calls the callee directly rather than using `start-call` to have the
     /// host do it.
-    fn import_async_start_call(
+    fn import_start_call(
         &mut self,
         suffix: &str,
         callback: Option<FuncIndex>,
         post_return: Option<FuncIndex>,
+        results: &[ValType],
     ) -> FuncIndex {
+        let key = (callback, post_return, results.to_vec());
         self.import_simple_get_and_set(
             "async",
             &format!("[start-call]{suffix}"),
             &[ValType::FUNCREF, ValType::I32, ValType::I32, ValType::I32],
-            &[ValType::I32],
-            Import::AsyncStartCall {
+            results,
+            Import::StartCall {
                 callback: callback
                     .map(|callback| self.imported_funcs.get(callback).unwrap().clone().unwrap()),
                 post_return: post_return.map(|post_return| {
@@ -657,18 +629,8 @@ impl<'a> Module<'a> {
                         .unwrap()
                 }),
             },
-            |me| {
-                me.imported_async_start_calls
-                    .get(&(callback, post_return))
-                    .copied()
-            },
-            |me, v| {
-                assert!(
-                    me.imported_async_start_calls
-                        .insert((callback, post_return), v)
-                        .is_none()
-                )
-            },
+            |me| me.imported_start_calls.get(&key).copied(),
+            |me, v| assert!(me.imported_start_calls.insert(key.clone(), v).is_none()),
         )
     }
 
@@ -923,15 +885,9 @@ pub enum Import {
         /// specified in the lifted export.
         memory: Option<CoreDef>,
     },
-    /// An intrinsic used by FACT-generated modules to complete a call involving
-    /// a sync-lowered import and async-lifted export.
-    SyncStartCall {
-        /// The callee's callback function, if any.
-        callback: Option<CoreDef>,
-    },
-    /// An intrinsic used by FACT-generated modules to complete a call involving
-    /// an async-lowered import function.
-    AsyncStartCall {
+    /// An intrinsic used by FACT-generated modules to start a call previously
+    /// set up with `PrepareCall`.
+    StartCall {
         /// The callee's callback function, if any.
         callback: Option<CoreDef>,
 

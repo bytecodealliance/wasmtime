@@ -46,10 +46,16 @@ pub const PREPARE_ASYNC_WITH_RESULT: u32 = u32::MAX - 1;
 
 /// Bit flag for indicating async-lifted exports
 ///
-/// This flag may be passed to the `async-start` built-in function (which is
-/// called from both async->async and async->sync adapters) to indicate that the
-/// callee is an async-lifted export.
+/// This flag may be passed to the `start-call` built-in function to indicate
+/// that the callee is an async-lifted export.
 pub const START_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
+
+/// Bit flag for indicating async-lowered imports
+///
+/// This flag may be passed to the `start-call` built-in function to indicate
+/// that the caller is an async-lowered import, in which case the call's status
+/// is returned rather than blocking until the callee produces its results.
+pub const START_FLAG_ASYNC_CALLER: i32 = 1 << 1;
 
 mod artifacts;
 mod info;
@@ -144,9 +150,7 @@ macro_rules! foreach_builtin_component_function {
                 storage_len: size
             ) -> bool;
             #[cfg(feature = "component-model-async")]
-            sync_start(vmctx: vmctx, callback: ptr_u8, storage: ptr_u8, storage_len: size, callee: ptr_u8, param_count: u32) -> bool;
-            #[cfg(feature = "component-model-async")]
-            async_start(vmctx: vmctx, callback: ptr_u8, post_return: ptr_u8, callee: ptr_u8, param_count: u32, result_count: u32, flags: u32) -> u64;
+            start_call(vmctx: vmctx, callback: ptr_u8, post_return: ptr_u8, storage: ptr_u8, storage_len: size, callee: ptr_u8, param_count: u32, result_count: u32, flags: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             future_new(vmctx: vmctx, caller_instance: u32, ty: u32) -> u64;
             #[cfg(feature = "component-model-async")]
