@@ -112,6 +112,37 @@ impl Server {
         })
     }
 
+    /// Test-only: send the response headers plus one chunk of body, then stall.
+    /// Exercises `between-bytes-timeout`.
+    pub fn http1_stalled_body(conns: usize, stall: std::time::Duration) -> Result<Self> {
+        debug!("initializing stalled-body http1 server");
+        Self::new(conns, move |stream| async move {
+            let io = TokioIo::new(stream);
+            let service = service_fn(move |_req| async move {
+                use futures::StreamExt as _;
+                let stream = futures::stream::once(async {
+                    Ok::<_, std::io::Error>(hyper::body::Frame::data(
+                        hyper::body::Bytes::from_static(b"first"),
+                    ))
+                })
+                .chain(futures::stream::once(async move {
+                    tokio::time::sleep(stall).await;
+                    Ok(hyper::body::Frame::data(hyper::body::Bytes::from_static(
+                        b"second",
+                    )))
+                }));
+                Ok::<_, std::convert::Infallible>(Response::new(http_body_util::BodyExt::boxed(
+                    http_body_util::StreamBody::new(stream),
+                )))
+            });
+            let mut builder = hyper::server::conn::http1::Builder::new();
+            let http = builder.keep_alive(false).pipeline_flush(true);
+            let conn = http.serve_connection(io, service).await;
+            conn?;
+            Ok(())
+        })
+    }
+
     pub fn http2(conns: usize) -> Result<Self> {
         debug!("initializing http2 server");
         Self::new(conns, |io| async move {
