@@ -171,7 +171,7 @@ impl Func {
         params: Vec<Val>,
     ) -> Result<PreparedCall<Vec<Val>>> {
         let store = store.as_context_mut();
-        let (options, flags, ty, raw_options) = self.abi_info(store.0);
+        let (options, _, ty, raw_options) = self.abi_info(store.0);
         let async_ = raw_options.async_;
         let instance = self.instance();
 
@@ -181,7 +181,7 @@ impl Func {
             MAX_FLAT_PARAMS,
             false,
             move |store, params_out| {
-                Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
+                Func::with_lower_context(instance, store, options, ty, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
                 })
             },
@@ -434,7 +434,7 @@ where
         } else {
             1
         };
-        let (options, flags, ty, raw_options) = self.func().abi_info(store.0);
+        let (options, _, ty, raw_options) = self.func().abi_info(store.0);
         let instance = self.func().instance();
         let max_results = if raw_options.async_ {
             MAX_FLAT_PARAMS
@@ -448,7 +448,7 @@ where
             param_count,
             host_future_present,
             move |store, params_out| {
-                Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
+                Func::with_lower_context(instance, store, options, ty, |cx, ty| {
                     lower(cx, ty, params_out)
                 })
             },
