@@ -102,3 +102,13 @@
                     (uextend ty x @ (value_type (ty_int narrow)))
                     (uextend ty y @ (value_type narrow))))
       (ult rty x y))
+
+;; sextend(x) OP sextend(y) --> x OP y, where OP = {==, <s}.
+(rule (simplify (eq rty
+                   (sextend ty x @ (value_type (ty_int narrow)))
+                   (sextend ty y @ (value_type narrow))))
+      (eq rty x y))
+(rule (simplify (slt rty
+                    (sextend ty x @ (value_type (ty_int narrow)))
+                    (sextend ty y @ (value_type narrow))))
+      (slt rty x y))

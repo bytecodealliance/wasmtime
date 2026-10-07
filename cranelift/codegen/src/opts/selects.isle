@@ -212,3 +212,43 @@
 ;; (x != y) ? (x - y) : 0 ==> x - y
 (rule (simplify (select ty (ne cty x y) (isub ty x y) (all_zero ty)))
       (isub ty x y))
+
+;; (c ? x : y) OP (c ? y : x) --> x OP y, where OP = {&, |, ^}.
+(rule (simplify (band ty (select ty c x y) (select ty c y x)))
+      (subsume (band ty x y)))
+(rule (simplify (bor ty (select ty c x y) (select ty c y x)))
+      (subsume (bor ty x y)))
+(rule (simplify (bxor ty (select ty c x y) (select ty c y x)))
+      (subsume (bxor ty x y)))
+
+;; (x == y) ? 0 : (x ^ y) --> x ^ y, and its variants
+(rule (simplify (select ty (eq cty x y) (all_zero ty) (bxor ty x y)))
+      (bxor ty x y))
+(rule (simplify (select ty (eq cty x y) (all_zero ty) (bxor ty y x)))
+      (bxor ty x y))
+(rule (simplify (select ty (ne cty x y) (bxor ty x y) (all_zero ty)))
+      (bxor ty x y))
+(rule (simplify (select ty (ne cty x y) (bxor ty y x) (all_zero ty)))
+      (bxor ty x y))
+
+;; (k == 0) ? x : (x shift k) --> x shift k
+(rule (simplify (select ty (eq cty k (all_zero _)) x (ishl ty x k)))
+      (ishl ty x k))
+(rule (simplify (select ty (ne cty k (all_zero _)) (ishl ty x k) x))
+      (ishl ty x k))
+(rule (simplify (select ty (eq cty k (all_zero _)) x (ushr ty x k)))
+      (ushr ty x k))
+(rule (simplify (select ty (ne cty k (all_zero _)) (ushr ty x k) x))
+      (ushr ty x k))
+(rule (simplify (select ty (eq cty k (all_zero _)) x (sshr ty x k)))
+      (sshr ty x k))
+(rule (simplify (select ty (ne cty k (all_zero _)) (sshr ty x k) x))
+      (sshr ty x k))
+(rule (simplify (select ty (eq cty k (all_zero _)) x (rotl ty x k)))
+      (rotl ty x k))
+(rule (simplify (select ty (ne cty k (all_zero _)) (rotl ty x k) x))
+      (rotl ty x k))
+(rule (simplify (select ty (eq cty k (all_zero _)) x (rotr ty x k)))
+      (rotr ty x k))
+(rule (simplify (select ty (ne cty k (all_zero _)) (rotr ty x k) x))
+      (rotr ty x k))
