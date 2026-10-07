@@ -670,19 +670,10 @@ impl Func {
         mut store: StoreContextMut<T>,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
-        let (options_idx, mut flags, ty, _) = self.abi_info(store.0);
-
-        // Perform the actual lowering, where while this is running the
-        // component is forbidden from calling imports.
-        unsafe {
-            debug_assert!(flags.may_leave());
-            flags.set_may_leave(false);
-        }
+        let (options_idx, _, ty, _) = self.abi_info(store.0);
         let mut cx = LowerContext::new(store.as_context_mut(), options_idx, self.instance);
         let param_ty = InterfaceType::Tuple(cx.types[ty].params);
-        let result = lower(&mut cx, param_ty);
-        unsafe { flags.set_may_leave(true) };
-        result
+        lower(&mut cx, param_ty)
     }
 
     /// Creates a `LiftContext` using the configuration values with this lifted
