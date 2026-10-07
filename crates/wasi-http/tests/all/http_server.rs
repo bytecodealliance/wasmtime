@@ -94,6 +94,24 @@ impl Server {
         })
     }
 
+    /// Test-only: delay the response headers, to exercise `first-byte-timeout`.
+    pub fn http1_delayed(conns: usize, header_delay: std::time::Duration) -> Result<Self> {
+        debug!("initializing delayed http1 server");
+        Self::new(conns, move |io| async move {
+            let service = service_fn(move |_req| async move {
+                tokio::time::sleep(header_delay).await;
+                Ok::<_, std::convert::Infallible>(Response::new(crate::body::full(
+                    hyper::body::Bytes::new(),
+                )))
+            });
+            let mut builder = hyper::server::conn::http1::Builder::new();
+            let http = builder.keep_alive(false).pipeline_flush(true);
+            let conn = http.serve_connection(io, service).await;
+            conn?;
+            Ok(())
+        })
+    }
+
     pub fn http2(conns: usize) -> Result<Self> {
         debug!("initializing http2 server");
         Self::new(conns, |io| async move {
