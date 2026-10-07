@@ -657,19 +657,19 @@
                       (iadd ty (ishl ty (iconst_u ty 1) y) (iconst_u ty 1))))
       (iadd ty (ishl ty x y) x))
 
-;; x - (x & M) --> ~M & x.
+;; x - (x & M) --> x & ~M.
 (rule (simplify (isub (fits_in_64 ty) x (band ty x (iconst ty y))))
-      (band ty (iconst ty (imm64_not ty y)) x))
+      (band ty x (iconst ty (imm64_not ty y))))
 
-;; (x + C1) - (y + C2) --> (C1 - C2) + (x - y).
+;; (x + C1) - (y + C2) --> (x - y) + (C1 - C2).
 (rule (simplify (isub (fits_in_64 ty)
                       (iadd ty x (iconst ty y))
                       (iadd ty z (iconst ty p))))
-      (iadd ty (iconst ty (imm64_sub ty y p)) (isub ty x z)))
+      (iadd ty (isub ty x z) (iconst ty (imm64_sub ty y p))))
 (rule (simplify (isub (fits_in_64 ty)
                       (isub ty (iconst ty x) y)
                       (isub ty (iconst ty z) p)))
-      (iadd ty (iconst ty (imm64_sub ty x z)) (isub ty p y)))
+      (iadd ty (isub ty p y) (iconst ty (imm64_sub ty x z))))
 (rule (simplify (isub (fits_in_64 ty)
                       (isub ty x (iconst ty y))
                       (isub ty z (iconst ty p))))

@@ -714,8 +714,8 @@ block0(v0: i32):
     return v3
 }
 ; check: v4 = iconst.i32 -16
-; check: v6 = band v0, v4  ; v4 = -16
-; check: return v6
+; check: v5 = band v0, v4  ; v4 = -16
+; check: return v5
 
 function %sub_mask_i64(i64) -> i64 {
 block0(v0: i64):
@@ -725,8 +725,8 @@ block0(v0: i64):
     return v3
 }
 ; check: v4 = iconst.i64 -16
-; check: v6 = band v0, v4  ; v4 = -16
-; check: return v6
+; check: v5 = band v0, v4  ; v4 = -16
+; check: return v5
 
 function %sub_offsets_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -737,10 +737,10 @@ block0(v0: i32, v1: i32):
     v6 = isub v4, v5
     return v6
 }
-; check: v8 = isub v0, v1
-; check: v7 = iconst.i32 -2
-; check: v10 = iadd v8, v7  ; v7 = -2
-; check: return v10
+; check: v7 = isub v0, v1
+; check: v8 = iconst.i32 -2
+; check: v9 = iadd v7, v8  ; v8 = -2
+; check: return v9
 
 function %sub_offsets_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -751,10 +751,10 @@ block0(v0: i64, v1: i64):
     v6 = isub v4, v5
     return v6
 }
-; check: v8 = isub v0, v1
-; check: v7 = iconst.i64 -2
-; check: v10 = iadd v8, v7  ; v7 = -2
-; check: return v10
+; check: v7 = isub v0, v1
+; check: v8 = iconst.i64 -2
+; check: v9 = iadd v7, v8  ; v8 = -2
+; check: return v9
 
 function %add_sub_offsets_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -843,10 +843,10 @@ block0(v0: i8, v1: i8):
     v6 = isub v4, v5
     return v6
 }
-; check: v8 = isub v0, v1
-; check: v7 = iconst.i8 -56
-; check: v10 = iadd v8, v7  ; v7 = -56
-; check: return v10
+; check: v7 = isub v0, v1
+; check: v8 = iconst.i8 -56
+; check: v9 = iadd v7, v8  ; v8 = -56
+; check: return v9
 
 function %add_sub_offsets_wrap_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -870,8 +870,8 @@ block0(v0: i8):
     return v3
 }
 ; check: v4 = iconst.i8 85
-; check: v6 = band v0, v4  ; v4 = 85
-; check: return v6
+; check: v5 = band v0, v4  ; v4 = 85
+; check: return v5
 
 function %add_sub_offsets_commuted_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -960,10 +960,10 @@ block0(v0: i32, v1: i32):
     v6 = isub v4, v5
     return v6
 }
-; check: v28 = isub v1, v0
-; check: v27 = iconst.i32 -2
-; check: v30 = iadd v28, v27  ; v27 = -2
-; check: return v30
+; check: v27 = isub v1, v0
+; check: v28 = iconst.i32 -2
+; check: v29 = iadd v27, v28  ; v28 = -2
+; check: return v29
 
 function %sub_constant_offsets_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -974,10 +974,10 @@ block0(v0: i64, v1: i64):
     v6 = isub v4, v5
     return v6
 }
-; check: v28 = isub v1, v0
-; check: v27 = iconst.i64 -2
-; check: v30 = iadd v28, v27  ; v27 = -2
-; check: return v30
+; check: v27 = isub v1, v0
+; check: v28 = iconst.i64 -2
+; check: v29 = iadd v27, v28  ; v28 = -2
+; check: return v29
 
 function %sub_sub_offsets_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -1068,10 +1068,10 @@ block0(v0: i8, v1: i8):
     v6 = isub v4, v5
     return v6
 }
-; check: v30 = isub v1, v0
-; check: v29 = iconst.i8 -56
-; check: v32 = iadd v30, v29  ; v29 = -56
-; check: return v32
+; check: v29 = isub v1, v0
+; check: v30 = iconst.i8 -56
+; check: v31 = iadd v29, v30  ; v30 = -56
+; check: return v31
 
 function %sub_sub_offsets_wrap_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
