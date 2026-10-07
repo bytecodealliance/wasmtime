@@ -713,7 +713,10 @@ pub trait StreamProducer<D>: Send + 'static {
     ///   items were read.
     ///
     /// * `Poll::Ok(StreamResult::Completed)` - items, if applicable, were
-    ///   written to the `destination`.
+    ///   written to the `destination`. Only zero-length reads (see above) may
+    ///   complete without writing anything; if nothing was written for a
+    ///   nonzero-length read, or for any read by the host, then a trap in the
+    ///   guest will be raised.
     ///
     /// * `Poll::Ok(StreamResult::Cancelled)` - used when `finish` is `true` and
     ///   the implementation was able to successfully cancel any async work that
@@ -1136,7 +1139,11 @@ pub trait StreamConsumer<D>: Send + 'static {
     /// when `finish` is false, the caller will trap.  Additionally, it should
     /// only return `Poll::Ready(Ok(StreamResult::Completed))` after taking at
     /// least one item from `source` if there is an item available; otherwise,
-    /// the caller will trap.  If `poll_consume` is called with no items in
+    /// the caller will trap.  Items taken during earlier calls for the same
+    /// write which returned `Poll::Pending` count towards this, so it's fine
+    /// to return `Completed` without taking more items once those have been
+    /// forwarded (see "Backpressure" below).  If `poll_consume` is called with
+    /// no items in
     /// `source`, it should only return `Poll::Ready(_)` once it is able to
     /// accept at least one item during the next call to `poll_consume`.
     ///
@@ -2725,13 +2732,15 @@ impl<T> StoreContextMut<'_, T> {
                         Ok((guest_offset, host_offset, count))
                     })?;
 
+                    let produced =
+                        !buffer.remaining().is_empty() || guest_offset > 0 || host_offset > 0;
+
                     match result {
                         StreamResult::Completed => {
-                            if count > 1
-                                && buffer.remaining().is_empty()
-                                && guest_offset == 0
-                                && host_offset == 0
-                            {
+                            // Only zero-length reads may complete without
+                            // producing anything. Note that host-to-host reads
+                            // always have a nonzero `count`.
+                            if count > 0 && !produced {
                                 bail!(
                                     "StreamProducer::poll_produce returned StreamResult::Completed \
                                      without producing any items"
@@ -2743,6 +2752,12 @@ impl<T> StoreContextMut<'_, T> {
                                 bail!(
                                     "StreamProducer::poll_produce returned StreamResult::Cancelled \
                                      without being given a `finish` parameter value of true"
+                                );
+                            }
+                            if produced {
+                                bail!(
+                                    "StreamProducer::poll_produce returned StreamResult::Cancelled \
+                                     after producing at least one item"
                                 );
                             }
                         }
@@ -2870,13 +2885,14 @@ impl<T> StoreContextMut<'_, T> {
 
                 match result {
                     StreamResult::Completed => {
-                        if count > 0
-                            && guest_offset == 0
-                            && host_buffer_remaining_before
-                                .zip(host_buffer.map(|v| v.remaining().len()))
-                                .map(|(before, after)| before == after)
-                                .unwrap_or(false)
-                        {
+                        // Progress for a host writer is tracked by its buffer
+                        // shrinking, whereas for a guest writer it's tracked
+                        // in `guest_offset`.
+                        let consumed = match (host_buffer_remaining_before, host_buffer) {
+                            (Some(before), Some(after)) => before != after.remaining().len(),
+                            _ => guest_offset > 0,
+                        };
+                        if count > 0 && !consumed {
                             bail!(
                                 "StreamConsumer::poll_consume returned StreamResult::Completed \
                                  without consuming any items"
