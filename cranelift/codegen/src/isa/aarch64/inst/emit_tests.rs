@@ -7916,7 +7916,7 @@ fn test_aarch64_binemit() {
             oldval_hi: writable_xreg(22),
             scratch: writable_xreg(21),
         },
-        "3BD77FC87F031AEBF8079F9ABF0217EB1807981A980000B43BD738C838FFFFB5030000143CDB38C8D8FEFFB5",
+        "3BD77FC87F031AEBC1000054BF0217EB810000543CDB38C858FFFFB5030000143BD738C8F8FEFFB5",
         "atomic_cas_128_loop addr=x25, expected_lo=x26, expected_hi=x24, replacement_lo=x28, replacement_hi=x23, oldval_lo=x27, oldval_hi=x22, scratch=x21",
     ));
 
