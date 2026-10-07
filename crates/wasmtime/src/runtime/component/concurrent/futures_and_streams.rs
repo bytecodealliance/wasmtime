@@ -2965,7 +2965,7 @@ impl<T> StoreContextMut<'_, T> {
                 transmit.read = ReadState::HostToHost {
                     accept: Box::new(move |input| {
                         let consume = consume_with_buffer.clone();
-                        async move { consume(Some(input.get_mut::<C::Item>())).await }.boxed()
+                        async move { consume(Some(input.get_mut::<C::Item>()?)).await }.boxed()
                     }),
                     buffer: Vec::new(),
                     limit: 0,
