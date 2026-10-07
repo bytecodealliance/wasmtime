@@ -3361,6 +3361,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(target_pointer_width = "64")]
     fn inst_size_test() {
         // This test will help with unintentionally growing the size
         // of the Inst enum.
