@@ -463,10 +463,7 @@ pub enum Trampoline {
     PrepareCall {
         memory: Option<MemoryId>,
     },
-    SyncStartCall {
-        callback: Option<CallbackId>,
-    },
-    AsyncStartCall {
+    StartCall {
         callback: Option<CallbackId>,
         post_return: Option<PostReturnId>,
     },
@@ -1137,13 +1134,10 @@ impl LinearizeDfg<'_> {
             Trampoline::PrepareCall { memory } => info::Trampoline::PrepareCall {
                 memory: memory.map(|v| self.runtime_memory(v)),
             },
-            Trampoline::SyncStartCall { callback } => info::Trampoline::SyncStartCall {
-                callback: callback.map(|v| self.runtime_callback(v)),
-            },
-            Trampoline::AsyncStartCall {
+            Trampoline::StartCall {
                 callback,
                 post_return,
-            } => info::Trampoline::AsyncStartCall {
+            } => info::Trampoline::StartCall {
                 callback: callback.map(|v| self.runtime_callback(v)),
                 post_return: post_return.map(|v| self.runtime_post_return(v)),
             },
