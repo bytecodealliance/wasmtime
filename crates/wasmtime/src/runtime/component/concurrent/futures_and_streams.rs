@@ -520,7 +520,13 @@ impl<D: 'static> DirectDestination<'_, D> {
 
         let memory = instance
             .options_memory_mut(self.store.0, options)
-            .get_mut((address + guest_offset.as_usize())..)
+            .get_mut(
+                if count == 0 {
+                    0
+                } else {
+                    address + guest_offset.as_usize()
+                }..,
+            )
             .and_then(|b| b.get_mut(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -1030,7 +1036,13 @@ impl<D: 'static> DirectSource<'_, D> {
 
         let memory = instance
             .options_memory(self.store.0, options)
-            .get((address + guest_offset.as_usize())..)
+            .get(
+                if count == 0 {
+                    0
+                } else {
+                    address + guest_offset.as_usize()
+                }..,
+            )
             .and_then(|b| b.get(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
