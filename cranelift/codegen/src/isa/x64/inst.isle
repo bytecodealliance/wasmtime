@@ -584,7 +584,17 @@
 (decl amode_imm_reg (MemFlagsData Value Offset32) Amode)
 (rule amode_imm_reg_base 0 (amode_imm_reg flags base offset)
         (Amode.ImmReg offset base flags))
-(rule amode_imm_reg_iadd 1 (amode_imm_reg flags (iadd _ x y) offset)
+
+;; Only fold an `i32` sum into the amode if it has a transitively unique use.
+;; This accounts for uses on loop backedges that lowering has not seen yet,
+;; and avoids extending the live ranges of `x` and `y`.
+;;
+;; For `i64` sums, allow folding even with multiple uses. Loads/stores can
+;; use base+index directly, avoiding extra temporaries for shared addresses.
+(rule amode_imm_reg_iadd_i32 1 (amode_imm_reg flags base @ (iadd $I32 x y) offset)
+        (if-let _ (is_sinkable_inst base))
+        (amode_imm_reg_reg_shift flags x y offset))
+(rule amode_imm_reg_iadd_i64 1 (amode_imm_reg flags (iadd $I64 x y) offset)
         (amode_imm_reg_reg_shift flags x y offset))
 
 (attr amode_imm_reg_reg_shift (veri chain))
