@@ -1973,6 +1973,20 @@ impl StoreOpaque {
         Ok(old_thread)
     }
 
+    fn set_running(&mut self, thread: TableId<GuestThread>) -> Result<()> {
+        let state = self.concurrent_state_mut()?;
+        match mem::replace(&mut state.get_mut(thread)?.state, GuestThreadState::Running) {
+            GuestThreadState::NotStartedImplicit
+            | GuestThreadState::NotStartedExplicit(_)
+            | GuestThreadState::Running => Ok(()),
+            GuestThreadState::Suspended(mut fiber) | GuestThreadState::Ready { mut fiber, .. } => {
+                fiber.dispose(self);
+                bail_bug!("unexpected thread state");
+            }
+            GuestThreadState::Completed => bail_bug!("unexpected thread state"),
+        }
+    }
+
     /// Set the global variable representing whether the current task may block
     /// prior to entering Wasm code.
     fn set_task_may_block(&mut self) -> Result<()> {
@@ -2079,21 +2093,40 @@ impl StoreOpaque {
     /// Resume the specified fiber, giving it exclusive access to the specified
     /// store.
     async fn resume_fiber(&mut self, fiber: StoreFiber<'static>) -> Result<()> {
-        let old_thread = self.current_thread()?;
+        struct Dispose<'a> {
+            store: &'a mut StoreOpaque,
+            fiber: Option<StoreFiber<'static>>,
+        }
+
+        impl<'a> Drop for Dispose<'a> {
+            fn drop(&mut self) {
+                if let Some(mut fiber) = self.fiber.take() {
+                    fiber.dispose(self.store);
+                }
+            }
+        }
+
+        let mut dispose = Dispose {
+            store: self,
+            fiber: Some(fiber),
+        };
+
+        let old_thread = dispose.store.current_thread()?;
         log::trace!("resume_fiber: save current thread {old_thread:?}");
 
-        let fiber = fiber::resolve_or_release(self, fiber).await?;
+        dispose.fiber =
+            fiber::resolve_or_release(dispose.store, dispose.fiber.take().unwrap()).await?;
 
-        self.set_thread(old_thread)?;
-
-        let state = self.concurrent_state_mut()?;
+        dispose.store.set_thread(old_thread)?;
 
         if let Some(ot) = old_thread.guest() {
-            state.get_mut(ot.thread)?.state = GuestThreadState::Running;
+            dispose.store.set_running(ot.thread)?;
         }
         log::trace!("resume_fiber: restore current thread {old_thread:?}");
 
-        if let Some(mut fiber) = fiber {
+        let state = dispose.store.concurrent_state_mut()?;
+
+        if dispose.fiber.is_some() {
             log::trace!("resume_fiber: suspend reason {:?}", &state.suspend_reason);
             // See the `SuspendReason` documentation for what each case means.
             let reason = match state.suspend_reason.take() {
@@ -2103,9 +2136,9 @@ impl StoreOpaque {
             match reason {
                 SuspendReason::NeedWork => {
                     if state.worker.is_none() {
-                        state.worker = Some(fiber);
+                        state.worker = dispose.fiber.take();
                     } else {
-                        fiber.dispose(self);
+                        drop(dispose);
                     }
                 }
                 SuspendReason::Yielding {
@@ -2113,19 +2146,22 @@ impl StoreOpaque {
                     cancellable,
                     ..
                 } => {
-                    state.get_mut(thread.thread)?.state =
-                        GuestThreadState::Ready { fiber, cancellable };
+                    state.get_mut(thread.thread)?.state = GuestThreadState::Ready {
+                        fiber: dispose.fiber.take().unwrap(),
+                        cancellable,
+                    };
                     let instance = state.get_mut(thread.task)?.instance.index;
                     state.push_low_priority(WorkItem::ResumeThread(instance, thread));
                 }
                 SuspendReason::ExplicitlySuspending { thread, .. } => {
-                    state.get_mut(thread.thread)?.state = GuestThreadState::Suspended(fiber);
+                    state.get_mut(thread.thread)?.state =
+                        GuestThreadState::Suspended(dispose.fiber.take().unwrap());
                 }
                 SuspendReason::Waiting { set, thread, .. } => {
                     let old = state
                         .get_mut(set)?
                         .waiting
-                        .insert(thread, WaitMode::Fiber(fiber));
+                        .insert(thread, WaitMode::Fiber(dispose.fiber.take().unwrap()));
                     assert!(old.is_none());
                 }
             };
@@ -2610,10 +2646,7 @@ impl Instance {
             move |store: &mut dyn VMStore| {
                 let mut storage = [MaybeUninit::uninit(); MAX_FLAT_PARAMS];
 
-                store
-                    .concurrent_state_mut()?
-                    .get_mut(guest_thread.thread)?
-                    .state = GuestThreadState::Running;
+                store.set_running(guest_thread.thread)?;
                 let task = store.concurrent_state_mut()?.get_mut(guest_thread.task)?;
                 let lower = match task.lower_params.take() {
                     Some(l) => l,
@@ -2688,9 +2721,9 @@ impl Instance {
                 store.exit_instance(callee_instance)?;
 
                 store.set_thread(old_thread)?;
-                let state = store.concurrent_state_mut()?;
+
                 if let Some(t) = old_thread.guest() {
-                    state.get_mut(t.thread)?.state = GuestThreadState::Running;
+                    store.set_running(t.thread)?;
                 }
                 log::trace!("stackless call: restored {old_thread:?} as current thread");
 
@@ -3188,11 +3221,7 @@ impl Instance {
 
         // Reset the current thread to point to the caller as it resumes control.
         store.0.set_thread(caller)?;
-        store
-            .0
-            .concurrent_state_mut()?
-            .get_mut(caller.thread)?
-            .state = GuestThreadState::Running;
+        store.0.set_running(caller.thread)?;
         log::trace!("popped current thread {guest_thread:?}; new thread is {caller:?}");
 
         if let Some(storage) = storage {
@@ -3722,9 +3751,8 @@ impl Instance {
                     CleanupTask::Yes,
                 )?;
                 log::trace!("explicit thread {guest_thread:?} completed");
-                let state = store.0.concurrent_state_mut()?;
                 if let Some(t) = old_thread.guest() {
-                    state.get_mut(t.thread)?.state = GuestThreadState::Running;
+                    store.0.set_running(t.thread)?;
                 }
                 log::trace!("thread start: restored {old_thread:?} as current thread");
 
