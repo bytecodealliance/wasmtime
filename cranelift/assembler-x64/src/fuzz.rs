@@ -772,4 +772,147 @@ mod test {
         let assembled = assemble(&inst.into());
         assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418317F50");
     }
+
+    /// Byte-level encoding check for the APX NDD form of `NEG`.
+    ///
+    /// `NEG` is a one-source instruction encoded with a `/3` opcode extension,
+    /// so ModRM.reg holds the digit rather than a register. In `VM` format the
+    /// constructor arguments are `[vvvv destination, ModRM.rm source]`. For a
+    /// destination of `%rax` (0, in `vvvv`) and a source of `%rdx` (2, in
+    /// ModRM.rm) with `W = 1` and `ND = 1`, the expected sequence is:
+    ///
+    /// ```text
+    ///   62 F4 FC 18 F7 DA
+    ///   ^^ ^^ ^^ ^^ ^^ ^^
+    ///   |  |  |  |  |  `- ModRM: mod=11, reg=/3, r/m=rdx
+    ///   |  |  |  |  `- opcode 0xF7 (group 3)
+    ///   |  |  |  `- P2: ND=1, V4=1 (inverted), NF=0
+    ///   |  |  `- P1: W=1, vvvv=~rax=1111, pp=00
+    ///   |  `- P0: inverted R/X/B bits, map=100 (map 4)
+    ///   `- EVEX identifier
+    /// ```
+    #[test]
+    fn apx_negq_vm_ndd_encoding() {
+        use crate::inst::negq_vm;
+
+        let inst = negq_vm::<FuzzRegs>::new(FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC18F7DA");
+    }
+
+    /// Companion to [`apx_negq_vm_ndd_encoding`] covering a memory operand,
+    /// confirming that map-4 `disp8` stays unscaled (`0x50` is not compressed).
+    #[test]
+    fn apx_negq_vm_ndd_disp8_is_unscaled() {
+        use crate::inst::negq_vm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = negq_vm::<FuzzRegs>::new(FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418F75F50");
+    }
+
+    /// Byte-level encoding check for the APX NDD form of `NOT`, which shares the
+    /// group-3 opcode with `NEG` but uses the `/2` extension.
+    #[test]
+    fn apx_notq_vm_ndd_encoding() {
+        use crate::inst::notq_vm;
+
+        let inst = notq_vm::<FuzzRegs>::new(FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC18F7D2");
+    }
+
+    /// Companion to [`apx_notq_vm_ndd_encoding`] covering a memory operand.
+    #[test]
+    fn apx_notq_vm_ndd_disp8_is_unscaled() {
+        use crate::inst::notq_vm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = notq_vm::<FuzzRegs>::new(FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418F75750");
+    }
+
+    /// Byte-level encoding checks for the 32-bit APX NDD forms.
+    ///
+    /// These differ from their 64-bit counterparts only in the `W` bit, which
+    /// lives in the second payload byte (`P1 = W vvvv U pp`). With `vvvv`
+    /// holding the inverted destination `%rax` (`1111`), `U = 1` and `pp = 00`,
+    /// `W = 1` gives `0xFC` for the `*q` forms and `W = 0` gives `0x7C` here.
+    #[test]
+    fn apx_32bit_rvm_ndd_encodings() {
+        use crate::inst::{addl_rvm, andl_rvm, orl_rvm, subl_rvm, xorl_rvm};
+
+        // `<op>l %ecx, %eax, %edx`: ModRM.reg = %ecx, vvvv = %eax, ModRM.rm = %edx.
+        let (reg, vvvv, rm) = (FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+
+        let inst = addl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1801CA"
+        );
+
+        let inst = subl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1829CA"
+        );
+
+        let inst = andl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1821CA"
+        );
+
+        let inst = orl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1809CA"
+        );
+
+        let inst = xorl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1831CA"
+        );
+    }
+
+    /// Byte-level encoding checks for the 32-bit APX NDD unary forms, which
+    /// keep the `/3` and `/2` opcode extensions in ModRM.reg.
+    #[test]
+    fn apx_32bit_vm_ndd_encodings() {
+        use crate::inst::{negl_vm, notl_vm};
+
+        // `<op>l %edx, %eax`: vvvv = %eax, ModRM.rm = %edx.
+        let (vvvv, rm) = (FuzzReg::new(0), FuzzReg::new(2));
+
+        let inst = negl_vm::<FuzzRegs>::new(vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C18F7DA"
+        );
+
+        let inst = notl_vm::<FuzzRegs>::new(vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C18F7D2"
+        );
+    }
 }
