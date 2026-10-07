@@ -996,8 +996,11 @@ fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
                             "event for {:?} on {set:?} no longer present; waiting again",
                             call.thread
                         );
-                        let state = store.concurrent_state_mut()?;
-                        return instance.wait_with_callback(state, call.thread, set);
+                        return instance.wait_with_callback(
+                            store.store_opaque_mut(),
+                            call.thread,
+                            set,
+                        );
                     }
                     // When a thread yields it doesn't wait on a set and the
                     // event to be delivered isn't stored anywhere, and this is
@@ -2784,8 +2787,7 @@ impl Instance {
             }
             callback_code::WAIT => {
                 let set = get_set(store, set)?;
-                let state = store.concurrent_state_mut()?;
-                self.wait_with_callback(state, guest_thread, set)?;
+                self.wait_with_callback(store, guest_thread, set)?;
             }
             _ => bail!(Trap::UnsupportedCallbackCode),
         }
@@ -2800,10 +2802,11 @@ impl Instance {
     /// already available, or once one is published.
     fn wait_with_callback(
         self,
-        state: &mut ConcurrentState,
+        store: &mut StoreOpaque,
         guest_thread: QualifiedThreadId,
         set: TableId<WaitableSet>,
     ) -> Result<()> {
+        let state = store.concurrent_state_mut()?;
         // This thread's wait ends when that work item is handled in
         // `handle_guest_call`.
         state.get_mut(set)?.num_waiting += 1;
@@ -2826,11 +2829,23 @@ impl Instance {
             return Ok(());
         }
 
-        // No event is immediately available, so register to be woken up when
-        // one is published for this waitable set.
+        // No event is immediately available, so this thread is about to block.
+        // Like any other suspension point (e.g. the callback `EXIT` path), if
+        // a sync-typed call is in progress for this instance we must first
+        // switch to another ready thread of that instance, or trap if there is
+        // none.
+        let instance = store
+            .concurrent_state_mut()?
+            .get_mut(guest_thread.task)?
+            .instance;
+        store.switch_or_trap_if_may_not_suspend(instance)?;
+
+        // Register to be woken up when an event is published for this waitable
+        // set.
         //
         // Here we also set `GuestTask::wake_on_cancel` which allows
         // `subtask.cancel` to interrupt the wait.
+        let state = store.concurrent_state_mut()?;
         let old = state
             .get_mut(guest_thread.thread)?
             .wake_on_cancel
