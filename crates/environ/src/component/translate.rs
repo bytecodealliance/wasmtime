@@ -312,7 +312,7 @@ enum LocalInitializer<'data> {
     },
     ThreadNewIndirect {
         func: ModuleInternedTypeIndex,
-        start_func_ty: ComponentTypeIndex,
+        start_func_ty: ModuleInternedTypeIndex,
         start_func_table_index: TableIndex,
     },
     ThreadResumeLater {
@@ -903,8 +903,32 @@ impl<'a, 'data> Translator<'a, 'data> {
                     component_type_index += 1;
                 }
             }
+
+            // Core types defined at the component level, such as the type of a
+            // `thread.new-indirect` start function, are interned as they're
+            // defined, just like in a core module. This ensures that all rec
+            // groups that a rec group refers to are interned before it is.
             Payload::CoreTypeSection(s) => {
+                let mut index = self
+                    .validator
+                    .types(0)
+                    .unwrap()
+                    .core_type_count_in_component();
                 self.validator.core_type_section(&s)?;
+                let types = self.validator.types(0).unwrap();
+                for ty in s {
+                    match ty? {
+                        wasmparser::CoreType::Rec(group) => {
+                            let id = types.core_type_at_in_component(index).unwrap_sub();
+                            let group_id = types.rec_group_id_of(id);
+                            self.types
+                                .module_types_builder()
+                                .intern_rec_group(types, group_id)?;
+                            index += u32::try_from(group.types().len()).unwrap();
+                        }
+                        wasmparser::CoreType::Module(_) => index += 1,
+                    }
+                }
             }
 
             // Processing the import section at this point is relatively simple
@@ -1286,9 +1310,16 @@ impl<'a, 'data> Translator<'a, 'data> {
                         } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
+                            let types = self.validator.types(0).unwrap();
+                            let start_func_ty =
+                                types.core_type_at_in_component(func_ty_index).unwrap_sub();
+                            let start_func_ty = self
+                                .types
+                                .module_types_builder()
+                                .intern_type(types, start_func_ty)?;
                             LocalInitializer::ThreadNewIndirect {
                                 func,
-                                start_func_ty: ComponentTypeIndex::from_u32(func_ty_index),
+                                start_func_ty,
                                 start_func_table_index: TableIndex::from_u32(table_index),
                             }
                         }

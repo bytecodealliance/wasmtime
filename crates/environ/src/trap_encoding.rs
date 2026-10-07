@@ -246,7 +246,7 @@ generate_trap_type! {
         SubtaskDropNotResolved = "cannot drop a subtask which has not yet resolved",
 
         /// Start function does not match the expected type.
-        ThreadNewIndirectInvalidType = "start function does not match expected type (currently only `(i32) -> ()` is supported)",
+        ThreadNewIndirectInvalidType = "start function does not match expected type",
 
         /// The start function index points to an uninitialized function.
         ThreadNewIndirectUninitialized = "the start function index points to an uninitialized function",

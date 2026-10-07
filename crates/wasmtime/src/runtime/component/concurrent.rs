@@ -67,9 +67,7 @@ use crate::vm::component::{CallContext, ComponentInstance, CurrentScope, Instanc
 use crate::vm::{
     AlwaysMut, SendSyncPtr, UncaughtException, VMFuncRef, VMLazyThread, VMMemoryDefinition, VMStore,
 };
-use crate::{
-    AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType, bail,
-};
+use crate::{AsContext, AsContextMut, Result, StoreContext, StoreContextMut, ValRaw, bail};
 use crate::{Instance as ModuleInstance, bail_bug};
 use alloc::borrow::ToOwned;
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -93,10 +91,10 @@ use wasmtime_environ::component::{
     MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
     RuntimeComponentInstanceIndex, RuntimeTableIndex, StringEncoding,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
-    TypeFuncIndex, TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
+    TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
 };
 use wasmtime_environ::packed_option::ReservedValue;
-use wasmtime_environ::{NUM_COMPONENT_CONTEXT_SLOTS, Trap};
+use wasmtime_environ::{ModuleInternedTypeIndex, NUM_COMPONENT_CONTEXT_SLOTS, Trap};
 #[cfg(feature = "gc")]
 use wasmtime_unwinder::Unwind;
 
@@ -4071,19 +4069,22 @@ impl Instance {
         self,
         mut store: StoreContextMut<T>,
         runtime_instance: RuntimeComponentInstanceIndex,
-        _func_ty_idx: TypeFuncIndex, // currently unused
+        start_func_ty: ModuleInternedTypeIndex,
         start_func_table_idx: RuntimeTableIndex,
         start_func_idx: u32,
         context: i32,
     ) -> Result<u32> {
         log::trace!("creating new thread");
 
-        let start_func_ty = FuncType::new(store.engine(), [ValType::I32], []);
         let (instance, registry) = self.id().get_mut_and_registry(store.0);
+        let Some(start_func_ty) = instance.component().signatures().shared_type(start_func_ty)
+        else {
+            bail_bug!("thread.new-indirect start function type should be registered");
+        };
         let callee = instance
             .index_runtime_func_table(registry, start_func_table_idx, start_func_idx as u64)?
             .ok_or_else(|| Trap::ThreadNewIndirectUninitialized)?;
-        if callee.type_index(store.0) != start_func_ty.type_index() {
+        if callee.type_index(store.0) != start_func_ty {
             bail!(Trap::ThreadNewIndirectInvalidType);
         }
 
@@ -4751,7 +4752,7 @@ pub trait VMComponentAsyncStore {
         &mut self,
         instance: Instance,
         caller: RuntimeComponentInstanceIndex,
-        func_ty_idx: TypeFuncIndex,
+        func_ty_idx: ModuleInternedTypeIndex,
         start_func_table_idx: RuntimeTableIndex,
         start_func_idx: u32,
         context: i32,
@@ -5029,7 +5030,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         &mut self,
         instance: Instance,
         caller: RuntimeComponentInstanceIndex,
-        func_ty_idx: TypeFuncIndex,
+        func_ty_idx: ModuleInternedTypeIndex,
         start_func_table_idx: RuntimeTableIndex,
         start_func_idx: u32,
         context: i32,
