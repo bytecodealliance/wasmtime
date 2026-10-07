@@ -1,5 +1,5 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
-use std::future::Future;
+use std::future::{self, Future};
 use std::pin::{Pin, pin};
 use std::task::{Context, Poll, Waker};
 use wasmtime::Result;
@@ -1394,4 +1394,137 @@ async fn call_between_start_and_finish() {
     }
     .await
     .unwrap()
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn zero_length_reads_and_writes() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+        (component
+            (core module $libc (memory (export "mem") 1))
+            (core instance $libc (instantiate $libc))
+
+            (core module $a
+                (import "" "stream.new" (func $stream.new (result i64)))
+                (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+                (import "" "stream.write" (func $stream.write (param i32 i32 i32) (result i32)))
+                (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+                (import "" "waitable.join" (func $waitable.join (param i32 i32)))
+                (import "" "task.return" (func $task.return (param i32)))
+
+                (func (export "a") (param $stream i32) (result i32)
+                    (local $set i32)
+                    (local $tmp i64)
+                    (local $stream-writer i32)
+                    (local $stream-reader i32)
+                    (local $ret i32)
+
+                    (local.set $ret (call $stream.read (local.get $stream) (i32.const 0xFFFFFF) (i32.const 0)))
+                    (if (i32.ne (local.get $ret) (i32.const 1 (; DROPPED ;))) (then unreachable))
+
+                    (local.set $tmp (call $stream.new))
+                    (local.set $stream-writer (i32.wrap_i64 (i64.shr_u (local.get $tmp) (i64.const 32))))
+                    (local.set $stream-reader (i32.wrap_i64 (local.get $tmp)))
+
+                    (call $task.return (local.get $stream-reader))
+
+                    (local.set $ret (call $stream.write (local.get $stream-writer) (i32.const 0xFFFFFF) (i32.const 0)))
+                    (if (i32.ne (local.get $ret) (i32.const -1 (; BLOCKED ;))) (then unreachable))
+
+                    (local.set $set (call $waitable-set.new))
+                    (call $waitable.join (local.get $stream-writer) (local.get $set))
+                    (i32.or (i32.const 2 (; WAIT ;)) (i32.shl (local.get $set) (i32.const 4)))
+                )
+
+                (func (export "a-callback") (param i32 i32 i32) (result i32)
+                    (i32.const 0 (; EXIT ;))
+                )
+            )
+
+            (type $stream (stream u8))
+            (canon stream.new $stream (core func $stream.new))
+            (canon stream.read $stream async (memory (core memory $libc "mem")) (core func $stream.read))
+            (canon stream.write $stream async (memory (core memory $libc "mem")) (core func $stream.write))
+            (canon waitable-set.new (core func $waitable-set.new))
+            (canon waitable.join (core func $waitable.join))
+            (canon task.return (result $stream) (core func $task.return))
+
+            (core instance $a (instantiate $a
+                (with "" (instance
+                    (export "stream.new" (func $stream.new))
+                    (export "stream.read" (func $stream.read))
+                    (export "stream.write" (func $stream.write))
+                    (export "waitable-set.new" (func $waitable-set.new))
+                    (export "waitable.join" (func $waitable.join))
+                    (export "task.return" (func $task.return))
+                ))
+            ))
+
+            (func (export "a") async (param "stream" $stream) (result $stream)
+                (canon lift (core func $a "a") async (callback (core func $a "a-callback")))
+            )
+        )
+    "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let func =
+        instance.get_typed_func::<(StreamReader<u8>,), (StreamReader<u8>,)>(&mut store, "a")?;
+
+    struct Producer;
+
+    impl StreamProducer<()> for Producer {
+        type Item = u8;
+        type Buffer = Option<u8>;
+
+        fn poll_produce<'a>(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            store: StoreContextMut<'a, ()>,
+            destination: Destination<'a, u8, Option<u8>>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            // This used to panic on zero-length reads with out-of-bounds
+            // addresses:
+            _ = destination.as_direct(store, 1).remaining();
+            Poll::Ready(Ok(StreamResult::Dropped))
+        }
+    }
+
+    struct Consumer;
+
+    impl StreamConsumer<()> for Consumer {
+        type Item = u8;
+
+        fn poll_consume(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            store: StoreContextMut<()>,
+            source: Source<'_, u8>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            // This used to panic on zero-length reads with out-of-bounds
+            // addresses:
+            _ = source.as_direct(store).remaining();
+            Poll::Ready(Ok(StreamResult::Dropped))
+        }
+    }
+
+    let input = StreamReader::<u8>::new(&mut store, Producer)?;
+    store
+        .run_concurrent(async |accessor| {
+            let (output,) = func.call_concurrent(accessor, (input,)).await?;
+
+            accessor.with(|access| output.pipe(access, Consumer))?;
+
+            future::poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
+
+            Ok(())
+        })
+        .await?
 }
