@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, collections::HashSet, iter::zip};
 
-use anyhow::{Context as _, Error, Result, bail, format_err};
+use anyhow::{Context as _, Error, Result, bail};
 use cranelift_isle_veri_caching::{Context, Response, SExpr, SExprData};
 use num_bigint::BigUint;
 use num_traits::Num as _;
@@ -75,6 +75,18 @@ pub enum Dialect {
     Z3,
 }
 
+/// Expression not valid at its inferred widths.
+#[derive(Debug)]
+struct IllTypedWidth(&'static str);
+
+impl std::fmt::Display for IllTypedWidth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+impl std::error::Error for IllTypedWidth {}
+
 pub struct Solver<'a> {
     smt: Context,
     dialect: Dialect,
@@ -86,6 +98,9 @@ pub struct Solver<'a> {
     /// Widths for which the deterministic `fp.sqrt` uninterpreted function has
     /// already been declared (see [`Solver::fp_sqrt`]).
     sqrt_uf_widths: HashSet<usize>,
+
+    /// Ill-typed expressions, left unconstrained.
+    ill_typed: Vec<(ExprId, String)>,
 }
 
 impl Drop for Solver<'_> {
@@ -110,6 +125,7 @@ impl<'a> Solver<'a> {
             assignment,
             tmp_idx: 0,
             sqrt_uf_widths: HashSet::new(),
+            ill_typed: Vec::new(),
         };
         solver.prelude()?;
         Ok(solver)
@@ -159,6 +175,29 @@ impl<'a> Solver<'a> {
         };
 
         // Leave solver context frame.
+        self.smt.pop()?;
+
+        Ok(verdict)
+    }
+
+    /// Expressions ill-typed under this type instantiation.
+    pub fn ill_typed(&self) -> &[(ExprId, String)] {
+        &self.ill_typed
+    }
+
+    /// Check the assumptions are unsatisfiable, with a model if not.
+    pub fn check_assumptions_unreachable(&mut self) -> Result<Verification> {
+        self.smt.push()?;
+
+        let assumptions = self.all(&self.conditions.assumptions);
+        self.smt.assert(assumptions)?;
+
+        let verdict = match self.check()? {
+            Response::Sat => Verification::Failure(self.model()?),
+            Response::Unsat => Verification::Success,
+            Response::Unknown => Verification::Unknown,
+        };
+
         self.smt.pop()?;
 
         Ok(verdict)
@@ -262,9 +301,16 @@ impl<'a> Solver<'a> {
 
     fn assign_expr(&mut self, x: ExprId, expr: &Expr) -> Result<()> {
         let lhs = self.smt.atom(self.expr_name(x));
-        let rhs = self
-            .expr_to_smt(expr)
-            .map_err(|err| self.error(x, err.to_string()))?;
+        let rhs = match self.expr_to_smt(expr) {
+            Ok(rhs) => rhs,
+            Err(err) => {
+                if let Some(ill_typed) = err.downcast_ref::<IllTypedWidth>() {
+                    self.ill_typed.push((x, ill_typed.to_string()));
+                    return Ok(());
+                }
+                return Err(self.error(x, err.to_string()));
+            }
+        };
         Ok(self.smt.assert(
             self.smt
                 .named(format!("expr{}", x.index()), self.smt.eq(lhs, rhs)),
@@ -488,7 +534,7 @@ impl<'a> Solver<'a> {
         // Build zero_extend expression.
         let padding = dst
             .checked_sub(src)
-            .ok_or(format_err!("cannot zero extend to smaller width"))?;
+            .ok_or(IllTypedWidth("cannot zero extend to smaller width"))?;
         Ok(self.zero_extend(padding, self.expr_atom(x)))
     }
 
@@ -512,7 +558,7 @@ impl<'a> Solver<'a> {
         // Build sign_extend expression.
         let padding = dst
             .checked_sub(src)
-            .ok_or(format_err!("cannot sign extend to smaller width"))?;
+            .ok_or(IllTypedWidth("cannot sign extend to smaller width"))?;
         Ok(self.sign_extend(padding, self.expr_atom(x)))
     }
 

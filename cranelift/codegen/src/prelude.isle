@@ -16,7 +16,7 @@
 (model Type (type (struct (bits Int))))
 (type Type (primitive Type))
 
-(model Value (type (bv)))
+(model Value (type (bv (8 16 32 64))))
 (type Value (primitive Value))
 
 (type ValueList (primitive ValueList))

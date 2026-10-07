@@ -509,6 +509,10 @@ impl ToSExpr for ModelType {
                 SExpr::List(vec![SExpr::atom("bv"), SExpr::atom(size)])
             }
             ModelType::BitVec(None) => SExpr::List(vec![SExpr::atom("bv")]),
+            ModelType::BitVecOneOf(widths) => SExpr::List(vec![
+                SExpr::atom("bv"),
+                SExpr::List(widths.iter().map(SExpr::atom).collect()),
+            ]),
             ModelType::Struct(fields) => {
                 let mut parts = vec![SExpr::atom("struct")];
                 parts.extend(fields.iter().map(ToSExpr::to_sexpr));

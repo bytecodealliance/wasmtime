@@ -243,13 +243,15 @@
 (decl uextend_maybe (Type Value) Value)
 (extractor (uextend_maybe ty val) (uextend_maybe_etor ty val))
 (rule 0 (uextend_maybe ty val) (uextend ty val))
-(rule 1 (uextend_maybe ty val@(value_type ty)) val)
+(attr rule uextend_maybe_same_type (veri priority))
+(rule uextend_maybe_same_type 1 (uextend_maybe ty val@(value_type ty)) val)
 
 ;; Same as `uextend_maybe` above, just for `sextend`.
 (decl sextend_maybe (Type Value) Value)
 (extractor (sextend_maybe ty val) (sextend_maybe_etor ty val))
 (rule 0 (sextend_maybe ty val) (sextend ty val))
-(rule 1 (sextend_maybe ty val@(value_type ty)) val)
+(attr rule sextend_maybe_same_type (veri priority))
+(rule sextend_maybe_same_type 1 (sextend_maybe ty val@(value_type ty)) val)
 
 ;;;;;; Helper CLIF Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

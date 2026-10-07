@@ -453,6 +453,7 @@ pub struct RunSummary {
     /// instantiation, so no query reached the solver. Only populated under
     /// `--debug`, and only reported when populated.
     pub no_instantiations: Option<usize>,
+    pub expansion_errors: usize,
     pub spec_conflicts: usize,
     pub applicable: usize,
     pub success: usize,
@@ -468,6 +469,7 @@ impl RunSummary {
         if let Some(no_instantiations) = self.no_instantiations {
             println!("No instantiations:   {no_instantiations}");
         }
+        println!("Expansion errors:    {}", self.expansion_errors);
         println!("Type instantiations: {}", self.total_instantiations);
         println!("Applicable:          {}", self.applicable);
         println!("Verification passed: {}", self.success);
@@ -851,7 +853,6 @@ impl Runner {
                         description = failure.description,
                         inst = failure.instantiation_index,
                     );
-                    eprintln!("model:");
                     eprint!("{counterexample}");
                     printed += 1;
                 }
@@ -981,6 +982,7 @@ impl Runner {
             total_expansions,
             in_scope,
             no_instantiations,
+            expansion_errors: errors.len(),
             spec_conflicts,
             ..Default::default()
         };
@@ -1233,6 +1235,9 @@ impl Runner {
                     Choice::TermInstantiation(term_id, sig) => {
                         format!("{term}{sig}", term = self.prog.term_name(*term_id))
                     }
+                    Choice::BitVectorWidth(x, width) => {
+                        format!("width(e{x}) = {width}", x = x.index())
+                    }
                 };
                 writeln!(output, "\t{choice}")?;
                 choices.push(choice);
@@ -1430,8 +1435,16 @@ impl Runner {
         };
 
         // Verify.
+        let ill_typed = solver.ill_typed().to_vec();
+        for (x, reason) in &ill_typed {
+            writeln!(output, "\t\till-typed: e{x}: {reason}", x = x.index())?;
+        }
         let start = time::Instant::now();
-        let verification = solver.check_verification_condition()?;
+        let verification = if ill_typed.is_empty() {
+            solver.check_verification_condition()?
+        } else {
+            solver.check_assumptions_unreachable()?
+        };
         let verify_time = Some(start.elapsed());
 
         writeln!(output, "\t\tverification = {verification}")?;
@@ -1441,6 +1454,19 @@ impl Runner {
                 conditions.write_model(&mut rendered, &model, &self.prog)?;
                 let rendered = String::from_utf8(rendered)?;
 
+                let mut notes = String::new();
+                for (x, reason) in &ill_typed {
+                    let position = conditions
+                        .pos
+                        .get(x)
+                        .map(|pos| pos.pretty_print_line(&self.prog.files))
+                        .unwrap_or_else(|| "?".to_string());
+                    notes.push_str(&format!(
+                        "ill-typed term reachable: {position}: e{x}: {reason}\n",
+                        x = x.index()
+                    ));
+                }
+
                 let failure_path = log_dir.join("failure.out");
                 let mut failure_file = Self::open_log_file(log_dir.clone(), "failure.out")?;
                 writeln!(
@@ -1449,8 +1475,8 @@ impl Runner {
                 )?;
                 writeln!(failure_file, "expansion:")?;
                 write_expansion(&mut failure_file, &self.prog, expansion)?;
-                writeln!(failure_file, "model:")?;
-                write!(failure_file, "{rendered}")?;
+                let counterexample = format!("{notes}model:\n{rendered}");
+                write!(failure_file, "{counterexample}")?;
 
                 writeln!(output, "\t\tfailure written to {}", failure_path.display())?;
                 log::warn!(
@@ -1464,7 +1490,7 @@ impl Runner {
                     description: description.to_string(),
                     instantiation_index,
                     failure_path,
-                    counterexample: self.print_counterexample.then_some(rendered),
+                    counterexample: self.print_counterexample.then_some(counterexample),
                 });
 
                 VerifyReport {

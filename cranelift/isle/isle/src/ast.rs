@@ -492,6 +492,8 @@ pub enum ModelType {
     Unit,
     /// SMT-LIB bitvector, but with a potentially-polymorphic width
     BitVec(Option<usize>),
+    /// SMT-LIB bitvector whose width is one of the given widths.
+    BitVecOneOf(Vec<usize>),
     /// Structured type.
     Struct(Vec<ModelField>),
     /// Same model as the named type.
