@@ -472,6 +472,21 @@ pub struct ComponentExternData {
     /// The `(external-id "...")` annotation, if present: a free-form
     /// host-defined identifier which is ignored by type checking.
     pub external_id: Option<String>,
+    /// The full name of this item, if it's different from the name that this
+    /// item is keyed by.
+    ///
+    /// Items are keyed by the literal name that the component uses to refer
+    /// to them, such as `a:b/c@0.2`, but the host sees the full name, such as
+    /// `a:b/c@0.2.1` with a `(versionsuffix ".1")`. See [`Self::name`].
+    pub full_name: Option<String>,
+}
+
+impl ComponentExternData {
+    /// Returns the full name of an item with this data that's keyed by
+    /// `name`.
+    pub fn name<'a>(&'a self, name: &'a str) -> &'a str {
+        self.full_name.as_deref().unwrap_or(name)
+    }
 }
 
 /// Types of imports and exports in the component model.

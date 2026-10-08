@@ -450,7 +450,7 @@ impl<T: 'static> Linker<T> {
                         stub_item(
                             &mut linker_instance,
                             resources,
-                            export_name,
+                            export.data.name(export_name),
                             &export.ty,
                             Some(item_name),
                             types,
@@ -999,6 +999,8 @@ fn validate_instance_name(name: &str) -> Result<()> {
         Ok(parsed) => parsed,
         Err(e) => bail!("invalid name `{name}`: {}", e.message()),
     };
+    // Annotated plain names, such as `[method]a.b` or `[static]a.b`, are
+    // only valid for functions, so they're rejected as instance names.
     if let ComponentNameKind::Plain(plain) = parsed.kind()
         && !plain.is_bare()
     {

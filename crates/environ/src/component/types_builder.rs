@@ -6,7 +6,7 @@ use crate::{
     WasmHeapType,
 };
 use cranelift_entity::EntityRef;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::ops::Index;
 use wasmparser::component_types::{
@@ -116,7 +116,7 @@ impl ComponentTypesBuilder {
         }
     }
 
-    fn export_type_def(
+    pub(crate) fn export_type_def(
         &mut self,
         export_items: &PrimaryMap<ExportIndex, Export>,
         idx: ExportIndex,
@@ -137,12 +137,7 @@ impl ComponentTypesBuilder {
     pub fn finish(mut self, component: &Component) -> (ComponentTypes, TypeComponentIndex) {
         let mut component_ty = TypeComponent::default();
         for (_, (name, ty)) in component.import_types.iter() {
-            // Distinct imports may have the same full name, such as a
-            // canonical name with a `versionsuffix` and the equivalent full
-            // name, so keep the first one.
-            if !component_ty.imports.contains_key(name) {
-                component_ty.imports.insert(name.clone(), ty.clone());
-            }
+            component_ty.imports.insert(name.clone(), ty.clone());
         }
         for (name, (ty, data)) in component.exports.raw_iter() {
             component_ty.exports.insert(
@@ -245,18 +240,55 @@ impl ComponentTypesBuilder {
 
     /// Converts a wasmparser `wasmparser::ComponentItem` into Wasmtime's type
     /// representation.
+    ///
+    /// The `name` is the name that the item is keyed by, which is used to
+    /// determine the item's full name.
     pub fn convert_component_item(
         &mut self,
         types: TypesRef<'_>,
+        name: &str,
         ty: &wasmparser::component_types::ComponentItem,
     ) -> Result<ComponentExtern> {
+        // Like `ComponentExternName::full_name`, the version suffix applies to
+        // the name only if there's no `implements`.
+        let full_name = match (&ty.implements, &ty.version_suffix) {
+            (None, Some(suffix)) if name.contains('@') => Some(format!("{name}{suffix}")),
+            _ => None,
+        };
         Ok(ComponentExtern {
             ty: self.convert_component_entity_type(types, ty.ty)?,
             data: ComponentExternData {
                 implements: ty.full_implements().map(|s| s.into_owned()),
                 external_id: ty.external_id.clone(),
+                full_name,
             },
         })
+    }
+
+    /// Converts the imports or exports of a component or instance type with
+    /// [`Self::convert_component_item`].
+    ///
+    /// The validator only guarantees that the literal names of `items` are
+    /// unique, but distinct names may have the same full name, such as
+    /// `a:b/c@0.2` with a `versionsuffix` of `.1` and `a:b/c@0.2.1`. The host
+    /// can't tell such items apart, so that's rejected here.
+    fn convert_component_items<'a>(
+        &mut self,
+        types: TypesRef<'_>,
+        items: impl IntoIterator<Item = (&'a String, &'a wasmparser::component_types::ComponentItem)>,
+    ) -> Result<IndexMap<String, ComponentExtern>> {
+        let mut result = IndexMap::<String, ComponentExtern>::default();
+        let mut full_names = HashSet::new();
+        for (name, ty) in items {
+            self.register_abstract_component_entity_type(types, ty.ty);
+            let item = self.convert_component_item(types, name, ty)?;
+            let full_name = item.data.name(name);
+            if !full_names.insert(full_name.to_string()) {
+                bail!("`{full_name}` is defined twice");
+            }
+            result.insert(name.clone(), item);
+        }
+        Ok(result)
     }
 
     /// Converts a wasmparser `ComponentEntityType` into Wasmtime's type
@@ -316,19 +348,10 @@ impl ComponentTypesBuilder {
     ) -> Result<TypeComponentIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
-        let mut result = TypeComponent::default();
-        for (name, ty) in ty.imports.iter() {
-            self.register_abstract_component_entity_type(types, ty.ty);
-            result
-                .imports
-                .insert(name.clone(), self.convert_component_item(types, ty)?);
-        }
-        for (name, ty) in ty.exports.iter() {
-            self.register_abstract_component_entity_type(types, ty.ty);
-            result
-                .exports
-                .insert(name.clone(), self.convert_component_item(types, ty)?);
-        }
+        let result = TypeComponent {
+            imports: self.convert_component_items(types, ty.imports.iter())?,
+            exports: self.convert_component_items(types, ty.exports.iter())?,
+        };
         Ok(self.component_types.components.push(result))
     }
 
@@ -339,14 +362,18 @@ impl ComponentTypesBuilder {
     ) -> Result<TypeComponentInstanceIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
-        let mut result = TypeComponentInstance::default();
-        for (name, ty) in ty.exports.iter() {
-            self.register_abstract_component_entity_type(types, ty.ty);
-            result
-                .exports
-                .insert(name.clone(), self.convert_component_item(types, ty)?);
-        }
-        Ok(self.component_types.component_instances.push(result))
+        let result = TypeComponentInstance {
+            exports: self.convert_component_items(types, ty.exports.iter())?,
+        };
+        Ok(self.push_component_instance(result))
+    }
+
+    /// Pushes a new component instance type.
+    pub(crate) fn push_component_instance(
+        &mut self,
+        ty: TypeComponentInstance,
+    ) -> TypeComponentInstanceIndex {
+        self.component_types.component_instances.push(ty)
     }
 
     fn register_abstract_component_entity_type(

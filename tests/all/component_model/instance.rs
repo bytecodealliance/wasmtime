@@ -209,22 +209,82 @@ fn export_keeps_highest_on_semver_track() -> Result<()> {
 }
 
 #[test]
-fn export_canonical_duplicate_full_name() -> Result<()> {
+#[cfg_attr(miri, ignore)]
+fn nested_export_keeps_highest_with_versionsuffix() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_canonical_names(true);
+    let engine = Engine::new(&config)?;
+    let component = r#"
+        (component
+            (core module $m1)
+            (core module $m2 (import "" "" (func)))
+            (instance $i1 (export "m" (core module $m1)))
+            (instance $i2 (export "m" (core module $m2)))
+
+            (instance $o
+                (export "a:b/n@0.2.1" (instance $i1))
+                (export "a:b/n@0.2" (versionsuffix ".3") (instance $i2))
+            )
+            (export "o" (instance $o))
+        )
+    "#;
+
+    fn assert_m2(module: &Module) {
+        assert_eq!(module.imports().len(), 1);
+    }
+
+    let component = Component::new(&engine, component)?;
+
+    // Only the highest full version on a semver track is exported, which for
+    // `a:b/n@0.2` is `a:b/n@0.2.3` due to its `versionsuffix`.
+    let ty = component.component_type();
+    let (_, o) = ty.exports(&engine).find(|(name, _)| *name == "o").unwrap();
+    let types::ComponentItem::ComponentInstance(o) = o.ty else {
+        panic!("expected an instance");
+    };
+    let names = o
+        .exports(&engine)
+        .map(|(name, _)| name.to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["a:b/n@0.2.3"]);
+    assert!(o.get_export(&engine, "a:b/n@0.2.3").is_some());
+    assert!(o.get_export(&engine, "a:b/n@0.2").is_none());
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+
+    let o = component.get_export_index(None, "o").unwrap();
+    for name in ["a:b/n@0.2.1", "a:b/n@0.2.3", "a:b/n@0.2"] {
+        println!("test {name}");
+        let i = component.get_export_index(Some(&o), name).unwrap();
+        let m = component.get_export_index(Some(&i), "m").unwrap();
+        assert_m2(&instance.get_module(&mut store, &m).unwrap());
+    }
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn nested_export_duplicate_full_name() -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_canonical_names(true);
     let engine = Engine::new(&config)?;
     let component = r#"
         (component
             (instance $i)
-            (export "a:b/i@1" (versionsuffix ".0.1") (instance $i))
-            (export "a:b/i@1.0.1" (instance $i))
+            (instance $o
+                (export "a:b/n@0.2" (versionsuffix ".1") (instance $i))
+                (export "a:b/n@0.2.1" (instance $i))
+            )
+            (export "o" (instance $o))
         )
     "#;
 
     let err = Component::new(&engine, component).unwrap_err();
     let err = format!("{err:?}");
     assert!(
-        err.contains("root export `a:b/i@1.0.1` is exported twice"),
+        err.contains("`a:b/n@0.2.1`") && err.contains("twice"),
         "{err}"
     );
 

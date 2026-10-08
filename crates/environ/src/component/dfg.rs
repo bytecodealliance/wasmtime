@@ -801,18 +801,31 @@ impl LinearizeDfg<'_> {
                 ty: *ty,
                 import: *import,
             },
-            Export::Instance { ty, exports } => info::Export::Instance {
-                ty: *ty,
-                exports: {
-                    let mut map = NameMap::default();
-                    for (name, (export, data)) in exports {
-                        let export =
-                            self.export(export, items, wasmtime_types, wasmparser_types)?;
-                        map.insert_highest(name, (export, data.clone()))?;
-                    }
-                    map
-                },
-            },
+            Export::Instance { exports, .. } => {
+                let mut map = NameMap::default();
+                for (name, (export, data)) in exports {
+                    let export = self.export(export, items, wasmtime_types, wasmparser_types)?;
+                    map.insert_highest(name, (export, data.clone()))?;
+                }
+
+                // Only the highest version on each semver track is kept in
+                // `map`, so the type of this instance is rebuilt from `map`
+                // to match, like the type of the root component's exports.
+                let mut ty = TypeComponentInstance::default();
+                for (name, (export, data)) in map.raw_iter() {
+                    ty.exports.insert(
+                        name.to_string(),
+                        ComponentExtern {
+                            data: data.clone(),
+                            ty: wasmtime_types.export_type_def(items, *export),
+                        },
+                    );
+                }
+                info::Export::Instance {
+                    ty: wasmtime_types.push_component_instance(ty),
+                    exports: map,
+                }
+            }
             Export::Type(def) => info::Export::Type(*def),
         };
         Ok(items.push(item))

@@ -469,3 +469,107 @@ fn unknown_imports_as_traps_share_semver_track() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn import_duplicate_full_name() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_canonical_names(true);
+    let engine = Engine::new(&config)?;
+
+    // Two distinct root imports with the same full name, `a:b/c@0.2.1`.
+    let err = Component::new(
+        &engine,
+        r#"(component
+            (import "a:b/c@0.2" (versionsuffix ".1") (instance
+                (export "f" (func))
+            ))
+            (import "a:b/c@0.2.1" (instance
+                (export "g" (func))
+            ))
+        )"#,
+    )
+    .unwrap_err();
+    let err = format!("{err:?}");
+    assert!(
+        err.contains("root import `a:b/c@0.2.1` is imported twice"),
+        "{err}"
+    );
+
+    // The same within an imported instance.
+    let err = Component::new(
+        &engine,
+        r#"(component
+            (import "x" (instance
+                (export "a:b/n@0.2" (versionsuffix ".1") (instance))
+                (export "a:b/n@0.2.1" (instance))
+            ))
+        )"#,
+    )
+    .unwrap_err();
+    let err = format!("{err:?}");
+    assert!(err.contains("`a:b/n@0.2.1` is defined twice"), "{err}");
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn nested_import_full_name() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_canonical_names(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "x" (instance
+                (export "a:b/n@0.2" (versionsuffix ".1") (instance
+                    (export "f" (func))
+                ))
+                (export "a:b/n@0.2.2" (instance
+                    (export "g" (func))
+                ))
+            ))
+        )"#,
+    )?;
+
+    // Nested imports are reported under their full name, and both versions on
+    // the `a:b/n@0.2` track are kept.
+    let ty = component.component_type();
+    let (_, x) = ty.imports(&engine).next().unwrap();
+    let ComponentItem::ComponentInstance(x) = x.ty else {
+        panic!("expected an instance");
+    };
+    let names = x
+        .exports(&engine)
+        .map(|(name, _)| name.to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["a:b/n@0.2.1", "a:b/n@0.2.2"]);
+    assert!(x.get_export(&engine, "a:b/n@0.2.1").is_some());
+    assert!(x.get_export(&engine, "a:b/n@0.2").is_none());
+
+    // Defining everything that `component_type` says is imported is enough
+    // to instantiate the component. Both versions on the track share one
+    // instance.
+    let mut linker = Linker::<()>::new(&engine);
+    let mut x_instance = linker.instance("x")?;
+    for (name, item) in x.exports(&engine) {
+        let ComponentItem::ComponentInstance(ty) = item.ty else {
+            panic!("expected an instance");
+        };
+        let mut instance = x_instance.instance(name)?;
+        for (export, _) in ty.exports(&engine) {
+            instance.func_wrap(export, |_, (): ()| Ok(()))?;
+        }
+    }
+    let mut store = Store::new(&engine, ());
+    linker.instantiate(&mut store, &component)?;
+
+    // So is defining unknown imports as traps.
+    let mut linker = Linker::<()>::new(&engine);
+    linker.define_unknown_imports_as_traps(&component)?;
+    let mut store = Store::new(&engine, ());
+    linker.instantiate(&mut store, &component)?;
+
+    Ok(())
+}

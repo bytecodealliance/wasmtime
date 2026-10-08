@@ -1081,9 +1081,7 @@ impl Component {
 
     /// Returns import associated with `name`, if such exists in the component
     pub fn get_import<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
-        self.0.types[self.0.index]
-            .imports
-            .get(name)
+        get_extern(&self.0.types[self.0.index].imports, name)
             .map(|e| ComponentExtern::new(engine, &self.0.instance(), e))
     }
 
@@ -1094,7 +1092,7 @@ impl Component {
     ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + 'a {
         self.0.types[self.0.index].imports.iter().map(|(name, e)| {
             (
-                name.as_str(),
+                e.data.name(name),
                 ComponentExtern::new(engine, &self.0.instance(), e),
             )
         })
@@ -1102,9 +1100,7 @@ impl Component {
 
     /// Returns export associated with `name`, if such exists in the component
     pub fn get_export<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
-        self.0.types[self.0.index]
-            .exports
-            .get(name)
+        get_extern(&self.0.types[self.0.index].exports, name)
             .map(|e| ComponentExtern::new(engine, &self.0.instance(), e))
     }
 
@@ -1115,7 +1111,7 @@ impl Component {
     ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + 'a {
         self.0.types[self.0.index].exports.iter().map(|(name, e)| {
             (
-                name.as_str(),
+                e.data.name(name),
                 ComponentExtern::new(engine, &self.0.instance(), e),
             )
         })
@@ -1130,6 +1126,26 @@ impl Component {
     }
 }
 
+/// Looks up the import or export with the full name `name` in `map`.
+///
+/// Items in `map` are keyed by the literal name used within the component,
+/// which may differ from the full name that the host sees, see
+/// [`ComponentExternData::name`].
+///
+/// [`ComponentExternData::name`]: wasmtime_environ::component::ComponentExternData::name
+fn get_extern<'a>(
+    map: &'a IndexMap<String, wasmtime_environ::component::ComponentExtern>,
+    name: &str,
+) -> Option<&'a wasmtime_environ::component::ComponentExtern> {
+    match map.get(name) {
+        Some(e) if e.data.name(name) == name => Some(e),
+        _ => map
+            .iter()
+            .find(|(key, e)| e.data.name(key) == name)
+            .map(|(_, e)| e),
+    }
+}
+
 /// Component instance type
 #[derive(Clone, Debug)]
 pub struct ComponentInstance(Handle<TypeComponentInstanceIndex>);
@@ -1141,9 +1157,7 @@ impl ComponentInstance {
 
     /// Returns export associated with `name`, if such exists in the component instance
     pub fn get_export<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
-        self.0.types[self.0.index]
-            .exports
-            .get(name)
+        get_extern(&self.0.types[self.0.index].exports, name)
             .map(|e| ComponentExtern::new(engine, &self.0.instance(), e))
     }
 
@@ -1154,7 +1168,7 @@ impl ComponentInstance {
     ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> {
         self.0.types[self.0.index].exports.iter().map(|(name, e)| {
             (
-                name.as_str(),
+                e.data.name(name),
                 ComponentExtern::new(engine, &self.0.instance(), e),
             )
         })
