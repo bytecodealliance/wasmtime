@@ -234,7 +234,7 @@ impl<D> StreamConsumer<D> for LimitedGuestBodyConsumer {
     ) -> Poll<wasmtime::Result<StreamResult>> {
         debug_assert!(!self.closed);
         let mut src = src.as_direct(store);
-        let buf = src.remaining();
+        let buf = src.remaining()?;
         let n = buf.len().min(self.max_chunk_size);
         let buf = &buf[..n];
 
@@ -297,7 +297,7 @@ impl<D> StreamConsumer<D> for UnlimitedGuestBodyConsumer {
         match self.contents_tx.poll_reserve(cx) {
             Poll::Ready(Ok(())) => {
                 let mut src = src.as_direct(store);
-                let buf = src.remaining();
+                let buf = src.remaining()?;
                 let n = buf.len().min(self.max_chunk_size);
                 let buf = Bytes::copy_from_slice(&buf[..n]);
                 match self.contents_tx.send_item(Ok(buf)) {
@@ -516,7 +516,7 @@ where
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         let res = 'result: {
-            let cap = match dst.remaining(&mut store).map(NonZeroUsize::new) {
+            let cap = match dst.remaining(&mut store)?.map(NonZeroUsize::new) {
                 Some(Some(cap)) => Some(cap),
                 Some(None) => {
                     // On 0-length the best we can do is check that underlying stream has not
@@ -555,12 +555,12 @@ where
                                         // data frame does not fit in destination, fill it and buffer the rest
                                         dst.set_buffer(frame.split_off(cap));
                                         let mut dst = dst.as_direct(store, cap);
-                                        dst.remaining().copy_from_slice(&frame);
+                                        dst.remaining()?.copy_from_slice(&frame);
                                         dst.mark_written(cap);
                                     } else {
                                         // copy the whole frame into the destination
                                         let mut dst = dst.as_direct(store, n);
-                                        dst.remaining()[..n].copy_from_slice(&frame);
+                                        dst.remaining()?[..n].copy_from_slice(&frame);
                                         dst.mark_written(n);
                                     }
                                 } else {

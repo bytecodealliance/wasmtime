@@ -36,13 +36,13 @@ impl<D> StreamProducer<D> for BufferStreamProducer {
         _: bool,
     ) -> Poll<Result<StreamResult>> {
         let me = self.get_mut();
-        let capacity = destination.remaining(store.as_context_mut());
+        let capacity = destination.remaining(store.as_context_mut())?;
         if capacity == Some(0) {
             Poll::Ready(Ok(StreamResult::Completed))
         } else {
             assert_eq!(capacity, Some(me.buffer.len()));
             let mut destination = destination.as_direct(store, me.buffer.len());
-            destination.remaining().copy_from_slice(&me.buffer);
+            destination.remaining()?.copy_from_slice(&me.buffer);
             destination.mark_written(me.buffer.len());
 
             Poll::Ready(Ok(StreamResult::Dropped))
@@ -65,13 +65,13 @@ impl<D> StreamConsumer<D> for BufferStreamConsumer {
         _: bool,
     ) -> Poll<Result<StreamResult>> {
         let me = self.get_mut();
-        let available = source.remaining(store.as_context_mut());
+        let available = source.remaining(store.as_context_mut())?;
         if available == 0 {
             Poll::Ready(Ok(StreamResult::Completed))
         } else {
             assert_eq!(available, me.expected.len());
             let mut source = source.as_direct(store);
-            assert_eq!(&me.expected, source.remaining());
+            assert_eq!(&me.expected, source.remaining()?);
             source.mark_read(me.expected.len());
 
             Poll::Ready(Ok(StreamResult::Dropped))
