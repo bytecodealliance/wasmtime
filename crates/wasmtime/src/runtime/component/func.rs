@@ -221,6 +221,7 @@ impl Func {
     ///   [store documentation](crate#async) for more information.
     /// * If the function is async-lifted, in which case either
     ///   [`Self::call_async`] or [`Self::call_concurrent`] must be used.
+    /// * The call is recursive from within e.g. a `call_async` invocation.
     ///
     /// See [`TypedFunc::call`] for more information in addition to
     /// [`wasmtime::Func::call`](crate::Func::call).
