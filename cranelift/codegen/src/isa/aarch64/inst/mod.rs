@@ -3356,15 +3356,10 @@ impl MachInstLabelUse for LabelUse {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    #[cfg(target_pointer_width = "64")]
-    fn inst_size_test() {
-        // This test will help with unintentionally growing the size
-        // of the Inst enum.
-        assert_eq!(48, core::mem::size_of::<Inst>());
-    }
+#[test]
+#[cfg(target_pointer_width = "64")]
+fn inst_size_test() {
+    // This test will help with unintentionally growing the size
+    // of the Inst enum.
+    assert_eq!(48, core::mem::size_of::<Inst>());
 }
