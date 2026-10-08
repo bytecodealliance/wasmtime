@@ -14,6 +14,7 @@ use tracing::debug;
 use wasmtime::AsContextMut as _;
 use wasmtime::component::{Accessor, HasData, Resource};
 use wasmtime::error::Context as _;
+use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
 
 /// A wrapper around [`AbortHandle`], which will [`AbortHandle::abort`] the task
 /// when dropped
@@ -27,8 +28,34 @@ impl Drop for AbortOnDropHandle {
 
 /// Own an I/O task and allow it to finish during the Store's shutdown grace period.
 struct DelayedAbortOnDropHandle {
-    inner: Option<wasmtime_wasi::runtime::AbortOnDropJoinHandle<()>>,
-    timeout: std::time::Duration,
+    inner: Option<AbortOnDropJoinHandle<()>>,
+    tx: Option<oneshot::Sender<AbortOnDropJoinHandle<()>>>,
+}
+
+impl DelayedAbortOnDropHandle {
+    fn new(
+        handle: wasmtime_wasi::runtime::AbortOnDropJoinHandle<()>,
+        timeout: std::time::Duration,
+    ) -> Self {
+        let tx = if timeout.is_zero() {
+            None
+        } else {
+            let (tx, rx) = oneshot::channel::<AbortOnDropJoinHandle<()>>();
+            wasmtime_wasi::runtime::with_ambient_tokio_runtime(|| {
+                tokio::spawn(async move {
+                    let Ok(handle) = rx.await else { return };
+                    if !handle.is_finished() {
+                        let _ = tokio::time::timeout(timeout, handle);
+                    }
+                });
+            });
+            Some(tx)
+        };
+        Self {
+            inner: Some(handle),
+            tx,
+        }
+    }
 }
 
 impl Future for DelayedAbortOnDropHandle {
@@ -49,25 +76,15 @@ impl Future for DelayedAbortOnDropHandle {
 
 impl Drop for DelayedAbortOnDropHandle {
     fn drop(&mut self) {
-        let Some(mut inner) = self.inner.take() else {
+        let Some(inner) = self.inner.take() else {
             return;
         };
-        if self.timeout.is_zero() || inner.is_finished() {
-            drop(inner);
-            return;
-        }
-        wasmtime_wasi::runtime::with_ambient_tokio_runtime(|| {
-            let completion = tokio::time::timeout(self.timeout, async move { (&mut *inner).await });
-            tokio::spawn(async move {
-                match completion.await {
-                    // Error just means that the timout was hit befare the task
-                    // completed.
-                    Ok(Ok(())) | Err(_) => {}
-                    Ok(Err(e)) if e.is_cancelled() => {}
-                    Ok(Err(e)) => std::panic::resume_unwind(e.into_panic()),
-                }
-            });
-        });
+        // Try sending the handle down the channel to be timed out.
+        // We took ownership of inner so it will be dropped (and cancelled) if
+        // the channel doesn't exist or sending fails.
+        if let Some(tx) = self.tx.take() {
+            let _ = tx.send(inner);
+        };
     }
 }
 
@@ -228,10 +245,7 @@ where
             });
             // `task` will be aborted when there are no more references to `io`.
             let io = Arc::new(AbortOnDropHandle(task.abort_handle()));
-            let task = DelayedAbortOnDropHandle {
-                inner: Some(task),
-                timeout: shutdown_timeout,
-            };
+            let task = DelayedAbortOnDropHandle::new(task, shutdown_timeout);
             // Pass ownership of `task` to `store`.
             store
                 .spawn(async move |_| {

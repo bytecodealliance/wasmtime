@@ -1,28 +1,15 @@
-mod bindings {
-    wit_bindgen::generate!({
-        inline: "
-            package wasmtime:test;
-            world outbound-request-pipe {
-                include wasi:cli/imports@0.3.0;
-                include wasi:http/service@0.3.0;
-                export wasi:cli/run@0.3.0;
-            }
-        ",
-        path: "../wasi-http/src/p3/wit",
-        default_bindings_module: "bindings",
-        generate_all,
-    });
-}
-
-use bindings::wasi::http::{
+use test_programs::p3::service;
+use test_programs::p3::wasi::cli::environment;
+use test_programs::p3::wasi::http::{
     client,
     types::{ErrorCode, Fields, Method, Request, Response, Scheme},
 };
-use bindings::wit_future;
+use test_programs::p3::wit_future;
 
 struct Component;
 
-bindings::export!(Component);
+test_programs::p3::export!(Component);
+service::export!(Component);
 
 ///! This component can be run as an HTTP server or a cli. In either case it
 ///! will first make a query to `/a`. When run as a server the body of that
@@ -35,7 +22,7 @@ async fn get_body() -> (
     wit_bindgen::StreamReader<u8>,
     wit_bindgen::FutureReader<Result<Option<Fields>, ErrorCode>>,
 ) {
-    let authority = bindings::wasi::cli::environment::get_environment()
+    let authority = environment::get_environment()
         .into_iter()
         .find_map(|(key, value)| (key == "HTTP_SERVER").then_some(value))
         .unwrap();
@@ -48,7 +35,7 @@ async fn get_body() -> (
     Response::consume_body(response, wit_future::new(|| Ok(())).1)
 }
 
-impl bindings::exports::wasi::http::handler::Guest for Component {
+impl service::exports::wasi::http::handler::Guest for Component {
     async fn handle(request: Request) -> Result<Response, ErrorCode> {
         drop(request);
         let (body, trailers) = get_body().await;
@@ -60,9 +47,9 @@ impl bindings::exports::wasi::http::handler::Guest for Component {
     }
 }
 
-impl bindings::exports::wasi::cli::run::Guest for Component {
+impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
-        let authority = bindings::wasi::cli::environment::get_environment()
+        let authority = environment::get_environment()
             .into_iter()
             .find_map(|(key, value)| (key == "HTTP_SERVER").then_some(value))
             .unwrap();
