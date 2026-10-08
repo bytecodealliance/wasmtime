@@ -703,7 +703,7 @@ struct TypeRegistryInner {
     // reference to another type, etc...
     drop_stack: TryVec<RecGroupEntry>,
 
-    #[cfg(all(debug_assertions, feature = "std"))]
+    #[cfg(debug_assertions)]
     /// Is set if we are already within a call to `drain_drop_stack`. Used to
     /// debug assert that `drain_drop_stock` does not recursively call itself.
     draining_drop_stack: bool,
@@ -1342,7 +1342,7 @@ impl TypeRegistryInner {
             type_to_supertypes: _,
             type_to_trampoline: _,
             type_to_gc_layout: _,
-            #[cfg(all(debug_assertions, feature = "std"))]
+            #[cfg(debug_assertions)]
                 draining_drop_stack: _,
         } = self;
 
@@ -1628,27 +1628,23 @@ impl TypeRegistryInner {
     /// whenever adding a call to `drain_drop_stack` or modifying its
     /// implementation.
     fn drain_drop_stack(&mut self) {
-        #[cfg(all(debug_assertions, feature = "std"))]
+        #[cfg(debug_assertions)]
         {
-            let was_draining = self.draining_drop_stack;
-            self.draining_drop_stack = true;
             debug_assert!(
-                !was_draining,
+                !self.draining_drop_stack,
                 "`drain_drop_stack` must not recursively call itself"
             );
+            self.draining_drop_stack = true;
         }
 
-        if !self.drop_stack.is_empty() {
-            log::trace!("Draining drop stack");
-            while let Some(entry) = self.drop_stack.pop() {
-                log::trace!("Begin unregistering {entry:?}");
-                self.debug_assert_all_registered(&entry);
-                self.remove_entry_impl(&entry, true);
-                log::trace!("End unregistering {entry:?}");
-            }
+        while let Some(entry) = self.drop_stack.pop() {
+            log::trace!("Begin unregistering {entry:?}");
+            self.debug_assert_all_registered(&entry);
+            self.remove_entry_impl(&entry, true);
+            log::trace!("End unregistering {entry:?}");
         }
 
-        #[cfg(all(debug_assertions, feature = "std"))]
+        #[cfg(debug_assertions)]
         {
             self.draining_drop_stack = false;
         }
@@ -1668,8 +1664,7 @@ impl Drop for TypeRegistryInner {
             type_to_trampoline,
             type_to_gc_layout,
             drop_stack,
-            #[cfg(all(debug_assertions, feature = "std"))]
-                draining_drop_stack: _,
+            draining_drop_stack: _,
         } = self;
         assert!(
             hash_consing_map.is_empty(),
