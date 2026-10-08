@@ -1,6 +1,24 @@
 test compile precise-output
 target aarch64
 
+function %atomic_store_i128(i128, i64) {
+block0(v0: i128, v1: i64):
+  atomic_store.i128 v0, v1
+  return
+}
+
+; VCode:
+; block0:
+;   store_release_128 x0, x1, [x2], scratch=x4
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldxp xzr, x4, [x2] ; trap: heap_oob
+;   stlxp w4, x0, x1, [x2] ; trap: heap_oob
+;   cbnz x4, #0
+;   ret
+
 function %atomic_store_i64(i64, i64) {
 block0(v0: i64, v1: i64):
   atomic_store.i64 v0, v1

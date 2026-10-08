@@ -292,6 +292,33 @@
         (scratch1 WritableReg)
         (scratch2 WritableReg))
 
+       ;; A synthetic insn, which is a 128-bit load-linked store-conditional loop, that has the
+       ;; overall effect of atomically modifying a memory location in a particular way.  Because we
+       ;; have no way to explain to the regalloc about earlyclobber registers, this instruction has
+       ;; completely fixed operand registers, and we rely on the RA's coalescing to remove copies
+       ;; in the surrounding code to the extent it can. Load- and store-exclusive instructions,
+       ;; with acquire-release semantics, are used to access memory. The operand conventions are:
+       ;;
+       ;; x25   (rd) address
+       ;; x26   (rd) low bytes of second operand for `op`
+       ;; x22   (rd) high bytes of second operand for `op`
+       ;; x27   (wr) low bytes of old value
+       ;; x23   (wr) high bytes of old value
+       ;; x24   (wr) scratch reg; value afterwards has no meaning
+       ;; x28   (wr) scratch reg; value afterwards has no meaning
+       ;; x21   (wr) scratch reg; value afterwards has no meaning
+       (AtomicRMW128Loop
+        (op AtomicRMWLoopOp)
+        (flags MemFlagsData)
+        (addr Reg)
+        (operand_lo Reg)
+        (operand_hi Reg)
+        (oldval_lo WritableReg)
+        (oldval_hi WritableReg)
+        (scratch1 WritableReg)
+        (scratch2 WritableReg)
+        (scratch3 WritableReg))
+
        ;; Similar to AtomicRMWLoop, a compare-and-swap operation implemented using a load-linked
        ;; store-conditional loop, with acquire-release semantics.
        ;; Note that the operand conventions, although very similar to AtomicRMWLoop, are different:
@@ -308,6 +335,29 @@
         (expected Reg)
         (replacement Reg)
         (oldval WritableReg)
+        (scratch WritableReg))
+
+       ;; Similar to AtomicRMW128Loop, a 128-bit compare-and-swap operation implemented using a load-linked
+       ;; store-conditional loop, with acquire-release semantics.
+       ;; Note that the operand conventions, although very similar to AtomicRMW128Loop, are different:
+       ;;
+       ;; x25   (rd) address
+       ;; x26   (rd) low bytes of expected value
+       ;; x23   (rd) high bytes of expected value
+       ;; x28   (rd) low bytes of replacement value
+       ;; x22   (rd) high bytes of replacement value
+       ;; x27   (wr) low bytes of old value
+       ;; x21   (wr) high bytes of old value
+       ;; x24   (wr) scratch reg; value afterwards has no meaning
+       (AtomicCAS128Loop
+        (flags MemFlagsData)
+        (addr Reg)
+        (expected_lo Reg)
+        (expected_hi Reg)
+        (replacement_lo Reg)
+        (replacement_hi Reg)
+        (oldval_lo WritableReg)
+        (oldval_hi WritableReg)
         (scratch WritableReg))
 
        ;; An atomic read-modify-write operation. These instructions require the
@@ -347,12 +397,31 @@
         (rn Reg)
         (flags MemFlagsData))
 
+       ;; Read 128 bits from address `rn` and put the lower and upper halves in `rt1` and `rt2`
+       ;; respectively.
+       ;; This instruction is sequentially consistent.
+       (LoadAcquire128
+        (rt1 WritableReg)
+        (rt2 WritableReg)
+        (rn Reg)
+        (scratch WritableReg)
+        (flags MemFlagsData))
+
        ;; Write the lowest `ty` bits of `rt` to address `rn`.
        ;; This instruction is sequentially consistent.
        (StoreRelease
         (access_ty Type) ;; I8, I16, I32 or I64
         (rt Reg)
         (rn Reg)
+        (flags MemFlagsData))
+
+       ;; Write 128 bits from `rt1` and `rt2` to address `rn`.
+       ;; This instruction is sequentially consistent.
+       (StoreRelease128
+        (rt1 Reg)
+        (rt2 Reg)
+        (rn Reg)
+        (scratch WritableReg)
         (flags MemFlagsData))
 
        ;; A memory fence.  This must provide ordering to ensure that, at a minimum, neither loads
@@ -3030,10 +3099,29 @@
             (_ Unit (emit (MInst.LoadAcquire ty dst addr flags))))
         dst))
 
+;; Helper for emitting `MInst.LoadAcquire128` instructions.
+(decl load_acquire_128 (MemFlagsData Reg) ValueRegs)
+(rule (load_acquire_128 flags addr)
+      (let ((dst_lo WritableReg (temp_writable_reg $I64))
+            (dst_hi WritableReg (temp_writable_reg $I64))
+            (scratch WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadAcquire128 dst_lo dst_hi addr scratch flags))))
+        (value_regs dst_lo dst_hi)))
+
 ;; Helper for emitting `MInst.StoreRelease` instructions.
 (decl store_release (Type MemFlagsData Reg Reg) SideEffectNoResult)
 (rule (store_release ty flags src addr)
       (SideEffectNoResult.Inst (MInst.StoreRelease ty src addr flags)))
+
+;; Helper for emitting `MInst.StoreRelease128` instructions.
+(decl store_release_128 (MemFlagsData ValueRegs Reg) SideEffectNoResult)
+(rule (store_release_128 flags src addr)
+      (let ((scratch WritableReg (temp_writable_reg $I64)))
+        (SideEffectNoResult.Inst (MInst.StoreRelease128 (value_regs_get src 0)
+                                                        (value_regs_get src 1)
+                                                        addr
+                                                        scratch
+                                                        flags))))
 
 ;; Helper for generating a `tst` instruction.
 ;;
@@ -4522,6 +4610,31 @@
             (_ Unit (emit (MInst.AtomicRMWLoop ty op flags addr operand dst scratch1 scratch2))))
         dst))
 
+;; Helper for emitting `MInst.AtomicRMW128Loop` instructions.
+;; - Make sure that both args are in virtual regs, since in effect
+;; we have to do a parallel copy to get them safely to the AtomicRMW input
+;; regs, and that's not guaranteed safe if either is in a real reg.
+;; - Move the args to the preordained AtomicRMW input regs
+;; - And finally, copy the preordained AtomicRMW output reg to its destination.
+(decl atomic_rmw_128_loop (AtomicRMWLoopOp Reg ValueRegs MemFlagsData) ValueRegs)
+(rule (atomic_rmw_128_loop op addr operand flags)
+      (let ((dst_lo WritableReg (temp_writable_reg $I64))
+            (dst_hi WritableReg (temp_writable_reg $I64))
+            (scratch1 WritableReg (temp_writable_reg $I64))
+            (scratch2 WritableReg (temp_writable_reg $I64))
+            (scratch3 WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AtomicRMW128Loop op
+                                                  flags
+                                                  addr
+                                                  (value_regs_get operand 0)
+                                                  (value_regs_get operand 1)
+                                                  dst_lo
+                                                  dst_hi
+                                                  scratch1
+                                                  scratch2
+                                                  scratch3))))
+        (value_regs dst_lo dst_hi)))
+
 ;; Helper for emitting `MInst.AtomicCASLoop` instructions.
 ;; This is very similar to, but not identical to, the AtomicRmw case.  Note
 ;; that the AtomicCASLoop sequence does its own masking, so we don't need to worry
@@ -4534,6 +4647,26 @@
             (scratch WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AtomicCASLoop ty flags addr expect replace dst scratch))))
         dst))
+
+;; Helper for emitting `MInst.AtomicCASLoop` instructions.
+;; This is very similar to, but not identical to, the AtomicRmw case.
+;; Make sure that all three args are in virtual regs.  See corresponding comment
+;; for `atomic_rmw_128_loop` above.
+(decl atomic_cas_128_loop (Reg ValueRegs ValueRegs MemFlagsData) ValueRegs)
+(rule (atomic_cas_128_loop addr expect replace flags)
+      (let ((dst_lo WritableReg (temp_writable_reg $I64))
+            (dst_hi WritableReg (temp_writable_reg $I64))
+            (scratch WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AtomicCAS128Loop flags
+                                                  addr
+                                                  (value_regs_get expect 0)
+                                                  (value_regs_get expect 1)
+                                                  (value_regs_get replace 0)
+                                                  (value_regs_get replace 1)
+                                                  dst_lo
+                                                  dst_hi
+                                                  scratch))))
+        (value_regs dst_lo dst_hi)))
 
 ;; Helper for emitting `MInst.MovPReg` instructions.
 (attr mov_from_preg (veri chain))
@@ -5835,6 +5968,10 @@
 (attr MInst.VecLoadReplicate (tag vector))
 (attr MInst.VecCSel (tag vector))
 (attr MInst.LoadAcquire (tag atomics))
+(attr MInst.LoadAcquire128 (tag atomics))
+(attr MInst.StoreRelease128 (tag atomics))
+(attr MInst.AtomicRMW128Loop (tag atomics))
+(attr MInst.AtomicCAS128Loop (tag atomics))
 (attr extract_vector (tag vector))
 
 
