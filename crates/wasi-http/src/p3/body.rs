@@ -361,8 +361,10 @@ impl GuestBody {
         })?;
 
         let contents_rx = if let Some(rx) = contents_rx {
-            // always add 1 buffer here because one empty slot is required
-            let (http_tx, http_rx) = mpsc::channel(buffer_chunks + 1);
+            // `mpsc::channel` panics above the semaphore's permit limit, so clamp
+            // to it. `PollSender` can use every slot, so no extra one is needed.
+            let capacity = buffer_chunks.min(tokio::sync::Semaphore::MAX_PERMITS);
+            let (http_tx, http_rx) = mpsc::channel(capacity);
             let contents_tx = PollSender::new(http_tx);
             if let Some(limit) = content_length {
                 let (error_tx, error_rx) = oneshot::channel();
