@@ -126,6 +126,7 @@ where
     ///   instance is currently calling a host function.
     /// * If `store` requires using [`Self::call_async`] instead, see
     ///   [crate documentation](crate#async) for more info.
+    /// * The call is recursive from within e.g. a `call_async` invocation.
     ///
     /// In general there are many ways that things could go wrong when copying
     /// types in and out of a wasm module with the canonical ABI, and certain
