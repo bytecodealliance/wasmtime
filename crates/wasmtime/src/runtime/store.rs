@@ -2244,10 +2244,13 @@ at https://bytecodealliance.org/security.
     }
 
     #[inline]
-    pub(crate) fn validate_sync_call(&self) -> Result<()> {
+    pub(crate) fn validate_sync_call(&mut self) -> Result<()> {
         #[cfg(feature = "async")]
         if self.async_state.async_required {
             bail!("store configuration requires that `*_async` functions are used instead");
+        }
+        if self.fiber_async_state_mut().can_block() {
+            bail!("cannot do blocking `call` from an async context");
         }
         Ok(())
     }
