@@ -338,6 +338,10 @@ impl GuestBody {
             .hooks
             .p3_outgoing_body_chunk_size()
             .max(1);
+        let buffer_chunks = getter(store.as_context_mut().data_mut())
+            .hooks
+            .p3_outgoing_body_buffer_chunks()
+            .max(1);
 
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
         trailers_rx.pipe_cb(&mut store, move |data, res| {
@@ -357,7 +361,8 @@ impl GuestBody {
         })?;
 
         let contents_rx = if let Some(rx) = contents_rx {
-            let (http_tx, http_rx) = mpsc::channel(1);
+            // always add 1 buffer here because one empty slot is required
+            let (http_tx, http_rx) = mpsc::channel(buffer_chunks + 1);
             let contents_tx = PollSender::new(http_tx);
             if let Some(limit) = content_length {
                 let (error_tx, error_rx) = oneshot::channel();
