@@ -21,6 +21,12 @@ use wasmtime::component::{
 use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, StoreContextMut};
 
+/// Clamp a requested outgoing body channel capacity into the range that
+/// `tokio::sync::mpsc::channel` accepts (it panics outside of it).
+fn channel_capacity(requested: usize) -> usize {
+    requested.clamp(1, tokio::sync::Semaphore::MAX_PERMITS)
+}
+
 /// The concrete type behind a `wasi:http/types.body` resource.
 pub(crate) enum Body {
     /// Body constructed by the guest
@@ -338,6 +344,10 @@ impl GuestBody {
             .hooks
             .p3_outgoing_body_chunk_size()
             .max(1);
+        let buffer_chunks = getter(store.as_context_mut().data_mut())
+            .hooks
+            .p3_outgoing_body_buffer_chunks()
+            .max(1);
 
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
         trailers_rx.pipe_cb(&mut store, move |data, res| {
@@ -357,7 +367,10 @@ impl GuestBody {
         })?;
 
         let contents_rx = if let Some(rx) = contents_rx {
-            let (http_tx, http_rx) = mpsc::channel(1);
+            // `PollSender` can use every slot, so no extra one is needed, but the
+            // capacity still has to stay inside what `mpsc::channel` accepts.
+            let capacity = channel_capacity(buffer_chunks);
+            let (http_tx, http_rx) = mpsc::channel(capacity);
             let contents_tx = PollSender::new(http_tx);
             if let Some(limit) = content_length {
                 let (error_tx, error_rx) = oneshot::channel();
@@ -738,3 +751,25 @@ pub(crate) trait BodyExt {
 }
 
 impl<T> BodyExt for T {}
+
+#[cfg(test)]
+mod tests {
+    use super::channel_capacity;
+
+    /// `mpsc::channel` panics above `Semaphore::MAX_PERMITS` and at zero, so the
+    /// capacity handed to it must always be clamped - including for the huge
+    /// values an embedder or `-Shttp-outgoing-body-buffer-chunks` can supply.
+    #[test]
+    fn outgoing_body_channel_capacity_is_always_accepted() {
+        let max = tokio::sync::Semaphore::MAX_PERMITS;
+        for requested in [0, 1, 1024, max, max + 1, usize::MAX] {
+            let capacity = channel_capacity(requested);
+            assert!(
+                capacity >= 1 && capacity <= max,
+                "capacity {capacity} out of range"
+            );
+            // Not panicking is the point: that is what the clamp buys us.
+            let _ = tokio::sync::mpsc::channel::<u8>(capacity);
+        }
+    }
+}

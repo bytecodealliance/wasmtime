@@ -413,8 +413,11 @@ impl HostOutgoingBody {
             }
         }
 
-        // always add 1 buffer here because one empty slot is required
-        let (body_sender, body_receiver) = mpsc::channel(buffer_chunks + 1);
+        // always add 1 buffer here because one empty slot is required; the
+        // extra slot is part of the clamp since `mpsc::channel` panics above
+        // the semaphore's permit limit.
+        let capacity = channel_capacity(buffer_chunks.saturating_add(1));
+        let (body_sender, body_receiver) = mpsc::channel(capacity);
         let (finish_sender, finish_receiver) = oneshot::channel();
         let body_impl = BodyImpl {
             body_receiver,
@@ -511,6 +514,12 @@ impl StreamContext {
             StreamContext::Response => types::ErrorCode::HttpResponseBodySize(Some(size)),
         }
     }
+}
+
+/// Clamp a requested outgoing body channel capacity into the range that
+/// `tokio::sync::mpsc::channel` accepts (it panics outside of it).
+fn channel_capacity(requested: usize) -> usize {
+    requested.clamp(1, tokio::sync::Semaphore::MAX_PERMITS)
 }
 
 /// Provides a [`HostOutputStream`] impl from a [`tokio::sync::mpsc::Sender`].
@@ -611,5 +620,27 @@ impl Pollable for BodyWriteStream {
         // the channel or it's already closed then this will return immediately.
         // If the channel is full this will block until capacity opens up.
         let _ = self.writer.reserve().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::channel_capacity;
+
+    /// `mpsc::channel` panics above `Semaphore::MAX_PERMITS` and at zero, so the
+    /// capacity handed to it must always be clamped - including for the huge
+    /// values an embedder or `-Shttp-outgoing-body-buffer-chunks` can supply.
+    #[test]
+    fn outgoing_body_channel_capacity_is_always_accepted() {
+        let max = tokio::sync::Semaphore::MAX_PERMITS;
+        for requested in [0, 1, 1024, max, max + 1, usize::MAX] {
+            let capacity = channel_capacity(requested);
+            assert!(
+                capacity >= 1 && capacity <= max,
+                "capacity {capacity} out of range"
+            );
+            // Not panicking is the point: that is what the clamp buys us.
+            let _ = tokio::sync::mpsc::channel::<u8>(capacity);
+        }
     }
 }
