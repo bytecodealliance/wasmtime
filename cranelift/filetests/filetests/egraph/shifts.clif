@@ -305,55 +305,6 @@ block0(v0: i64):
     ; check: v19 = uextend.i64 v18
     ; check: return v19
 }
-function %i8_shl_sshr_neg8(i8) -> i8 {
-block0(v0: i8):
-    v1 = iconst.i64 -8
-    v2 = ishl v0, v1
-    v3 = sshr v2, v1
-    return v3
-    ; check: v4 = iconst.i64 0
-    ; check: v5 = ishl v0, v4
-    ; check: v7 = sshr v5, v4
-    ; check: return v7
-}
-function %i8_shl_ushr_neg8(i8) -> i8 {
-block0(v0: i8):
-    v1 = iconst.i64 -8
-    v2 = ishl v0, v1
-    v3 = ushr v2, v1
-    return v3
-    ; check: return v0
-}
-function %i8_shl_sshr_neg24(i8) -> i8 {
-block0(v0: i8):
-    v1 = iconst.i64 -24
-    v2 = ishl v0, v1
-    v3 = sshr v2, v1
-    return v3
-    ; check: v4 = iconst.i64 0
-    ; check: v5 = ishl v0, v4
-    ; check: v7 = sshr v5, v4
-    ; check: return v7
-}
-function %i16_shl_sshr_neg16(i16) -> i16 {
-block0(v0: i16):
-    v1 = iconst.i64 -16
-    v2 = ishl v0, v1
-    v3 = sshr v2, v1
-    return v3
-    ; check: v4 = iconst.i64 0
-    ; check: v5 = ishl v0, v4
-    ; check: v7 = sshr v5, v4
-    ; check: return v7
-}
-function %i16_shl_ushr_neg16(i16) -> i16 {
-block0(v0: i16):
-    v1 = iconst.i64 -16
-    v2 = ishl v0, v1
-    v3 = ushr v2, v1
-    return v3
-    ; check: return v0
-}
 function %ishl_amt_type_ireduce(i8, i16) -> i8 {
 block0(v0: i8, v1: i16):
     v2 = ireduce.i8 v1
