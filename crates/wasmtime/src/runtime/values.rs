@@ -106,18 +106,18 @@ impl Val {
         Val::FuncRef(None)
     }
 
-    /// Returns the null function reference value.
+    /// Returns the null external reference value.
     ///
-    /// The return value has type `(ref null extern)` aka `nullexternref` and is
-    /// a subtype of all external references.
+    /// The return value has type `(ref null noextern)` aka `nullexternref` and
+    /// is a subtype of all external references.
     #[inline]
     pub const fn null_extern_ref() -> Val {
         Val::ExternRef(None)
     }
 
-    /// Returns the null function reference value.
+    /// Returns the null internal reference value.
     ///
-    /// The return value has type `(ref null any)` aka `nullref` and is a
+    /// The return value has type `(ref null none)` aka `nullref` and is a
     /// subtype of all internal references.
     #[inline]
     pub const fn null_any_ref() -> Val {
@@ -169,7 +169,7 @@ impl Val {
             Val::F64(_) => ValType::F64,
             Val::V128(_) => ValType::V128,
             Val::ExternRef(Some(_)) => ValType::EXTERNREF,
-            Val::ExternRef(None) => ValType::NULLFUNCREF,
+            Val::ExternRef(None) => ValType::NULLEXTERNREF,
             Val::FuncRef(None) => ValType::NULLFUNCREF,
             Val::FuncRef(Some(f)) => ValType::Ref(RefType::new(
                 false,
@@ -1047,7 +1047,7 @@ impl Ref {
                 Ref::Any(None) => HeapType::None,
                 Ref::Any(Some(a)) => a._ty(store)?,
 
-                Ref::Exn(None) => HeapType::None,
+                Ref::Exn(None) => HeapType::NoExn,
                 Ref::Exn(Some(e)) => e._ty(store)?.into(),
             },
         ))
