@@ -1,0 +1,34 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 has_sse3 has_ssse3 has_sse41
+target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
+set enable_multi_ret_implicit_sret
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+target pulley64
+target pulley64be
+
+function %fcmp_eq_unaligned_f32x4(f32x4) -> i32x4 {
+    ss0 = explicit_slot 48, align = 16
+block0(v0: f32x4):
+    v1 = stack_addr.i64 ss0
+    store.f32x4 v0, v1+1
+    v2 = load.f32x4 v1+1
+    v3 = fcmp eq v0, v2
+    return v3
+}
+; run: %fcmp_eq_unaligned_f32x4([0x1.0 0x2.0 0x3.0 0x4.0]) == [-1 -1 -1 -1]
+
+function %fcmp_lt_unaligned_f64x2(f64x2) -> i64x2 {
+    ss0 = explicit_slot 48, align = 16
+block0(v0: f64x2):
+    v1 = stack_addr.i64 ss0
+    store.f64x2 v0, v1+1
+    v2 = load.f64x2 v1+1
+    v3 = fcmp lt v0, v2
+    return v3
+}
+; run: %fcmp_lt_unaligned_f64x2([0x1.0 0x2.0]) == [0 0]
