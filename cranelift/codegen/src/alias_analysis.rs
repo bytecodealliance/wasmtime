@@ -65,7 +65,9 @@
 //!   elimination". Note that observing a store is not just loading
 //!   from the location it wrote, all potentially-trapping
 //!   instructions must be treated as observing every store because we
-//!   must preserve post-trap memory state.
+//!   must preserve post-trap memory state. Similarly, loop back edges
+//!   observe every store, because the loop might never terminate and
+//!   reach the overwriting store.
 //!
 //! Which store is the "last store" to a region is flow-sensitive, but
 //! whether a store is ever observed is *not*: it is observed if there
@@ -1025,10 +1027,20 @@ impl<'a> AliasAnalysis<'a> {
                 state.update(func, inst);
             }
 
-            // When a predecessor and successor disagree on the last store to a
-            // region, we need to mark the predecessor's last store as observed,
-            // so that dead-store elimination cannot remove it.
-            visit_block_succs(func, block, |_inst, succ, _from_table| {
+            visit_block_succs(func, block, |branch, succ, _from_table| {
+                // A loop between a maybe-dead store and its overwriter might
+                // never terminate, but if the maybe-dead store traps, then we
+                // need to preserve that rather than rewrite the program to
+                // infinite loop. Therefore, we observe every store in
+                // `LastStores` on retreating edges.
+                if self.domtree.is_retreating_edge(block, succ) {
+                    state.observe_others(func, &mut observed_stores, None, branch);
+                    return;
+                }
+
+                // When a predecessor and successor disagree on the last store
+                // to a region, we need to mark the predecessor's last store as
+                // observed, so that dead-store elimination cannot remove it.
                 let succ_input = self
                     .block_input
                     .get(&succ)
