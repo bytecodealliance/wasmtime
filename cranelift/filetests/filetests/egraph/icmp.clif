@@ -1286,3 +1286,91 @@ block0(v0: i32, v1: i32):
 ;     v7 = icmp eq v0, v6
 ;     return v7
 ; }
+
+function %xor_eq_one_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = iconst.i8 1
+    v4 = bxor v2, v3
+    return v4
+}
+
+; function %xor_eq_one_i32(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %xor_eq_one_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp eq v0, v1
+    v3 = iconst.i8 1
+    v4 = bxor v2, v3
+    return v4
+}
+
+; function %xor_eq_one_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %ugt_sub_one_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = isub v0, v1
+    v3 = icmp ugt v0, v2
+    return v3
+}
+
+; function %ugt_sub_one_i32(i32) -> i8 fast {
+; block0(v0: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp ne v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %ugt_sub_one_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 1
+    v2 = isub v0, v1
+    v3 = icmp ugt v0, v2
+    return v3
+}
+
+; function %ugt_sub_one_i64(i64) -> i8 fast {
+; block0(v0: i64):
+;     v4 = iconst.i64 0
+;     v5 = icmp ne v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %ult_sub_one_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = isub v0, v1
+    v3 = icmp ult v2, v0
+    return v3
+}
+
+; function %ult_sub_one_i32(i32) -> i8 fast {
+; block0(v0: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp ne v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %ult_sub_one_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 1
+    v2 = isub v0, v1
+    v3 = icmp ult v2, v0
+    return v3
+}
+
+; function %ult_sub_one_i64(i64) -> i8 fast {
+; block0(v0: i64):
+;     v4 = iconst.i64 0
+;     v5 = icmp ne v0, v4  ; v4 = 0
+;     return v5
+; }

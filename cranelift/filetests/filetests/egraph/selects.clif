@@ -274,3 +274,299 @@ block0(v0: i32, v1: i32):
 ;     v3 = isub v0, v1
 ;     return v3
 ; }
+
+function %select_zero_add_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp eq v0, v2
+    v4 = iadd v0, v1
+    v5 = select v3, v1, v4
+    return v5
+}
+
+; function %select_zero_add_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = iadd v1, v0
+;     return v6
+; }
+
+function %select_zero_add_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp eq v0, v2
+    v4 = iadd v0, v1
+    v5 = select v3, v1, v4
+    return v5
+}
+
+; function %select_zero_add_i64(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v6 = iadd v1, v0
+;     return v6
+; }
+
+function %add_same_condition_selects_i32(i8, i32, i32, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32, v3: i32, v4: i32):
+    v5 = select v0, v1, v2
+    v6 = select v0, v3, v4
+    v7 = iadd v5, v6
+    return v7
+}
+
+; function %add_same_condition_selects_i32(i8, i32, i32, i32, i32) -> i32 fast {
+; block0(v0: i8, v1: i32, v2: i32, v3: i32, v4: i32):
+;     v8 = iadd v1, v3
+;     v9 = iadd v2, v4
+;     v10 = select v0, v8, v9
+;     return v10
+; }
+
+function %add_same_condition_selects_i64(i8, i64, i64, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64, v3: i64, v4: i64):
+    v5 = select v0, v1, v2
+    v6 = select v0, v3, v4
+    v7 = iadd v5, v6
+    return v7
+}
+
+; function %add_same_condition_selects_i64(i8, i64, i64, i64, i64) -> i64 fast {
+; block0(v0: i8, v1: i64, v2: i64, v3: i64, v4: i64):
+;     v8 = iadd v1, v3
+;     v9 = iadd v2, v4
+;     v10 = select v0, v8, v9
+;     return v10
+; }
+
+function %select_constant_mask_i32(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 11
+    v2 = iconst.i32 13
+    v3 = iconst.i32 7
+    v4 = select v0, v1, v2
+    v5 = band v4, v3
+    return v5
+}
+
+; function %select_constant_mask_i32(i8) -> i32 fast {
+; block0(v0: i8):
+;     v6 = iconst.i32 3
+;     v7 = iconst.i32 5
+;     v8 = select v0, v6, v7  ; v6 = 3, v7 = 5
+;     return v8
+; }
+
+function %select_constant_mask_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 11
+    v2 = iconst.i64 13
+    v3 = iconst.i64 7
+    v4 = select v0, v1, v2
+    v5 = band v4, v3
+    return v5
+}
+
+; function %select_constant_mask_i64(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 3
+;     v7 = iconst.i64 5
+;     v8 = select v0, v6, v7  ; v6 = 3, v7 = 5
+;     return v8
+; }
+
+function %select_zero_add_commuted_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp eq v0, v2
+    v4 = iadd v1, v0
+    v5 = select v3, v1, v4
+    return v5
+}
+
+; function %select_zero_add_commuted_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iadd v1, v0
+;     return v4
+; }
+
+function %select_zero_add_commuted_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp eq v0, v2
+    v4 = iadd v1, v0
+    v5 = select v3, v1, v4
+    return v5
+}
+
+; function %select_zero_add_commuted_i64(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v4 = iadd v1, v0
+;     return v4
+; }
+
+function %select_nonzero_add_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp ne v0, v2
+    v4 = iadd v0, v1
+    v5 = select v3, v4, v1
+    return v5
+}
+
+; function %select_nonzero_add_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = iadd v1, v0
+;     return v6
+; }
+
+function %select_nonzero_add_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp ne v0, v2
+    v4 = iadd v0, v1
+    v5 = select v3, v4, v1
+    return v5
+}
+
+; function %select_nonzero_add_i64(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v6 = iadd v1, v0
+;     return v6
+; }
+
+function %select_nonzero_add_commuted_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp ne v0, v2
+    v4 = iadd v1, v0
+    v5 = select v3, v4, v1
+    return v5
+}
+
+; function %select_nonzero_add_commuted_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iadd v1, v0
+;     return v4
+; }
+
+function %select_nonzero_add_commuted_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp ne v0, v2
+    v4 = iadd v1, v0
+    v5 = select v3, v4, v1
+    return v5
+}
+
+; function %select_nonzero_add_commuted_i64(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v4 = iadd v1, v0
+;     return v4
+; }
+
+function %select_constant_mask_commuted_i32(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 11
+    v2 = iconst.i32 13
+    v3 = iconst.i32 7
+    v4 = select v0, v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %select_constant_mask_commuted_i32(i8) -> i32 fast {
+; block0(v0: i8):
+;     v6 = iconst.i32 3
+;     v7 = iconst.i32 5
+;     v8 = select v0, v6, v7  ; v6 = 3, v7 = 5
+;     return v8
+; }
+
+function %select_constant_mask_commuted_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 11
+    v2 = iconst.i64 13
+    v3 = iconst.i64 7
+    v4 = select v0, v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %select_constant_mask_commuted_i64(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 3
+;     v7 = iconst.i64 5
+;     v8 = select v0, v6, v7  ; v6 = 3, v7 = 5
+;     return v8
+; }
+
+function %select_constant_mask_preserved_branch_i32(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 27
+    v2 = iconst.i32 13
+    v3 = iconst.i32 15
+    v4 = select v0, v1, v2
+    v5 = band v4, v3
+    return v5
+}
+
+; function %select_constant_mask_preserved_branch_i32(i8) -> i32 fast {
+; block0(v0: i8):
+;     v6 = iconst.i32 11
+;     v2 = iconst.i32 13
+;     v7 = select v0, v6, v2  ; v6 = 11, v2 = 13
+;     return v7
+; }
+
+function %select_constant_mask_preserved_branch_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 27
+    v2 = iconst.i64 13
+    v3 = iconst.i64 15
+    v4 = select v0, v1, v2
+    v5 = band v4, v3
+    return v5
+}
+
+; function %select_constant_mask_preserved_branch_i64(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 11
+;     v2 = iconst.i64 13
+;     v7 = select v0, v6, v2  ; v6 = 11, v2 = 13
+;     return v7
+; }
+
+function %select_constant_mask_changed_branch_i32(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 27
+    v2 = iconst.i32 13
+    v3 = iconst.i32 7
+    v4 = select v0, v1, v2
+    v5 = band v4, v3
+    return v5
+}
+
+; function %select_constant_mask_changed_branch_i32(i8) -> i32 fast {
+; block0(v0: i8):
+;     v6 = iconst.i32 3
+;     v7 = iconst.i32 5
+;     v8 = select v0, v6, v7  ; v6 = 3, v7 = 5
+;     return v8
+; }
+
+function %select_constant_mask_changed_branch_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 27
+    v2 = iconst.i64 13
+    v3 = iconst.i64 7
+    v4 = select v0, v1, v2
+    v5 = band v4, v3
+    return v5
+}
+
+; function %select_constant_mask_changed_branch_i64(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 3
+;     v7 = iconst.i64 5
+;     v8 = select v0, v6, v7  ; v6 = 3, v7 = 5
+;     return v8
+; }
