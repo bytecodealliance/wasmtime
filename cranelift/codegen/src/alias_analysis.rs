@@ -1011,6 +1011,10 @@ impl<'a> AliasAnalysis<'a> {
     /// solved fixpoint.
     fn compute_observed_stores(&mut self, func: &Function) {
         let mut observed_stores = FxHashMap::default();
+        let mut postorder = SecondaryMap::<Block, usize>::new();
+        for (index, &block) in self.domtree.cfg_postorder().iter().enumerate() {
+            postorder[block] = index;
+        }
 
         for block in func.layout.blocks() {
             // Ignore unreachable blocks.
@@ -1036,12 +1040,11 @@ impl<'a> AliasAnalysis<'a> {
 
                 let observer = func.layout.block_insts(succ).next().unwrap();
 
-                // A backedge can be taken indefinitely without reaching the
-                // overwriting store. Treat the memory state at the loop edge
-                // as observed so DSE cannot turn a trapping store into a hang
-                // (or erase a value visible to another thread in shared
-                // memory) merely because the CFG has an exit elsewhere.
-                if self.domtree.block_dominates(succ, block) {
+                // Every cycle contains an edge that does not decrease DFS
+                // postorder, including irreducible cycles with multiple
+                // entries. Observe stores across these edges: execution may
+                // diverge before reaching a post-dominating overwriter.
+                if postorder[succ] >= postorder[block] {
                     let max_len = state.regions.keys().len();
                     for i in 0..max_len {
                         observe(
