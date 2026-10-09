@@ -1123,15 +1123,15 @@ mod tests {
         }
 
         let mut m = full(f);
-        // Verify geometry. Get get node2 as the root and leaves node0, 1, 3, ...
+        // Verify geometry. Get get node1 as the root and leaves node0, 2, 5, ...
         m.verify(f, &());
-        assert_eq!(m.tpath(110, f, &()), "node2[0]--node0[0]");
-        assert_eq!(m.tpath(140, f, &()), "node2[0]--node0[3]");
-        assert_eq!(m.tpath(210, f, &()), "node2[1]--node1[0]");
-        assert_eq!(m.tpath(270, f, &()), "node2[1]--node1[6]");
-        assert_eq!(m.tpath(310, f, &()), "node2[2]--node3[0]");
-        assert_eq!(m.tpath(810, f, &()), "node2[7]--node8[0]");
-        assert_eq!(m.tpath(870, f, &()), "node2[7]--node8[6]");
+        assert_eq!(m.tpath(110, f, &()), "node1[0]--node0[0]");
+        assert_eq!(m.tpath(140, f, &()), "node1[0]--node0[3]");
+        assert_eq!(m.tpath(210, f, &()), "node1[1]--node2[0]");
+        assert_eq!(m.tpath(270, f, &()), "node1[1]--node2[6]");
+        assert_eq!(m.tpath(310, f, &()), "node1[2]--node5[0]");
+        assert_eq!(m.tpath(810, f, &()), "node1[7]--node10[0]");
+        assert_eq!(m.tpath(870, f, &()), "node1[7]--node10[6]");
 
         {
             let mut c = m.cursor_mut(f, &());
@@ -1236,19 +1236,19 @@ mod tests {
 
         // Verify geometry.
         m.verify(f, &());
-        assert_eq!(m.tpath(10, f, &()), "node2[0]--node0[0]");
-        assert_eq!(m.tpath(40, f, &()), "node2[0]--node0[3]");
-        assert_eq!(m.tpath(49, f, &()), "node2[0]--node0[4]");
-        assert_eq!(m.tpath(50, f, &()), "node2[1]--node1[0]");
-        assert_eq!(m.tpath(80, f, &()), "node2[1]--node1[3]");
+        assert_eq!(m.tpath(10, f, &()), "node1[0]--node0[0]");
+        assert_eq!(m.tpath(40, f, &()), "node1[0]--node0[3]");
+        assert_eq!(m.tpath(49, f, &()), "node1[0]--node0[4]");
+        assert_eq!(m.tpath(50, f, &()), "node1[1]--node2[0]");
+        assert_eq!(m.tpath(80, f, &()), "node1[1]--node2[3]");
 
         // Remove the front entry from a node that stays healthy.
         assert_eq!(m.insert(55, 5.5, f, &()), None);
         assert_eq!(m.remove(50, f, &()), Some(5.0));
         m.verify(f, &());
-        assert_eq!(m.tpath(49, f, &()), "node2[0]--node0[4]");
-        assert_eq!(m.tpath(50, f, &()), "node2[0]--node0[4]");
-        assert_eq!(m.tpath(55, f, &()), "node2[1]--node1[0]");
+        assert_eq!(m.tpath(49, f, &()), "node1[0]--node0[4]");
+        assert_eq!(m.tpath(50, f, &()), "node1[0]--node0[4]");
+        assert_eq!(m.tpath(55, f, &()), "node1[1]--node2[0]");
 
         // Remove the front entry from the first leaf node: No critical key to update.
         assert_eq!(m.insert(15, 1.5, f, &()), None);
@@ -1261,8 +1261,8 @@ mod tests {
         // No rebalancing for the right-most node. Still need critical key update.
         assert_eq!(m.remove(55, f, &()), Some(5.5));
         m.verify(f, &());
-        assert_eq!(m.tpath(55, f, &()), "node2[0]--node0[4]");
-        assert_eq!(m.tpath(60, f, &()), "node2[1]--node1[0]");
+        assert_eq!(m.tpath(55, f, &()), "node1[0]--node0[4]");
+        assert_eq!(m.tpath(60, f, &()), "node1[1]--node2[0]");
 
         // [ 15 20 30 40 ] [ 60 70 80 ]
 
@@ -1270,8 +1270,8 @@ mod tests {
         assert_eq!(m.insert(90, 9.0, f, &()), None);
         assert_eq!(m.insert(100, 10.0, f, &()), None);
         m.verify(f, &());
-        assert_eq!(m.tpath(55, f, &()), "node2[0]--node0[4]");
-        assert_eq!(m.tpath(60, f, &()), "node2[1]--node1[0]");
+        assert_eq!(m.tpath(55, f, &()), "node1[0]--node0[4]");
+        assert_eq!(m.tpath(60, f, &()), "node1[1]--node2[0]");
 
         // [ 15 20 30 40 ] [ 60 70 80 90 100 ]
 
@@ -1282,9 +1282,9 @@ mod tests {
 
         // [ 15 30 40 60 ] [ 70 80 90 100 ]
         // Check that the critical key was updated correctly.
-        assert_eq!(m.tpath(50, f, &()), "node2[0]--node0[3]");
-        assert_eq!(m.tpath(60, f, &()), "node2[0]--node0[3]");
-        assert_eq!(m.tpath(70, f, &()), "node2[1]--node1[0]");
+        assert_eq!(m.tpath(50, f, &()), "node1[0]--node0[3]");
+        assert_eq!(m.tpath(60, f, &()), "node1[0]--node0[3]");
+        assert_eq!(m.tpath(70, f, &()), "node1[1]--node2[0]");
 
         // Remove front entry from the left-most leaf node, underflowing.
         // This should cause two leaf nodes to be merged and the root node to go away.
@@ -1306,8 +1306,8 @@ mod tests {
         m.verify(f, &());
 
         // [ 10 20 30 40 ] [ 70 ]
-        assert_eq!(m.tpath(50, f, &()), "node2[0]--node0[4]");
-        assert_eq!(m.tpath(70, f, &()), "node2[1]--node1[0]");
+        assert_eq!(m.tpath(50, f, &()), "node1[0]--node0[4]");
+        assert_eq!(m.tpath(70, f, &()), "node1[1]--node2[0]");
 
         // Removing the last entry from the right leaf should cause a collapse.
         assert_eq!(m.remove(70, f, &()), Some(7.0));
@@ -1332,28 +1332,28 @@ mod tests {
         m.verify(f, &());
 
         // Check geometry.
-        // Root: node11
-        // [ node2 170 node10 330 node16 490 node21 650 node26 810 node31 970 node36 1130 node41 ]
-        // L1: node11
-        assert_eq!(m.tpath(0, f, &()), "node11[0]--node2[0]--node0[0]");
-        assert_eq!(m.tpath(10000, f, &()), "node11[7]--node41[4]--node40[4]");
+        // Root: node3
+        // [ node1 170 node4 330 node14 490 node19 650 node24 810 node29 970 node34 1130 node39 ]
+        // L1: node3
+        assert_eq!(m.tpath(0, f, &()), "node3[0]--node1[0]--node0[0]");
+        assert_eq!(m.tpath(10000, f, &()), "node3[7]--node39[4]--node43[4]");
 
         // 650 is a critical key in the middle of the root.
-        assert_eq!(m.tpath(640, f, &()), "node11[3]--node21[3]--node19[3]");
-        assert_eq!(m.tpath(650, f, &()), "node11[4]--node26[0]--node20[0]");
+        assert_eq!(m.tpath(640, f, &()), "node3[3]--node19[3]--node22[3]");
+        assert_eq!(m.tpath(650, f, &()), "node3[4]--node24[0]--node23[0]");
 
-        // Deleting 640 triggers a rebalance from node19 to node 20, cascading to n21 -> n26.
+        // Deleting 640 triggers a rebalance from node22 to node 23, cascading to n19 -> n24.
         assert_eq!(m.remove(640, f, &()), Some(64.0));
         m.verify(f, &());
-        assert_eq!(m.tpath(650, f, &()), "node11[3]--node26[3]--node20[3]");
+        assert_eq!(m.tpath(650, f, &()), "node3[3]--node24[3]--node23[3]");
 
-        // 1130 is in the first leaf of the last L1 node. Deleting it triggers a rebalance node35
-        // -> node37, but no rebalance above where there is no right sibling.
-        assert_eq!(m.tpath(1130, f, &()), "node11[6]--node41[0]--node35[0]");
-        assert_eq!(m.tpath(1140, f, &()), "node11[6]--node41[0]--node35[1]");
+        // 1130 is in the first leaf of the last L1 node. Deleting it triggers a rebalance node38
+        // -> node40, but no rebalance above where there is no right sibling.
+        assert_eq!(m.tpath(1130, f, &()), "node3[6]--node39[0]--node38[0]");
+        assert_eq!(m.tpath(1140, f, &()), "node3[6]--node39[0]--node38[1]");
         assert_eq!(m.remove(1130, f, &()), Some(113.0));
         m.verify(f, &());
-        assert_eq!(m.tpath(1140, f, &()), "node11[6]--node41[0]--node37[0]");
+        assert_eq!(m.tpath(1140, f, &()), "node3[6]--node39[0]--node40[0]");
     }
 
     #[test]

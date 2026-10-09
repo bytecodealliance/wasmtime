@@ -462,7 +462,7 @@ mod tests {
         assert!(!c.is_empty());
 
         assert_eq!(c.goto_first(), Some(0));
-        assert_eq!(c.tpath(), "node2[0]--node0[0]");
+        assert_eq!(c.tpath(), "node1[0]--node0[0]");
 
         assert_eq!(c.prev(), None);
         for i in 1..50 {
@@ -509,7 +509,7 @@ mod tests {
         assert!(!c.is_empty());
 
         assert!(c.goto(0));
-        assert_eq!(c.tpath(), "node11[0]--node2[0]--node0[0]");
+        assert_eq!(c.tpath(), "node3[0]--node1[0]--node0[0]");
 
         assert_eq!(c.prev(), None);
         for i in 1..150 {
@@ -576,7 +576,7 @@ mod tests {
         // Peel off a whole sub-tree of the root by deleting from the front.
         // The 900 element is near the front of the second sub-tree.
         assert!(c.goto(900));
-        assert_eq!(c.tpath(), "node48[1]--node47[0]--node26[0]--node20[4]");
+        assert_eq!(c.tpath(), "node12[1]--node13[0]--node24[0]--node23[4]");
         assert!(c.goto(0));
         for i in 0..900 {
             assert!(!c.is_empty());
