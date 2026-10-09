@@ -938,11 +938,17 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.def_var(self.epoch_deadline_var, deadline);
         self.epoch_check_cached(builder, cur_epoch_value, continuation_block);
 
+        if self.tunables.consume_fuel {
+            self.fuel_save_from_var(builder);
+        }
         let new_epoch = self.builtin_functions.new_epoch(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
         // new_epoch() returns the new deadline, so we don't have to
         // reload it.
         let call = builder.ins().call(new_epoch, &[vmctx]);
+        if self.tunables.consume_fuel {
+            self.fuel_load_into_var(builder);
+        }
         let new_deadline = *builder.func.dfg.inst_results(call).first().unwrap();
         builder.def_var(self.epoch_deadline_var, new_deadline);
         builder.ins().jump(continuation_block, &[]);
