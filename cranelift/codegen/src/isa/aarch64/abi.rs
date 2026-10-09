@@ -784,6 +784,22 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let mut insts = SmallVec::new();
         let setup_frame = frame_layout.setup_area_size > 0;
 
+        if flags.unwind_info() && setup_frame {
+            // The *unwind* frame (but not the actual frame) starts at the
+            // clobbers, just below the saved FP/LR pair.
+            //
+            // This is emitted before the incoming argument area is resized
+            // below so that the CFA is defined in terms of FP while the saved
+            // FP/LR pair is being moved: FP keeps pointing at the original pair
+            // until it has been copied, and then points at the new copy.
+            insts.push(Inst::Unwind {
+                inst: UnwindInst::DefineNewFrame {
+                    offset_downward_to_clobbers: frame_layout.clobber_size,
+                    offset_upward_to_caller_sp: frame_layout.setup_area_size,
+                },
+            });
+        }
+
         // When a return_call within this function required more stack arguments than we have
         // present, resize the incoming argument area of the frame to accommodate those arguments.
         let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
@@ -800,18 +816,20 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
             // Move fp and lr down.
             if setup_frame {
-                // Reload the frame pointer from the stack.
+                // Reload the saved frame pointer from the stack. This uses a
+                // temporary rather than FP itself so that FP keeps pointing at
+                // a valid frame record until the copy below is complete.
                 insts.push(Inst::ULoad64 {
-                    rd: regs::writable_fp_reg(),
+                    rd: writable_spilltmp_reg(),
                     mem: AMode::SPOffset {
                         off: i64::from(incoming_args_diff),
                     },
                     flags: MemFlagsData::trusted(),
                 });
 
-                // Store the frame pointer and link register again at the new SP
+                // Store the saved frame pointer and link register again at the new SP
                 insts.push(Inst::StoreP64 {
-                    rt: fp_reg(),
+                    rt: spilltmp_reg(),
                     rt2: link_reg(),
                     mem: PairAMode::SignedOffset {
                         reg: regs::stack_reg(),
@@ -827,17 +845,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     types::I64,
                 ));
             }
-        }
-
-        if flags.unwind_info() && setup_frame {
-            // The *unwind* frame (but not the actual frame) starts at the
-            // clobbers, just below the saved FP/LR pair.
-            insts.push(Inst::Unwind {
-                inst: UnwindInst::DefineNewFrame {
-                    offset_downward_to_clobbers: frame_layout.clobber_size,
-                    offset_upward_to_caller_sp: frame_layout.setup_area_size,
-                },
-            });
         }
 
         // We use pre-indexed addressing modes here, rather than the possibly
