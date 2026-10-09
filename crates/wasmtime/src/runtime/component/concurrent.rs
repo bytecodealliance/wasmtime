@@ -1656,6 +1656,20 @@ impl<T> StoreContextMut<'_, T> {
                     }
 
                     let instance = state.get_mut(call.thread.task)?.instance;
+                    // If this call is for a callback-lifted task waiting on a
+                    // waitable set, it can't run until `instance` is enterable
+                    // again. Meanwhile, the set may have an event which another
+                    // thread waiting on it could take, and that thread may
+                    // even be the reason `instance` isn't enterable, so wake
+                    // the next waiter up as well if there's still an event
+                    // for it. Whichever thread runs first takes the event, and
+                    // the other goes back to waiting if none is left.
+                    if let GuestCallKind::DeliverEvent { set: Some(set), .. } = &call.kind {
+                        let state = self.0.concurrent_state_mut()?;
+                        if !state.get_mut(*set)?.ready.is_empty() {
+                            state.wake_waiter(*set)?;
+                        }
+                    }
                     self.0
                         .instance_state(instance)
                         .concurrent_state()
@@ -5691,35 +5705,8 @@ impl Waitable {
     /// arrives.
     fn mark_ready(&self, state: &mut ConcurrentState) -> Result<()> {
         if let Some(set) = self.common(state)?.set {
-            let set_state = state.get_mut(set)?;
-            set_state.ready.insert(*self);
-
-            if let Some((thread, mode)) = set_state.waiting.pop_first() {
-                let wake_on_cancel = state.get_mut(thread.thread)?.wake_on_cancel.take();
-                assert!(wake_on_cancel.is_none() || wake_on_cancel == WakeOnCancel::Waiting(set));
-
-                let item = match mode {
-                    WaitMode::Fiber(fiber) => Some(WorkItem::ResumeFiber {
-                        instance: state.get_mut(thread.task)?.instance,
-                        thread,
-                        fiber,
-                    }),
-                    WaitMode::Callback(instance) => Some(WorkItem::GuestCall {
-                        instance: state.get_mut(thread.task)?.instance,
-                        call: GuestCall {
-                            thread,
-                            kind: GuestCallKind::DeliverEvent {
-                                instance,
-                                set: Some(set),
-                            },
-                        },
-                    }),
-                };
-
-                if let Some(item) = item {
-                    state.push_high_priority(item);
-                }
-            }
+            state.get_mut(set)?.ready.insert(*self);
+            state.wake_waiter(set)?;
         }
         Ok(())
     }
@@ -6271,6 +6258,37 @@ impl ConcurrentState {
         if let Some(item) = self.next_switch_item.take() {
             self.set_switch_item(item)?;
         }
+        Ok(())
+    }
+
+    /// Wake the first thread waiting on `set`, if any, so that it may receive
+    /// one of the set's pending events.
+    fn wake_waiter(&mut self, set: TableId<WaitableSet>) -> Result<()> {
+        let Some((thread, mode)) = self.get_mut(set)?.waiting.pop_first() else {
+            return Ok(());
+        };
+        let wake_on_cancel = self.get_mut(thread.thread)?.wake_on_cancel.take();
+        assert!(wake_on_cancel.is_none() || wake_on_cancel == WakeOnCancel::Waiting(set));
+
+        let instance = self.get_mut(thread.task)?.instance;
+        let item = match mode {
+            WaitMode::Fiber(fiber) => WorkItem::ResumeFiber {
+                instance,
+                thread,
+                fiber,
+            },
+            WaitMode::Callback(callback_instance) => WorkItem::GuestCall {
+                instance,
+                call: GuestCall {
+                    thread,
+                    kind: GuestCallKind::DeliverEvent {
+                        instance: callback_instance,
+                        set: Some(set),
+                    },
+                },
+            },
+        };
+        self.push_high_priority(item);
         Ok(())
     }
 
