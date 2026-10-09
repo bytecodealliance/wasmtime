@@ -774,6 +774,7 @@ pub struct Conditions {
     pub calls: Vec<Call>,
     pub qualifiers: Vec<Qualifier>,
     pub pos: HashMap<ExprId, Pos>,
+    pub width_domains: Vec<(ExprId, Vec<usize>)>,
 }
 
 impl Conditions {
@@ -1440,11 +1441,13 @@ impl<'a> ConditionsBuilder<'a> {
             vars.set(name.0.clone(), (*input).clone())?;
         }
 
-        // Requires.
+        // Requires. An extractor's are assumed with the provides below.
         let mut requires: Vec<ExprId> = Vec::new();
-        for require in &term_spec.requires {
-            let require = self.spec_expr(require, &vars)?;
-            requires.push(self.as_scalar(require)?);
+        if kind == TermKind::Constructor {
+            for require in &term_spec.requires {
+                let require = self.spec_expr(require, &vars)?;
+                requires.push(self.as_scalar(require)?);
+            }
         }
 
         // Matches.
@@ -1464,6 +1467,14 @@ impl<'a> ConditionsBuilder<'a> {
         for provide in &term_spec.provides {
             let provide = self.spec_expr(provide, &vars)?;
             provides.push(self.as_scalar(provide)?);
+        }
+
+        // An extractor's requires hold of the matched term.
+        if kind == TermKind::Extractor {
+            for require in &term_spec.requires {
+                let require = self.spec_expr(require, &vars)?;
+                provides.push(self.as_scalar(require)?);
+            }
         }
 
         // Partial function.
@@ -1494,8 +1505,9 @@ impl<'a> ConditionsBuilder<'a> {
             }
         }
 
-        // Record callsite.
-        self.record_term_instantiation(term, args.to_vec(), ret)?;
+        // Record callsite. Instantiations do not constrain constructor/RHS terms.
+        let rhs = kind == TermKind::Constructor && matches!(invocation, Invocation::Caller);
+        self.record_term_instantiation(term, args.to_vec(), ret, !rhs)?;
 
         Ok(())
     }
@@ -1505,12 +1517,17 @@ impl<'a> ConditionsBuilder<'a> {
         term: TermId,
         args: Vec<Symbolic>,
         ret: Symbolic,
+        use_instantiations: bool,
     ) -> Result<()> {
-        let signatures = self.prog.specenv.resolve_term_instantiations(
-            &term,
-            &self.prog.tyenv,
-            self.excluded_tags,
-        )?;
+        let signatures = if use_instantiations {
+            self.prog.specenv.resolve_term_instantiations(
+                &term,
+                &self.prog.tyenv,
+                self.excluded_tags,
+            )?
+        } else {
+            Vec::new()
+        };
         self.conditions.calls.push(Call {
             term,
             args,
@@ -1741,6 +1758,7 @@ impl<'a> ConditionsBuilder<'a> {
     fn constrain(&mut self, constrain: &Constrain) -> Result<ExprId> {
         match constrain {
             Constrain::Match(binding_id, constraint) => self.constraint(*binding_id, constraint),
+            Constrain::Equal(a, b) => self.bindings_equal(*a, *b),
             Constrain::NotAll(constrains) => {
                 let cs = constrains
                     .iter()
@@ -2536,7 +2554,7 @@ impl<'a> ConditionsBuilder<'a> {
         for variant in &e.variants {
             let term = self.prog.get_variant_term(e.ty, variant.id);
             let args = variant.field_values()?;
-            self.record_term_instantiation(term, args, ret.clone())?;
+            self.record_term_instantiation(term, args, ret.clone(), true)?;
         }
 
         Ok(ret)
@@ -2570,7 +2588,14 @@ impl<'a> ConditionsBuilder<'a> {
              some width, or an enum listing its variants) so the verifier can allocate a \
              symbolic value for it."
             )))?;
-        self.alloc_value(ty, name)
+        let value = self.alloc_value(ty, name)?;
+
+        if let Some(widths) = self.prog.specenv.type_model_widths.get(&type_id) {
+            let x = self.as_scalar(value.clone())?;
+            self.conditions.width_domains.push((x, widths.clone()));
+        }
+
+        Ok(value)
     }
 
     fn undef_variable(&mut self) -> ExprId {

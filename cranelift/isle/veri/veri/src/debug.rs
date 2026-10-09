@@ -296,6 +296,7 @@ pub fn constrain_string(constrain: &Constrain, tyenv: &TypeEnv) -> String {
             binding_id.index(),
             constraint_string(constraint, tyenv)
         ),
+        Constrain::Equal(a, b) => format!("{} == {}", a.index(), b.index()),
         Constrain::NotAll(constraints) => {
             format!(
                 "not_all({constraints})",

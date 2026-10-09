@@ -461,6 +461,7 @@
     ((args (named Type) (bv 64)) (ret (bv 64))))
 
 (spec (ireduce ty x)
+    (require (< (:bits ty) (widthof x)))
     (provide (= result (conv_to (widthof result) x))
              (= (:bits ty) (widthof result))))
 (instantiate ireduce
@@ -482,11 +483,13 @@
     ;; (8->8, 16->16, 32->32, 64->64) are not accepted in clif.
 
 (spec (uextend ty x)
+    (require (< (widthof x) (:bits ty)))
     (provide (= result (zero_ext (widthof result) x))
              (= (:bits ty) (widthof result))))
 (instantiate uextend extend)
 
 (spec (sextend ty x)
+    (require (< (widthof x) (:bits ty)))
     (provide (= result (sign_ext (widthof result) x))
              (= (:bits ty) (widthof result))))
 (instantiate sextend extend)

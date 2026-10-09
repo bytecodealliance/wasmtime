@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug, Clone)]
 pub enum Constrain {
     Match(BindingId, Constraint),
+    Equal(BindingId, BindingId),
     NotAll(Vec<Constrain>),
 }
 
@@ -17,6 +18,7 @@ impl Constrain {
     fn bindings(&self) -> Vec<BindingId> {
         match self {
             Constrain::Match(binding_id, _) => vec![*binding_id],
+            Constrain::Equal(a, b) => vec![*a, *b],
             Constrain::NotAll(constrains) => constrains.iter().flat_map(|c| c.bindings()).collect(),
         }
     }
@@ -26,6 +28,7 @@ impl Constrain {
             Constrain::Match(binding_id, constraint) => {
                 Constrain::Match(reindex.id(*binding_id), *constraint)
             }
+            Constrain::Equal(a, b) => Constrain::Equal(reindex.id(*a), reindex.id(*b)),
             Constrain::NotAll(constrains) => {
                 Constrain::NotAll(constrains.iter().map(|c| c.substitute(reindex)).collect())
             }
@@ -66,8 +69,8 @@ impl Expansion {
                         return false;
                     }
                 }
-                Constrain::NotAll(_) => {
-                    // Conservatively assume negated constraints can be met.
+                Constrain::Equal(..) | Constrain::NotAll(_) => {
+                    // Conservatively assume these can be met.
                     continue;
                 }
             }
@@ -782,10 +785,20 @@ impl Application {
             }
         }
 
+        // Collect the equalities required.
+        for i in 0..rule_set.bindings.len() {
+            let binding_id = i.try_into().unwrap();
+            if let Some(equal_binding_id) = rule.equals.find(binding_id)
+                && equal_binding_id != binding_id
+            {
+                let a = self.add_binding(rule_set, binding_id);
+                let b = self.add_binding(rule_set, equal_binding_id);
+                constraints.push(Constrain::Equal(a, b));
+            }
+        }
+
         // Require their negation.
         self.expansion.constrain(Constrain::NotAll(constraints));
-
-        // TODO(mbm): negation of equality constraints
     }
 
     fn add_binding(&mut self, rule_set: &RuleSet, binding_id: BindingId) -> BindingId {
