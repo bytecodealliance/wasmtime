@@ -1327,3 +1327,75 @@ fn const_expr_fuel_is_accounted_without_start(config: &mut Config) -> Result<()>
 
     Ok(())
 }
+
+#[cfg(all(
+    feature = "stack-switching",
+    target_os = "linux",
+    target_arch = "x86_64"
+))]
+#[test]
+#[cfg_attr(miri, ignore)]
+fn stack_switching_respects_fuel() -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (type $ft (func))
+          (type $ct (cont $ft))
+          (tag $t)
+
+          (func $burn
+            (local $i i32)
+            (local.set $i (i32.const 50))
+            (loop $l
+              (suspend $t)
+              (local.tee $i (i32.sub (local.get $i) (i32.const 1)))
+              (br_if $l)
+            )
+          )
+
+          (func (export "run")
+            (local $k (ref null $ct))
+            (local.set $k (cont.new $ct (ref.func $burn)))
+            (loop $l
+              (block $on_t (result (ref $ct))
+                (resume $ct (on $t $on_t) (local.get $k))
+                return
+              )
+              (local.set $k)
+              (br $l)
+            )
+          )
+
+          (elem declare func $burn)
+        )
+    "#;
+
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    config.wasm_function_references(true);
+    config.wasm_exceptions(true);
+    config.wasm_stack_switching(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, WAT)?;
+
+    // Measure exact fuel consumed by a full run with plenty of fuel.
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(10_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call(&mut store, ())?;
+    let total_consumed = 10_000 - store.get_fuel()?;
+    // 50 iterations inside `$burn` (4 ops per iteration + entry) plus 50
+    // iterations in `run` must both be accounted for (> 400 fuel).
+    assert!(
+        total_consumed > 400,
+        "expected continuation fuel to be accounted for, got {total_consumed}"
+    );
+
+    // Providing enough fuel for `run`'s outer loop alone (~250 units) but not
+    // enough for `$burn` + `run` combined must trap with `Trap::OutOfFuel`.
+    store.set_fuel(300)?;
+    let trap = run.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
+    assert_eq!(trap, Trap::OutOfFuel);
+
+    Ok(())
+}
