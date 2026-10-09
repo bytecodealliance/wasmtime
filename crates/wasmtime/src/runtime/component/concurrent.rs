@@ -6511,7 +6511,7 @@ impl ConcurrentState {
     where
         F: FnMut(&WorkItem) -> bool,
     {
-        // Note the use of `.rev()` below to preserve ordering given that items
+        // Scan from the back to preserve the ordering of items
         // are popped from the back of the `VecDeque`s by `poll_until` and
         // pushed to the front by `push_{high,low}_priority`.
 
