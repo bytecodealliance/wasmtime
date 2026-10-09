@@ -226,6 +226,84 @@ fn empty_data_object() {
     module.define_data(data_id, &data).unwrap();
 }
 
+/// Defines a data object of `size` bytes holding the address of `target` at
+/// `offset`.
+fn define_data_with_reloc(
+    module: &mut JITModule,
+    target: DataId,
+    zeroed: bool,
+    size: usize,
+    offset: u32,
+) -> ModuleResult<DataId> {
+    let id = module.declare_anonymous_data(true, false)?;
+    let mut data = DataDescription::new();
+    if zeroed {
+        data.define_zeroinit(size);
+    } else {
+        data.define(vec![0; size].into_boxed_slice());
+    }
+    let target = module.declare_data_in_data(target, &mut data);
+    data.write_data_addr(offset, target, 0);
+    module.define_data(id, &data)?;
+    Ok(id)
+}
+
+#[test]
+fn data_reloc_out_of_bounds_is_rejected() {
+    let Some(isa) = isa() else {
+        return;
+    };
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
+    let ptr_bytes = usize::from(module.target_config().pointer_bytes());
+
+    let target = module.declare_anonymous_data(false, false).unwrap();
+    let mut data = DataDescription::new();
+    data.define(Box::new([1]));
+    module.define_data(target, &data).unwrap();
+
+    for zeroed in [false, true] {
+        // The pointer starts inside the object but ends past it.
+        define_data_with_reloc(&mut module, target, zeroed, ptr_bytes, 1).unwrap_err();
+        // The pointer starts past the object.
+        define_data_with_reloc(&mut module, target, zeroed, ptr_bytes, 4096).unwrap_err();
+        define_data_with_reloc(&mut module, target, zeroed, ptr_bytes, u32::MAX).unwrap_err();
+    }
+
+    // A pointer that ends exactly at the end of the object is fine.
+    let offset = u32::try_from(ptr_bytes).unwrap();
+    let id = define_data_with_reloc(&mut module, target, false, 2 * ptr_bytes, offset).unwrap();
+    module.finalize_definitions().unwrap();
+    let (target_ptr, _) = module.get_finalized_data(target);
+    let (ptr, size) = module.get_finalized_data(id);
+    assert_eq!(size, 2 * ptr_bytes);
+    let written = unsafe { ptr.add(ptr_bytes).cast::<usize>().read_unaligned() };
+    assert_eq!(written, target_ptr.addr());
+}
+
+#[test]
+fn function_bytes_reloc_out_of_bounds_is_rejected() {
+    use cranelift_codegen::binemit::Reloc;
+
+    let Some(isa) = isa() else {
+        return;
+    };
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
+    let sig = module.make_signature();
+
+    for (kind, offset) in [(Reloc::Abs4, 1), (Reloc::Abs8, 0), (Reloc::Abs4, 64)] {
+        let func_id = module.declare_anonymous_function(&sig).unwrap();
+        let reloc = ModuleReloc {
+            offset,
+            kind,
+            name: ModuleRelocTarget::FunctionOffset(func_id, 0),
+            addend: 0,
+        };
+        module
+            .define_function_bytes(func_id, 1, &[0; 4], &[reloc])
+            .unwrap_err();
+    }
+}
+
 #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
 mod far_x86_memory {
     use std::collections::VecDeque;

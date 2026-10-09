@@ -1,6 +1,6 @@
 use std::ptr;
 
-use cranelift_codegen::binemit::{Addend, Reloc};
+use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_module::{ModuleError, ModuleReloc, ModuleRelocTarget, ModuleResult};
 
 use crate::JITMemoryProvider;
@@ -16,6 +16,32 @@ const VENEER_SIZE: usize = 16;
 
 /// Size of a GOT entry: the absolute 8-byte address of a symbol.
 const GOT_ENTRY_SIZE: usize = 8;
+
+/// Whether the bytes patched by a `kind` relocation at `offset` lie within a
+/// definition of `size` bytes.
+fn reloc_in_bounds(kind: Reloc, offset: CodeOffset, size: usize) -> bool {
+    let len = match kind {
+        // An absolute 64-bit address, or a RISC-V `auipc` + `jalr` pair.
+        Reloc::Abs8 | Reloc::RiscvCallPlt => 8,
+        _ => 4,
+    };
+    (offset as usize)
+        .checked_add(len)
+        .is_some_and(|end| end <= size)
+}
+
+fn check_relocs(relocs: &[ModuleReloc], size: usize) -> ModuleResult<()> {
+    for reloc in relocs {
+        if !reloc_in_bounds(reloc.kind, reloc.offset, size) {
+            return Err(ModuleError::Backend(anyhow::anyhow!(
+                "{:?} relocation at offset {} is out of bounds of a {size}-byte definition",
+                reloc.kind,
+                reloc.offset,
+            )));
+        }
+    }
+    Ok(())
+}
 
 /// Reads a 32bit instruction at `iptr`, and writes it again after
 /// being altered by `modifier`
@@ -47,6 +73,8 @@ impl CompiledBlob {
         #[cfg(feature = "wasmtime-unwinder")] wasmtime_exception_data: Option<Vec<u8>>,
         kind: JITMemoryKind,
     ) -> ModuleResult<Self> {
+        check_relocs(&relocs, data.len())?;
+
         // Reserve a worst-case veneer slot for every branch relocation and a
         // GOT entry for every GOT-relative load in case its target is out of
         // range.
@@ -94,6 +122,8 @@ impl CompiledBlob {
         #[cfg(feature = "wasmtime-unwinder")] wasmtime_exception_data: Option<Vec<u8>>,
         kind: JITMemoryKind,
     ) -> ModuleResult<Self> {
+        check_relocs(&relocs, size)?;
+
         let ptr = memory
             .allocate(size, align, kind)
             .map_err(|e| ModuleError::Allocation { err: e })?;
@@ -156,7 +186,7 @@ impl CompiledBlob {
             },
         ) in self.relocs.iter().enumerate()
         {
-            debug_assert!((offset as usize) < self.size);
+            assert!(reloc_in_bounds(kind, offset, self.size));
             let at = unsafe { self.ptr.offset(isize::try_from(offset).unwrap()) };
             match kind {
                 Reloc::Abs4 => {
