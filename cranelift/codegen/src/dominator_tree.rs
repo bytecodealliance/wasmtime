@@ -188,6 +188,9 @@ struct DominatorTreeNode {
     idom: PackedOption<Block>,
     /// Preorder traversal number, zero for unreachable blocks.
     pre_number: u32,
+    /// This block's index in the CFG post-order, meaningless for unreachable
+    /// blocks.
+    post_number: u32,
 
     /// First child node in the domtree.
     child: PackedOption<Block>,
@@ -363,6 +366,22 @@ impl DominatorTree {
         na.dom_pre_number <= nb.dom_pre_number && na.dom_pre_max >= nb.dom_pre_max
     }
 
+    /// Returns `true` if the CFG edge `from -> to` is a retreating edge.
+    ///
+    /// A retreating edge is one that goes from a block to one of its ancestors
+    /// in the depth-first spanning tree used to compute this dominator tree, or
+    /// to itself. Every cycle in the CFG contains at least one retreating edge,
+    /// including irreducible cycles, which have no back edge whose target
+    /// dominates its source. In a reducible CFG, the retreating edges are
+    /// exactly its back edges.
+    ///
+    /// Both blocks must be reachable.
+    pub fn is_retreating_edge(&self, from: Block, to: Block) -> bool {
+        debug_assert!(self.is_reachable(from));
+        debug_assert!(self.is_reachable(to));
+        self.nodes[to].post_number >= self.nodes[from].post_number
+    }
+
     /// Get an iterator over the direct children of `block` in the dominator tree.
     ///
     /// These are the blocks whose immediate dominator is `block`, ordered by
@@ -486,6 +505,7 @@ impl DominatorTree {
                     );
                 }
                 Some(TraversalEvent::Exit(block)) => {
+                    self.nodes[block].post_number = u32::try_from(self.postorder.len()).unwrap();
                     self.postorder.push(block);
                 }
                 None => break,
@@ -844,6 +864,65 @@ mod tests {
         assert!(dt.dominates(jmp21, trap, &cur.func.layout));
         assert!(!dt.dominates(jmp21, block2, &cur.func.layout));
         assert!(dt.dominates(jmp21, jmp21, &cur.func.layout));
+    }
+
+    #[test]
+    fn retreating_edges() {
+        let mut func = Function::new();
+        let block0 = func.dfg.make_block();
+        let v0 = func.dfg.append_block_param(block0, I32);
+        let block1 = func.dfg.make_block();
+        let block2 = func.dfg.make_block();
+        let block3 = func.dfg.make_block();
+        let block4 = func.dfg.make_block();
+        let block5 = func.dfg.make_block();
+
+        let mut cur = FuncCursor::new(&mut func);
+
+        // An irreducible cycle between `block1` and `block2`, each of which can
+        // be entered directly from `block0`.
+        cur.insert_block(block0);
+        cur.ins().brif(v0, block1, &[], block2, &[]);
+
+        cur.insert_block(block1);
+        cur.ins().brif(v0, block2, &[], block3, &[]);
+
+        cur.insert_block(block2);
+        cur.ins().jump(block1, &[]);
+
+        // A natural loop with header `block3` and back edge `block4 -> block3`.
+        cur.insert_block(block3);
+        cur.ins().jump(block4, &[]);
+
+        cur.insert_block(block4);
+        cur.ins().brif(v0, block3, &[], block5, &[]);
+
+        // A self-loop.
+        cur.insert_block(block5);
+        cur.ins().brif(v0, block5, &[], block1, &[]);
+
+        let cfg = ControlFlowGraph::with_function(cur.func);
+        let dt = DominatorTree::with_function(cur.func, &cfg);
+
+        // Exactly one edge of the irreducible cycle retreats, depending on which
+        // of its blocks the DFS entered first. Neither block dominates the
+        // other.
+        assert!(!dt.block_dominates(block1, block2));
+        assert!(!dt.block_dominates(block2, block1));
+        assert_ne!(
+            dt.is_retreating_edge(block1, block2),
+            dt.is_retreating_edge(block2, block1),
+        );
+
+        assert!(dt.is_retreating_edge(block4, block3));
+        assert!(dt.is_retreating_edge(block5, block5));
+        assert!(dt.is_retreating_edge(block5, block1));
+
+        assert!(!dt.is_retreating_edge(block0, block1));
+        assert!(!dt.is_retreating_edge(block0, block2));
+        assert!(!dt.is_retreating_edge(block1, block3));
+        assert!(!dt.is_retreating_edge(block3, block4));
+        assert!(!dt.is_retreating_edge(block4, block5));
     }
 
     #[test]
