@@ -1005,6 +1005,7 @@ impl Func {
     ///   types and such.
     /// * Reference types like `externref` and `funcref` are valid at the
     ///   time of this call and for the `store` specified.
+    /// * The call is _not_ recursive from within e.g. a `call_async` invocation.
     ///
     /// These invariants are all upheld for you with [`Func::call`] and
     /// [`TypedFunc::call`].
