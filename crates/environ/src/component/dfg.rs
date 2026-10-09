@@ -478,7 +478,7 @@ pub enum Trampoline {
     },
     ThreadNewIndirect {
         instance: RuntimeComponentInstanceIndex,
-        start_func_ty_idx: ComponentTypeIndex,
+        start_func_ty_idx: ModuleInternedTypeIndex,
         start_func_table_id: TableId,
     },
     ThreadResumeLater {
