@@ -1994,6 +1994,7 @@ fn translate_resume_impl<'a>(
     let (handler_index, suspended_contref, suspended_contobj) = {
         builder.switch_to_block(suspend_block);
         builder.seal_block(suspend_block);
+        env.on_catch_block_entry(builder);
 
         let suspended_continuation = new_stack_chain.unchecked_get_continuation();
         let mut suspended_continuation = helpers::VMContRef::new(suspended_continuation);
