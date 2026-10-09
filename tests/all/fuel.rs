@@ -1327,3 +1327,70 @@ fn const_expr_fuel_is_accounted_without_start(config: &mut Config) -> Result<()>
 
     Ok(())
 }
+
+#[wasmtime_test(strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn else_and_end_operator_cost_on_taken_paths(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true).operator_cost(OperatorCost {
+        If: 0,
+        Else: 10,
+        End: 100,
+        Nop: 0,
+        Return: 0,
+        LocalGet: 0,
+        ..Default::default()
+    });
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (func (export "if_else") (param i32)
+            (if (local.get 0)
+              (then nop)
+              (else nop)))
+          (func (export "if_then_returns") (param i32)
+            (if (local.get 0)
+              (then return)
+              (else nop)))
+          (func (export "if_else_returns") (param i32)
+            (if (local.get 0)
+              (then nop)
+              (else return)))
+        )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let call_and_measure = |store: &mut Store<()>, name: &str, cond: i32| -> Result<u64> {
+        store.set_fuel(10_000)?;
+        let f = instance.get_typed_func::<i32, ()>(&mut *store, name)?;
+        f.call(&mut *store, cond)?;
+        Ok(10_000 - store.get_fuel()?)
+    };
+
+    // `then` taken: 1 (func entry) + 100 (`if` end) + 100 (`func` end) = 201.
+    // `Else` (10) must NOT be charged when the `then` branch is taken.
+    assert_eq!(call_and_measure(&mut store, "if_else", 1)?, 201);
+
+    // `else` taken: 1 (func entry) + 10 (`else`) + 100 (`if` end) + 100 (`func` end) = 211.
+    assert_eq!(call_and_measure(&mut store, "if_else", 0)?, 211);
+
+    // `then` taken when `then` ends in `return`: only function entry (1) is charged;
+    // neither `Else` (10) nor either `End` (100) is reached.
+    assert_eq!(call_and_measure(&mut store, "if_then_returns", 1)?, 1);
+
+    // `else` taken when `then` ends in `return`: still charges `Else` (10) + both `End`s (200) + entry (1) = 211.
+    assert_eq!(call_and_measure(&mut store, "if_then_returns", 0)?, 211);
+
+    // `then` taken when `else` ends in `return`: still charges both `End`s (200) + entry (1) = 201.
+    assert_eq!(call_and_measure(&mut store, "if_else_returns", 1)?, 201);
+
+    // `else` taken when `else` ends in `return`: charges entry (1) + `Else` (10) = 11;
+    // neither `End` (100) is reached.
+    assert_eq!(call_and_measure(&mut store, "if_else_returns", 0)?, 11);
+
+    Ok(())
+}

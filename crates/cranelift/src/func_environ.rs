@@ -629,7 +629,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             return;
         }
 
-        self.fuel_consumed += self.tunables.operator_cost.cost(op);
+        if !matches!(op, Operator::Else | Operator::End) {
+            self.fuel_consumed += self.tunables.operator_cost.cost(op);
+        }
 
         match op {
             // Exiting a function (via a return or unreachable) or otherwise
@@ -713,6 +715,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         match op {
             Operator::Call { .. } | Operator::CallIndirect { .. } | Operator::CallRef { .. } => {
                 self.fuel_load_into_var(builder);
+            }
+            Operator::Else => {
+                self.fuel_consumed += self.tunables.operator_cost.cost(op);
+            }
+            Operator::End => {
+                self.fuel_consumed += self.tunables.operator_cost.cost(op);
+                self.fuel_increment_var(builder);
             }
             _ => {}
         }
