@@ -319,10 +319,19 @@ impl StartTimes {
     }
 }
 
+/// A request queued for a worker.
+///
+/// The last element is set when the caller drops the `handle` future for this
+/// request, i.e. the response is no longer of interest to anyone.  It is
+/// per-request (rather than a handler-wide counter) so that a worker only
+/// reacts to the requests it actually accepted, and `Worker::run` observes it
+/// from a poll point outside the `run_concurrent` event loop -- which is what
+/// makes it work for synchronous (p2) guests as well.
 type WorkerRequest<S> = (
     <<S as HandlerState>::WorkerState as WorkerState>::RequestData,
     Request,
     oneshot::Sender<Result<Response, wasmtime::Error>>,
+    Arc<AtomicBool>,
 );
 
 struct Worker<S>
@@ -377,7 +386,7 @@ where
 
             Err(error) => {
                 let error = Arc::new(error);
-                if let Some((request_data, request, tx)) = request {
+                if let Some((request_data, request, tx, _)) = request {
                     _ = tx.send(Err(InstantiationError {
                         request_data,
                         request: Mutex::new(request),
@@ -388,7 +397,7 @@ where
                     // In this case, the worker was spawned to handle any queued
                     // requests.  Since we can't handle those requests, we send
                     // them all an instantiation error.
-                    for (request_data, request, tx) in mem::take(
+                    for (request_data, request, tx, _) in mem::take(
                         self.handler
                             .0
                             .request_queue
@@ -471,6 +480,8 @@ where
 
         let accept_concurrent = AtomicBool::new(true);
         let status = Mutex::new((WorkerStatus::Idle, Instant::now()));
+        // Abandonment flags of the requests this worker has accepted.
+        let accepted: Arc<Mutex<Vec<Arc<AtomicBool>>>> = Arc::new(Mutex::new(Vec::new()));
         let mut expiration = pin!(expiration);
 
         let function = async |accessor: &Accessor<_>| {
@@ -479,7 +490,8 @@ where
             let mut futures = FuturesUnordered::new();
             let mut start_times = StartTimes::default();
 
-            let accept_request = |(request_data, request, tx): WorkerRequest<S>,
+            let accepted = accepted.clone();
+            let accept_request = |(request_data, request, tx, abandoned): WorkerRequest<S>,
                                   futures: &mut FuturesUnordered<_>,
                                   start_times: &mut StartTimes,
                                   reuse_count: &mut usize| {
@@ -494,6 +506,7 @@ where
                 // additional requests for other workers to handle.
                 accept_concurrent.store(false, Relaxed);
                 *reuse_count += 1;
+                accepted.lock().unwrap().push(abandoned);
 
                 let prepared = accessor.with(|mut store| {
                     let prepared = Prepared::new(store.as_context_mut(), proxy, request, view, tx);
@@ -717,6 +730,19 @@ where
 
                     let (status, start) = *status.try_lock().unwrap();
 
+                    // If any request this worker accepted has been abandoned by
+                    // its caller then there is nobody left to receive the
+                    // response, so wind the worker down rather than waiting for
+                    // the full request timeout.
+                    //
+                    // This is the p2 counterpart of the `poll_canceled`
+                    // handling in `Prepared::run`: it has to be observed here,
+                    // because a synchronous guest can block the
+                    // `run_concurrent` event loop where that future lives.
+                    if accepted.lock().unwrap().iter().any(|f| f.load(Relaxed)) {
+                        return Poll::Ready(Err(ExpirationError.into()));
+                    }
+
                     if let Poll::Ready(()) = expiration.as_mut().poll(cx, status, start) {
                         return Poll::Ready(match status {
                             WorkerStatus::Requests | WorkerStatus::PostReturn => {
@@ -892,8 +918,33 @@ where
         data: <S::WorkerState as WorkerState>::RequestData,
         request: Request,
     ) -> Result<Response, wasmtime::Error> {
+        let abandoned = Arc::new(AtomicBool::new(false));
+        /// Marks the request as abandoned **only if** the future is dropped
+        /// before the request completes; [`disarm`](AbandonGuard::disarm) is
+        /// called once a response has been received.
+        struct AbandonGuard {
+            flag: Arc<AtomicBool>,
+            armed: bool,
+        }
+        impl AbandonGuard {
+            fn disarm(&mut self) {
+                self.armed = false;
+            }
+        }
+        impl Drop for AbandonGuard {
+            fn drop(&mut self) {
+                if self.armed {
+                    self.flag.store(true, Relaxed);
+                }
+            }
+        }
+        let mut abandon = AbandonGuard {
+            flag: abandoned.clone(),
+            armed: true,
+        };
+
         let (tx, rx) = oneshot::channel();
-        let req = (data, request, tx);
+        let req = (data, request, tx, abandoned);
         if self.0.worker_count.load(Relaxed) == 0 {
             // There are no available workers; skip the queue and pass
             // the request directly to the worker, which improves
@@ -932,7 +983,9 @@ where
             }
         }
 
-        rx.await.map_err(|_| TrapOrPanicError)?
+        let result = rx.await.map_err(|_| TrapOrPanicError)?;
+        abandon.disarm();
+        result
     }
 
     /// Return a reference to the application state.
@@ -1083,7 +1136,7 @@ impl<'a, T: Send> Prepared<'a, T> {
             Prepared::P3 {
                 guest,
                 call,
-                tx,
+                mut tx,
                 request_io_result,
                 view,
             } => {
@@ -1105,14 +1158,30 @@ impl<'a, T: Send> Prepared<'a, T> {
                 // notified when the receiver is dropped, in which case we should
                 // expire the request since the response is no longer of interest to
                 // the original `ProxyHandler::handle` caller.
-                let (result, sent) = match futures::future::select(handle, expiration).await {
-                    Either::Left((result, _)) => (result, true),
-                    // TODO: We should also send a cancel request to the expired
-                    // task to give it a chance to shut down gracefully, but as of
-                    // this writing Wasmtime does not yet provide an API for doing
-                    // that.  See issue #11833.  Instead, we let it continue running
-                    // as a background task until it either returns a response
-                    // (which we'll ignore) or the instance itself has expired.
+                // Also stop waiting as soon as the original
+                // `ProxyHandler::handle` caller drops the receiver, since the
+                // response is no longer of interest to anyone.  (This is
+                // `oneshot::Sender::poll_canceled`; the TODO above calls it
+                // `poll_close`, which is tokio's name for the same idea.)
+                let closed = std::future::poll_fn(|cx| tx.poll_canceled(cx));
+                futures::pin_mut!(closed);
+
+                let (result, sent) = match futures::future::select(
+                    futures::future::select(handle, expiration),
+                    closed,
+                )
+                .await
+                {
+                    Either::Left((Either::Left((result, _)), _)) => (result, true),
+                    Either::Left((Either::Right(((), _)), _)) => {
+                        // TODO: We should also send a cancel request to the expired
+                        // task to give it a chance to shut down gracefully, but as of
+                        // this writing Wasmtime does not yet provide an API for doing
+                        // that.  See issue #11833.  Instead, we let it continue running
+                        // as a background task until it either returns a response
+                        // (which we'll ignore) or the instance itself has expired.
+                        (Err(ExpirationError.into()), false)
+                    }
                     Either::Right(((), _)) => (Err(ExpirationError.into()), false),
                 };
 
@@ -1146,6 +1215,13 @@ impl<'a, T: Send> Prepared<'a, T> {
                 let tx = Dropper(tx);
 
                 // See corresponding TODO comment for the p3 case above.
+                //
+                // Note that the `poll_canceled` approach used for p3 does not
+                // work here: a synchronous guest call blocks the
+                // `run_concurrent` event loop, so the cancellation waker is
+                // never polled.  The same signal is instead observed by
+                // `Worker::run` through the per-request flag carried by
+                // `WorkerRequest`, at a poll point outside that event loop.
                 let (result, sent) = match futures::future::select(handle, expiration).await {
                     Either::Left((result, _)) => (result.context(MESSAGE), true),
                     // See corresponding TODO comment for the p3 case above.
