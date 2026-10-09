@@ -15,6 +15,9 @@ pub(super) struct NodePool<F: Forest> {
     freelist: Option<Node>,
     /// Invariant: This tracks the length of the `freelist`.
     freelist_count: usize,
+    /// Simulate allocation failure whenever `nodes` would need to grow.
+    #[cfg(test)]
+    pub(super) fail_allocs: bool,
 }
 
 impl<F: Forest> NodePool<F> {
@@ -24,7 +27,18 @@ impl<F: Forest> NodePool<F> {
             nodes: PrimaryMap::new(),
             freelist: None,
             freelist_count: 0,
+            #[cfg(test)]
+            fail_allocs: false,
         }
+    }
+
+    /// Reserve capacity for `additional` more nodes in `nodes`.
+    fn try_reserve_nodes(&mut self, additional: usize) -> Result<(), OutOfMemory> {
+        #[cfg(test)]
+        if self.fail_allocs {
+            return Err(OutOfMemory::new(additional));
+        }
+        self.nodes.try_reserve(additional)
     }
 
     /// Free all nodes.
@@ -52,7 +66,7 @@ impl<F: Forest> NodePool<F> {
             }
             None => {
                 // The free list is empty. Allocate a new node.
-                self.nodes.try_reserve(1)?;
+                self.try_reserve_nodes(1)?;
                 Ok(self.nodes.push(data))
             }
         }
@@ -62,7 +76,7 @@ impl<F: Forest> NodePool<F> {
     /// calls to `alloc_node` will succeed.
     pub fn reserve(&mut self, count: usize) -> Result<(), OutOfMemory> {
         if count > self.freelist_count {
-            self.nodes.try_reserve(count - self.freelist_count)?;
+            self.try_reserve_nodes(count - self.freelist_count)?;
             let mut freelist_head = self.freelist;
             for _ in 0..count - self.freelist_count {
                 freelist_head = Some(self.nodes.push(NodeData::Free {

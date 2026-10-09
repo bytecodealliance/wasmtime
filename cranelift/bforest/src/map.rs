@@ -1064,6 +1064,32 @@ mod tests {
     }
 
     #[test]
+    fn failed_insert_preserves_entries() {
+        let mut failures = 0;
+        // For each n, insert n entries and then fail allocations while
+        // inserting the n+1th entry.
+        for n in 1..1000u32 {
+            let f = &mut MapForest::<u32, u32>::new();
+            let mut m = Map::new();
+            for k in 0..n {
+                m.insert(k, k, f, &());
+            }
+            f.nodes.fail_allocs = true;
+            let result = m.try_insert(n, n, f, &());
+            f.nodes.fail_allocs = false;
+            if result.is_err() {
+                failures += 1;
+                m.verify(f, &());
+                for k in 0..n {
+                    assert_eq!(m.get(k, f, &()), Some(k), "key {k} lost at n={n}");
+                }
+                assert_eq!(m.get(n, f, &()), None);
+            }
+        }
+        assert!(failures > 0, "no insertion hit an allocation failure");
+    }
+
+    #[test]
     fn split_level1_leaf() {
         // Various ways of splitting a full leaf node at level 1.
         let f = &mut MapForest::<u32, f32>::new();
