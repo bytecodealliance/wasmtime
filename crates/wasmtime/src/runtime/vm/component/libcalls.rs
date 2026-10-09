@@ -862,40 +862,20 @@ unsafe fn prepare_call(
 }
 
 #[cfg(feature = "component-model-async")]
-unsafe fn sync_start(
-    store: &mut dyn VMStore,
-    instance: Instance,
-    callback: *mut u8,
-    storage: *mut u8,
-    storage_len: usize,
-    callee: *mut u8,
-    param_count: u32,
-) -> Result<()> {
-    unsafe {
-        store.component_async_store().sync_start(
-            instance,
-            callback.cast::<crate::vm::VMFuncRef>(),
-            NonNull::new(callee).unwrap().cast::<crate::vm::VMFuncRef>(),
-            param_count,
-            storage.cast::<core::mem::MaybeUninit<crate::ValRaw>>(),
-            storage_len,
-        )
-    }
-}
-
-#[cfg(feature = "component-model-async")]
-unsafe fn async_start(
+unsafe fn start_call(
     store: &mut dyn VMStore,
     instance: Instance,
     callback: *mut u8,
     post_return: *mut u8,
+    storage: *mut u8,
+    storage_len: usize,
     callee: *mut u8,
     param_count: u32,
     result_count: u32,
     flags: u32,
-) -> Result<u32> {
+) -> Result<()> {
     unsafe {
-        store.component_async_store().async_start(
+        store.component_async_store().start_call(
             instance,
             callback.cast::<crate::vm::VMFuncRef>(),
             post_return.cast::<crate::vm::VMFuncRef>(),
@@ -903,6 +883,8 @@ unsafe fn async_start(
             param_count,
             result_count,
             flags,
+            storage.cast::<core::mem::MaybeUninit<crate::ValRaw>>(),
+            storage_len,
         )
     }
 }

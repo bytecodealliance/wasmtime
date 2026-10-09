@@ -212,10 +212,9 @@ mod callback_code {
     pub const WAIT: u32 = 2;
 }
 
-/// A flag indicating that the callee is an async-lowered export.
-///
-/// This may be passed to the `async-start` intrinsic from a fused adapter.
+// Flags passed to the `start-call` intrinsic.
 const START_FLAG_ASYNC_CALLEE: u32 = wasmtime_environ::component::START_FLAG_ASYNC_CALLEE as u32;
+const START_FLAG_ASYNC_CALLER: u32 = wasmtime_environ::component::START_FLAG_ASYNC_CALLER as u32;
 
 /// Provides access to either store data (via the `get` method) or the store
 /// itself (via [`AsContext`]/[`AsContextMut`]), as well as the component
@@ -1098,6 +1097,7 @@ impl<T> StoreContextMut<'_, T> {
         assert!(state.next_switch_item.is_none());
         assert!(state.high_priority.is_empty());
         assert!(state.low_priority.is_empty());
+        assert!(state.saved_next_switch_items.is_empty());
         assert!(state.unforced_current_thread.is_none());
         assert!(state.deferred_host_call_context.is_none());
         assert!(state.futures_mut().unwrap().is_empty());
@@ -1906,6 +1906,13 @@ impl StoreOpaque {
             return self.enter_call_not_concurrent();
         }
 
+        // Stash the next switch item (if any) for the duration of this call
+        // since it's for the caller's caller, not for us.  We'll restore this
+        // in `exit_guest_sync_call`.
+        let state = self.concurrent_state_mut()?;
+        let item = state.next_switch_item.take();
+        state.saved_next_switch_items.push(item);
+
         let thread = self.current_thread()?;
         let caller = if let Some(thread) = thread.guest() {
             Caller::Guest { thread: *thread }
@@ -1994,6 +2001,17 @@ impl StoreOpaque {
         }
 
         self.cleanup_thread(thread, instance, CleanupTask::Yes)?;
+
+        let state = self.concurrent_state_mut()?;
+        let Some(item) = state.saved_next_switch_items.pop() else {
+            bail_bug!("unable to pop from `saved_next_switch_items`");
+        };
+        if let Some(item) = mem::replace(&mut state.next_switch_item, item) {
+            // Stash it back in the store to ensure it's cleaned up on store
+            // drop:
+            state.push_high_priority(item);
+            bail_bug!("`next_switch_item` unexpectedly already set");
+        }
 
         Ok(())
     }
@@ -2279,6 +2297,7 @@ impl StoreOpaque {
                         fiber,
                     };
 
+                    log::trace!("set next switch item to {item:?}");
                     if state.next_switch_item.replace(item).is_some() {
                         // This should be unreachable per the save/restore code
                         // in `Self::suspend`.
@@ -3283,6 +3302,11 @@ impl Instance {
     /// `wasmtime_environ::fact::trampoline::Compiler`.  The adapter will call
     /// this function immediately after calling `Self::prepare_call`.
     ///
+    /// If `flags` contains `START_FLAG_ASYNC_CALLER` then the caller used an
+    /// async-lowered import and the call's packed status is written to
+    /// `storage[0]`. Otherwise this blocks until the callee has produced its
+    /// result, if any, which is written to `storage[0]`.
+    ///
     /// SAFETY: The `*mut VMFuncRef` arguments must be valid pointers to guest
     /// functions with the appropriate signatures for the current guest task.
     /// If this is a call to an async-lowered import, the actual call may be
@@ -3297,10 +3321,10 @@ impl Instance {
         param_count: u32,
         result_count: u32,
         flags: u32,
-        storage: Option<&mut [MaybeUninit<ValRaw>]>,
-    ) -> Result<u32> {
+        storage: &mut [MaybeUninit<ValRaw>],
+    ) -> Result<()> {
         let token = StoreToken::new(store.as_context_mut());
-        let async_caller = storage.is_none();
+        let async_caller = (flags & START_FLAG_ASYNC_CALLER) != 0;
         let guest_thread = store.0.current_guest_thread()?;
         let state = store.0.concurrent_state_mut()?;
 
@@ -3463,10 +3487,14 @@ impl Instance {
             .state = GuestThreadState::Running;
         log::trace!("popped current thread {guest_thread:?}; new thread is {caller:?}");
 
-        if let Some(storage) = storage {
-            // The caller used a sync-lowered import to call an async-lifted
-            // export, in which case the result, if any, has been stashed in
-            // `GuestTask::sync_result`.
+        if async_caller {
+            let Some(slot) = storage.first_mut() else {
+                bail_bug!("no storage for async call status");
+            };
+            *slot = MaybeUninit::new(ValRaw::u32(status.pack(waitable)));
+        } else {
+            // The caller used a sync-lowered import, in which case the result,
+            // if any, has been stashed in `GuestTask::sync_result`.
             let state = store.0.concurrent_state_mut()?;
             let task = state.get_mut(guest_thread.task)?;
             if let Some(result) = task.sync_result.take()? {
@@ -3480,7 +3508,7 @@ impl Instance {
             }
         }
 
-        Ok(status.pack(waitable))
+        Ok(())
     }
 
     /// Poll the specified future once on behalf of a guest->host call using an
@@ -4493,21 +4521,9 @@ pub trait VMComponentAsyncStore {
         storage_len: usize,
     ) -> Result<()>;
 
-    /// A helper function for fused adapter modules involving calls where the
-    /// caller is sync-lowered but the callee is async-lifted.
-    unsafe fn sync_start(
-        &mut self,
-        instance: Instance,
-        callback: *mut VMFuncRef,
-        callee: NonNull<VMFuncRef>,
-        param_count: u32,
-        storage: *mut MaybeUninit<ValRaw>,
-        storage_len: usize,
-    ) -> Result<()>;
-
-    /// A helper function for fused adapter modules involving calls where the
-    /// caller is async-lowered.
-    unsafe fn async_start(
+    /// A helper function for fused adapter modules to start a call previously
+    /// set up with `prepare_call`.
+    unsafe fn start_call(
         &mut self,
         instance: Instance,
         callback: *mut VMFuncRef,
@@ -4516,7 +4532,9 @@ pub trait VMComponentAsyncStore {
         param_count: u32,
         result_count: u32,
         flags: u32,
-    ) -> Result<u32>;
+        storage: *mut MaybeUninit<ValRaw>,
+        storage_len: usize,
+    ) -> Result<()>;
 
     /// The `future.write` intrinsic.
     fn future_write(
@@ -4683,35 +4701,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         }
     }
 
-    unsafe fn sync_start(
-        &mut self,
-        instance: Instance,
-        callback: *mut VMFuncRef,
-        callee: NonNull<VMFuncRef>,
-        param_count: u32,
-        storage: *mut MaybeUninit<ValRaw>,
-        storage_len: usize,
-    ) -> Result<()> {
-        unsafe {
-            instance
-                .start_call(
-                    StoreContextMut(self),
-                    callback,
-                    ptr::null_mut(),
-                    callee,
-                    param_count,
-                    1,
-                    START_FLAG_ASYNC_CALLEE,
-                    // SAFETY: The `wasmtime_cranelift`-generated code that calls
-                    // this method will have ensured that `storage` is a valid
-                    // pointer containing at least `storage_len` items.
-                    Some(core::slice::from_raw_parts_mut(storage, storage_len)),
-                )
-                .map(drop)
-        }
-    }
-
-    unsafe fn async_start(
+    unsafe fn start_call(
         &mut self,
         instance: Instance,
         callback: *mut VMFuncRef,
@@ -4720,7 +4710,9 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         param_count: u32,
         result_count: u32,
         flags: u32,
-    ) -> Result<u32> {
+        storage: *mut MaybeUninit<ValRaw>,
+        storage_len: usize,
+    ) -> Result<()> {
         unsafe {
             instance.start_call(
                 StoreContextMut(self),
@@ -4730,7 +4722,10 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
                 param_count,
                 result_count,
                 flags,
-                None,
+                // SAFETY: The `wasmtime_cranelift`-generated code that calls
+                // this method will have ensured that `storage` is a valid
+                // pointer containing at least `storage_len` items.
+                core::slice::from_raw_parts_mut(storage, storage_len),
             )
         }
     }
@@ -5826,6 +5821,10 @@ pub struct ConcurrentState {
     /// Whether the `StoreContextMut::poll_until` event loop is running.
     event_loop_running: bool,
 
+    /// Stack of switch items to push to and pop from when entering and exiting
+    /// sync-to-sync calls.
+    saved_next_switch_items: Vec<Option<WorkItem>>,
+
     /// See [TaskGroupHook].
     #[cfg(feature = "task-group-hook")]
     task_group_hook: Option<Box<dyn TaskGroupHook>>,
@@ -5850,6 +5849,7 @@ impl Default for ConcurrentState {
             interesting_tasks_empty_waker: None,
             ready_for_concurrent_call_waker: None,
             event_loop_running: false,
+            saved_next_switch_items: Vec::new(),
             #[cfg(feature = "task-group-hook")]
             task_group_hook: None,
         }
@@ -5937,6 +5937,12 @@ impl ConcurrentState {
         for item in mem::take(&mut self.low_priority) {
             handle_item(item);
         }
+        for item in mem::take(&mut self.saved_next_switch_items)
+            .into_iter()
+            .filter_map(|v| v)
+        {
+            handle_item(item);
+        }
 
         if let Some(them) = self.futures.get_mut().take() {
             futures.push(them);
@@ -5957,6 +5963,7 @@ impl ConcurrentState {
             next_switch_item,
             high_priority,
             low_priority,
+            saved_next_switch_items,
 
             // TODO(cm-gc): This field contains `ValRaw`s, but they are never GC
             // references because the component model doesn't support GC yet. We
@@ -6027,6 +6034,12 @@ impl ConcurrentState {
             handle_item(item);
         }
         for item in low_priority {
+            handle_item(item);
+        }
+        for item in saved_next_switch_items
+            .iter_mut()
+            .filter_map(|v| v.as_mut())
+        {
             handle_item(item);
         }
     }

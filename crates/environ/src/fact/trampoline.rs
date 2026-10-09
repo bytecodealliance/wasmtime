@@ -18,10 +18,11 @@
 use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FixedEncoding as FE, FlatType, InterfaceType,
     MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
-    START_FLAG_ASYNC_CALLEE, StringEncoding, Transcode, TypeComponentLocalErrorContextTableIndex,
-    TypeEnumIndex, TypeFixedLengthListIndex, TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex,
-    TypeMapIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
-    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
+    START_FLAG_ASYNC_CALLEE, START_FLAG_ASYNC_CALLER, StringEncoding, Transcode,
+    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedLengthListIndex,
+    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex, TypeOptionIndex,
+    TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
+    TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -158,104 +159,44 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
         result
     };
 
-    match (adapter.lower.options.async_, adapter.lift.options.async_) {
-        (false, false) => {
-            // We can adapt sync->sync case with only minimal use of intrinsics,
-            // e.g. resource enter and exit calls as needed.
-            let (compiler, lower_sig, lift_sig) = compiler(module, adapter);
-            compiler.compile_sync_to_sync_adapter(adapter, &lower_sig, &lift_sig)
-        }
-        (true, true) => {
-            assert!(module.tunables.concurrency_support);
-
-            // In the async->async case, we must compile a couple of helper functions:
-            //
-            // - `async-start`: copies the parameters from the caller to the callee
-            // - `async-return`: copies the result from the callee to the caller
-            //
-            // Unlike synchronous calls, the above operations are asynchronous
-            // and subject to backpressure.  If the callee is not yet ready to
-            // handle a new call, the `async-start` function will not be called
-            // immediately.  Instead, control will return to the caller,
-            // allowing it to do other work while waiting for this call to make
-            // progress.  Once the callee indicates it is ready, `async-start`
-            // will be called, and sometime later (possibly after various task
-            // switch events), when the callee has produced a result, it will
-            // call `async-return` via the `task.return` intrinsic, at which
-            // point a `STATUS_RETURNED` event will be delivered to the caller.
-            let start = async_start_adapter(module);
-            let return_ = async_return_adapter(module);
-            let (compiler, lower_sig, lift_sig) = compiler(module, adapter);
-            compiler.compile_async_to_async_adapter(
-                adapter,
-                start,
-                return_,
-                i32::try_from(lift_sig.params.len()).unwrap(),
-                &lower_sig,
-            );
-        }
-        (false, true) => {
-            assert!(module.tunables.concurrency_support);
-
-            // Like the async->async case above, for the sync->async case we
-            // also need `async-start` and `async-return` helper functions to
-            // allow the callee to asynchronously "pull" the parameters and
-            // "push" the results when it is ready.
-            //
-            // However, since the caller is using the synchronous ABI, the
-            // parameters may have been passed via the stack rather than linear
-            // memory.  In that case, we pass them to the host to store in a
-            // task-local location temporarily in the case of backpressure.
-            // Similarly, the host will also temporarily store the results that
-            // the callee provides to `async-return` until it is ready to resume
-            // the caller.
-            let start = async_start_adapter(module);
-            let return_ = async_return_adapter(module);
-            let (compiler, lower_sig, lift_sig) = compiler(module, adapter);
-            compiler.compile_sync_to_async_adapter(
-                adapter,
-                start,
-                return_,
-                i32::try_from(lift_sig.params.len()).unwrap(),
-                &lower_sig,
-            );
-        }
-        (true, false) => {
-            assert!(module.tunables.concurrency_support);
-
-            // As with the async->async and sync->async cases above, for the
-            // async->sync case we use `async-start` and `async-return` helper
-            // functions.  Here, those functions allow the host to enforce
-            // backpressure in the case where the callee instance already has
-            // another synchronous call in progress, in which case we can't
-            // start a new one until the current one (and any others already
-            // waiting in line behind it) has completed.
-            //
-            // In the case of backpressure, we'll return control to the caller
-            // immediately so it can do other work.  Later, once the callee is
-            // ready, the host will call the `async-start` function to retrieve
-            // the parameters and pass them to the callee.  At that point, the
-            // callee may block on a host call, at which point the host will
-            // suspend the fiber it is running on and allow the caller (or any
-            // other ready instance) to run concurrently with the blocked
-            // callee.  Once the callee finally returns, the host will call the
-            // `async-return` function to write the result to the caller's
-            // linear memory and deliver a `STATUS_RETURNED` event to the
-            // caller.
-            let lift_sig = module.types.signature(&adapter.lift);
-            let start = async_start_adapter(module);
-            let return_ = async_return_adapter(module);
-            let (compiler, lower_sig, ..) = compiler(module, adapter);
-            compiler.compile_async_to_sync_adapter(
-                adapter,
-                start,
-                return_,
-                i32::try_from(lift_sig.params.len()).unwrap(),
-                i32::try_from(lift_sig.results.len()).unwrap(),
-                &lower_sig,
-            );
-        }
+    let lower_async = adapter.lower.options.async_;
+    let lift_async = adapter.lift.options.async_;
+    if !lower_async && !lift_async && !module.types[adapter.lift.ty].async_ {
+        // We can adapt sync->sync case with only minimal use of intrinsics,
+        // e.g. resource enter and exit calls as needed.
+        let (compiler, lower_sig, lift_sig) = compiler(module, adapter);
+        compiler.compile_sync_to_sync_adapter(adapter, &lower_sig, &lift_sig);
+        return;
     }
+
+    assert!(module.tunables.concurrency_support);
+
+    // All other cases are mediated by the host: the caller and/or callee use
+    // the async ABI, or the callee has an async function type (in which case
+    // it's subject to backpressure and exclusive-entry checks even if both
+    // sides are otherwise sync).  For these we compile a couple of helper
+    // functions:
+    //
+    // - `async-start`: copies the parameters from the caller to the callee
+    // - `async-return`: copies the result from the callee to the caller
+    //
+    // The host calls `async-start` once the callee is ready to handle a new
+    // call (e.g. it has no backpressure and, if required, its instance isn't
+    // exclusively held by another task), which may not be immediately.  It
+    // calls `async-return` once the callee has produced its result, either
+    // via `task.return` (if async-lifted) or by returning (if sync-lifted).
+    //
+    // In the meantime, an async caller gets control back immediately so it can
+    // do other work, and is later notified of the subtask's progress via
+    // events.  A sync caller instead blocks until the callee has produced its
+    // result.  Since a sync caller may have passed its parameters on the stack
+    // rather than in linear memory, the host stores them in a task-local
+    // location until `async-start` is called, and similarly stores the results
+    // until the caller is resumed.
+    let start = async_start_adapter(module);
+    let return_ = async_return_adapter(module);
+    let (compiler, lower_sig, lift_sig) = compiler(module, adapter);
+    compiler.compile_host_mediated_adapter(adapter, start, return_, &lower_sig, &lift_sig);
 }
 
 /// Compiles a helper function as specified by the `Helper` configuration.
@@ -449,28 +390,40 @@ impl<'a, 'b> Compiler<'a, 'b> {
         }
     }
 
-    /// Compile an adapter function supporting an async-lowered import to an
-    /// async-lifted export.
+    /// Compile an adapter function for a call which is mediated by the host,
+    /// i.e. any call other than a sync->sync call to a sync-typed function.
     ///
-    /// This uses a pair of `async-prepare` and `async-start` built-in functions
-    /// to set up and start a subtask, respectively.  `async-prepare` accepts
+    /// This uses a pair of `prepare-call` and `start-call` built-in functions
+    /// to set up and start a subtask, respectively.  `prepare-call` accepts
     /// `start` and `return_` functions which copy the parameters and results,
-    /// respectively; the host will call the former when the callee has cleared
-    /// its backpressure flag and the latter when the callee has called
-    /// `task.return`.
-    fn compile_async_to_async_adapter(
+    /// respectively; the host will call the former when the callee may be
+    /// entered (e.g. it has no backpressure) and the latter when the callee has
+    /// produced its result.
+    ///
+    /// For an async caller, `start-call` returns the subtask's status.  For a
+    /// sync caller, it blocks until the callee has produced its result and
+    /// returns the lowered result, if any.
+    fn compile_host_mediated_adapter(
         mut self,
         adapter: &AdapterData,
         start: FunctionId,
         return_: FunctionId,
-        param_count: i32,
         lower_sig: &Signature,
+        lift_sig: &Signature,
     ) {
-        let start_call =
-            self.module
-                .import_async_start_call(&adapter.name, adapter.lift.options.callback, None);
+        let async_caller = adapter.lower.options.async_;
+        let start_call = self.module.import_start_call(
+            &adapter.name,
+            adapter.lift.options.callback,
+            adapter.lift.post_return,
+            if async_caller {
+                &[ValType::I32]
+            } else {
+                &lower_sig.results
+            },
+        );
 
-        self.call_prepare(adapter, start, return_, lower_sig, false);
+        self.call_prepare(adapter, start, return_, lower_sig, !async_caller);
 
         // TODO: As an optimization, consider checking the backpressure flag on
         // the callee instance and, if it's unset _and_ the callee uses a
@@ -485,13 +438,18 @@ impl<'a, 'b> Compiler<'a, 'b> {
             format!("[adapter-callee]{}", adapter.name),
         ));
 
+        let mut flags = 0;
+        if async_caller {
+            flags |= START_FLAG_ASYNC_CALLER;
+        }
+        if adapter.lift.options.async_ {
+            flags |= START_FLAG_ASYNC_CALLEE;
+        }
+
         self.instruction(RefFunc(adapter.callee.as_u32()));
-        self.instruction(I32Const(param_count));
-        // The result count for an async callee is either one (if there's a
-        // callback) or zero (if there's no callback).  We conservatively use
-        // one here to ensure the host provides room for the result, if any.
-        self.instruction(I32Const(1));
-        self.instruction(I32Const(START_FLAG_ASYNC_CALLEE));
+        self.instruction(I32Const(i32::try_from(lift_sig.params.len()).unwrap()));
+        self.instruction(I32Const(i32::try_from(lift_sig.results.len()).unwrap()));
+        self.instruction(I32Const(flags));
         self.instruction(Call(start_call.as_u32()));
 
         self.finish()
@@ -581,92 +539,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(LocalGet(u32::try_from(index).unwrap()));
         }
         self.instruction(Call(prepare.as_u32()));
-    }
-
-    /// Compile an adapter function supporting a sync-lowered import to an
-    /// async-lifted export.
-    ///
-    /// This uses a pair of `sync-prepare` and `sync-start` built-in functions
-    /// to set up and start a subtask, respectively.  `sync-prepare` accepts
-    /// `start` and `return_` functions which copy the parameters and results,
-    /// respectively; the host will call the former when the callee has cleared
-    /// its backpressure flag and the latter when the callee has called
-    /// `task.return`.
-    fn compile_sync_to_async_adapter(
-        mut self,
-        adapter: &AdapterData,
-        start: FunctionId,
-        return_: FunctionId,
-        lift_param_count: i32,
-        lower_sig: &Signature,
-    ) {
-        let start_call = self.module.import_sync_start_call(
-            &adapter.name,
-            adapter.lift.options.callback,
-            &lower_sig.results,
-        );
-
-        self.call_prepare(adapter, start, return_, lower_sig, true);
-
-        // TODO: As an optimization, consider checking the backpressure flag on
-        // the callee instance and, if it's unset _and_ the callee uses a
-        // callback, translate the params and call the callee function directly
-        // here (and make sure `start_call` knows _not_ to call it in that case).
-
-        // We export this function so we can pass a funcref to the host.
-        //
-        // TODO: Use a declarative element segment instead of exporting this.
-        self.module.exports.push((
-            adapter.callee.as_u32(),
-            format!("[adapter-callee]{}", adapter.name),
-        ));
-
-        self.instruction(RefFunc(adapter.callee.as_u32()));
-        self.instruction(I32Const(lift_param_count));
-        self.instruction(Call(start_call.as_u32()));
-
-        self.finish()
-    }
-
-    /// Compile an adapter function supporting an async-lowered import to a
-    /// sync-lifted export.
-    ///
-    /// This uses a pair of `async-prepare` and `async-start` built-in functions
-    /// to set up and start a subtask, respectively.  `async-prepare` accepts
-    /// `start` and `return_` functions which copy the parameters and results,
-    /// respectively; the host will call the former when the callee has cleared
-    /// its backpressure flag and the latter when the callee has returned its
-    /// result(s).
-    fn compile_async_to_sync_adapter(
-        mut self,
-        adapter: &AdapterData,
-        start: FunctionId,
-        return_: FunctionId,
-        param_count: i32,
-        result_count: i32,
-        lower_sig: &Signature,
-    ) {
-        let start_call =
-            self.module
-                .import_async_start_call(&adapter.name, None, adapter.lift.post_return);
-
-        self.call_prepare(adapter, start, return_, lower_sig, false);
-
-        // We export this function so we can pass a funcref to the host.
-        //
-        // TODO: Use a declarative element segment instead of exporting this.
-        self.module.exports.push((
-            adapter.callee.as_u32(),
-            format!("[adapter-callee]{}", adapter.name),
-        ));
-
-        self.instruction(RefFunc(adapter.callee.as_u32()));
-        self.instruction(I32Const(param_count));
-        self.instruction(I32Const(result_count));
-        self.instruction(I32Const(0));
-        self.instruction(Call(start_call.as_u32()));
-
-        self.finish()
     }
 
     /// Compiles a function to be exported to the host which host to lift the
@@ -1045,7 +917,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             let abi = CanonicalAbiInfo::record(src_tys.iter().map(|t| self.types.canonical_abi(t)));
             assert_eq!(
                 result_locals.len(),
-                if lower_opts.async_ || lift_opts.async_ {
+                if lower_opts.async_ || lift_opts.async_ || self.types[adapter.lift.ty].async_ {
                     2
                 } else {
                     1
