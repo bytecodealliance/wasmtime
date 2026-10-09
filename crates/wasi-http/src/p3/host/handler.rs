@@ -45,7 +45,9 @@ impl DelayedAbortOnDropHandle {
                 tokio::spawn(async move {
                     let Ok(handle) = rx.await else { return };
                     if !handle.is_finished() {
-                        let _ = tokio::time::timeout(timeout, handle);
+                        // We don't care if the task completes in the deadline
+                        // or not.
+                        let _ = tokio::time::timeout(timeout, handle).await;
                     }
                 });
             });
