@@ -24,12 +24,12 @@
 
 ;; `(x >> k) << k` is the same as masking off the bottom `k` bits (regardless if
 ;; this is a signed or unsigned shift right).
-(rule (simplify (ishl (fits_in_64 ty)
+(rule (simplify (ishl (fits_in_64 (ty_int ty))
                       (ushr ty x (iconst _ k))
                       (iconst _ k)))
       (let ((mask Imm64 (imm64_shl ty (imm64 0xFFFF_FFFF_FFFF_FFFF) k)))
         (band ty x (iconst ty mask))))
-(rule (simplify (ishl (fits_in_64 ty)
+(rule (simplify (ishl (fits_in_64 (ty_int ty))
                       (sshr ty x (iconst _ k))
                       (iconst _ k)))
       (let ((mask Imm64 (imm64_shl ty (imm64 0xFFFF_FFFF_FFFF_FFFF) k)))
