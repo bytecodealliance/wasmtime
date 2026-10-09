@@ -1,13 +1,52 @@
 use super::{TypedResource, TypedResourceIndex};
 use crate::prelude::TryVec;
 use crate::{Result, bail};
+use alloc::sync::Arc;
 use core::mem;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
 
 /// The maximum handle value is specified in
 /// <https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md>
 /// currently and keeps the upper bits free for use in the component and ABI.
 const MAX_HANDLE: u32 = 1 << 28;
+
+/// Live-handle count shared by all `HandleTable`s in a store.
+///
+/// The count tracks live handles (incremented in `insert`, decremented in
+/// `remove`), since freed slots are reused.
+///
+/// Only touched behind `&mut` on the store; the atomics exist solely to make
+/// this `Send + Sync` without unsafe code.
+pub struct HandleCounter {
+    live: AtomicUsize,
+    limit: AtomicUsize,
+}
+
+impl HandleCounter {
+    /// Creates a counter with no live handles and the given `limit`.
+    pub fn new(limit: usize) -> HandleCounter {
+        HandleCounter {
+            live: AtomicUsize::new(0),
+            limit: AtomicUsize::new(limit),
+        }
+    }
+
+    /// Returns the number of currently-live handles.
+    pub fn live(&self) -> usize {
+        self.live.load(Ordering::Relaxed)
+    }
+
+    /// Returns the configured limit on simultaneously-live handles.
+    pub fn limit(&self) -> usize {
+        self.limit.load(Ordering::Relaxed)
+    }
+
+    /// Updates the limit. Does not retroactively trap tables already over it.
+    pub fn set_limit(&self, limit: usize) {
+        self.limit.store(limit, Ordering::Relaxed);
+    }
+}
 
 /// Represents the state of a stream or future handle from the perspective of a
 /// given component instance.
@@ -115,18 +154,22 @@ enum Slot {
 pub struct HandleTable {
     next: u32,
     slots: TryVec<Slot>,
-}
 
-impl Default for HandleTable {
-    fn default() -> Self {
-        Self {
-            next: 0,
-            slots: TryVec::new(),
-        }
-    }
+    /// Store-wide live-handle count, shared across the store's tables. See
+    /// `HandleCounter`.
+    counter: Arc<HandleCounter>,
 }
 
 impl HandleTable {
+    /// Creates an empty table charged to the shared store-level `counter`.
+    pub fn new(counter: Arc<HandleCounter>) -> HandleTable {
+        HandleTable {
+            next: 0,
+            slots: TryVec::new(),
+            counter,
+        }
+    }
+
     /// Returns whether or not this table is empty.
     pub fn is_empty(&self) -> bool {
         self.slots
@@ -148,6 +191,12 @@ impl HandleTable {
             bail!("cannot allocate another handle: index overflow");
         }
 
+        // Also enforce the store-wide cap; `MAX_HANDLE` alone scales with the
+        // guest-controlled instance count. See `HandleCounter`.
+        if self.counter.live() >= self.counter.limit() {
+            bail!("cannot allocate another handle: store handle limit exceeded");
+        }
+
         if next as usize == self.slots.len() {
             self.slots.push(Slot::Free {
                 next: next.checked_add(1).unwrap(),
@@ -158,14 +207,21 @@ impl HandleTable {
             _ => unreachable!(),
         };
 
+        // Count the handle only once its slot is committed; pairs with the
+        // decrement in `remove`.
+        self.counter.live.fetch_add(1, Ordering::Relaxed);
+
         Ok(next + 1)
     }
 
     fn remove(&mut self, idx: u32) -> Result<()> {
         let to_fill = Slot::Free { next: self.next };
+        // Decrement only after this `?`: `get_mut` rejects a freed slot, so a
+        // failed removal must not touch the counter.
         let slot = self.get_mut(idx)?;
         *slot = to_fill;
         self.next = idx - 1;
+        self.counter.live.fetch_sub(1, Ordering::Relaxed);
         Ok(())
     }
 
@@ -579,12 +635,16 @@ impl HandleTable {
     }
 }
 
-#[derive(Default)]
 #[cfg(feature = "component-model-async")]
 pub struct ThreadHandleTable(HandleTable);
 
 #[cfg(feature = "component-model-async")]
 impl ThreadHandleTable {
+    /// Creates an empty thread-handle table charged to the shared `counter`.
+    pub fn new(counter: Arc<HandleCounter>) -> ThreadHandleTable {
+        ThreadHandleTable(HandleTable::new(counter))
+    }
+
     /// Inserts the guest thread `rep` into this table, returning the index it
     /// now resides at.
     pub fn guest_thread_insert(&mut self, rep: u32) -> Result<u32> {
