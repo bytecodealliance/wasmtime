@@ -6286,6 +6286,9 @@ impl FuncEnvironment<'_> {
                 let base = self.load_runtime_data_base(builder, data);
                 let null = builder.ins().iconst(self.pointer_type(), 0);
                 let is_null = builder.ins().icmp(IntCC::Equal, base, null);
+                if self.tunables.consume_fuel {
+                    self.fuel_increment_var(builder);
+                }
                 builder.ins().brif(is_null, end_block, &[], init_block, &[]);
                 builder.switch_to_block(init_block);
                 builder.seal_block(init_block);

@@ -1327,3 +1327,40 @@ fn const_expr_fuel_is_accounted_without_start(config: &mut Config) -> Result<()>
 
     Ok(())
 }
+
+#[wasmtime_test(wasm_features(extended_const))]
+#[cfg_attr(miri, ignore)]
+fn static_memory_segment_preserves_startup_fuel(config: &mut Config) -> Result<()> {
+    const WAT: &str = r#"
+        (module
+          (global $g i32 (i32.add (i32.const 1) (i32.const 2)))
+          (memory 1)
+          (data (i32.const 0) "hello")
+          (export "g" (global $g)))
+    "#;
+
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(&engine, WAT)?;
+
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(10_000)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let g = instance
+        .get_global(&mut store, "g")
+        .unwrap()
+        .get(&mut store);
+    assert_eq!(g.i32(), Some(3));
+
+    // At least the 4 units from startup entry + `i32.const` + `i32.const` +
+    // `i32.add` must be accounted for even when static memory initialization
+    // takes the CoW fast path.
+    let consumed = 10_000 - store.get_fuel()?;
+    assert!(
+        consumed >= 4,
+        "startup fuel before static data segment was lost: consumed={consumed}"
+    );
+
+    Ok(())
+}
