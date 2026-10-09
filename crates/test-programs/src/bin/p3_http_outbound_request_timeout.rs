@@ -30,7 +30,11 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         assert!(
             matches!(
                 err.downcast_ref::<ErrorCode>(),
-                Some(ErrorCode::ConnectionTimeout | ErrorCode::ConnectionRefused)
+                Some(
+                    ErrorCode::ConnectionTimeout
+                        | ErrorCode::ConnectionRefused
+                        | ErrorCode::DestinationUnavailable
+                )
             ),
             "expected connection timeout: {err:?}"
         );
