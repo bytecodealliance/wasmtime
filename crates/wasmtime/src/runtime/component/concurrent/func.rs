@@ -6,6 +6,7 @@ use crate::runtime::vm::SendSyncPtr;
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use core::marker;
 use core::mem::MaybeUninit;
+use core::pin::pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 
@@ -126,6 +127,11 @@ impl Func {
     /// which can be passed to [`Func::finish_call_concurrent`] to resolve
     /// the call.
     ///
+    /// Note that the returned [`FuncCallConcurrent`] must either be passed to
+    /// [`Func::finish_call_concurrent`] or [`Func::dispose_call_concurrent`]
+    /// before it is dropped; otherwise, the underlying guest task will be
+    /// leaked inside the store until the store is dropped.
+    ///
     /// For more information see [`Func::call_concurrent`].
     pub fn start_call_concurrent<'a, T: Send + 'static>(
         self,
@@ -158,18 +164,31 @@ impl Func {
         })
     }
 
+    /// Dispose of a call that was initiated via [`Func::start_call_concurrent`]
+    /// without waiting for the result.
+    ///
+    /// Note that this will not cancel the guest task; it will only release the
+    /// reference to ensure that it doesn't leak.
+    pub fn dispose_call_concurrent<T: 'static>(
+        mut store: impl AsContextMut<Data = T>,
+        call: FuncCallConcurrent<'_, T>,
+    ) -> Result<()> {
+        pin!(call.call).as_mut().dispose(store.as_context_mut().0)
+    }
+
     /// Completes a call that was initiated via
     /// [`Func::start_call_concurrent`].
-    pub async fn finish_call_concurrent<T: Send>(
+    pub async fn finish_call_concurrent<T: Send + 'static>(
         self,
         accessor: impl AsAccessor<Data = T>,
         call: FuncCallConcurrent<'_, T>,
     ) -> Result<()> {
-        // Intentionally not used today, but left here for future API
-        // compatibility with using this.
-        let _ = accessor;
         let FuncCallConcurrent { call, results, .. } = call;
-        let run_results = call.await?;
+        let mut call = pin!(call);
+        let run_results = call.as_mut().await?;
+        accessor
+            .as_accessor()
+            .with(|mut access| call.dispose(access.as_context_mut().0))?;
         assert_eq!(run_results.len(), results.len());
         for (result, slot) in run_results.into_iter().zip(results) {
             *slot = result;
@@ -277,7 +296,12 @@ where
         wrapper
             .store
             .as_context_mut()
-            .run_concurrent_trap_on_idle(async |_| Ok(result.await?))
+            .run_concurrent_trap_on_idle(async |accessor| {
+                let mut call = pin!(result);
+                let result = call.as_mut().await?;
+                accessor.with(|mut access| call.dispose(access.as_context_mut().0))?;
+                Ok(result)
+            })
             .await?
     }
 
@@ -362,6 +386,12 @@ where
     /// which can be passed to [`TypedFunc::finish_call_concurrent`] to resolve
     /// the call.
     ///
+    /// Note that the returned [`TypedFuncCallConcurrent`] must either be passed
+    /// to [`TypedFunc::finish_call_concurrent`] or
+    /// [`TypedFunc::dispose_call_concurrent`] before it is dropped; otherwise,
+    /// the underlying guest task will be leaked inside the store until the
+    /// store is dropped.
+    ///
     /// For more information see [`TypedFunc::call_concurrent`].
     pub fn start_call_concurrent<T>(
         self,
@@ -390,6 +420,18 @@ where
         })
     }
 
+    /// Dispose of a call that was initiated via [`Func::start_call_concurrent`]
+    /// without waiting for the result.
+    ///
+    /// Note that this will not cancel the guest task; it will only release the
+    /// reference to ensure that it doesn't leak.
+    pub fn dispose_call_concurrent<T: 'static>(
+        mut store: impl AsContextMut<Data = T>,
+        call: TypedFuncCallConcurrent<T, Params, Return>,
+    ) -> Result<()> {
+        pin!(call.call).as_mut().dispose(store.as_context_mut().0)
+    }
+
     /// Completes a call that was initiated via
     /// [`TypedFunc::start_call_concurrent`].
     pub async fn finish_call_concurrent<T>(
@@ -402,10 +444,12 @@ where
         Params: 'static,
         Return: 'static,
     {
-        // This is intentionally part of the public API but not used yet.
-        // This'll likely want to be used in future refactorings.
-        let _ = accessor;
-        call.call.await
+        let mut call = pin!(call.call);
+        let result = call.as_mut().await?;
+        accessor
+            .as_accessor()
+            .with(|mut access| call.dispose(access.as_context_mut().0))?;
+        Ok(result)
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for

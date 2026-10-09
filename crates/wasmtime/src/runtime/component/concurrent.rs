@@ -3572,7 +3572,10 @@ impl Instance {
         }
 
         if status == Status::Returned {
-            state.decrement_task_ref_count(guest_thread.task)?;
+            store
+                .0
+                .concurrent_state_mut()?
+                .decrement_task_ref_count(guest_thread.task)?;
         }
 
         Ok(())
@@ -6615,6 +6618,17 @@ impl<R> StagedCall<R> {
             group: store.0.concurrent_state_mut()?.get_mut(thread.task)?.group,
         })
     }
+
+    pub(crate) fn dispose(self: Pin<&mut Self>, store: &mut StoreOpaque) -> Result<()> {
+        if store.id() != self.store {
+            bail!("call disposed using wrong store");
+        }
+
+        store
+            .concurrent_state_mut()
+            .unwrap()
+            .decrement_task_ref_count(self.task)
+    }
 }
 
 impl<R> Future for StagedCall<R>
@@ -6632,19 +6646,6 @@ where
             },
             Err(oneshot::Canceled) => bail_bug!("channel erroneously dropped"),
         })
-    }
-}
-
-impl<R> Drop for StagedCall<R> {
-    fn drop(&mut self) {
-        check_ambient_store(self.store);
-        tls::get(|store| {
-            store
-                .concurrent_state_mut()
-                .unwrap()
-                .decrement_task_ref_count(self.task)
-        })
-        .unwrap();
     }
 }
 
