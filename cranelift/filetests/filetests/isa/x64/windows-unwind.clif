@@ -1,0 +1,288 @@
+; Windows x64 unwind info. The frame base that `UWOP_SAVE_NONVOL` (scaled by
+; 8) and `UWOP_SAVE_XMM128` (scaled by 16) offsets are measured from is
+; `rbp - 16 * frame register offset`, which is the bottom of the clobber
+; area. The `SmallStackAlloc` at the same prologue offset as
+; `SetFramePointer` compensates for the frame register offset so that
+; unwinding `SetFramePointer` still recovers RSP == RBP.
+test unwind
+set unwind_info=true
+set preserve_frame_pointers=true
+target x86_64-pc-windows-msvc
+
+; Five GPRs and one XMM register saved (64-byte clobber area).
+function %f(i64, i64) -> i64 windows_fastcall {
+    fn0 = %g() windows_fastcall
+block0(v0: i64, v1: i64):
+    v2 = iadd v0, v1
+    v3 = imul v0, v1
+    v4 = isub v0, v1
+    v5 = f64const 0x1.0
+    call fn0()
+    v6 = iadd v2, v3
+    v7 = iadd v6, v4
+    v8 = fcvt_to_sint.i64 v5
+    v9 = iadd v7, v8
+    v10 = iadd v9, v0
+    v11 = iadd v10, v1
+    return v11
+}
+
+; sameln:               version: 1
+; nextln:                 flags: 0
+; nextln:         prologue size: 39
+; nextln:        frame register: 5
+; nextln: frame register offset: 4
+; nextln:          unwind codes: 9
+; check:                offset: 1
+; nextln:                    op: PushNonvolatileRegister
+; nextln:                  info: 5
+; check:                offset: 4
+; nextln:                    op: SmallStackAlloc
+; nextln:                  info: 7
+; check:                offset: 4
+; nextln:                    op: SetFramePointer
+; nextln:                  info: 0
+; check:                offset: 13
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 3
+; nextln:                 value: 0 (u16)
+; check:                offset: 18
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 6
+; nextln:                 value: 1 (u16)
+; check:                offset: 23
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 7
+; nextln:                 value: 2 (u16)
+; check:                offset: 28
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 12
+; nextln:                 value: 3 (u16)
+; check:                offset: 33
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 13
+; nextln:                 value: 4 (u16)
+; check:                offset: 39
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 6
+; nextln:                 value: 3 (u16)
+
+; Three GPRs saved (32-byte clobber area).
+function %small(i64, i64) -> i64 windows_fastcall {
+    fn0 = %g() windows_fastcall
+block0(v0: i64, v1: i64):
+    call fn0()
+    v2 = iadd v0, v1
+    return v2
+}
+
+; sameln:               version: 1
+; nextln:                 flags: 0
+; nextln:         prologue size: 23
+; nextln:        frame register: 5
+; nextln: frame register offset: 2
+; nextln:          unwind codes: 6
+; check:                offset: 1
+; nextln:                    op: PushNonvolatileRegister
+; nextln:                  info: 5
+; check:                offset: 4
+; nextln:                    op: SmallStackAlloc
+; nextln:                  info: 3
+; check:                offset: 4
+; nextln:                    op: SetFramePointer
+; nextln:                  info: 0
+; check:                offset: 13
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 6
+; nextln:                 value: 0 (u16)
+; check:                offset: 18
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 7
+; nextln:                 value: 1 (u16)
+; check:                offset: 23
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 12
+; nextln:                 value: 2 (u16)
+
+; Every windows_fastcall callee-saved register: 7 GPRs and 10 XMM
+; registers (224-byte clobber area, frame register offset 14).
+function %fastcall_f(i64, i64) -> i64 windows_fastcall {
+    sig0 = () windows_fastcall
+block0(v0: i64, v1: i64):
+    v11 = load.i64 notrap aligned v1+0
+    v12 = load.i64 notrap aligned v1+8
+    v13 = load.i64 notrap aligned v1+16
+    v14 = load.i64 notrap aligned v1+24
+    v15 = load.i64 notrap aligned v1+32
+    v16 = load.i64 notrap aligned v1+40
+    v17 = load.i64 notrap aligned v1+48
+    v18 = load.f64 notrap aligned v1+56
+    v19 = load.f64 notrap aligned v1+64
+    v20 = load.f64 notrap aligned v1+72
+    v21 = load.f64 notrap aligned v1+80
+    v22 = load.f64 notrap aligned v1+88
+    v23 = load.f64 notrap aligned v1+96
+    v24 = load.f64 notrap aligned v1+104
+    v25 = load.f64 notrap aligned v1+112
+    v26 = load.f64 notrap aligned v1+120
+    v27 = load.f64 notrap aligned v1+128
+    call_indirect sig0, v0()
+    v28 = iadd v11, v12
+    v29 = iadd v28, v13
+    v30 = iadd v29, v14
+    v31 = iadd v30, v15
+    v32 = iadd v31, v16
+    v33 = iadd v32, v17
+    v34 = fadd v18, v19
+    v35 = fadd v34, v20
+    v36 = fadd v35, v21
+    v37 = fadd v36, v22
+    v38 = fadd v37, v23
+    v39 = fadd v38, v24
+    v40 = fadd v39, v25
+    v41 = fadd v40, v26
+    v42 = fadd v41, v27
+    v43 = fcvt_to_sint_sat.i64 v42
+    v44 = iadd v33, v43
+    return v44
+}
+
+; sameln:               version: 1
+; nextln:                 flags: 0
+; nextln:         prologue size: 138
+; nextln:        frame register: 5
+; nextln: frame register offset: 14
+; nextln:          unwind codes: 20
+; check:                offset: 1
+; nextln:                    op: PushNonvolatileRegister
+; nextln:                  info: 5
+; check:                offset: 4
+; nextln:                    op: LargeStackAlloc
+; nextln:                  info: 0
+; nextln:                 value: 28 (u16)
+; check:                offset: 4
+; nextln:                    op: SetFramePointer
+; nextln:                  info: 0
+; check:                offset: 16
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 3
+; nextln:                 value: 0 (u16)
+; check:                offset: 21
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 6
+; nextln:                 value: 1 (u16)
+; check:                offset: 26
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 7
+; nextln:                 value: 2 (u16)
+; check:                offset: 31
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 12
+; nextln:                 value: 3 (u16)
+; check:                offset: 36
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 13
+; nextln:                 value: 4 (u16)
+; check:                offset: 41
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 14
+; nextln:                 value: 5 (u16)
+; check:                offset: 46
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 15
+; nextln:                 value: 6 (u16)
+; check:                offset: 52
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 6
+; nextln:                 value: 4 (u16)
+; check:                offset: 58
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 7
+; nextln:                 value: 5 (u16)
+; check:                offset: 68
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 8
+; nextln:                 value: 6 (u16)
+; check:                offset: 78
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 9
+; nextln:                 value: 7 (u16)
+; check:                offset: 88
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 10
+; nextln:                 value: 8 (u16)
+; check:                offset: 98
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 11
+; nextln:                 value: 9 (u16)
+; check:                offset: 108
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 12
+; nextln:                 value: 10 (u16)
+; check:                offset: 118
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 13
+; nextln:                 value: 11 (u16)
+; check:                offset: 128
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 14
+; nextln:                 value: 12 (u16)
+; check:                offset: 138
+; nextln:                    op: SaveXmm128
+; nextln:                  info: 15
+; nextln:                 value: 13 (u16)
+
+; A tail function that grows its incoming argument area for a
+; return_call: the clobbers are still just below the (moved) frame pointer.
+function %tail_grow(i64, i64, i64) -> i64 tail {
+    sig0 = () windows_fastcall
+    sig1 = (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+block0(v0: i64, v1: i64, v2: i64):
+    v11 = load.i64 notrap aligned v1+0
+    v12 = load.i64 notrap aligned v1+8
+    v13 = load.i64 notrap aligned v1+16
+    v14 = load.i64 notrap aligned v1+24
+    v15 = load.i64 notrap aligned v1+32
+    call_indirect sig0, v0()
+    v16 = iadd v11, v12
+    v17 = iadd v16, v13
+    v18 = iadd v17, v14
+    v19 = iadd v18, v15
+    return_call_indirect sig1, v2(v19, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+}
+
+; sameln:               version: 1
+; nextln:                 flags: 0
+; nextln:         prologue size: 59
+; nextln:        frame register: 5
+; nextln: frame register offset: 3
+; nextln:          unwind codes: 8
+; check:                offset: 1
+; nextln:                    op: PushNonvolatileRegister
+; nextln:                  info: 5
+; check:                offset: 30
+; nextln:                    op: SmallStackAlloc
+; nextln:                  info: 5
+; check:                offset: 30
+; nextln:                    op: SetFramePointer
+; nextln:                  info: 0
+; check:                offset: 39
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 3
+; nextln:                 value: 0 (u16)
+; check:                offset: 44
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 12
+; nextln:                 value: 1 (u16)
+; check:                offset: 49
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 13
+; nextln:                 value: 2 (u16)
+; check:                offset: 54
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 14
+; nextln:                 value: 3 (u16)
+; check:                offset: 59
+; nextln:                    op: SaveNonvolatileRegister
+; nextln:                  info: 15
+; nextln:                 value: 4 (u16)

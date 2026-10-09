@@ -91,10 +91,9 @@ impl UnwindCode {
                     )
                 };
                 writer.write_u8(*instruction_offset);
-                let scaled_stack_offset = stack_offset / 16;
-                if scaled_stack_offset <= u16::MAX as u32 {
+                if let Some(scaled_stack_offset) = self.scaled_stack_offset() {
                     writer.write_u8((*reg << 4) | (op_small as u8));
-                    writer.write_u16_le(scaled_stack_offset as u16);
+                    writer.write_u16_le(scaled_stack_offset);
                 } else {
                     writer.write_u8((*reg << 4) | (op_large as u8));
                     writer.write_u16_le(*stack_offset as u16);
@@ -140,8 +139,8 @@ impl UnwindCode {
                     3
                 }
             }
-            Self::SaveXmm { stack_offset, .. } | Self::SaveReg { stack_offset, .. } => {
-                if *stack_offset <= u16::MAX as u32 {
+            Self::SaveXmm { .. } | Self::SaveReg { .. } => {
+                if self.scaled_stack_offset().is_some() {
                     2
                 } else {
                     3
@@ -149,6 +148,22 @@ impl UnwindCode {
             }
             _ => 1,
         }
+    }
+
+    /// For `SaveReg` and `SaveXmm`, the stack offset in the scaled form used
+    /// by the short `UWOP_SAVE_NONVOL` and `UWOP_SAVE_XMM128` encodings, if it
+    /// fits; otherwise the unscaled `_FAR` encodings must be used.
+    ///
+    /// `UWOP_SAVE_NONVOL` offsets are scaled by 8 and `UWOP_SAVE_XMM128`
+    /// offsets by 16.
+    fn scaled_stack_offset(&self) -> Option<u16> {
+        let (stack_offset, scale) = match self {
+            Self::SaveReg { stack_offset, .. } => (*stack_offset, 8),
+            Self::SaveXmm { stack_offset, .. } => (*stack_offset, 16),
+            _ => unreachable!(),
+        };
+        debug_assert_eq!(stack_offset % scale, 0);
+        u16::try_from(stack_offset / scale).ok()
     }
 }
 
@@ -237,6 +252,10 @@ impl UnwindInfo {
 
 const UNWIND_RBP_REG: u8 = 5;
 
+/// The largest value of the 4-bit frame register offset field (in units of
+/// 16 bytes) in `UNWIND_INFO`.
+const MAX_FRAME_REGISTER_OFFSET: u32 = 15;
+
 pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<crate::machinst::Reg>>(
     insts: &[(CodeOffset, UnwindInst)],
 ) -> CodegenResult<UnwindInfo> {
@@ -256,7 +275,20 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<crate::machinst::
                 offset_downward_to_clobbers,
                 ..
             } => {
-                frame_register_offset = ensure_unwind_offset(offset_downward_to_clobbers)?;
+                assert!(
+                    offset_downward_to_clobbers % 16 == 0
+                        && offset_downward_to_clobbers / 16 <= MAX_FRAME_REGISTER_OFFSET,
+                    "clobber area of {offset_downward_to_clobbers} bytes can't be described by \
+                     the Windows x64 frame register offset"
+                );
+                frame_register_offset = u8::try_from(offset_downward_to_clobbers / 16).unwrap();
+
+                if offset_downward_to_clobbers > 0 {
+                    unwind_codes.push(UnwindCode::StackAlloc {
+                        instruction_offset,
+                        size: offset_downward_to_clobbers,
+                    });
+                }
                 unwind_codes.push(UnwindCode::SetFPReg { instruction_offset });
             }
             &UnwindInst::StackAlloc { size } => {
