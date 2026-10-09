@@ -203,8 +203,8 @@ block0:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #160
-;   ldr fp, [sp, #160]
-;   stp fp, lr, [sp]
+;   ldr x16, [sp, #160]
+;   stp x16, lr, [sp]
 ;   mov fp, sp
 ;   stp x27, x28, [sp, #-16]!
 ;   stp x25, x26, [sp, #-16]!
@@ -266,8 +266,8 @@ block0:
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0xa0
-;   ldur x29, [sp, #0xa0]
-;   stp x29, x30, [sp]
+;   ldur x16, [sp, #0xa0]
+;   stp x16, x30, [sp]
 ;   mov x29, sp
 ;   stp x27, x28, [sp, #-0x10]!
 ;   stp x25, x26, [sp, #-0x10]!
@@ -428,8 +428,8 @@ block2:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   sub sp, sp, #176
-;   ldr fp, [sp, #176]
-;   stp fp, lr, [sp]
+;   ldr x16, [sp, #176]
+;   stp x16, lr, [sp]
 ;   mov fp, sp
 ;   stp x27, x28, [sp, #-16]!
 ;   stp x25, x26, [sp, #-16]!
@@ -522,8 +522,8 @@ block2:
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0xb0
-;   ldur x29, [sp, #0xb0]
-;   stp x29, x30, [sp]
+;   ldur x16, [sp, #0xb0]
+;   stp x16, x30, [sp]
 ;   mov x29, sp
 ;   stp x27, x28, [sp, #-0x10]!
 ;   stp x25, x26, [sp, #-0x10]!
