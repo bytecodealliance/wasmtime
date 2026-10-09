@@ -1945,6 +1945,13 @@ impl StoreOpaque {
             return self.enter_call_not_concurrent();
         }
 
+        // Stash the next switch item (if any) for the duration of this call
+        // since it's for the caller's caller, not for us.  We'll restore this
+        // in `exit_guest_sync_call`.
+        let state = self.concurrent_state_mut()?;
+        let item = state.next_switch_item.take();
+        state.saved_next_switch_items.push(item);
+
         let thread = self.current_thread()?;
         let caller = if let Some(thread) = thread.guest() {
             Caller::Guest { thread: *thread }
@@ -2033,6 +2040,17 @@ impl StoreOpaque {
         }
 
         self.cleanup_thread(thread, instance, CleanupTask::Yes)?;
+
+        let state = self.concurrent_state_mut()?;
+        let Some(item) = state.saved_next_switch_items.pop() else {
+            bail_bug!("unable to pop from `saved_next_switch_items`");
+        };
+        if let Some(item) = mem::replace(&mut state.next_switch_item, item) {
+            // Stash it back in the store to ensure it's cleaned up on store
+            // drop:
+            state.push_high_priority(item);
+            bail_bug!("`next_switch_item` unexpectedly already set");
+        }
 
         Ok(())
     }
@@ -2318,6 +2336,7 @@ impl StoreOpaque {
                         fiber,
                     };
 
+                    log::trace!("set next switch item to {item:?}");
                     if state.next_switch_item.replace(item).is_some() {
                         // This should be unreachable per the save/restore code
                         // in `Self::suspend`.
@@ -5942,6 +5961,10 @@ pub struct ConcurrentState {
     /// Whether the `StoreContextMut::poll_until` event loop is running.
     event_loop_running: bool,
 
+    /// Stack of switch items to push to and pop from when entering and exiting
+    /// sync-to-sync calls.
+    saved_next_switch_items: Vec<Option<WorkItem>>,
+
     /// See [TaskGroupHook].
     #[cfg(feature = "task-group-hook")]
     task_group_hook: Option<Box<dyn TaskGroupHook>>,
@@ -5966,6 +5989,7 @@ impl Default for ConcurrentState {
             interesting_tasks_empty_waker: None,
             ready_for_concurrent_call_waker: None,
             event_loop_running: false,
+            saved_next_switch_items: Vec::new(),
             #[cfg(feature = "task-group-hook")]
             task_group_hook: None,
         }
@@ -6053,6 +6077,12 @@ impl ConcurrentState {
         for item in mem::take(&mut self.low_priority) {
             handle_item(item);
         }
+        for item in mem::take(&mut self.saved_next_switch_items)
+            .into_iter()
+            .filter_map(|v| v)
+        {
+            handle_item(item);
+        }
 
         if let Some(them) = self.futures.get_mut().take() {
             futures.push(them);
@@ -6073,6 +6103,7 @@ impl ConcurrentState {
             next_switch_item,
             high_priority,
             low_priority,
+            saved_next_switch_items,
 
             // TODO(cm-gc): This field contains `ValRaw`s, but they are never GC
             // references because the component model doesn't support GC yet. We
@@ -6143,6 +6174,12 @@ impl ConcurrentState {
             handle_item(item);
         }
         for item in low_priority {
+            handle_item(item);
+        }
+        for item in saved_next_switch_items
+            .iter_mut()
+            .filter_map(|v| v.as_mut())
+        {
             handle_item(item);
         }
     }
