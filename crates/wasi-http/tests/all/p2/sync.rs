@@ -25,8 +25,26 @@ fn p2_http_outbound_request_get() -> Result<()> {
 }
 
 #[test_log::test]
+fn p2_http_outbound_request_between_bytes_timeout() -> Result<()> {
+    let server = Server::http1_stalled_body(1, std::time::Duration::from_secs(5))?;
+    run(
+        P2_HTTP_OUTBOUND_REQUEST_BETWEEN_BYTES_TIMEOUT_COMPONENT,
+        &server,
+    )
+}
+
+#[test_log::test]
+fn p2_http_outbound_request_first_byte_timeout() -> Result<()> {
+    let server = Server::http1_delayed(1, std::time::Duration::from_secs(5))?;
+    run(
+        P2_HTTP_OUTBOUND_REQUEST_FIRST_BYTE_TIMEOUT_COMPONENT,
+        &server,
+    )
+}
+
+#[test_log::test]
 fn p2_http_outbound_request_timeout() -> Result<()> {
-    let server = Server::http1(1)?;
+    let server = Server::http1(3)?;
     run(P2_HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server)
 }
 
@@ -107,8 +125,21 @@ fn p2_http_outbound_request_missing_path_and_query() -> Result<()> {
         &server,
     )
 }
-
 #[test_log::test]
 fn p2_http_named_imports() {
     // named imports are intentionally not implemented for sync at this time
+}
+
+#[test_log::test]
+fn p2_http_outbound_body_write_backpressure() -> Result<()> {
+    let server = Server::http1(0)?;
+    let e = run(P2_HTTP_OUTBOUND_BODY_WRITE_BACKPRESSURE_COMPONENT, &server)
+        .err()
+        .expect("guest execution should trap");
+    let e_debug = format!("{e:?}");
+    assert!(
+        e_debug.contains("write exceeded budget"),
+        "expected trap to contain 'write exceeded budget': {e:?}"
+    );
+    Ok(())
 }

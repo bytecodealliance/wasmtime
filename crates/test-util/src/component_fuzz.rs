@@ -28,7 +28,7 @@ pub const IMPORT_FUNCTION: &str = "echo-import";
 pub const EXPORT_FUNCTION: &str = "echo-export";
 
 /// Wasmtime allows up to 100 type depth so limit this to just under that.
-pub const MAX_TYPE_DEPTH: u32 = 99;
+pub const MAX_TYPE_DEPTH: u32 = 90;
 
 macro_rules! uwriteln {
     ($($arg:tt)*) => {
@@ -213,7 +213,7 @@ impl Type {
         // - No Float32/Float64 (NaN comparison issues)
         // - No complex types (Record, Tuple, Variant, etc.) as they might contain floats
         // - String is allowed as it implements Hash + Eq
-        Ok(match u.int_in_range(0..=11)? {
+        Ok(match u.int_in_range(0..=10)? {
             0 => Type::Bool,
             1 => Type::S8,
             2 => Type::U8,
@@ -225,11 +225,6 @@ impl Type {
             8 => Type::U64,
             9 => Type::Char,
             10 => Type::String,
-            11 => {
-                let amt = u.int_in_range(1..=(*fuel).max(1).min(257))?;
-                *fuel = fuel.saturating_sub(amt);
-                Type::Enum(amt)
-            }
             _ => unreachable!(),
         })
     }

@@ -213,7 +213,7 @@ unsafe fn handler_thread() {
         let kret = unsafe {
             mach_msg(
                 &mut request.body.Head,
-                MACH_RCV_MSG | MACH_RCV_INTERRUPT,
+                MACH_RCV_MSG,
                 0,
                 mem::size_of_val(&request) as u32,
                 WASMTIME_PORT,

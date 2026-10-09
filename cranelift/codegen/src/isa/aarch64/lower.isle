@@ -482,72 +482,117 @@
 (rule -1 (lower (fadd ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fadd) rn rm (vector_size ty)))
 
-(rule (lower (fadd (ty_scalar_float ty) rn rm))
-      (fpu_rrr (FPUOp2.Add) rn rm (scalar_size ty)))
+(rule 1 (lower (fadd $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Add) rn rm (ScalarSize.Size16)))
+(rule (lower (fadd $F32 rn rm))
+      (fpu_rrr (FPUOp2.Add) rn rm (ScalarSize.Size32)))
+(rule (lower (fadd $F64 rn rm))
+      (fpu_rrr (FPUOp2.Add) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fsub ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fsub) rn rm (vector_size ty)))
 
-(rule fsub (lower (fsub (ty_scalar_float ty) rn rm))
-      (fpu_rrr (FPUOp2.Sub) rn rm (scalar_size ty)))
+(rule 1 (lower (fsub $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Sub) rn rm (ScalarSize.Size16)))
+(rule fsub (lower (fsub $F32 rn rm))
+      (fpu_rrr (FPUOp2.Sub) rn rm (ScalarSize.Size32)))
+(rule fsub64 (lower (fsub $F64 rn rm))
+      (fpu_rrr (FPUOp2.Sub) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fmul ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fmul) rn rm (vector_size ty)))
 
-(rule (lower (fmul (ty_scalar_float ty) rn rm))
-      (fpu_rrr (FPUOp2.Mul) rn rm (scalar_size ty)))
+(rule 1 (lower (fmul $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Mul) rn rm (ScalarSize.Size16)))
+(rule (lower (fmul $F32 rn rm))
+      (fpu_rrr (FPUOp2.Mul) rn rm (ScalarSize.Size32)))
+(rule (lower (fmul $F64 rn rm))
+      (fpu_rrr (FPUOp2.Mul) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fdiv ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fdiv) rn rm (vector_size ty)))
 
-(rule (lower (fdiv (ty_scalar_float ty) rn rm))
-      (fpu_rrr (FPUOp2.Div) rn rm (scalar_size ty)))
+(rule 1 (lower (fdiv $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Div) rn rm (ScalarSize.Size16)))
+(rule (lower (fdiv $F32 rn rm))
+      (fpu_rrr (FPUOp2.Div) rn rm (ScalarSize.Size32)))
+(rule (lower (fdiv $F64 rn rm))
+      (fpu_rrr (FPUOp2.Div) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fmin ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fmin) rn rm (vector_size ty)))
 
-(rule (lower (fmin (ty_scalar_float ty) rn rm))
-      (fpu_rrr (FPUOp2.Min) rn rm (scalar_size ty)))
+(rule 1 (lower (fmin $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Min) rn rm (ScalarSize.Size16)))
+(rule (lower (fmin $F32 rn rm))
+      (fpu_rrr (FPUOp2.Min) rn rm (ScalarSize.Size32)))
+(rule (lower (fmin $F64 rn rm))
+      (fpu_rrr (FPUOp2.Min) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fmax ty @ (multi_lane _ _) rn rm))
       (vec_rrr (VecALUOp.Fmax) rn rm (vector_size ty)))
 
-(rule (lower (fmax (ty_scalar_float ty) rn rm))
-      (fpu_rrr (FPUOp2.Max) rn rm (scalar_size ty)))
+(rule 1 (lower (fmax $F16 rn rm))
+      (if-let true (use_fp16))
+      (fpu_rrr (FPUOp2.Max) rn rm (ScalarSize.Size16)))
+(rule (lower (fmax $F32 rn rm))
+      (fpu_rrr (FPUOp2.Max) rn rm (ScalarSize.Size32)))
+(rule (lower (fmax $F64 rn rm))
+      (fpu_rrr (FPUOp2.Max) rn rm (ScalarSize.Size64)))
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (sqrt ty @ (multi_lane _ _) x))
       (vec_misc (VecMisc2.Fsqrt) x (vector_size ty)))
 
-(rule (lower (sqrt (ty_scalar_float ty) x))
-      (fpu_rr (FPUOp1.Sqrt) x (scalar_size ty)))
+(rule 1 (lower (sqrt $F16 x))
+      (if-let true (use_fp16))
+      (fpu_rr (FPUOp1.Sqrt) x (ScalarSize.Size16)))
+(rule (lower (sqrt $F32 x))
+      (fpu_rr (FPUOp1.Sqrt) x (ScalarSize.Size32)))
+(rule (lower (sqrt $F64 x))
+      (fpu_rr (FPUOp1.Sqrt) x (ScalarSize.Size64)))
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fneg ty @ (multi_lane _ _) x))
       (vec_misc (VecMisc2.Fneg) x (vector_size ty)))
 
-(rule (lower (fneg (ty_scalar_float ty) x))
-      (fpu_rr (FPUOp1.Neg) x (scalar_size ty)))
+(rule 1 (lower (fneg $F16 x))
+      (if-let true (use_fp16))
+      (fpu_rr (FPUOp1.Neg) x (ScalarSize.Size16)))
+(rule (lower (fneg $F32 x))
+      (fpu_rr (FPUOp1.Neg) x (ScalarSize.Size32)))
+(rule (lower (fneg $F64 x))
+      (fpu_rr (FPUOp1.Neg) x (ScalarSize.Size64)))
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (fabs ty @ (multi_lane _ _) x))
       (vec_misc (VecMisc2.Fabs) x (vector_size ty)))
 
-(rule (lower (fabs (ty_scalar_float ty) x))
-      (fpu_rr (FPUOp1.Abs) x (scalar_size ty)))
+(rule 1 (lower (fabs $F16 x))
+      (if-let true (use_fp16))
+      (fpu_rr (FPUOp1.Abs) x (ScalarSize.Size16)))
+(rule (lower (fabs $F32 x))
+      (fpu_rr (FPUOp1.Abs) x (ScalarSize.Size32)))
+(rule (lower (fabs $F64 x))
+      (fpu_rr (FPUOp1.Abs) x (ScalarSize.Size64)))
 
 ;;;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -615,17 +660,18 @@
 ;; * fnmadd  r = -(a * b) - c   /   multiply, then negate, then subtract
 ;; * fmsub   r = -(a * b) + c   /   multiply, then negate, then add
 ;; * fnmsub  r =   a * b  - c   /   multiply, then subtract
+;; `partial` so that unsupported cases fail at the top level rather than panicking
 (attr fmadd (tag vector))
-(decl fmadd (Type Value Value Value) Reg)
+(decl partial fmadd (Type Value Value Value) Reg)
 
 (attr fnmadd (tag vector))
-(decl fnmadd (Type Value Value Value) Reg)
+(decl partial fnmadd (Type Value Value Value) Reg)
 
 (attr fmsub (tag vector))
-(decl fmsub (Type Value Value Value) Reg)
+(decl partial fmsub (Type Value Value Value) Reg)
 
 (attr fnmsub (tag vector))
-(decl fnmsub (Type Value Value Value) Reg)
+(decl partial fnmsub (Type Value Value Value) Reg)
 
 ;; Switch `fm{add,sub}` to `fnm{add,sub}` if one of the operands are negated
 ;; instruction instead
@@ -635,14 +681,22 @@
 (rule 3 (fnmsub ty x (fneg _ y) z) (fnmadd ty x y z))
 
 ;; Scalar cases
-(rule 0 (fmadd (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
-(rule 0 (fnmadd (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.NMAdd) (scalar_size ty) x y z))
-(rule 0 (fmsub (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.MSub) (scalar_size ty) x y z))
-(rule 0 (fnmsub (ty_scalar_float ty) x y z) (fpu_rrrr (FPUOp3.NMSub) (scalar_size ty) x y z))
+(rule 1 (fmadd $F16 x y z) (if-let true (use_fp16)) (fpu_rrrr (FPUOp3.MAdd) (ScalarSize.Size16) x y z))
+(rule 1 (fnmadd $F16 x y z) (if-let true (use_fp16)) (fpu_rrrr (FPUOp3.NMAdd) (ScalarSize.Size16) x y z))
+(rule 1 (fmsub $F16 x y z) (if-let true (use_fp16)) (fpu_rrrr (FPUOp3.MSub) (ScalarSize.Size16) x y z))
+(rule 1 (fnmsub $F16 x y z) (if-let true (use_fp16)) (fpu_rrrr (FPUOp3.NMSub) (ScalarSize.Size16) x y z))
+(rule -1 (fmadd $F32 x y z) (fpu_rrrr (FPUOp3.MAdd) (ScalarSize.Size32) x y z))
+(rule -1 (fnmadd $F32 x y z) (fpu_rrrr (FPUOp3.NMAdd) (ScalarSize.Size32) x y z))
+(rule -1 (fmsub $F32 x y z) (fpu_rrrr (FPUOp3.MSub) (ScalarSize.Size32) x y z))
+(rule -1 (fnmsub $F32 x y z) (fpu_rrrr (FPUOp3.NMSub) (ScalarSize.Size32) x y z))
+(rule -1 (fmadd $F64 x y z) (fpu_rrrr (FPUOp3.MAdd) (ScalarSize.Size64) x y z))
+(rule -1 (fnmadd $F64 x y z) (fpu_rrrr (FPUOp3.NMAdd) (ScalarSize.Size64) x y z))
+(rule -1 (fmsub $F64 x y z) (fpu_rrrr (FPUOp3.MSub) (ScalarSize.Size64) x y z))
+(rule -1 (fnmsub $F64 x y z) (fpu_rrrr (FPUOp3.NMSub) (ScalarSize.Size64) x y z))
 
 ;; Vector cases
-(rule 1 (fmadd ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))
-(rule 1 (fmsub ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmls) x y z (vector_size ty)))
+(rule 0 (fmadd ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))
+(rule 0 (fmsub ty @ (multi_lane _ _) x y z) (lower_fmla (VecALUModOp.Fmls) x y z (vector_size ty)))
 
 ;; Lowers a fused-multiply-add operation handling various forms of the
 ;; instruction to get maximal coverage of what's available on AArch64.
@@ -1280,7 +1334,12 @@
 ;; per-lane mask of either all ones or zeroes. rather than 0 or 1.
 (rule 1 (lower (uextend (fits_in_64 _) (icmp _ cond x @ (value_type (ty_int _)) y)))
       (lower_cond_result_bool (emit_icmp cond x y)))
-(rule 1 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type (ty_scalar_float _)) y)))
+(rule 2 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type $F16) y)))
+      (if-let true (use_fp16))
+      (lower_cond_result_bool (emit_fcmp cond x y)))
+(rule 1 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type $F32) y)))
+      (lower_cond_result_bool (emit_fcmp cond x y)))
+(rule 1 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type $F64) y)))
       (lower_cond_result_bool (emit_fcmp cond x y)))
 
 ;; Conversion to 128-bit needs a zero-extension of the lower bits and the upper
@@ -2178,7 +2237,12 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (float_cmp_zero_swap cond rn vec_size))))
 
-(rule 0 (lower (fcmp _ cond x @ (value_type (ty_scalar_float _)) y))
+(rule 5 (lower (fcmp _ cond x @ (value_type $F16) y))
+      (if-let true (use_fp16))
+      (lower_cond_result_bool (emit_fcmp cond x y)))
+(rule 0 (lower (fcmp _ cond x @ (value_type $F32) y))
+  (lower_cond_result_bool (emit_fcmp cond x y)))
+(rule 0 (lower (fcmp _ cond x @ (value_type $F64) y))
   (lower_cond_result_bool (emit_fcmp cond x y)))
 
 (rule -1 (lower (fcmp _ cond x @ (value_type in_ty) y))
@@ -2320,13 +2384,20 @@
 ;;;; Rules for `AtomicLoad` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (atomic_load (valid_atomic_transaction ty) (little_or_native_endian flags) addr))
       (load_acquire ty flags addr))
-
+;; Lower 128-bit `atomic_load` through a special case
+(rule 1 (lower (atomic_load $I128 (little_or_native_endian flags) addr))
+      (load_acquire_128 flags addr))
 
 ;;;; Rules for `AtomicStore` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (atomic_store (little_or_native_endian flags)
                 src @ (value_type (valid_atomic_transaction ty))
                 addr))
       (side_effect (store_release ty flags src addr)))
+;; Lower 128-bit `atomic_store` through a special case
+(rule 1 (lower (atomic_store (little_or_native_endian flags)
+                src @ (value_type $I128)
+                addr))
+      (side_effect (store_release_128 flags src addr)))
 
 ;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2382,18 +2453,44 @@
 (rule (lower (atomic_rmw (valid_atomic_transaction ty) (little_or_native_endian flags) (AtomicRmwOp.Xchg) addr src))
       (atomic_rmw_loop (AtomicRMWLoopOp.Xchg) addr src ty flags))
 
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Add) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Add) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Sub) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Sub) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.And) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.And) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Nand) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Nand) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Or) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Orr) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Xor) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Eor) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Smin) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Smin) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Smax) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Smax) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Umin) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Umin) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Umax) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Umax) addr src flags))
+(rule 2 (lower (atomic_rmw $I128 (little_or_native_endian flags) (AtomicRmwOp.Xchg) addr src))
+      (atomic_rmw_128_loop (AtomicRMWLoopOp.Xchg) addr src flags))
+
 ;;;; Rules for `AtomicCAS` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 1 (lower (and (use_lse)
                   (atomic_cas (valid_atomic_transaction ty) (little_or_native_endian flags) addr src1 src2)))
       (lse_atomic_cas addr src1 src2 ty flags))
 
 (attr rule lse_atomic_cas_i128 (tag atomics))
-(rule lse_atomic_cas_i128 2 (lower (and (use_lse)
+(rule lse_atomic_cas_i128 3 (lower (and (use_lse)
                   (atomic_cas $I128 (little_or_native_endian flags) addr expect replace)))
       (lse_atomic_cas_128 addr expect replace flags))
 
 (rule (lower (and (atomic_cas (valid_atomic_transaction ty) (little_or_native_endian flags) addr src1 src2)))
       (atomic_cas_loop addr src1 src2 ty flags))
+
+(rule 2 (lower (and (atomic_cas $I128 (little_or_native_endian flags) addr expect replace)))
+      (atomic_cas_128_loop addr expect replace flags))
 
 ;;;; Rules for 'fvdemote' ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (attr fvdemote (tag vector))

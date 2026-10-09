@@ -246,7 +246,7 @@ impl ResourceTables<'_> {
     /// the specified table. This operation can fail if:
     ///
     /// * The index is invalid.
-    /// * The index points to an `own` resource which has active borrows.
+    /// * The index points to a resource which has been lent out.
     /// * The index's type is mismatched with the entry in the table's type.
     ///
     /// Otherwise this will return `Some(rep)` if the destructor for `rep` needs
@@ -306,32 +306,49 @@ impl ResourceTables<'_> {
     /// Unlike [`Self::materialize_current_scope`], this does not materialize a
     /// deferred host task.
     fn current_scope(&mut self) -> Result<&mut CallContext> {
-        match self.current_scope {
-            Some(CurrentScope::Id(id)) => self.task_state.call_context(id),
+        let id = match self.current_scope {
+            Some(CurrentScope::Id(id)) => id,
             Some(CurrentScope::DeferredHost) => {
-                match self.task_state.deferred_host_call_context() {
-                    Some(cx) => Ok(cx),
-                    None => bail_bug!("deferred host scope has no call context"),
+                // With a deferred host task the `CallContext` for this task
+                // could be stored in one of two locations. The primary location
+                // is `task_state.deferred_host_call_context()` but that stops
+                // being used once the host task is actually materialized. On
+                // materialization this over here isn't updated necessarily, so
+                // this'll only lazily pick up when the host task is actually
+                // materialized. In such a situation that's detected here and
+                // `self.current_scope` is mutated to match.
+                //
+                // NB: this should use `if let` when rustc is smarter about
+                // borrows.
+                if self.task_state.deferred_host_call_context().is_some() {
+                    return Ok(self.task_state.deferred_host_call_context().unwrap());
                 }
+                let id = self.task_state.materialize_current_scope()?;
+                self.current_scope = Some(CurrentScope::Id(id));
+                id
             }
             None => bail_bug!("no current scope"),
-        }
+        };
+        self.task_state.call_context(id)
     }
 
     /// Extracts the underlying resource representation by lifting a "borrow"
     /// from the tables.
     ///
-    /// This primarily employs dynamic tracking when a borrow is created from an
-    /// "own" handle to ensure that the "own" handle isn't dropped while the
-    /// borrow is active and additionally that when the current call scope
-    /// returns the lend operation is undone.
+    /// This primarily employs dynamic tracking when a borrow is created from
+    /// either an "own" or a "borrow" handle to ensure that the lending handle
+    /// isn't dropped while the borrow is active and additionally that when the
+    /// current call scope returns the lend operation is undone.
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        let (rep, is_own) = self.table_for_index(&index).resource_lend(index)?;
-        if is_own {
-            self.current_scope()?.lenders.push(index);
-        }
+        // FIXME: the logic here applies to all resources, both own and borrow,
+        // although tracking `borrow` here isn't always necessary for sync
+        // tasks. Ideally the `lenders.push` would be skipped for sync tasks but
+        // that requires a bit more plumbing and also appropriately tracking the
+        // `lend_count` and such. For now this treats own/borrow the same way.
+        let rep = self.table_for_index(&index).resource_lend(index)?;
+        self.current_scope()?.lenders.push(index);
         Ok(rep)
     }
 

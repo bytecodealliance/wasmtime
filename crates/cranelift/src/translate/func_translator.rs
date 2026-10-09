@@ -138,6 +138,11 @@ impl FuncTranslator {
         builder.ensure_inserted_block();
         environ.before_translate_function(&mut builder)?;
         environ.translate_module_startup(&mut builder)?;
+        // This function is synthesized rather than translated, so it has no
+        // trailing `end` operator to fold buffered fuel charges into
+        // `self.fuel_var`. Flush them here so they are not dropped when
+        // `fuel_function_exit` saves the fuel var below.
+        environ.fuel_flush_consumed(&mut builder);
         environ.after_translate_function(&mut builder)?;
         builder.ins().return_(&[]);
         builder.finalize(environ.target_config());

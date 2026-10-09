@@ -399,12 +399,28 @@ impl RunCommon {
                 .common
                 .wasi
                 .http_outgoing_body_buffer_chunks
-                .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS),
+                .map(|n| n.get())
+                .unwrap_or(wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS),
             p2_outgoing_body_chunk_size: self
                 .common
                 .wasi
                 .http_outgoing_body_chunk_size
-                .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE),
+                .map(|n| n.get())
+                .unwrap_or(wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE),
+            #[cfg(feature = "component-model-async")]
+            p3_outgoing_body_buffer_chunks: self
+                .common
+                .wasi
+                .http_outgoing_body_buffer_chunks
+                .map(|n| n.get())
+                .unwrap_or(wasmtime_wasi_http::p3::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS),
+            #[cfg(feature = "component-model-async")]
+            p3_outgoing_body_chunk_size: self
+                .common
+                .wasi
+                .http_outgoing_body_chunk_size
+                .map(|n| n.get())
+                .unwrap_or(wasmtime_wasi_http::p3::DEFAULT_OUTGOING_BODY_CHUNK_SIZE),
         }
     }
 
@@ -567,6 +583,10 @@ impl Profile {
 pub struct HttpHooks {
     p2_outgoing_body_buffer_chunks: usize,
     p2_outgoing_body_chunk_size: usize,
+    #[cfg(feature = "component-model-async")]
+    p3_outgoing_body_buffer_chunks: usize,
+    #[cfg(feature = "component-model-async")]
+    p3_outgoing_body_chunk_size: usize,
 }
 
 #[cfg(feature = "wasi-http")]
@@ -576,6 +596,11 @@ impl Default for HttpHooks {
             p2_outgoing_body_buffer_chunks:
                 wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
             p2_outgoing_body_chunk_size: wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+            #[cfg(feature = "component-model-async")]
+            p3_outgoing_body_buffer_chunks:
+                wasmtime_wasi_http::p3::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
+            #[cfg(feature = "component-model-async")]
+            p3_outgoing_body_chunk_size: wasmtime_wasi_http::p3::DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
         }
     }
 }
@@ -588,5 +613,50 @@ impl wasmtime_wasi_http::WasiHttpHooks for HttpHooks {
 
     fn p2_outgoing_body_chunk_size(&mut self) -> usize {
         self.p2_outgoing_body_chunk_size
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn p3_outgoing_body_buffer_chunks(&mut self) -> usize {
+        self.p3_outgoing_body_buffer_chunks
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn p3_outgoing_body_chunk_size(&mut self) -> usize {
+        self.p3_outgoing_body_chunk_size
+    }
+}
+
+#[cfg(all(test, feature = "wasi-http", feature = "component-model-async"))]
+mod tests {
+    use super::RunCommon;
+    use clap::Parser as _;
+    use std::num::NonZeroUsize;
+    use wasmtime_wasi_http::WasiHttpHooks as _;
+
+    /// `-Shttp-outgoing-body-*` lands in `CommonWasiOptions`; from there it has
+    /// to reach both the p2 and the p3 hooks.
+    #[test]
+    fn p3_outgoing_body_options_reach_hooks() {
+        let mut cli = RunCommon::try_parse_from(["wasmtime"]).expect("failed to parse options");
+        cli.common.wasi.http_outgoing_body_buffer_chunks = NonZeroUsize::new(3);
+        cli.common.wasi.http_outgoing_body_chunk_size = NonZeroUsize::new(1024);
+
+        let mut hooks = cli.wasi_http_hooks();
+        assert_eq!(hooks.p2_outgoing_body_buffer_chunks(), 3);
+        assert_eq!(hooks.p3_outgoing_body_buffer_chunks(), 3);
+        assert_eq!(hooks.p2_outgoing_body_chunk_size(), 1024);
+        assert_eq!(hooks.p3_outgoing_body_chunk_size(), 1024);
+
+        // Without the options set, both sides keep their documented defaults.
+        let cli = RunCommon::try_parse_from(["wasmtime"]).expect("failed to parse options");
+        let mut hooks = cli.wasi_http_hooks();
+        assert_eq!(
+            hooks.p3_outgoing_body_buffer_chunks(),
+            wasmtime_wasi_http::p3::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
+        );
+        assert_eq!(
+            hooks.p3_outgoing_body_chunk_size(),
+            wasmtime_wasi_http::p3::DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+        );
     }
 }

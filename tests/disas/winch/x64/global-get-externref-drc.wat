@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = "-Ccollector=drc"
+;;! flags = "-Wgc-support -Ccollector=drc"
 
 (module
   (global $g (mut externref) (ref.null extern))
@@ -62,7 +62,7 @@
 ;;       jb      0xff
 ;;   e4: subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
-;;       callq   0x21a
+;;       callq   0x225
 ;;       addq    $0xc, %rsp
 ;;       ╰─╼ stack_map: frame_size=32, frame_offsets=[12]
 ;;       movq    0xc(%rsp), %r14

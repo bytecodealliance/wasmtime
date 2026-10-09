@@ -3,7 +3,7 @@ use wasmtime::*;
 #[test]
 fn get_none() {
     let mut store = Store::<()>::default();
-    let ty = TableType::new(RefType::FUNCREF, 1, None);
+    let ty = TableType::new(RefType::FUNCREF, 1, None).unwrap();
     let table = Table::new(&mut store, ty, Ref::Func(None)).unwrap();
     match table.get(&mut store, 0) {
         Some(Ref::Func(None)) => {}
@@ -13,9 +13,20 @@ fn get_none() {
 }
 
 #[test]
+fn min_greater_than_max() -> Result<()> {
+    assert!(TableType::new(RefType::FUNCREF, 10, Some(5)).is_err());
+    assert!(TableType::new64(RefType::FUNCREF, 10, Some(5)).is_err());
+
+    let mut store = Store::<()>::default();
+    let ty = TableType::new(RefType::FUNCREF, 5, Some(5))?;
+    Table::new(&mut store, ty, Ref::Func(None))?;
+    Ok(())
+}
+
+#[test]
 fn fill_wrong() {
     let mut store = Store::<()>::default();
-    let ty = TableType::new(RefType::FUNCREF, 1, None);
+    let ty = TableType::new(RefType::FUNCREF, 1, None).unwrap();
     let table = Table::new(&mut store, ty, Ref::Func(None)).unwrap();
     assert_eq!(
         table
@@ -25,7 +36,7 @@ fn fill_wrong() {
         "type mismatch: value does not match table element type"
     );
 
-    let ty = TableType::new(RefType::EXTERNREF, 1, None);
+    let ty = TableType::new(RefType::EXTERNREF, 1, None).unwrap();
     let table = Table::new(&mut store, ty, Ref::Extern(None)).unwrap();
     assert_eq!(
         table
@@ -39,9 +50,9 @@ fn fill_wrong() {
 #[test]
 fn copy_wrong() {
     let mut store = Store::<()>::default();
-    let ty = TableType::new(RefType::FUNCREF, 1, None);
+    let ty = TableType::new(RefType::FUNCREF, 1, None).unwrap();
     let table1 = Table::new(&mut store, ty, Ref::Func(None)).unwrap();
-    let ty = TableType::new(RefType::EXTERNREF, 1, None);
+    let ty = TableType::new(RefType::EXTERNREF, 1, None).unwrap();
     let table2 = Table::new(&mut store, ty, Ref::Extern(None)).unwrap();
     assert_eq!(
         Table::copy(&mut store, &table1, 0, &table2, 0, 1)
@@ -55,7 +66,7 @@ fn copy_wrong() {
 #[cfg_attr(miri, ignore)]
 fn null_elem_segment_works_with_imported_table() -> Result<()> {
     let mut store = Store::<()>::default();
-    let ty = TableType::new(RefType::FUNCREF, 1, None);
+    let ty = TableType::new(RefType::FUNCREF, 1, None)?;
     let table = Table::new(&mut store, ty, Ref::Func(None))?;
     let module = Module::new(
         store.engine(),
@@ -98,7 +109,7 @@ fn i31ref_table_new() -> Result<()> {
             vec![AnyRef::from_i31(&mut store, I31::default()).into()],
         ),
     ] {
-        let table_ty = TableType::new(elem_ty, 10, None);
+        let table_ty = TableType::new(elem_ty, 10, None)?;
         for init in inits {
             Table::new(&mut store, table_ty.clone(), init)?;
         }
@@ -129,7 +140,7 @@ fn i31ref_table_get() -> Result<()> {
             vec![AnyRef::from_i31(&mut store, I31::default()).into()],
         ),
     ] {
-        let table_ty = TableType::new(elem_ty, 10, None);
+        let table_ty = TableType::new(elem_ty, 10, None)?;
         for init in inits {
             let table = Table::new(&mut store, table_ty.clone(), init.clone())?;
             for i in 0..10 {
@@ -177,7 +188,7 @@ fn i31ref_table_set() -> Result<()> {
             vec![AnyRef::from_i31(&mut store, I31::wrapping_u32(42)).into()],
         ),
     ] {
-        let table_ty = TableType::new(elem_ty, 10, None);
+        let table_ty = TableType::new(elem_ty, 10, None)?;
         for init in inits {
             for expected in vals.clone() {
                 let table = Table::new(&mut store, table_ty.clone(), init.clone())?;
@@ -219,7 +230,7 @@ fn i31ref_table_grow() -> Result<()> {
             AnyRef::from_i31(&mut store, I31::default()).into(),
         ),
     ] {
-        let table_ty = TableType::new(elem_ty, 10, None);
+        let table_ty = TableType::new(elem_ty, 10, None)?;
         let table = Table::new(&mut store, table_ty, init)?;
         assert_eq!(table.size(&store), 10);
         for i in 10..20 {
@@ -256,7 +267,7 @@ fn i31ref_table_fill() -> Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
-    let table_ty = TableType::new(RefType::I31REF, 10, None);
+    let table_ty = TableType::new(RefType::I31REF, 10, None)?;
     let table = Table::new(&mut store, table_ty, Ref::Any(None))?;
 
     let expected = I31::wrapping_u32(42);
@@ -299,7 +310,7 @@ fn i31ref_table_copy() -> Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
-    let table_ty = TableType::new(RefType::I31REF, 10, None);
+    let table_ty = TableType::new(RefType::I31REF, 10, None)?;
     let dst_table = Table::new(&mut store, table_ty.clone(), Ref::Any(None))?;
 
     let expected = I31::wrapping_u32(42);
@@ -347,7 +358,7 @@ fn host_table_keep_type_registration() -> Result<()> {
 
     let t = Table::new(
         &mut store,
-        TableType::new(RefType::new(true, HeapType::ConcreteFunc(ty)), 1, None),
+        TableType::new(RefType::new(true, HeapType::ConcreteFunc(ty)), 1, None)?,
         Ref::Func(None),
     )?;
 

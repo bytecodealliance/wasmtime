@@ -43,6 +43,11 @@ impl VMContinuationStack {
         panic!("Stack switching disabled or not implemented on this platform")
     }
 
+    #[cfg(all(feature = "stack-switching", asan))]
+    pub fn asan_range(&self) -> Option<Range<usize>> {
+        panic!("Stack switching disabled or not implemented on this platform")
+    }
+
     pub fn control_context_instruction_pointer(&self) -> usize {
         panic!("Stack switching disabled or not implemented on this platform")
     }

@@ -6,8 +6,8 @@ use crate::component::resources::{HostResourceData, HostResourceIndex, HostResou
 use crate::component::store::ComponentTaskState;
 use crate::component::{Instance, ResourceType, RuntimeInstance};
 use crate::prelude::*;
-use crate::runtime::vm::VMFuncRef;
 use crate::runtime::vm::component::{ComponentInstance, CurrentScope, HandleTable, ResourceTables};
+use crate::runtime::vm::{UncaughtException, VMFuncRef};
 use crate::store::{StoreId, StoreOpaque};
 use alloc::sync::Arc;
 use core::fmt;
@@ -179,7 +179,13 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         // Invoke the wasm malloc function using its raw and statically known
         // signature.
         let result = unsafe {
-            ReallocFunc::call_raw(&mut StoreContextMut(store), &realloc_ty, realloc, params)?
+            ReallocFunc::call_raw(
+                &mut StoreContextMut(store),
+                &realloc_ty,
+                realloc,
+                params,
+                UncaughtException::Trap,
+            )?
         };
 
         if result % old_align != 0 {

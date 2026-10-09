@@ -148,6 +148,16 @@ fn spec_test_config(test: &Path) -> TestConfig {
         Some("custom-descriptors") => {
             ret.custom_descriptors = Some(true);
         }
+        Some("compact-import-section") => {
+            ret.compact_imports = Some(true);
+            ret.reference_types = Some(true);
+            ret.multi_memory = Some(true);
+            ret.exceptions = Some(true);
+        }
+        Some("extended-name-section") => {
+            ret.gc = Some(true);
+            ret.exceptions = Some(true);
+        }
         Some(proposal) => panic!("unsupported proposal {proposal:?}"),
 
         // The rough goal here is to enable a minimal set of features for the
@@ -205,6 +215,9 @@ fn spec_test_config(test: &Path) -> TestConfig {
             if test_name.contains("return_") || test_name.contains("try_table") {
                 ret.tail_call = Some(true);
             }
+            if test_name == "return_call.wast" || test_name == "return_call_indirect.wast" {
+                ret.function_references = Some(true);
+            }
             if test_name.contains("tag")
                 || test_name.contains("try_table")
                 || test_name.contains("throw")
@@ -253,6 +266,7 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.multi_memory = Some(true);
     ret.component_model_implements = Some(true);
     ret.component_model_canonical_names = Some(true);
+    ret.component_model_accessors = Some(true);
     ret.bulk_memory = Some(true);
     ret.component_model_async = Some(true);
     ret.component_model_more_async_builtins = Some(true);
@@ -336,6 +350,7 @@ macro_rules! foreach_config_option {
             extended_const
             wide_arithmetic
             branch_hinting
+            compact_imports
             hogs_memory
             nan_canonicalization
             component_model_async
@@ -349,6 +364,7 @@ macro_rules! foreach_config_option {
             component_model_fixed_length_lists
             component_model_implements
             component_model_canonical_names
+            component_model_accessors
             simd
             gc_types
             exceptions
@@ -560,6 +576,15 @@ impl WastTest {
         }
 
         if config.compiler.should_fail(&self.config) {
+            return true;
+        }
+
+        // Wasmtime doesn't implement `assert_{invalid,malformed}_custom`
+        let unsupported = [
+            "spec_testsuite/proposals/extended-name-section/custom/name_annot.wast",
+            "spec_testsuite/proposals/extended-name-section/custom/name.wast",
+        ];
+        if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;
         }
 

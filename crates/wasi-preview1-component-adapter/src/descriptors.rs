@@ -421,6 +421,22 @@ impl Descriptors {
         self.get_file_with_error(fd, wasip1::ERRNO_INVAL)
     }
 
+    /// Like [`Self::get_file`], but also accepts a directory.
+    ///
+    /// `fd_filestat_set_times` applies to both, so unlike the other callers of
+    /// `get_file` it must not reject a directory.
+    #[cfg(not(feature = "proxy"))]
+    pub fn get_file_or_dir(&self, fd: Fd) -> Result<&File, Errno> {
+        match self.get(fd)? {
+            Descriptor::Streams(Streams {
+                type_: StreamType::File(file),
+                ..
+            }) => Ok(file),
+            Descriptor::Closed(_) => Err(wasip1::ERRNO_BADF),
+            _ => Err(wasip1::ERRNO_INVAL),
+        }
+    }
+
     #[cfg(not(feature = "proxy"))]
     pub fn get_dir(&self, fd: Fd) -> Result<&File, Errno> {
         match self.get(fd)? {

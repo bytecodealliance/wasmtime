@@ -1,7 +1,15 @@
 use crate::async_functions::{PollOnce, execute_across_threads};
+use futures::stream::{FuturesUnordered, TryStreamExt as _};
+use std::collections::HashMap;
+use std::future::Future;
+use std::iter;
+use std::mem;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use wasmtime::Result;
+use wasmtime::component::{TaskGroupHook, TaskGroupId};
 use wasmtime::{AsContextMut, Config, Engine, Store, StoreContextMut, Trap, component::*};
 use wasmtime_component_util::REALLOC_AND_FREE;
 
@@ -43,6 +51,186 @@ async fn smoke() -> Result<()> {
         .unwrap_err();
     assert_eq!(err.downcast::<Trap>()?, Trap::UnreachableCodeReached);
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn run_concurrent_yields_during_high_priority_work() -> Result<()> {
+    const TASKS: usize = 256;
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let completed = Arc::new(AtomicUsize::new(0));
+    let mut handles = Vec::new();
+
+    // Spawning store tasks queues high-priority work. Each task is immediately
+    // ready, so the event loop can drain them without returning to Tokio.
+    for _ in 0..TASKS {
+        let completed = completed.clone();
+        handles.push(store.spawn(async move |_| {
+            completed.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        })?);
+    }
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    tokio::spawn(async move {
+        _ = tx.send(completed.load(Ordering::Relaxed));
+    });
+
+    // On a current-thread runtime, the spawned Tokio task can only run once
+    // `run_concurrent` returns Pending. It should get a turn before all store
+    // tasks have completed.
+    let completed_when_tokio_ran = store.run_concurrent(async |_| rx.await).await??;
+    store
+        .run_concurrent(async move |_| {
+            for handle in handles {
+                handle.await;
+            }
+        })
+        .await?;
+    assert!(
+        completed_when_tokio_ran < TASKS,
+        "Tokio did not run until all {TASKS} store tasks completed"
+    );
+    store.assert_concurrent_state_empty();
+    Ok(())
+}
+
+// A callback-driven guest can continuously cancel host subtasks. If Tokio's
+// cooperative budget is exhausted, even a ready timer cannot complete until
+// Wasmtime returns Pending to Tokio.
+#[tokio::test(flavor = "current_thread")]
+#[cfg_attr(miri, ignore)]
+async fn guest_cancellation_loop_does_not_starve_tokio() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_more_async_builtins(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+        (component
+          (import "burn" (func $burn))
+          (import "probe" (func $probe async))
+          (import "pending" (func $pending async))
+
+          (core module $m
+            (import "" "burn" (func $burn))
+            (import "" "probe" (func $probe (result i32)))
+            (import "" "pending" (func $pending (result i32)))
+            (import "" "cancel" (func $cancel (param i32) (result i32)))
+            (import "" "drop" (func $drop (param i32)))
+            (import "" "new" (func $new (result i32)))
+            (import "" "join" (func $join (param i32 i32)))
+            (import "" "task.return" (func $task.return))
+
+            (global $set (mut i32) (i32.const 0))
+            (global $probe-handle (mut i32) (i32.const 0))
+            (global $pending-handle (mut i32) (i32.const 0))
+            (global $cancellations (mut i32) (i32.const 0))
+
+            (func $start (param $status i32) (result i32)
+              (if (i32.ne (i32.and (local.get $status) (i32.const 15)) (i32.const 1))
+                (then unreachable))
+              (i32.shr_u (local.get $status) (i32.const 4)))
+
+            (func $start-pending
+              (global.set $pending-handle (call $start (call $pending)))
+              (if (i32.ne (call $cancel (global.get $pending-handle)) (i32.const -1))
+                (then unreachable))
+              (call $join (global.get $pending-handle) (global.get $set)))
+
+            (func (export "run") (result i32)
+              (call $burn)
+              (global.set $set (call $new))
+              (global.set $probe-handle (call $start (call $probe)))
+              (call $join (global.get $probe-handle) (global.get $set))
+              (call $start-pending)
+              (i32.or (i32.const 2) (i32.shl (global.get $set) (i32.const 4))))
+
+            (func (export "callback") (param $event i32) (param $waitable i32)
+              (param $code i32) (result i32)
+              (if (i32.ne (local.get $event) (i32.const 1)) (then unreachable))
+              (if (i32.eq (local.get $waitable) (global.get $probe-handle))
+                (then
+                  (if (i32.ne (local.get $code) (i32.const 2)) (then unreachable))
+                  (call $drop (global.get $probe-handle))
+                  (call $task.return)
+                  (return (i32.const 0))))
+              (if (i32.ne (local.get $waitable) (global.get $pending-handle))
+                (then unreachable))
+              (if (i32.ne (local.get $code) (i32.const 4)) (then unreachable))
+              (call $drop (global.get $pending-handle))
+              (global.set $cancellations (i32.add (global.get $cancellations) (i32.const 1)))
+              (if (i32.gt_u (global.get $cancellations) (i32.const 500))
+                (then unreachable))
+              (call $start-pending)
+              (i32.or (i32.const 2) (i32.shl (global.get $set) (i32.const 4))))
+          )
+
+          (core func $burn (canon lower (func $burn)))
+          (core func $probe (canon lower (func $probe) async))
+          (core func $pending (canon lower (func $pending) async))
+          (core func $cancel (canon subtask.cancel async))
+          (core func $drop (canon subtask.drop))
+          (core func $new (canon waitable-set.new))
+          (core func $join (canon waitable.join))
+          (core func $task.return (canon task.return))
+          (core instance $i (instantiate $m (with "" (instance
+            (export "burn" (func $burn))
+            (export "probe" (func $probe))
+            (export "pending" (func $pending))
+            (export "cancel" (func $cancel))
+            (export "drop" (func $drop))
+            (export "new" (func $new))
+            (export "join" (func $join))
+            (export "task.return" (func $task.return))
+          ))))
+          (func (export "run") async
+            (canon lift (core func $i "run") async
+              (callback (core func $i "callback"))))
+        )
+        "#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .func_wrap("burn", |_: StoreContextMut<()>, ()| {
+            let mut context = Context::from_waker(std::task::Waker::noop());
+            let mut exhausted = false;
+            for _ in 0..256 {
+                let (sender, mut receiver) = tokio::sync::oneshot::channel();
+                sender.send(()).unwrap();
+                if Pin::new(&mut receiver).poll(&mut context).is_pending() {
+                    exhausted = true;
+                    break;
+                }
+            }
+            assert!(exhausted, "failed to exhaust Tokio's cooperative budget");
+            Ok(())
+        })?;
+    linker.root().func_wrap_concurrent("probe", |_, ()| {
+        Box::pin(async {
+            tokio::time::sleep(std::time::Duration::ZERO).await;
+            Ok(())
+        })
+    })?;
+    linker.root().func_wrap_concurrent("pending", |_, ()| {
+        Box::pin(async {
+            std::future::pending::<()>().await;
+            Ok(())
+        })
+    })?;
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    instance
+        .get_typed_func::<(), ()>(&mut store, "run")?
+        .call_async(&mut store, ())
+        .await?;
     Ok(())
 }
 
@@ -515,22 +703,68 @@ async fn require_concurrency_support() -> Result<()> {
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn cancel_host_task_does_not_leak() -> Result<()> {
+    test_cancel_host_task(HostTaskCancelMode::Sync).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn async_cancel_host_task_does_not_leak() -> Result<()> {
+    test_cancel_host_task(HostTaskCancelMode::Async).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn async_cancel_host_task_drop_before_completion_traps() -> Result<()> {
+    test_cancel_host_task(HostTaskCancelMode::DropDuringAsyncCancel).await
+}
+
+enum HostTaskCancelMode {
+    Sync,
+    Async,
+    DropDuringAsyncCancel,
+}
+
+async fn test_cancel_host_task(mode: HostTaskCancelMode) -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_async(true);
+    config.wasm_component_model_more_async_builtins(true);
+    config.wasm_component_model_async_stackful(true);
     let engine = Engine::new(&config)?;
 
     let mut store = Store::new(&engine, ());
+    let async_cancel = !matches!(mode, HostTaskCancelMode::Sync);
+    let drop_early = matches!(mode, HostTaskCancelMode::DropDuringAsyncCancel);
+    let cancel_option = if async_cancel { "async" } else { "" };
+    let expected_cancel_status = if async_cancel { -1 } else { 4 };
+    let early_drop = if drop_early {
+        r#"
+                    ;; Cancellation returned BLOCKED, so dropping must trap.
+                    (call $drop (local.get $task))
+                    ;; Stop here if the drop was incorrectly accepted.
+                    unreachable
+        "#
+    } else {
+        ""
+    };
     let component = Component::new(
         &engine,
-        r#"(component
+        format!(
+            r#"(component
             (import "f" (func $f async))
+            (core module $memory (memory (export "memory") 1))
+            (core instance $memory (instantiate $memory))
 
             (core module $m
+                (import "" "memory" (memory 1))
                 (import "" "f" (func $f (result i32)))
                 (import "" "cancel" (func $cancel (param i32) (result i32)))
                 (import "" "drop" (func $drop (param i32)))
+                (import "" "new-set" (func $new-set (result i32)))
+                (import "" "join" (func $join (param i32 i32)))
+                (import "" "wait" (func $wait (param i32 i32) (result i32)))
+                (import "" "drop-set" (func $drop-set (param i32)))
                 (func (export "run")
-                    (local i32)
+                    (local $task i32) (local $status i32) (local $set i32)
 
                     ;; start the subtask, asserting it's `STARTED`
                     call $f
@@ -547,26 +781,46 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
                     i32.shr_u
                     local.set 0
 
-                    ;; cancel the subtask asserting it's `RETURN_CANCELLED`
-                    local.get 0
-                    call $cancel
-                    i32.const 4 ;; RETURN_CANCELLED
-                    i32.ne
-                    if unreachable end
+                    ;; Request cancellation and check its status.
+                    (local.set $status (call $cancel (local.get $task)))
+                    (if (i32.ne (local.get $status) (i32.const {expected_cancel_status}))
+                        (then unreachable))
+                    {early_drop}
+                    (if (i32.eq (local.get $status) (i32.const -1))
+                        (then
+                            (local.set $set (call $new-set))
+                            (call $join (local.get $task) (local.get $set))
+                            (if (i32.ne (call $wait (local.get $set) (i32.const 0)) (i32.const 1))
+                                (then unreachable))
+                            (if (i32.ne (i32.load (i32.const 0)) (local.get $task))
+                                (then unreachable))
+                            (local.set $status (i32.load (i32.const 4)))))
+                    (if (i32.ne (local.get $status) (i32.const 4)) ;; RETURN_CANCELLED
+                        (then unreachable))
 
                     ;; drop the subtask
                     local.get 0
                     call $drop
+                    (if (local.get $set) (then (call $drop-set (local.get $set))))
                 )
             )
             (core func $f (canon lower (func $f) async))
-            (core func $cancel (canon subtask.cancel))
+            (core func $cancel (canon subtask.cancel {cancel_option}))
             (core func $drop (canon subtask.drop))
+            (core func $new-set (canon waitable-set.new))
+            (core func $join (canon waitable.join))
+            (core func $wait (canon waitable-set.wait (memory (core memory $memory "memory"))))
+            (core func $drop-set (canon waitable-set.drop))
             (core instance $i (instantiate $m
                 (with "" (instance
+                    (export "memory" (memory $memory "memory"))
                     (export "f" (func $f))
                     (export "cancel" (func $cancel))
                     (export "drop" (func $drop))
+                    (export "new-set" (func $new-set))
+                    (export "join" (func $join))
+                    (export "wait" (func $wait))
+                    (export "drop-set" (func $drop-set))
                 ))
             ))
 
@@ -574,7 +828,8 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
                 (canon lift (core func $i "run")))
 
 
-        )"#,
+        )"#
+        ),
     )?;
 
     let mut linker = Linker::new(&engine);
@@ -586,7 +841,7 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
     })?;
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
-    store
+    let result = store
         .run_concurrent(async |store| -> wasmtime::Result<()> {
             func.call_concurrent(store, ()).await?;
 
@@ -595,10 +850,17 @@ async fn cancel_host_task_does_not_leak() -> Result<()> {
             }
             Ok(())
         })
-        .await??;
+        .await
+        .and_then(std::convert::identity);
 
-    // The host task was cancelled, nothing should remain.
-    store.assert_concurrent_state_empty();
+    if drop_early {
+        let err = result.unwrap_err();
+        assert_eq!(err.downcast::<Trap>()?, Trap::SubtaskDropNotResolved);
+    } else {
+        result?;
+        // The host task was cancelled, nothing should remain.
+        store.assert_concurrent_state_empty();
+    }
 
     Ok(())
 }
@@ -971,196 +1233,262 @@ async fn bytes_stream_producer() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-#[cfg_attr(miri, ignore)]
-async fn async_call_stack() -> Result<()> {
-    let mut config = Config::new();
-    config.wasm_component_model_async(true);
-    let engine = Engine::new(&config)?;
-
-    let component = Component::new(
-        &engine,
-        r#"
-        (component
-            (import "a" (func $a))
-            (core func $a (canon lower (func $a)))
-
-            (core module $a
-                (import "" "a" (func $a))
-                (func (export "a") call $a)
-            )
-            (core instance $a (instantiate $a
-                (with "" (instance (export "a" (func $a))))
-            ))
-            (func (export "a") async (canon lift (core func $a "a")))
-        )
-    "#,
-    )?;
-
-    let mut linker = Linker::new(&engine);
-    linker.root().func_wrap(
-        "a",
-        |mut store: StoreContextMut<Option<GuestTaskId>>, (): ()| {
-            let stack = store.async_call_stack()?.collect::<Vec<_>>();
-            assert_eq!(stack, [store.data().unwrap()]);
-            Ok(())
-        },
-    )?;
-    let mut store = Store::new(&engine, None);
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
-
-    let call = func.start_call_concurrent(&mut store, ())?;
-    *store.data_mut() = Some(call.task());
-    store
-        .run_concurrent(async |store| func.finish_call_concurrent(store, call).await)
-        .await??;
-
-    let component = Component::new(
-        &engine,
-        r#"
-        (component
-            (import "a" (func $a))
-            (component $a
-                (import "a" (func $a))
-                (core func $a (canon lower (func $a)))
-
-                (core module $a
-                    (import "" "a" (func $a))
-                    (func (export "a") call $a)
-                )
-                (core instance $a (instantiate $a
-                    (with "" (instance (export "a" (func $a))))
-                ))
-                (func (export "a") (canon lift (core func $a "a")))
-            )
-
-            (instance $a (instantiate $a (with "a" (func $a))))
-            (instance $b (instantiate $a (with "a" (func $a "a"))))
-            (export "a" (func $b "a"))
-        )
-    "#,
-    )?;
-
-    let mut linker = Linker::new(&engine);
-    linker.root().func_wrap(
-        "a",
-        |mut store: StoreContextMut<Option<GuestTaskId>>, (): ()| {
-            let stack = store.async_call_stack()?.collect::<Vec<_>>();
-            assert_eq!(stack.len(), 2);
-            assert_eq!(stack.last(), store.data().as_ref());
-            Ok(())
-        },
-    )?;
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
-
-    let call = func.start_call_concurrent(&mut store, ())?;
-    *store.data_mut() = Some(call.task());
-    store
-        .run_concurrent(async |store| func.finish_call_concurrent(store, call).await)
-        .await??;
-    Ok(())
+#[derive(Copy, Clone)]
+enum TaskGroupHookTestVariant {
+    WithDrop,
+    WithoutDrop,
+    Trap,
 }
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
-async fn async_call_stack_omits_transparent_adapters() -> Result<()> {
-    async fn call_stack(taint: bool) -> Result<(Vec<GuestTaskId>, GuestTaskId)> {
-        let mut config = Config::new();
-        config.wasm_component_model_async(true);
-        let engine = Engine::new(&config)?;
+async fn task_group_hook_with_drop() -> Result<()> {
+    test_task_group_hook(TaskGroupHookTestVariant::WithDrop).await
+}
 
-        let (taint_canon, taint_import, taint_arg) = if taint {
-            (
-                r#"(core func $ctx (canon context.get i32 0))"#,
-                r#"(import "" "ctx" (func $ctx (result i32)))"#,
-                r#"(export "ctx" (func $ctx))"#,
-            )
-        } else {
-            ("", "", "")
-        };
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn task_group_hook_without_drop() -> Result<()> {
+    test_task_group_hook(TaskGroupHookTestVariant::WithoutDrop).await
+}
 
-        let component = Component::new(
-            &engine,
-            &format!(
-                r#"
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn task_group_hook_trap() -> Result<()> {
+    test_task_group_hook(TaskGroupHookTestVariant::Trap).await
+}
+
+/// Verify that all the expected `TaskGroupHook` events are delivered,
+/// regardless of whether the guest tasks exit normally, leak subtasks, or trap.
+async fn test_task_group_hook(variant: TaskGroupHookTestVariant) -> Result<()> {
+    _ = env_logger::try_init();
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let call_drop = if let TaskGroupHookTestVariant::WithDrop = variant {
+        "(call $subtask.drop (local.get $waitable))"
+    } else {
+        ""
+    };
+
+    let component = Component::new(
+        &engine,
+        format!(
+            r#"
         (component
-            (import "a" (func $a))
+            (import "a" (func $a async))
+            (core func $a (canon lower (func $a) async))
 
-            ;; Lowers the host import, so this is never thread-transparent.
-            (component $Deep
-                (import "a" (func $a))
-                (core func $a (canon lower (func $a)))
-                (core module $m
-                    (import "" "a" (func $a))
-                    (func (export "a") call $a))
-                (core instance $m (instantiate $m
-                    (with "" (instance (export "a" (func $a))))))
-                (func (export "a") (canon lift (core func $m "a")))
+            (core module $a
+                (import "" "a" (func $a (result i32)))
+                (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+                (import "" "waitable.join" (func $waitable.join (param i32 i32)))
+                (import "" "subtask.drop" (func $subtask.drop (param i32)))
+                (import "" "task.return" (func $task.return))
+                (func (export "a") (result i32)
+                    (local $ret i32)
+                    (local $subtask i32)
+                    (local $set i32)
+
+                    (local.set $ret (call $a))
+                    (if (i32.ne (i32.const 1 (; STARTED ;)) (i32.and (local.get $ret) (i32.const 0xf)))
+                        (then unreachable))
+                    (local.set $subtask (i32.shr_u (local.get $ret) (i32.const 4)))
+                    (local.set $set (call $waitable-set.new))
+                    (call $waitable.join (local.get $subtask) (local.get $set))
+                    (i32.or (i32.const 2 (; WAIT ;)) (i32.shl (local.get $set) (i32.const 4)))
+                )
+
+                (func (export "a-callback")
+                      (param $event_code i32)
+                      (param $waitable i32)
+                      (param $payload i32)
+                      (result i32)
+                    (if (i32.ne (local.get $event_code) (i32.const 1 (; SUBTASK ;)))
+                        (then unreachable))
+                    (if (i32.ne (local.get $payload) (i32.const 2 (; RETURNED ;)))
+                        (then unreachable))
+                    (call $waitable.join (local.get $waitable) (i32.const 0))
+                    {call_drop}
+                    (call $task.return)
+                    (i32.const 0 (; EXIT ;))
+                )
             )
-
-            ;; Declares nothing but a `canon lower` of an imported *lifted*,
-            ;; non-`async` function, so an instance of this component is
-            ;; thread-transparent -- unless the taint below is present.
-            (component $Mid
-                (import "a" (func $a))
-                {taint_canon}
-                (core func $a (canon lower (func $a)))
-                (core module $m
-                    (import "" "a" (func $a))
-                    {taint_import}
-                    (func (export "a") call $a))
-                (core instance $m (instantiate $m
-                    (with "" (instance (export "a" (func $a)) {taint_arg}))))
-                (func (export "a") (canon lift (core func $m "a")))
-            )
-
-            (instance $deep (instantiate $Deep (with "a" (func $a))))
-            (instance $mid (instantiate $Mid (with "a" (func $deep "a"))))
-            (instance $top (instantiate $Mid (with "a" (func $mid "a"))))
-            (export "a" (func $top "a"))
+            (canon waitable-set.new (core func $waitable-set.new))
+            (canon waitable.join (core func $waitable.join))
+            (canon subtask.drop (core func $subtask.drop))
+            (canon task.return (core func $task.return))
+            (core instance $a (instantiate $a
+                (with "" (instance
+                    (export "a" (func $a))
+                    (export "waitable-set.new" (func $waitable-set.new))
+                    (export "waitable.join" (func $waitable.join))
+                    (export "subtask.drop" (func $subtask.drop))
+                    (export "task.return" (func $task.return))
+                ))
+            ))
+            (func (export "a") async (canon lift (core func $a "a") async (callback (core func $a "a-callback"))))
         )
-        "#
-            ),
-        )?;
+    "#
+        ),
+    )?;
 
-        let mut linker = Linker::new(&engine);
-        linker.root().func_wrap(
-            "a",
-            |mut store: StoreContextMut<Option<Vec<GuestTaskId>>>, (): ()| {
-                let stack = store.async_call_stack()?.collect::<Vec<_>>();
-                *store.data_mut() = Some(stack);
-                Ok(())
-            },
-        )?;
+    #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+    enum Event {
+        Start,
+        PollHostCall,
+        Finish,
+    }
 
-        let mut store = Store::new(&engine, None);
+    #[derive(Default)]
+    struct HookInner {
+        events: Vec<(Event, usize)>,
+        next_id: usize,
+        ids: HashMap<TaskGroupId, usize>,
+        entered: Option<usize>,
+        call_count: usize,
+    }
+
+    #[derive(Clone)]
+    struct Hook(Arc<Mutex<HookInner>>);
+
+    impl TaskGroupHook for Hook {
+        fn handle_start(&mut self, group: TaskGroupId) -> Result<()> {
+            let mut inner = self.0.try_lock().unwrap();
+            let id = inner.next_id;
+            inner.next_id += 1;
+            // This `group` should not be equal to any other
+            // started-and-not-yet-finished group:
+            assert!(inner.ids.insert(group, id).is_none());
+            inner.events.push((Event::Start, id));
+            Ok(())
+        }
+
+        fn handle_enter(&mut self, group: TaskGroupId) -> Result<()> {
+            let mut inner = self.0.try_lock().unwrap();
+            let id = *inner.ids.get(&group).unwrap();
+            // We should not have entered-but-not-yet-exited this or any other
+            // group:
+            assert!(inner.entered.replace(id).is_none());
+            Ok(())
+        }
+
+        fn handle_exit(&mut self, group: TaskGroupId) -> Result<()> {
+            let mut inner = self.0.try_lock().unwrap();
+            let id = *inner.ids.get(&group).unwrap();
+            // We should have entered-but-not-yet-exited this group:
+            assert_eq!(Some(id), inner.entered);
+            inner.entered = None;
+            Ok(())
+        }
+
+        fn handle_finish(&mut self, group: TaskGroupId) -> Result<()> {
+            let mut inner = self.0.try_lock().unwrap();
+            let id = inner.ids.remove(&group).unwrap();
+            inner.events.push((Event::Finish, id));
+            Ok(())
+        }
+    }
+
+    let yield_count = 5;
+    let call_count = 3;
+
+    let hook = Hook(Arc::new(Mutex::new(HookInner::default())));
+
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap_concurrent("a", {
+        let hook = hook.clone();
+        move |_, ()| {
+            let hook = hook.clone();
+            Box::pin(async move {
+                let mut previous_id = None;
+                let mut on_poll = || {
+                    let mut inner = hook.0.try_lock().unwrap();
+                    // We should only ever be polled after a `handle_enter` and
+                    // before a `handle_exit` event:
+                    let id = inner.entered.unwrap();
+                    inner.events.push((Event::PollHostCall, id));
+
+                    // Should see the same task group on every poll:
+                    if let Some(previous_id) = previous_id {
+                        assert_eq!(previous_id, id);
+                    } else {
+                        previous_id = Some(id);
+                    }
+
+                    id
+                };
+
+                on_poll();
+                for _ in 0..yield_count {
+                    tokio::task::yield_now().await;
+                    on_poll();
+                }
+
+                let mut inner = hook.0.try_lock().unwrap();
+                inner.call_count += 1;
+                if let TaskGroupHookTestVariant::Trap = variant
+                    && inner.call_count == call_count
+                {
+                    Err(wasmtime::format_err!("yikes"))
+                } else {
+                    Ok(())
+                }
+            })
+        }
+    })?;
+
+    {
+        let mut store = Store::new(&engine, ());
         let instance = linker.instantiate_async(&mut store, &component).await?;
         let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
 
-        let call = func.start_call_concurrent(&mut store, ())?;
-        let root = call.task();
-        store
-            .run_concurrent(async |store| func.finish_call_concurrent(store, call).await)
-            .await??;
+        store.task_group_hook(hook.clone());
 
-        Ok((store.data_mut().take().unwrap(), root))
+        // Call the guest export `call_count` times concurrently, recording the
+        // events in `hook`:
+        let result = store
+            .run_concurrent(async |store| {
+                iter::repeat_with(|| func.call_concurrent(store, ()))
+                    .take(call_count)
+                    .collect::<FuturesUnordered<_>>()
+                    .try_collect::<()>()
+                    .await
+            })
+            .await;
+
+        match (result, variant) {
+            (
+                Ok(result),
+                TaskGroupHookTestVariant::WithDrop | TaskGroupHookTestVariant::WithoutDrop,
+            ) => result?,
+            (Err(error), TaskGroupHookTestVariant::Trap) => {
+                assert!(error.to_string().contains("yikes"), "{error}");
+            }
+            _ => unreachable!(),
+        }
     }
 
-    // With the intermediate instances tainted into opacity, all three
-    // guest-to-guest calls materialize a task and all three show up.
-    let (stack, root) = call_stack(true).await?;
-    assert_eq!(stack.len(), 3);
-    assert_eq!(stack.last(), Some(&root));
+    // Group the events by task group, preserving order:
+    let mut map = HashMap::<_, Vec<_>>::new();
+    for (event, id) in mem::take(&mut hook.0.try_lock().unwrap().events) {
+        map.entry(id).or_default().push(event);
+    }
 
-    // Without the taint, `$top -> $mid` is a thread-transparent call, its task
-    // is never materialized, and so it is omitted from the stack. The root
-    // host-to-guest call is always materialized, so it is still reported, and
-    // `$mid -> $deep` still is too since `$deep` is opaque.
-    let (stack, root) = call_stack(false).await?;
-    assert_eq!(stack.len(), 2);
-    assert_eq!(stack.last(), Some(&root));
+    // Assert that the events start with a `Start`, followed by the expected
+    // number of `PollHostCall`s, followed by a `Finish`:
+    let expected = iter::once(Event::Start)
+        .chain(iter::repeat(Event::PollHostCall).take(yield_count + 1))
+        .chain(Some(Event::Finish))
+        .collect::<Vec<_>>();
+
+    for id in 0..call_count {
+        assert_eq!(&map.get(&id).unwrap()[..], &expected[..])
+    }
+
+    assert_eq!(None, hook.0.try_lock().unwrap().entered);
+    assert!(hook.0.try_lock().unwrap().ids.is_empty());
 
     Ok(())
 }
@@ -1281,6 +1609,494 @@ fn inter_component_stream_is_not_intra_component() -> Result<()> {
     let (stream,) = mk.call(&mut store, ())?;
     write.call(&mut store, ())?;
     assert_eq!(read.call(&mut store, (stream,))?, ("hello".to_string(),));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn join_handle_used_from_other_threads() -> Result<()> {
+    use std::task::Waker;
+    use std::time::Duration;
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    // Spawn some tasks and hand each `JoinHandle` to its own thread, which
+    // polls, aborts, and drops it while the event loop (below) is driving and
+    // dropping the same tasks. The two race, so this doesn't reproduce the
+    // underlying lock-contention bug on every run.
+    let remaining = Arc::new(AtomicUsize::new(4));
+    let mut threads = Vec::new();
+    for _ in 0..4 {
+        let mut handle = store.spawn(async |_| std::future::pending::<Result<()>>().await)?;
+        let remaining = remaining.clone();
+        threads.push(std::thread::spawn(move || {
+            let mut cx = Context::from_waker(Waker::noop());
+            assert!(Pin::new(&mut handle).poll(&mut cx).is_pending());
+            handle.abort();
+            // Wait for the event loop to drop the aborted task, racing it.
+            while Pin::new(&mut handle).poll(&mut cx).is_pending() {
+                std::hint::spin_loop();
+            }
+            remaining.fetch_sub(1, Ordering::Relaxed);
+        }));
+    }
+
+    // Drive the event loop until every thread is done, bounded by a timeout so
+    // a hang fails the test rather than blocking forever.
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        store.run_concurrent(async |_| {
+            while remaining.load(Ordering::Relaxed) != 0 {
+                tokio::task::yield_now().await;
+            }
+        }),
+    )
+    .await
+    .expect("timed out driving the event loop")?;
+
+    for thread in threads {
+        thread.join().unwrap();
+    }
+    Ok(())
+}
+
+/// Yields to the executor `n` times.
+async fn yield_times(n: usize) {
+    for _ in 0..n {
+        let mut yielded = false;
+        std::future::poll_fn(|cx| {
+            if yielded {
+                Poll::Ready(())
+            } else {
+                yielded = true;
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+        })
+        .await
+    }
+}
+
+/// Starts a guest task which yields forever (calling the host's `tick` each
+/// time it runs) concurrently with one which fails, then checks that once the
+/// store is poisoned the event loop refuses to run any further guest code.
+async fn no_guest_code_after_trap(boom_calls_failing_host: bool) -> Result<()> {
+    let boom = if boom_calls_failing_host {
+        "(call $fail) unreachable"
+    } else {
+        "unreachable"
+    };
+    let wat = format!(
+        r#"
+(component
+  (import "tick" (func $tick))
+  (import "fail" (func $fail))
+  (component $Spin
+    (import "tick" (func $tick))
+    (core func $tick (canon lower (func $tick)))
+    (core module $m
+      (import "" "tick" (func $tick))
+      (func (export "run") (result i32) (call $tick) (i32.const 1)) ;; YIELD
+      (func (export "cb") (param i32 i32 i32) (result i32)
+        (call $tick) (i32.const 1))) ;; YIELD
+    (core instance $i (instantiate $m (with "" (instance (export "tick" (func $tick))))))
+    (func (export "run") async
+      (canon lift (core func $i "run") async (callback (core func $i "cb")))))
+  (component $Boom
+    (import "fail" (func $fail))
+    (core func $fail (canon lower (func $fail)))
+    (core module $m
+      (import "" "fail" (func $fail))
+      (func (export "run") (result i32) {boom})
+      (func (export "cb") (param i32 i32 i32) (result i32) unreachable))
+    (core instance $i (instantiate $m (with "" (instance (export "fail" (func $fail))))))
+    (func (export "run") async
+      (canon lift (core func $i "run") async (callback (core func $i "cb")))))
+  (instance $s (instantiate $Spin (with "tick" (func $tick))))
+  (instance $b (instantiate $Boom (with "fail" (func $fail))))
+  (export "spin" (func $s "run"))
+  (export "boom" (func $b "run")))
+"#
+    );
+
+    let engine = Engine::default();
+    let component = Component::new(&engine, wat)?;
+    let mut linker = Linker::<u32>::new(&engine);
+    linker
+        .root()
+        .func_wrap("tick", |mut store: StoreContextMut<'_, u32>, (): ()| {
+            *store.data_mut() += 1;
+            Ok(())
+        })?;
+    linker.root().func_wrap(
+        "fail",
+        |_: StoreContextMut<'_, u32>, (): ()| -> Result<()> { wasmtime::bail!("host error") },
+    )?;
+    let mut store = Store::new(&engine, 0);
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let spin = instance.get_typed_func::<(), ()>(&mut store, "spin")?;
+    let boom = instance.get_typed_func::<(), ()>(&mut store, "boom")?;
+
+    let result = store
+        .run_concurrent(async |a| {
+            let s = spin.call_concurrent(a, ());
+            let b = boom.call_concurrent(a, ());
+            tokio::join!(s, b)
+        })
+        .await;
+    assert!(result.is_err());
+    let ticks = *store.data();
+
+    // Neither running the event loop for a host-only future nor entering the
+    // guest may run any more guest code.
+    let result = store.run_concurrent(async |_| yield_times(10).await).await;
+    assert_eq!(*store.data(), ticks);
+    assert_eq!(
+        result.unwrap_err().downcast::<Trap>()?,
+        Trap::CannotEnterComponent,
+    );
+    let result = store
+        .run_concurrent(async |a| spin.call_concurrent(a, ()).await)
+        .await
+        .and_then(|r| r);
+    assert_eq!(*store.data(), ticks);
+    assert_eq!(
+        result.unwrap_err().downcast::<Trap>()?,
+        Trap::CannotEnterComponent,
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn no_guest_code_after_trap_in_run_concurrent() -> Result<()> {
+    no_guest_code_after_trap(false).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn no_guest_code_after_host_error_in_run_concurrent() -> Result<()> {
+    no_guest_code_after_trap(true).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn event_loop_after_realloc_trap_during_host_stream_write() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (type $st (stream string))
+  (core module $libc
+    (memory (export "mem") 1)
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable))
+  (core instance $libc (instantiate $libc))
+  (core func $stream.read (canon stream.read $st async (memory (core memory $libc "mem"))
+    (realloc (core func $libc "realloc"))))
+  (core func $waitable-set.new (canon waitable-set.new))
+  (core func $waitable.join (canon waitable.join))
+  (core func $task.return (canon task.return (result u32)))
+  (core module $m
+    (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+    (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+    (import "" "waitable.join" (func $waitable.join (param i32 i32)))
+    (import "" "task.return" (func $task.return (param i32)))
+    (func (export "consume") (param $s i32) (result i32)
+      (local $set i32)
+      (drop (call $stream.read (local.get $s) (i32.const 0) (i32.const 4)))
+      (local.set $set (call $waitable-set.new))
+      (call $waitable.join (local.get $s) (local.get $set))
+      ;; WAIT on $set
+      (i32.or (i32.const 2) (i32.shl (local.get $set) (i32.const 4))))
+    (func (export "cb") (param i32 i32 i32) (result i32)
+      (call $task.return (i32.const 0))
+      (i32.const 0))) ;; EXIT
+  (core instance $i (instantiate $m (with "" (instance
+    (export "stream.read" (func $stream.read))
+    (export "waitable-set.new" (func $waitable-set.new))
+    (export "waitable.join" (func $waitable.join))
+    (export "task.return" (func $task.return))))))
+  (func (export "consume") async (param "s" $st) (result u32)
+    (canon lift (core func $i "consume") async (callback (core func $i "cb"))))
+)
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let consume =
+        instance.get_typed_func::<(StreamReader<String>,), (u32,)>(&mut store, "consume")?;
+
+    let stream = StreamReader::new(&mut store, vec!["hello".to_string()])?;
+    let err = consume.call_async(&mut store, (stream,)).await.unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::UnreachableCodeReached)
+    );
+
+    let result = store.run_concurrent(async |_| yield_times(5).await).await;
+    assert_eq!(
+        result.unwrap_err().downcast::<Trap>()?,
+        Trap::CannotEnterComponent,
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn start_function_trap_reported_faithfully() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $m (func $s unreachable) (start $s))
+  (core instance (instantiate $m)))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let err = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await
+        .unwrap_err();
+    assert_eq!(err.downcast::<Trap>()?, Trap::UnreachableCodeReached);
+    Ok(())
+}
+
+const DROP_MID_FLIGHT_WAT: &str = r#"
+(component
+  (core func $task.return (canon task.return))
+  (core module $m
+    (import "" "task.return" (func $tr))
+    (memory 1)
+    (func (export "run") (result i32) (call $tr) (i32.const 0 (; EXIT ;)))
+    (func (export "cb") (param i32 i32 i32) (result i32) unreachable))
+  (core instance $i (instantiate $m (with "" (instance (export "task.return" (func $task.return))))))
+  (func (export "run") async (canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+"#;
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_instantiate_async_blocked_in_limiter() -> Result<()> {
+    struct Limiter {
+        block: bool,
+    }
+
+    #[async_trait::async_trait]
+    impl wasmtime::ResourceLimiterAsync for Limiter {
+        async fn memory_growing(&mut self, _: usize, _: usize, _: Option<usize>) -> Result<bool> {
+            if self.block {
+                std::future::pending::<()>().await;
+            }
+            Ok(true)
+        }
+        async fn table_growing(&mut self, _: usize, _: usize, _: Option<usize>) -> Result<bool> {
+            Ok(true)
+        }
+    }
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, DROP_MID_FLIGHT_WAT)?;
+    let linker = Linker::new(&engine);
+    let mut store = Store::new(&engine, Limiter { block: true });
+    store.limiter_async(|l| l);
+
+    let future = Box::pin(linker.instantiate_async(&mut store, &component));
+    assert!(PollOnce::new(future).await.is_err());
+
+    // Using the store afterwards shouldn't panic...
+    store.data_mut().block = false;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    store
+        .run_concurrent(async |a| run.call_concurrent(a, ()).await)
+        .await??;
+    run.call_async(&mut store, ()).await?;
+
+    Ok(())
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum BlockingCallHook {
+    Calling,
+    Returning,
+}
+
+struct BlockingCallHookHandler(Arc<Mutex<Option<BlockingCallHook>>>);
+
+#[async_trait::async_trait]
+impl<T: Send> wasmtime::CallHookHandler<T> for BlockingCallHookHandler {
+    async fn handle_call_event(
+        &self,
+        _: wasmtime::StoreHookState<'_, T>,
+        ch: wasmtime::CallHook,
+    ) -> Result<()> {
+        let which = match ch {
+            wasmtime::CallHook::CallingWasm => BlockingCallHook::Calling,
+            wasmtime::CallHook::ReturningFromWasm => BlockingCallHook::Returning,
+            _ => return Ok(()),
+        };
+        if *self.0.lock().unwrap() == Some(which) {
+            std::future::pending::<()>().await;
+        }
+        Ok(())
+    }
+}
+
+// Dropping `run_concurrent` while a guest call is blocked in an async call
+// hook abandons that call partway through, so the store must be poisoned
+// rather than left with a stale current guest task.
+async fn drop_run_concurrent_blocked_in_call_hook(which: BlockingCallHook) -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, DROP_MID_FLIGHT_WAT)?;
+    let mut store = Store::new(&engine, ());
+    let block = Arc::new(Mutex::new(None));
+    store.call_hook_async(BlockingCallHookHandler(block.clone()));
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+    *block.lock().unwrap() = Some(which);
+    let future = Box::pin(store.run_concurrent(async |a| run.call_concurrent(a, ()).await));
+    assert!(PollOnce::new(future).await.is_err());
+    *block.lock().unwrap() = None;
+
+    let err = store
+        .run_concurrent(async |a| run.call_concurrent(a, ()).await)
+        .await?
+        .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_run_concurrent_blocked_in_calling_hook() -> Result<()> {
+    drop_run_concurrent_blocked_in_call_hook(BlockingCallHook::Calling).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_run_concurrent_blocked_in_returning_hook() -> Result<()> {
+    drop_run_concurrent_blocked_in_call_hook(BlockingCallHook::Returning).await
+}
+
+// Dropping `instantiate_async` while a core module's start function is blocked
+// in an async call hook abandons the start function partway through, so the
+// store must be poisoned.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_instantiate_async_blocked_in_start_call_hook() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let with_start = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $m
+    (func $start)
+    (start $start))
+  (core instance $i (instantiate $m))
+)
+        "#,
+    )?;
+    let component = Component::new(&engine, DROP_MID_FLIGHT_WAT)?;
+    let mut store = Store::new(&engine, ());
+    let block = Arc::new(Mutex::new(Some(BlockingCallHook::Calling)));
+    store.call_hook_async(BlockingCallHookHandler(block.clone()));
+    let linker = Linker::new(&engine);
+
+    let future = Box::pin(linker.instantiate_async(&mut store, &with_start));
+    assert!(PollOnce::new(future).await.is_err());
+    *block.lock().unwrap() = None;
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    let err = store
+        .run_concurrent(async |a| run.call_concurrent(a, ()).await)
+        .await?
+        .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent)
+    );
+
+    Ok(())
+}
+
+// A call hook failing while `ResourceAny::resource_drop_async` enters the
+// guest to run a destructor must poison the store.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn resource_drop_call_hook_error() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $d (func (export "dtor") (param i32)))
+  (core instance $d (instantiate $d))
+  (type $r (resource (rep i32) (dtor (core func $d "dtor"))))
+  (core func $new (canon resource.new $r))
+  (core module $m
+    (import "" "new" (func $new (param i32) (result i32)))
+    (func (export "mk") (result i32) (call $new (i32.const 7)))
+    (func (export "nop")))
+  (core instance $i (instantiate $m
+    (with "" (instance (export "new" (func $new))))))
+  (export $r2 "r" (type $r))
+  (func (export "mk") (result (own $r2)) (canon lift (core func $i "mk")))
+  (func (export "nop") (canon lift (core func $i "nop")))
+)
+        "#,
+    )?;
+    let mut store = Store::new(&engine, false);
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let mk = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, "mk")?;
+    let nop = instance.get_typed_func::<(), ()>(&mut store, "nop")?;
+    let (r,) = mk.call_async(&mut store, ()).await?;
+
+    store.call_hook(|store, hook| {
+        if *store.data() && matches!(hook, wasmtime::CallHook::CallingWasm) {
+            wasmtime::bail!("hook error");
+        }
+        Ok(())
+    });
+    *store.data_mut() = true;
+    let err = r.resource_drop_async(&mut store).await.unwrap_err();
+    assert_eq!(err.to_string(), "hook error");
+    *store.data_mut() = false;
+
+    let err = store
+        .run_concurrent(async |a| nop.call_concurrent(a, ()).await)
+        .await
+        .and_then(|r| r)
+        .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent),
+        "unexpected error: {err:?}"
+    );
 
     Ok(())
 }

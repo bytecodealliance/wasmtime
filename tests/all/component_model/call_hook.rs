@@ -6,7 +6,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{self, Poll};
 use wasmtime::component::*;
-use wasmtime::{CallHook, CallHookHandler, Engine, Result, Store, StoreContextMut, bail};
+use wasmtime::{CallHook, CallHookHandler, Engine, Result, Store, StoreHookState, bail};
 
 // Crate a synchronous Func, call it directly:
 #[test]
@@ -406,7 +406,7 @@ async fn timeout_async_hook() -> Result<()> {
     impl CallHookHandler<State> for HandlerR {
         async fn handle_call_event(
             &self,
-            mut ctx: StoreContextMut<'_, State>,
+            mut ctx: StoreHookState<'_, State>,
             ch: CallHook,
         ) -> Result<()> {
             let obj = ctx.data_mut();
@@ -497,7 +497,7 @@ async fn drop_suspended_async_hook() -> Result<()> {
     impl CallHookHandler<u32> for Handler {
         async fn handle_call_event(
             &self,
-            mut ctx: StoreContextMut<'_, u32>,
+            mut ctx: StoreHookState<'_, u32>,
             _ch: CallHook,
         ) -> Result<()> {
             let state = ctx.data_mut();

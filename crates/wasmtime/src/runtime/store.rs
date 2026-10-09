@@ -242,7 +242,7 @@ pub struct StoreInner<T: 'static> {
     call_hook: Option<CallHookInner<T>>,
     #[cfg(target_has_atomic = "64")]
     epoch_deadline_behavior:
-        Option<Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>>,
+        Option<Box<dyn FnMut(StoreHookState<T>) -> Result<UpdateDeadline> + Send + Sync>>,
 
     /// The user's `T` data.
     ///
@@ -369,7 +369,7 @@ impl StoreResourceLimiter<'_> {
 
 enum CallHookInner<T: 'static> {
     #[cfg(feature = "call-hook")]
-    Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
+    Sync(Box<dyn FnMut(StoreHookState<'_, T>, CallHook) -> Result<()> + Send + Sync>),
     #[cfg(all(feature = "async", feature = "call-hook"))]
     Async(Box<dyn CallHookHandler<T> + Send + Sync>),
     #[expect(
@@ -900,6 +900,7 @@ impl<T> Store<T> {
     ///     limits: StoreLimits,
     /// }
     ///
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let my_state = MyApplicationState {
     ///     my_state: 42,
@@ -912,18 +913,20 @@ impl<T> Store<T> {
     /// store.limiter(|state| &mut state.limits);
     ///
     /// // Creation of smaller memories is allowed
-    /// Memory::new(&mut store, MemoryType::new(1, None)).unwrap();
+    /// Memory::new(&mut store, MemoryType::new(1, None)?)?;
     ///
     /// // Creation of a larger memory, however, will exceed the 1MB limit we've
     /// // configured
-    /// assert!(Memory::new(&mut store, MemoryType::new(1000, None)).is_err());
+    /// assert!(Memory::new(&mut store, MemoryType::new(1000, None)?).is_err());
     ///
     /// // The number of instances in this store is limited to 2, so the third
     /// // instance here should fail.
-    /// let module = Module::new(&engine, "(module)").unwrap();
-    /// assert!(Instance::new(&mut store, &module, &[]).is_ok());
-    /// assert!(Instance::new(&mut store, &module, &[]).is_ok());
+    /// let module = Module::new(&engine, "(module)")?;
+    /// Instance::new(&mut store, &module, &[])?;
+    /// Instance::new(&mut store, &module, &[])?;
     /// assert!(Instance::new(&mut store, &module, &[]).is_err());
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// [`ResourceLimiter`]: crate::ResourceLimiter
@@ -965,7 +968,7 @@ impl<T> Store<T> {
     #[cfg(feature = "call-hook")]
     pub fn call_hook(
         &mut self,
-        hook: impl FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync + 'static,
+        hook: impl FnMut(StoreHookState<'_, T>, CallHook) -> Result<()> + Send + Sync + 'static,
     ) {
         self.inner.call_hook = Some(CallHookInner::Sync(Box::new(hook)));
     }
@@ -1073,6 +1076,13 @@ impl<T> Store<T> {
     /// [`Engine::increment_epoch()`] has been invoked at least
     /// `ticks_beyond_current` times.
     ///
+    /// Note that when this method is called while WebAssembly is already
+    /// executing, for example from within a host function called by wasm,
+    /// raising the deadline takes effect immediately but lowering it is
+    /// unsupported. Lowering the deadline does not affect WebAssembly frames
+    /// already executing and only takes effect for new WebAssembly stack frames
+    /// made after this function was called.
+    ///
     /// By default a store will trap immediately with an epoch deadline of 0
     /// (which has always "elapsed"). This method is required to be configured
     /// for stores with epochs enabled to some future epoch deadline.
@@ -1146,7 +1156,7 @@ impl<T> Store<T> {
     #[cfg(target_has_atomic = "64")]
     pub fn epoch_deadline_callback(
         &mut self,
-        callback: impl FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync + 'static,
+        callback: impl FnMut(StoreHookState<T>) -> Result<UpdateDeadline> + Send + Sync + 'static,
     ) {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
@@ -1432,16 +1442,18 @@ impl<T> StoreInner<T> {
     fn invoke_call_hook(&mut self, call_hook: &mut CallHookInner<T>, s: CallHook) -> Result<()> {
         match call_hook {
             #[cfg(feature = "call-hook")]
-            CallHookInner::Sync(hook) => hook((&mut *self).as_context_mut(), s),
+            CallHookInner::Sync(hook) => {
+                hook(StoreHookState::new((&mut *self).as_context_mut()), s)
+            }
 
             #[cfg(all(feature = "async", feature = "call-hook"))]
             CallHookInner::Async(handler) => {
                 if !self.can_block() {
                     bail!("couldn't grab async_cx for call hook")
                 }
-                return (&mut *self)
-                    .as_context_mut()
-                    .with_blocking(|store, cx| cx.block_on(handler.handle_call_event(store, s)))?;
+                return (&mut *self).as_context_mut().with_blocking(|store, cx| {
+                    cx.block_on(handler.handle_call_event(StoreHookState::new(store), s))
+                })?;
             }
 
             CallHookInner::ForceTypeParameterToBeUsed { uninhabited, .. } => {
@@ -1639,6 +1651,16 @@ impl StoreOpaque {
     #[inline]
     pub fn instance(&self, id: InstanceId) -> &vm::Instance {
         self.instances[id].handle.get()
+    }
+
+    /// Accessor from `InstanceId` to `&vm::Instance`, if `id` is actually an
+    /// instance within this store.
+    ///
+    /// Unlike `instance`, this does not assume `id` has already been validated,
+    /// and so suits ids from an untrusted source.
+    #[inline]
+    pub fn try_instance(&self, id: InstanceId) -> Option<&vm::Instance> {
+        Some(self.instances.get(id)?.handle.get())
     }
 
     /// Accessor from `InstanceId` to `Pin<&mut vm::Instance>`.
@@ -2139,6 +2161,17 @@ at https://bytecodealliance.org/security.
         let mut continuation = Box::new(VMContRef::empty());
         let stack_size = self.engine.config().async_stack_size;
         let stack = crate::vm::VMContinuationStack::new(stack_size)?;
+        #[cfg(asan)]
+        {
+            let asan_range = stack
+                .asan_range()
+                .expect("supported continuation stacks have a usable range");
+            continuation.common_stack_information.asan.stack_bottom = Some(vm::VmPtr::from(
+                NonNull::new(asan_range.start as *mut u8)
+                    .expect("a continuation stack's ASan range must have a non-null bottom"),
+            ));
+            continuation.common_stack_information.asan.stack_size = asan_range.len();
+        }
         continuation.stack = stack;
         let ptr = continuation.deref_mut() as *mut VMContRef;
         self.continuations.push(continuation);
@@ -2236,7 +2269,7 @@ at https://bytecodealliance.org/security.
         // return into it.
         let current_epoch = self.engine().current_epoch();
         let epoch_deadline = self.vm_store_context.epoch_deadline.get_mut();
-        *epoch_deadline = current_epoch + delta;
+        *epoch_deadline = current_epoch.saturating_add(delta).min(u64::MAX - 1);
     }
 
     pub(crate) fn get_epoch_deadline(&mut self) -> u64 {
@@ -2277,6 +2310,9 @@ at https://bytecodealliance.org/security.
         // otherwise fall back to the runtime-agnostic code.
         yield_now().await
     }
+
+    #[cfg(not(feature = "component-model"))]
+    pub(crate) fn set_trapped(&mut self) {}
 }
 
 #[cfg(any(feature = "async", feature = "gc"))]
@@ -2354,7 +2390,7 @@ unsafe impl<T> VMStore for StoreInner<T> {
         // multiple times.
         let mut behavior = self.epoch_deadline_behavior.take();
         let update = match &mut behavior {
-            Some(callback) => callback((&mut *self).as_context_mut()),
+            Some(callback) => callback(StoreHookState::new((&mut *self).as_context_mut())),
             None => Ok(UpdateDeadline::Interrupt),
         };
 
@@ -2388,7 +2424,7 @@ impl<T> StoreInner<T> {
     #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_callback(
         &mut self,
-        callback: Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>,
+        callback: Box<dyn FnMut(StoreHookState<T>) -> Result<UpdateDeadline> + Send + Sync>,
     ) {
         self.epoch_deadline_behavior = Some(callback);
     }

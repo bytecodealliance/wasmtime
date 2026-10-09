@@ -428,7 +428,7 @@ impl PackedIndex {
 
     fn as_owned(&self) -> Option<SlabId> {
         if self.is_owned() {
-            Some(SlabId::from_raw(self.payload()))
+            Some(SlabId::try_from_raw(self.payload()).unwrap())
         } else {
             None
         }

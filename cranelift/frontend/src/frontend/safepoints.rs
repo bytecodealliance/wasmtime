@@ -424,23 +424,59 @@ impl LivenessAnalysis {
         // live-in set inside the currently-live set.
         let mut option_inst = func.layout.last_inst(block);
         while let Some(inst) = option_inst {
-            // Process any needs-stack-map values defined by this instruction.
+            // 1. Process needs-stack-map block-call args. These are
+            // uses that logically happen *after* the instruction --
+            // this matters for `try_call` in particular which is also
+            // a callsite (safepoint).
+            for block_call in func.dfg.insts[inst]
+                .branch_destination(&func.dfg.jump_tables, &func.dfg.exception_tables)
+            {
+                for val in block_call
+                    .args(&func.dfg.value_lists)
+                    .filter_map(|arg| arg.as_value())
+                {
+                    let val = func.dfg.resolve_aliases(val);
+                    if stack_map_values.contains(val) {
+                        self.process_use(func, inst, val);
+                    }
+                }
+            }
+
+            // 2. Process needs-stack-map defs.
             for val in func.dfg.inst_results(inst) {
                 self.process_def(func, *val);
             }
 
-            // If this instruction is a safepoint and we've been asked to record
-            // safepoints, then do so.
+            // 3. If this instruction is a safepoint and we've been
+            // asked to record safepoints, then do so.
             let opcode = func.dfg.insts[inst].opcode();
             if record_safepoints == RecordSafepoints::Yes && opcode.is_safepoint() {
                 self.record_safepoint(func, inst);
             }
 
-            // Process any needs-stack-map values used by this instruction.
-            for val in func.dfg.inst_values(inst) {
-                let val = func.dfg.resolve_aliases(val);
+            // 4. Process any other needs-stack-map uses.
+            for val in func.dfg.inst_args(inst) {
+                let val = func.dfg.resolve_aliases(*val);
                 if stack_map_values.contains(val) {
                     self.process_use(func, inst, val);
+                }
+            }
+
+            // We do not support GC refs as exception-context values
+            // (Wasmtime uses its vmctx as the
+            // exception-context). Reject this explicitly; this slot
+            // is not handled by the analysis.
+            if let Some(et) = func.dfg.insts[inst].exception_table() {
+                for item in func.dfg.exception_tables[et].items() {
+                    let ir::ExceptionTableItem::Context(ctx) = item else {
+                        continue;
+                    };
+                    let ctx = func.dfg.resolve_aliases(ctx);
+                    assert!(
+                        !stack_map_values.contains(ctx),
+                        "exception-table context {ctx:?} on {inst:?} must not be a \
+                         needs-stack-map value"
+                    );
                 }
             }
 
@@ -775,6 +811,82 @@ impl SafepointSpiller {
         true
     }
 
+    /// Rewrite the outgoing edges of a safepoint instruction that is
+    /// also a branch (i.e. a `try_call` or `try_call_indirect`) such
+    /// that any spilled needs-stack-map values passed as block-call
+    /// arguments are reloaded *after* the safepoint. These uses
+    /// logically occur after the call, not before, so we need to
+    /// split edges to insert these reloads.
+    fn rewrite_safepoint_edges(
+        &mut self,
+        func: &mut Function,
+        block: ir::Block,
+        inst: ir::Inst,
+        pointer_type: ir::Type,
+    ) {
+        let num_dests = func.dfg.insts[inst]
+            .branch_destination(&func.dfg.jump_tables, &func.dfg.exception_tables)
+            .len();
+        let mut insert_after = block;
+
+        for i in 0..num_dests {
+            let block_call = func.dfg.insts[inst]
+                .branch_destination(&func.dfg.jump_tables, &func.dfg.exception_tables)[i];
+            let target = block_call.block(&func.dfg.value_lists);
+            let args: SmallVec<[_; 8]> = block_call.args(&func.dfg.value_lists).collect();
+
+            // Only split this edge if it passes some spilled value.
+            let needs_reload = args.iter().any(|arg| {
+                arg.as_value().is_some_and(|val| {
+                    let val = func.dfg.resolve_aliases(val);
+                    self.liveness.live_across_any_safepoint.contains(val)
+                })
+            });
+            if !needs_reload {
+                continue;
+            }
+
+            let landing = func.dfg.make_block();
+            func.layout.insert_block_after(landing, insert_after);
+            if func.layout.is_cold(target) {
+                func.layout.set_cold(landing);
+            }
+            insert_after = landing;
+            log::trace!(
+                "rewriting:     splitting edge {block:?} -> {target:?} with {landing:?} \
+                 to reload values after {inst:?}"
+            );
+
+            let mut jump_args: SmallVec<[_; 8]> = SmallVec::new();
+            let mut landing_args: SmallVec<[_; 8]> = SmallVec::new();
+            for (j, arg) in args.iter().enumerate() {
+                match *arg {
+                    ir::BlockArg::Value(val) => {
+                        let mut val = func.dfg.resolve_aliases(val);
+                        let mut pos = FuncCursor::new(func).at_bottom(landing);
+                        self.rewrite_use(&mut pos, &mut val, pointer_type);
+                        jump_args.push(ir::BlockArg::Value(val));
+                    }
+                    ir::BlockArg::TryCallRet(_) | ir::BlockArg::TryCallExn(_) => {
+                        let ty = func.dfg.value_type(func.dfg.block_params(target)[j]);
+                        let param = func.dfg.append_block_param(landing, ty);
+                        landing_args.push(*arg);
+                        jump_args.push(ir::BlockArg::Value(param));
+                    }
+                }
+            }
+
+            let mut pos = FuncCursor::new(func).at_bottom(landing);
+            pos.ins().jump(target, &jump_args);
+            let new_block_call =
+                ir::BlockCall::new(landing, landing_args, &mut func.dfg.value_lists);
+            let dfg = &mut func.dfg;
+            dfg.insts[inst]
+                .branch_destination_mut(&mut dfg.jump_tables, &mut dfg.exception_tables)[i] =
+                new_block_call;
+        }
+    }
+
     /// Rewrite the function's instructions to spill and reload values that are
     /// live across safepoints:
     ///
@@ -833,6 +945,11 @@ impl SafepointSpiller {
                 // across it.
                 if self.liveness.safepoints.contains_key(&inst) {
                     self.rewrite_safepoint(func, inst);
+
+                    // If this safepoint is also a branch (i.e. a `try_call`),
+                    // then values it passes along its edges must be reloaded
+                    // *after* the call, on the edge, rather than before it.
+                    self.rewrite_safepoint_edges(func, block, inst, pointer_type);
                 }
 
                 // Replace all uses of needs-stack-map values with loads from
@@ -3067,6 +3184,123 @@ block10:
         assert!(
             output.contains("try_call fn0(), sig0, block1, [], stack_map=[i32 @ ss0+0]"),
             "try_call should have stack_map entry for v0 (spilled to ss0), got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn needs_stack_map_try_call_edge_args() {
+        let _ = env_logger::try_init();
+
+        // Test that values needing stack maps which are passed as block-call
+        // arguments on a `try_call`'s edges are live across the `try_call`,
+        // and are reloaded *after* it, on each edge (see #14452).
+        //
+        //     block0:
+        //       v0 = call fn0()   ;; returns a gc ref
+        //       try_call fn0(), sig0, block1(ret0, v0), [ default: block2(exn0, v0) ]
+        //                         ;; v0 should be in the stack map here
+        //     block1(v1: i32, v2: i32):
+        //       return
+        //     block2(v3: i64, v4: i32):
+        //       return
+
+        let sig = Signature::new(CallConv::SystemV);
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ir::UserFuncName::testcase("sample"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        // fn0: () -> i32 (returns a gc ref)
+        let name0 = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 0,
+            });
+        let mut sig0 = Signature::new(CallConv::SystemV);
+        sig0.returns.push(AbiParam::new(ir::types::I32));
+        let signature0 = builder.func.import_signature(sig0);
+        let func_ref0 = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(name0),
+            signature: signature0,
+            colocated: true,
+            patchable: false,
+        });
+
+        let block0 = builder.create_block();
+        let block1 = builder.create_block();
+        let block2 = builder.create_block();
+        builder.append_block_param(block1, ir::types::I32);
+        builder.append_block_param(block1, ir::types::I32);
+        builder.append_block_param(block2, ir::types::I64);
+        builder.append_block_param(block2, ir::types::I32);
+
+        builder.switch_to_block(block0);
+        let call0 = builder.ins().call(func_ref0, &[]);
+        let v0 = builder.func.dfg.inst_results(call0)[0];
+        builder.declare_value_needs_stack_map(v0);
+
+        let normal_return = BlockCall::new(
+            block1,
+            [ir::BlockArg::TryCallRet(0), ir::BlockArg::Value(v0)],
+            &mut builder.func.dfg.value_lists,
+        );
+        let handler = BlockCall::new(
+            block2,
+            [ir::BlockArg::TryCallExn(0), ir::BlockArg::Value(v0)],
+            &mut builder.func.dfg.value_lists,
+        );
+        let exception_table = builder
+            .func
+            .dfg
+            .exception_tables
+            .push(ExceptionTableData::new(
+                signature0,
+                normal_return,
+                [ir::ExceptionTableItem::Default(handler)],
+            ));
+        builder.ins().try_call(func_ref0, &[], exception_table);
+
+        builder.switch_to_block(block1);
+        builder.ins().return_(&[]);
+
+        builder.switch_to_block(block2);
+        builder.ins().return_(&[]);
+
+        builder.seal_all_blocks();
+        builder.finalize(systemv_frontend_config());
+
+        assert_eq_output!(
+            func.display().to_string(),
+            r#"
+function %sample() system_v {
+    ss0 = explicit_slot 4, align = 4
+    sig0 = () -> i32 system_v
+    fn0 = colocated u0:0 sig0
+
+block0:
+    v4 = call fn0()
+    v11 = stack_addr.i64 ss0
+    store notrap aligned v4, v11
+    try_call fn0(), sig0, block4(ret0), [ default: block3(exn0) ], stack_map=[i32 @ ss0+0]
+
+block3(v5: i64):
+    v6 = stack_addr.i64 ss0
+    v7 = load.i32 notrap aligned v6
+    jump block2(v5, v7)
+
+block4(v8: i32):
+    v9 = stack_addr.i64 ss0
+    v10 = load.i32 notrap aligned v9
+    jump block1(v8, v10)
+
+block1(v0: i32, v1: i32):
+    return
+
+block2(v2: i64, v3: i32):
+    return
+}
+            "#
         );
     }
 

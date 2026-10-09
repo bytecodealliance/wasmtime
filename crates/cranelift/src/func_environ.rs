@@ -60,6 +60,23 @@ pub(crate) struct VMPayloadStackSlots {
     pub(crate) gc_ref_markers: Option<ir::StackSlot>,
 }
 
+/// Function-local support used while translating stack-switching
+/// operations.
+#[derive(Default)]
+struct StackSwitchingSupport {
+    /// A stack slot backing the current stack's `handler_list` field.
+    handler_list_buffer: Option<ir::StackSlot>,
+
+    /// Stack slots backing the current continuation's `values` field.
+    values_storage: Option<VMPayloadStackSlots>,
+
+    /// Reusable result storage for the `get_interned_contref` builtin.
+    contref_result_storage: Option<ir::StackSlot>,
+
+    /// Reusable result storage for ASan's fake-stack pointer.
+    asan_fake_stack_storage: Option<ir::StackSlot>,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum Extension {
     Sign,
@@ -225,17 +242,8 @@ pub struct FuncEnvironment<'module_environment> {
     /// into the host to trap when signal handlers are disabled.
     pub(crate) stack_limit_at_function_entry: Option<VmctxLoadChain>,
 
-    /// Used by the stack switching feature. If set, we have a allocated a
-    /// slot on this function's stack to be used for the
-    /// current stack's `handler_list` field.
-    stack_switching_handler_list_buffer: Option<ir::StackSlot>,
-
-    /// Used by the stack switching feature. If set, these are the stack slots
-    /// backing the current continuation's `values` field.
-    stack_switching_values_storage: Option<VMPayloadStackSlots>,
-
-    /// Reusable storage for `get_interned_contref` builtin.
-    stack_switching_cont_ref_result_storage: Option<ir::StackSlot>,
+    /// Function-local support for translating stack-switching operations.
+    stack_switching: StackSwitchingSupport,
 
     /// The stack-slot used for exposing Wasm state via debug
     /// instrumentation, if any, and the builder containing its metadata.
@@ -315,9 +323,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             stack_limit_at_function_entry: None,
 
-            stack_switching_handler_list_buffer: None,
-            stack_switching_values_storage: None,
-            stack_switching_cont_ref_result_storage: None,
+            stack_switching: StackSwitchingSupport::default(),
 
             state_slot: None,
             next_srcloc: ir::SourceLoc::default(),
@@ -338,8 +344,30 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         data: ir::StackSlotData,
     ) -> ir::StackSlot {
         *self
-            .stack_switching_cont_ref_result_storage
+            .stack_switching
+            .contref_result_storage
             .get_or_insert_with(|| builder.create_sized_stack_slot(data))
+    }
+
+    /// Returns the cached ASan fake-stack out-parameter slot, creating it with
+    /// `data` if necessary.
+    pub(crate) fn get_or_create_asan_fake_stack_slot(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> ir::StackSlot {
+        let pointer_type = self.pointer_type();
+        *self
+            .stack_switching
+            .asan_fake_stack_storage
+            .get_or_insert_with(|| {
+                let pointer_bytes = pointer_type.bytes();
+                let data = ir::StackSlotData::new(
+                    ir::StackSlotKind::ExplicitSlot,
+                    pointer_bytes,
+                    u8::try_from(pointer_bytes.trailing_zeros()).unwrap(),
+                );
+                return builder.create_sized_stack_slot(data);
+            })
     }
 
     /// Consume the branch hint for the instruction at module-relative `offset`
@@ -575,6 +603,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.fuel_save_from_var(builder);
     }
 
+    /// Folds any fuel buffered in `self.fuel_consumed` into `self.fuel_var`.
+    ///
+    /// Functions translated from wasm do this as part of their trailing `end`
+    /// operator. A synthesized function has no `end` operator, so it has to call
+    /// this itself before returning; otherwise the charges it buffered would be
+    /// dropped when `fuel_function_exit` saves `self.fuel_var`.
+    pub fn fuel_flush_consumed(&mut self, builder: &mut FunctionBuilder<'_>) {
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+        }
+    }
+
     fn fuel_before_op(
         &mut self,
         op: &Operator<'_>,
@@ -605,6 +645,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             | Operator::Return
             | Operator::CallIndirect { .. }
             | Operator::Call { .. }
+            | Operator::CallRef { .. }
             | Operator::ReturnCall { .. }
             | Operator::ReturnCallRef { .. }
             | Operator::ReturnCallIndirect { .. }
@@ -670,7 +711,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // After a function call we need to reload our fuel value since the
         // function may have changed it.
         match op {
-            Operator::Call { .. } | Operator::CallIndirect { .. } => {
+            Operator::Call { .. } | Operator::CallIndirect { .. } | Operator::CallRef { .. } => {
                 self.fuel_load_into_var(builder);
             }
             _ => {}
@@ -1963,8 +2004,17 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // so that we don't have to patch the code at runtime.
 
         // First append the callee vmctx address.
+        //
+        // If the same-`vmctx` analysis proved that this import always shares
+        // its `vmctx` with an earlier import, load it from that import's slot.
+        // The value is identical either way, but funneling a whole set through
+        // one slot lets GVN collapse those loads, and everything downstream of
+        // them, into one.
         let vmctx = self.env.vmctx_val(&mut self.builder.cursor());
-        let import_off = self.env.offsets.imported_functions().at(callee_index);
+        let vmctx_index = self.env.translation.imported_func_vmctx_representative[callee_index]
+            .expand()
+            .unwrap_or(callee_index);
+        let import_off = self.env.offsets.imported_functions().at(vmctx_index);
         let callee_vmctx = self
             .env
             .alias_regions
@@ -4734,20 +4784,22 @@ impl FuncEnvironment<'_> {
             (2, ir::types::I16),
             (1, ir::types::I8),
         ];
-        // 12 covers the worst case under the 128-byte cap: n=127 decomposes into
-        // 7×i8x16 + i64 + i32 + i16 + i8 = 11 chunks. Sized so both `SmallVec`s
-        // stay inline.
-        let mut chunks: SmallVec<[(i32, ir::Type); 12]> = smallvec![];
+        // Without vectors, n=127 decomposes into 15×i64 + i32 + i16 + i8 = 18
+        // chunks, the worst case under the 128-byte cap. Keep both `SmallVec`s inline.
+        let mut chunks: SmallVec<[(i32, ir::Type); 18]> = smallvec![];
         let mut offset = 0u64;
         let mut remaining = bytes;
         for &(width, ty) in WIDTHS {
+            if ty.is_vector() && !self.isa.supports_vector_load_store(ty) {
+                continue;
+            }
             while remaining >= width {
                 chunks.push((i32::try_from(offset).unwrap(), ty));
                 offset += width;
                 remaining -= width;
             }
         }
-        let vals: SmallVec<[ir::Value; 12]> = chunks
+        let vals: SmallVec<[ir::Value; 18]> = chunks
             .iter()
             .map(|&(off, ty)| builder.ins().load(ty, load_flags, src_addr, off))
             .collect();
@@ -5276,6 +5328,15 @@ impl FuncEnvironment<'_> {
             self.update_state_slot_stack(validator, builder)?;
         }
         Ok(())
+    }
+
+    /// Hook invoked at the start of a catch block for a `try_table`,
+    /// i.e. the block that control lands in when a `try_call` returns
+    /// along its exceptional edge.
+    pub fn on_catch_block_entry(&mut self, builder: &mut FunctionBuilder) {
+        if self.tunables.consume_fuel {
+            self.fuel_load_into_var(builder);
+        }
     }
 
     pub fn before_unconditionally_trapping_memory_access(&mut self, builder: &mut FunctionBuilder) {

@@ -3,6 +3,7 @@ use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
 use crate::component::concurrent::{ConcurrentState, QualifiedThreadId, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
+use crate::component::resources::{HostResourceIndex, HostResourceTables};
 use crate::component::types;
 use crate::component::values::ErrorContextAny;
 use crate::component::{
@@ -712,7 +713,10 @@ pub trait StreamProducer<D>: Send + 'static {
     ///   items were read.
     ///
     /// * `Poll::Ok(StreamResult::Completed)` - items, if applicable, were
-    ///   written to the `destination`.
+    ///   written to the `destination`. Only zero-length reads (see above) may
+    ///   complete without writing anything; if nothing was written for a
+    ///   nonzero-length read, or for any read by the host, then a trap in the
+    ///   guest will be raised.
     ///
     /// * `Poll::Ok(StreamResult::Cancelled)` - used when `finish` is `true` and
     ///   the implementation was able to successfully cancel any async work that
@@ -1135,7 +1139,11 @@ pub trait StreamConsumer<D>: Send + 'static {
     /// when `finish` is false, the caller will trap.  Additionally, it should
     /// only return `Poll::Ready(Ok(StreamResult::Completed))` after taking at
     /// least one item from `source` if there is an item available; otherwise,
-    /// the caller will trap.  If `poll_consume` is called with no items in
+    /// the caller will trap.  Items taken during earlier calls for the same
+    /// write which returned `Poll::Pending` count towards this, so it's fine
+    /// to return `Completed` without taking more items once those have been
+    /// forwarded (see "Backpressure" below).  If `poll_consume` is called with
+    /// no items in
     /// `source`, it should only return `Poll::Ready(_)` once it is able to
     /// accept at least one item during the next call to `poll_consume`.
     ///
@@ -1257,7 +1265,7 @@ pub trait FutureConsumer<D>: Send + 'static {
 /// end will hang indefinitely.  Consider using [`GuardedFutureReader`] to
 /// ensure that disposal happens automatically.
 pub struct FutureReader<T> {
-    id: TableId<TransmitHandle>,
+    idx: HostResourceIndex,
     _phantom: PhantomData<T>,
 }
 
@@ -1326,26 +1334,24 @@ impl<T> FutureReader<T> {
         ))
     }
 
-    pub(super) fn new_(id: TableId<TransmitHandle>) -> Self {
+    pub(super) fn new_(idx: HostResourceIndex) -> Self {
         Self {
-            id,
+            idx,
             _phantom: PhantomData,
         }
     }
 
-    pub(super) fn id(&self) -> TableId<TransmitHandle> {
-        self.id
+    pub(super) fn idx(&self) -> HostResourceIndex {
+        self.idx
     }
 
     /// Set the consumer that accepts the result of this future.
     ///
     /// # Errors
     ///
-    /// Returns an error if this future has already been closed.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this future does not belong to `store`.
+    /// Returns an error if this future has already been closed or otherwise
+    /// transferred (e.g. lowered into a guest), or if it does not belong to
+    /// `store`.
     pub fn pipe<S: AsContextMut>(
         self,
         mut store: S,
@@ -1394,13 +1400,12 @@ impl<T> FutureReader<T> {
 
         store
             .as_context_mut()
-            .set_consumer(self.id, TransmitKind::Future, Consumer(consumer))
+            .set_consumer(self.idx, TransmitKind::Future, Consumer(consumer))
     }
 
     /// Transfer ownership of the read end of a future from a guest to the host.
     fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
-        let id = lift_index_to_future(cx, ty, index)?;
-        Ok(Self::new_(id))
+        Ok(Self::new_(lift_index_to_future(cx, ty, index)?))
     }
 
     /// Close this `FutureReader`.
@@ -1412,16 +1417,11 @@ impl<T> FutureReader<T> {
     ///
     /// # Errors
     ///
-    /// Returns an error if this future has already been closed.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the store that the [`Accessor`] is derived from does not own
-    /// this future.
-    ///
-    /// [`Accessor`]: crate::component::Accessor
+    /// Returns an error if this future has already been closed or otherwise
+    /// transferred (e.g. lowered into a guest), or if it does not belong to
+    /// `store`.
     pub fn close(&mut self, mut store: impl AsContextMut) -> Result<()> {
-        future_close(store.as_context_mut().0, &mut self.id)
+        future_close(store.as_context_mut().0, self.idx)
     }
 
     /// Convenience method around [`Self::close`].
@@ -1471,29 +1471,29 @@ impl<T> FutureReader<T> {
 impl<T> fmt::Debug for FutureReader<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FutureReader")
-            .field("id", &self.id)
+            .field("idx", &self.idx)
             .finish()
     }
 }
 
-pub(super) fn future_close(
-    store: &mut StoreOpaque,
-    id: &mut TableId<TransmitHandle>,
-) -> Result<()> {
-    let id = mem::replace(id, TableId::new(u32::MAX));
+pub(super) fn future_close(store: &mut StoreOpaque, idx: HostResourceIndex) -> Result<()> {
+    let id = store.host_reader_take(idx)?;
     store.host_drop_reader(id, TransmitKind::Future)
 }
 
-/// Transfer ownership of the read end of a future from the host to a guest.
+/// Transfer ownership of the read end of a future from a guest to the host.
 pub(super) fn lift_index_to_future(
     cx: &mut LiftContext<'_>,
     ty: InterfaceType,
     index: u32,
-) -> Result<TableId<TransmitHandle>> {
+) -> Result<HostResourceIndex> {
     match ty {
         InterfaceType::Future(src) => {
-            let (state, instance) = cx.concurrent_state_and_instance_mut();
-            lift_index_to_transmit(instance, state, TransmitIndex::Future(src), index)
+            let id = {
+                let (state, instance) = cx.concurrent_state_and_instance_mut();
+                lift_index_to_transmit(instance, state, TransmitIndex::Future(src), index)?
+            };
+            cx.host_resource_lower_own(id.rep(), None, None)
         }
         _ => func::bad_type_info(),
     }
@@ -1501,12 +1501,13 @@ pub(super) fn lift_index_to_future(
 
 /// Transfer ownership of the read end of a future from the host to a guest.
 pub(super) fn lower_future_to_index<U>(
-    id: TableId<TransmitHandle>,
+    idx: HostResourceIndex,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
 ) -> Result<u32> {
     match ty {
         InterfaceType::Future(dst) => {
+            let id = cx.store.0.host_reader_take(idx)?;
             cx.instance_handle()
                 .lower_transmit_to_index(cx.store.0, TransmitIndex::Future(dst), id)
         }
@@ -1540,7 +1541,7 @@ unsafe impl<T: ComponentType> func::Lower for FutureReader<T> {
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        lower_future_to_index(self.id, cx, ty)?.linear_lower_to_flat(cx, InterfaceType::U32, dst)
+        lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
     fn linear_lower_to_memory<U>(
@@ -1549,7 +1550,7 @@ unsafe impl<T: ComponentType> func::Lower for FutureReader<T> {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        lower_future_to_index(self.id, cx, ty)?.linear_lower_to_memory(
+        lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
             cx,
             InterfaceType::U32,
             offset,
@@ -1641,8 +1642,11 @@ where
 {
     fn drop(&mut self) {
         if let Some(reader) = &mut self.reader {
-            // Currently this can only fail if the future is closed twice, which
-            // this guard prevents, so this error shouldn't happen.
+            // Currently this can only fail if the future is closed twice or
+            // the handle was cloned/closed elsewhere, all of which the embedder
+            // is responsible for when using this guard. Hint during
+            // development that's a bad idea, but otherwise ignore the error in
+            // release builds.
             let result = reader.close_with(&self.accessor);
             debug_assert!(result.is_ok());
         }
@@ -1656,7 +1660,7 @@ where
 /// indefinitely.  Consider using [`GuardedStreamReader`] to ensure that
 /// disposal happens automatically.
 pub struct StreamReader<T> {
-    id: TableId<TransmitHandle>,
+    idx: HostResourceIndex,
     _phantom: PhantomData<T>,
 }
 
@@ -1687,15 +1691,15 @@ impl<T> StreamReader<T> {
         ))
     }
 
-    pub(super) fn new_(id: TableId<TransmitHandle>) -> Self {
+    pub(super) fn new_(idx: HostResourceIndex) -> Self {
         Self {
-            id,
+            idx,
             _phantom: PhantomData,
         }
     }
 
-    pub(super) fn id(&self) -> TableId<TransmitHandle> {
-        self.id
+    pub(super) fn idx(&self) -> HostResourceIndex {
+        self.idx
     }
 
     /// Attempt to consume this object by converting it into the specified type.
@@ -1721,8 +1725,9 @@ impl<T> StreamReader<T> {
     /// belong to the specified `store`.
     pub fn try_into<V: 'static>(mut self, mut store: impl AsContextMut) -> Result<V, Self> {
         let store = store.as_context_mut();
+        let id = store.0.host_reader_rep(self.idx).unwrap();
         let state = store.0.concurrent_state_mut_already_forced_current_thread();
-        let id = state.get_mut(self.id).unwrap().state;
+        let id = state.get_mut(id).unwrap().state;
         if let WriteState::HostReady { try_into, .. } = &state.get_mut(id).unwrap().write {
             match try_into(TypeId::of::<V>()) {
                 Some(result) => {
@@ -1740,11 +1745,9 @@ impl<T> StreamReader<T> {
     ///
     /// # Errors
     ///
-    /// Returns an error if this stream has already been closed.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this stream does not belong to `store`.
+    /// Returns an error if this stream has already been closed or otherwise
+    /// transferred (e.g. lowered into a guest), or if it does not belong to
+    /// `store`.
     pub fn pipe<S: AsContextMut>(
         self,
         mut store: S,
@@ -1755,13 +1758,12 @@ impl<T> StreamReader<T> {
     {
         store
             .as_context_mut()
-            .set_consumer(self.id, TransmitKind::Stream, consumer)
+            .set_consumer(self.idx, TransmitKind::Stream, consumer)
     }
 
     /// Transfer ownership of the read end of a stream from a guest to the host.
     fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
-        let id = lift_index_to_stream(cx, ty, index)?;
-        Ok(Self::new_(id))
+        Ok(Self::new_(lift_index_to_stream(cx, ty, index)?))
     }
 
     /// Close this `StreamReader`.
@@ -1771,16 +1773,11 @@ impl<T> StreamReader<T> {
     ///
     /// # Errors
     ///
-    /// Returns an error if this stream has already been closed.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the store that the [`Accessor`] is derived from does not own
-    /// this stream.
-    ///
-    /// [`Accessor`]: crate::component::Accessor
+    /// Returns an error if this stream has already been closed or otherwise
+    /// transferred (e.g. lowered into a guest), or if it does not belong to
+    /// `store`.
     pub fn close(&mut self, mut store: impl AsContextMut) -> Result<()> {
-        stream_close(store.as_context_mut().0, &mut self.id)
+        stream_close(store.as_context_mut().0, self.idx)
     }
 
     /// Convenience method around [`Self::close`].
@@ -1830,16 +1827,13 @@ impl<T> StreamReader<T> {
 impl<T> fmt::Debug for StreamReader<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StreamReader")
-            .field("id", &self.id)
+            .field("idx", &self.idx)
             .finish()
     }
 }
 
-pub(super) fn stream_close(
-    store: &mut StoreOpaque,
-    id: &mut TableId<TransmitHandle>,
-) -> Result<()> {
-    let id = mem::replace(id, TableId::new(u32::MAX));
+pub(super) fn stream_close(store: &mut StoreOpaque, idx: HostResourceIndex) -> Result<()> {
+    let id = store.host_reader_take(idx)?;
     store.host_drop_reader(id, TransmitKind::Stream)
 }
 
@@ -1848,11 +1842,14 @@ pub(super) fn lift_index_to_stream(
     cx: &mut LiftContext<'_>,
     ty: InterfaceType,
     index: u32,
-) -> Result<TableId<TransmitHandle>> {
+) -> Result<HostResourceIndex> {
     match ty {
         InterfaceType::Stream(src) => {
-            let (state, instance) = cx.concurrent_state_and_instance_mut();
-            lift_index_to_transmit(instance, state, TransmitIndex::Stream(src), index)
+            let id = {
+                let (state, instance) = cx.concurrent_state_and_instance_mut();
+                lift_index_to_transmit(instance, state, TransmitIndex::Stream(src), index)?
+            };
+            cx.host_resource_lower_own(id.rep(), None, None)
         }
         _ => func::bad_type_info(),
     }
@@ -1860,12 +1857,13 @@ pub(super) fn lift_index_to_stream(
 
 /// Transfer ownership of the read end of a stream from the host to a guest.
 pub(super) fn lower_stream_to_index<U>(
-    id: TableId<TransmitHandle>,
+    idx: HostResourceIndex,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
 ) -> Result<u32> {
     match ty {
         InterfaceType::Stream(dst) => {
+            let id = cx.store.0.host_reader_take(idx)?;
             cx.instance_handle()
                 .lower_transmit_to_index(cx.store.0, TransmitIndex::Stream(dst), id)
         }
@@ -1899,7 +1897,7 @@ unsafe impl<T: ComponentType> func::Lower for StreamReader<T> {
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        lower_stream_to_index(self.id, cx, ty)?.linear_lower_to_flat(cx, InterfaceType::U32, dst)
+        lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
     fn linear_lower_to_memory<U>(
@@ -1908,7 +1906,7 @@ unsafe impl<T: ComponentType> func::Lower for StreamReader<T> {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        lower_stream_to_index(self.id, cx, ty)?.linear_lower_to_memory(
+        lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
             cx,
             InterfaceType::U32,
             offset,
@@ -2001,8 +1999,7 @@ where
 {
     fn drop(&mut self) {
         if let Some(reader) = &mut self.reader {
-            // Currently this can only fail if the future is closed twice, which
-            // this guard prevents, so this error shouldn't happen.
+            // See comments in `Drop for GuardedFutureReader` for this assert.
             let result = reader.close_with(&self.accessor);
             debug_assert!(result.is_ok());
         }
@@ -2585,13 +2582,32 @@ impl StoreOpaque {
         Ok(())
     }
 
-    pub(super) fn transmit_origin(
-        &mut self,
-        id: TableId<TransmitHandle>,
-    ) -> Result<TransmitOrigin> {
+    pub(super) fn transmit_origin(&mut self, idx: HostResourceIndex) -> Result<TransmitOrigin> {
+        let id = self.host_reader_rep(idx)?;
         let state = self.concurrent_state_mut()?;
         let state_id = state.get_mut(id)?.state;
         Ok(state.get_mut(state_id)?.origin)
+    }
+
+    /// Insert `id` within the store, returning a `HostResourceIndex` suitable
+    /// to re-acquire it via the `host_reader_take` and `host_reader_rep`
+    /// methods below.
+    fn host_reader_insert(&mut self, id: TableId<TransmitHandle>) -> Result<HostResourceIndex> {
+        HostResourceTables::new_host(self)?.host_resource_lower_own(id.rep(), None, None)
+    }
+
+    /// Removes `idx` from the store, returning the internal `id` it was
+    /// created with.
+    fn host_reader_take(&mut self, idx: HostResourceIndex) -> Result<TableId<TransmitHandle>> {
+        let rep = HostResourceTables::new_host(self)?.host_resource_lift_own(idx)?;
+        Ok(TableId::new(rep))
+    }
+
+    /// Looks up `idx` within the store, returning the internal `id` it was
+    /// created with.
+    fn host_reader_rep(&mut self, idx: HostResourceIndex) -> Result<TableId<TransmitHandle>> {
+        let rep = HostResourceTables::new_host(self)?.host_resource_rep(idx)?;
+        Ok(TableId::new(rep))
     }
 }
 
@@ -2600,7 +2616,7 @@ impl<T> StoreContextMut<'_, T> {
         mut self,
         kind: TransmitKind,
         producer: P,
-    ) -> Result<TableId<TransmitHandle>>
+    ) -> Result<HostResourceIndex>
     where
         P::Item: func::Lower,
     {
@@ -2716,13 +2732,15 @@ impl<T> StoreContextMut<'_, T> {
                         Ok((guest_offset, host_offset, count))
                     })?;
 
+                    let produced =
+                        !buffer.remaining().is_empty() || guest_offset > 0 || host_offset > 0;
+
                     match result {
                         StreamResult::Completed => {
-                            if count > 1
-                                && buffer.remaining().is_empty()
-                                && guest_offset == 0
-                                && host_offset == 0
-                            {
+                            // Only zero-length reads may complete without
+                            // producing anything. Note that host-to-host reads
+                            // always have a nonzero `count`.
+                            if count > 0 && !produced {
                                 bail!(
                                     "StreamProducer::poll_produce returned StreamResult::Completed \
                                      without producing any items"
@@ -2734,6 +2752,12 @@ impl<T> StoreContextMut<'_, T> {
                                 bail!(
                                     "StreamProducer::poll_produce returned StreamResult::Cancelled \
                                      without being given a `finish` parameter value of true"
+                                );
+                            }
+                            if produced {
+                                bail!(
+                                    "StreamProducer::poll_produce returned StreamResult::Cancelled \
+                                     after producing at least one item"
                                 );
                             }
                         }
@@ -2780,16 +2804,17 @@ impl<T> StoreContextMut<'_, T> {
             cancel: false,
             cancel_waker: None,
         };
-        Ok(read)
+        self.0.host_reader_insert(read)
     }
 
     fn set_consumer<C: StreamConsumer<T>>(
         mut self,
-        id: TableId<TransmitHandle>,
+        idx: HostResourceIndex,
         kind: TransmitKind,
         consumer: C,
     ) -> Result<()> {
         let token = StoreToken::new(self.as_context_mut());
+        let id = self.0.host_reader_take(idx)?;
         let state = self.0.concurrent_state_mut()?;
         let id = state.get_mut(id)?.state;
         let transmit = state.get_mut(id)?;
@@ -2860,13 +2885,14 @@ impl<T> StoreContextMut<'_, T> {
 
                 match result {
                     StreamResult::Completed => {
-                        if count > 0
-                            && guest_offset == 0
-                            && host_buffer_remaining_before
-                                .zip(host_buffer.map(|v| v.remaining().len()))
-                                .map(|(before, after)| before == after)
-                                .unwrap_or(false)
-                        {
+                        // Progress for a host writer is tracked by its buffer
+                        // shrinking, whereas for a guest writer it's tracked
+                        // in `guest_offset`.
+                        let consumed = match (host_buffer_remaining_before, host_buffer) {
+                            (Some(before), Some(after)) => before != after.remaining().len(),
+                            _ => guest_offset > 0,
+                        };
+                        if count > 0 && !consumed {
                             bail!(
                                 "StreamConsumer::poll_consume returned StreamResult::Completed \
                                  without consuming any items"
@@ -2912,14 +2938,29 @@ impl<T> StoreContextMut<'_, T> {
                 };
             }
             &WriteState::GuestReady { .. } => {
-                let future = consume();
-                transmit.read = ReadState::HostReady {
+                // If the guest writer has a pending event, then don't start
+                // another read event here even if there's some partial data
+                // available. Wait for that to be delivered and wait for the
+                // writer to do something else before a read is triggered.
+                let write_handle = transmit.write_handle;
+                let write_has_event = Waitable::Transmit(write_handle)
+                    .common(state)?
+                    .event
+                    .is_some();
+                let future = if write_has_event {
+                    None
+                } else {
+                    Some(consume())
+                };
+                state.get_mut(id)?.read = ReadState::HostReady {
                     consume,
                     guest_offset: ItemCount::ZERO,
                     cancel: false,
                     cancel_waker: None,
                 };
-                self.0.pipe_from_guest(kind, id, future);
+                if let Some(future) = future {
+                    self.0.pipe_from_guest(kind, id, future);
+                }
             }
             WriteState::HostReady { .. } => {
                 let WriteState::HostReady { produce, .. } = mem::replace(
@@ -3067,7 +3108,16 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     })?;
                     match rx.await {
                         Ok(r) => r,
-                        Err(oneshot::Canceled) => bail_bug!("work cancelled"),
+                        // The worker function was dropped without sending a
+                        // result, which can happen when lowering trapped. This
+                        // isn't a bug but this specific handling here might be
+                        // the last hurray of this task in the event queue, so
+                        // don't kill anything other than our caller. The
+                        // original trap should make its way back to the best
+                        // location naturally.
+                        Err(oneshot::Canceled) => {
+                            bail!("stream write cancelled before it could complete")
+                        }
                     }
                 } else {
                     // Optimize flat payloads (i.e. those which do not

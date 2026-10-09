@@ -353,7 +353,7 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
     }
 
     fn get_remote_address(&mut self, socket: Resource<TcpSocket>) -> SocketResult<IpSocketAddress> {
-        let sock = get_socket(self.table, &socket)?;
+        let sock = get_socket_mut(self.table, &socket)?;
         Ok(sock.remote_address()?.into())
     }
 

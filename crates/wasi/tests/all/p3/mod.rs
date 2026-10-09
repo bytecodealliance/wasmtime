@@ -68,6 +68,57 @@ async fn p3_cli() -> wasmtime::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_large_stdio_write() -> wasmtime::Result<()> {
+    use std::pin::Pin;
+    use std::sync::{Arc, Mutex};
+    use std::task::{Context, Poll};
+    use wasmtime_wasi::cli::AsyncStdoutStream;
+
+    #[derive(Clone, Default)]
+    struct Capture(Arc<Mutex<Vec<u8>>>);
+
+    impl tokio::io::AsyncWrite for Capture {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<std::io::Result<usize>> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Poll::Ready(Ok(buf.len()))
+        }
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    // Use a write budget much smaller than the guest's single write to
+    // exercise partial writes through `AsyncStdoutStream`.
+    const SIZE: usize = 100_000;
+    let stdout = Capture::default();
+    let stderr = Capture::default();
+    run_with_builder(P3_LARGE_STDIO_WRITE_COMPONENT, false, |builder| {
+        builder
+            .arg(SIZE.to_string())
+            .stdout(AsyncStdoutStream::new(1024, stdout.clone()))
+            .stderr(AsyncStdoutStream::new(1024, stderr.clone()));
+    })
+    .await?;
+
+    assert!(
+        *stdout.0.lock().unwrap() == vec![0; SIZE],
+        "stdout mismatch"
+    );
+    assert!(
+        *stderr.0.lock().unwrap() == vec![1; SIZE],
+        "stderr mismatch"
+    );
+    Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_clocks_sleep() -> wasmtime::Result<()> {
     run(P3_CLOCKS_SLEEP_COMPONENT).await
 }
@@ -190,6 +241,10 @@ async fn p3_file_write_blocking() -> wasmtime::Result<()> {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_file_write_chunked() -> wasmtime::Result<()> {
     run(P3_FILE_WRITE_CHUNKED_COMPONENT).await
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_file_settime_overflow() -> wasmtime::Result<()> {
+    run(P3_FILE_SETTIME_OVERFLOW_COMPONENT).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]

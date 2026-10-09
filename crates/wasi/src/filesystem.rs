@@ -578,26 +578,25 @@ impl Descriptor {
         atim: Option<SystemTime>,
         mtim: Option<SystemTime>,
     ) -> Result<(), ErrorCode> {
-        let mut times = std::fs::FileTimes::new();
-        if let Some(atim) = atim {
-            times = times.set_accessed(atim);
-        }
-        if let Some(mtim) = mtim {
-            times = times.set_modified(mtim);
-        }
         match self {
             Self::File(f) => {
                 if f.perms.write_not_permitted() {
                     return Err(ErrorCode::NotPermitted);
                 }
-                f.run_blocking(move |f| f.set_times(times)).await?;
+                f.run_blocking(move |f| {
+                    crate::filesystem::primitives::set_times_on_fd(f, atim, mtim)
+                })
+                .await?;
                 Ok(())
             }
             Self::Dir(d) => {
                 if d.perms.write_not_permitted() {
                     return Err(ErrorCode::NotPermitted);
                 }
-                d.run_blocking(move |d| d.set_times(times)).await?;
+                d.run_blocking(move |d| {
+                    crate::filesystem::primitives::set_times_on_fd(d, atim, mtim)
+                })
+                .await?;
                 Ok(())
             }
         }

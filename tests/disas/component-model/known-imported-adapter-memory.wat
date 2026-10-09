@@ -181,7 +181,7 @@
 ;;                                 block7:
 ;; @0103                               v10 = load.i64 notrap aligned readonly can_move region2 v0+320
 ;; @0103                               v11 = load.i32 notrap aligned region5 v10
-;; @0111                               v15 = load.i64 notrap aligned readonly can_move region4 v0+184
+;; @0111                               v15 = load.i64 notrap aligned readonly can_move region4 v0+120
 ;; @0111                               try_call fn0(v15, v0, v2), sig1, block9(ret0), [ context v0, default: block6(exn0) ]
 ;;
 ;;                                 block9(v16: i32):

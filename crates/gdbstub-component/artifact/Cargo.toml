@@ -8,3 +8,6 @@ description = "gdbstub debug-component adapter"
 
 [lints]
 workspace = true
+
+[dependencies]
+wasmtime-core = { workspace = true }

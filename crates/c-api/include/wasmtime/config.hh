@@ -433,6 +433,14 @@ class Config {
     wasmtime_config_wasm_custom_page_sizes_set(ptr.get(), enable);
   }
 
+  /// \brief Configures whether the WebAssembly compact imports proposal will be
+  /// enabled
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_compact_imports
+  void wasm_compact_imports(bool enable) {
+    wasmtime_config_wasm_compact_imports_set(ptr.get(), enable);
+  }
+
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
   /// \brief Configures whether the WebAssembly component model proposal will be
   /// enabled

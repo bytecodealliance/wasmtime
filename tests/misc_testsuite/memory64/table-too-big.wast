@@ -13,5 +13,8 @@
   )
 )
 
-(assert_trap (invoke "grow" (i64.const 0x2000_0000_0000_0000))
-  "failed to allocate")
+;; Failing to allocate the table's storage is a failed `table.grow`, not a
+;; trap.
+(assert_return (invoke "grow" (i64.const 0x2000_0000_0000_0000))
+  (i64.const -1))
+(assert_return (invoke "grow" (i64.const 0x1000_0000_0000)) (i64.const -1))

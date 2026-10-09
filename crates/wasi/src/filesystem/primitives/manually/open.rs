@@ -350,6 +350,13 @@ impl<'start> Context<'start> {
         Ok(())
     }
 
+    /// Whether a symlink in the last component should be left as-is rather
+    /// than dereferenced. A trailing slash requires a directory, so it
+    /// forces dereferencing even with `FollowSymlinks::No`.
+    fn stops_at_symlink(&self, follow: FollowSymlinks) -> bool {
+        follow == FollowSymlinks::No && !self.trailing_slash
+    }
+
     /// Check whether this is the last component and we don't need
     /// to dereference; otherwise call `Self::symlink`.
     fn maybe_last_component_symlink(
@@ -359,7 +366,7 @@ impl<'start> Context<'start> {
         follow: FollowSymlinks,
         err: io::Error,
     ) -> io::Result<()> {
-        if follow == FollowSymlinks::No && !self.trailing_slash && self.components.is_empty() {
+        if self.stops_at_symlink(follow) && self.components.is_empty() {
             self.canonical_path.push(one);
             self.canonical_path.complete();
             return Err(err);
@@ -451,9 +458,10 @@ pub(crate) fn stat(start: &fs::File, path: &Path, follow: FollowSymlinks) -> io:
                     // `stat_unchecked` on it.
                     let stat = stat_unchecked(&ctx.base, one.as_ref(), FollowSymlinks::No)?;
 
-                    // If we weren't asked to follow symlinks, or it wasn't a
+                    // If we weren't asked to follow symlinks (and there was no
+                    // trailing slash requiring a directory), or it wasn't a
                     // symlink, we're done.
-                    if options.follow == FollowSymlinks::No || !stat.file_type().is_symlink() {
+                    if ctx.stops_at_symlink(options.follow) || !stat.file_type().is_symlink() {
                         if stat.is_dir() {
                             if ctx.dir_precluded {
                                 return Err(errors::is_directory());
@@ -473,7 +481,8 @@ pub(crate) fn stat(start: &fs::File, path: &Path, follow: FollowSymlinks) -> io:
                         ctx.dir_precluded = true;
                     }
 
-                    // If it was a symlink and we're asked to follow symlinks,
+                    // If it was a symlink and we're asked to follow symlinks (or
+                    // a trailing slash forces dereferencing to a directory),
                     // dereference it.
                     ctx.symlink(&one, &mut symlink_count)?
                 } else {

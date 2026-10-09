@@ -53,6 +53,7 @@ wat = { workspace = true }
 object = { workspace = true, features = ['unaligned'] }
 arbtest = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
+mutatis = { workspace = true }
 
 [[example]]
 name = "factc"

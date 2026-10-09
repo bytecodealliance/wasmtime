@@ -517,6 +517,8 @@ wasmtime_option_group! {
         pub wide_arithmetic: Option<bool>,
         /// Configure support for the branch-hinting proposal.
         pub branch_hinting: Option<bool>,
+        /// Configure support for compact imports.
+        pub compact_imports: Option<bool>,
         /// Configure support for the extended-const proposal.
         pub extended_const: Option<bool>,
         /// Configure support for the exceptions proposal.
@@ -532,6 +534,9 @@ wasmtime_option_group! {
         /// Component model support for canonical names, corresponds to the
         /// 🔗 emoji in the upstream spec.
         pub component_model_canonical_names: Option<bool>,
+        /// Component model support for `[get]` and `[set]` accessors,
+        /// corresponds to the 📡 emoji in the upstream spec.
+        pub component_model_accessors: Option<bool>,
         /// Whether or not any concurrency infrastructure in Wasmtime is
         /// enabled or not.
         pub concurrency_support: Option<bool>,
@@ -560,10 +565,10 @@ wasmtime_option_group! {
         /// Number of distinct write calls to the outgoing body's output-stream
         /// that the implementation will buffer.
         /// Default: 1.
-        pub http_outgoing_body_buffer_chunks: Option<usize>,
+        pub http_outgoing_body_buffer_chunks: Option<NonZeroUsize>,
         /// Maximum size allowed in a write call to the outgoing body's output-stream.
         /// Default: 1024 * 1024.
-        pub http_outgoing_body_chunk_size: Option<usize>,
+        pub http_outgoing_body_chunk_size: Option<NonZeroUsize>,
         /// Enable support for WASI config imports (experimental)
         pub config: Option<bool>,
         /// Enable support for WASI key-value imports (experimental)
@@ -598,7 +603,7 @@ wasmtime_option_group! {
         pub udp: Option<bool>,
         /// Enable WASI APIs marked as: @unstable(feature = network-error-code)
         pub network_error_code: Option<bool>,
-        /// Allows imports from the `wasi_unstable` core wasm module.
+        /// Allows imports from the `wasi_unstable` core wasm module. Disabled by default.
         pub preview0: Option<bool>,
         /// Inherit all environment variables from the parent process.
         ///
@@ -1250,7 +1255,7 @@ impl CommonOptions {
             #[cfg(any(feature = "async", feature = "stack-switching"))]
             if self.wasm.async_stack_size.is_none() {
                 const DEFAULT_HOST_STACK: usize = 512 << 10;
-                config.async_stack_size(max + DEFAULT_HOST_STACK);
+                config.async_stack_size(max.saturating_add(DEFAULT_HOST_STACK));
             }
         }
 
@@ -1324,6 +1329,10 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.branch_hinting {
             config.wasm_branch_hinting(enable);
         }
+        // Not included in `all_proposals`: off by default until fuzzed.
+        if let Some(enable) = self.wasm.compact_imports {
+            config.wasm_compact_imports(enable);
+        }
         if let Some(enable) = self.wasm.extended_const.or(all) {
             config.wasm_extended_const(enable);
         }
@@ -1352,6 +1361,7 @@ impl CommonOptions {
             ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
             ("component-model", component_model_implements, wasm_component_model_implements)
             ("component-model", component_model_canonical_names, wasm_component_model_canonical_names)
+            ("component-model", component_model_accessors, wasm_component_model_accessors)
             ("component-model", component_model_memory64, wasm_component_model_memory64)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
@@ -1512,6 +1522,7 @@ impl CommonOptions {
                 async_stack_size: Some(engine.get_async_stack_size()),
                 async_stack_zeroing: Some(engine.get_async_stack_zeroing()),
                 branch_hinting: Some(engine.get_wasm_branch_hinting()),
+                compact_imports: Some(features.contains(WasmFeatures::COMPACT_IMPORTS)),
                 bulk_memory: Some(features.contains(WasmFeatures::BULK_MEMORY)),
                 component_model: Some(features.contains(WasmFeatures::COMPONENT_MODEL)),
                 component_model_async: Some(features.contains(WasmFeatures::CM_ASYNC)),
@@ -1529,6 +1540,7 @@ impl CommonOptions {
                 component_model_canonical_names: Some(
                     features.contains(WasmFeatures::CM_CANON_NAMES),
                 ),
+                component_model_accessors: Some(features.contains(WasmFeatures::CM_ACCESSORS)),
                 component_model_map: Some(features.contains(WasmFeatures::CM_MAP)),
                 component_model_memory64: Some(features.contains(WasmFeatures::CM64)),
                 component_model_more_async_builtins: Some(

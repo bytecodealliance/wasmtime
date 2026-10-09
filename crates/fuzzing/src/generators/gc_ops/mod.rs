@@ -3,6 +3,7 @@
 pub mod limits;
 pub mod mutator;
 pub mod ops;
+pub mod stack;
 pub mod types;
 
 #[cfg(test)]

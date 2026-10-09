@@ -49,11 +49,9 @@ impl CMemoryType {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn wasm_memorytype_new(limits: &wasm_limits_t) -> Box<wasm_memorytype_t> {
-    Box::new(wasm_memorytype_t::new(MemoryType::new(
-        limits.min,
-        limits.max(),
-    )))
+pub extern "C" fn wasm_memorytype_new(limits: &wasm_limits_t) -> Option<Box<wasm_memorytype_t>> {
+    let ty = MemoryType::new(limits.min, limits.max()).ok()?;
+    Some(Box::new(wasm_memorytype_t::new(ty)))
 }
 
 #[unsafe(no_mangle)]

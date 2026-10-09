@@ -30,7 +30,7 @@ fn test_limits() -> Result<()> {
     // Test instance exports and host objects hitting the limit
     for memory in IntoIterator::into_iter([
         instance.get_memory(&mut store, "m").unwrap(),
-        Memory::new(&mut store, MemoryType::new(0, None))?,
+        Memory::new(&mut store, MemoryType::new(0, None)?)?,
     ]) {
         memory.grow(&mut store, 3)?;
         memory.grow(&mut store, 5)?;
@@ -50,7 +50,7 @@ fn test_limits() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(RefType::FUNCREF, 0, None),
+            TableType::new(RefType::FUNCREF, 0, None)?,
             Ref::Func(None),
         )?,
     ]) {
@@ -138,7 +138,7 @@ async fn test_limits_async() -> Result<()> {
     // Test instance exports and host objects hitting the limit
     for memory in IntoIterator::into_iter([
         instance.get_memory(&mut store, "m").unwrap(),
-        Memory::new_async(&mut store, MemoryType::new(0, None)).await?,
+        Memory::new_async(&mut store, MemoryType::new(0, None)?).await?,
     ]) {
         memory.grow_async(&mut store, 3).await?;
         memory.grow_async(&mut store, 5).await?;
@@ -159,7 +159,7 @@ async fn test_limits_async() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new_async(
             &mut store,
-            TableType::new(RefType::FUNCREF, 0, None),
+            TableType::new(RefType::FUNCREF, 0, None)?,
             Ref::Func(None),
         )
         .await?,
@@ -202,7 +202,7 @@ fn test_limits_memory_only() -> Result<()> {
     // Test instance exports and host objects hitting the limit
     for memory in IntoIterator::into_iter([
         instance.get_memory(&mut store, "m").unwrap(),
-        Memory::new(&mut store, MemoryType::new(0, None))?,
+        Memory::new(&mut store, MemoryType::new(0, None)?)?,
     ]) {
         memory.grow(&mut store, 3)?;
         memory.grow(&mut store, 5)?;
@@ -222,7 +222,7 @@ fn test_limits_memory_only() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(RefType::FUNCREF, 0, None),
+            TableType::new(RefType::FUNCREF, 0, None)?,
             Ref::Func(None),
         )?,
     ]) {
@@ -256,7 +256,7 @@ fn test_initial_memory_limits_exceeded() -> Result<()> {
         ),
     }
 
-    match Memory::new(&mut store, MemoryType::new(25, None)) {
+    match Memory::new(&mut store, MemoryType::new(25, None)?) {
         Ok(_) => unreachable!(),
         Err(e) => assert_eq!(
             e.to_string(),
@@ -283,7 +283,7 @@ fn test_limits_table_only() -> Result<()> {
     // Test instance exports and host objects *not* hitting the limit
     for memory in IntoIterator::into_iter([
         instance.get_memory(&mut store, "m").unwrap(),
-        Memory::new(&mut store, MemoryType::new(0, None))?,
+        Memory::new(&mut store, MemoryType::new(0, None)?)?,
     ]) {
         memory.grow(&mut store, 3)?;
         memory.grow(&mut store, 5)?;
@@ -296,7 +296,7 @@ fn test_limits_table_only() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(RefType::FUNCREF, 0, None),
+            TableType::new(RefType::FUNCREF, 0, None)?,
             Ref::Func(None),
         )?,
     ]) {
@@ -334,7 +334,7 @@ fn test_initial_table_limits_exceeded() -> Result<()> {
 
     match Table::new(
         &mut store,
-        TableType::new(RefType::FUNCREF, 99, None),
+        TableType::new(RefType::FUNCREF, 99, None)?,
         Ref::Func(None),
     ) {
         Ok(_) => unreachable!(),
@@ -1135,7 +1135,7 @@ fn growth_trap() -> Result<()> {
     // Test instance exports and host objects hitting the limit
     for memory in [
         instance.get_memory(&mut store, "m").unwrap(),
-        Memory::new(&mut store, MemoryType::new(0, None))?,
+        Memory::new(&mut store, MemoryType::new(0, None)?)?,
     ] {
         memory.grow(&mut store, 1)?;
         assert!(memory.grow(&mut store, 1).is_err());
@@ -1146,7 +1146,7 @@ fn growth_trap() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(RefType::FUNCREF, 0, None),
+            TableType::new(RefType::FUNCREF, 0, None)?,
             Ref::Func(None),
         )?,
     ] {

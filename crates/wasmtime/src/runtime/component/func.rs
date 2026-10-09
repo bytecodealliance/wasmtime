@@ -5,7 +5,7 @@ use crate::component::types::ComponentFunc;
 use crate::component::values::Val;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, InstanceFlags};
-use crate::runtime::vm::{Export, SendSyncPtr, VMFuncRef};
+use crate::runtime::vm::{Export, SendSyncPtr, UncaughtException, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use core::mem::{self, MaybeUninit};
@@ -519,6 +519,7 @@ impl Func {
                     mem::size_of_val(space) / mem::size_of::<ValRaw>(),
                 ))
                 .unwrap(),
+                UncaughtException::Trap,
             )?;
         }
 
@@ -733,6 +734,7 @@ pub(crate) unsafe fn call_post_return(
                 &mut store.as_context_mut(),
                 func,
                 core::slice::from_ref(&arg).into(),
+                UncaughtException::Trap,
             )?;
         }
 

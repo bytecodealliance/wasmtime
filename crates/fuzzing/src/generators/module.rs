@@ -27,6 +27,7 @@ pub struct ModuleConfig {
     pub component_model_fixed_length_lists: bool,
     pub component_model_implements: bool,
     pub component_model_canonical_names: bool,
+    pub component_model_accessors: bool,
     pub legacy_exceptions: bool,
     pub shared_memory: bool,
     pub stack_switching: bool,
@@ -56,6 +57,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         let _ = config.tail_call_enabled;
         let _ = config.extended_const_enabled;
         let _ = config.gc_enabled;
+        let _ = config.compact_imports_enabled;
         let _ = config.exceptions_enabled;
         config.custom_page_sizes_enabled = u.arbitrary()?;
         config.wide_arithmetic_enabled = u.arbitrary()?;
@@ -78,9 +80,6 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // do that most of the time.
         config.disallow_traps = u.ratio(9, 10)?;
 
-        // not supported in wasmtime yet
-        config.compact_imports_enabled = false;
-
         Ok(ModuleConfig {
             component_model_async: false,
             component_model_more_async_builtins: false,
@@ -93,6 +92,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
             component_model_fixed_length_lists: false,
             component_model_implements: false,
             component_model_canonical_names: false,
+            component_model_accessors: false,
             legacy_exceptions: false,
             shared_memory: false,
             stack_switching: false,

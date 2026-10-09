@@ -324,6 +324,36 @@ error while executing at wasm backtrace:
 }
 
 #[test]
+fn trap_display_demangled_names() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let wat = r#"
+        (module $m
+            (func $c unreachable)
+            (func $i call $c)
+            (func $_Z3foov call $i)
+            (func (export "bar") call $_Z3foov)
+        )
+    "#;
+
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "bar")?;
+
+    // Short names like `c` and `i` shouldn't be "demangled" as C++ types, but
+    // C++ mangled names should still be demangled.
+    let e = run_func.call(&mut store, ()).unwrap_err();
+    e.assert_contains(
+        "\
+error while executing at wasm backtrace:
+    0:     0x23 - m!c
+    1:     0x27 - m!i
+    2:     0x2c - m!foo()
+    3:     0x31 - m!<wasm function 3>",
+    );
+    Ok(())
+}
+
+#[test]
 fn trap_display_multi_module() -> Result<()> {
     let mut store = Store::<()>::default();
     let wat = r#"
@@ -1151,6 +1181,79 @@ fn standalone_backtrace() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[func.into()])?;
     let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
     f.call(&mut store, ())?;
+    Ok(())
+}
+
+/// A host function called via `Func::call` from another host function sees the
+/// Wasm frames beneath them exactly once.
+#[test]
+fn standalone_backtrace_nested_host_call() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "" (func $host))
+                (func $foo (export "f") call $bar)
+                (func $bar call $host)
+            )
+        "#,
+    )?;
+    let inner = Func::wrap(&mut store, |cx: Caller<'_, ()>| {
+        let trace = WasmBacktrace::capture(&cx);
+        let names: Vec<_> = trace.frames().iter().map(|f| f.func_name()).collect();
+        assert_eq!(names, [Some("bar"), Some("foo")]);
+    });
+    let outer = Func::wrap(&mut store, move |mut cx: Caller<'_, ()>| {
+        inner.call(&mut cx, &[], &mut [])
+    });
+    let instance = Instance::new(&mut store, &module, &[outer.into()])?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    f.call(&mut store, ())?;
+    Ok(())
+}
+
+/// Wasm frames on both sides of a host function called via `Func::call` from
+/// another host function each appear exactly once.
+#[test]
+fn standalone_backtrace_host_call_between_wasm() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::<Option<Func>>::new(&engine, None);
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "a" (func $a))
+                (import "" "c" (func $c))
+                (func $foo (export "foo") call $a)
+                (func $bar (export "bar") call $c)
+            )
+        "#,
+    )?;
+
+    let c = Func::wrap(&mut store, |cx: Caller<'_, Option<Func>>| {
+        let trace = WasmBacktrace::capture(&cx);
+        let names: Vec<_> = trace.frames().iter().map(|f| f.func_name()).collect();
+        assert_eq!(names, [Some("bar"), Some("foo")]);
+    });
+
+    let b = Func::wrap(&mut store, |mut cx: Caller<'_, Option<Func>>| {
+        let bar = cx.data().unwrap();
+        bar.call(&mut cx, &[], &mut [])
+    });
+
+    let a = Func::wrap(&mut store, move |mut cx: Caller<'_, Option<Func>>| {
+        b.call(&mut cx, &[], &mut [])
+    });
+
+    let instance = Instance::new(&mut store, &module, &[a.into(), c.into()])?;
+    *store.data_mut() = instance.get_func(&mut store, "bar");
+
+    let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
+    foo.call(&mut store, ())?;
+
     Ok(())
 }
 

@@ -1,7 +1,7 @@
 use crate::error::OutOfMemory;
 use crate::prelude::*;
 use crate::runtime::vm::{
-    self, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
+    self, InterpreterRef, SendSyncPtr, StoreBox, UncaughtException, VMArrayCallHostFuncContext,
     VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
     VMStoreContext, VmPtr,
 };
@@ -878,7 +878,7 @@ impl Func {
     /// Note that this is a somewhat expensive method since it requires taking a
     /// lock as well as cloning a type.
     pub(crate) fn load_ty(&self, store: &StoreOpaque) -> FuncType {
-        FuncType::from_shared_type_index(store.engine(), self.type_index(store))
+        FuncType::from_shared_type_index(store.engine(), self.type_index(store)).unwrap()
     }
 
     /// Does this function match the given type?
@@ -1018,17 +1018,25 @@ impl Func {
 
         // SAFETY: the safety of this function call is the same as the contract
         // of this function.
-        unsafe { Self::call_unchecked_raw(&mut store, func_ref, params_and_returns) }
+        unsafe {
+            Self::call_unchecked_raw(
+                &mut store,
+                func_ref,
+                params_and_returns,
+                UncaughtException::Propagate,
+            )
+        }
     }
 
     pub(crate) unsafe fn call_unchecked_raw<T>(
         store: &mut StoreContextMut<'_, T>,
         func_ref: NonNull<VMFuncRef>,
         params_and_returns: NonNull<[ValRaw]>,
+        uncaught_exception: UncaughtException,
     ) -> Result<()> {
         // SAFETY: the safety of this function call is the same as the contract
         // of this function.
-        invoke_wasm_and_catch_traps(store, |caller, vm| unsafe {
+        invoke_wasm_and_catch_traps(store, uncaught_exception, |caller, vm| unsafe {
             VMFuncRef::array_call(func_ref, vm, caller, params_and_returns)
         })
     }
@@ -1456,6 +1464,7 @@ impl Func {
 /// can pass to the called wasm function, if desired.
 pub(crate) fn invoke_wasm_and_catch_traps<T>(
     store: &mut StoreContextMut<'_, T>,
+    uncaught_exception: crate::runtime::vm::UncaughtException,
     closure: impl FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 ) -> Result<()> {
     // The `enter_wasm` call below will reset the store context's
@@ -1472,8 +1481,12 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         // `previous_runtime_state` implicitly dropped here
         return Err(trap);
     }
-    let result = crate::runtime::vm::catch_traps(store, &mut previous_runtime_state, closure);
-    #[cfg(feature = "component-model")]
+    let result = crate::runtime::vm::catch_traps(
+        store,
+        &mut previous_runtime_state,
+        uncaught_exception,
+        closure,
+    );
     if result.is_err() {
         store.0.set_trapped();
     }
@@ -1594,17 +1607,20 @@ impl EntryStoreContext {
             let stack_chain =
                 mem::replace(&mut *vm_store_context.stack_chain.get(), new_stack_chain);
 
+            // Zero these out, rather than leave the previous activation's
+            // values behind, so that if we call into a host function callee
+            // (which never runs an entry trampoline to overwrite them) and it
+            // walks the stack, we don't see these values both while walking
+            // activations and in the saved state.
+            let take = |field: &core::cell::UnsafeCell<usize>| mem::replace(&mut *field.get(), 0);
+
             Self {
                 stack_limit,
-                last_wasm_exit_pc: *(*vm_store_context).last_wasm_exit_pc.get(),
-                last_wasm_exit_trampoline_fp: *(*vm_store_context)
-                    .last_wasm_exit_trampoline_fp
-                    .get(),
-                last_wasm_entry_fp: *(*vm_store_context).last_wasm_entry_fp.get(),
-                last_wasm_entry_sp: *(*vm_store_context).last_wasm_entry_sp.get(),
-                last_wasm_entry_trap_handler: *(*vm_store_context)
-                    .last_wasm_entry_trap_handler
-                    .get(),
+                last_wasm_exit_pc: take(&vm_store_context.last_wasm_exit_pc),
+                last_wasm_exit_trampoline_fp: take(&vm_store_context.last_wasm_exit_trampoline_fp),
+                last_wasm_entry_fp: take(&vm_store_context.last_wasm_entry_fp),
+                last_wasm_entry_sp: take(&vm_store_context.last_wasm_entry_sp),
+                last_wasm_entry_trap_handler: take(&vm_store_context.last_wasm_entry_trap_handler),
                 stack_chain,
                 vm_store_context,
             }

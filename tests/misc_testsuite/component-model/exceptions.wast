@@ -235,3 +235,15 @@
   (export "run" (func $b "run"))
 )
 (assert_trap (invoke "run") "uncaught exception propagated out of component")
+
+;; A sync-lifted export whose own body throws with no handler. Invoking it
+;; directly must trap with an uncaught exception rather than letting the
+;; exception unwind out of the component to the host.
+(component
+  (core module $m
+    (tag $t)
+    (func (export "run") (throw $t)))
+  (core instance $i (instantiate $m))
+  (func (export "run") (canon lift (core func $i "run"))))
+
+(assert_trap (invoke "run") "uncaught exception propagated out of component")

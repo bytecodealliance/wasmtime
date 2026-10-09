@@ -43,6 +43,7 @@ tokio-rustls = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 webpki-roots = { workspace = true, optional = true }
 pin-project-lite = { workspace = true }
+rustix = { workspace = true }
 
 [dev-dependencies]
 wasmtime-wasi-http = { path = ".", features = ['default-send-request'] }

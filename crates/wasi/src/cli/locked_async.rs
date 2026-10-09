@@ -9,22 +9,6 @@ use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 use wasmtime_wasi_io::streams::{InputStream, OutputStream};
 
-trait SharedHandleReady: Send + Sync + 'static {
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()>;
-}
-
-impl SharedHandleReady for p2::pipe::AsyncWriteStream {
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        <Self>::poll_ready(self, cx)
-    }
-}
-
-impl SharedHandleReady for p2::pipe::AsyncReadStream {
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        <Self>::poll_ready(self, cx)
-    }
-}
-
 /// An impl of [`StdinStream`] built on top of [`AsyncRead`].
 //
 // Note the usage of `tokio::sync::Mutex` here as opposed to a
@@ -114,7 +98,10 @@ impl AsyncRead for StdioHandle<p2::pipe::AsyncReadStream> {
         cx: &mut Context<'_>,
         buf: &mut io::ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        match ready!(self.as_mut().poll(cx, |g| g.read(buf.remaining()))) {
+        match ready!(self.as_mut().poll(cx, |cx, g| {
+            ready!(g.poll_ready(cx));
+            Poll::Ready(g.read(buf.remaining()))
+        })) {
             Some(Ok(bytes)) => {
                 buf.put_slice(&bytes);
                 Poll::Ready(Ok(()))
@@ -149,7 +136,10 @@ impl StdoutStream for AsyncStdoutStream {
         Box::new(Self(self.0.clone()))
     }
     fn async_stream(&self) -> Box<dyn AsyncWrite + Send + Sync> {
-        Box::new(StdioHandle::Ready(self.0.clone()))
+        Box::new(StdoutHandle {
+            handle: StdioHandle::Ready(self.0.clone()),
+            flushing: false,
+        })
     }
 }
 
@@ -214,20 +204,61 @@ impl p2::Pollable for AsyncStdoutStream {
     }
 }
 
-impl AsyncWrite for StdioHandle<p2::pipe::AsyncWriteStream> {
+struct StdoutHandle {
+    handle: StdioHandle<p2::pipe::AsyncWriteStream>,
+    flushing: bool,
+}
+
+impl AsyncWrite for StdoutHandle {
     fn poll_write(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        match ready!(self.poll(cx, |i| i.write(Bytes::copy_from_slice(buf)))) {
-            Some(Ok(())) => Poll::Ready(Ok(buf.len())),
-            Some(Err(e)) => Poll::Ready(Err(e)),
+        if buf.is_empty() {
+            return Poll::Ready(Ok(0));
+        }
+        match ready!(Pin::new(&mut self.handle).poll(cx, |cx, i| {
+            // Use `check_write` to see if the stream isn't yet ready (a 0
+            // return value) and also how much it's willing to accept should it
+            // be nonzero.
+            loop {
+                let amt = match i.check_write() {
+                    Ok(amt) => amt.min(buf.len()),
+                    Err(e) => return Poll::Ready(Err(e)),
+                };
+                if amt > 0 {
+                    return Poll::Ready(i.write(Bytes::copy_from_slice(&buf[..amt])).map(|()| amt));
+                }
+                ready!(i.poll_ready(cx));
+            }
+        })) {
+            Some(result) => Poll::Ready(result),
             None => Poll::Ready(Ok(0)),
         }
     }
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match ready!(self.poll(cx, |i| i.flush())) {
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        // First request a flush of the underlying stream.
+        if !self.flushing {
+            match ready!(Pin::new(&mut self.handle).poll(cx, |cx, i| {
+                ready!(i.poll_ready(cx));
+                Poll::Ready(i.flush())
+            })) {
+                Some(Ok(())) => self.flushing = true,
+                Some(Err(e)) => return Poll::Ready(Err(e)),
+                None => return Poll::Ready(Ok(())),
+            }
+        }
+
+        // Next wait for the stream to become ready again, meaning that the
+        // flush has completed. Here `check_write` is called again to pick up
+        // any error which happened along the way.
+        let result = ready!(Pin::new(&mut self.handle).poll(cx, |cx, i| {
+            ready!(i.poll_ready(cx));
+            Poll::Ready(i.check_write().map(|_| ()))
+        }));
+        self.flushing = false;
+        match result {
             Some(result) => Poll::Ready(result),
             None => Poll::Ready(Ok(())),
         }
@@ -256,12 +287,12 @@ enum StdioHandle<S> {
 
 impl<S> StdioHandle<S>
 where
-    S: SharedHandleReady,
+    S: Send + Sync + 'static,
 {
     fn poll<T>(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        op: impl FnOnce(&mut S) -> p2::StreamResult<T>,
+        op: impl FnOnce(&mut Context<'_>, &mut S) -> Poll<p2::StreamResult<T>>,
     ) -> Poll<Option<io::Result<T>>> {
         // If we don't currently have the lock on this handle, initiate the
         // lock acquisition.
@@ -283,21 +314,18 @@ where
             None => return Poll::Ready(None),
         };
 
-        // Wait for our locked stream to be ready, resetting to the "locked"
-        // state if it's not quite ready yet.
-        match guard.poll_ready(cx) {
-            Poll::Ready(()) => {}
+        // Perform the I/O and delegate on the result.
+        let result = match op(cx, &mut guard) {
+            Poll::Ready(result) => result,
 
-            // If the read isn't ready yet then restore our "locked" state
+            // If the stream isn't ready yet then restore our "locked" state
             // since we haven't finished, then return pending.
             Poll::Pending => {
                 self.set(StdioHandle::Locked(guard));
                 return Poll::Pending;
             }
-        }
-
-        // Perform the I/O and delegate on the result.
-        match op(&mut guard) {
+        };
+        match result {
             // The I/O succeeded so relinquish the lock on this stream by
             // transitioning back to the "Ready" state.
             Ok(result) => {

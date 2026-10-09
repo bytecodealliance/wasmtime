@@ -24,8 +24,13 @@ fn main() {
         .map(|s| s.split(" ").map(|s| s.to_string()).collect::<Vec<_>>());
 
     // List of supported compilers, filtered by what our current host supports.
+    // If the current host doesn't support anything native, then test pulley
+    // instead.
     let mut compilers = vec![Compiler::CraneliftNative, Compiler::Winch];
     compilers.retain(|c| c.supports_host());
+    if compilers.is_empty() {
+        compilers.push(Compiler::CraneliftPulley);
+    }
 
     // Only test one compiler in ASAN since we're mostly interested in testing
     // runtime code, not compiler-generated code.
@@ -96,6 +101,12 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
     let multi_memory = test_config.multi_memory();
     let test_hogs_memory = test_config.hogs_memory();
     let relaxed_simd = test_config.relaxed_simd();
+
+    // Skip memory-intensive tests on ASAN. Some of these require gracefully
+    // handling OOM but ASAN hard-aborts on OOM.
+    if test_hogs_memory && cfg!(asan) {
+        return Ok(());
+    }
 
     let is_cranelift = match config.compiler {
         Compiler::CraneliftNative | Compiler::CraneliftPulley => true,

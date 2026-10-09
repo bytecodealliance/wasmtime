@@ -23,7 +23,12 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
         request_id: Resource<HostOutgoingRequest>,
         options: Option<Resource<types::RequestOptions>>,
     ) -> HttpResult<Resource<HostFutureIncomingResponse>> {
-        let opts = options.and_then(|opts| self.table.get(&opts).ok()).cloned();
+        // `options` is an `own` parameter (`outgoing-handler.handle` takes ownership of it, per
+        // `wasi:http` types.wit), so it must be consumed from the table like `request` below.
+        let opts = match options {
+            Some(id) => Some(self.table.delete(id)?),
+            None => None,
+        };
 
         let req = self.table.delete(request_id)?;
         let mut builder = hyper::Request::builder();

@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = "-W exceptions -C collector=null"
+;;! flags = "-W exceptions,gc-support -C collector=null"
 
 ;; Store an external reference in an exception payload.
 (module

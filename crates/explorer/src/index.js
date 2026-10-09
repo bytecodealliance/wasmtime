@@ -218,6 +218,47 @@ const createDivForCode = () => {
   return div;
 };
 
+const panes = ["wat", "clif", "asm"]
+  .map(id => document.getElementById(id))
+  .filter(pane => pane !== null);
+
+for (let i = 0; i < panes.length - 1; i++) {
+  const left = panes[i];
+  const right = panes[i + 1];
+  const handle = document.createElement("div");
+  handle.classList.add("resize-handle");
+  left.after(handle);
+
+  handle.addEventListener("pointerdown", event => {
+    const startX = event.clientX;
+    const leftWidth = left.getBoundingClientRect().width;
+    const rightWidth = right.getBoundingClientRect().width;
+    const totalWidth = leftWidth + rightWidth;
+
+    const resize = event => {
+      const newLeftWidth = Math.max(
+        0,
+        Math.min(totalWidth, leftWidth + event.clientX - startX),
+      );
+      left.style.flex = `0 0 ${newLeftWidth}px`;
+      right.style.flex = `0 0 ${totalWidth - newLeftWidth}px`;
+    };
+
+    const stopResizing = () => {
+      handle.removeEventListener("pointermove", resize);
+      handle.removeEventListener("pointerup", stopResizing);
+      handle.removeEventListener("pointercancel", stopResizing);
+      document.body.classList.remove("resizing");
+    };
+
+    handle.setPointerCapture(event.pointerId);
+    handle.addEventListener("pointermove", resize);
+    handle.addEventListener("pointerup", stopResizing);
+    handle.addEventListener("pointercancel", stopResizing);
+    document.body.classList.add("resizing");
+  });
+}
+
 // Render the CLIF (if any).
 const clifElem = document.getElementById("clif");
 if (clifElem) {
@@ -226,11 +267,13 @@ if (clifElem) {
 
     const funcHeader = document.createElement("h3");
     let func_name =
-      func.name === null ? `function[${func.func_index}]` : func.name;
+      func.name === null
+        ? `wasm[${func.module_index}]::function[${func.func_index}]`
+        : func.name;
     let demangled_name =
       func.demangled_name !== null ? func.demangled_name : func_name;
     funcHeader.textContent = `Intermediate Representation of function <${demangled_name}>:`;
-    funcHeader.title = `Function ${func.func_index}: ${func_name}`;
+    funcHeader.title = `Module ${func.module_index}, function ${func.func_index}: ${func_name}`;
     funcElem.appendChild(funcHeader);
 
     for (const inst of func.instructions) {
@@ -255,11 +298,13 @@ for (const func of state.asm.functions) {
 
   const funcHeader = document.createElement("h3");
   let functionName =
-    func.name === null ? `function[${func.func_index}]` : func.name;
+    func.name === null
+      ? `wasm[${func.module_index}]::function[${func.func_index}]`
+      : func.name;
   let demangledName =
     func.demangled_name !== null ? func.demangled_name : functionName;
   funcHeader.textContent = `Disassembly of function <${demangledName}>:`;
-  funcHeader.title = `Function ${func.func_index}: ${functionName}`;
+  funcHeader.title = `Module ${func.module_index}, function ${func.func_index}: ${functionName}`;
   funcElem.appendChild(funcHeader);
 
   let currentBlock = createDivForCode();

@@ -3,11 +3,11 @@
 //! owned by the guest or the host.
 //!
 //! This is in contrast with `Resource<T>`, for example, and `ResourceAny` has
-//! more "state" behind it. Specifically a `ResourceAny` has a type and a
-//! `HostResourceIndex` which points inside of a `HostResourceData` structure
-//! inside of a store. The `ResourceAny::resource_drop` method, or a conversion
-//! to `Resource<T>`, is required to be called to avoid leaking data within a
-//! store.
+//! more "state" behind it. Most `ResourceAny` values have a type and a
+//! `HostResourceIndex` which points inside of a store. These must be dropped
+//! or converted to a typed resource to release that state. A synthetic borrow
+//! converted from `Resource::new_borrow` instead holds its representation
+//! directly and has no host table entry.
 
 use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
@@ -15,57 +15,95 @@ use crate::component::resources::host::{HostResource, HostResourceType};
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
 use crate::component::{ComponentType, Lift, Lower, Resource, ResourceDynamic, ResourceType};
 use crate::prelude::*;
-use crate::runtime::vm::ValRaw;
+use crate::runtime::vm::{UncaughtException, ValRaw};
 use crate::{AsContextMut, StoreContextMut, Trap};
 use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 
-/// Representation of a resource in the component model, either a guest-defined
-/// or a host-defined resource.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+enum ResourceAnyIndex {
+    Table(HostResourceIndex),
+    Borrow(u32),
+}
+
+/// Representation of a dynamically typed guest-defined or host-defined
+/// resource in the component model.
 ///
-/// This type is similar to [`Resource`] except that it can be used to represent
-/// any resource, either host or guest. This type cannot be directly constructed
-/// and is only available if the guest returns it to the host (e.g. a function
-/// returning a guest-defined resource) or by a conversion from [`Resource`] via
-/// [`ResourceAny::try_from_resource`].
-/// This type also does not carry a static type parameter `T` for example and
-/// does not have as much information about its type.
-/// This means that it's possible to get runtime type-errors when
-/// using this type because it cannot statically prevent mismatching resource
-/// types.
+/// # Guest-defined resources
+///
+/// Guest-defined resources enter the host through generated bindings, such as
+/// a function that returns an owned resource. Their methods are called through
+/// the generated type for that resource, for example `GuestLogger` in the
+/// exported resources example in [`bindgen_examples`]. A guest-defined
+/// [`ResourceAny`] cannot be converted to [`Resource`] or [`ResourceDynamic`],
+/// because those types represent host-defined resources.
+///
+/// [`bindgen_examples`]: crate::component::bindgen_examples
+///
+/// # Host-defined resources
+///
+/// Convert a host-defined [`Resource<T>`](Resource) to this type with
+/// [`ResourceAny::try_from_resource`]. Convert it back with
+/// [`ResourceAny::try_into_resource`] or
+/// [`ResourceAny::try_into_resource_dynamic`]. These conversions check the
+/// resource type at runtime.
+///
+/// # Ownership and destruction
 ///
 /// Like [`Resource`] this type represents either an `own` or a `borrow`
-/// resource internally. Unlike [`Resource`], however, a [`ResourceAny`] must
-/// always be explicitly destroyed with the [`ResourceAny::resource_drop`]
-/// method. This will update internal dynamic state tracking and invoke the
-/// WebAssembly-defined destructor for a resource, if any.
+/// resource internally, and the WIT signature controls which one a value is.
+/// Passing a resource to an `own` parameter transfers ownership to the callee,
+/// while passing it to a `borrow` parameter keeps ownership with the caller.
+/// When a function returns an `own` resource, the caller acquires ownership.
+/// The same applies to each owned resource nested in a record, variant, list,
+/// or other value.
 ///
-/// Note that it is required to call `resource_drop` for all instances of
-/// [`ResourceAny`]: even borrows. Both borrows and own handles have state
-/// associated with them that must be discarded by the time they're done being
-/// used.
+/// A [`ResourceAny`] with a host table entry that the host still owns must
+/// eventually be passed to an `own` parameter, converted to a typed resource,
+/// or explicitly destroyed with [`ResourceAny::resource_drop`]. Destroying it
+/// updates dynamic state tracking and invokes the WebAssembly-defined
+/// destructor for a resource, if any. `ResourceAny` is `Copy`, but once
+/// ownership has been transferred the handle must not be used again.
+///
+/// `ResourceAny` has no static type parameter, so using one with the wrong
+/// generated function produces a runtime type error.
+///
+/// Borrows lifted from a component have host table state and must be dropped.
+/// Synthetic borrows converted from [`Resource::new_borrow`] have no host table
+/// state; calling `resource_drop` on one is harmless but unnecessary.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct ResourceAny {
-    idx: HostResourceIndex,
+    idx: ResourceAnyIndex,
     ty: ResourceType,
     owned: bool,
 }
 
 impl ResourceAny {
     pub(crate) fn new(idx: HostResourceIndex, ty: ResourceType, owned: bool) -> ResourceAny {
-        ResourceAny { idx, ty, owned }
+        ResourceAny {
+            idx: ResourceAnyIndex::Table(idx),
+            ty,
+            owned,
+        }
     }
 
-    /// Attempts to convert an imported [`Resource`] into [`ResourceAny`].
+    pub(crate) fn new_borrow(rep: u32, ty: ResourceType) -> ResourceAny {
+        ResourceAny {
+            idx: ResourceAnyIndex::Borrow(rep),
+            ty,
+            owned: false,
+        }
+    }
+
+    /// Attempts to convert a host-defined [`Resource`] into [`ResourceAny`].
     ///
     /// * `resource` is the resource to convert.
     /// * `store` is the store to place the returned resource into.
     ///
-    /// The returned `ResourceAny` will not have a destructor attached to it
-    /// meaning that if `resource_drop` is called then it will not invoked a
-    /// host-defined destructor. This is similar to how `Resource<T>` does not
-    /// have a destructor associated with it.
+    /// The returned `ResourceAny` has no destructor attached to it, so
+    /// `resource_drop` will not invoke a host-defined destructor. This matches
+    /// [`Resource`], which has no associated destructor.
     ///
     /// # Errors
     ///
@@ -83,9 +121,17 @@ impl ResourceAny {
         resource.try_into_resource_any(store)
     }
 
-    /// See [`Resource::try_from_resource_any`]
+    /// Attempts to convert this value into a statically typed, host-defined
+    /// [`Resource`].
+    ///
+    /// This conversion accepts only host-defined resources of type `T`.
+    /// Guest-defined resources must remain [`ResourceAny`] values and be used
+    /// through their generated functions and resource projection.
     ///
     /// # Errors
+    ///
+    /// See [`Resource::try_from_resource_any`] for the conditions under which
+    /// this conversion fails.
     ///
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
@@ -94,7 +140,17 @@ impl ResourceAny {
         Resource::try_from_resource_any(self, store)
     }
 
-    /// See [`ResourceDynamic::try_from_resource_any`]
+    /// Attempts to convert this value into a dynamically typed, host-defined
+    /// [`ResourceDynamic`].
+    ///
+    /// This conversion accepts only host-defined resources. Guest-defined
+    /// resources must remain [`ResourceAny`] values and be used through their
+    /// generated functions and resource projection.
+    ///
+    /// # Errors
+    ///
+    /// See [`Resource::try_from_resource_any`] for the conditions under which
+    /// this conversion fails.
     pub fn try_into_resource_dynamic(self, store: impl AsContextMut) -> Result<ResourceDynamic> {
         ResourceDynamic::try_from_resource_any(self, store)
     }
@@ -108,26 +164,28 @@ impl ResourceAny {
         T: HostResourceType<D>,
         D: PartialEq + Send + Sync + Copy + 'static,
     {
-        let store = store.as_context_mut();
-        let mut tables = HostResourceTables::new_host(store.0)?;
         let ResourceAny { idx, ty, owned } = self;
         let ty = T::typecheck(ty).ok_or_else(|| crate::format_err!("resource type mismatch"))?;
-        if owned {
-            let rep = tables.host_resource_lift_own(idx)?;
-            Ok(HostResource::new_own(rep, ty))
-        } else {
-            // For borrowed handles, first acquire the `rep` via lifting the
-            // borrow. Afterwards though remove any dynamic state associated
-            // with this borrow. `Resource<T>` doesn't participate in dynamic
-            // state tracking and it's assumed embedders know what they're
-            // doing, so the drop call will clear out that a borrow is active
-            //
-            // Note that the result of `drop` should always be `None` as it's a
-            // borrowed handle, so assert so.
-            let rep = tables.host_resource_lift_borrow(idx)?;
-            let res = tables.host_resource_drop(idx)?;
-            assert!(res.is_none());
-            Ok(HostResource::new_borrow(rep, ty))
+        match idx {
+            ResourceAnyIndex::Borrow(rep) => {
+                assert!(!owned);
+                Ok(HostResource::new_borrow(rep, ty))
+            }
+            ResourceAnyIndex::Table(idx) => {
+                let store = store.as_context_mut();
+                let mut tables = HostResourceTables::new_host(store.0)?;
+                if owned {
+                    let rep = tables.host_resource_lift_own(idx)?;
+                    Ok(HostResource::new_own(rep, ty))
+                } else {
+                    // Typed borrows have no dynamic state. Remove the table
+                    // entry after reading its representation.
+                    let rep = tables.host_resource_rep(idx)?;
+                    let res = tables.host_resource_drop(idx)?;
+                    assert!(res.is_none());
+                    Ok(HostResource::new_borrow(rep, ty))
+                }
+            }
         }
     }
 
@@ -151,8 +209,8 @@ impl ResourceAny {
 
     /// Destroy this resource and release any state associated with it.
     ///
-    /// This is required to be called for all instances of [`ResourceAny`] to
-    /// ensure that state associated with this resource is properly cleaned up.
+    /// This is required for resources with host table state. For synthetic
+    /// borrows converted from [`Resource::new_borrow`] it has no effect.
     /// For owned resources this may execute the guest-defined destructor if
     /// applicable (or the host-defined destructor if one was specified).
     ///
@@ -234,7 +292,11 @@ impl ResourceAny {
         //
         // This could fail if the index is invalid or if this is removing an
         // `Own` entry which is currently being borrowed.
-        let pair = HostResourceTables::new_host(store.0)?.host_resource_drop(self.idx)?;
+        let idx = match self.idx {
+            ResourceAnyIndex::Table(idx) => idx,
+            ResourceAnyIndex::Borrow(_) => return Ok(()),
+        };
+        let pair = HostResourceTables::new_host(store.0)?.host_resource_drop(idx)?;
 
         let (rep, slot) = match (pair, self.owned) {
             (Some(pair), true) => pair,
@@ -271,9 +333,18 @@ impl ResourceAny {
         // destructors have al been previously type-checked and are guaranteed
         // to take one i32 argument and return no results, so the parameters
         // here should be configured correctly.
-        unsafe {
-            crate::Func::call_unchecked_raw(store, dtor, NonNull::from(&mut args))?;
+        let result = unsafe {
+            crate::Func::call_unchecked_raw(
+                store,
+                dtor,
+                NonNull::from(&mut args),
+                UncaughtException::Trap,
+            )
+        };
+        if result.is_err() {
+            store.0.set_trapped();
         }
+        result?;
 
         if slot.instance.is_some() {
             store.0.exit_guest_sync_call()?;
@@ -288,14 +359,22 @@ impl ResourceAny {
                 if cx.resource_type(t) != self.ty {
                     bail!("mismatched resource types");
                 }
-                let rep = cx.host_resource_lift_own(self.idx)?;
+                let rep = match self.idx {
+                    ResourceAnyIndex::Table(idx) => cx.host_resource_lift_own(idx)?,
+                    ResourceAnyIndex::Borrow(_) => {
+                        bail!("cannot lower a `borrow` resource into an `own`")
+                    }
+                };
                 cx.guest_resource_lower_own(t, rep)
             }
             InterfaceType::Borrow(t) => {
                 if cx.resource_type(t) != self.ty {
                     bail!("mismatched resource types");
                 }
-                let rep = cx.host_resource_lift_borrow(self.idx)?;
+                let rep = match self.idx {
+                    ResourceAnyIndex::Table(idx) => cx.host_resource_lift_borrow(idx)?,
+                    ResourceAnyIndex::Borrow(rep) => rep,
+                };
                 cx.guest_resource_lower_borrow(t, rep)
             }
             _ => bad_type_info(),
@@ -308,21 +387,13 @@ impl ResourceAny {
                 let ty = cx.resource_type(t);
                 let (rep, dtor, flags) = cx.guest_resource_lift_own(t, index)?;
                 let idx = cx.host_resource_lower_own(rep, dtor, flags)?;
-                Ok(ResourceAny {
-                    idx,
-                    ty,
-                    owned: true,
-                })
+                Ok(ResourceAny::new(idx, ty, true))
             }
             InterfaceType::Borrow(t) => {
                 let ty = cx.resource_type(t);
                 let rep = cx.guest_resource_lift_borrow(t, index)?;
                 let idx = cx.host_resource_lower_borrow(rep)?;
-                Ok(ResourceAny {
-                    idx,
-                    ty,
-                    owned: false,
-                })
+                Ok(ResourceAny::new(idx, ty, false))
             }
             _ => bad_type_info(),
         }
