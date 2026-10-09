@@ -1940,11 +1940,11 @@ impl Inst {
                     FPUOp1::Abs => "fabs",
                     FPUOp1::Neg => "fneg",
                     FPUOp1::Sqrt => "fsqrt",
-                    FPUOp1::Cvt32To64 | FPUOp1::Cvt64To32 => "fcvt",
+                    FPUOp1::Cvt16To32 | FPUOp1::Cvt32To64 | FPUOp1::Cvt64To32 => "fcvt",
                 };
                 let dst_size = match fpu_op {
                     FPUOp1::Cvt32To64 => ScalarSize::Size64,
-                    FPUOp1::Cvt64To32 => ScalarSize::Size32,
+                    FPUOp1::Cvt16To32 | FPUOp1::Cvt64To32 => ScalarSize::Size32,
                     _ => size,
                 };
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), dst_size);

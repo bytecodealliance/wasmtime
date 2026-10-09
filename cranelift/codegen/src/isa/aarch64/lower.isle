@@ -1335,7 +1335,6 @@
 (rule 1 (lower (uextend (fits_in_64 _) (icmp _ cond x @ (value_type (ty_int _)) y)))
       (lower_cond_result_bool (emit_icmp cond x y)))
 (rule 2 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type $F16) y)))
-      (if-let true (use_fp16))
       (lower_cond_result_bool (emit_fcmp cond x y)))
 (rule 1 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type $F32) y)))
       (lower_cond_result_bool (emit_fcmp cond x y)))
@@ -2238,7 +2237,6 @@
           (value_reg (float_cmp_zero_swap cond rn vec_size))))
 
 (rule 5 (lower (fcmp _ cond x @ (value_type $F16) y))
-      (if-let true (use_fp16))
       (lower_cond_result_bool (emit_fcmp cond x y)))
 (rule 0 (lower (fcmp _ cond x @ (value_type $F32) y))
   (lower_cond_result_bool (emit_fcmp cond x y)))
