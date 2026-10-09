@@ -2100,3 +2100,82 @@ async fn resource_drop_call_hook_error() -> Result<()> {
 
     Ok(())
 }
+
+/// This is a regression test for
+/// https://github.com/bytecodealliance/wasmtime/issues/14504, in which the host
+/// panicked due to a too-early deletion of a task group.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn task_group_deletion() -> Result<()> {
+    struct Hook;
+
+    impl TaskGroupHook for Hook {
+        fn handle_start(&mut self, _id: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_enter(&mut self, _id: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_exit(&mut self, _id: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_finish(&mut self, _id: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    const WAT: &str = r#"
+(component
+  (core module $m
+    (import "" "task.return" (func $task.return))
+    (import "" "backpressure.inc" (func $backpressure.inc))
+    ;; `bg`: turn on backpressure, return a result, then keep running in the
+    ;; background by yielding; the next callback invocation traps.
+    (func (export "bg") (result i32)
+      (call $backpressure.inc)
+      (call $task.return)
+      (i32.const 1 (; YIELD ;)))
+    (func (export "bg-cb") (param i32 i32 i32) (result i32)
+      (i32.const 0 (; EXIT ;)))
+    ;; `foo`: never gets to run because of the backpressure.
+    (func (export "foo") (result i32)
+      (call $task.return)
+      (i32.const 0 (; EXIT ;)))
+    (func (export "foo-cb") (param i32 i32 i32) (result i32)
+      unreachable)
+  )
+  (core func $task.return (canon task.return))
+  (core func $backpressure.inc (canon backpressure.inc))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "task.return" (func $task.return))
+    (export "backpressure.inc" (func $backpressure.inc))))))
+  (func (export "bg") async
+    (canon lift (core func $i "bg") async (callback (core func $i "bg-cb"))))
+  (func (export "foo") async
+    (canon lift (core func $i "foo") async (callback (core func $i "foo-cb"))))
+)
+"#;
+
+    _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, ());
+    store.task_group_hook(Hook);
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let bg = instance.get_typed_func::<(), ()>(&mut store, "bg")?;
+    let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
+
+    bg.call_async(&mut store, ()).await?;
+    let result = foo.call_async(&mut store, ()).await.unwrap_err();
+
+    assert!(
+        matches!(result.downcast_ref::<Trap>(), Some(Trap::AsyncDeadlock)),
+        "{result:?}"
+    );
+
+    Ok(())
+}
