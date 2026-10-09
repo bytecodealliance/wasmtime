@@ -1,0 +1,35 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; A trapping store must not be removed when execution can diverge before the
+;; later store that overwrites the same location.
+function %trap_before_divergence(i64, i32) {
+    region0 = 0 "R0"
+
+block0(v0: i64, v1: i32):
+    store user1 aligned region0 v1, v0
+    brif v1, block1, block2
+
+block1:
+    jump block1
+
+block2:
+    store user1 aligned region0 v1, v0
+    return
+}
+
+; function %trap_before_divergence(i64, i32) fast {
+;     region0 = 0 "R0"
+;
+; block0(v0: i64, v1: i32):
+;     store user1 aligned region0 v1, v0
+;     brif v1, block1, block2
+;
+; block1:
+;     jump block1
+;
+; block2:
+;     return
+; }
+

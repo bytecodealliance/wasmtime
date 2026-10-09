@@ -1036,6 +1036,24 @@ impl<'a> AliasAnalysis<'a> {
 
                 let observer = func.layout.block_insts(succ).next().unwrap();
 
+                // A backedge can be taken indefinitely without reaching the
+                // overwriting store. Treat the memory state at the loop edge
+                // as observed so DSE cannot turn a trapping store into a hang
+                // (or erase a value visible to another thread in shared
+                // memory) merely because the CFG has an exit elsewhere.
+                if self.domtree.block_dominates(succ, block) {
+                    let max_len = state.regions.keys().len();
+                    for i in 0..max_len {
+                        observe(
+                            func,
+                            &mut observed_stores,
+                            state.regions[AliasRegion::new(i)],
+                            observer,
+                        );
+                    }
+                    observe(func, &mut observed_stores, state.last_fence, observer);
+                }
+
                 let max_len =
                     core::cmp::max(state.regions.keys().len(), succ_input.regions.keys().len());
                 for i in 0..max_len {
