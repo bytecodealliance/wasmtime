@@ -1542,32 +1542,6 @@ impl<T> StoreContextMut<'_, T> {
                     ready,
                     low_priority,
                 } => {
-                    struct Dispose<'a, T: 'static> {
-                        store: StoreContextMut<'a, T>,
-                        ready: Option<WorkItem>,
-                    }
-
-                    impl<'a, T> Drop for Dispose<'a, T> {
-                        fn drop(&mut self) {
-                            if let Some(item) = self.ready.take() {
-                                match item {
-                                    WorkItem::ResumeFiber { mut fiber, .. } => {
-                                        fiber.dispose(self.store.0);
-                                    }
-                                    WorkItem::PushFuture(future) => {
-                                        tls::set(self.store.0, move || drop(future))
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-
-                    let mut dispose = Dispose {
-                        store: self.as_context_mut(),
-                        ready,
-                    };
-
                     // If we're about to run a low-priority task, first yield to
                     // the executor.  This ensures that it won't be starved of
                     // the ability to e.g. update the readiness of sockets,
@@ -1589,23 +1563,50 @@ impl<T> StoreContextMut<'_, T> {
                     // performance issues, this could be optimized such that we
                     // only yield periodically (e.g. for batches of low priority
                     // items) and not for each and every individual item.
-                    if low_priority {
-                        dispose.store.0.yield_now().await;
-                        turns_without_yield = 0;
-                    }
+                    //
+                    // Note that if this future is dropped while yielded (e.g.
+                    // due to a timeout) then the item we popped is pushed back
+                    // onto the end of the low-priority queue it was popped
+                    // from, so it's the next low-priority item to run when a
+                    // later call to `run_concurrent` picks it up, rather than
+                    // being lost.
+                    let ready = if low_priority {
+                        struct Requeue<'a, T: 'static> {
+                            store: StoreContextMut<'a, T>,
+                            item: Option<WorkItem>,
+                        }
 
-                    if let Some(item) = dispose.ready.take() {
-                        dispose
-                            .store
-                            .as_context_mut()
-                            .handle_work_item(item)
-                            .await?;
+                        impl<'a, T> Drop for Requeue<'a, T> {
+                            fn drop(&mut self) {
+                                if let Some(item) = self.item.take() {
+                                    self.store
+                                        .0
+                                        .concurrent_state_mut_already_forced_current_thread()
+                                        .low_priority
+                                        .push_back(item);
+                                }
+                            }
+                        }
+
+                        let mut requeue = Requeue {
+                            store: self.as_context_mut(),
+                            item: ready,
+                        };
+                        requeue.store.0.yield_now().await;
+                        turns_without_yield = 0;
+                        requeue.item.take()
+                    } else {
+                        ready
+                    };
+
+                    if let Some(item) = ready {
+                        self.as_context_mut().handle_work_item(item).await?;
                     }
 
                     turns_without_yield += 1;
                     if turns_without_yield == MAX_TURNS_WITHOUT_YIELD {
                         turns_without_yield = 0;
-                        dispose.store.0.yield_now().await;
+                        self.0.yield_now().await;
                     }
                 }
             }
