@@ -861,3 +861,42 @@ fn waiter_assertion_keeps_fiber_in_set() {
     assert!(result.is_err());
     assert!(state.get_mut(set).unwrap().waiting.contains_key(&q));
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn unpolled_work_item_disposes_fiber() {
+    let mut s = store();
+    let fiber = live(s.as_context_mut().0);
+    drop(s.as_context_mut().handle_work_item(WorkItem::ResumeFiber {
+        instance: instance(),
+        thread: thread(),
+        fiber,
+    }));
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn promotion_panic_keeps_queued_fibers() {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    let mut s = store();
+    let store = s.as_context_mut().0;
+    let a = live(store);
+    let b = live(store);
+    let state = store.concurrent_state_mut().unwrap();
+    state.push_high_priority(WorkItem::ResumeFiber {
+        instance: instance(),
+        thread: thread(),
+        fiber: a,
+    });
+    state.push_low_priority(WorkItem::ResumeFiber {
+        instance: instance(),
+        thread: thread(),
+        fiber: b,
+    });
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        state.promote_work_item_matching(|_| panic!("predicate"))
+    }));
+    assert!(result.is_err());
+    assert_eq!(state.high_priority.len(), 1);
+    assert_eq!(state.low_priority.len(), 1);
+}
