@@ -1327,3 +1327,62 @@ fn const_expr_fuel_is_accounted_without_start(config: &mut Config) -> Result<()>
 
     Ok(())
 }
+
+#[wasmtime_test(strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn epoch_check_preserves_fuel_on_trap(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    config.epoch_interruption(true);
+    let engine = Engine::new(config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (func (export "run")
+            (drop (i32.add (i32.const 1) (i32.const 2)))
+            (loop $l
+              (br $l)
+            )
+          )
+        )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, 0usize);
+    store.set_fuel(1_000)?;
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_callback(|mut store| {
+        let remaining = store.as_context().get_fuel()?;
+        let count = store.data_mut();
+        *count += 1;
+        if *count == 1 {
+            // At function entry, 1 unit of fuel has been consumed and saved.
+            assert_eq!(remaining, 999);
+            // Allow function entry to proceed so the body executes the add and
+            // reaches the loop-header check with `epoch >= deadline`.
+            Ok(UpdateDeadline::Continue(0))
+        } else {
+            // At loop header, 1 (entry) + 3 (const, const, add) = 4 units have
+            // been consumed and saved before calling `new_epoch`.
+            assert_eq!(remaining, 996);
+            Err(Error::from(Trap::Interrupt))
+        }
+    });
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+    engine.increment_epoch();
+    let trap = run.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
+    assert_eq!(trap, Trap::Interrupt);
+
+    // 1 (function entry) + 3 (`i32.const`, `i32.const`, `i32.add`) = 4 fuel
+    // units consumed before the loop header's epoch check traps.
+    let consumed = 1_000 - store.get_fuel()?;
+    assert_eq!(
+        consumed, 4,
+        "fuel consumed before epoch trap was not saved to store: consumed={consumed}"
+    );
+
+    Ok(())
+}
