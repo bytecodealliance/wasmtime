@@ -352,7 +352,8 @@ param        : type [paramext] [paramspecial]
 paramext     : "uext" | "sext"
 paramspecial : "sarg" ( num ) | "sret" | "vmctx" | "stack_limit"
 callconv     : "fast" | "cold" | "system_v" | "windows_fastcall"
-             | "apple_aarch64" | "probestack" | "winch"
+             | "apple_aarch64" | "probestack" | "winch" | "preserve_all"
+             | "tail" | "ghc"
 ```
 
 A function's calling convention determines exactly how arguments and return
@@ -374,11 +375,75 @@ system, a function's calling convention is only fully determined by a
 | cold      |  not-ABI-stable convention for infrequently executed code |
 | system_v  |  System V-style convention used on many platforms |
 | fastcall  |  Windows "fastcall" convention, also used for x64 and ARM |
+| ghc       |  GHC STG register-pinning convention (x86_64, aarch64, riscv64) |
 
 The "not-ABI-stable" conventions do not follow an external specification and
 may change between versions of Cranelift.
 
 The "fastcall" convention is not yet implemented.
+
+### The `ghc` calling convention
+
+The `ghc` convention mirrors LLVM's `ghccc`: arguments are passed only in
+fixed STG (Spineless Tagless G-machine) registers, there are no callee-saved
+registers, return values are not supported, and `return_call` is allowed
+between `ghc` callers and callees. Excess arguments that do not fit in the
+STG register set are a compile-time error (they are not spilled to the stack).
+
+STG integer / floating-point argument registers:
+
+| ISA | Integer (in order) | Floating-point (in order) |
+| --- | --- | --- |
+| x86_64 | `%r13`, `%rbp`, `%r12`, `%rbx`, `%r14`, `%rsi`, `%rdi`, `%r8`, `%r9`, `%r15` | `%xmm1`–`%xmm6` |
+| aarch64 | `x19`–`x28` | `s8`–`s11` (`f32`), `d12`–`d15` (`f64`) |
+| riscv64 | `x9`, `x18`–`x27` | `f8`, `f9`, `f18`–`f21` (`f32`); `f22`–`f27` (`f64`) |
+
+On x86_64 the second integer argument is STG Sp and is pinned to `%rbp`.
+Cranelift `ghc` functions therefore use an FP-less frame. A Cranelift
+`system_v` function cannot place Sp in `%rbp` while using `%rbp` as its own
+frame pointer, so **entry from Rust / SysV must go through a small naked
+assembly trampoline** (not through CLIF `system_v` that `call`s `ghc` with
+Sp). On aarch64 and riscv64, Sp is not the hardware frame pointer, so
+`system_v` → `ghc` calls with a full STG argument list work without asm.
+
+#### x86_64 entry stub (SysV → `ghc`)
+
+Compile the GHC body with `ghc`. Call it from Rust via a naked stub that
+moves SysV argument registers into the STG pins and jumps (typical for
+continuation-style STG code that does not return like C):
+
+```rust
+use std::arch::naked_asm;
+
+// SysV args: rdi=Base, rsi=Sp, rdx=Hp, rcx=R1, r8=R2, r9=R3
+// STG pins:  r13, rbp, r12, rbx, r14, rsi, rdi, r8, r9, r15
+#[unsafe(naked)]
+pub unsafe extern "C" fn enter_ghc(
+    _base: u64,
+    _sp: u64,
+    _hp: u64,
+    _r1: u64,
+    _r2: u64,
+    _r3: u64,
+) -> ! {
+    naked_asm!(
+        "mov r13, rdi",           // Base
+        "mov rbp, rsi",           // Sp (safe here: no frame pointer)
+        "mov r12, rdx",           // Hp
+        "mov rbx, rcx",           // R1
+        "mov r14, r8",            // R2
+        "mov rsi, r9",            // R3
+        // Optional: load R4..SpLim from the SysV stack into rdi, r8, r9, r15.
+        "jmp {target}",
+        target = sym your_ghc_entry, // Cranelift-compiled `ghc` function
+    )
+}
+```
+
+Use `call` instead of `jmp` only if the `ghc` callee is guaranteed to return
+to this stub with a SysV-compatible machine state (uncommon for STG). Exit
+back to Rust through a second, similarly explicit stub or a known
+continuation, not by assuming a normal SysV return through Sp-in-`%rbp`.
 
 Parameters and return values have flags whose meaning is mostly target
 dependent. These flags support interfacing with code produced by other
