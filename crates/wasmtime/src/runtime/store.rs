@@ -2249,7 +2249,13 @@ at https://bytecodealliance.org/security.
         if self.async_state.async_required {
             bail!("store configuration requires that `*_async` functions are used instead");
         }
-        if self.fiber_async_state_mut().can_block() {
+        // We disallow `[Typed]Func::call` from a fiber since it can lead to
+        // e.g. GC or epoch interruption which suspends the fiber, potentially
+        // returning control to the embedder and allowing it to poll a top-level
+        // `call_async` future from another thread, effectively and unsoundly
+        // sending `!Send` data across threads.  In addition, allowing such
+        // recursion risks panicking on stack overflow.
+        if self.can_block() {
             bail!("cannot do blocking `call` from an async context");
         }
         Ok(())
