@@ -4175,27 +4175,59 @@ impl Instance {
             bail!(Trap::CannotResumeThread);
         }
 
-        let state = store.concurrent_state_mut()?;
-        let thread = state.get_mut(guest_thread.thread)?;
         let priority = match how {
-            ResumeThread::Promote | ResumeThread::Resume => Priority::Switch,
+            ResumeThread::Resume => Priority::Switch,
             ResumeThread::ResumeLater => Priority::Low,
+
+            // Promotion is a noop unless the thread is ready, so only search
+            // through pending work items to see if something matches.
+            ResumeThread::Promote => {
+                let instance = self.runtime_instance(runtime_instance);
+                let do_not_enter = store
+                    .instance_state(instance)
+                    .concurrent_state()
+                    .do_not_enter;
+                return store.concurrent_state_mut()?.promote_work_item_matching(
+                    |item: &WorkItem| match item {
+                        WorkItem::ResumeThread { thread, .. }
+                        | WorkItem::ResumeFiber { thread, .. } => *thread == guest_thread,
+
+                        WorkItem::GuestCall {
+                            call: GuestCall { thread, kind },
+                            ..
+                        } => {
+                            *thread == guest_thread
+                                && match kind {
+                                    // Events can only be delivered if this
+                                    // instance's exclusive lock isn't held, so
+                                    // gate on that.
+                                    GuestCallKind::DeliverEvent { .. } => !do_not_enter,
+
+                                    // A not-yet-started thread made ready via
+                                    // `thread.resume-later`.
+                                    GuestCallKind::StartExplicit(_) => true,
+
+                                    // Technically shouldn't be possible since
+                                    // if this hasn't started nothing could get
+                                    // its id...
+                                    GuestCallKind::StartImplicit(_) => false,
+                                }
+                        }
+
+                        WorkItem::PushFuture(_) | WorkItem::WorkerFunction(_) => false,
+                    },
+                );
+            }
         };
 
-        match (&how, &thread.state) {
-            // Promotion is a noop unless the thread is in a ready state.
-            (ResumeThread::Promote, GuestThreadState::Ready { .. }) => {}
-            (ResumeThread::Promote, _) => return Ok(false),
+        let state = store.concurrent_state_mut()?;
+        let thread = state.get_mut(guest_thread.thread)?;
 
-            // When resuming a thread it must be in a suspended state otherwise
-            // this operation is a trap.
-            (
-                ResumeThread::Resume | ResumeThread::ResumeLater,
-                GuestThreadState::NotStartedExplicit(_) | GuestThreadState::Suspended(_),
-            ) => {}
-            (ResumeThread::Resume | ResumeThread::ResumeLater, _) => {
-                bail!(Trap::CannotResumeThread)
-            }
+        // When resuming a thread it must be in a suspended state otherwise
+        // this operation is a trap.
+        match &thread.state {
+            GuestThreadState::NotStartedExplicit(_) | GuestThreadState::Suspended(_) => {}
+            _ => bail!(Trap::CannotResumeThread),
         }
 
         match mem::replace(&mut thread.state, GuestThreadState::Running) {
@@ -4225,17 +4257,9 @@ impl Instance {
                     priority,
                 )?;
             }
-            GuestThreadState::Ready { fiber } => {
-                log::trace!("resuming thread {thread_id:?} that was ready");
-                thread.state = GuestThreadState::Ready { fiber };
-                store
-                    .concurrent_state_mut()?
-                    .promote_thread_work_item(guest_thread)?;
-            }
-            other @ (GuestThreadState::NotStartedImplicit
-            | GuestThreadState::Running
-            | GuestThreadState::Completed) => {
+            other => {
                 thread.state = other;
+                bail_bug!("thread state checked to be resumable above");
             }
         }
         Ok(true)
