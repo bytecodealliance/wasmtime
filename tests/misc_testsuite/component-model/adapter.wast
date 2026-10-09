@@ -94,24 +94,25 @@
   (func $f1 (canon lift (core func $m "")))
   (core func $f2 (canon lower (func $f1)))
 )
+(assert_trap
+  (component
+    (core module $m (func (export "")))
+    (core instance $m (instantiate $m))
 
-(component
-  (core module $m (func (export "")))
-  (core instance $m (instantiate $m))
+    (func $f1 (canon lift (core func $m "")))
+    (core func $f2 (canon lower (func $f1)))
 
-  (func $f1 (canon lift (core func $m "")))
-  (core func $f2 (canon lower (func $f1)))
-
-  (core module $m2
-    (import "" "" (func $f))
-    (func $start
-      call $f)
-    (start $start)
+    (core module $m2
+      (import "" "" (func $f))
+      (func $start
+        call $f)
+      (start $start)
+    )
+    (core instance (instantiate $m2
+      (with "" (instance (export "" (func $f2))))
+    ))
   )
-  (core instance (instantiate $m2
-    (with "" (instance (export "" (func $f2))))
-  ))
-)
+  "cannot enter component instance")
 
 ;; fiddling with 0-sized lists
 (component $c
