@@ -274,3 +274,379 @@ block0(v0: i32, v1: i32):
 ;     v3 = isub v0, v1
 ;     return v3
 ; }
+
+function %band_swapped_selects(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = select v0, v1, v2
+    v4 = select v0, v2, v1
+    v5 = band v3, v4
+    return v5
+}
+
+; function %band_swapped_selects(i8, i32, i32) -> i32 fast {
+; block0(v0: i8, v1: i32, v2: i32):
+;     v6 = band v1, v2
+;     return v6
+; }
+
+function %bor_swapped_selects(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = select v0, v1, v2
+    v4 = select v0, v2, v1
+    v5 = bor v3, v4
+    return v5
+}
+
+; function %bor_swapped_selects(i8, i32, i32) -> i32 fast {
+; block0(v0: i8, v1: i32, v2: i32):
+;     v6 = bor v1, v2
+;     return v6
+; }
+
+function %bxor_swapped_selects(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = select v0, v1, v2
+    v4 = select v0, v2, v1
+    v5 = bxor v3, v4
+    return v5
+}
+
+; function %bxor_swapped_selects(i8, i32, i32) -> i32 fast {
+; block0(v0: i8, v1: i32, v2: i32):
+;     v6 = bxor v1, v2
+;     return v6
+; }
+
+function %band_swapped_selects_shared(i8, i32, i32) -> i32, i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = select v0, v1, v2
+    v4 = select v0, v2, v1
+    v5 = band v3, v4
+    return v5, v3
+}
+
+; function %band_swapped_selects_shared(i8, i32, i32) -> i32, i32 fast {
+; block0(v0: i8, v1: i32, v2: i32):
+;     v6 = band v1, v2
+;     v3 = select v0, v1, v2
+;     return v6, v3
+; }
+
+function %band_selects_different_conditions(i8, i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i8, v2: i32, v3: i32):
+    v4 = select v0, v2, v3
+    v5 = select v1, v3, v2
+    v6 = band v4, v5
+    return v6
+}
+
+; function %band_selects_different_conditions(i8, i8, i32, i32) -> i32 fast {
+; block0(v0: i8, v1: i8, v2: i32, v3: i32):
+;     v4 = select v0, v2, v3
+;     v5 = select v1, v3, v2
+;     v6 = band v4, v5
+;     return v6
+; }
+
+function %select_eq_bxor_zero(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = iconst.i32 0
+    v4 = bxor v0, v1
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; function %select_eq_bxor_zero(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = bxor v0, v1
+;     return v4
+; }
+
+function %select_eq_bxor_zero_commuted(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = iconst.i32 0
+    v4 = bxor v1, v0
+    v5 = select v2, v3, v4
+    return v5
+}
+
+; function %select_eq_bxor_zero_commuted(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = bxor v0, v1
+;     return v6
+; }
+
+function %select_ne_bxor_zero(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ne v0, v1
+    v3 = iconst.i32 0
+    v4 = bxor v0, v1
+    v5 = select v2, v4, v3
+    return v5
+}
+
+; function %select_ne_bxor_zero(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = bxor v0, v1
+;     return v4
+; }
+
+function %select_ne_bxor_zero_commuted(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = icmp ne v0, v1
+    v3 = iconst.i32 0
+    v4 = bxor v1, v0
+    v5 = select v2, v4, v3
+    return v5
+}
+
+; function %select_ne_bxor_zero_commuted(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = bxor v0, v1
+;     return v6
+; }
+
+function %select_zero_count_ishl_eq_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp eq v1, v2
+    v4 = ishl v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_zero_count_ishl_eq_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = ishl v0, v1
+;     return v4
+; }
+
+function %select_zero_count_ishl_ne_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp ne v1, v2
+    v4 = ishl v0, v1
+    v5 = select v3, v4, v0
+    return v5
+}
+
+; function %select_zero_count_ishl_ne_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = ishl v0, v1
+;     return v4
+; }
+
+function %select_zero_count_ushr_eq_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp eq v1, v2
+    v4 = ushr v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_zero_count_ushr_eq_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = ushr v0, v1
+;     return v4
+; }
+
+function %select_zero_count_ushr_ne_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp ne v1, v2
+    v4 = ushr v0, v1
+    v5 = select v3, v4, v0
+    return v5
+}
+
+; function %select_zero_count_ushr_ne_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = ushr v0, v1
+;     return v4
+; }
+
+function %select_zero_count_sshr_eq_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp eq v1, v2
+    v4 = sshr v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_zero_count_sshr_eq_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = sshr v0, v1
+;     return v4
+; }
+
+function %select_zero_count_sshr_ne_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp ne v1, v2
+    v4 = sshr v0, v1
+    v5 = select v3, v4, v0
+    return v5
+}
+
+; function %select_zero_count_sshr_ne_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = sshr v0, v1
+;     return v4
+; }
+
+function %select_zero_count_rotl_eq_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp eq v1, v2
+    v4 = rotl v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_zero_count_rotl_eq_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = rotl v0, v1
+;     return v4
+; }
+
+function %select_zero_count_rotl_ne_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp ne v1, v2
+    v4 = rotl v0, v1
+    v5 = select v3, v4, v0
+    return v5
+}
+
+; function %select_zero_count_rotl_ne_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = rotl v0, v1
+;     return v4
+; }
+
+function %select_zero_count_rotr_eq_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp eq v1, v2
+    v4 = rotr v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_zero_count_rotr_eq_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = rotr v0, v1
+;     return v4
+; }
+
+function %select_zero_count_rotr_ne_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp ne v1, v2
+    v4 = rotr v0, v1
+    v5 = select v3, v4, v0
+    return v5
+}
+
+; function %select_zero_count_rotr_ne_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = rotr v0, v1
+;     return v4
+; }
+
+function %select_zero_count_ishl_eq_i64(i64, i8) -> i64 {
+block0(v0: i64, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp eq v1, v2
+    v4 = ishl v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_zero_count_ishl_eq_i64(i64, i8) -> i64 fast {
+; block0(v0: i64, v1: i8):
+;     v4 = ishl v0, v1
+;     return v4
+; }
+
+function %select_zero_count_ushr_eq_i64(i64, i8) -> i64 {
+block0(v0: i64, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp eq v1, v2
+    v4 = ushr v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_zero_count_ushr_eq_i64(i64, i8) -> i64 fast {
+; block0(v0: i64, v1: i8):
+;     v4 = ushr v0, v1
+;     return v4
+; }
+
+function %select_zero_count_sshr_eq_i64(i64, i8) -> i64 {
+block0(v0: i64, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp eq v1, v2
+    v4 = sshr v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_zero_count_sshr_eq_i64(i64, i8) -> i64 fast {
+; block0(v0: i64, v1: i8):
+;     v4 = sshr v0, v1
+;     return v4
+; }
+
+function %select_zero_count_rotl_eq_i64(i64, i8) -> i64 {
+block0(v0: i64, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp eq v1, v2
+    v4 = rotl v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_zero_count_rotl_eq_i64(i64, i8) -> i64 fast {
+; block0(v0: i64, v1: i8):
+;     v4 = rotl v0, v1
+;     return v4
+; }
+
+function %select_zero_count_rotr_eq_i64(i64, i8) -> i64 {
+block0(v0: i64, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp eq v1, v2
+    v4 = rotr v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_zero_count_rotr_eq_i64(i64, i8) -> i64 fast {
+; block0(v0: i64, v1: i8):
+;     v4 = rotr v0, v1
+;     return v4
+; }
+
+function %select_nonzero_count_ishl(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = icmp eq v1, v2
+    v4 = ishl v0, v1
+    v5 = select v3, v0, v4
+    return v5
+}
+
+; function %select_nonzero_count_ishl(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = iconst.i32 1
+;     v3 = icmp eq v1, v2  ; v2 = 1
+;     v4 = ishl v0, v1
+;     v5 = select v3, v0, v4
+;     return v5
+; }

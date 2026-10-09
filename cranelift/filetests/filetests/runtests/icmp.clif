@@ -380,3 +380,70 @@ block0(v0: i32, v1: i32):
 ; run: %signed_bounds_variable_limit(-1, -1) == 0
 ; run: %signed_bounds_variable_limit(0, 1) == 1
 ; run: %signed_bounds_variable_limit(100, 100) == 0
+
+function %eq_rotr_i32(i32, i32, i32) -> i8 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = rotr v0, v2
+    v4 = rotr v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+; run: %eq_rotr_i32(0, 0, 0) == 1
+; run: %eq_rotr_i32(1, 2, 1) == 0
+; run: %eq_rotr_i32(-1, -1, 1) == 1
+; run: %eq_rotr_i32(-2147483648, 2147483647, 31) == 0
+; run: %eq_rotr_i32(7, 7, 32) == 1
+; run: %eq_rotr_i32(7, 8, 33) == 0
+; run: %eq_rotr_i32(7, 7, -1) == 1
+
+function %eq_rotr_i64(i64, i64, i64) -> i8 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = rotr v0, v2
+    v4 = rotr v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+; run: %eq_rotr_i64(0, 0, 0) == 1
+; run: %eq_rotr_i64(1, 2, 1) == 0
+; run: %eq_rotr_i64(-1, -1, 1) == 1
+; run: %eq_rotr_i64(-9223372036854775808, 9223372036854775807, 63) == 0
+; run: %eq_rotr_i64(7, 7, 64) == 1
+; run: %eq_rotr_i64(7, 8, 65) == 0
+; run: %eq_rotr_i64(7, 7, -1) == 1
+
+function %eq_rotr_i32_i8_count(i32, i32, i8) -> i8 {
+block0(v0: i32, v1: i32, v2: i8):
+    v3 = rotr v0, v2
+    v4 = rotr v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+; run: %eq_rotr_i32_i8_count(0, 0, 0) == 1
+; run: %eq_rotr_i32_i8_count(1, 2, 1) == 0
+; run: %eq_rotr_i32_i8_count(-1, -1, 1) == 1
+; run: %eq_rotr_i32_i8_count(-2147483648, 2147483647, 31) == 0
+; run: %eq_rotr_i32_i8_count(7, 7, 32) == 1
+; run: %eq_rotr_i32_i8_count(7, 8, 33) == 0
+; run: %eq_rotr_i32_i8_count(7, 7, -1) == 1
+
+function %eq_rotr_different_counts(i32, i32, i32, i32) -> i8 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = rotr v0, v2
+    v5 = rotr v1, v3
+    v6 = icmp eq v4, v5
+    return v6
+}
+; run: %eq_rotr_different_counts(1, 2, 0, 1) == 1
+; run: %eq_rotr_different_counts(1, 1, 0, 1) == 0
+; run: %eq_rotr_different_counts(7, 7, 0, 32) == 1
+
+function %eq_rotr_shared(i32, i32, i32) -> i8, i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = rotr v0, v2
+    v4 = rotr v1, v2
+    v5 = icmp eq v3, v4
+    return v5, v3
+}
+; run: %eq_rotr_shared(1, 1, 1) == [1, -2147483648]
+; run: %eq_rotr_shared(1, 2, 1) == [0, -2147483648]
+; run: %eq_rotr_shared(7, 7, 32) == [1, 7]

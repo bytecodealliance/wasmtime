@@ -546,6 +546,10 @@
 (rule (simplify (eq ty (rotl cty x k) (rotl cty y k)))
       (subsume (eq ty x y)))
 
+;; rotr(x, k) == rotr(y, k) --> x == y.
+(rule (simplify (eq ty (rotr cty x k) (rotr cty y k)))
+      (subsume (eq ty x y)))
+
 ;; (x >=s 0) & (x <s N) --> x <u N, 0 < N < 2^(B - 1).
 (rule (simplify (band rty
                      (sge rty x (all_zero ty))

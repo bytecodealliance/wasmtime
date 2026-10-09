@@ -305,3 +305,119 @@ block0(v0: i8, v1: i16):
 ; check: uextend.i32 v0
 ; check: uextend.i32 v1
 ; check: icmp ult v2, v3
+
+function %eq_sextend_i8_i32(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i32 v0
+    v3 = sextend.i32 v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+; check: v5 = icmp eq v0, v1
+; check: return v5
+
+function %slt_sextend_i8_i32(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i32 v0
+    v3 = sextend.i32 v1
+    v4 = icmp slt v2, v3
+    return v4
+}
+; check: v5 = icmp slt v0, v1
+; check: return v5
+
+function %eq_sextend_i16_i64(i16, i16) -> i8 {
+block0(v0: i16, v1: i16):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+; check: v5 = icmp eq v0, v1
+; check: return v5
+
+function %slt_sextend_i16_i64(i16, i16) -> i8 {
+block0(v0: i16, v1: i16):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp slt v2, v3
+    return v4
+}
+; check: v5 = icmp slt v0, v1
+; check: return v5
+
+function %eq_sextend_i32_i64(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+; check: v5 = icmp eq v0, v1
+; check: return v5
+
+function %slt_sextend_i32_i64(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp slt v2, v3
+    return v4
+}
+; check: v5 = icmp slt v0, v1
+; check: return v5
+
+function %eq_sextend_i64_i128(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+; check: v5 = icmp eq v0, v1
+; check: return v5
+
+function %slt_sextend_i64_i128(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = icmp slt v2, v3
+    return v4
+}
+; check: v5 = icmp slt v0, v1
+; check: return v5
+
+function %eq_sextend_different_input_types(i8, i16) -> i8 {
+block0(v0: i8, v1: i16):
+    v2 = sextend.i32 v0
+    v3 = sextend.i32 v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+; check: v2 = sextend.i32 v0
+; check: v3 = sextend.i32 v1
+; check: v4 = icmp eq v2, v3
+; check: return v4
+
+function %slt_sextend_different_input_types(i8, i16) -> i8 {
+block0(v0: i8, v1: i16):
+    v2 = sextend.i32 v0
+    v3 = sextend.i32 v1
+    v4 = icmp slt v2, v3
+    return v4
+}
+; check: v2 = sextend.i32 v0
+; check: v3 = sextend.i32 v1
+; check: v4 = icmp slt v2, v3
+; check: return v4
+
+function %eq_mixed_sign_and_zero_extend(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i32 v0
+    v3 = uextend.i32 v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+; check: v2 = sextend.i32 v0
+; check: v3 = uextend.i32 v1
+; check: v4 = icmp eq v2, v3
+; check: return v4
