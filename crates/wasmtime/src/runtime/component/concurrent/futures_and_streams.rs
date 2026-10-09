@@ -4389,6 +4389,9 @@ impl Instance {
 
         let lower_cx = &mut LowerContext::new(store, options, self);
         let debug_msg_address = usize::try_from(debug_msg_address)?;
+        if debug_msg_address % usize::try_from(<str as ComponentType>::ALIGN32)? != 0 {
+            bail!("invalid debug message pointer: not aligned");
+        }
         // Lower the string into the component's memory.
         //
         // Note that the "8" here is the size of a WIT `string` in linear
