@@ -13,6 +13,8 @@ use wasmtime_core::error::OutOfMemory;
 pub(super) struct NodePool<F: Forest> {
     nodes: PrimaryMap<Node, NodeData<F>>,
     freelist: Option<Node>,
+    /// Invariant: This tracks the length of the `freelist`.
+    freelist_count: usize,
 }
 
 impl<F: Forest> NodePool<F> {
@@ -21,6 +23,7 @@ impl<F: Forest> NodePool<F> {
         Self {
             nodes: PrimaryMap::new(),
             freelist: None,
+            freelist_count: 0,
         }
     }
 
@@ -28,6 +31,7 @@ impl<F: Forest> NodePool<F> {
     pub fn clear(&mut self) {
         self.nodes.clear();
         self.freelist = None;
+        self.freelist_count = 0;
     }
 
     /// Allocate a new node containing `data`.
@@ -37,7 +41,10 @@ impl<F: Forest> NodePool<F> {
             Some(node) => {
                 // Remove this node from the free list.
                 match self.nodes[node] {
-                    NodeData::Free { next } => self.freelist = next,
+                    NodeData::Free { next } => {
+                        self.freelist = next;
+                        self.freelist_count -= 1;
+                    }
                     _ => panic!("Invalid {node} on free list"),
                 }
                 self.nodes[node] = data;
@@ -51,6 +58,25 @@ impl<F: Forest> NodePool<F> {
         }
     }
 
+    /// Reserve at least `count` nodes. This guarantees that the next `count`
+    /// calls to `alloc_node` will succeed.
+    pub fn reserve(&mut self, count: usize) -> Result<(), OutOfMemory> {
+        if count > self.freelist_count {
+            self.nodes.try_reserve(count - self.freelist_count)?;
+            let mut freelist_head = self.freelist;
+            for _ in 0..count - self.freelist_count {
+                freelist_head = Some(self.nodes.push(NodeData::Free {
+                    next: freelist_head,
+                }));
+            }
+            // We inserted exactly enough nodes for the freelist to have size
+            // `count`.
+            self.freelist = freelist_head;
+            self.freelist_count = count;
+        }
+        Ok(())
+    }
+
     /// Free a node.
     pub fn free_node(&mut self, node: Node) {
         // Quick check for a double free.
@@ -59,6 +85,7 @@ impl<F: Forest> NodePool<F> {
             next: self.freelist,
         };
         self.freelist = Some(node);
+        self.freelist_count += 1;
     }
 
     /// Free the entire tree rooted at `node`.
