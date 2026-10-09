@@ -1959,7 +1959,6 @@ impl StoreOpaque {
         } else {
             Caller::Host {
                 tx: None,
-                host_future_present: false,
                 caller: self.materialize_host_task_id()?,
             }
         };
@@ -2040,7 +2039,10 @@ impl StoreOpaque {
             self.switch_or_trap_if_may_not_suspend(instance)?;
         }
 
-        self.cleanup_thread(thread, instance, CleanupTask::Yes)?;
+        self.cleanup_thread(thread, instance)?;
+
+        self.concurrent_state_mut()?
+            .decrement_task_ref_count(thread.task)?;
 
         let state = self.concurrent_state_mut()?;
         let Some(item) = state.saved_next_switch_items.pop() else {
@@ -2105,7 +2107,7 @@ impl StoreOpaque {
                     "delete host task with caller {original_task:?} and materialized as {materialized_task:?}"
                 );
                 if let Some(task) = materialized_task {
-                    Waitable::Host(task).delete_from(self)?;
+                    self.concurrent_state_mut()?.delete_host_task(task)?;
                 }
             }
             None => {
@@ -2491,7 +2493,6 @@ impl StoreOpaque {
         &mut self,
         guest_thread: QualifiedThreadId,
         runtime_instance: RuntimeInstance,
-        cleanup_task: CleanupTask,
     ) -> Result<()> {
         let state = self.concurrent_state_mut()?;
         // If we never suspended, we never had a chance to deliver a subtask
@@ -2510,13 +2511,12 @@ impl StoreOpaque {
         for waitable in mem::take(&mut state.get_mut(sync_call_set)?.ready) {
             if let Some(Event::Subtask {
                 status: Status::Returned | Status::ReturnCancelled,
-            }) = waitable.common(self.concurrent_state_mut()?)?.event
+            }) = waitable.common(state)?.event
             {
-                waitable.delete_from(self)?;
+                waitable.delete_from(state)?;
             }
         }
 
-        let state = self.concurrent_state_mut()?;
         state.delete(guest_thread.thread)?;
         state.delete(sync_call_set)?;
         let task = state.get_mut(guest_thread.task)?;
@@ -2525,7 +2525,6 @@ impl StoreOpaque {
         if task.threads.is_empty() && !task.returned_or_cancelled() {
             bail!(Trap::NoAsyncResult);
         }
-        let ready_to_delete = task.ready_to_delete();
 
         if !task.decremented_interesting_task_count && task.exited && task.returned_or_cancelled() {
             task.decremented_interesting_task_count = true;
@@ -2539,14 +2538,7 @@ impl StoreOpaque {
             }
         }
 
-        match cleanup_task {
-            CleanupTask::Yes => {
-                if ready_to_delete {
-                    Waitable::Guest(guest_thread.task).delete_from(self)?;
-                }
-            }
-            CleanupTask::No => {}
-        }
+        state.decrement_task_ref_count(guest_thread.task)?;
 
         Ok(())
     }
@@ -2589,7 +2581,6 @@ impl StoreOpaque {
                 thread,
             },
             caller_instance,
-            CleanupTask::No,
         )?;
 
         // Not yet started; cancel and remove from pending
@@ -2665,11 +2656,6 @@ impl StoreOpaque {
                     .do_not_suspend
             }))
     }
-}
-
-enum CleanupTask {
-    Yes,
-    No,
 }
 
 impl Instance {
@@ -2772,7 +2758,7 @@ impl Instance {
                 // exiting this thread:
                 store.switch_or_trap_if_may_not_suspend(runtime_instance)?;
 
-                store.cleanup_thread(guest_thread, runtime_instance, CleanupTask::Yes)?;
+                store.cleanup_thread(guest_thread, runtime_instance)?;
             }
             callback_code::YIELD => {
                 // Set `GuestTask::wake_on_cancel` to allow `subtask.cancel` to
@@ -3133,7 +3119,7 @@ impl Instance {
                 }
 
                 // This is a callback-less call, so the implicit thread has now completed
-                store.cleanup_thread(guest_thread, callee_instance, CleanupTask::Yes)?;
+                store.cleanup_thread(guest_thread, callee_instance)?;
                 Ok(())
             })
         };
@@ -3565,11 +3551,9 @@ impl Instance {
 
         // Reset the current thread to point to the caller as it resumes control.
         store.0.set_thread(caller)?;
-        store
-            .0
-            .concurrent_state_mut()?
-            .get_mut(caller.thread)?
-            .state = GuestThreadState::Running;
+
+        let state = store.0.concurrent_state_mut()?;
+        state.get_mut(caller.thread)?.state = GuestThreadState::Running;
         log::trace!("popped current thread {guest_thread:?}; new thread is {caller:?}");
 
         if async_caller {
@@ -3582,15 +3566,16 @@ impl Instance {
             // if any, has been stashed in `GuestTask::sync_result`.
             let state = store.0.concurrent_state_mut()?;
             let task = state.get_mut(guest_thread.task)?;
-            if let Some(result) = task.sync_result.take()? {
-                if let Some(result) = result {
-                    storage[0] = MaybeUninit::new(result);
-                }
-
-                if task.exited && task.ready_to_delete() {
-                    Waitable::Guest(guest_thread.task).delete_from(store.0)?;
-                }
+            if let Some(Some(result)) = task.sync_result.take()? {
+                storage[0] = MaybeUninit::new(result);
             }
+        }
+
+        if status == Status::Returned {
+            store
+                .0
+                .concurrent_state_mut()?
+                .decrement_task_ref_count(guest_thread.task)?;
         }
 
         Ok(())
@@ -3971,7 +3956,7 @@ impl Instance {
             .subtask_remove(task_id)?;
 
         let concurrent_state = store.concurrent_state_mut()?;
-        let (waitable, delete) = if is_host {
+        let waitable = if is_host {
             let id = TableId::<HostTask>::new(rep);
             let task = concurrent_state.get_mut(id)?;
             match &task.state {
@@ -3984,17 +3969,14 @@ impl Instance {
                 }
             }
 
-            (Waitable::Host(id), true)
+            Waitable::Host(id)
         } else {
             let id = TableId::<GuestTask>::new(rep);
             let task = concurrent_state.get_mut(id)?;
             if task.lift_result.is_some() {
                 bail!(Trap::SubtaskDropNotResolved);
             }
-            (
-                Waitable::Guest(id),
-                concurrent_state.get_mut(id)?.ready_to_delete(),
-            )
+            Waitable::Guest(id)
         };
 
         waitable.common(concurrent_state)?.handle = None;
@@ -4005,9 +3987,7 @@ impl Instance {
             bail!(Trap::SubtaskDropNotResolved);
         }
 
-        if delete {
-            waitable.delete_from(store)?;
-        }
+        waitable.delete_from(concurrent_state)?;
 
         log::trace!("subtask_drop {waitable:?} (handle {task_id})");
         Ok(())
@@ -4131,9 +4111,7 @@ impl Instance {
                     .0
                     .switch_or_trap_if_may_not_suspend(runtime_instance)?;
 
-                store
-                    .0
-                    .cleanup_thread(guest_thread, runtime_instance, CleanupTask::Yes)?;
+                store.0.cleanup_thread(guest_thread, runtime_instance)?;
 
                 log::trace!("explicit thread {guest_thread:?} completed");
                 let state = store.0.concurrent_state_mut()?;
@@ -5163,9 +5141,6 @@ enum Caller {
     Host {
         /// If present, may be used to deliver the result.
         tx: Option<oneshot::Sender<LiftedResult>>,
-        /// If true, there's a host future that must be dropped before the task
-        /// can be deleted.
-        host_future_present: bool,
         /// The host task which called into the guest, or `None` for a call from
         /// the top-level host. The task may belong to an entirely unrelated
         /// top-level component instance than the one the host called into.
@@ -5325,6 +5300,7 @@ impl GuestThread {
             dyn FnOnce(&mut dyn VMStore, QualifiedThreadId) -> Result<()> + Send + Sync,
         >,
     ) -> Result<Self> {
+        state.increment_task_ref_count(parent_task)?;
         let sync_call_set = state.push(WaitableSet {
             is_sync_call_set: true,
             ..WaitableSet::default()
@@ -5363,13 +5339,6 @@ impl SyncResult {
             }
         })
     }
-}
-
-#[derive(Debug)]
-enum HostFutureState {
-    NotApplicable,
-    Live,
-    Dropped,
 }
 
 /// Represents a pending guest task.
@@ -5416,9 +5385,6 @@ pub(crate) struct GuestTask {
     exited: bool,
     /// Threads belonging to this task
     threads: HashSet<TableId<GuestThread>>,
-    /// The state of the host future that represents an async task, which must
-    /// be dropped before we can delete the task.
-    host_future_state: HostFutureState,
     /// Indicates whether this task was created for a call to an async-typed
     /// export.
     async_typed: bool,
@@ -5429,6 +5395,8 @@ pub(crate) struct GuestTask {
     decremented_interesting_task_count: bool,
 
     group: TaskGroupId,
+
+    ref_count: usize,
 }
 
 impl GuestTask {
@@ -5442,29 +5410,6 @@ impl GuestTask {
         self.lift_result.is_none()
     }
 
-    fn ready_to_delete(&self) -> bool {
-        let threads_completed = self.threads.is_empty();
-        let has_sync_result = matches!(self.sync_result, SyncResult::Produced(_));
-        let pending_completion_event = matches!(
-            self.common.event,
-            Some(Event::Subtask {
-                status: Status::Returned | Status::ReturnCancelled
-            })
-        );
-        let ready = threads_completed
-            && !has_sync_result
-            && !pending_completion_event
-            && !matches!(self.host_future_state, HostFutureState::Live);
-        log::trace!(
-            "ready to delete? {ready} (threads_completed: {}, has_sync_result: {}, pending_completion_event: {}, host_future_state: {:?})",
-            threads_completed,
-            has_sync_result,
-            pending_completion_event,
-            self.host_future_state
-        );
-        ready
-    }
-
     fn new(
         state: &mut ConcurrentState,
         lower_params: RawLower,
@@ -5475,20 +5420,6 @@ impl GuestTask {
         async_typed: bool,
         async_lifted: bool,
     ) -> Result<QualifiedThreadId> {
-        let host_future_state = match &caller {
-            Caller::Guest { .. } => HostFutureState::NotApplicable,
-            Caller::Host {
-                host_future_present,
-                ..
-            } => {
-                if *host_future_present {
-                    HostFutureState::Live
-                } else {
-                    HostFutureState::NotApplicable
-                }
-            }
-        };
-
         let group = match caller {
             Caller::Guest { thread } => {
                 let group = state.get_mut(thread.task)?.group;
@@ -5513,11 +5444,13 @@ impl GuestTask {
             event: None,
             exited: false,
             threads: HashSet::new(),
-            host_future_state,
             async_typed,
             async_lifted,
             decremented_interesting_task_count: false,
             group,
+            // One for the caller and one for the implicit guest thread we're
+            // about to create:
+            ref_count: 2,
         })?;
         let new_thread = GuestThread::new_implicit(state, task)?;
         let thread = state.push(new_thread)?;
@@ -5699,37 +5632,14 @@ impl Waitable {
         Ok(())
     }
 
-    /// Remove this waitable from the store's rep table.
-    fn delete_from(&self, store: &mut StoreOpaque) -> Result<()> {
+    /// Remove this waitable from the store's rep table (or decrement the ref
+    /// count if it's a guest task).
+    fn delete_from(&self, state: &mut ConcurrentState) -> Result<()> {
         match self {
-            Self::Host(task) => {
-                log::trace!("delete host task {task:?}");
-                let state = store.concurrent_state_mut()?;
-                let task = state.delete(*task)?;
-
-                state.decrement_group_ref_count(task.group)?;
-            }
-            Self::Guest(task) => {
-                log::trace!("delete guest task {task:?}");
-                let state = store.concurrent_state_mut()?;
-                let task = state.delete(*task)?;
-
-                state.decrement_group_ref_count(task.group)?;
-
-                // When a guest task is created it increments the
-                // `ConcurrentState::interesting_tasks` counter, and that needs
-                // to be paired with a decrement. There are a few situations in
-                // which the decrement needs to happen which don't all funnel
-                // through here, so in lieu of that at least try to catch issues
-                // where we forgot to do a decrement.
-                debug_assert!(task.decremented_interesting_task_count);
-            }
-            Self::Transmit(task) => {
-                store.concurrent_state_mut()?.delete(*task)?;
-            }
+            Self::Host(task) => state.delete_host_task(*task),
+            Self::Guest(task) => state.decrement_task_ref_count(*task),
+            Self::Transmit(task) => Ok(state.delete(*task).map(drop)?),
         }
-
-        Ok(())
     }
 }
 
@@ -6417,6 +6327,48 @@ impl ConcurrentState {
             _ => bail_bug!("current scope is not a deferred host scope"),
         }
     }
+
+    fn increment_task_ref_count(&mut self, task: TableId<GuestTask>) -> Result<()> {
+        let count = &mut self.get_mut(task)?.ref_count;
+        *count += 1;
+        log::trace!("increment {task:?} to {count}");
+        Ok(())
+    }
+
+    fn decrement_task_ref_count(&mut self, task: TableId<GuestTask>) -> Result<()> {
+        let count = &mut self.get_mut(task)?.ref_count;
+        ensure!(*count >= 1);
+        *count -= 1;
+        log::trace!("decrement {task:?} to {count}");
+        if *count == 0 {
+            self.delete_guest_task(task)?;
+        }
+        Ok(())
+    }
+
+    fn delete_host_task(&mut self, task: TableId<HostTask>) -> Result<()> {
+        log::trace!("delete host task {task:?}");
+        let task = self.delete(task)?;
+
+        self.decrement_group_ref_count(task.group)
+    }
+
+    fn delete_guest_task(&mut self, task: TableId<GuestTask>) -> Result<()> {
+        log::trace!("delete guest task {task:?}");
+        let task = self.delete(task)?;
+
+        self.decrement_group_ref_count(task.group)?;
+
+        // When a guest task is created it increments the
+        // `ConcurrentState::interesting_tasks` counter, and that needs
+        // to be paired with a decrement. There are a few situations in
+        // which the decrement needs to happen which don't all funnel
+        // through here, so in lieu of that at least try to catch issues
+        // where we forgot to do a decrement.
+        debug_assert!(task.decremented_interesting_task_count);
+
+        Ok(())
+    }
 }
 
 /// Provide a type hint to compiler about the shape of a parameter lower
@@ -6494,12 +6446,21 @@ pub(crate) struct PreparedCall<R> {
 }
 
 impl<R> PreparedCall<R> {
-    /// Get a copy of the `TaskId` for this `PreparedCall`.
-    pub(crate) fn task_id(&self) -> TaskId {
-        TaskId {
+    /// Acquire a reference to the `TaskId` for this `PreparedCall`.
+    ///
+    /// Note that this increments the reference count for the task, and
+    /// `TaskId::host_future_dropped` decrements it.  Hence,
+    /// `TaskId::host_future_dropped` _must_ be called before the `TaskId` is
+    /// dropped to avoid leaking the task.
+    pub(crate) fn acquire_task_id(&self, store: &mut StoreOpaque) -> Result<TaskId> {
+        store
+            .concurrent_state_mut()?
+            .increment_task_ref_count(self.thread.task)?;
+
+        Ok(TaskId {
             task: self.thread.task,
             runtime_instance: self.runtime_instance,
-        }
+        })
     }
 }
 
@@ -6510,26 +6471,26 @@ pub(crate) struct TaskId {
 }
 
 impl TaskId {
-    /// The host future for an async task was dropped. If the parameters have not been lowered yet,
-    /// it is no longer valid to do so, as the lowering closure would see a dangling pointer. In this case,
-    /// we delete the task eagerly. Otherwise, there may be running threads, or ones that are suspended
-    /// and can be resumed by other tasks for this component, so we mark the future as dropped
-    /// and delete the task when all threads are done.
+    /// The host future for an async task was dropped. If the parameters have
+    /// not been lowered yet, it is no longer valid to do so, as the lowering
+    /// closure would see a dangling pointer. In this case, we clear
+    /// `GuestTask::lower_params` and cancel the task to ensure that doesn't
+    /// happen. If the parameters _have_ already been lowered, then the closure
+    /// is no longer reachable, in which case we only need to decrement the task
+    /// refcount.
     pub(crate) fn host_future_dropped(&self, store: &mut StoreOpaque) -> Result<()> {
         let task = store.concurrent_state_mut()?.get_mut(self.task)?;
-        let delete = if !task.already_lowered_parameters() {
+        if !task.already_lowered_parameters() {
             store.cancel_guest_subtask_without_lowered_parameters(
                 self.runtime_instance,
                 self.task,
             )?;
-            true
-        } else {
-            task.host_future_state = HostFutureState::Dropped;
-            task.ready_to_delete()
-        };
-        if delete {
-            Waitable::Guest(self.task).delete_from(store)?
         }
+
+        store
+            .concurrent_state_mut()?
+            .decrement_task_ref_count(self.task)?;
+
         Ok(())
     }
 }
@@ -6543,7 +6504,6 @@ pub(crate) fn prepare_call<T, R>(
     mut store: StoreContextMut<T>,
     handle: Func,
     param_count: usize,
-    host_future_present: bool,
     lower_params: impl FnOnce(StoreContextMut<T>, &mut [MaybeUninit<ValRaw>]) -> Result<()>
     + Send
     + Sync
@@ -6594,7 +6554,6 @@ pub(crate) fn prepare_call<T, R>(
         },
         Caller::Host {
             tx: Some(tx),
-            host_future_present,
             caller,
         },
         callback.map(|callback| {
@@ -6626,6 +6585,7 @@ pub(crate) struct StagedCall<R> {
     store: StoreId,
     rx: oneshot::Receiver<LiftedResult>,
     _marker: PhantomData<fn() -> R>,
+    task: TableId<GuestTask>,
     group: TaskGroupId,
 }
 
@@ -6654,8 +6614,20 @@ impl<R> StagedCall<R> {
             store: store.0.id(),
             rx,
             _marker: PhantomData,
+            task: thread.task,
             group: store.0.concurrent_state_mut()?.get_mut(thread.task)?.group,
         })
+    }
+
+    pub(crate) fn dispose(self: Pin<&mut Self>, store: &mut StoreOpaque) -> Result<()> {
+        if store.id() != self.store {
+            bail!("call disposed using wrong store");
+        }
+
+        store
+            .concurrent_state_mut()
+            .unwrap()
+            .decrement_task_ref_count(self.task)
     }
 }
 

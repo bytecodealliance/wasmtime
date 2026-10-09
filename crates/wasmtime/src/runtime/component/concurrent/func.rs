@@ -6,6 +6,7 @@ use crate::runtime::vm::SendSyncPtr;
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use core::marker;
 use core::mem::MaybeUninit;
+use core::pin::pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 
@@ -126,6 +127,11 @@ impl Func {
     /// which can be passed to [`Func::finish_call_concurrent`] to resolve
     /// the call.
     ///
+    /// Note that the returned [`FuncCallConcurrent`] must either be passed to
+    /// [`Func::finish_call_concurrent`] or [`Func::dispose_call_concurrent`]
+    /// before it is dropped; otherwise, the underlying guest task will be
+    /// leaked inside the store until the store is dropped.
+    ///
     /// For more information see [`Func::call_concurrent`].
     pub fn start_call_concurrent<'a, T: Send + 'static>(
         self,
@@ -158,18 +164,31 @@ impl Func {
         })
     }
 
+    /// Dispose of a call that was initiated via [`Func::start_call_concurrent`]
+    /// without waiting for the result.
+    ///
+    /// Note that this will not cancel the guest task; it will only release the
+    /// reference to ensure that it doesn't leak.
+    pub fn dispose_call_concurrent<T: 'static>(
+        mut store: impl AsContextMut<Data = T>,
+        call: FuncCallConcurrent<'_, T>,
+    ) -> Result<()> {
+        pin!(call.call).as_mut().dispose(store.as_context_mut().0)
+    }
+
     /// Completes a call that was initiated via
     /// [`Func::start_call_concurrent`].
-    pub async fn finish_call_concurrent<T: Send>(
+    pub async fn finish_call_concurrent<T: Send + 'static>(
         self,
         accessor: impl AsAccessor<Data = T>,
         call: FuncCallConcurrent<'_, T>,
     ) -> Result<()> {
-        // Intentionally not used today, but left here for future API
-        // compatibility with using this.
-        let _ = accessor;
         let FuncCallConcurrent { call, results, .. } = call;
-        let run_results = call.await?;
+        let mut call = pin!(call);
+        let run_results = call.as_mut().await?;
+        accessor
+            .as_accessor()
+            .with(|mut access| call.dispose(access.as_context_mut().0))?;
         assert_eq!(run_results.len(), results.len());
         for (result, slot) in run_results.into_iter().zip(results) {
             *slot = result;
@@ -193,7 +212,6 @@ impl Func {
             store,
             self,
             MAX_FLAT_PARAMS,
-            false,
             move |store, params_out| {
                 Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
@@ -236,7 +254,7 @@ where
     {
         let mut store = store.as_context_mut();
         let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
-        let prepared = self.prepare_call(store.as_context_mut(), true, move |cx, ty, dst| {
+        let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
             // SAFETY: The goal here is to get `Params`, a non-`'static`
             // value, to live long enough to the lowering of the
             // parameters. We're guaranteed that `Params` lives in the
@@ -270,16 +288,20 @@ where
             }
         }
 
-        let mut wrapper = SignalOnDrop {
-            store,
-            task: prepared.task_id(),
-        };
+        let task = prepared.acquire_task_id(store.0)?;
+
+        let mut wrapper = SignalOnDrop { store, task };
 
         let result = concurrent::StagedCall::new(wrapper.store.as_context_mut(), prepared)?;
         wrapper
             .store
             .as_context_mut()
-            .run_concurrent_trap_on_idle(async |_| Ok(result.await?))
+            .run_concurrent_trap_on_idle(async |accessor| {
+                let mut call = pin!(result);
+                let result = call.as_mut().await?;
+                accessor.with(|mut access| call.dispose(access.as_context_mut().0))?;
+                Ok(result)
+            })
             .await?
     }
 
@@ -364,6 +386,12 @@ where
     /// which can be passed to [`TypedFunc::finish_call_concurrent`] to resolve
     /// the call.
     ///
+    /// Note that the returned [`TypedFuncCallConcurrent`] must either be passed
+    /// to [`TypedFunc::finish_call_concurrent`] or
+    /// [`TypedFunc::dispose_call_concurrent`] before it is dropped; otherwise,
+    /// the underlying guest task will be leaked inside the store until the
+    /// store is dropped.
+    ///
     /// For more information see [`TypedFunc::call_concurrent`].
     pub fn start_call_concurrent<T>(
         self,
@@ -382,7 +410,7 @@ where
             "cannot use `call_concurrent` Config::concurrency_support disabled",
         );
 
-        let prepared = self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
+        let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
             Self::lower_args(cx, ty, dst, &params)
         })?;
         let call = concurrent::StagedCall::new(store, prepared)?;
@@ -390,6 +418,18 @@ where
             call,
             _marker: marker::PhantomData,
         })
+    }
+
+    /// Dispose of a call that was initiated via [`Func::start_call_concurrent`]
+    /// without waiting for the result.
+    ///
+    /// Note that this will not cancel the guest task; it will only release the
+    /// reference to ensure that it doesn't leak.
+    pub fn dispose_call_concurrent<T: 'static>(
+        mut store: impl AsContextMut<Data = T>,
+        call: TypedFuncCallConcurrent<T, Params, Return>,
+    ) -> Result<()> {
+        pin!(call.call).as_mut().dispose(store.as_context_mut().0)
     }
 
     /// Completes a call that was initiated via
@@ -404,10 +444,12 @@ where
         Params: 'static,
         Return: 'static,
     {
-        // This is intentionally part of the public API but not used yet.
-        // This'll likely want to be used in future refactorings.
-        let _ = accessor;
-        call.call.await
+        let mut call = pin!(call.call);
+        let result = call.as_mut().await?;
+        accessor
+            .as_accessor()
+            .with(|mut access| call.dispose(access.as_context_mut().0))?;
+        Ok(result)
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
@@ -417,7 +459,6 @@ where
     fn prepare_call<T>(
         self,
         store: StoreContextMut<'_, T>,
-        host_future_present: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
             InterfaceType,
@@ -450,7 +491,6 @@ where
             store,
             *self.func(),
             param_count,
-            host_future_present,
             move |store, params_out| {
                 Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
                     lower(cx, ty, params_out)

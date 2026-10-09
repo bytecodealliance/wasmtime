@@ -2100,3 +2100,74 @@ async fn resource_drop_call_hook_error() -> Result<()> {
 
     Ok(())
 }
+
+const THUNK_COMPONENT: &str = r#"
+    (component
+        (core module $m
+            (func (export "thunk"))
+        )
+        (core instance $i (instantiate $m))
+        (func (export "thunk") async
+            (canon lift (core func $i "thunk"))
+        )
+    )
+"#;
+
+/// Dropping the result of `start_call_concurrent` outside of the store's event
+/// loop should not panic.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_start_call_concurrent_outside_event_loop() -> Result<()> {
+    let engine = super::async_engine();
+    let component = Component::new(&engine, THUNK_COMPONENT)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
+
+    let call = thunk.start_call_concurrent(&mut store, ())?;
+    drop(call);
+
+    Ok(())
+}
+
+/// An error returned from `TaskGroupHook::handle_finish` for a
+/// `call_concurrent` should not panic.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn task_group_hook_finish_error_call_concurrent() -> Result<()> {
+    _ = env_logger::try_init();
+    struct FailFinish;
+
+    impl TaskGroupHook for FailFinish {
+        fn handle_start(&mut self, _: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_enter(&mut self, _: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_exit(&mut self, _: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_finish(&mut self, _: TaskGroupId) -> Result<()> {
+            wasmtime::bail!("handle_finish failed")
+        }
+    }
+
+    let engine = super::async_engine();
+    let component = Component::new(&engine, THUNK_COMPONENT)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
+    store.task_group_hook(FailFinish);
+
+    let result = store
+        .run_concurrent(async |store| thunk.call_concurrent(store, ()).await)
+        .await;
+    assert!(result.is_err() || result.unwrap().is_err());
+
+    Ok(())
+}
