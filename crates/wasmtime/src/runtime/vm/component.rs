@@ -42,7 +42,7 @@ mod handle_table;
 mod libcalls;
 mod resources;
 
-pub use self::handle_table::{HandleTable, RemovedResource};
+pub use self::handle_table::{HandleCounter, HandleTable, RemovedResource};
 #[cfg(feature = "component-model-async")]
 pub use self::handle_table::{ThreadHandleTable, TransmitLocalState, Waitable};
 pub use self::resources::{
@@ -50,7 +50,6 @@ pub use self::resources::{
 };
 
 /// Represents the state of a (sub-)component instance.
-#[derive(Default)]
 pub struct InstanceState {
     /// Represents the Component Model Async state of a (sub-)component instance.
     #[cfg(feature = "component-model-async")]
@@ -71,6 +70,17 @@ pub struct InstanceState {
 }
 
 impl InstanceState {
+    /// Creates instance state whose handle tables are charged to `counter`.
+    fn new(counter: &Arc<HandleCounter>) -> InstanceState {
+        InstanceState {
+            #[cfg(feature = "component-model-async")]
+            concurrent_state: ConcurrentInstanceState::default(),
+            handle_table: HandleTable::new(counter.clone()),
+            #[cfg(feature = "component-model-async")]
+            thread_handle_table: ThreadHandleTable::new(counter.clone()),
+        }
+    }
+
     /// Represents the Component Model Async state of a (sub-)component instance.
     #[cfg(feature = "component-model-async")]
     pub fn concurrent_state(&mut self) -> &mut ConcurrentInstanceState {
@@ -323,13 +333,14 @@ impl ComponentInstance {
         component: &Component,
         resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
         imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
+        handle_counter: &Arc<HandleCounter>,
         store: NonNull<dyn VMStore>,
     ) -> Result<OwnedComponentInstance, OutOfMemory> {
         let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
         let num_instances = component.env_component().num_runtime_component_instances;
         let mut instance_states = TryPrimaryMap::with_capacity(num_instances.try_into().unwrap())?;
         for _ in 0..num_instances {
-            instance_states.push(InstanceState::default())?;
+            instance_states.push(InstanceState::new(handle_counter))?;
         }
 
         let instances = TryPrimaryMap::with_capacity(
