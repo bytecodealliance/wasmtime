@@ -16,7 +16,7 @@ use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::error::{Result, bail};
 use wasmtime_environ::{
     Abi, BuiltinFunctionIndex, CompiledFunctionBody, EntityRef, FuncKey, GetPtrSize, HostCall,
-    PanicOnOom as _, Trap, TrapSentinel, Tunables, WasmFuncType, WasmValType, component::*,
+    PanicOnOom as _, TrapSentinel, Tunables, WasmFuncType, WasmValType, component::*,
     fact::PREPARE_CALL_FIXED_PARAMS,
 };
 
@@ -1819,23 +1819,6 @@ impl TrampolineCompiler<'_> {
             Transcode::Utf8ToUtf16 => host::utf8_to_utf16,
         };
 
-        // The adapter already checked both buffers. The host turns them into
-        // raw slices, so check again in case the adapter has a bug.
-        // Code unit sizes (log2 of bytes) of the source and destination.
-        let (src_unit_log2, dst_unit_log2) = match op {
-            Transcode::Copy(FixedEncoding::Utf8 | FixedEncoding::Latin1)
-            | Transcode::Latin1ToUtf8
-            | Transcode::Utf8ToLatin1 => (0, 0),
-            Transcode::Copy(FixedEncoding::Utf16)
-            | Transcode::Utf16ToCompactProbablyUtf16
-            | Transcode::Utf16ToCompactUtf16 => (1, 1),
-            Transcode::Latin1ToUtf16 | Transcode::Utf8ToCompactUtf16 | Transcode::Utf8ToUtf16 => {
-                (0, 1)
-            }
-            Transcode::Utf16ToLatin1 | Transcode::Utf16ToUtf8 => (1, 0),
-        };
-        self.check_transcode_buffer(vmctx, from, 0, 1, src_unit_log2);
-
         // Load the base pointers for the from/to linear memories.
         let from_base = self.load_runtime_memory_base(vmctx, from);
         let to_base = self.load_runtime_memory_base(vmctx, to);
@@ -1861,14 +1844,12 @@ impl TrampolineCompiler<'_> {
             | Transcode::Utf8ToLatin1
             | Transcode::Utf16ToLatin1
             | Transcode::Utf8ToUtf16 => {
-                self.check_transcode_buffer(vmctx, to, 2, 1, dst_unit_log2);
                 args.push(self.ptr_param(0, from64, from_base));
                 args.push(self.len_param(1, from64));
                 args.push(self.ptr_param(2, to64, to_base));
             }
 
             Transcode::Utf16ToUtf8 | Transcode::Latin1ToUtf8 => {
-                self.check_transcode_buffer(vmctx, to, 2, 3, dst_unit_log2);
                 args.push(self.ptr_param(0, from64, from_base));
                 args.push(self.len_param(1, from64));
                 args.push(self.ptr_param(2, to64, to_base));
@@ -1878,7 +1859,6 @@ impl TrampolineCompiler<'_> {
             }
 
             Transcode::Utf8ToCompactUtf16 | Transcode::Utf16ToCompactUtf16 => {
-                self.check_transcode_buffer(vmctx, to, 2, 3, dst_unit_log2);
                 args.push(self.ptr_param(0, from64, from_base));
                 args.push(self.len_param(1, from64));
                 args.push(self.ptr_param(2, to64, to_base));
@@ -1952,64 +1932,11 @@ impl TrampolineCompiler<'_> {
     // linear memory. This will cast the input parameter to the host integer
     // type and then add that value to the base.
     //
-    // Note that bounds-checking happens in adapter modules, and is repeated
-    // by `check_transcode_buffer` before the host libcall.
+    // Note that bounds-checking happens in adapter modules, and this
+    // trampoline is simply calling the host libcall.
     fn ptr_param(&mut self, param: usize, is64: bool, base: ir::Value) -> ir::Value {
         let val = self.len_param(param, is64);
         self.builder.ins().iadd(base, val)
-    }
-
-    // Traps unless the buffer of `len` code units of `1 << unit_log2` bytes at
-    // `ptr` is aligned and inside memory `mem`. `ptr` and `len` are indices of
-    // this trampoline's wasm parameters, as in `ptr_param` and `len_param`.
-    fn check_transcode_buffer(
-        &mut self,
-        vmctx: ir::Value,
-        mem: RuntimeMemoryIndex,
-        ptr: usize,
-        len: usize,
-        unit_log2: i64,
-    ) {
-        let params = self.builder.func.dfg.block_params(self.block0);
-        let (ptr, len) = (params[2 + ptr], params[2 + len]);
-        let definition = self.load_memory(vmctx, mem);
-        // Canonical ABI memories are never shared, so a plain load suffices.
-        let mem_len = self
-            .alias_regions
-            .vm_memory_definition()
-            .current_length()
-            .load(&mut self.builder.cursor(), definition);
-
-        // Compare in 64 bits for every memory and host width. No multiply is
-        // needed, and `mem_len - ptr` only matters once `ptr <= mem_len`.
-        let [ptr, len, mem_len] = [ptr, len, mem_len].map(|val| {
-            if self.builder.func.dfg.value_type(val) == ir::types::I64 {
-                val
-            } else {
-                self.builder.ins().uextend(ir::types::I64, val)
-            }
-        });
-        let ptr_oob = self
-            .builder
-            .ins()
-            .icmp(IntCC::UnsignedGreaterThan, ptr, mem_len);
-        let avail = self.builder.ins().isub(mem_len, ptr);
-        let avail_units = self.builder.ins().ushr_imm_u(avail, unit_log2);
-        let len_oob = self
-            .builder
-            .ins()
-            .icmp(IntCC::UnsignedGreaterThan, len, avail_units);
-        let oob = self.builder.ins().bor(ptr_oob, len_oob);
-        // Use the adapter's own trap codes so guests observe the same trap
-        // whichever check catches the bad buffer.
-        let (mut traps, builder) = self.traps();
-        let code = crate::env_trap_to_clif_trap(Trap::StringOutOfBounds);
-        traps.trapnz(builder, oob, code);
-        if unit_log2 > 0 {
-            let misaligned = builder.ins().band_imm_u(ptr, (1 << unit_log2) - 1);
-            let code = crate::env_trap_to_clif_trap(Trap::UnalignedPointer);
-            traps.trapnz(builder, misaligned, code);
-        }
     }
 
     // Helper function to cast a core wasm input to a host pointer type
