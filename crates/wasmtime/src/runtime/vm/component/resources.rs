@@ -24,9 +24,11 @@
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
 use crate::prelude::*;
+use alloc::sync::Arc;
 use core::error::Error;
 use core::fmt;
 use core::mem;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, RuntimeComponentInstanceIndex, TypeResourceTableIndex,
@@ -36,6 +38,45 @@ use wasmtime_environ::component::{
 /// <https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md>
 /// currently and keeps the upper bit free for use in the component.
 const MAX_RESOURCE_HANDLE: u32 = 1 << 30;
+
+/// Live-handle count shared by all `ResourceTable`s in a store.
+///
+/// `MAX_RESOURCE_HANDLE` only caps each table; total handles would otherwise
+/// scale with the guest-controlled number of instances. This imposes one
+/// store-wide ceiling instead. The count tracks live handles (incremented in
+/// `insert`, decremented in `remove`), since freed slots are reused.
+///
+/// Only touched behind `&mut` on the store; the atomics exist solely to make
+/// this `Send + Sync` without unsafe code.
+pub struct HandleCounter {
+    live: AtomicUsize,
+    limit: AtomicUsize,
+}
+
+impl HandleCounter {
+    /// Creates a counter with no live handles and the given `limit`.
+    pub fn new(limit: usize) -> HandleCounter {
+        HandleCounter {
+            live: AtomicUsize::new(0),
+            limit: AtomicUsize::new(limit),
+        }
+    }
+
+    /// Returns the number of currently-live handles.
+    pub fn live(&self) -> usize {
+        self.live.load(Ordering::Relaxed)
+    }
+
+    /// Returns the configured limit on simultaneously-live handles.
+    pub fn limit(&self) -> usize {
+        self.limit.load(Ordering::Relaxed)
+    }
+
+    /// Updates the limit. Does not retroactively trap tables already over it.
+    pub fn set_limit(&self, limit: usize) {
+        self.limit.store(limit, Ordering::Relaxed);
+    }
+}
 
 /// Contextual state necessary to perform resource-related operations.
 ///
@@ -81,12 +122,25 @@ pub struct ResourceTables<'a> {
 
 /// An individual slab of resources used for a single table within a component.
 /// Not much fancier than a general slab data structure.
-#[derive(Default)]
 pub struct ResourceTable {
     /// Next slot to allocate, or `self.slots.len()` if they're all full.
     next: u32,
     /// Runtime state of all slots.
     slots: Vec<Slot>,
+    /// Store-wide live-handle count, shared across the store's tables. See
+    /// `HandleCounter`.
+    counter: Arc<HandleCounter>,
+}
+
+impl ResourceTable {
+    /// Creates an empty table charged to the shared store-level `counter`.
+    pub fn new(counter: Arc<HandleCounter>) -> ResourceTable {
+        ResourceTable {
+            next: 0,
+            slots: Vec::new(),
+            counter,
+        }
+    }
 }
 
 /// Typed representation of a "rep" for a resource.
@@ -421,6 +475,13 @@ impl ResourceTables<'_> {
 
 impl ResourceTable {
     fn insert(&mut self, new: Slot) -> Result<u32> {
+        // Enforce the store-wide cap before mutating; `MAX_RESOURCE_HANDLE`
+        // alone scales with the guest-controlled instance count. See
+        // `HandleCounter`.
+        if self.counter.live() >= self.counter.limit() {
+            bail!("cannot allocate another handle: store handle limit exceeded");
+        }
+
         let next = self.next as usize;
         if next == self.slots.len() {
             self.slots.push(Slot::Free {
@@ -441,6 +502,10 @@ impl ResourceTable {
         if ret >= MAX_RESOURCE_HANDLE {
             bail!("cannot allocate another handle: index overflow");
         }
+
+        // Count the handle only once its slot is committed; pairs with the
+        // decrement in `remove`.
+        self.counter.live.fetch_add(1, Ordering::Relaxed);
         Ok(ret)
     }
 
@@ -473,8 +538,11 @@ impl ResourceTable {
 
     fn remove(&mut self, idx: TypedResourceIndex) -> Result<Slot> {
         let to_fill = Slot::Free { next: self.next };
+        // `get_mut` rejects a freed slot, so a successful lookup means a live
+        // handle is being removed; decrement only after this `?`.
         let ret = mem::replace(self.get_mut(idx)?, to_fill);
         self.next = idx.raw_index() - 1;
+        self.counter.live.fetch_sub(1, Ordering::Relaxed);
         Ok(ret)
     }
 }

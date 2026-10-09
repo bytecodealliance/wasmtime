@@ -555,6 +555,12 @@ impl<T> Store<T> {
         let store_data = StoreData::new();
         log::trace!("creating new store {:?}", store_data.id());
 
+        // The host resource table shares the store-wide live-handle counter with
+        // every per-instance table so the cap spans the whole store.
+        #[cfg(feature = "component-model")]
+        let component_host_table =
+            vm::component::ResourceTable::new(store_data.components.handle_counter().clone());
+
         let pkey = engine.allocator().next_available_pkey();
 
         let inner = StoreOpaque {
@@ -593,7 +599,7 @@ impl<T> Store<T> {
             wasm_val_raw_storage: Vec::new(),
             pkey,
             #[cfg(feature = "component-model")]
-            component_host_table: Default::default(),
+            component_host_table,
             #[cfg(feature = "component-model")]
             component_calls: Default::default(),
             #[cfg(feature = "component-model")]

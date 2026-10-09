@@ -1,6 +1,7 @@
-use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
+use crate::runtime::vm::component::{ComponentInstance, HandleCounter, OwnedComponentInstance};
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Store, StoreContextMut};
+use alloc::sync::Arc;
 #[cfg(feature = "component-model-async")]
 use alloc::vec::Vec;
 use core::pin::Pin;
@@ -14,6 +15,14 @@ use wasmtime_environ::PrimaryMap;
 /// existing embeddings for when this feature was backported.
 const DEFAULT_HOSTCALL_FUEL: usize = 2 << 30;
 
+/// Default per-store cap on simultaneously-live component-model resource
+/// handles.
+///
+/// A guest creates these directly (e.g. `resource.new`), so leaving them
+/// unbounded is a DoS vector. At ~24 bytes each this bounds the tables at a few
+/// megabytes. Raise it with `Store::set_max_component_handles`.
+const DEFAULT_MAX_COMPONENT_HANDLES: usize = 100_000;
+
 pub struct ComponentStoreData {
     instances: PrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
 
@@ -23,6 +32,10 @@ pub struct ComponentStoreData {
     /// Caps the size of the allocations made on the host to this amount
     /// effectively.
     hostcall_fuel: usize,
+
+    /// Live-handle counter shared with every `ResourceTable` in this store (the
+    /// host table and each instance's tables). See `HandleCounter`.
+    handle_counter: Arc<HandleCounter>,
 }
 
 impl Default for ComponentStoreData {
@@ -30,6 +43,7 @@ impl Default for ComponentStoreData {
         Self {
             instances: PrimaryMap::default(),
             hostcall_fuel: DEFAULT_HOSTCALL_FUEL,
+            handle_counter: Arc::new(HandleCounter::new(DEFAULT_MAX_COMPONENT_HANDLES)),
         }
     }
 }
@@ -53,6 +67,11 @@ impl StoreData {
 impl ComponentStoreData {
     pub fn next_component_instance_id(&self) -> ComponentInstanceId {
         self.instances.next_key()
+    }
+
+    /// Returns the counter all of this store's resource tables are charged to.
+    pub(crate) fn handle_counter(&self) -> &Arc<HandleCounter> {
+        &self.handle_counter
     }
 
     #[cfg(feature = "component-model-async")]
@@ -102,6 +121,14 @@ impl StoreOpaque {
 
     pub(crate) fn set_hostcall_fuel(&mut self, fuel: usize) {
         self.store_data_mut().components.hostcall_fuel = fuel;
+    }
+
+    pub(crate) fn max_component_handles(&self) -> usize {
+        self.store_data().components.handle_counter.limit()
+    }
+
+    pub(crate) fn set_max_component_handles(&mut self, limit: usize) {
+        self.store_data().components.handle_counter.set_limit(limit);
     }
 }
 
@@ -212,6 +239,35 @@ impl<T> Store<T> {
     pub fn set_hostcall_fuel(&mut self, fuel: usize) {
         self.as_context_mut().set_hostcall_fuel(fuel)
     }
+
+    /// Returns the maximum number of simultaneously-live component-model handles
+    /// permitted in this store.
+    ///
+    /// This is either the default amount if it hasn't been configured or
+    /// returns the last value passed to [`Store::set_max_component_handles`].
+    ///
+    /// See [`Store::set_max_component_handles`] for more details.
+    pub fn max_component_handles(&self) -> usize {
+        self.as_context().0.max_component_handles()
+    }
+
+    /// Sets the maximum number of simultaneously-live component-model handles
+    /// permitted in this store.
+    ///
+    /// Operations such as `resource.new` let a guest allocate handles in
+    /// host-side tables (~24 bytes each) without host code in the loop, across
+    /// as many instances as it likes. This store-wide limit caps that as a DoS
+    /// mitigation; allocating past it traps.
+    ///
+    /// The limit counts *live* handles, so dropping a handle (e.g. via
+    /// `resource.drop`) returns budget and steady-state churn is unaffected.
+    /// Lowering it below the current live count does not trap existing handles,
+    /// only blocks new allocations until the count falls back under it.
+    ///
+    /// The default value for this is 100,000 handles.
+    pub fn set_max_component_handles(&mut self, limit: usize) {
+        self.as_context_mut().set_max_component_handles(limit)
+    }
 }
 
 impl<T> StoreContextMut<'_, T> {
@@ -223,5 +279,15 @@ impl<T> StoreContextMut<'_, T> {
     /// See [`Store::set_hostcall_fuel`].
     pub fn set_hostcall_fuel(&mut self, fuel: usize) {
         self.0.set_hostcall_fuel(fuel)
+    }
+
+    /// See [`Store::max_component_handles`].
+    pub fn max_component_handles(&self) -> usize {
+        self.0.max_component_handles()
+    }
+
+    /// See [`Store::set_max_component_handles`].
+    pub fn set_max_component_handles(&mut self, limit: usize) {
+        self.0.set_max_component_handles(limit)
     }
 }

@@ -37,7 +37,7 @@ mod resources;
 #[cfg(feature = "component-model-async")]
 pub use self::resources::CallContext;
 pub use self::resources::{
-    CallContexts, ResourceTable, ResourceTables, TypedResource, TypedResourceIndex,
+    CallContexts, HandleCounter, ResourceTable, ResourceTables, TypedResource, TypedResourceIndex,
 };
 
 #[cfg(feature = "component-model-async")]
@@ -269,6 +269,7 @@ impl ComponentInstance {
         component: &Component,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
+        handle_counter: &Arc<HandleCounter>,
         store: NonNull<dyn VMStore>,
     ) -> OwnedComponentInstance {
         let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
@@ -276,7 +277,7 @@ impl ComponentInstance {
         let mut instance_resource_tables =
             PrimaryMap::with_capacity(num_instances.try_into().unwrap());
         for _ in 0..num_instances {
-            instance_resource_tables.push(ResourceTable::default());
+            instance_resource_tables.push(ResourceTable::new(handle_counter.clone()));
         }
 
         let mut ret = OwnedInstance::new(ComponentInstance {
