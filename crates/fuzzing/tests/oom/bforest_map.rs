@@ -27,7 +27,7 @@ fn bforest_map_failed_insert_preserves_entries() -> Result<()> {
         .test(|| {
             let mut forest = MapForest::new();
             let mut map = Map::new();
-            for i in 0..100 {
+            for i in 0..1000 {
                 if let Err(e) = map.try_insert(Key(i), i, &mut forest, &()) {
                     // A failed insert must leave every existing entry in place.
                     for j in 0..i {
