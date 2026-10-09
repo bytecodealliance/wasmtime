@@ -2,6 +2,7 @@ test compile precise-output
 set enable_multi_ret_implicit_sret
 set unwind_info=false
 target riscv64 has_v has_zvfh
+target riscv64 has_v has_zvfh=false
 
 
 function %const_f16x8() -> f16x8 {
