@@ -1125,6 +1125,7 @@ impl<T> StoreContextMut<'_, T> {
         assert!(state.next_switch_item.is_none());
         assert!(state.high_priority.is_empty());
         assert!(state.low_priority.is_empty());
+        assert!(state.saved_next_switch_items.is_empty());
         assert!(state.unforced_current_thread.is_none());
         assert!(state.deferred_host_call_context.is_none());
         assert!(state.futures_mut().unwrap().is_empty());
