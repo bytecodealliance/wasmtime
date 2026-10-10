@@ -260,10 +260,10 @@ block0(v0: i64, v1: i64, v2: i64):
 ; check:                offset: 1
 ; nextln:                    op: PushNonvolatileRegister
 ; nextln:                  info: 5
-; check:                offset: 30
+; check:                offset: 4
 ; nextln:                    op: SmallStackAlloc
 ; nextln:                  info: 5
-; check:                offset: 30
+; check:                offset: 4
 ; nextln:                    op: SetFramePointer
 ; nextln:                  info: 0
 ; check:                offset: 39
