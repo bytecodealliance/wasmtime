@@ -1458,8 +1458,9 @@
 (decl abi_stackslot_addr (WritableReg StackSlot Offset32) MInst)
 (extern constructor abi_stackslot_addr abi_stackslot_addr)
 
-;; StackSlot raw offset into slot region
-(decl abi_stackslot_offset_into_slot_region (StackSlot Offset32 Offset32) i32)
+;; StackSlot raw offset into slot region, if it is small enough to address
+;; directly; otherwise, the address must be computed in a register.
+(decl pure partial abi_stackslot_offset_into_slot_region (StackSlot Offset32 Offset32) i32)
 (extern constructor abi_stackslot_offset_into_slot_region abi_stackslot_offset_into_slot_region)
 
 ;; DynamicStackSlot addr

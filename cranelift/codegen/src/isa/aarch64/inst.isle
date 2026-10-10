@@ -4143,8 +4143,8 @@
 
 (rule 3
       (amode ty (stack_addr _ slot offset1) offset2)
-      (AMode.SlotOffset
-       (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
+      (if-let slot_offset (abi_stackslot_offset_into_slot_region slot offset1 offset2))
+      (AMode.SlotOffset slot_offset))
 
 (attr amode_no_more_iconst (veri chain))
 (decl amode_no_more_iconst (Type Value i32) AMode)

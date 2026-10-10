@@ -1,0 +1,39 @@
+; Stack slots and `stack_addr` offsets that can't fit in a frame (limited to
+; 1 GiB) fail with an implementation-limit error rather than overflowing the
+; frame-size arithmetic or panicking during lowering.
+test compile expect-fail
+target x86_64
+
+; A slot so large that the frame size would overflow a u32.
+function %huge_slot() -> i64 {
+    ss0 = explicit_slot 4294967288
+block0:
+    v0 = stack_addr.i64 ss0
+    return v0
+}
+
+; A slot just over the frame size limit.
+function %slot_over_limit() -> i64 {
+    ss0 = explicit_slot 1073741832
+block0:
+    v0 = stack_addr.i64 ss0
+    return v0
+}
+
+; A `stack_addr` offset beyond the frame size limit.
+function %large_offset() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss1+2147483647
+    return v0
+}
+
+; A negative `stack_addr` offset.
+function %negative_offset() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss1-8
+    return v0
+}
