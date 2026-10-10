@@ -75,6 +75,7 @@ pub(super) fn run(
     // Note that this is represents the abstract state of a host import of an
     // item since we don't know the precise structure of the host import.
     let mut args = HashMap::with_capacity(result.exports.len());
+    let mut import_names = HashSet::new();
     let mut path = Vec::new();
     types.resources_mut().set_current_instance(index);
     let types_ref = result.types_ref();
@@ -114,8 +115,22 @@ pub(super) fn run(
         if let TypeDef::Interface(_) = ty {
             continue;
         }
+
+        // The host sees the full name of this import, reconstructed from a
+        // canonical name and `versionsuffix` if necessary. Note that `args`
+        // below is still keyed by the literal name since that's what's used
+        // to refer to this import within the component.
+        //
+        // The validator only guarantees that literal names are unique, but
+        // distinct literal names may have the same full name, such as
+        // `a:b/c@0.2` with a `versionsuffix` of `.1` and `a:b/c@0.2.1`. The
+        // host can't tell such imports apart, so that's rejected here.
+        let full_name = name.full_name();
+        if !import_names.insert(full_name.to_string()) {
+            bail!("root import `{full_name}` is imported twice");
+        }
         let index = inliner.result.import_types.push((
-            name.name.to_string(),
+            full_name.into_owned(),
             ComponentExtern {
                 ty,
                 data: ComponentExternData::new(name),
@@ -136,9 +151,19 @@ pub(super) fn run(
     let exports = inliner.run(types, &mut frames)?;
     assert!(frames.is_empty());
 
-    let mut export_map = Default::default();
+    let mut export_map = IndexMap::new();
     for (name, (def, data)) in exports {
+        // Exports are recorded under their full name, like imports above.
+        // Unlike imports, though, exports provide a definition, so two exports
+        // with the same full name are ambiguous for the host, and that's
+        // rejected here as well. Note that nested exports are already checked
+        // when their instance's type is converted, see
+        // `ComponentTypesBuilder::convert_component_items`.
         let data = ComponentExternData::new(data);
+        let full_name = data.name(name);
+        if export_map.contains_key(full_name) {
+            bail!("root export `{full_name}` is exported twice");
+        }
         inliner.record_export(name, def, data, types, &mut export_map)?;
     }
     inliner.result.exports = export_map;
@@ -1615,6 +1640,11 @@ impl<'a> Inliner<'a> {
         })
     }
 
+    /// Records the export `def` named `name` in `map`.
+    ///
+    /// Exports are recorded under their full name, which is derived from
+    /// `name`, the literal name, and `data`. Callers are responsible for
+    /// ensuring that full names in `map` are unique.
     fn record_export(
         &mut self,
         name: &str,
@@ -1709,7 +1739,9 @@ impl<'a> Inliner<'a> {
             ComponentItemDef::Type(def) => dfg::Export::Type(def),
         };
 
-        map.insert(name.to_string(), (export, data));
+        let full_name = data.name(name);
+        debug_assert!(!map.contains_key(full_name));
+        map.insert(full_name.to_string(), (export, data));
         Ok(())
     }
 }
@@ -1958,8 +1990,12 @@ enum InstanceModule {
 impl ComponentExternData {
     fn new(data: wasmparser::ComponentExternName<'_>) -> Self {
         ComponentExternData {
-            implements: data.implements.map(|s| s.to_string()),
+            implements: data.full_implements().map(|s| s.into_owned()),
             external_id: data.external_id.map(|s| s.to_string()),
+            full_name: match data.full_name() {
+                Cow::Owned(name) => Some(name),
+                Cow::Borrowed(_) => None,
+            },
         }
     }
 }

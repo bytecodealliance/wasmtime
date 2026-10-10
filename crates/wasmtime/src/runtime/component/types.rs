@@ -14,7 +14,7 @@ use wasmtime_environ::component::{
     TypeFuncIndex, TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex,
     TypeModuleIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex,
     TypeResultIndex, TypeStreamIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
-    alternate_lookup_key,
+    canonical_name,
 };
 
 pub use crate::component::resources::ResourceType;
@@ -1081,9 +1081,7 @@ impl Component {
 
     /// Returns import associated with `name`, if such exists in the component
     pub fn get_import<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
-        self.0.types[self.0.index]
-            .imports
-            .get(name)
+        get_extern(&self.0.types[self.0.index].imports, name)
             .map(|e| ComponentExtern::new(engine, &self.0.instance(), e))
     }
 
@@ -1094,7 +1092,7 @@ impl Component {
     ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + 'a {
         self.0.types[self.0.index].imports.iter().map(|(name, e)| {
             (
-                name.as_str(),
+                e.data.name(name),
                 ComponentExtern::new(engine, &self.0.instance(), e),
             )
         })
@@ -1102,9 +1100,7 @@ impl Component {
 
     /// Returns export associated with `name`, if such exists in the component
     pub fn get_export<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
-        self.0.types[self.0.index]
-            .exports
-            .get(name)
+        get_extern(&self.0.types[self.0.index].exports, name)
             .map(|e| ComponentExtern::new(engine, &self.0.instance(), e))
     }
 
@@ -1115,7 +1111,7 @@ impl Component {
     ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + 'a {
         self.0.types[self.0.index].exports.iter().map(|(name, e)| {
             (
-                name.as_str(),
+                e.data.name(name),
                 ComponentExtern::new(engine, &self.0.instance(), e),
             )
         })
@@ -1130,6 +1126,26 @@ impl Component {
     }
 }
 
+/// Looks up the import or export with the full name `name` in `map`.
+///
+/// Items in `map` are keyed by the literal name used within the component,
+/// which may differ from the full name that the host sees, see
+/// [`ComponentExternData::name`].
+///
+/// [`ComponentExternData::name`]: wasmtime_environ::component::ComponentExternData::name
+fn get_extern<'a>(
+    map: &'a IndexMap<String, wasmtime_environ::component::ComponentExtern>,
+    name: &str,
+) -> Option<&'a wasmtime_environ::component::ComponentExtern> {
+    match map.get(name) {
+        Some(e) if e.data.name(name) == name => Some(e),
+        _ => map
+            .iter()
+            .find(|(key, e)| e.data.name(key) == name)
+            .map(|(_, e)| e),
+    }
+}
+
 /// Component instance type
 #[derive(Clone, Debug)]
 pub struct ComponentInstance(Handle<TypeComponentInstanceIndex>);
@@ -1141,9 +1157,7 @@ impl ComponentInstance {
 
     /// Returns export associated with `name`, if such exists in the component instance
     pub fn get_export<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
-        self.0.types[self.0.index]
-            .exports
-            .get(name)
+        get_extern(&self.0.types[self.0.index].exports, name)
             .map(|e| ComponentExtern::new(engine, &self.0.instance(), e))
     }
 
@@ -1154,7 +1168,7 @@ impl ComponentInstance {
     ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> {
         self.0.types[self.0.index].exports.iter().map(|(name, e)| {
             (
-                name.as_str(),
+                e.data.name(name),
                 ComponentExtern::new(engine, &self.0.instance(), e),
             )
         })
@@ -1199,19 +1213,12 @@ impl<'a> ComponentExtern<'a> {
     /// returned. Failing that, this attempts to perform version-matching to see
     /// if a compatible version of this item is implemented. For example if
     /// `(implements "a:b/c@1.1.0")` is specified then this will return `true`
-    /// for `a:b/c@1.0.0` and `a:b/c@1.2.0` as well.
+    /// for `a:b/c@1.0.0`, `a:b/c@1.2.0`, and the canonical name `a:b/c@1` as
+    /// well.
     pub fn is_implements(&self, name: &str) -> bool {
-        let implements = match self.implements {
-            Some(s) => s,
-            None => return false,
-        };
-        if name == implements {
-            return true;
-        }
-
-        match (alternate_lookup_key(implements), alternate_lookup_key(name)) {
-            (Some((alt_implements, _)), Some((alt_name, _))) => alt_implements == alt_name,
-            _ => false,
+        match self.implements {
+            Some(implements) => canonical_name(implements) == canonical_name(name),
+            None => false,
         }
     }
 }

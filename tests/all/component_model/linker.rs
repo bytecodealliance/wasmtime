@@ -54,10 +54,16 @@ fn import_both_old_and_new() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::<()>::new(&engine);
 
+    // There's one definition per semver track.
     let t1 = ResourceType::host::<u32>();
     let t2 = ResourceType::host::<i32>();
     linker.root().resource("a:b/c@1.0.0", t1, |_, _| Ok(()))?;
-    linker.root().resource("a:b/c@1.0.1", t2, |_, _| Ok(()))?;
+    assert!(
+        linker
+            .root()
+            .resource("a:b/c@1.0.1", t2, |_, _| Ok(()))
+            .is_err()
+    );
 
     let component = Component::new(
         &engine,
@@ -72,15 +78,16 @@ fn import_both_old_and_new() -> Result<()> {
     let i = linker.instantiate(&mut store, &component)?;
 
     assert_eq!(i.get_resource(&mut store, "t1"), Some(t1));
-    assert_eq!(i.get_resource(&mut store, "t2"), Some(t2));
+    assert_eq!(i.get_resource(&mut store, "t2"), Some(t1));
 
     Ok(())
 }
 
 #[test]
-fn missing_import_selects_max() -> Result<()> {
+fn shadowing_replaces_same_track() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::<()>::new(&engine);
+    linker.allow_shadowing(true);
 
     let t1 = ResourceType::host::<u32>();
     let t2 = ResourceType::host::<i32>();
@@ -266,6 +273,303 @@ fn open_instance_twice() -> Result<()> {
     linker.instance("foo")?.module("c", &module)?;
     assert!(linker.root().module("foo", &module).is_err());
     linker.instance("foo")?.module("d", &module)?;
+
+    Ok(())
+}
+
+#[test]
+fn semver_instances_share_track() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    let t1 = ResourceType::host::<u32>();
+    let t2 = ResourceType::host::<i32>();
+    let t3 = ResourceType::host::<u64>();
+    linker
+        .instance("a:b/c@0.2.0")?
+        .resource("r1", t1, |_, _| Ok(()))?;
+    linker
+        .instance("a:b/c@0.2.1")?
+        .resource("r2", t2, |_, _| Ok(()))?;
+    assert!(
+        linker
+            .instance("a:b/c@0.2.1")?
+            .resource("r1", t2, |_, _| Ok(()))
+            .is_err()
+    );
+    assert!(
+        linker
+            .instance("a:b/c@0.2.0")?
+            .resource("r2", t1, |_, _| Ok(()))
+            .is_err()
+    );
+    // A different semver track is a separate instance.
+    linker
+        .instance("a:b/c@0.3.0")?
+        .resource("r1", t3, |_, _| Ok(()))?;
+
+    for version in ["0.2.0", "0.2.1", "0.2.2"] {
+        let component = Component::new(
+            &engine,
+            format!(
+                r#"(component
+                    (import "a:b/c@{version}" (instance $i
+                        (export "r1" (type (sub resource)))
+                        (export "r2" (type (sub resource)))
+                    ))
+                    (import "a:b/c@0.3.0" (instance $j
+                        (export "r1" (type (sub resource)))
+                    ))
+                    (alias export $i "r1" (type $r1))
+                    (alias export $i "r2" (type $r2))
+                    (alias export $j "r1" (type $r3))
+                    (export "r1" (type $r1))
+                    (export "r2" (type $r2))
+                    (export "r3" (type $r3))
+                )"#
+            ),
+        )?;
+        let mut store = Store::new(&engine, ());
+        let i = linker.instantiate(&mut store, &component)?;
+        assert_eq!(i.get_resource(&mut store, "r1"), Some(t1));
+        assert_eq!(i.get_resource(&mut store, "r2"), Some(t2));
+        assert_eq!(i.get_resource(&mut store, "r3"), Some(t3));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn semver_instances_share_track_with_shadowing() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+    linker.allow_shadowing(true);
+
+    let t1 = ResourceType::host::<u32>();
+    let t2 = ResourceType::host::<i32>();
+    linker
+        .instance("a:b/c@0.2.0")?
+        .resource("r", t1, |_, _| Ok(()))?;
+    linker
+        .instance("a:b/c@0.2.1")?
+        .resource("r", t2, |_, _| Ok(()))?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "a:b/c@0.2.0" (instance $i
+                (export "r" (type (sub resource)))
+            ))
+            (alias export $i "r" (type $r))
+            (export "r" (type $r))
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let i = linker.instantiate(&mut store, &component)?;
+    assert_eq!(i.get_resource(&mut store, "r"), Some(t2));
+
+    Ok(())
+}
+
+#[test]
+fn canonical_instance_names() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_canonical_names(true);
+    let engine = Engine::new(&config)?;
+    let mut linker = Linker::<()>::new(&engine);
+
+    let t1 = ResourceType::host::<u32>();
+    linker
+        .instance("a:b/c@0.2.1")?
+        .resource("r", t1, |_, _| Ok(()))?;
+    // A canonical name reopens the instance on its semver track.
+    assert!(
+        linker
+            .instance("a:b/c@0.2")?
+            .resource("r", t1, |_, _| Ok(()))
+            .is_err()
+    );
+
+    for import in [
+        r#""a:b/c@0.2" (versionsuffix ".1")"#,
+        r#""a:b/c@0.2" (versionsuffix ".0")"#,
+        r#""a:b/c@0.2.1""#,
+    ] {
+        let component = Component::new(
+            &engine,
+            format!(
+                r#"(component
+                    (import {import} (instance $i
+                        (export "r" (type (sub resource)))
+                    ))
+                    (alias export $i "r" (type $r))
+                    (export "r" (type $r))
+                )"#
+            ),
+        )?;
+        let mut store = Store::new(&engine, ());
+        let i = linker.instantiate(&mut store, &component)?;
+        assert_eq!(i.get_resource(&mut store, "r"), Some(t1));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn invalid_instance_names() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    assert!(linker.instance("[method]a.b").is_err());
+    assert!(linker.root().instance("[static]a.b").is_err());
+    assert!(linker.instance("a:b/c@1.2").is_err());
+    assert!(linker.instance("a:b/c@").is_err());
+
+    // Invalid names are rejected even when a same-track instance exists.
+    linker.instance("a:b/c@1.2.0")?;
+    assert!(linker.instance("a:b/c@1.2").is_err());
+    linker.instance("a:b/c@1")?;
+
+    Ok(())
+}
+
+#[test]
+fn unknown_imports_as_traps_share_semver_track() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    let t1 = ResourceType::host::<u32>();
+    linker
+        .instance("a:b/c@0.2.1")?
+        .resource("r", t1, |_, _| Ok(()))?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "a:b/c@0.2.0" (instance $i
+                (export "r" (type (sub resource)))
+                (export "f" (func))
+            ))
+            (alias export $i "r" (type $r))
+            (export "r" (type $r))
+        )"#,
+    )?;
+    linker.define_unknown_imports_as_traps(&component)?;
+    let mut store = Store::new(&engine, ());
+    let i = linker.instantiate(&mut store, &component)?;
+    assert_eq!(i.get_resource(&mut store, "r"), Some(t1));
+
+    // The stub for `f` was added to the existing `@0.2.1` instance.
+    assert!(
+        linker
+            .instance("a:b/c@0.2.1")?
+            .func_wrap("f", |_, (): ()| Ok(()))
+            .is_err()
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn import_duplicate_full_name() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_canonical_names(true);
+    let engine = Engine::new(&config)?;
+
+    // Two distinct root imports with the same full name, `a:b/c@0.2.1`.
+    let err = Component::new(
+        &engine,
+        r#"(component
+            (import "a:b/c@0.2" (versionsuffix ".1") (instance
+                (export "f" (func))
+            ))
+            (import "a:b/c@0.2.1" (instance
+                (export "g" (func))
+            ))
+        )"#,
+    )
+    .unwrap_err();
+    let err = format!("{err:?}");
+    assert!(
+        err.contains("root import `a:b/c@0.2.1` is imported twice"),
+        "{err}"
+    );
+
+    // The same within an imported instance.
+    let err = Component::new(
+        &engine,
+        r#"(component
+            (import "x" (instance
+                (export "a:b/n@0.2" (versionsuffix ".1") (instance))
+                (export "a:b/n@0.2.1" (instance))
+            ))
+        )"#,
+    )
+    .unwrap_err();
+    let err = format!("{err:?}");
+    assert!(err.contains("`a:b/n@0.2.1` is defined twice"), "{err}");
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn nested_import_full_name() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_canonical_names(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "x" (instance
+                (export "a:b/n@0.2" (versionsuffix ".1") (instance
+                    (export "f" (func))
+                ))
+                (export "a:b/n@0.2.2" (instance
+                    (export "g" (func))
+                ))
+            ))
+        )"#,
+    )?;
+
+    // Nested imports are reported under their full name, and both versions on
+    // the `a:b/n@0.2` track are kept.
+    let ty = component.component_type();
+    let (_, x) = ty.imports(&engine).next().unwrap();
+    let ComponentItem::ComponentInstance(x) = x.ty else {
+        panic!("expected an instance");
+    };
+    let names = x
+        .exports(&engine)
+        .map(|(name, _)| name.to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["a:b/n@0.2.1", "a:b/n@0.2.2"]);
+    assert!(x.get_export(&engine, "a:b/n@0.2.1").is_some());
+    assert!(x.get_export(&engine, "a:b/n@0.2").is_none());
+
+    // Defining everything that `component_type` says is imported is enough
+    // to instantiate the component. Both versions on the track share one
+    // instance.
+    let mut linker = Linker::<()>::new(&engine);
+    let mut x_instance = linker.instance("x")?;
+    for (name, item) in x.exports(&engine) {
+        let ComponentItem::ComponentInstance(ty) = item.ty else {
+            panic!("expected an instance");
+        };
+        let mut instance = x_instance.instance(name)?;
+        for (export, _) in ty.exports(&engine) {
+            instance.func_wrap(export, |_, (): ()| Ok(()))?;
+        }
+    }
+    let mut store = Store::new(&engine, ());
+    linker.instantiate(&mut store, &component)?;
+
+    // So is defining unknown imports as traps.
+    let mut linker = Linker::<()>::new(&engine);
+    linker.define_unknown_imports_as_traps(&component)?;
+    let mut store = Store::new(&engine, ());
+    linker.instantiate(&mut store, &component)?;
 
     Ok(())
 }
