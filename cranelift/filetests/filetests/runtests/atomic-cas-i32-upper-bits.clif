@@ -1,0 +1,30 @@
+test interpret
+test run
+target aarch64
+target aarch64 has_lse
+target x86_64
+target s390x
+target riscv64 has_a
+target riscv64 has_c has_zcb
+
+; The upper 32 bits of the register holding an `i32` value are unspecified on
+; 64-bit backends. An `i32` atomic_cas must only compare the low 32 bits of the
+; expected value with the value in memory.
+
+function %atomic_cas_i32_ireduce(i32, i64, i32) -> i32, i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i32, v1: i64, v2: i32):
+    v3 = stack_addr.i64 ss0
+    store.i32 notrap v0, v3
+    v4 = ireduce.i32 v1
+    v5 = atomic_cas.i32 v3, v4, v2
+    v6 = load.i32 notrap v3
+    return v5, v6
+}
+; run: %atomic_cas_i32_ireduce(5, 5, 7) == [5, 7]
+; run: %atomic_cas_i32_ireduce(5, 0x1_00000005, 7) == [5, 7]
+; run: %atomic_cas_i32_ireduce(5, 0xFFFFFFFF_00000005, 7) == [5, 7]
+; run: %atomic_cas_i32_ireduce(0xC0FFEEEE, 0xDECAFFFF_C0FFEEEE, 1) == [0xC0FFEEEE, 1]
+; run: %atomic_cas_i32_ireduce(5, 0x1_00000006, 7) == [5, 5]
+; run: %atomic_cas_i32_ireduce(5, 0x5_00000000, 7) == [5, 5]

@@ -7897,7 +7897,7 @@ fn test_aarch64_binemit() {
             oldval: writable_xreg(27),
             scratch: writable_xreg(24),
         },
-        "3BFF5F887F031AEB610000543CFF188898FFFFB5",
+        "3BFF5F887F433AEB610000543CFF188898FFFFB5",
         "atomic_cas_loop_32 addr=x25, expect=x26, replacement=x28, oldval=x27, scratch=x24",
     ));
 
