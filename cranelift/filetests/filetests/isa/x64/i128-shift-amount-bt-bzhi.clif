@@ -1,0 +1,93 @@
+; The `bt` and `bzhi` fusion rules must accept an `i128` shift amount: only its
+; low 64 bits matter, since the amount is taken modulo the type's width.
+test compile precise-output
+target x86_64 has_bmi2
+
+function %bt_i128_amount(i64, i64) -> i8 {
+block0(v0: i64, v9: i64):
+    v1 = uextend.i128 v9
+    v2 = iconst.i64 1
+    v3 = ishl v2, v1
+    v4 = band v0, v3
+    brif v4, block1, block2
+block1:
+    v5 = iconst.i8 1
+    return v5
+block2:
+    v6 = iconst.i8 0
+    return v6
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   uninit  %r8
+;   xorq %r8, %r8
+;   btq %rsi, %rdi
+;   jb      label2; j label1
+; block1:
+;   uninit  %rax
+;   xorl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block2:
+;   movl $0x1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorq %r8, %r8
+;   btq %rsi, %rdi
+;   jb 0x18
+; block2: ; offset 0x11
+;   xorl %eax, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x18
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bzhi_i128_amount(i64, i64) -> i64 {
+block0(v0: i64, v9: i64):
+    v1 = uextend.i128 v9
+    v2 = iconst.i64 1
+    v3 = ishl v2, v1
+    v4 = isub v3, v2
+    v5 = band v0, v4
+    return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   uninit  %r8
+;   xorq %r8, %r8
+;   andq $0x3f, %rsi
+;   bzhiq %rsi, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorq %r8, %r8
+;   andq $0x3f, %rsi
+;   bzhiq %rsi, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
