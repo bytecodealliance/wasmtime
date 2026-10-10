@@ -467,12 +467,13 @@
 ;; which is generated to be N bits large. Note that if the index is larger than
 ;; the bit-width of the type then `bzhi` doesn't have the same semantics as
 ;; `ishl`, so an `and` instruction is required to mask the index to match the
-;; semantics of Cranelift's `ishl`.
+;; semantics of Cranelift's `ishl`. The index may be an `i128`; only its low 64
+;; bits matter, since it is masked to the type's width anyway.
 
 (rule 16 (lower (band (ty_32_or_64 ty) x y))
          (if-let true (has_bmi2))
          (if-let (ishl _ (u64_from_iconst 1) index) (val_minus_one y))
-         (x64_bzhi ty x (x64_and ty index (RegMemImm.Imm (u32_wrapping_sub (ty_bits ty) 1)))))
+         (x64_bzhi ty x (x64_and ty (lo_gpr index) (RegMemImm.Imm (u32_wrapping_sub (ty_bits ty) 1)))))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -3947,9 +3947,10 @@
 ;; can pattern-match to the native `bt` instruction. Note that to have the
 ;; same semantics this requires that `a` is in a register which forces `bt` to
 ;; use modulo semantics for the second operand `b`, thus `put_in_gpr` is
-;; manually used.
+;; manually used. The shift amount `b` may be an `i128`; only its low 64 bits
+;; matter, since the amount is taken modulo the type's width.
 (rule 1 (is_nonzero_band (ty_32_or_64 ty) a (ishl _ (u64_from_iconst 1) b))
-  (CondResult.CC (x64_bt ty (put_in_gpr a) b) (CC.B)))
+  (CondResult.CC (x64_bt ty (put_in_gpr a) (lo_gpr b)) (CC.B)))
 
 ;; If a value is and'd one shifted by a variable value that matches `bt` as
 ;; well.
