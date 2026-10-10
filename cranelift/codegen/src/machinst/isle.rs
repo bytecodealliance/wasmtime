@@ -556,15 +556,11 @@ macro_rules! isle_lower_prelude_methods {
             stack_slot: StackSlot,
             offset1: Offset32,
             offset2: Offset32,
-        ) -> i32 {
-            let offset1 = i32::from(offset1);
-            let offset2 = i32::from(offset2);
-            i32::try_from(self.lower_ctx.abi().sized_stackslot_offset(stack_slot))
-                .expect("Stack slot region cannot be larger than 2GiB")
-                .checked_add(offset1)
-                .expect("Stack slot region cannot be larger than 2GiB")
-                .checked_add(offset2)
-                .expect("Stack slot region cannot be larger than 2GiB")
+        ) -> Option<i32> {
+            let offset = i64::from(i32::from(offset1)) + i64::from(i32::from(offset2));
+            self.lower_ctx
+                .abi()
+                .sized_stackslot_area_offset(stack_slot, offset)
         }
 
         fn abi_dynamic_stackslot_addr(

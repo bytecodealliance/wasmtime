@@ -435,11 +435,6 @@
 (decl synthetic_amode_slot (i32) SyntheticAmode)
 (extern constructor synthetic_amode_slot synthetic_amode_slot)
 
-;; Helper for loads/stores to/from stackslots.
-(decl stackslot_amode (StackSlot Offset32 Offset32) SyntheticAmode)
-(rule (stackslot_amode slot offset1 offset2)
-      (let ((slot_offset i32 (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
-        (synthetic_amode_slot slot_offset)))
 
 ;; An `Amode` represents a possible addressing mode that can be used
 ;; in instructions. These denote a 64-bit value only.
@@ -539,7 +534,8 @@
 
 (rule 2
       (to_amode flags (stack_addr _ slot offset1) offset2)
-      (stackslot_amode slot offset1 offset2))
+      (if-let slot_offset (abi_stackslot_offset_into_slot_region slot offset1 offset2))
+      (synthetic_amode_slot slot_offset))
 
 ;; Same as `to_amode`, except that the base address is computed via the addition
 ;; of the two `Value` arguments provided.
