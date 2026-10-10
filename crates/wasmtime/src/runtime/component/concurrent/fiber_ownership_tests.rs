@@ -436,22 +436,27 @@ fn running_update_keeps_suspended_fiber() {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn worker_item_conflict_keeps_worker_in_store() {
-    use std::panic::{AssertUnwindSafe, catch_unwind};
     let mut s = store();
     let fiber = live(s.as_context_mut().0);
     let state = s.as_context_mut().0.concurrent_state_mut().unwrap();
     state.worker = Some(fiber);
     state.worker_item = Some(WorkerItem::Function(AlwaysMut::new(Box::new(|_| Ok(())))));
-    let result = catch_unwind(AssertUnwindSafe(|| {
-        let mut future = Box::pin(
-            s.as_context_mut()
-                .run_on_worker(WorkerItem::Function(AlwaysMut::new(Box::new(|_| Ok(()))))),
-        );
-        let _ = future
-            .as_mut()
-            .poll(&mut Context::from_waker(Waker::noop()));
-    }));
-    assert!(result.is_err());
+    bug(
+        || {
+            let cx = &mut Context::from_waker(Waker::noop());
+            let mut future = Box::pin(
+                s.as_context_mut()
+                    .run_on_worker(WorkerItem::Function(AlwaysMut::new(Box::new(|_| Ok(()))))),
+            );
+            loop {
+                match future.as_mut().poll(cx) {
+                    Poll::Pending => {}
+                    Poll::Ready(r) => return r,
+                }
+            }
+        },
+        "worker item already set",
+    );
     assert!(
         s.as_context_mut()
             .0
@@ -586,7 +591,6 @@ fn suspended_destination_keeps_old_fiber() {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn duplicate_waiter_keeps_old_fiber() {
-    use std::panic::{AssertUnwindSafe, catch_unwind};
     let mut s = store();
     let store = s.as_context_mut().0;
     let old = live(store);
@@ -608,13 +612,19 @@ fn duplicate_waiter_keeps_old_fiber() {
         })
     }
     .unwrap();
-    let result = catch_unwind(AssertUnwindSafe(|| {
-        let mut future = Box::pin(store.resume_fiber(fiber));
-        let _ = future
-            .as_mut()
-            .poll(&mut Context::from_waker(Waker::noop()));
-    }));
-    assert!(result.is_err());
+    bug(
+        || {
+            let mut future = Box::pin(store.resume_fiber(fiber));
+            let cx = &mut Context::from_waker(Waker::noop());
+            loop {
+                match future.as_mut().poll(cx) {
+                    Poll::Pending => {}
+                    Poll::Ready(r) => return r,
+                }
+            }
+        },
+        "entry unexpectedly already exists",
+    );
     assert!(
         store
             .concurrent_state_mut()
@@ -831,7 +841,6 @@ fn occupied_subtask_switch_keeps_both_fibers() {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn waiter_assertion_keeps_fiber_in_set() {
-    use std::panic::{AssertUnwindSafe, catch_unwind};
     let mut s = store();
     let store = s.as_context_mut().0;
     let old = live(store);
@@ -857,8 +866,10 @@ fn waiter_assertion_keeps_fiber_in_set() {
         .unwrap()
         .waiting
         .insert(q, WaitMode::Fiber(fiber));
-    let result = catch_unwind(AssertUnwindSafe(|| Waitable::Host(host).mark_ready(state)));
-    assert!(result.is_err());
+    bug(
+        || Waitable::Host(host).mark_ready(state),
+        "unexpected wake_on_cancel",
+    );
     assert!(state.get_mut(set).unwrap().waiting.contains_key(&q));
 }
 

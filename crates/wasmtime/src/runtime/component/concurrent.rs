@@ -1731,7 +1731,9 @@ impl<T> StoreContextMut<'_, T> {
     /// Execute the specified guest call on a worker fiber.
     async fn run_on_worker(self, item: WorkerItem) -> Result<()> {
         let state = self.0.concurrent_state_mut()?;
-        assert!(state.worker_item.is_none());
+        if state.worker_item.is_some() {
+            bail_bug!("worker item already set when taking worker fiber");
+        }
         let worker = if let Some(fiber) = state.worker.take() {
             fiber
         } else {
@@ -2387,7 +2389,9 @@ impl StoreOpaque {
                             Entry::Vacant(entry) => {
                                 entry.insert(WaitMode::Fiber(resuming.fiber.take().unwrap()));
                             }
-                            Entry::Occupied(_) => panic!("assertion failed: old.is_none()"),
+                            Entry::Occupied(_) => {
+                                bail_bug!("entry unexpectedly already exists for {thread:?}");
+                            }
                         }
                     }
                     SuspendReason::YieldingToSubtask { thread } => {
@@ -4292,18 +4296,17 @@ impl Instance {
         // When resuming a thread it must be in a suspended state otherwise
         // this operation is a trap.
         match &thread.state {
-            GuestThreadState::NotStartedExplicit(_) | GuestThreadState::Suspended(_) => {}
+            GuestThreadState::NotStartedExplicit(_) => {}
+            GuestThreadState::Suspended(_) => {
+                log::trace!("resuming thread {thread_id:?} that was suspended");
+                state.schedule_suspended_thread(
+                    guest_thread,
+                    self.runtime_instance(runtime_instance),
+                    priority,
+                )?;
+                return Ok(true);
+            }
             _ => bail!(Trap::CannotResumeThread),
-        }
-
-        if matches!(thread.state, GuestThreadState::Suspended(_)) {
-            log::trace!("resuming thread {thread_id:?} that was suspended");
-            state.schedule_suspended_thread(
-                guest_thread,
-                self.runtime_instance(runtime_instance),
-                priority,
-            )?;
-            return Ok(true);
         }
         match mem::replace(&mut thread.state, GuestThreadState::Running) {
             GuestThreadState::NotStartedExplicit(start_func) => {
@@ -6418,7 +6421,9 @@ impl ConcurrentState {
             return Ok(());
         };
         let wake_on_cancel = self.get_mut(thread.thread)?.wake_on_cancel;
-        assert!(wake_on_cancel.is_none() || wake_on_cancel == WakeOnCancel::Waiting(set));
+        if wake_on_cancel != WakeOnCancel::None && wake_on_cancel != WakeOnCancel::Waiting(set) {
+            bail_bug!("thread {thread:?} has unexpected wake_on_cancel value {wake_on_cancel:?}");
+        }
         let instance = self.get_mut(thread.task)?.instance;
         self.get_mut(thread.thread)?.wake_on_cancel.take();
         let (_, mode) = self.get_mut(set)?.waiting.pop_first().unwrap();
