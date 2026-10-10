@@ -1,5 +1,6 @@
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::instructions::AllInstructions;
+use crate::display_join::DisplayJoinedVecExt;
 use crate::error;
 use cranelift_srcgen::{Formatter, Language, fmtln};
 use std::{borrow::Cow, cmp::Ordering, rc::Rc};
@@ -93,7 +94,10 @@ fn gen_common_isle(
             fmt,
             "(decl value_array_{} ({}) ValueArray{})",
             n,
-            (0..n).map(|_| "Value").collect::<Vec<_>>().join(" "),
+            (0..n)
+                .map(|_| "Value")
+                .collect::<Vec<_>>()
+                .display_join(" "),
             n
         );
         fmtln!(
@@ -129,7 +133,10 @@ fn gen_common_isle(
             fmt,
             "(decl block_array_{0} ({1}) BlockArray{0})",
             n,
-            (0..n).map(|_| "BlockCall").collect::<Vec<_>>().join(" ")
+            (0..n)
+                .map(|_| "BlockCall")
+                .collect::<Vec<_>>()
+                .display_join(" ")
         );
 
         fmtln!(
@@ -256,7 +263,7 @@ fn gen_common_isle(
                     }
                 })
                 .collect::<Vec<_>>()
-                .join(" "),
+                .display_join(" "),
             ret_ty
         );
         fmtln!(fmt, "(extractor");
@@ -270,7 +277,7 @@ fn gen_common_isle(
                     .iter()
                     .map(|o| { o.name })
                     .collect::<Vec<_>>()
-                    .join(" ")
+                    .display_join(" ")
             );
 
             let mut s = format!(
@@ -312,7 +319,7 @@ fn gen_common_isle(
                         &mut s,
                         " (unwrap_head_value_list_{} {} {})",
                         values.len(),
-                        values.join(" "),
+                        values.display_join(" "),
                         varargs
                     )
                     .unwrap();
@@ -332,7 +339,7 @@ fn gen_common_isle(
                     .map(|o| o.name)
                     .collect::<Vec<_>>();
                 assert_eq!(values.len(), inst.format.num_value_operands);
-                let values = values.join(" ");
+                let values = values.display_join(" ");
                 write!(
                     &mut s,
                     " (value_array_{} {})",
@@ -354,8 +361,11 @@ fn gen_common_isle(
                 if block_operands.len() == 1 {
                     write!(&mut s, " {}", block_operands[0].name).unwrap();
                 } else {
-                    let blocks: Vec<_> = block_operands.iter().map(|o| o.name).collect();
-                    let blocks = blocks.join(" ");
+                    let blocks = block_operands
+                        .iter()
+                        .map(|o| o.name)
+                        .collect::<Vec<_>>()
+                        .display_join(" ");
                     write!(
                         &mut s,
                         " (block_array_{} {})",
@@ -403,7 +413,7 @@ fn gen_common_isle(
                     .iter()
                     .map(|o| o.name)
                     .collect::<Vec<_>>()
-                    .join(" ")
+                    .display_join(" ")
             );
             fmt.indent(|fmt| {
                 let mut s = format!(
@@ -446,7 +456,7 @@ fn gen_common_isle(
                         .map(|o| o.name)
                         .collect::<Vec<_>>();
                     assert_eq!(values.len(), inst.format.num_value_operands);
-                    let values = values.join(" ");
+                    let values = values.display_join(" ");
                     write!(
                         &mut s,
                         " (value_array_{}_ctor {})",
@@ -469,7 +479,7 @@ fn gen_common_isle(
                             &mut s,
                             " (block_array_{} {})",
                             inst.format.num_block_operands,
-                            blocks.join(" ")
+                            blocks.display_join(" ")
                         )
                         .unwrap();
                     }
