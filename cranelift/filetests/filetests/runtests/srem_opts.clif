@@ -527,7 +527,7 @@ block0(v0: i32):
 ; run: %srem_zero_i32_divisor7(-2147483648) == 0
 ; run: %srem_zero_i32_divisor7(2147483647) == 0
 
-function %srem_zero_shared_remainder(i32) -> i32, i8 {
+function %srem_zero_shared_remainder(i32) -> i32, i8 system_v {
 block0(v0: i32):
     v1 = iconst.i32 8
     v2 = srem v0, v1

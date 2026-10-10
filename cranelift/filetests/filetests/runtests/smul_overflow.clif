@@ -5,7 +5,7 @@ target x86_64 has_bmi2
 target s390x
 target aarch64
 
-function %smulof_i64(i64, i64) -> i64, i8 {
+function %smulof_i64(i64, i64) -> i64, i8 system_v {
 block0(v0: i64, v1: i64):
     v2, v3 = smul_overflow v0, v1
     return v2, v3
@@ -23,7 +23,7 @@ block0(v0: i64, v1: i64):
 ; run: %smulof_i64(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == [0x2236D88F_E5618CF0, 1]
 ; run: %smulof_i64(0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF) == [0xDB6B1E48_19BA1112, 1]
 
-function %smulof_i32(i32, i32) -> i32, i8 {
+function %smulof_i32(i32, i32) -> i32, i8 system_v {
 block0(v0: i32, v1: i32):
     v2, v3 = smul_overflow v0, v1
     return v2, v3
@@ -41,7 +41,7 @@ block0(v0: i32, v1: i32):
 ; run: %smulof_i32(0x01234567, 0xFEDCBA98) == [0x23E20B28, 1]
 ; run: %smulof_i32(0xC0FFEEEE, 0xDECAFFFF) == [0x19BA1112, 1]
 
-function %smulof_i16(i16, i16) -> i16, i8 {
+function %smulof_i16(i16, i16) -> i16, i8 system_v {
 block0(v0: i16, v1: i16):
     v2, v3 = smul_overflow v0, v1
     return v2, v3
@@ -59,7 +59,7 @@ block0(v0: i16, v1: i16):
 ; run: %smulof_i16(0x0123, 0xFEDC) == [0xB414, 1]
 ; run: %smulof_i16(0xC0FF, 0xDECA) == [0x6B36, 1]
 
-function %smulof_i8(i8, i8) -> i8, i8 {
+function %smulof_i8(i8, i8) -> i8, i8 system_v {
 block0(v0: i8, v1: i8):
     v2, v3 = smul_overflow v0, v1
     return v2, v3
