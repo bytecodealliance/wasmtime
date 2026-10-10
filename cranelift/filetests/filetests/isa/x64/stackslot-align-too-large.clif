@@ -1,0 +1,13 @@
+; Stack slots can't be more aligned than the ABI's stack alignment (16 bytes
+; on x86-64), since the frame itself is only that aligned. Requesting more is
+; an unsupported-feature error rather than a silently misaligned slot.
+test compile expect-fail
+target x86_64
+
+function %f() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 64, align = 32
+block0:
+    v0 = stack_addr.i64 ss1
+    return v0
+}

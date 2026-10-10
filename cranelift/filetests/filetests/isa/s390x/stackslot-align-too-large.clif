@@ -1,0 +1,12 @@
+; Stack slots can't be more aligned than the ABI's stack alignment (8 bytes on
+; s390x), since the frame itself is only that aligned. Requesting more is an
+; unsupported-feature error rather than a silently misaligned slot.
+test compile expect-fail
+target s390x
+
+function %f() -> i64 {
+    ss0 = explicit_slot 16, align = 16
+block0:
+    v0 = stack_addr.i64 ss0
+    return v0
+}

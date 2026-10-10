@@ -1264,7 +1264,17 @@ impl<M: ABIMachineSpec> Callee<M> {
             // We always at least machine-word-align slots, but also
             // satisfy the user's requested alignment.
             debug_assert!(data.align_shift < 32);
-            let align = core::cmp::max(M::word_bytes(), 1u32 << data.align_shift);
+            // The frame is only as aligned as the ABI's stack alignment, so a
+            // slot can't be more aligned than that.
+            let requested_align = 1u32 << data.align_shift;
+            if requested_align > M::stack_align(call_conv) {
+                return Err(CodegenError::Unsupported(format!(
+                    "stack slot alignment of {requested_align} bytes is larger than the \
+                     stack alignment of {} bytes",
+                    M::stack_align(call_conv)
+                )));
+            }
+            let align = core::cmp::max(M::word_bytes(), requested_align);
             let mask = align - 1;
             let start_offset = checked_round_up(unaligned_start_offset, mask)
                 .ok_or(CodegenError::ImplLimitExceeded)?;

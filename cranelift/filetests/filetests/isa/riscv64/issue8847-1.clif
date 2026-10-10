@@ -4,12 +4,12 @@ test compile
 target riscv64
 
 function u1:0() tail {
-    ss0 = explicit_slot 50, align = 512
+    ss0 = explicit_slot 50, align = 16
     ss1 = explicit_slot 47, align = 4
-    ss2 = explicit_slot 34, align = 32
-    ss3 = explicit_slot 103, align = 1024
-    ss4 = explicit_slot 110, align = 512
-    ss5 = explicit_slot 126, align = 512
+    ss2 = explicit_slot 34, align = 16
+    ss3 = explicit_slot 103, align = 16
+    ss4 = explicit_slot 110, align = 16
+    ss5 = explicit_slot 126, align = 16
     sig0 = (i64 sext, i64 sext, i64 sext, i64 sext, i64 sext, i64 sext, i64 sext, i8 uext, i16 uext, i16, i64 sext, i64 sext, i128 uext, i8 sext, f32) tail
 
 block0:
