@@ -1219,8 +1219,6 @@ where
             .can_elide_bounds_check(&memory_tunables, self.env.page_size_log2);
 
         let addr = if offset_with_access_size > heap.memory.maximum_byte_size().unwrap_or(u64::MAX)
-            || (!self.tunables.memory_may_move
-                && offset_with_access_size > self.tunables.memory_reservation)
         {
             // Detect at compile time if the access is out of bounds.
             // Doing so will put the compiler in an unreachable code state,
