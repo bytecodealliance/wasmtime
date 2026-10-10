@@ -836,7 +836,30 @@ impl CallThreadState {
                         event = crate::DebugEvent::Exception(exn.clone());
                     }
 
-                    store.block_on_debug_handler(event)
+                    // The debug handler is embedder code and may panic. This
+                    // function is called from the `raise` libcall, which
+                    // doesn't catch panics, so catch them here and replace
+                    // the unwind reason with the panic so that it's
+                    // resumed on the other side of wasm, like a panic in a
+                    // host function.
+                    let f = || {
+                        store
+                            .block_on_debug_handler(event)
+                            .map_err(UnwindReason::from)
+                    };
+
+                    #[cfg(all(feature = "std", panic = "unwind"))]
+                    {
+                        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+                            Ok(result) => result,
+                            Err(panic) => Err(UnwindReason::Panic(panic)),
+                        }
+                    }
+
+                    #[cfg(not(all(feature = "std", panic = "unwind")))]
+                    {
+                        f()
+                    }
                 }
 
                 TrapReason::Jit { .. } => {
@@ -849,10 +872,10 @@ impl CallThreadState {
 
             // If the debugger invocation itself resulted in an `Err`
             // (which can only come from the `block_on` hitting a
-            // failure mode), we need to override our unwind as-if
-            // were handling a host error.
-            if let Err(err) = result {
-                unwind = Some(UnwindReason::from(err));
+            // failure mode, or from the handler panicking), we need to
+            // override our unwind with that reason.
+            if let Err(reason) = result {
+                unwind = Some(reason);
             }
         }
 
