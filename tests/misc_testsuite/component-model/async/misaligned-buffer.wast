@@ -1,6 +1,6 @@
 ;;! component_model_async = true
 
-;; Buffer pointers are validate at the time a `{stream,future}.{read,write}`
+;; Buffer pointers are validated at the time a `{stream,future}.{read,write}`
 ;; is issued regardless of the state of the other end of the stream or future.
 (component definition $C
   (core module $libc (memory (export "mem") 1))
