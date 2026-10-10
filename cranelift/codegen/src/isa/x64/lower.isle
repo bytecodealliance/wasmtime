@@ -381,8 +381,10 @@
 (decl sse_and (Type Xmm XmmMem128) Xmm)
 (rule (sse_and $F32X4 x y) (x64_andps x y))
 (rule (sse_and $F64X2 x y) (x64_andpd x y))
+(rule (sse_and $F16 x y) (x64_andps x y))
 (rule (sse_and $F32 x y) (x64_andps x y))
 (rule (sse_and $F64 x y) (x64_andpd x y))
+(rule (sse_and $F128 x y) (x64_andps x y))
 (rule -1 (sse_and (multi_lane _bits _lanes) x y) (x64_pand x y))
 
 (rule 6 (lower (band ty @ (multi_lane _bits _lanes) x y))
@@ -509,8 +511,10 @@
 (decl sse_or (Type Xmm XmmMem128) Xmm)
 (rule (sse_or $F32X4 x y) (x64_orps x y))
 (rule (sse_or $F64X2 x y) (x64_orpd x y))
+(rule (sse_or $F16 x y) (x64_orps x y))
 (rule (sse_or $F32 x y) (x64_orps x y))
 (rule (sse_or $F64 x y) (x64_orpd x y))
+(rule (sse_or $F128 x y) (x64_orps x y))
 (rule -1 (sse_or (multi_lane _bits _lanes) x y) (x64_por x y))
 
 (rule 6 (lower (bor ty @ (multi_lane _bits _lanes) x y))
@@ -4359,8 +4363,10 @@
 ;; Helper for the `ceil`/`floor`/`nearest`/`trunc` instructions ;;;;;;;;;;;;;;;;
 
 ;; Emits either a `round{ss,sd,ps,pd}` instruction, as appropriate, or generates
-;; the appropriate libcall and sequence to call that.
-(decl x64_round (Type Value RoundImm) Xmm)
+;; the appropriate libcall and sequence to call that. Partial: there's no
+;; lowering for other types (e.g. `f16` and `f128`), which are then rejected as
+;; unsupported.
+(decl partial x64_round (Type Value RoundImm) Xmm)
 (rule (x64_round $F32   a imm) (x64_round_f32   a imm))
 (rule (x64_round $F64   a imm) (x64_round_f64   a imm))
 (rule (x64_round $F32X4 a imm) (x64_round_f32x4 a imm))
