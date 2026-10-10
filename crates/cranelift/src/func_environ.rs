@@ -1308,26 +1308,29 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     /// Update the state slot layout with a new layout given a local.
+    ///
+    /// If there is a state slot, `init` is invoked to produce the local's
+    /// initial value, which is stored in its entry.
     pub(crate) fn add_state_slot_local(
         &mut self,
         builder: &mut FunctionBuilder,
         ty: WasmValType,
-        init: Option<ir::Value>,
-    ) {
+        init: impl FnOnce(&mut Self, &mut FunctionBuilder) -> WasmResult<ir::Value>,
+    ) -> WasmResult<()> {
         if let Some((slot, b)) = &mut self.state_slot {
             let offset = b.add_local(FrameValType::from(ty));
-            if let Some(init) = init {
-                let slot = *slot;
-                let region = self.alias_regions.stack_slot_region(builder.func, slot);
-                let address = builder
-                    .ins()
-                    .stack_addr(self.pointer_type(), slot, offset.offset());
-                let flags = self
-                    .memflags_for_debug_slot_value_wasm_ty(ty)
-                    .with_alias_region(Some(region));
-                builder.ins().store(flags, init, address, 0);
-            }
+            let slot = *slot;
+            let init = init(self, builder)?;
+            let region = self.alias_regions.stack_slot_region(builder.func, slot);
+            let address = builder
+                .ins()
+                .stack_addr(self.pointer_type(), slot, offset.offset());
+            let flags = self
+                .memflags_for_debug_slot_value_wasm_ty(ty)
+                .with_alias_region(Some(region));
+            builder.ins().store(flags, init, address, 0);
         }
+        Ok(())
     }
 
     fn update_state_slot_stack(

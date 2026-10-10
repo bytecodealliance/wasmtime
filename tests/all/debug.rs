@@ -1697,3 +1697,112 @@ async fn take_exception_in_debug_handler() -> Result<()> {
         }
     }
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn uninit_non_nullable_ref_local_in_single_step() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    // `$dirty` fills its frame with a garbage pattern so that `$victim`'s
+    // frame, which occupies the same stack space afterwards, starts with
+    // that garbage in it. `$victim`'s non-nullable local must still read as
+    // null, and must not be traced by the GC, before it is first set.
+    //
+    // Single-stepping is enabled by a host call at the start of `$victim`,
+    // not up front: a debug event in `main` between the two calls would run
+    // host code in the stack space `$dirty` used, overwriting the garbage.
+    let dirty_sets = (0..128)
+        .map(|i| format!("(local.set {i} (i64.const 0x0000123400001234))"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let wat = format!(
+        r#"
+    (module
+      (type $s (struct (field i32)))
+      (import "" "enable_single_step" (func $enable_single_step))
+      (func $dirty
+        (local {i64s})
+        {dirty_sets})
+      (func $victim (result i32)
+        (local $r (ref $s))
+        (call $enable_single_step)
+        (local.set $r (struct.new $s (i32.const 42)))
+        (struct.get $s 0 (local.get $r)))
+      (func (export "main") (result i32)
+        (call $dirty)
+        (call $victim)))
+    "#,
+        i64s = "i64 ".repeat(128),
+    );
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.wasm_gc(true);
+        },
+        &wat,
+    )?;
+
+    let handler = UninitLocalHandler::default();
+    store.set_debug_handler(handler.clone());
+
+    let enable_single_step = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| {
+        caller
+            .edit_breakpoints()
+            .unwrap()
+            .single_step(true)
+            .unwrap();
+    });
+    let instance =
+        Instance::new_async(&mut store, &module, &[Extern::Func(enable_single_step)]).await?;
+    let main = instance.get_typed_func::<(), i32>(&mut store, "main")?;
+    assert_eq!(main.call_async(&mut store, ()).await?, 42);
+
+    // We should have stopped at least once in `$victim` before the
+    // `local.set`, and then seen the local initialized afterwards.
+    assert!(handler.uninit_steps.load(Ordering::Relaxed) > 0);
+    assert!(handler.init_steps.load(Ordering::Relaxed) > 0);
+    return Ok(());
+
+    #[derive(Clone, Default)]
+    struct UninitLocalHandler {
+        uninit_steps: Arc<AtomicUsize>,
+        init_steps: Arc<AtomicUsize>,
+    }
+
+    impl DebugHandler for UninitLocalHandler {
+        type Data = ();
+
+        fn handle(
+            &self,
+            mut store: StoreContextMut<'_, ()>,
+            event: DebugEvent<'_>,
+        ) -> impl Future<Output = ()> + Send {
+            if let DebugEvent::Breakpoint = event {
+                let frame = store.debug_exit_frames().next().unwrap();
+                let (func, _pc) = frame
+                    .wasm_function_index_and_pc(&mut store)
+                    .unwrap()
+                    .unwrap();
+                // Only look at `$victim`, defined function 1.
+                if func.as_u32() == 1 {
+                    // A GC here traces the frame's state slot, including the
+                    // entry for `$r`, whether or not it's been set yet.
+                    store.gc(None).unwrap();
+                    let is_set = frame
+                        .local(&mut store, 0)
+                        .unwrap()
+                        .unwrap_any_ref()
+                        .is_some();
+                    if is_set {
+                        self.init_steps.fetch_add(1, Ordering::Relaxed);
+                    } else {
+                        // Before the `local.set`, the local reads as null.
+                        assert_eq!(self.init_steps.load(Ordering::Relaxed), 0);
+                        self.uninit_steps.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            }
+            async {}
+        }
+    }
+}
