@@ -3515,27 +3515,29 @@ impl Instance {
         count: usize,
     ) -> Result<()> {
         let types = self.id().get(store).component().types();
-        let size = usize::try_from(
-            match ty {
-                TransmitIndex::Future(ty) => types[types[ty].ty]
-                    .payload
-                    .map(|ty| types.canonical_abi(&ty).size32),
-                TransmitIndex::Stream(ty) => types[types[ty].ty]
-                    .payload
-                    .map(|ty| types.canonical_abi(&ty).size32),
-            }
-            .unwrap_or(0),
-        )?;
-
-        if count > 0 && size > 0 {
-            self.options_memory(store, options)
-                .get(address..)
-                .and_then(|b| b.get(..size.checked_mul(count)?))
-                .map(drop)
-                .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))
-        } else {
-            Ok(())
+        let payload = match ty {
+            TransmitIndex::Future(ty) => types[types[ty].ty].payload,
+            TransmitIndex::Stream(ty) => types[types[ty].ty].payload,
+        };
+        let Some(payload) = payload else {
+            return Ok(());
+        };
+        // As-written the spec currently exempts zero-length reads/writes from
+        // bounds/alignment checks.
+        if count == 0 {
+            return Ok(());
         }
+        let abi = types.canonical_abi(&payload);
+        let size = usize::try_from(abi.size32)?;
+        let align = usize::try_from(abi.align32)?;
+        if address % align != 0 {
+            bail!("buffer pointer not aligned");
+        }
+        self.options_memory(store, options)
+            .get(address..)
+            .and_then(|b| b.get(..size.checked_mul(count)?))
+            .map(drop)
+            .ok_or_else(|| crate::format_err!("buffer pointer out of bounds of memory"))
     }
 
     /// Write to the specified stream or future from the guest.
