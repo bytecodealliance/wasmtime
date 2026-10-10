@@ -642,7 +642,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let probe_count = frame_size / guard_size;
         if probe_count == 0 {
             // No probe necessary
-        } else if probe_count <= PROBE_MAX_UNROLL {
+        } else if probe_count <= PROBE_MAX_UNROLL || call_conv == isa::CallConv::PreserveAll {
+            // The probe loop needs a temporary register, but probes run
+            // before any registers are saved, and a `preserve_all` function
+            // must not clobber any register. The unrolled probes don't use
+            // any registers, so always use them for `preserve_all`.
             Self::gen_probestack_unroll(insts, guard_size, probe_count)
         } else {
             Self::gen_probestack_loop(insts, call_conv, frame_size, guard_size)

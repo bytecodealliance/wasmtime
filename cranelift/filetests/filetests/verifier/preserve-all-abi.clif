@@ -20,3 +20,27 @@ block0():
     v1, v2, v3, v4 = call fn0()
     return
 }
+
+; The stack-limit check runs before any registers are saved and needs scratch
+; registers, which a `preserve_all` function can't clobber.
+function %f3(i64 vmctx) preserve_all { ; error: functions with the `preserve_all` ABI cannot have a `stack_limit`
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    stack_limit = gv1
+
+block0(v0: i64):
+    return
+}
+
+; Other ABIs can have a `stack_limit`, and calling a `preserve_all` function
+; from such a function is fine.
+function %f4(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    stack_limit = gv1
+    fn0 = %g(i64) preserve_all
+
+block0(v0: i64):
+    call fn0(v0)
+    return
+}

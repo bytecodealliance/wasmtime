@@ -699,7 +699,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_inline_probestack(
         insts: &mut SmallInstVec<Self::I>,
-        _call_conv: isa::CallConv,
+        call_conv: isa::CallConv,
         frame_size: u32,
         guard_size: u32,
     ) {
@@ -711,6 +711,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let probe_count = frame_size / guard_size;
         if probe_count == 0 {
             // No probe necessary
+            return;
+        }
+
+        // Probes run before any registers are saved, and a `preserve_all`
+        // function must not clobber any register. The probe loop needs both
+        // non-allocatable spill temporaries in addition to `tmp`, so always
+        // use the unrolled probes, which only need `tmp`, and use the second
+        // spill temporary for it (the first is used to restore SP).
+        if call_conv == isa::CallConv::PreserveAll {
+            Self::gen_probestack_unroll(insts, writable_spilltmp_reg2(), guard_size, probe_count);
             return;
         }
 

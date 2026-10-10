@@ -78,7 +78,7 @@ use crate::ir::{
 use crate::ir::{ExceptionTableItem, Signature};
 use crate::isa::{CallConv, TargetIsa};
 use crate::print_errors::pretty_verifier_error;
-use crate::settings::FlagsOrIsa;
+use crate::settings::{Flags, FlagsOrIsa, ProbestackStrategy};
 use crate::timing;
 use alloc::collections::BTreeSet;
 use alloc::string::{String, ToString};
@@ -304,6 +304,7 @@ struct Verifier<'a> {
     func: &'a Function,
     expected_cfg: ControlFlowGraph,
     expected_domtree: DominatorTree,
+    flags: &'a Flags,
     isa: Option<&'a dyn TargetIsa>,
 }
 
@@ -315,6 +316,7 @@ impl<'a> Verifier<'a> {
             func,
             expected_cfg,
             expected_domtree,
+            flags: fisa.flags,
             isa: fisa.isa,
         }
     }
@@ -2113,6 +2115,32 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    /// A `preserve_all` function must not clobber any register, but the
+    /// prologue's stack-limit check and outline stack probe run before any
+    /// registers are saved and need scratch registers (and, for the outline
+    /// probe, a call to a function with its own clobbers). Reject both.
+    fn verify_preserve_all_prologue(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
+        if self.func.signature.call_conv != CallConv::PreserveAll {
+            return Ok(());
+        }
+        if self.func.stack_limit.is_some() {
+            errors.fatal((
+                AnyEntity::Function,
+                "functions with the `preserve_all` ABI cannot have a `stack_limit`",
+            ))?;
+        }
+        if self.flags.enable_probestack()
+            && self.flags.probestack_strategy() == ProbestackStrategy::Outline
+        {
+            errors.fatal((
+                AnyEntity::Function,
+                "functions with the `preserve_all` ABI cannot use the outline stack probe \
+                 (`probestack_strategy=outline`)",
+            ))?;
+        }
+        Ok(())
+    }
+
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
         self.verify_global_values(errors)?;
         self.verify_alias_regions(errors)?;
@@ -2120,6 +2148,7 @@ impl<'a> Verifier<'a> {
         self.check_entry_not_cold(errors)?;
         self.typecheck_function_signature(errors)?;
         self.verify_signatures(errors)?;
+        self.verify_preserve_all_prologue(errors)?;
 
         for block in self.func.layout.blocks() {
             if self.func.layout.first_inst(block).is_none() {

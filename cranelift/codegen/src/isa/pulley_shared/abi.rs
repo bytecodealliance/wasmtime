@@ -752,12 +752,12 @@ impl FrameLayout {
                 }
             }
             // Allocate space for this manually-managed clobber.
-            offset -= 8;
             let ty = match r_reg.class() {
                 RegClass::Int => I64,
                 RegClass::Float => F64,
                 RegClass::Vector => I8X16,
             };
+            offset -= ty.bytes();
             let offset = i32::try_from(offset).unwrap();
             Some((offset, ty, Reg::from(reg.to_reg())))
         })

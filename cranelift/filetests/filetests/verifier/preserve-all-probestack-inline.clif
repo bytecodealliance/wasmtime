@@ -1,0 +1,10 @@
+test verifier
+set enable_probestack=true
+set probestack_strategy=inline
+
+; Inline stack probes are allowed for `preserve_all` functions: backends
+; must emit them without clobbering any registers.
+function %f0() preserve_all {
+block0():
+    return
+}
