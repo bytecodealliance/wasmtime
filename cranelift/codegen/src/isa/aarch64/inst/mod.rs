@@ -1035,6 +1035,37 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(start);
             collector.reg_use(end);
         }
+        Inst::InterruptPoll {
+            dst,
+            load_ptr,
+            context,
+            trap_code: _,
+            next_load_ptr,
+        } => {
+            // `load_ptr` is an input param. It is pinned to x10 so an update of
+            // `next_load_ptr` updates this as well. x10 is chosen because it is
+            // a caller-saved scratch reg with no special role.
+            collector.reg_fixed_use(load_ptr, regs::xreg(10));
+            // Demand `context` (the vmctx) go into x0, where the signal
+            // handler can find it and hand it straight to
+            // `task_switch_trampoline` as its first argument.
+            collector.reg_fixed_use(context, regs::xreg(0));
+            // Reserve x9 as a place for the signal handler to put the address
+            // at which to resume once the task switch is done. x9 is caller
+            // saved and has no special role.
+            //
+            // Define it, so we can use it as the destination of the dead
+            // load rather than consuming another arbitrary reg.
+            collector.reg_fixed_def(dst, regs::xreg(9));
+            // `next_load_ptr` is pinned so embedders know where to write to
+            // fill it. It shares x10 with `load_ptr`, above, so filling this
+            // output means also filling in the (potential) next input, for
+            // efficiency. This also means that leaving x10 alone (in the
+            // common, non-trapping case), makes info conceptually flow in the
+            // other direction, piping the old but unchanging `load_ptr` through
+            // to the output.
+            collector.reg_fixed_def(next_load_ptr, regs::xreg(10));
+        }
     }
 }
 
@@ -3166,6 +3197,21 @@ impl Inst {
                 let end = pretty_print_reg(end);
                 let step = step.pretty_print(0);
                 format!("stack_probe_loop {start}, {end}, {step}")
+            }
+            &Inst::InterruptPoll {
+                dst,
+                load_ptr,
+                context,
+                trap_code,
+                next_load_ptr,
+            } => {
+                let dst = pretty_print_reg(dst.to_reg());
+                let load_ptr = pretty_print_reg(load_ptr);
+                let context = pretty_print_reg(context);
+                let next_load_ptr = pretty_print_reg(next_load_ptr.to_reg());
+                format!(
+                    "{next_load_ptr} = interrupt_poll {dst}, {load_ptr}, {context} #trap={trap_code}"
+                )
             }
         }
     }

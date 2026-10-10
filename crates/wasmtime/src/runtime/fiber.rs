@@ -418,7 +418,7 @@ pub(crate) struct StoreFiber<'a> {
     /// Note that using `StoreFiberYield` as the `Yield` type parameter allows
     /// the fiber to indicate whether it needs exclusive access to the store
     /// across suspend points (in which case it will pass `KeepStore` when
-    /// suspending , meaning the store must not be used at all until the fiber
+    /// suspending, meaning the store must not be used at all until the fiber
     /// is resumed again) or whether it is giving up exclusive access (in which
     /// case it will pass `ReleaseStore` when yielding, meaning exclusive access
     /// may be given to another fiber that runs concurrently.
