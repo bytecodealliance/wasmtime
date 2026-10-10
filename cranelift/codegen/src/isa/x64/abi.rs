@@ -154,6 +154,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             let last_param = ix == params.len() - 1;
 
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
+                if is_tail {
+                    return Err(crate::CodegenError::Unsupported(
+                        "struct arguments (`sarg`) in `tail` signatures".to_owned(),
+                    ));
+                }
                 let offset = next_stack as i64;
                 let size = size;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");

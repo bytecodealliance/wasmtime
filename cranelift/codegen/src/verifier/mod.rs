@@ -2085,6 +2085,19 @@ impl<'a> Verifier<'a> {
                     ))?;
                 }
             }
+            CallConv::Tail => {
+                if sig
+                    .params
+                    .iter()
+                    .any(|p| matches!(p.purpose, ArgumentPurpose::StructArgument(_)))
+                {
+                    errors.fatal((
+                        entity,
+                        "Signature with `tail` ABI cannot have struct arguments (`sarg`)"
+                            .to_string(),
+                    ))?;
+                }
+            }
             _ => {}
         }
         Ok(())
