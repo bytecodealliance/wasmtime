@@ -26,8 +26,8 @@
 )
 
 ;; function u0:0(i64 vmctx, i64) tail {
-;;     ss0 = explicit_slot 16, align = 65536
-;;     ss1 = explicit_slot 24, align = 256
+;;     ss0 = explicit_slot 16, align = 16
+;;     ss1 = explicit_slot 24, align = 8
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
 ;;     region2 = 28 ""
@@ -307,7 +307,7 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) tail {
-;;     ss0 = explicit_slot 8, align = 256
+;;     ss0 = explicit_slot 8, align = 8
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
 ;;     region2 = 28 ""
