@@ -2192,6 +2192,25 @@ impl Config {
         self
     }
 
+    /// Configures the page size of the internal memory used as a GC heap.
+    ///
+    /// Allowed sizes are 16 (for a page size of 64KiB) and 0 (for a page size of one byte).
+    ///
+    /// ## Default
+    ///
+    /// The default GC heap page size is 64KiB (represented by the log2 value 16).
+    pub fn gc_heap_page_size_log2(&mut self, page_size_log2: u8) -> Result<&mut Self> {
+        if page_size_log2 != 16 && page_size_log2 != 0 {
+            bail!(
+                "invalid page_size_log2: {}; must be 16 or 0",
+                page_size_log2
+            )
+        }
+
+        self.tunables.gc_heap_page_size_log2 = Some(page_size_log2);
+        Ok(self)
+    }
+
     /// Indicates whether a guard region is present before allocations of
     /// linear memory.
     ///
@@ -4965,6 +4984,11 @@ impl Engine {
     /// Returns the configured [`Config::gc_heap_guard_size`] value.
     pub fn get_gc_heap_guard_size(&self) -> u64 {
         self.tunables().gc_heap_guard_size
+    }
+
+    /// Returns the configured [`Config::gc_heap_page_size_log2`] value.
+    pub fn get_gc_heap_page_size_log2(&self) -> u8 {
+        self.tunables().gc_heap_page_size_log2
     }
 
     /// Returns the configured [`Config::guard_before_linear_memory`] value.

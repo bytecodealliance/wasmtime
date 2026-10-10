@@ -336,6 +336,7 @@ impl Metadata<'_> {
             gc_heap_guard_size,
             gc_heap_may_move,
             gc_heap_initial_size,
+            gc_heap_page_size_log2,
 
             // This doesn't affect compilation, it's just a runtime setting.
             gc_heap_reservation_for_growth: _,
@@ -444,6 +445,11 @@ impl Metadata<'_> {
             gc_heap_initial_size,
             other.gc_heap_initial_size,
             "GC heap initial size",
+        )?;
+        Self::check_int(
+            gc_heap_page_size_log2,
+            other.gc_heap_page_size_log2,
+            "GC heap page size",
         )?;
         Self::check_bool(gc_heap_may_move, other.gc_heap_may_move, "GC heap may move")?;
 

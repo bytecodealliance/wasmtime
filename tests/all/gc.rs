@@ -4329,3 +4329,68 @@ async fn manually_grow_gc_heap() -> Result<()> {
     assert_eq!(store.gc_heap_capacity(), 4 << 16);
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn gc_heap_byte_pages() -> Result<()> {
+    for collector in [
+        Collector::Null,
+        Collector::DeferredReferenceCounting,
+        Collector::Copying,
+    ] {
+        let mut config = Config::new();
+        config.collector(collector);
+        config.gc_heap_page_size_log2(0).unwrap();
+        config.gc_heap_reservation(0);
+        config.gc_heap_reservation_for_growth(0);
+        config.gc_heap_guard_size(0);
+
+        let engine = Engine::new(&config)?;
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (type $small (struct (field i32)))
+                    (type $bytes (array (mut i8)))
+                    (global $keep (mut (ref null $bytes)) (ref.null $bytes))
+
+                    (func (export "run") (param i32)
+                        (local $i i32)
+                        (loop $loop
+                            (drop (struct.new $small (local.get $i)))
+                            ;; Arrays of varying, unaligned sizes.
+                            (global.set $keep
+                                (array.new_default $bytes
+                                    (i32.rem_u (i32.mul (local.get $i) (i32.const 7))
+                                               (i32.const 61))))
+                            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                            (br_if $loop (i32.lt_u (local.get $i) (local.get 0)))
+                        )
+                    )
+                )
+            "#,
+        )?;
+
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let run = instance.get_typed_func::<(i32,), ()>(&mut store, "run")?;
+        run.call(&mut store, (1,))?;
+        let capacity = store.gc_heap_capacity();
+        assert!(
+            capacity > 0 && capacity < 1 << 10,
+            "{collector:?}: GC heap should only grow by the bytes needed, but has {capacity} bytes"
+        );
+
+        run.call(&mut store, (1000,))?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn gc_heap_page_size_log2_validation() {
+    let mut config = Config::new();
+    assert!(config.gc_heap_page_size_log2(16).is_ok());
+    assert!(config.gc_heap_page_size_log2(14).is_err());
+    assert!(config.gc_heap_page_size_log2(0).is_ok());
+}

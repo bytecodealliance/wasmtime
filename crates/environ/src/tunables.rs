@@ -197,6 +197,11 @@ define_tunables! {
         /// This is the same as `memory_may_move` but for GC heaps.
         pub gc_heap_may_move: bool,
 
+        /// The page size ([Memory::page_size_log2]) used for GC heaps.
+        ///
+        /// Allowed values are `16` (for 64 KiB pages) and `0` for (1 byte pages).
+        pub gc_heap_page_size_log2: u8,
+
         /// Boolean to track whether compiled code retains metadata necessary to
         /// report extra information on internal assertions failing.
         pub metadata_for_internal_asserts: bool,
@@ -293,6 +298,11 @@ impl Tunables {
             gc_heap_reservation_for_growth: 0,
             gc_heap_may_move: true,
             gc_heap_initial_size: 0,
+            // We *could* try to match the target architecture's page size, but that
+            // would require exercising a page size for memories that we don't
+            // otherwise support for Wasm; we conservatively avoid that, and just
+            // use the default Wasm page size, for now.
+            gc_heap_page_size_log2: 16,
             metadata_for_internal_asserts: false,
             metadata_for_gc_heap_corruption: true,
             branch_hinting: false,
@@ -355,11 +365,7 @@ impl Tunables {
 
     /// Get the GC heap's memory type, given our configured tunables.
     pub fn gc_heap_memory_type(&self) -> Memory {
-        // We *could* try to match the target architecture's page size, but that
-        // would require exercising a page size for memories that we don't
-        // otherwise support for Wasm; we conservatively avoid that, and just
-        // use the default Wasm page size, for now.
-        let page_size_log2 = 16;
+        let page_size_log2 = self.gc_heap_page_size_log2;
         let min = self.gc_heap_initial_size.div_ceil(1 << page_size_log2);
         Memory {
             idx_type: IndexType::I32,
