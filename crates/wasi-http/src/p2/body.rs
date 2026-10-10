@@ -94,6 +94,10 @@ enum StreamEnd {
     /// Body was completely read and trailers were read. Here are the trailers.
     /// Note that `None` means that the body finished without trailers.
     Trailers(Option<http::HeaderMap>),
+
+    /// The body finished with an error. `future-trailers` reports it as well,
+    /// so a guest that only reads the trailers still sees the failure.
+    Error(Error),
 }
 
 /// The concrete type behind the `wasi:io/streams.input-stream` resource returned
@@ -136,6 +140,15 @@ impl HostIncomingBodyStream {
             // Destroy the body to terminate the stream while enqueueing the
             // error to get returned from the next call to `read`.
             Some(Err(e)) => {
+                // Also tell `future-trailers`. `Error` isn't cloneable, so the
+                // future gets the error-code this failure maps to for guests.
+                let tx = match mem::replace(&mut self.state, IncomingBodyStreamState::Closed) {
+                    IncomingBodyStreamState::Open { tx, .. } => Some(tx),
+                    IncomingBodyStreamState::Closed => None,
+                };
+                if let Some(tx) = tx {
+                    let _ = tx.send(StreamEnd::Error(Error::HttpProtocolError));
+                }
                 self.error = Some(e);
                 self.state = IncomingBodyStreamState::Closed;
             }
@@ -283,6 +296,12 @@ impl Pollable for HostFutureTrailers {
                 // The body wasn't fully read and was dropped before trailers
                 // were reached. It's up to us now to complete the body.
                 Ok(StreamEnd::Remaining(b)) => body.body = IncomingBodyState::Start(b),
+
+                // The body itself errored out, so report that through this
+                // future as its contract requires.
+                Ok(StreamEnd::Error(e)) => {
+                    *self = HostFutureTrailers::Done(Err(e));
+                }
 
                 // This means there were no trailers present.
                 Ok(StreamEnd::Trailers(None)) | Err(_) => {

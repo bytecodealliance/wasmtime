@@ -2141,6 +2141,77 @@ start a print 1234
         Ok(())
     }
 
+    // A body can fail to parse after the guest read part of it.
+    // `future-trailers` must report an error, not a successful body.
+    #[tokio::test]
+    async fn p2_cli_serve_trailers_result() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_TRAILERS_RESULT_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        async fn request(server: &WasmtimeServe, raw: &[u8]) -> Result<String> {
+            let mut stream = TcpStream::connect(server.first_addr()).await?;
+            stream.write_all(raw).await?;
+            let mut response = Vec::new();
+            let mut buf = [0; 1024];
+            loop {
+                let n = tokio::time::timeout(Duration::from_secs(10), stream.read(&mut buf))
+                    .await
+                    .expect("timed out waiting for a response")?;
+                if n == 0 {
+                    break;
+                }
+                response.extend_from_slice(&buf[..n]);
+            }
+            String::from_utf8(response).map_err(Into::into)
+        }
+
+        let malformed: &[(&str, &[u8])] = &[
+            (
+                "empty trailer name",
+                b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n: v\r\n\r\n",
+            ),
+            (
+                "trailer without a colon",
+                b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\nBadTrailer\r\n\r\n",
+            ),
+            (
+                "trailer with a NUL",
+                b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\nX-T: a\x00b\r\n\r\n",
+            ),
+            (
+                "extra zero chunk",
+                b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n0\r\n\r\n",
+            ),
+        ];
+        for (name, raw) in malformed {
+            let response = request(&server, raw).await?;
+            assert!(
+                response.contains("trailers=error-code=ErrorCode::HttpProtocolError"),
+                "{name}: {response:?}",
+            );
+        }
+
+        // A well-formed body still reports success: once without trailers and
+        // once with a single trailer.
+        let response = request(
+            &server,
+            b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n",
+        )
+        .await?;
+        assert!(response.contains("trailers=none"), "{response:?}");
+
+        let response = request(
+            &server,
+            b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\nX-T: v\r\n\r\n",
+        )
+        .await?;
+        assert!(response.contains("trailers=field-count=1"), "{response:?}");
+
+        server.finish()?;
+        Ok(())
+    }
+
     #[test]
     fn p2_cli_argv0() -> Result<()> {
         run_wasmtime(&["run", "--argv0=a", P2_CLI_ARGV0, "a"])?;
