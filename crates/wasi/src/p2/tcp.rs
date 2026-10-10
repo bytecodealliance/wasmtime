@@ -25,6 +25,15 @@ pub struct TcpSocket {
     writer: Option<TcpWriter>,
 }
 
+impl Drop for TcpSocket {
+    fn drop(&mut self) {
+        // Reset before the retained streams shut down. Shutting down the
+        // writer can make the peer observe a clean EOF, and on macOS shutting
+        // down the reader discards unread data that would otherwise cause a reset.
+        self.inner.abort_if_unread();
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AsyncOperation {
     Bind,
@@ -316,5 +325,128 @@ impl OutputStream for TcpWriter {
 impl Pollable for TcpWriter {
     async fn ready(&mut self) {
         poll_fn(|cx| self.0.lock().unwrap().poll_ready(cx).map(|_| ())).await;
+    }
+}
+
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[derive(Clone, Copy)]
+    enum CloseMode {
+        Unread,
+        Read,
+        Empty,
+        ShutdownSend,
+        RetainWriter,
+    }
+
+    async fn close_with_unread_data(family: crate::sockets::SocketAddressFamily, mode: CloseMode) {
+        use crate::WasiCtxBuilder;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let address = match family {
+                crate::sockets::SocketAddressFamily::Ipv4 => "127.0.0.1:0",
+                crate::sockets::SocketAddressFamily::Ipv6 => "[::1]:0",
+            };
+            let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+            let mut ctx = WasiCtxBuilder::new();
+            ctx.inherit_network().allow_tcp(true);
+            let ctx = ctx.build();
+            let mut inner = P3Socket::new(&ctx.sockets, family).unwrap();
+            inner.start_connect(listener.local_addr().unwrap()).unwrap();
+            poll_fn(|cx| inner.poll_finish_connect(cx)).await.unwrap();
+            let (mut peer, _) = listener.accept().await.unwrap();
+            let mut socket = TcpSocket::new(inner);
+            let (mut input, output) = socket.take_streams().unwrap();
+
+            if !matches!(mode, CloseMode::Empty) {
+                peer.write_all(b"unread").await.unwrap();
+                input.ready().await;
+            }
+            if matches!(mode, CloseMode::Read) {
+                let mut received = Vec::new();
+                while received.len() < 6 {
+                    received.extend_from_slice(&input.read(6).unwrap());
+                    if received.len() < 6 {
+                        input.ready().await;
+                    }
+                }
+                assert_eq!(received, b"unread");
+            }
+
+            if matches!(mode, CloseMode::ShutdownSend) {
+                socket.shutdown(Shutdown::Write).unwrap();
+                // An explicit send shutdown must still give the peer a clean EOF
+                // even with unread incoming data. Observe it before dropping the socket.
+                assert_eq!(peer.read(&mut [0]).await.unwrap(), 0);
+            }
+
+            let retained_writer = if matches!(mode, CloseMode::RetainWriter) {
+                // Keep the native descriptor open past socket drop.
+                socket.writer.clone()
+            } else {
+                None
+            };
+
+            // Match wasi-libc close: the socket retains both streams until
+            // after their guest resources have been dropped.
+            drop(input);
+            drop(output);
+            drop(socket);
+
+            if matches!(mode, CloseMode::ShutdownSend) {
+                return;
+            }
+            let result = peer.read(&mut [0]).await;
+            if matches!(mode, CloseMode::Unread | CloseMode::RetainWriter) {
+                assert_eq!(
+                    result.unwrap_err().kind(),
+                    std::io::ErrorKind::ConnectionReset
+                );
+            } else {
+                assert_eq!(result.unwrap(), 0);
+            }
+            drop(retained_writer);
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn close_resets_unread_data() {
+        use crate::sockets::SocketAddressFamily;
+        close_with_unread_data(SocketAddressFamily::Ipv4, CloseMode::Unread).await;
+        close_with_unread_data(SocketAddressFamily::Ipv6, CloseMode::Unread).await;
+    }
+
+    #[tokio::test]
+    async fn close_is_orderly_after_reading_data() {
+        use crate::sockets::SocketAddressFamily;
+        close_with_unread_data(SocketAddressFamily::Ipv4, CloseMode::Read).await;
+        close_with_unread_data(SocketAddressFamily::Ipv6, CloseMode::Read).await;
+    }
+
+    #[tokio::test]
+    async fn close_is_orderly_without_received_data() {
+        use crate::sockets::SocketAddressFamily;
+        close_with_unread_data(SocketAddressFamily::Ipv4, CloseMode::Empty).await;
+        close_with_unread_data(SocketAddressFamily::Ipv6, CloseMode::Empty).await;
+    }
+
+    #[tokio::test]
+    async fn send_shutdown_is_orderly_with_unread_data() {
+        use crate::sockets::SocketAddressFamily;
+        close_with_unread_data(SocketAddressFamily::Ipv4, CloseMode::ShutdownSend).await;
+        close_with_unread_data(SocketAddressFamily::Ipv6, CloseMode::ShutdownSend).await;
+    }
+
+    #[tokio::test]
+    async fn close_resets_unread_data_with_retained_writer() {
+        use crate::sockets::SocketAddressFamily;
+        close_with_unread_data(SocketAddressFamily::Ipv4, CloseMode::RetainWriter).await;
+        close_with_unread_data(SocketAddressFamily::Ipv6, CloseMode::RetainWriter).await;
     }
 }

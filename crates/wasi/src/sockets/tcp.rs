@@ -398,6 +398,20 @@ impl TcpSocket {
         }
     }
 
+    /// Preserve native close behavior for a P2 socket with unread data.
+    pub(crate) fn abort_if_unread(&self) {
+        #[cfg(unix)]
+        if let TcpState::Connected { stream, .. } = &self.tcp_state {
+            if matches!(rustix::io::ioctl_fionread(&**stream), Ok(unread) if unread > 0) {
+                // Zero linger alone takes effect when the native descriptor closes.
+                // Disconnect now, before stream shutdowns can signal a clean EOF
+                // or discard unread data.
+                _ = sockopt::set_socket_linger(&**stream, Some(Duration::ZERO));
+                abort_connection(stream);
+            }
+        }
+    }
+
     pub(crate) fn is_listening(&self) -> bool {
         matches!(self.tcp_state, TcpState::Listening(_))
     }
@@ -611,6 +625,35 @@ impl TcpListenStream {
                 .map(|_| ())
         })
     }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn abort_connection(stream: &tokio::net::TcpStream) {
+    _ = rustix::net::connect_unspec(stream);
+}
+
+#[cfg(target_vendor = "apple")]
+fn abort_connection(stream: &tokio::net::TcpStream) {
+    use std::os::fd::AsRawFd;
+
+    // Unlike Linux, connecting to AF_UNSPEC does not disconnect TCP on macOS.
+    // SAFETY: The descriptor remains open for this call, and both connection
+    // identifiers are passed by value; no pointers are involved.
+    unsafe {
+        libc::disconnectx(
+            stream.as_raw_fd(),
+            libc::SAE_ASSOCID_ANY,
+            libc::SAE_CONNID_ANY,
+        );
+    }
+}
+
+#[cfg(all(
+    unix,
+    not(any(target_os = "linux", target_os = "android", target_vendor = "apple"))
+))]
+fn abort_connection(_stream: &tokio::net::TcpStream) {
+    // On other Unix platforms, zero linger takes effect at the last close.
 }
 
 pub(crate) struct TcpSendStream {

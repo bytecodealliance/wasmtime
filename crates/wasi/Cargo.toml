@@ -45,6 +45,9 @@ env_logger = { workspace = true }
 rustix = { workspace = true, features = ["event", "fs", "net", "time"] }
 rustix-linux-procfs = "0.1.1"
 
+[target.'cfg(target_vendor = "apple")'.dependencies]
+libc = { workspace = true }
+
 [target.'cfg(windows)'.dependencies]
 rustix = { workspace = true, features = ["event", "net"] }
 
