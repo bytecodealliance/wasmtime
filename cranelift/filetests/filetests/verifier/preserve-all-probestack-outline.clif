@@ -1,0 +1,21 @@
+test verifier
+set enable_probestack=true
+set probestack_strategy=outline
+
+; The outline stack probe runs before any registers are saved and clobbers
+; registers (the frame size argument and the probestack function's own
+; clobbers), which a `preserve_all` function can't do.
+function %f0() preserve_all { ; error: functions with the `preserve_all` ABI cannot use the outline stack probe
+block0():
+    return
+}
+
+; Other ABIs can use the outline stack probe, and calling a `preserve_all`
+; function from such a function is fine.
+function %f1(i64) {
+    fn0 = %g(i64) preserve_all
+
+block0(v0: i64):
+    call fn0(v0)
+    return
+}

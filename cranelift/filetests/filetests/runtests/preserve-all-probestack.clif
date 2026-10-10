@@ -1,0 +1,65 @@
+; A `preserve_all` callee with a frame large enough for an inline stack-probe
+; loop must not clobber any of the caller's registers: the caller keeps
+; values live across the call in registers, including ones that other ABIs
+; treat as caller-saved scratch registers (e.g. %r11 on x86-64).
+test interpret
+test run
+set enable_probestack=true
+set probestack_strategy=inline
+target x86_64
+target aarch64
+
+function %callee(i64) preserve_all {
+    ss0 = explicit_slot 100000
+block0(v0: i64):
+    v1 = stack_addr.i64 ss0
+    store v0, v1
+    return
+}
+
+function %caller(i64) -> i64 {
+    fn0 = colocated %callee(i64) preserve_all
+block0(v0: i64):
+    v101 = iconst.i64 4369
+    v1 = imul v0, v101
+    v102 = iconst.i64 8738
+    v2 = imul v0, v102
+    v103 = iconst.i64 13107
+    v3 = imul v0, v103
+    v104 = iconst.i64 17476
+    v4 = imul v0, v104
+    v105 = iconst.i64 21845
+    v5 = imul v0, v105
+    v106 = iconst.i64 26214
+    v6 = imul v0, v106
+    v107 = iconst.i64 30583
+    v7 = imul v0, v107
+    v108 = iconst.i64 34952
+    v8 = imul v0, v108
+    v109 = iconst.i64 39321
+    v9 = imul v0, v109
+    v110 = iconst.i64 43690
+    v10 = imul v0, v110
+    v111 = iconst.i64 48059
+    v11 = imul v0, v111
+    v112 = iconst.i64 52428
+    v12 = imul v0, v112
+    v113 = iconst.i64 56797
+    v13 = imul v0, v113
+    call fn0(v0)
+    v200 = iadd v1, v2
+    v201 = iadd v200, v3
+    v202 = iadd v201, v4
+    v203 = iadd v202, v5
+    v204 = iadd v203, v6
+    v205 = iadd v204, v7
+    v206 = iadd v205, v8
+    v207 = iadd v206, v9
+    v208 = iadd v207, v10
+    v209 = iadd v208, v11
+    v210 = iadd v209, v12
+    v211 = iadd v210, v13
+    return v211
+}
+; run: %caller(1) == 397579
+; run: %caller(3) == 1192737
