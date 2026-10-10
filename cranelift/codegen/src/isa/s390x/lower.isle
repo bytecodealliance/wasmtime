@@ -1586,6 +1586,12 @@
 (rule (lower (bitselect (vr128_ty ty) x y z))
       (vec_select ty y z x))
 
+;; Bitselect float registers, using vector overlay (as for `band`/`bor`/`bxor`
+;; on scalar floats). This must take priority over the `fits_in_64` rules above,
+;; which use GPR instructions.
+(rule 8 (lower (bitselect (ty_scalar_float _) x y z))
+      (vec_select $F64X2 y z x))
+
 ;; Bitselect-not vector registers.
 (rule 5 (lower (bitselect (vr128_ty ty) x (bnot _ y) z))
       (if-let true (has_vxrs_ext3))

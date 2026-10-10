@@ -1,0 +1,74 @@
+; Bitwise operations on `f16` and `f128` values.
+;
+; Only x86-64 implements all of these for both types so far; other backends
+; reject some of them as unsupported.
+test interpret
+test run
+set enable_llvm_abi_extensions
+target x86_64
+target x86_64 has_avx
+
+function %band_f16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = bitcast.f16 v0
+    v3 = bitcast.f16 v1
+    v4 = band v2, v3
+    v5 = bitcast.i16 v4
+    return v5
+}
+; run: %band_f16(0xff00, 0x0ff0) == 0x0f00
+; run: %band_f16(0x7fff, 0x8001) == 0x0001
+
+function %bor_f16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = bitcast.f16 v0
+    v3 = bitcast.f16 v1
+    v4 = bor v2, v3
+    v5 = bitcast.i16 v4
+    return v5
+}
+; run: %bor_f16(0xff00, 0x0ff0) == 0xfff0
+; run: %bor_f16(0x7c00, 0x8001) == 0xfc01
+
+function %bitselect_f16(i16, i16, i16) -> i16 {
+block0(v0: i16, v1: i16, v2: i16):
+    v3 = bitcast.f16 v0
+    v4 = bitcast.f16 v1
+    v5 = bitcast.f16 v2
+    v6 = bitselect v3, v4, v5
+    v7 = bitcast.i16 v6
+    return v7
+}
+; run: %bitselect_f16(0xff00, 0x1234, 0xabcd) == 0x12cd
+; run: %bitselect_f16(0x8000, 0x8000, 0x7fff) == 0xffff
+
+function %band_f128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = bitcast.f128 v0
+    v3 = bitcast.f128 v1
+    v4 = band v2, v3
+    v5 = bitcast.i128 v4
+    return v5
+}
+; run: %band_f128(0xffffffff_00000000_ffff0000_ff00ff00, 0x0ff00ff0_0ff00ff0_0ff00ff0_0ff00ff0) == 0x0ff00ff0_00000000_0ff00000_0f000f00
+
+function %bor_f128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = bitcast.f128 v0
+    v3 = bitcast.f128 v1
+    v4 = bor v2, v3
+    v5 = bitcast.i128 v4
+    return v5
+}
+; run: %bor_f128(0xffffffff_00000000_ffff0000_ff00ff00, 0x0ff00ff0_0ff00ff0_0ff00ff0_0ff00ff0) == 0xffffffff_0ff00ff0_ffff0ff0_fff0fff0
+
+function %bitselect_f128(i128, i128, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128):
+    v3 = bitcast.f128 v0
+    v4 = bitcast.f128 v1
+    v5 = bitcast.f128 v2
+    v6 = bitselect v3, v4, v5
+    v7 = bitcast.i128 v6
+    return v7
+}
+; run: %bitselect_f128(0xffffffff_ffffffff_00000000_00000000, 0x11111111_22222222_33333333_44444444, 0xaaaaaaaa_bbbbbbbb_cccccccc_dddddddd) == 0x11111111_22222222_cccccccc_dddddddd

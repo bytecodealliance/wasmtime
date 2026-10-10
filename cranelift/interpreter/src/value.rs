@@ -233,8 +233,10 @@ macro_rules! bitop {
             (DataValue::I32(a), DataValue::I32(b)) => DataValue::I32(a $op b),
             (DataValue::I64(a), DataValue::I64(b)) => DataValue::I64(a $op b),
             (DataValue::I128(a), DataValue::I128(b)) => DataValue::I128(a $op b),
+            (DataValue::F16(a), DataValue::F16(b)) => DataValue::F16(a $op b),
             (DataValue::F32(a), DataValue::F32(b)) => DataValue::F32(a $op b),
             (DataValue::F64(a), DataValue::F64(b)) => DataValue::F64(a $op b),
+            (DataValue::F128(a), DataValue::F128(b)) => DataValue::F128(a $op b),
             (DataValue::V64(a), DataValue::V64(b)) => {
                 let mut a2 = a.clone();
                 for (a, b) in a2.iter_mut().zip(b.iter()) {
@@ -843,8 +845,10 @@ impl DataValueExt for DataValue {
             DataValue::I32(a) => DataValue::I32(!a),
             DataValue::I64(a) => DataValue::I64(!a),
             DataValue::I128(a) => DataValue::I128(!a),
+            DataValue::F16(a) => DataValue::F16(!a),
             DataValue::F32(a) => DataValue::F32(!a),
             DataValue::F64(a) => DataValue::F64(!a),
+            DataValue::F128(a) => DataValue::F128(!a),
             DataValue::V64(mut a) => {
                 for byte in a.iter_mut() {
                     *byte = !*byte;
