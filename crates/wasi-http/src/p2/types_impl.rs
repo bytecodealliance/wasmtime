@@ -9,7 +9,6 @@ use crate::p2::types::{
 use crate::p2::{HeaderError, HeaderResult, HttpError, HttpResult};
 use crate::{FieldMap, WasiHttpCtxView, get_content_length};
 use http::HeaderName;
-use std::str::FromStr;
 use wasmtime::component::Resource;
 use wasmtime::{error::Context as _, format_err};
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
@@ -155,7 +154,12 @@ impl types::HostIncomingRequest for WasiHttpCtxView<'_> {
     }
     fn authority(&mut self, id: Resource<HostIncomingRequest>) -> wasmtime::Result<Option<String>> {
         let req = self.table.get(&id)?;
-        Ok(Some(req.authority.clone()))
+        let a = req
+            .uri
+            .authority()
+            .expect("authority validated at creation")
+            .to_string();
+        Ok(Some(a))
     }
 
     fn headers(
@@ -208,6 +212,7 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
                 headers,
                 scheme: None,
                 body: None,
+                strings: crate::request_strings::RequestStringsValidator::new(self.ctx),
             })
             .context("[new_outgoing_request] pushing request")
     }
@@ -263,10 +268,13 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = self.table.get_mut(&request)?;
 
-        if let Method::Other(s) = &method {
-            if let Err(_) = http::Method::from_str(s) {
-                return Ok(Err(()));
+        match &method {
+            Method::Other(s) => {
+                if req.strings.set_other_method(s).is_err() {
+                    return Ok(Err(()));
+                }
             }
+            _ => req.strings.set_builtin_method(),
         }
 
         req.method = method;
@@ -288,10 +296,12 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = self.table.get_mut(&request)?;
 
-        if let Some(s) = path_with_query.as_ref() {
-            if crate::parse_path_with_query(s).is_none() {
-                return Ok(Err(()));
-            }
+        if req
+            .strings
+            .set_path_with_query(path_with_query.as_deref())
+            .is_err()
+        {
+            return Ok(Err(()));
         }
 
         req.path_with_query = path_with_query;
@@ -313,10 +323,13 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = self.table.get_mut(&request)?;
 
-        if let Some(types::Scheme::Other(s)) = scheme.as_ref() {
-            if let Err(_) = http::uri::Scheme::from_str(s.as_str()) {
-                return Ok(Err(()));
+        match &scheme {
+            Some(types::Scheme::Other(s)) => {
+                if req.strings.set_other_scheme(s).is_err() {
+                    return Ok(Err(()));
+                }
             }
+            _ => req.strings.set_builtin_scheme(),
         }
 
         req.scheme = scheme;
@@ -340,14 +353,10 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
 
         // Match p3: reject empty / non-numeric / out-of-range ports that
         // `http::uri::Authority` alone would accept (see crate::parse_authority).
-        if let Some(s) = authority {
-            let Ok(parsed) = crate::parse_authority(s) else {
-                return Ok(Err(()));
-            };
-            req.authority = Some(parsed.as_str().into());
-        } else {
-            req.authority = None;
-        }
+        let Ok(parsed) = req.strings.set_authority(authority) else {
+            return Ok(Err(()));
+        };
+        req.authority = parsed.map(|a| a.as_str().into());
 
         Ok(Ok(()))
     }

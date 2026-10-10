@@ -1000,9 +1000,22 @@ impl<'a, T: Send> Prepared<'a, T> {
             Proxy::P3(guest) => {
                 let (request, body) = request.into_parts();
                 let request = http::Request::from_parts(request, body);
-                let hooks = view(store.data_mut()).hooks;
-                let (request, request_io_result) = p3::Request::from_http(hooks, request);
-                let request = view(store.data_mut()).table.push(request)?;
+                let cx = view(store.data_mut());
+                let (request, request_io_result) = match p3::Request::from_http(
+                    cx.ctx, cx.hooks, request,
+                ) {
+                    Ok(pair) => pair,
+                    Err(e) => {
+                        // As in the p2 case below, the request never
+                        // reaches the guest, so report the failure through
+                        // `tx`.
+                        _ = tx.send(Err(e));
+                        wasmtime::bail!(
+                            "request was rejected before it could be turned into a guest request"
+                        );
+                    }
+                };
+                let request = cx.table.push(request)?;
 
                 Ok(Prepared::P3 {
                     tx,

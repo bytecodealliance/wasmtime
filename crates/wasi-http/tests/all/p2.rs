@@ -154,6 +154,7 @@ async fn run_wasi_http(
     rejected_authority: Option<String>,
     early_drop: bool,
     field_size_limit: Option<usize>,
+    string_size_limit: Option<usize>,
 ) -> wasmtime::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
@@ -174,6 +175,9 @@ async fn run_wasi_http(
     let mut http = WasiHttpCtx::new();
     if let Some(limit) = field_size_limit {
         http.set_field_size_limit(limit);
+    }
+    if let Some(limit) = string_size_limit {
+        http.set_request_strings_size_limit(limit);
     }
     let ctx = Ctx {
         table,
@@ -265,6 +269,7 @@ async fn wasi_http_proxy_tests() -> wasmtime::Result<()> {
         None,
         None,
         false,
+        None,
         None,
     )
     .await?;
@@ -385,6 +390,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
         None,
         false,
         None,
+        None,
     )
     .await??;
 
@@ -433,6 +439,7 @@ async fn wasi_http_hash_all_with_reject() -> Result<()> {
         None,
         Some("forbidden.com".to_string()),
         false,
+        None,
         None,
     )
     .await??;
@@ -555,6 +562,7 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
         None,
         false,
         None,
+        None,
     )
     .await??;
 
@@ -607,6 +615,7 @@ async fn wasi_http_without_port() -> Result<()> {
         None,
         false,
         None,
+        None,
     )
     .await??;
 
@@ -627,6 +636,7 @@ async fn wasi_http_no_trap_on_early_drop() -> Result<()> {
         None,
         None,
         true,
+        None,
         None,
     )
     .await?;
@@ -676,6 +686,7 @@ async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
         None,
         false,
         Some(255),
+        None,
     )
     .await
     .context("request with headers on wire over the size limit")??;
@@ -688,6 +699,7 @@ async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
         None,
         false,
         Some(500),
+        None,
     )
     .await
     .context("new_fields with size matching the size limit")??;
@@ -700,6 +712,7 @@ async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
         None,
         false,
         Some(500),
+        None,
     )
     .await
     .err()
@@ -713,6 +726,7 @@ async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
         None,
         false,
         Some(500),
+        None,
     )
     .await??;
     assert_eq!(resp.status(), 200);
@@ -724,11 +738,139 @@ async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
         None,
         false,
         Some(500),
+        None,
     )
     .await
     .err()
     .expect("run_wasi_http should give error");
     assert!(err.downcast_ref::<FieldMapError>().is_some());
+
+    Ok(())
+}
+
+#[test_log::test(tokio::test)]
+async fn wasi_http_string_limit() -> Result<()> {
+    async fn status(sets: &str, limit: Option<usize>) -> Result<http::StatusCode> {
+        // `h` + `/rs` is 4 bytes of the incoming request's own budget.
+        let req = hyper::Request::builder()
+            .uri("http://h/rs")
+            .header("sets", sets)
+            .method(http::Method::GET)
+            .body(body::empty())?;
+        let resp = run_wasi_http(
+            test_programs_artifacts::P2_API_PROXY_COMPONENT,
+            req,
+            None,
+            None,
+            false,
+            None,
+            limit,
+        )
+        .await
+        .with_context(|| format!("{sets} limit {limit:?}"))??;
+        Ok(resp.status())
+    }
+
+    for field in ["method", "path", "scheme", "authority"] {
+        // The `http` crate rejects non-standard schemes over 64 bytes, so use a
+        // limit below that.
+        let at = format!("{field}=32");
+        let over = format!("{field}=33");
+        assert_eq!(status(&at, Some(32)).await?, 200, "{field} at limit");
+        assert_eq!(status(&over, Some(32)).await?, 500, "{field} over limit");
+        // Replacing a field releases the size of its previous value.
+        let replaced = format!("{at},{field}=8,{at}");
+        assert_eq!(status(&replaced, Some(32)).await?, 200, "{field} replaced");
+    }
+
+    // The limit applies to the sum of all four fields.
+    let sum = "method=8,scheme=8,authority=8,path=8";
+    assert_eq!(status(sum, Some(32)).await?, 200, "sum at limit");
+    let sum = "method=8,scheme=8,authority=8,path=9";
+    assert_eq!(status(sum, Some(32)).await?, 500, "sum over limit");
+
+    for field in ["method", "path", "authority"] {
+        let at = format!("{field}=16384");
+        let over = format!("{field}=16385");
+        assert_eq!(status(&at, None).await?, 200, "{field} at default");
+        assert_eq!(status(&over, None).await?, 500, "{field} over default");
+        assert_eq!(
+            status(&over, Some(1 << 20)).await?,
+            200,
+            "{field} large limit"
+        );
+    }
+
+    Ok(())
+}
+
+#[test_log::test(tokio::test)]
+async fn wasi_http_string_limit_incoming_request() -> Result<()> {
+    use wasmtime_wasi_http::ErrorResponse;
+
+    async fn run(req: hyper::Request<BoxBody<Bytes, hyper::Error>>, limit: usize) -> Result<()> {
+        run_wasi_http(
+            test_programs_artifacts::P2_API_PROXY_COMPONENT,
+            req,
+            None,
+            None,
+            false,
+            None,
+            Some(limit),
+        )
+        .await??;
+        Ok(())
+    }
+    fn expect_bad_request(r: Result<()>, ctx: &str) {
+        let err = r.expect_err(ctx);
+        let resp = err
+            .downcast_ref::<ErrorResponse>()
+            .unwrap_or_else(|| panic!("{ctx}: expected ErrorResponse, got {err:?}"));
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{ctx}");
+    }
+    let req = |method: &str, uri: &str, host: Option<&str>| {
+        let mut b = hyper::Request::builder().method(method).uri(uri);
+        if let Some(host) = host {
+            b = b.header(http::header::HOST, host);
+        }
+        b.body(body::empty()).unwrap()
+    };
+
+    // The limit applies to the sum of the method, scheme, authority, and
+    // path. `GET` and `http` are built-ins and don't count, so for
+    // `http://<authority><path>` the total is authority plus path.
+    let authority = "a".repeat(16);
+    let path = format!("/{}", "b".repeat(15));
+    run(req("GET", &format!("http://{authority}{path}"), None), 32).await?;
+    expect_bad_request(
+        run(req("GET", &format!("http://{authority}{path}b"), None), 32).await,
+        "path pushes total over limit",
+    );
+    expect_bad_request(
+        run(req("GET", &format!("http://{authority}a{path}"), None), 32).await,
+        "authority pushes total over limit",
+    );
+
+    // An authority taken from the `Host` header, when the URI has none, is
+    // counted in its place.
+    run(req("GET", &path, Some(&authority)), 32).await?;
+    expect_bad_request(
+        run(req("GET", &path, Some(&format!("{authority}a"))), 32).await,
+        "host header pushes total over limit",
+    );
+
+    // A non-built-in method counts. Unknown methods fall through to the
+    // guest's default handler, which still succeeds.
+    let method = "X".repeat(15);
+    run(req(&method, &format!("http://{authority}/"), None), 32).await?;
+    expect_bad_request(
+        run(
+            req(&format!("{method}X"), &format!("http://{authority}/"), None),
+            32,
+        )
+        .await,
+        "method pushes total over limit",
+    );
 
     Ok(())
 }

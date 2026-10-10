@@ -2,7 +2,7 @@ use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, BodyExt as _, GuestBody};
 use crate::p3::{HttpError, HttpResult};
 use crate::{
-    Error, FieldMap, RequestOptions, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
+    Error, FieldMap, RequestOptions, WasiHttpCtx, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
     get_content_length,
 };
 use bytes::Bytes;
@@ -32,6 +32,8 @@ pub struct Request {
     pub options: Option<Arc<RequestOptions>>,
     /// Request body.
     pub(crate) body: Body,
+    /// Accounting for the size of the method, scheme, authority, and path.
+    pub(crate) strings: crate::request_strings::RequestStringsValidator,
 }
 
 impl Request {
@@ -41,25 +43,42 @@ impl Request {
     /// a request processing error, if any.
     ///
     /// Requests constructed this way will not perform any `Content-Length` validation.
-    pub fn new<B>(
+    ///
+    /// # Errors
+    ///
+    /// Returns an error carrying an [`ErrorResponse`](crate::ErrorResponse)
+    /// with status `400 Bad Request` if the combined size of the method,
+    /// scheme, authority, and path-with-query exceeds the limit configured in
+    /// `ctx` (see [`WasiHttpCtx::set_request_strings_size_limit`]).
+    pub fn new<B, H>(
+        ctx: &WasiHttpCtx,
         method: Method,
         scheme: Option<Scheme>,
         authority: Option<Authority>,
         path_with_query: Option<PathAndQuery>,
-        headers: impl Into<FieldMap>,
+        headers: H,
         options: Option<Arc<RequestOptions>>,
         body: B,
-    ) -> (
+    ) -> wasmtime::Result<(
         Self,
-        impl Future<Output = Result<(), Error>> + Send + 'static,
-    )
+        impl Future<Output = Result<(), Error>> + Send + 'static + use<B, H>,
+    )>
     where
         B: http_body::Body<Data = Bytes> + Send + 'static,
         B::Error: Into<Error>,
+        H: Into<FieldMap>,
     {
+        let mut strings = crate::request_strings::RequestStringsValidator::new(ctx);
+        strings.host_parts(
+            &method,
+            scheme.as_ref(),
+            authority.as_ref(),
+            path_with_query.as_ref(),
+        )?;
         let (tx, rx) = oneshot::channel();
-        (
+        Ok((
             Self {
+                strings,
                 method,
                 scheme,
                 authority,
@@ -75,7 +94,7 @@ impl Request {
                 let Ok(fut) = rx.await else { return Ok(()) };
                 Box::into_pin(fut).await
             },
-        )
+        ))
     }
 
     /// Construct a new [Request] from [http::Request].
@@ -84,13 +103,18 @@ impl Request {
     /// a request processing error, if any.
     ///
     /// Requests constructed this way will not perform any `Content-Length` validation.
+    ///
+    /// # Errors
+    ///
+    /// Fails under the same conditions as [`Request::new`].
     pub fn from_http<T>(
+        ctx: &WasiHttpCtx,
         hooks: &mut dyn WasiHttpHooks,
         req: http::Request<T>,
-    ) -> (
+    ) -> wasmtime::Result<(
         Self,
         impl Future<Output = Result<(), Error>> + Send + 'static + use<T>,
-    )
+    )>
     where
         T: http_body::Body<Data = Bytes> + Send + 'static,
         T::Error: Into<Error>,
@@ -111,6 +135,7 @@ impl Request {
             ..
         } = uri.into_parts();
         Self::new(
+            ctx,
             method,
             scheme,
             authority,
@@ -155,6 +180,7 @@ impl Request {
             mut headers,
             options,
             body,
+            strings: _,
         } = self;
         // `Content-Length` header value is validated in `fields` implementation
         let content_length = match get_content_length(&headers) {
@@ -297,6 +323,7 @@ mod tests {
 
         for scheme in schemes {
             let (req, fut) = Request::new(
+                &WasiHttpCtx::new(),
                 Method::POST,
                 scheme.clone(),
                 Some(Authority::from_static("example.com")),
@@ -304,7 +331,7 @@ mod tests {
                 FieldMap::default(),
                 None,
                 Full::new(Bytes::from_static(b"body")).boxed_unsync(),
-            );
+            )?;
             let mut store = Store::new(&engine, TestCtx::new());
             let (http_req, options) = req.into_http(&mut store, async { Ok(()) }).unwrap();
             assert_eq!(options, None);
@@ -328,9 +355,51 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_request_new_strings_limit() -> Result<()> {
+        let new =
+            |ctx: &WasiHttpCtx, method: Method, authority: &'static str, path: &'static str| {
+                Request::new(
+                    ctx,
+                    method,
+                    Some(Scheme::HTTP),
+                    Some(Authority::from_static(authority)),
+                    Some(PathAndQuery::from_static(path)),
+                    FieldMap::default(),
+                    None,
+                    Empty::new().boxed_unsync(),
+                )
+                .map(|_| ())
+            };
+        let expect_bad_request = |r: Result<()>| {
+            let err = r.unwrap_err();
+            let resp = err.downcast_ref::<crate::ErrorResponse>().unwrap();
+            assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        };
+
+        let mut ctx = WasiHttpCtx::new();
+        ctx.set_request_strings_size_limit(10);
+
+        // Authority and path total 10; `GET` and `http` don't count.
+        new(&ctx, Method::GET, "aaaaa", "/bbbb")?;
+        expect_bad_request(new(&ctx, Method::GET, "aaaaa", "/bbbbb"));
+
+        // A non-built-in method counts.
+        let method = Method::from_bytes(b"X")?;
+        new(&ctx, method.clone(), "aaaa", "/bbbb")?;
+        expect_bad_request(new(&ctx, method, "aaaaa", "/bbbb"));
+
+        // Raising the limit admits the larger request.
+        ctx.set_request_strings_size_limit(11);
+        new(&ctx, Method::GET, "aaaaa", "/bbbbb")?;
+
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_request_into_http_uri_error() -> Result<()> {
         let (req, fut) = Request::new(
+            &WasiHttpCtx::new(),
             Method::GET,
             Some(Scheme::HTTP),
             Some(Authority::from_static("example.com")),
@@ -338,7 +407,7 @@ mod tests {
             FieldMap::default(),
             None,
             Empty::new().boxed_unsync(),
-        );
+        )?;
         let mut store = Store::new(&Engine::default(), TestCtx::new());
         let result = req
             .into_http(&mut store, async {

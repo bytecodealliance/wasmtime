@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use test_programs::wasi::http::types::{
-    Headers, IncomingRequest, Method, OutgoingBody, OutgoingResponse, ResponseOutparam,
+    Fields, Headers, IncomingRequest, Method, OutgoingBody, OutgoingRequest, OutgoingResponse,
+    ResponseOutparam, Scheme,
 };
 
 struct T;
@@ -37,6 +38,11 @@ impl test_programs::proxy::exports::wasi::http::incoming_handler::Guest for T {
             }
             (Method::Get, Some(p)) if p.starts_with("/new_fields/") => {
                 let r = new_fields_handler(request);
+                response_for(r, outparam);
+                return;
+            }
+            (Method::Get, Some("/rs")) => {
+                let r = request_strings_handler(&request);
                 response_for(r, outparam);
                 return;
             }
@@ -139,5 +145,31 @@ fn new_fields_handler(request: IncomingRequest) -> Result<()> {
         .context("expect remainder of url to parse as number")?;
     add_bytes_to_headers(Headers::new(), added_field_bytes);
 
+    Ok(())
+}
+
+/// `/rs` with header `sets: <field>=<len>,...`: on a single fresh outgoing
+/// request, set each `field` in order to a valid string of exactly `len` bytes.
+///
+/// The path is kept short, and the sets are passed in a header, so that the
+/// incoming request itself stays well within a small request strings limit.
+fn request_strings_handler(request: &IncomingRequest) -> Result<()> {
+    let sets = request.headers().get("sets");
+    let sets = std::str::from_utf8(sets.first().context("expect a `sets` header")?)?;
+    let req = OutgoingRequest::new(Fields::new());
+    for set in sets.split(',') {
+        let (field, len) = set
+            .split_once('=')
+            .context("expect sets: <field>=<len>,...")?;
+        let len: usize = len.parse().context("expect len to parse as number")?;
+        let result = match field {
+            "method" => req.set_method(&Method::Other("X".repeat(len))),
+            "path" => req.set_path_with_query(Some(&format!("/{}", "a".repeat(len - 1)))),
+            "scheme" => req.set_scheme(Some(&Scheme::Other("x".repeat(len)))),
+            "authority" => req.set_authority(Some(&"a".repeat(len))),
+            other => anyhow::bail!("unknown field {other:?}"),
+        };
+        result.map_err(|()| anyhow::anyhow!("failed to set {field} of length {len}"))?;
+    }
     Ok(())
 }
