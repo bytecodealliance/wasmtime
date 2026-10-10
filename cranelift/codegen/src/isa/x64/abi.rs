@@ -413,6 +413,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         next_stack = align_to(next_stack, 16);
 
+        if args_or_rets == ArgsOrRets::Args
+            && matches!(call_conv, CallConv::Tail | CallConv::Winch)
+            && next_stack > u32::from(u16::MAX)
+        {
+            return Err(crate::CodegenError::ImplLimitExceeded);
+        }
+
         Ok((next_stack, extra_arg_idx))
     }
 
