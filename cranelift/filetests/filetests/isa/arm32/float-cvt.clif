@@ -1,0 +1,130 @@
+test compile precise-output
+target arm
+
+function %feq(f64, f64) -> i8 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp eq v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   vcmp.f64 d0, d1; vmrs
+;   mov r1, #1
+;   mov r2, #0
+;   mov r0, r2; moveq r0, r1
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vcmp.f64 d0, d1
+;   vmrs apsr_nzcv, fpscr
+;   mov r1, #1
+;   mov r2, #0
+;   mov r0, r2
+;   moveq r0, r1
+;   bx lr
+
+function %flt_br(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp lt v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i32 1
+    return v3
+block2:
+    v4 = iconst.i32 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   vcmp.f32 d0, d1; vmrs
+;   bmi label2; b label1
+; block1:
+;   mov r0, #0
+;   bx lr
+; block2:
+;   mov r0, #1
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vcmp.f32 s0, s2
+;   vmrs apsr_nzcv, fpscr
+;   bmi #0x14
+; block1: ; offset 0xc
+;   mov r0, #0
+;   bx lr
+; block2: ; offset 0x14
+;   mov r0, #1
+;   bx lr
+
+function %promote(f32) -> f64 {
+block0(v0: f32):
+    v1 = fpromote.f64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   vcvt.f64.f32 d0, d0
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vcvt.f64.f32 d0, s0
+;   bx lr
+
+function %f2i(f64) -> i32 {
+block0(v0: f64):
+    v1 = fcvt_to_sint_sat.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   vcvt.s32.f64 d2, d0
+;   vmov r0, d2
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vcvt.s32.f64 s4, d0
+;   vmov r0, s4
+;   bx lr
+
+function %i2f(i32) -> f64 {
+block0(v0: i32):
+    v1 = fcvt_from_sint.f64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   vmov d2, r0
+;   vcvt.f64.s32 d0, d2
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vmov s4, r0
+;   vcvt.f64.s32 d0, s4
+;   bx lr
+
+function %bitcast_f2i(f32) -> i32 {
+block0(v0: f32):
+    v1 = bitcast.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   vmov r0, d0
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vmov r0, s0
+;   bx lr
+
