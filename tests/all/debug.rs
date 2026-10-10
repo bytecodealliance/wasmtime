@@ -817,6 +817,69 @@ async fn hostcall_error_events() -> wasmtime::Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
+async fn hostcall_error_handler_panic_propagates() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |_config| {},
+        r#"
+    (module
+      (import "" "fail" (func))
+      (func (export "main")
+        call 0))
+    "#,
+    )?;
+
+    store.set_debug_handler(PanicOnHostcallError);
+
+    let fail = Func::wrap(
+        &mut store,
+        |_caller: Caller<'_, ()>| -> wasmtime::Result<()> {
+            Err(wasmtime::format_err!("host error"))
+        },
+    );
+    let instance = Instance::new_async(&mut store, &module, &[Extern::Func(fail)]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+
+    // The handler's panic should propagate out of `call_async` like a panic
+    // in a host function, rather than aborting the process.
+    let err = tokio::spawn(async move {
+        let mut results = [];
+        let _ = func.call_async(&mut store, &[], &mut results).await;
+    })
+    .await
+    .unwrap_err();
+    assert!(err.is_panic());
+    let panic = err.into_panic();
+    assert_eq!(
+        panic.downcast_ref::<&str>(),
+        Some(&"debug handler panic on hostcall error")
+    );
+    return Ok(());
+
+    #[derive(Clone)]
+    struct PanicOnHostcallError;
+
+    impl DebugHandler for PanicOnHostcallError {
+        type Data = ();
+
+        fn handle(
+            &self,
+            _store: StoreContextMut<'_, ()>,
+            event: DebugEvent<'_>,
+        ) -> impl Future<Output = ()> + Send {
+            let is_hostcall_error = matches!(event, DebugEvent::HostcallError(_));
+            async move {
+                if is_hostcall_error {
+                    panic!("debug handler panic on hostcall error");
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn breakpoint_events() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
