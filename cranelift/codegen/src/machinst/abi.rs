@@ -1878,6 +1878,12 @@ impl<M: ABIMachineSpec> Callee<M> {
             match &sigs.args(sig)[idx] {
                 &ABIArg::Slots { .. } | &ABIArg::ImplicitPtrArg { .. } => {}
                 &ABIArg::StructArg { offset, size, .. } => {
+                    // The `tail` calling convention doesn't support
+                    // struct arguments, because doing so would be
+                    // complex: the copies would go to the caller's
+                    // own incoming argument area, which may also be
+                    // where their sources are.
+                    debug_assert!(!is_tail_call);
                     let tmp = vregs.alloc_with_deferred_error(word_ty).only_reg().unwrap();
                     insts.push(M::gen_get_stack_addr(
                         stack_arg(offset),

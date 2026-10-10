@@ -1,0 +1,34 @@
+test verifier
+
+; Struct arguments (`sarg`) are not supported with the `tail` ABI: a
+; `return_call` would have to copy them into the caller's own incoming
+; argument area, which may also be where they're copied from.
+function %f0(i64 sarg(16)) tail { ; error: Signature with `tail` ABI cannot have struct arguments (`sarg`)
+block0(v0: i64):
+    return
+}
+
+function %f1(i64) {
+    fn0 = %g(i64 sarg(16)) tail ; error: Signature with `tail` ABI cannot have struct arguments (`sarg`)
+
+block0(v0: i64):
+    call fn0(v0)
+    return
+}
+
+function %f2(i64, i64) {
+    sig0 = (i64 sarg(16)) tail ; error: Signature with `tail` ABI cannot have struct arguments (`sarg`)
+
+block0(v0: i64, v1: i64):
+    call_indirect sig0, v1(v0)
+    return
+}
+
+; Other ABIs can still use struct arguments.
+function %f3(i64 sarg(16)) system_v {
+    fn0 = %g(i64 sarg(16)) system_v
+
+block0(v0: i64):
+    call fn0(v0)
+    return
+}
