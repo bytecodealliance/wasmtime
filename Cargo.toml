@@ -426,7 +426,7 @@ libfuzzer-sys = "0.4.10"
 walkdir = "2.5.0"
 tempfile = "3.27.0"
 filecheck = "0.5.0"
-libc = { version = "0.2.185", default-features = true }
+libc = { version = "0.2.190", default-features = true }
 file-per-thread-logger = "0.2.0"
 tokio = { version = "1.51.1", features = [ "rt", "time" ] }
 hyper = "1.9.0"

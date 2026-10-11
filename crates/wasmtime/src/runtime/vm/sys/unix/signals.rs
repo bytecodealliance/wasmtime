@@ -336,6 +336,13 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 fp: cx.uc_mcontext.arm_fp as usize,
             }
         }
+        all(target_os = "redox", target_arch = "x86_64") => {
+            let cx = unsafe { &*(cx as *const libc::ucontext_t) };
+            TrapRegisters {
+                pc: cx.uc_mcontext.rip as usize,
+                fp: cx.uc_mcontext.rbp as usize,
+            }
+        }
         _ => {
             compile_error!("unsupported platform");
             panic!();
@@ -423,6 +430,14 @@ unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
             cx.uc_mcontext.__gregs[libc::REG_SP] = handler.sp as _;
             cx.uc_mcontext.__gregs[libc::REG_A0] = 0;
             cx.uc_mcontext.__gregs[libc::REG_A0 + 1] = 0;
+        }
+        all(target_os = "redox", target_arch = "x86_64") => {
+            let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
+            cx.uc_mcontext.rip = handler.pc as _;
+            cx.uc_mcontext.rbp = handler.fp as _;
+            cx.uc_mcontext.rsp = handler.sp as _;
+            cx.uc_mcontext.rax = 0;
+            cx.uc_mcontext.rdx = 0;
         }
         _ => {
             compile_error!("unsupported platform");
