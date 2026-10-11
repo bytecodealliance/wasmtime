@@ -15,7 +15,7 @@ workspace = true
 [dependencies]
 base64 = { workspace = true }
 postcard = { workspace = true }
-directories-next = "2.0"
+directories = "6.0"
 log = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
