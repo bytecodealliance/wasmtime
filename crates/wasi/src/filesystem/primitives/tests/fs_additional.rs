@@ -285,6 +285,30 @@ fn trailing_slash() {
 }
 
 #[test]
+fn remove_dir_trailing_slash() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+
+    // A trailing slash after a directory names the directory itself.
+    check!(h::create_dir(&start, "dir"));
+    check!(p::remove_dir(&start, Path::new("dir/")));
+    check!(h::create_dir(&start, "dir"));
+    check!(p::remove_dir(&start, Path::new("dir//")));
+    check!(h::create_dir(&start, "dir"));
+    check!(h::create_dir(&start, "dir/sub"));
+    check!(p::remove_dir(&start, Path::new("dir/sub/")));
+
+    // A trailing slash-dot still resolves through `open_parent`, which can't
+    // remove the directory it opened.
+    assert!(p::remove_dir(&start, Path::new("dir/.")).is_err());
+    check!(p::remove_dir(&start, Path::new("dir")));
+
+    // A file with a trailing slash still isn't a directory.
+    check!(h::create(&start, "file"));
+    assert!(p::remove_dir(&start, Path::new("file/")).is_err());
+}
+
+#[test]
 fn trailing_slash_in_dir() {
     let tmpdir = tmpdir();
     let start = h::dir_of(&tmpdir);

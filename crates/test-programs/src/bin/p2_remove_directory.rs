@@ -22,9 +22,15 @@ fn test_remove_directory(dir: &Descriptor) {
     dir.remove_directory_at("dir")
         .expect("remove_directory on a directory should succeed");
 
-    // There isn't consistient behavior across operating systems of whether removing with a
-    // directory where the path has a trailing slash succeeds or fails, so we won't test
-    // that behavior.
+    // Test that removing it with trailing slashes also succeeds.
+    dir.create_directory_at("dir")
+        .expect("creating a directory");
+    dir.remove_directory_at("dir/")
+        .expect("remove_directory with a trailing slash on a directory should succeed");
+    dir.create_directory_at("dir")
+        .expect("creating a directory");
+    dir.remove_directory_at("dir//")
+        .expect("remove_directory with trailing slashes on a directory should succeed");
 
     // Create a temporary file.
     create_file(dir, "file");
