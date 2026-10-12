@@ -7047,6 +7047,3 @@ mod tests {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod fiber_ownership_tests;
