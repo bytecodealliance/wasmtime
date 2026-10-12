@@ -2338,3 +2338,73 @@ async fn task_group_hook_finish_error_call_concurrent() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn cancel_read_while_cancelling() -> Result<()> {
+    let component = r#"
+        (component
+            (core module $libc (memory (export "memory") 1))
+            (core instance $libc (instantiate $libc))
+            (type $s (stream u8))
+            (core func $stream.read (canon stream.read $s async (memory (core memory $libc "memory"))))
+            (core func $stream.cancel-read (canon stream.cancel-read $s async))
+            (core module $m
+                (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+                (import "" "stream.cancel-read" (func $stream.cancel-read (param i32) (result i32)))
+                (func (export "run") (param $s i32)
+                    ;; Both the read and its cancellation block on the host.
+                    (if (i32.ne (call $stream.read (local.get $s) (i32.const 0) (i32.const 1))
+                                (i32.const -1))
+                        (then unreachable))
+                    (if (i32.ne (call $stream.cancel-read (local.get $s)) (i32.const -1))
+                        (then unreachable))
+                    ;; This must trap since a cancellation is already pending.
+                    (drop (call $stream.cancel-read (local.get $s)))
+                    unreachable)
+            )
+            (core instance $i (instantiate $m (with "" (instance
+                (export "stream.read" (func $stream.read))
+                (export "stream.cancel-read" (func $stream.cancel-read))
+            ))))
+            (func (export "run") (param "s" $s)
+                (canon lift (core func $i "run")))
+        )
+    "#;
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_more_async_builtins(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let run = instance.get_typed_func::<(StreamReader<u8>,), ()>(&mut store, "run")?;
+    let reader = StreamReader::new(&mut store, Pending)?;
+    let err = run.call_async(&mut store, (reader,)).await.unwrap_err();
+    assert!(
+        format!("{err:?}").contains("when a cancellation is already pending"),
+        "{err:?}"
+    );
+    return Ok(());
+
+    /// A producer which never produces anything.
+    struct Pending;
+
+    impl StreamProducer<()> for Pending {
+        type Item = u8;
+        type Buffer = Option<u8>;
+
+        fn poll_produce<'a>(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<'a, ()>,
+            _destination: Destination<'a, Self::Item, Self::Buffer>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            Poll::Pending
+        }
+    }
+}

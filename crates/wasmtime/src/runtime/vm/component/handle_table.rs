@@ -29,6 +29,9 @@ pub enum TransmitLocalState {
     },
     /// A read or write is in progress.
     Busy,
+    /// A read or write is in progress and an asynchronous cancellation of it
+    /// has been requested but has not yet completed.
+    Cancelling,
 }
 
 /// Return value from [`HandleTable::remove_resource`].
@@ -364,7 +367,9 @@ impl HandleTable {
                     TransmitLocalState::Write { .. } => {
                         bail!("handle is not a readable end of a stream")
                     }
-                    TransmitLocalState::Busy => bail!("cannot remove busy stream"),
+                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                        bail!("cannot remove busy stream")
+                    }
                 };
                 (*rep, is_done)
             }
@@ -390,7 +395,9 @@ impl HandleTable {
                     TransmitLocalState::Read { .. } => {
                         bail!("passed read end to `stream.drop-writable`")
                     }
-                    TransmitLocalState::Busy => bail!("cannot drop busy stream"),
+                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                        bail!("cannot drop busy stream")
+                    }
                 }
                 *rep
             }
@@ -467,7 +474,9 @@ impl HandleTable {
                     TransmitLocalState::Write { .. } => {
                         bail!("handle is not a readable end of a future")
                     }
-                    TransmitLocalState::Busy => bail!("cannot remove busy future"),
+                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                        bail!("cannot remove busy future")
+                    }
                 };
                 (*rep, is_done)
             }
@@ -495,7 +504,9 @@ impl HandleTable {
                     TransmitLocalState::Read { .. } => {
                         bail!("passed read end to `future.drop-writable`")
                     }
-                    TransmitLocalState::Busy => bail!("cannot drop busy future"),
+                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                        bail!("cannot drop busy future")
+                    }
                 };
                 (*rep, is_done)
             }

@@ -4269,17 +4269,21 @@ impl Instance {
             TransmitLocalState::Read { .. } => {
                 bail!("passed read end to `{{stream|future}}.cancel-write`")
             }
+            TransmitLocalState::Cancelling => {
+                bail!("stream or future write cancelled when a cancellation is already pending")
+            }
             TransmitLocalState::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
         let code = self.cancel_write(store, caller, transmit_id, async_)?;
-        if !matches!(code, ReturnCode::Blocked) {
-            let state =
-                get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?
-                    .1;
-            if let TransmitLocalState::Busy = state {
-                *state = TransmitLocalState::Write { done: false };
-            }
+        let state =
+            get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?.1;
+        if let TransmitLocalState::Busy = state {
+            *state = if matches!(code, ReturnCode::Blocked) {
+                TransmitLocalState::Cancelling
+            } else {
+                TransmitLocalState::Write { done: false }
+            };
         }
         Ok(code)
     }
@@ -4304,17 +4308,21 @@ impl Instance {
             TransmitLocalState::Write { .. } => {
                 bail!("passed write end to `{{stream|future}}.cancel-read`")
             }
+            TransmitLocalState::Cancelling => {
+                bail!("stream or future read cancelled when a cancellation is already pending")
+            }
             TransmitLocalState::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
         let code = self.cancel_read(store, caller, transmit_id, async_)?;
-        if !matches!(code, ReturnCode::Blocked) {
-            let state =
-                get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?
-                    .1;
-            if let TransmitLocalState::Busy = state {
-                *state = TransmitLocalState::Read { done: false };
-            }
+        let state =
+            get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?.1;
+        if let TransmitLocalState::Busy = state {
+            *state = if matches!(code, ReturnCode::Blocked) {
+                TransmitLocalState::Cancelling
+            } else {
+                TransmitLocalState::Read { done: false }
+            };
         }
         Ok(code)
     }
@@ -5002,8 +5010,11 @@ impl Waitable {
         if rep != self.rep() {
             bail_bug!("unexpected rep mismatch");
         }
-        if *state != TransmitLocalState::Busy {
-            bail_bug!("expected state to be busy");
+        if !matches!(
+            *state,
+            TransmitLocalState::Busy | TransmitLocalState::Cancelling
+        ) {
+            bail_bug!("expected state to be busy or cancelling");
         }
         let done = matches!(code, ReturnCode::Dropped(_));
         *state = match event {
