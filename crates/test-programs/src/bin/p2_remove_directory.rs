@@ -32,6 +32,23 @@ fn test_remove_directory(dir: &Descriptor) {
     dir.remove_directory_at("dir//")
         .expect("remove_directory with trailing slashes on a directory should succeed");
 
+    // Test that removing a directory through a symlink with a trailing slash
+    // fails, like on Linux, and leaves both in place.
+    dir.create_directory_at("dir")
+        .expect("creating a directory");
+    if dir.symlink_at("dir", "dir_link").is_ok() {
+        let err = dir
+            .remove_directory_at("dir_link/")
+            .expect_err("remove_directory through a symlink should fail");
+        assert!(
+            matches!(err, ErrorCode::NotDirectory),
+            "unexpected error {err:?}"
+        );
+        dir.unlink_file_at("dir_link").expect("removing a symlink");
+    }
+    dir.remove_directory_at("dir")
+        .expect("remove_directory on a directory should succeed");
+
     // Create a temporary file.
     create_file(dir, "file");
 

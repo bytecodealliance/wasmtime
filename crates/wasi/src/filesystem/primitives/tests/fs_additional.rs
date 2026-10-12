@@ -309,6 +309,31 @@ fn remove_dir_trailing_slash() {
 }
 
 #[test]
+fn remove_dir_trailing_slash_symlink() {
+    if !symlink_supported() {
+        return;
+    }
+
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "dir"));
+    check!(h::create(&start, "file"));
+    check!(h::symlink_dir(&start, "dir", "dir_link"));
+    check!(h::symlink_file(&start, "file", "file_link"));
+    check!(h::symlink_dir(&start, "missing", "dangling"));
+    check!(h::symlink_dir(&start, "..", "up"));
+
+    // Like Linux, the symlink isn't followed, whatever it points to, and both
+    // it and its target stay in place.
+    for path in ["dir_link/", "file_link/", "dangling/", "up/"] {
+        let err = p::remove_dir(&start, Path::new(path)).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotADirectory, "{path}");
+    }
+    check!(h::symlink_metadata(&start, "dir_link"));
+    check!(h::metadata(&start, "dir"));
+}
+
+#[test]
 fn trailing_slash_in_dir() {
     let tmpdir = tmpdir();
     let start = h::dir_of(&tmpdir);
