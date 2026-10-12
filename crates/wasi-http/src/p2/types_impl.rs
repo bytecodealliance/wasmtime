@@ -28,6 +28,9 @@ impl types::Host for WasiHttpCtxView<'_> {
         err: wasmtime::component::Resource<types::IoError>,
     ) -> wasmtime::Result<Option<types::ErrorCode>> {
         let e = self.table.get(&err)?;
+        if let Some(e) = e.downcast_ref::<crate::Error>() {
+            return Ok(Some(self.hooks.error_to_p2(e)));
+        }
         Ok(e.downcast_ref::<types::ErrorCode>().cloned())
     }
 }
@@ -475,7 +478,7 @@ impl types::HostFutureTrailers for WasiHttpCtxView<'_> {
             Ok(Some(fields)) => fields,
             Ok(None) => return Ok(Some(Ok(Ok(None)))),
             Err(e) => {
-                let e = self.error_to_p2(e);
+                let e = self.hooks.error_to_p2(&e);
                 return Ok(Some(Ok(Err(e))));
             }
         };
@@ -623,7 +626,7 @@ impl types::HostFutureIncomingResponse for WasiHttpCtxView<'_> {
             match std::mem::replace(resp, HostFutureIncomingResponse::Consumed).unwrap_ready() {
                 Ok(pair) => pair,
                 Err(e) => {
-                    let e = self.error_to_p2(e);
+                    let e = self.hooks.error_to_p2(&e);
                     return Ok(Some(Ok(Err(e))));
                 }
             };
