@@ -4,7 +4,7 @@
 //! timeout, so reading the second chunk has to fail rather than wait for it.
 //! `http.wit` documents these timeouts as transport-layer timeouts, so the expected
 //! failure is a read timeout — and `io.wit` warns that the debug string of an error
-//! "should not be consumed mechanically", so this only asserts the error's kind.
+//! "should not be consumed mechanically", so this asserts the code via `http-error-code`.
 use anyhow::{Result, anyhow};
 use test_programs::wasi::http::{outgoing_handler, types as http_types};
 use test_programs::wasi::io::streams;
@@ -70,9 +70,13 @@ fn main() -> Result<()> {
     let err = stream
         .read(1024)
         .expect_err("reading the stalled second chunk should have timed out");
+    let streams::StreamError::LastOperationFailed(err) = err else {
+        panic!("expected the read to fail with a last-operation failure: {err:?}");
+    };
+    let code = http_types::http_error_code(&err);
     assert!(
-        matches!(err, streams::StreamError::LastOperationFailed(_)),
-        "expected the read to fail with a last-operation failure: {err:?}"
+        matches!(code, Some(http_types::ErrorCode::ConnectionReadTimeout)),
+        "expected a connection read timeout: {code:?}"
     );
 
     Ok(())
