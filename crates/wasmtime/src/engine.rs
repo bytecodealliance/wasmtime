@@ -124,7 +124,7 @@ impl Engine {
     /// details on Wasmtime's out-of-memory handling.
     pub fn new(config: &Config) -> Result<Engine> {
         let config = config.clone();
-        let (mut tunables, features) = config.validate()?;
+        let (mut tunables, mut features) = config.validate()?;
 
         #[cfg(feature = "runtime")]
         if tunables.signals_based_traps {
@@ -142,13 +142,13 @@ impl Engine {
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         let (config, compiler) = if config.has_compiler() {
-            let (config, compiler) = config.build_compiler(&mut tunables, features)?;
+            let (config, compiler) = config.build_compiler(&mut tunables, &mut features)?;
             (config, Some(compiler))
         } else {
             (config.clone(), None)
         };
         #[cfg(not(any(feature = "cranelift", feature = "winch")))]
-        let _ = &mut tunables;
+        let _ = (&mut tunables, &mut features);
 
         #[cfg(feature = "runtime")]
         let empty_module_runtime_info = ModuleRuntimeInfo::bare(try_new(

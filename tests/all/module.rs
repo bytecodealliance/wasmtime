@@ -123,6 +123,57 @@ fn memory_copy_without_riscv_v() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn simd_without_riscv_v() -> Result<()> {
+    let wat = br#"
+        (module
+            (func (export "add") (param v128 v128) (result v128)
+                (i32x4.add (local.get 0) (local.get 1)))
+        )
+    "#;
+    let new_config = |has_v: bool| -> Result<Config> {
+        let mut config = Config::new();
+        config.strategy(Strategy::Cranelift).target("riscv64")?;
+        unsafe {
+            config.cranelift_flag_set("has_v", if has_v { "true" } else { "false" });
+        }
+        Ok(config)
+    };
+
+    // SIMD is off by default, so the module fails validation instead of
+    // panicking in the backend.
+    let engine = Engine::new(&new_config(false)?)?;
+    let err = engine.precompile_module(wat).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("SIMD support is not enabled"),
+        "bad error: {err:?}"
+    );
+
+    // Asking for SIMD explicitly is an error.
+    let mut config = new_config(false)?;
+    config.wasm_simd(true);
+    let err = Engine::new(&config).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("wasm_simd feature is not supported"),
+        "bad error: {err:?}"
+    );
+
+    let mut config = new_config(false)?;
+    config.wasm_relaxed_simd(true);
+    let err = Engine::new(&config).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("wasm_relaxed_simd feature is not supported"),
+        "bad error: {err:?}"
+    );
+
+    // With vector support the default configuration compiles SIMD.
+    let engine = Engine::new(&new_config(true)?)?;
+    engine.precompile_module(wat)?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn serialize_deterministic() {
     let engine = Engine::default();
 

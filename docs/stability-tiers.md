@@ -303,10 +303,10 @@ by default and therefore supported as tier 1.  The legend here is:
 | [`multi-value`]                         | ✅        | ❌     |
 | [`bulk-memory`]                         | ✅        | ❌     |
 | [`reference-types`]                     | ✅        | ❌[^a] |
-| [`simd`]                                | ✅        | ❌     |
+| [`simd`]                                | ✅[^d]    | ❌     |
 | [`component-model`]                     | ✅        | ❌     |
 | [`component-model-async`]               | ✅        | ❌     |
-| [`relaxed-simd`]                        | ✅        | ❌     |
+| [`relaxed-simd`]                        | ✅[^d]    | ❌     |
 | [`multi-memory`]                        | ✅        | ❌     |
 | [`threads`]                             | ✅        | ❌     |
 | [`tail-call`]                           | ✅        | ❌     |
@@ -358,6 +358,8 @@ emitting Pulley bytecode.
 [^b]: Pulley does not support the [`threads`] proposal because there is no known
   safe way to implement this with Rust's memory model.
 [^c]: Winch's support for aarch64 is complete for Core Wasm.
+[^d]: Requires the V extension (the `has_v` Cranelift setting). Without it these
+  proposals are disabled by default.
 
 ## Tier Details
 
