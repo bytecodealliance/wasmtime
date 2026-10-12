@@ -32,16 +32,14 @@
 ;;       movq    0x18(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x8a
+;;       ja      0x7f
 ;;   5c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
-;;       movq    %r14, %rdi
-;;       movl    $0, %esi
-;;       callq   0x288
-;;       movq    8(%rsp), %r14
+;;       ud2
+;;       movl    $0, %eax
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   8a: ud2
+;;   7f: ud2

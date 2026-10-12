@@ -2309,15 +2309,15 @@ where
         })
     }
 
-    fn visit_ref_func(&mut self, function_index: u32) -> Self::Output {
-        let ref_func = self.env.builtins.ref_func::<M::ABI>()?;
-        self.context.stack.extend([function_index.try_into()?]);
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(ref_func),
-        )
+    fn visit_ref_func(&mut self, _function_index: u32) -> Self::Output {
+        // TODO: implement this in the next commit...
+        self.masm.trap(wasmtime_cranelift::TRAP_UNREACHABLE)?;
+        match self.env.ptr_type() {
+            WasmValType::I64 => self.context.stack.push(Val::i64(0)),
+            WasmValType::I32 => self.context.stack.push(Val::i32(0)),
+            _ => bail!(CodeGenError::unsupported_wasm_type()),
+        }
+        Ok(())
     }
 
     fn visit_i32_load(&mut self, memarg: MemArg) -> Self::Output {

@@ -70,8 +70,7 @@ use core::ptr::NonNull;
 use core::time::Duration;
 use wasmtime_core::math::WasmFloat;
 use wasmtime_environ::{
-    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, PassiveElemIndex, TableIndex,
-    Trap,
+    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, PassiveElemIndex, TableIndex, Trap,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -394,15 +393,6 @@ unsafe fn memory_fill(
         )]
         dst.write_bytes(val as u8, len);
     }
-}
-
-// Implementation of `ref.func`.
-fn ref_func(store: &mut dyn VMStore, instance: InstanceId, func_index: u32) -> NonNull<u8> {
-    let (instance, registry) = store.instance_and_module_registry_mut(instance);
-    instance
-        .get_func_ref(registry, FuncIndex::from_u32(func_index))
-        .expect("ref_func: funcref should always be available for given func index")
-        .cast()
 }
 
 // Returns a table entry after lazily initializing it.

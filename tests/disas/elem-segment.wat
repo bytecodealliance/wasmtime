@@ -46,18 +46,15 @@
 ;; function u2415919104:0(i64 vmctx, i64) tail {
 ;;     region0 = 116 ""
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
-;;     sig1 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u805306368:4 sig0
-;;     fn1 = colocated u805306368:6 sig1
 ;;
 ;; block0(v0: i64, v1: i64):
 ;;     v2 = iconst.i32 0
 ;;     v3 = call fn0(v0, v2)  ; v2 = 0
-;;     v5 = call fn1(v0, v2)  ; v2 = 0
-;;     store notrap aligned little region0 v5, v3
-;;     v7 = call fn1(v0, v2)  ; v2 = 0
-;;     store notrap aligned little region0 v7, v3+16
-;;     v9 = call fn1(v0, v2)  ; v2 = 0
-;;     store notrap aligned little region0 v9, v3+32
+;;     trapz v2, user12  ; v2 = 0
+;;     v5 = iconst.i64 0
+;;     store notrap aligned little region0 v5, v3  ; v5 = 0
+;;     store notrap aligned little region0 v5, v3+16  ; v5 = 0
+;;     store notrap aligned little region0 v5, v3+32  ; v5 = 0
 ;;     return
 ;; }
