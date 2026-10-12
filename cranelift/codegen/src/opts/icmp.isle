@@ -617,3 +617,7 @@
       (ne ty x (iconst_u cty 0)))
 (rule (simplify (ult ty (isub cty x (iconst_u cty 1)) x))
       (ne ty x (iconst_u cty 0)))
+
+;; rotr(x, k) == rotr(y, k) --> x == y.
+(rule (simplify (eq ty (rotr cty x k) (rotr cty y k)))
+      (subsume (eq ty x y)))
