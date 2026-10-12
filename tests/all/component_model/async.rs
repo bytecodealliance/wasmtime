@@ -865,27 +865,80 @@ async fn test_cancel_host_task(mode: HostTaskCancelMode) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-#[cfg_attr(miri, ignore)]
-async fn sync_lower_async_host_does_not_leak() -> Result<()> {
+/// Instantiates the component `wat`, with any extra host functions defined by
+/// `define_host`, and calls its `run` export once.
+///
+/// The component may import a `record` function which it should call as it
+/// runs to keep track of the maximum size of the table in concurrent_state.
+///
+/// Asserts that the concurrent state is cleaned up both at the end and
+/// incrementally along the way, i.e. that the table never reaches
+/// `max_table_size` entries.
+async fn assert_concurrent_state_does_not_leak(
+    wat: &str,
+    max_table_size: usize,
+    define_host: impl FnOnce(&mut Linker<usize>) -> Result<()>,
+) -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_async(true);
     let engine = Engine::new(&config)?;
 
     let mut store = Store::new(&engine, 0);
-    let component = Component::new(
-        &engine,
+    let component = Component::new(&engine, wat)?;
+
+    let mut linker = Linker::<usize>::new(&engine);
+    linker
+        .root()
+        .func_wrap("record", |mut s: StoreContextMut<'_, usize>, (): ()| {
+            // Keep track of the maximum size of the table in
+            // concurrent_state.
+            let cur = s.concurrent_state_table_size();
+            let max = s.data_mut();
+            *max = (*max).max(cur);
+            Ok(())
+        })?;
+    define_host(&mut linker)?;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    func.call_async(&mut store, ()).await?;
+
+    // First-level assertion: nothing should remain after the guest has exited.
+    store.assert_concurrent_state_empty();
+
+    // Second-level assertion: state should be incrementally cleaned up along
+    // the way as the guest runs. Things shouldn't leak until the guest exits
+    // at the end, for example.
+    assert!(
+        *store.data() < max_table_size,
+        "the store peaked at over {max_table_size} items in the concurrent \
+         table which indicates that something isn't getting cleaned up \
+         between calls"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn sync_lower_async_host_does_not_leak() -> Result<()> {
+    assert_concurrent_state_does_not_leak(
         r#"(component
             (import "f" (func $f async))
+            (import "record" (func $record))
 
             (core module $m
                 (import "" "f" (func $f))
+                (import "" "record" (func $record))
                 (func (export "run")
                     (local $c i32)
 
                     ;; call the host 100 times
                     loop
                       call $f
+
+                      ;; track the max table size
+                      call $record
+
                       (local.tee $c (i32.add (local.get $c) (i32.const 1)))
                       i32.const 100
                       i32.ne
@@ -894,58 +947,107 @@ async fn sync_lower_async_host_does_not_leak() -> Result<()> {
                 )
             )
             (core func $f (canon lower (func $f) ))
+            (core func $record (canon lower (func $record)))
             (core instance $i (instantiate $m
                 (with "" (instance
                     (export "f" (func $f))
+                    (export "record" (func $record))
                 ))
             ))
 
-            (func (export "f") async
+            (func (export "run") async
                 (canon lift (core func $i "run")))
 
 
         )"#,
-    )?;
+        100,
+        |linker| {
+            linker.root().func_wrap_concurrent("f", |_, (): ()| {
+                Box::pin(async move {
+                    // Ensure that this doesn't hit the fast path of "ready
+                    // on first poll"
+                    for _ in 0..5 {
+                        tokio::task::yield_now().await;
+                    }
+                    Ok(())
+                })
+            })?;
+            Ok(())
+        },
+    )
+    .await
+}
 
-    let mut linker = Linker::<usize>::new(&engine);
-    linker
-        .root()
-        .func_wrap_concurrent("f", |accessor, (): ()| {
-            Box::pin(async move {
-                // Ensure that this doesn't hit the fast path of "ready on
-                // first poll"
-                for _ in 0..5 {
-                    tokio::task::yield_now().await;
-                }
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn async_lower_guest_immediate_return_does_not_leak() -> Result<()> {
+    assert_concurrent_state_does_not_leak(
+        r#"(component
+            (import "record" (func $record))
 
-                // Keep track of the maximum size of the table in
-                // concurrent_state.
-                accessor.with(|mut s| {
-                    let cur = s.as_context_mut().concurrent_state_table_size();
-                    let max = s.data_mut();
-                    *max = (*max).max(cur);
-                });
-                Ok(())
-            })
-        })?;
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-    let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
-    func.call_async(&mut store, ()).await?;
+            (component $callee
+                (core module $m
+                    (func (export "f"))
+                )
+                (core instance $i (instantiate $m))
 
-    // First-level assertion: nothing should remain after the guest has exited.
-    store.assert_concurrent_state_empty();
+                (func (export "f") async
+                    (canon lift (core func $i "f")))
+            )
+            (instance $callee (instantiate $callee))
 
-    // Second-level assertion: state should be incrementally cleaned up along
-    // the way as the guest calls the host. Things shouldn't leak until the
-    // guest exits at the end, for example.
-    assert!(
-        *store.data() < 100,
-        "the store peaked at over 100 items in the concurrent table which \
-         indicates that something isn't getting cleaned up between executions \
-         of the host"
-    );
+            (component $caller
+                (import "f" (func $f async))
+                (import "record" (func $record))
 
-    Ok(())
+                (core module $m
+                    (import "" "f" (func $f (result i32)))
+                    (import "" "record" (func $record))
+                    (func (export "run")
+                        (local $c i32)
+
+                        ;; call the callee 100 times
+                        loop
+                          ;; the callee returns immediately, so the result
+                          ;; is RETURNED with no subtask handle
+                          call $f
+                          i32.const 2 ;; RETURNED
+                          i32.ne
+                          if unreachable end
+
+                          ;; track the max table size
+                          call $record
+
+                          (local.tee $c (i32.add (local.get $c) (i32.const 1)))
+                          i32.const 100
+                          i32.ne
+                          if br 1 end
+                        end
+                    )
+                )
+                (core func $f (canon lower (func $f) async))
+                (core func $record (canon lower (func $record)))
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "f" (func $f))
+                        (export "record" (func $record))
+                    ))
+                ))
+
+                (func (export "run") async
+                    (canon lift (core func $i "run")))
+            )
+            (instance $caller (instantiate $caller
+                (with "f" (func $callee "f"))
+                (with "record" (func $record))
+            ))
+
+            (export "run" (func $caller "run"))
+        )"#,
+        100,
+        |_| Ok(()),
+    )
+    .await
 }
 
 /// Regression test: `stream.cancel-read` with `async` option must not corrupt
