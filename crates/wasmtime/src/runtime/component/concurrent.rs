@@ -70,6 +70,7 @@ use crate::vm::{
 use crate::{AsContext, AsContextMut, Result, StoreContext, StoreContextMut, ValRaw, bail};
 use crate::{Instance as ModuleInstance, bail_bug};
 use alloc::borrow::ToOwned;
+use alloc::collections::btree_map::Entry;
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
 use core::any::Any;
 use core::cell::UnsafeCell;
@@ -843,6 +844,24 @@ enum WorkItem {
     WorkerFunction(AlwaysMut<Box<dyn FnOnce(&mut dyn VMStore) -> Result<()> + Send>>),
 }
 
+/// A fiber temporarily outside the store's scheduler state.
+///
+/// Construct this before returning a future so cancellation before its first
+/// poll also disposes of the fiber. Successful handoffs take the fiber only
+/// after all fallible destination checks have completed.
+struct ResumingFiber<'a> {
+    store: &'a mut StoreOpaque,
+    fiber: Option<StoreFiber<'static>>,
+}
+
+impl Drop for ResumingFiber<'_> {
+    fn drop(&mut self) {
+        if let Some(mut fiber) = self.fiber.take() {
+            fiber.dispose(self.store);
+        }
+    }
+}
+
 impl fmt::Debug for WorkItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -1611,88 +1630,111 @@ impl<T> StoreContextMut<'_, T> {
     }
 
     /// Handle the specified work item, possibly resuming a fiber if applicable.
-    async fn handle_work_item(self, item: WorkItem) -> Result<()> {
-        log::trace!("handle work item {item:?}");
-        match item {
-            WorkItem::PushFuture(future) => {
-                self.0
-                    .concurrent_state_mut()?
-                    .futures_mut()?
-                    .push(future.into_inner());
+    fn handle_work_item(self, item: WorkItem) -> impl Future<Output = Result<()>> {
+        // Construct the guarded future before returning, even when the caller
+        // never polls this work item. Other variants keep their fibers in the
+        // store until their first poll.
+        let item = match item {
+            WorkItem::ResumeFiber {
+                instance,
+                thread,
+                fiber,
+            } => {
+                let future = self.0.resume_fiber(fiber);
+                log::trace!(
+                    "handle work item ResumeFiber {{ instance: {instance:?}, thread: {thread:?} }}"
+                );
+                return futures::future::Either::Left(future);
             }
-            WorkItem::ResumeFiber { fiber, .. } => {
-                self.0.resume_fiber(fiber).await?;
-            }
-            WorkItem::ResumeThread { thread, .. } => {
-                if let GuestThreadState::Ready { fiber, .. } = mem::replace(
-                    &mut self.0.concurrent_state_mut()?.get_mut(thread.thread)?.state,
-                    GuestThreadState::Running,
-                ) {
-                    self.0.resume_fiber(fiber).await?;
-                } else {
-                    bail_bug!("cannot resume non-pending thread {thread:?}");
-                }
-            }
-            WorkItem::GuestCall { call, .. } => {
-                if call.is_ready(self.0)? {
+            item => item,
+        };
+        futures::future::Either::Right(async move {
+            log::trace!("handle work item {item:?}");
+            match item {
+                WorkItem::PushFuture(future) => {
                     self.0
                         .concurrent_state_mut()?
-                        .get_mut(call.thread.thread)?
-                        .wake_on_cancel = WakeOnCancel::None;
-                    self.run_on_worker(WorkerItem::GuestCall(call)).await?;
-                } else {
-                    let state = self.0.concurrent_state_mut()?;
-                    let task = state.get_mut(call.thread.task)?;
-                    if !task.starting_sent {
-                        task.starting_sent = true;
-                        if let GuestCallKind::StartImplicit(_) = &call.kind {
-                            Waitable::Guest(call.thread.task).set_event(
-                                state,
-                                Some(Event::Subtask {
-                                    status: Status::Starting,
-                                }),
-                            )?;
-                        }
+                        .futures_mut()?
+                        .push(future.into_inner());
+                }
+                WorkItem::ResumeFiber { .. } => unreachable!(),
+                WorkItem::ResumeThread { thread, .. } => {
+                    let slot = &mut self.0.concurrent_state_mut()?.get_mut(thread.thread)?.state;
+                    if !matches!(slot, GuestThreadState::Ready { .. }) {
+                        bail_bug!("cannot resume non-pending thread {thread:?}");
                     }
-
-                    let instance = state.get_mut(call.thread.task)?.instance;
-                    // If this call is for a callback-lifted task waiting on a
-                    // waitable set, it can't run until `instance` is enterable
-                    // again. Meanwhile, the set may have an event which another
-                    // thread waiting on it could take, and that thread may
-                    // even be the reason `instance` isn't enterable, so wake
-                    // the next waiter up as well if there's still an event
-                    // for it. Whichever thread runs first takes the event, and
-                    // the other goes back to waiting if none is left.
-                    if let GuestCallKind::DeliverEvent { set: Some(set), .. } = &call.kind {
+                    let GuestThreadState::Ready { fiber } =
+                        mem::replace(slot, GuestThreadState::Running)
+                    else {
+                        unreachable!()
+                    };
+                    self.0.resume_fiber(fiber).await?;
+                }
+                WorkItem::GuestCall { call, .. } => {
+                    if call.is_ready(self.0)? {
+                        self.0
+                            .concurrent_state_mut()?
+                            .get_mut(call.thread.thread)?
+                            .wake_on_cancel = WakeOnCancel::None;
+                        self.run_on_worker(WorkerItem::GuestCall(call)).await?;
+                    } else {
                         let state = self.0.concurrent_state_mut()?;
-                        if !state.get_mut(*set)?.ready.is_empty() {
-                            state.wake_waiter(*set)?;
+                        let task = state.get_mut(call.thread.task)?;
+                        if !task.starting_sent {
+                            task.starting_sent = true;
+                            if let GuestCallKind::StartImplicit(_) = &call.kind {
+                                Waitable::Guest(call.thread.task).set_event(
+                                    state,
+                                    Some(Event::Subtask {
+                                        status: Status::Starting,
+                                    }),
+                                )?;
+                            }
                         }
-                    }
-                    self.0
-                        .instance_state(instance)
-                        .concurrent_state()
-                        .pending
-                        .insert(call.thread, call.kind);
 
-                    // Switch back to the caller (or canceller) immediately if
-                    // applicable since we aren't yet able to run the subtask it
-                    // yielded to.
-                    self.0.concurrent_state_mut()?.take_next_switch_item()?;
+                        let instance = state.get_mut(call.thread.task)?.instance;
+                        // If this call is for a callback-lifted task waiting on a
+                        // waitable set, it can't run until `instance` is enterable
+                        // again. Meanwhile, the set may have an event which another
+                        // thread waiting on it could take, and that thread may
+                        // even be the reason `instance` isn't enterable, so wake
+                        // the next waiter up as well if there's still an event
+                        // for it. Whichever thread runs first takes the event, and
+                        // the other goes back to waiting if none is left.
+                        if let GuestCallKind::DeliverEvent { set: Some(set), .. } = &call.kind {
+                            let state = self.0.concurrent_state_mut()?;
+                            if !state.get_mut(*set)?.ready.is_empty() {
+                                state.wake_waiter(*set)?;
+                            }
+                        }
+                        self.0
+                            .instance_state(instance)
+                            .concurrent_state()
+                            .pending
+                            .insert(call.thread, call.kind);
+
+                        // Switch back to the caller (or canceller) immediately if
+                        // applicable since we aren't yet able to run the subtask it
+                        // yielded to.
+                        self.0.concurrent_state_mut()?.take_next_switch_item()?;
+                    }
+                }
+                WorkItem::WorkerFunction(fun) => {
+                    self.run_on_worker(WorkerItem::Function(fun)).await?;
                 }
             }
-            WorkItem::WorkerFunction(fun) => {
-                self.run_on_worker(WorkerItem::Function(fun)).await?;
-            }
-        }
 
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Execute the specified guest call on a worker fiber.
     async fn run_on_worker(self, item: WorkerItem) -> Result<()> {
-        let worker = if let Some(fiber) = self.0.concurrent_state_mut()?.worker.take() {
+        let state = self.0.concurrent_state_mut()?;
+        if state.worker_item.is_some() {
+            bail_bug!("worker item already set when taking worker fiber");
+        }
+        let worker = if let Some(fiber) = state.worker.take() {
             fiber
         } else {
             // SAFETY: the `make_fiber_unchecked` function is unsafe because the
@@ -1730,9 +1772,11 @@ impl<T> StoreContextMut<'_, T> {
             }
         };
 
-        let worker_item = &mut self.0.concurrent_state_mut()?.worker_item;
-        assert!(worker_item.is_none());
-        *worker_item = Some(item);
+        // No fallible operation between taking the fiber and guarding it in
+        // resume_fiber; the current thread was forced before the take.
+        self.0
+            .concurrent_state_mut_already_forced_current_thread()
+            .worker_item = Some(item);
 
         self.0.resume_fiber(worker).await
     }
@@ -2289,82 +2333,99 @@ impl StoreOpaque {
 
     /// Resume the specified fiber, giving it exclusive access to the specified
     /// store.
-    async fn resume_fiber(&mut self, fiber: StoreFiber<'static>) -> Result<()> {
-        let old_thread = self.current_thread()?;
-        log::trace!("resume_fiber: save current thread {old_thread:?}");
+    fn resume_fiber(
+        &mut self,
+        fiber: StoreFiber<'static>,
+    ) -> impl Future<Output = Result<()>> + '_ {
+        let mut resuming = ResumingFiber {
+            store: self,
+            fiber: Some(fiber),
+        };
+        async move {
+            let old_thread = resuming.store.current_thread()?;
+            log::trace!("resume_fiber: save current thread {old_thread:?}");
 
-        let fiber = fiber::resolve_or_release(self, fiber).await?;
+            let fiber = resuming.fiber.take().unwrap();
+            resuming.fiber = fiber::resolve_or_release(resuming.store, fiber).await?;
 
-        self.set_thread(old_thread)?;
+            resuming.store.set_thread(old_thread)?;
 
-        let state = self.concurrent_state_mut()?;
+            let state = resuming.store.concurrent_state_mut()?;
 
-        if let Some(ot) = old_thread.guest() {
-            state.get_mut(ot.thread)?.state = GuestThreadState::Running;
-        }
-        log::trace!("resume_fiber: restore current thread {old_thread:?}");
+            if let Some(ot) = old_thread.guest() {
+                state.set_thread_running(ot.thread)?;
+            }
+            log::trace!("resume_fiber: restore current thread {old_thread:?}");
 
-        if let Some(mut fiber) = fiber {
-            log::trace!("resume_fiber: suspend reason {:?}", &state.suspend_reason);
-            // See the `SuspendReason` documentation for what each case means.
-            let reason = match state.suspend_reason.take() {
-                Some(r) => r,
-                None => bail_bug!("suspend reason missing when resuming fiber"),
-            };
-            match reason {
-                SuspendReason::NeedWork => {
-                    if state.worker.is_none() {
-                        state.worker = Some(fiber);
-                    } else {
-                        fiber.dispose(self);
+            if resuming.fiber.is_some() {
+                log::trace!("resume_fiber: suspend reason {:?}", &state.suspend_reason);
+                // See the `SuspendReason` documentation for what each case means.
+                let reason = match state.suspend_reason.take() {
+                    Some(r) => r,
+                    None => bail_bug!("suspend reason missing when resuming fiber"),
+                };
+                match reason {
+                    SuspendReason::NeedWork => {
+                        if state.worker.is_none() {
+                            state.worker = resuming.fiber.take();
+                        }
                     }
-                }
-                SuspendReason::Yielding { thread } => {
-                    state.get_mut(thread.thread)?.state = GuestThreadState::Ready { fiber };
-                    let instance = state.get_mut(thread.task)?.instance;
-                    state.push_low_priority(WorkItem::ResumeThread { instance, thread });
-                }
-                SuspendReason::ExplicitlySuspending { thread } => {
-                    state.get_mut(thread.thread)?.state = GuestThreadState::Suspended(fiber);
-                }
-                SuspendReason::Waiting { set, thread } => {
-                    let old = state
-                        .get_mut(set)?
-                        .waiting
-                        .insert(thread, WaitMode::Fiber(fiber));
-                    assert!(old.is_none());
-                }
-                SuspendReason::YieldingToSubtask { thread } => {
-                    // In this case, the thread has either invoked or sent a
-                    // cancel request to a subtask, and is now yielding to that
-                    // subtask.  According to the CM spec, that subtask may only
-                    // yield back to the original thread the first time it
-                    // suspends or exits (or a thread that it has resumed
-                    // suspends or exits, etc.), which we ensure by setting
-                    // `ConcurrentState::next_switch_item` here.
+                    SuspendReason::Yielding { thread } => {
+                        let slot = &mut state.get_mut(thread.thread)?.state;
+                        slot.check_no_fiber()?;
+                        *slot = GuestThreadState::Ready {
+                            fiber: resuming.fiber.take().unwrap(),
+                        };
+                        let instance = state.get_mut(thread.task)?.instance;
+                        state.push_low_priority(WorkItem::ResumeThread { instance, thread });
+                    }
+                    SuspendReason::ExplicitlySuspending { thread } => {
+                        let slot = &mut state.get_mut(thread.thread)?.state;
+                        slot.check_no_fiber()?;
+                        *slot = GuestThreadState::Suspended(resuming.fiber.take().unwrap());
+                    }
+                    SuspendReason::Waiting { set, thread } => {
+                        match state.get_mut(set)?.waiting.entry(thread) {
+                            Entry::Vacant(entry) => {
+                                entry.insert(WaitMode::Fiber(resuming.fiber.take().unwrap()));
+                            }
+                            Entry::Occupied(_) => {
+                                bail_bug!("entry unexpectedly already exists for {thread:?}");
+                            }
+                        }
+                    }
+                    SuspendReason::YieldingToSubtask { thread } => {
+                        // In this case, the thread has either invoked or sent a
+                        // cancel request to a subtask, and is now yielding to that
+                        // subtask.  According to the CM spec, that subtask may only
+                        // yield back to the original thread the first time it
+                        // suspends or exits (or a thread that it has resumed
+                        // suspends or exits, etc.), which we ensure by setting
+                        // `ConcurrentState::next_switch_item` here.
 
-                    let item = WorkItem::ResumeFiber {
-                        instance: state.get_mut(thread.task)?.instance,
-                        thread,
-                        fiber,
-                    };
-
-                    log::trace!("set next switch item to {item:?}");
-                    if state.next_switch_item.replace(item).is_some() {
-                        // This should be unreachable per the save/restore code
-                        // in `Self::suspend`.
-                        bail_bug!(
-                            "`ConcurrentState::next_switch_item` was already `Some(_)` when \
+                        let instance = state.get_mut(thread.task)?.instance;
+                        if state.next_switch_item.is_some() {
+                            // This should be unreachable per the save/restore code
+                            // in `Self::suspend`.
+                            bail_bug!(
+                                "`ConcurrentState::next_switch_item` was already `Some(_)` when \
                              a thread wanted to wait on a subtask"
-                        );
+                            );
+                        }
+                        let item = state.next_switch_item.insert(WorkItem::ResumeFiber {
+                            instance,
+                            thread,
+                            fiber: resuming.fiber.take().unwrap(),
+                        });
+                        log::trace!("set next switch item to {item:?}");
                     }
-                }
-            };
-        } else {
-            log::trace!("resume_fiber: fiber has exited");
-        }
+                };
+            } else {
+                log::trace!("resume_fiber: fiber has exited");
+            }
 
-        Ok(())
+            Ok(())
+        }
     }
 
     /// Suspend the current fiber, storing the reason in
@@ -2400,11 +2461,7 @@ impl StoreOpaque {
         };
 
         let old_next_switch_item = if save_and_restore_next_switch_item {
-            let item = state.next_switch_item.take();
-            // Note that we store it in the table here rather than directly in a
-            // local variable to ensure the fiber is disposed of properly if we
-            // end up trapping or panicking.
-            Some(state.push(item)?)
+            Some(state.save_next_switch_item()?)
         } else {
             None
         };
@@ -2448,7 +2505,7 @@ impl StoreOpaque {
 
         if let Some(item) = old_next_switch_item {
             let state = self.concurrent_state_mut()?;
-            state.next_switch_item = state.delete(item)?;
+            state.restore_next_switch_item(item)?;
         }
 
         Ok(())
@@ -2944,8 +3001,7 @@ impl Instance {
 
                 store
                     .concurrent_state_mut()?
-                    .get_mut(guest_thread.thread)?
-                    .state = GuestThreadState::Running;
+                    .set_thread_running(guest_thread.thread)?;
                 let task = store.concurrent_state_mut()?.get_mut(guest_thread.task)?;
                 let lower = match task.lower_params.take() {
                     Some(l) => l,
@@ -3023,7 +3079,7 @@ impl Instance {
                 store.set_thread(old_thread)?;
                 let state = store.concurrent_state_mut()?;
                 if let Some(t) = old_thread.guest() {
-                    state.get_mut(t.thread)?.state = GuestThreadState::Running;
+                    state.set_thread_running(t.thread)?;
                 }
                 log::trace!("stackless call: restored {old_thread:?} as current thread");
 
@@ -3580,8 +3636,7 @@ impl Instance {
         store
             .0
             .concurrent_state_mut()?
-            .get_mut(caller.thread)?
-            .state = GuestThreadState::Running;
+            .set_thread_running(caller.thread)?;
         log::trace!("popped current thread {guest_thread:?}; new thread is {caller:?}");
 
         if async_caller {
@@ -4153,7 +4208,7 @@ impl Instance {
                 log::trace!("explicit thread {guest_thread:?} completed");
                 let state = store.0.concurrent_state_mut()?;
                 if let Some(t) = old_thread.guest() {
-                    state.get_mut(t.thread)?.state = GuestThreadState::Running;
+                    state.set_thread_running(t.thread)?;
                 }
                 log::trace!("thread start: restored {old_thread:?} as current thread");
 
@@ -4241,10 +4296,18 @@ impl Instance {
         // When resuming a thread it must be in a suspended state otherwise
         // this operation is a trap.
         match &thread.state {
-            GuestThreadState::NotStartedExplicit(_) | GuestThreadState::Suspended(_) => {}
+            GuestThreadState::NotStartedExplicit(_) => {}
+            GuestThreadState::Suspended(_) => {
+                log::trace!("resuming thread {thread_id:?} that was suspended");
+                state.schedule_suspended_thread(
+                    guest_thread,
+                    self.runtime_instance(runtime_instance),
+                    priority,
+                )?;
+                return Ok(true);
+            }
             _ => bail!(Trap::CannotResumeThread),
         }
-
         match mem::replace(&mut thread.state, GuestThreadState::Running) {
             GuestThreadState::NotStartedExplicit(start_func) => {
                 log::trace!("starting thread {guest_thread:?}");
@@ -4257,20 +4320,7 @@ impl Instance {
                         })),
                     },
                 };
-                store
-                    .concurrent_state_mut()?
-                    .push_work_item(guest_call, priority)?;
-            }
-            GuestThreadState::Suspended(fiber) => {
-                log::trace!("resuming thread {thread_id:?} that was suspended");
-                store.concurrent_state_mut()?.push_work_item(
-                    WorkItem::ResumeFiber {
-                        instance: self.runtime_instance(runtime_instance),
-                        thread: guest_thread,
-                        fiber,
-                    },
-                    priority,
-                )?;
+                state.push_work_item(guest_call, priority)?;
             }
             other => {
                 thread.state = other;
@@ -4554,21 +4604,16 @@ impl Instance {
                     match thread_mut.wake_on_cancel.take() {
                         WakeOnCancel::Waiting(set) => {
                             // The thread is in a cancellable wait, so wake it up:
-                            let item = match concurrent_state.get_mut(set)?.waiting.remove(&thread)
-                            {
-                                Some(WaitMode::Callback(instance)) => WorkItem::GuestCall {
-                                    instance: runtime_instance,
-                                    call: GuestCall {
-                                        thread,
-                                        kind: GuestCallKind::DeliverEvent {
-                                            instance,
-                                            set: Some(set),
-                                        },
+                            let instance = concurrent_state.take_callback_waiter(set, thread)?;
+                            let item = WorkItem::GuestCall {
+                                instance: runtime_instance,
+                                call: GuestCall {
+                                    thread,
+                                    kind: GuestCallKind::DeliverEvent {
+                                        instance,
+                                        set: Some(set),
                                     },
                                 },
-                                other => bail_bug!(
-                                    "expected `Some(WaitMode::Callback(_))`; got `{other:?}`"
-                                ),
                             };
                             concurrent_state.set_switch_item(item)?;
 
@@ -4628,21 +4673,14 @@ impl Instance {
 
             // Save and later restore `next_switch_item` during a sync cancel so
             // we don't try to switch to it while blocking.
-            let old_next_switch_item = {
-                let state = store.concurrent_state_mut()?;
-                let item = state.next_switch_item.take();
-                // Note that we store it in the table here rather than directly
-                // in a local variable to ensure the fiber is disposed of
-                // properly if we end up trapping or panicking.
-                state.push(item)?
-            };
+            let old_next_switch_item = store.concurrent_state_mut()?.save_next_switch_item()?;
 
             // Wait for this waitable to get signaled with its terminal
             // status. Once that's done fall through to the shared code.
             store.wait_for_event(self.runtime_instance(caller_instance), waitable)?;
 
             let state = store.concurrent_state_mut()?;
-            state.next_switch_item = state.delete(old_next_switch_item)?;
+            state.restore_next_switch_item(old_next_switch_item)?;
 
             // .. fall through to determine what event's in store for us.
         }
@@ -5268,6 +5306,18 @@ enum GuestThreadState {
         fiber: StoreFiber<'static>,
     },
     Completed,
+}
+
+impl GuestThreadState {
+    fn check_no_fiber(&self) -> Result<()> {
+        match self {
+            Self::Suspended(_) | Self::Ready { .. } => bail_bug!("thread already owns a fiber"),
+            Self::NotStartedImplicit
+            | Self::NotStartedExplicit(_)
+            | Self::Running
+            | Self::Completed => Ok(()),
+        }
+    }
 }
 
 impl fmt::Debug for GuestThreadState {
@@ -6031,8 +6081,30 @@ impl ConcurrentState {
         fibers: &mut Vec<StoreFiber<'static>>,
         futures: &mut Vec<FuturesUnordered<HostTaskFuture>>,
     ) {
+        let ConcurrentState {
+            table,
+            worker,
+            switch_item,
+            next_switch_item,
+            high_priority,
+            low_priority,
+            saved_next_switch_items,
+            futures: pending_futures,
+            worker_item: _,
+            unforced_current_thread: _,
+            deferred_host_call_context: _,
+            suspend_reason: _,
+            global_error_context_ref_counts: _,
+            interesting_tasks: _,
+            interesting_tasks_empty_waker: _,
+            ready_for_concurrent_call_waker: _,
+            event_loop_running: _,
+            #[cfg(feature = "task-group-hook")]
+                task_group_hook: _,
+        } = self;
+
         let mut items = Vec::new();
-        for (_, entry) in self.table.get_mut().iter_mut() {
+        for (_, entry) in table.get_mut().iter_mut() {
             if let Some(set) = entry.downcast_mut::<WaitableSet>() {
                 for mode in mem::take(&mut set.waiting).into_values() {
                     match mode {
@@ -6043,10 +6115,14 @@ impl ConcurrentState {
                     }
                 }
             } else if let Some(thread) = entry.downcast_mut::<GuestThread>() {
-                if let GuestThreadState::Suspended(fiber) | GuestThreadState::Ready { fiber, .. } =
-                    mem::replace(&mut thread.state, GuestThreadState::Completed)
-                {
-                    fibers.push(fiber);
+                match mem::replace(&mut thread.state, GuestThreadState::Completed) {
+                    GuestThreadState::Suspended(fiber) | GuestThreadState::Ready { fiber } => {
+                        fibers.push(fiber);
+                    }
+                    GuestThreadState::NotStartedImplicit
+                    | GuestThreadState::NotStartedExplicit(_)
+                    | GuestThreadState::Running
+                    | GuestThreadState::Completed => {}
                 }
             } else if let Some(item) = entry.downcast_mut::<Option<WorkItem>>() {
                 if let Some(item) = item.take() {
@@ -6055,7 +6131,7 @@ impl ConcurrentState {
             }
         }
 
-        if let Some(fiber) = self.worker.take() {
+        if let Some(fiber) = worker.take() {
             fibers.push(fiber);
         }
 
@@ -6064,7 +6140,7 @@ impl ConcurrentState {
                 fibers.push(fiber);
             }
             WorkItem::PushFuture(future) => {
-                self.futures
+                pending_futures
                     .get_mut()
                     .as_mut()
                     .unwrap()
@@ -6078,26 +6154,26 @@ impl ConcurrentState {
         for item in items {
             handle_item(item);
         }
-        if let Some(item) = self.switch_item.take() {
+        if let Some(item) = switch_item.take() {
             handle_item(item);
         }
-        if let Some(item) = self.next_switch_item.take() {
+        if let Some(item) = next_switch_item.take() {
             handle_item(item);
         }
-        for item in mem::take(&mut self.high_priority) {
+        for item in mem::take(high_priority) {
             handle_item(item);
         }
-        for item in mem::take(&mut self.low_priority) {
+        for item in mem::take(low_priority) {
             handle_item(item);
         }
-        for item in mem::take(&mut self.saved_next_switch_items)
+        for item in mem::take(saved_next_switch_items)
             .into_iter()
             .filter_map(|v| v)
         {
             handle_item(item);
         }
 
-        if let Some(them) = self.futures.get_mut().take() {
+        if let Some(them) = pending_futures.get_mut().take() {
             futures.push(them);
         }
     }
@@ -6148,10 +6224,14 @@ impl ConcurrentState {
                     }
                 }
             } else if let Some(thread) = entry.downcast_mut::<GuestThread>() {
-                if let GuestThreadState::Suspended(fiber) | GuestThreadState::Ready { fiber, .. } =
-                    &mut thread.state
-                {
-                    fiber.trace_gc_roots(modules, unwind, gc_roots_list);
+                match &mut thread.state {
+                    GuestThreadState::Suspended(fiber) | GuestThreadState::Ready { fiber } => {
+                        fiber.trace_gc_roots(modules, unwind, gc_roots_list);
+                    }
+                    GuestThreadState::NotStartedImplicit
+                    | GuestThreadState::NotStartedExplicit(_)
+                    | GuestThreadState::Running
+                    | GuestThreadState::Completed => {}
                 }
             } else if let Some(Some(WorkItem::ResumeFiber { fiber, .. })) =
                 entry.downcast_mut::<Option<WorkItem>>()
@@ -6195,6 +6275,75 @@ impl ConcurrentState {
         {
             handle_item(item);
         }
+    }
+
+    fn schedule_suspended_thread(
+        &mut self,
+        thread: QualifiedThreadId,
+        instance: RuntimeInstance,
+        priority: Priority,
+    ) -> Result<()> {
+        // Validate the destination while the source still owns the fiber.
+        if matches!(priority, Priority::Switch) && self.switch_item.is_some() {
+            bail_bug!("switch item already set");
+        }
+        let slot = &mut self.get_mut(thread.thread)?.state;
+        if !matches!(slot, GuestThreadState::Suspended(_)) {
+            bail!(Trap::CannotResumeThread);
+        }
+        let GuestThreadState::Suspended(fiber) = mem::replace(slot, GuestThreadState::Running)
+        else {
+            unreachable!()
+        };
+        let item = WorkItem::ResumeFiber {
+            instance,
+            thread,
+            fiber,
+        };
+        match priority {
+            Priority::Switch => self.switch_item = Some(item),
+            Priority::High => self.push_high_priority(item),
+            Priority::Low => self.push_low_priority(item),
+        }
+        Ok(())
+    }
+
+    fn set_thread_running(&mut self, thread: TableId<GuestThread>) -> Result<()> {
+        let slot = &mut self.get_mut(thread)?.state;
+        slot.check_no_fiber()?;
+        *slot = GuestThreadState::Running;
+        Ok(())
+    }
+
+    fn save_next_switch_item(&mut self) -> Result<TableId<Option<WorkItem>>> {
+        // push can consume and drop its argument when the table is full.
+        // Reserve with an empty item before taking the fiber-owning source.
+        let saved = self.push(None::<WorkItem>)?;
+        let slot = self.table.get_mut().get_mut(&Resource::from(saved))?;
+        *slot = self.next_switch_item.take();
+        Ok(saved)
+    }
+
+    fn restore_next_switch_item(&mut self, saved: TableId<Option<WorkItem>>) -> Result<()> {
+        if self.next_switch_item.is_some() {
+            bail_bug!("next switch item already set when restoring");
+        }
+        self.next_switch_item = self.delete(saved)?;
+        Ok(())
+    }
+
+    fn take_callback_waiter(
+        &mut self,
+        set: TableId<WaitableSet>,
+        thread: QualifiedThreadId,
+    ) -> Result<Instance> {
+        let waiting = &mut self.get_mut(set)?.waiting;
+        let instance = match waiting.get(&thread) {
+            Some(WaitMode::Callback(instance)) => *instance,
+            other => bail_bug!("expected `Some(WaitMode::Callback(_))`; got `{other:?}`"),
+        };
+        waiting.remove(&thread);
+        Ok(instance)
     }
 
     fn push<V: Send + Sync + 'static>(
@@ -6243,13 +6392,15 @@ impl ConcurrentState {
     }
 
     fn set_switch_item(&mut self, item: WorkItem) -> Result<()> {
-        log::trace!("set switch item: {item:?}");
-
         if self.switch_item.is_some() {
+            // Preserve ownership on this internal-error path. The caller
+            // must stop scheduling after the error; teardown disposes the item.
+            self.push_high_priority(item);
             bail_bug!("switch item already set");
         }
 
         self.switch_item = Some(item);
+        log::trace!("set switch item: {:?}", self.switch_item.as_ref().unwrap());
 
         Ok(())
     }
@@ -6264,13 +6415,19 @@ impl ConcurrentState {
     /// Wake the first thread waiting on `set`, if any, so that it may receive
     /// one of the set's pending events.
     fn wake_waiter(&mut self, set: TableId<WaitableSet>) -> Result<()> {
-        let Some((thread, mode)) = self.get_mut(set)?.waiting.pop_first() else {
+        // Finish every fallible lookup and check before taking the waiter out
+        // of the set, so that an error leaves its fiber owned by the set.
+        let Some((&thread, _)) = self.get_mut(set)?.waiting.first_key_value() else {
             return Ok(());
         };
-        let wake_on_cancel = self.get_mut(thread.thread)?.wake_on_cancel.take();
-        assert!(wake_on_cancel.is_none() || wake_on_cancel == WakeOnCancel::Waiting(set));
-
+        let wake_on_cancel = self.get_mut(thread.thread)?.wake_on_cancel;
+        if wake_on_cancel != WakeOnCancel::None && wake_on_cancel != WakeOnCancel::Waiting(set) {
+            bail_bug!("thread {thread:?} has unexpected wake_on_cancel value {wake_on_cancel:?}");
+        }
         let instance = self.get_mut(thread.task)?.instance;
+        self.get_mut(thread.thread)?.wake_on_cancel.take();
+        let (_, mode) = self.get_mut(set)?.waiting.pop_first().unwrap();
+
         let item = match mode {
             WaitMode::Fiber(fiber) => WorkItem::ResumeFiber {
                 instance,
@@ -6293,13 +6450,19 @@ impl ConcurrentState {
     }
 
     fn push_high_priority(&mut self, item: WorkItem) {
-        log::trace!("push high priority: {item:?}");
         self.high_priority.push_front(item);
+        log::trace!(
+            "push high priority: {:?}",
+            self.high_priority.front().unwrap()
+        );
     }
 
     fn push_low_priority(&mut self, item: WorkItem) {
-        log::trace!("push low priority: {item:?}");
         self.low_priority.push_front(item);
+        log::trace!(
+            "push low priority: {:?}",
+            self.low_priority.front().unwrap()
+        );
     }
 
     fn push_work_item(&mut self, item: WorkItem, priority: Priority) -> Result<()> {
@@ -6353,28 +6516,22 @@ impl ConcurrentState {
     where
         F: FnMut(&WorkItem) -> bool,
     {
-        // Note the use of `.rev()` below to preserve ordering given that items
+        // Scan from the back to preserve the ordering of items
         // are popped from the back of the `VecDeque`s by `poll_until` and
         // pushed to the front by `push_{high,low}_priority`.
 
-        for item in mem::take(&mut self.high_priority).into_iter().rev() {
-            if self.switch_item.is_none() && predicate(&item) {
-                self.set_switch_item(item)?;
-            } else {
-                self.push_high_priority(item);
-            }
-        }
-
+        // Inspect items while they are still owned by the store. A predicate
+        // (including tracing) may panic; it must not drop an extracted queue.
         if self.switch_item.is_none() {
-            for item in mem::take(&mut self.low_priority).into_iter().rev() {
-                if self.switch_item.is_none() && predicate(&item) {
-                    self.set_switch_item(item)?;
-                } else {
-                    self.push_low_priority(item);
-                }
+            if let Some(index) = self.high_priority.iter().rposition(&mut predicate) {
+                self.switch_item = self.high_priority.remove(index);
             }
         }
-
+        if self.switch_item.is_none() {
+            if let Some(index) = self.low_priority.iter().rposition(predicate) {
+                self.switch_item = self.low_priority.remove(index);
+            }
+        }
         Ok(self.switch_item.is_some())
     }
 
@@ -6894,3 +7051,6 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod fiber_ownership_tests;
