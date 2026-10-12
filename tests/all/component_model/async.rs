@@ -2179,3 +2179,90 @@ async fn task_group_deletion() -> Result<()> {
 
     Ok(())
 }
+
+/// A guest's `future.write` to a host consumer which never takes the value
+/// blocks, and once cancelled the write may be retried.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn retry_cancelled_future_write_to_host() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc (memory (export "memory") 1))
+  (core instance $libc (instantiate $libc))
+  (type $f (future u32))
+  (core func $future.new (canon future.new $f))
+  (core func $future.write (canon future.write $f async (memory (core memory $libc "memory"))))
+  (core func $future.cancel-write (canon future.cancel-write $f))
+  (core func $task.return (canon task.return))
+  (core module $m
+    (import "" "future.new" (func $future.new (result i64)))
+    (import "" "future.write" (func $future.write (param i32 i32) (result i32)))
+    (import "" "future.cancel-write" (func $future.cancel-write (param i32) (result i32)))
+    (import "" "task.return" (func $task.return))
+    (global $w (mut i32) (i32.const 0))
+    (func (export "new") (result i32)
+      (local $pair i64)
+      (local.set $pair (call $future.new))
+      (global.set $w (i32.wrap_i64 (i64.shr_u (local.get $pair) (i64.const 32))))
+      (i32.wrap_i64 (local.get $pair)))
+    (func $write-then-cancel
+      (if (i32.ne (call $future.write (global.get $w) (i32.const 0)) (i32.const -1 (; BLOCKED ;)))
+        (then unreachable))
+      (if (i32.ne (call $future.cancel-write (global.get $w)) (i32.const 2 (; CANCELLED ;)))
+        (then unreachable)))
+    (func (export "run") (result i32)
+      (call $write-then-cancel)
+      (call $write-then-cancel)
+      (call $task.return)
+      (i32.const 0 (; EXIT ;)))
+    (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+  )
+  (core instance $i (instantiate $m (with "" (instance
+    (export "future.new" (func $future.new))
+    (export "future.write" (func $future.write))
+    (export "future.cancel-write" (func $future.cancel-write))
+    (export "task.return" (func $task.return))))))
+  (func (export "new") (result $f) (canon lift (core func $i "new")))
+  (func (export "run") async
+    (canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let new = instance.get_typed_func::<(), (FutureReader<u32>,)>(&mut store, "new")?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    let (reader,) = new.call_async(&mut store, ()).await?;
+    reader.pipe(&mut store, NeverConsume)?;
+    run.call_async(&mut store, ()).await?;
+    return Ok(());
+
+    /// Never takes the value; acknowledges cancellation when asked to finish.
+    struct NeverConsume;
+
+    impl FutureConsumer<()> for NeverConsume {
+        type Item = u32;
+
+        fn poll_consume(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<()>,
+            _source: Source<'_, u32>,
+            finish: bool,
+        ) -> Poll<Result<()>> {
+            if finish {
+                Poll::Ready(Ok(()))
+            } else {
+                Poll::Pending
+            }
+        }
+    }
+}
