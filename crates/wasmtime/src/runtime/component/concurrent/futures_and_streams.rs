@@ -4912,6 +4912,9 @@ impl ConcurrentState {
         &mut self,
         origin: TransmitOrigin,
     ) -> Result<(TableId<TransmitHandle>, TableId<TransmitHandle>)> {
+        // All three entries must fit before inserting any of them so a full
+        // table does not leave an inaccessible state or handle behind.
+        self.table().ensure_capacity(3)?;
         let state_id = self.push(TransmitState::new(origin))?;
 
         let write = self.push(TransmitHandle::new(state_id))?;
@@ -5175,12 +5178,69 @@ impl<T> Drop for LockedStateGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::component::ResourceTableError;
     use crate::{Engine, Store};
     use core::future::pending;
     use core::pin::pin;
     use std::sync::LazyLock;
 
     static ENGINE: LazyLock<Engine> = LazyLock::new(Engine::default);
+
+    #[test]
+    fn new_transmit_full_does_not_leak() -> Result<()> {
+        for origin in [
+            TransmitOrigin::Host,
+            TransmitOrigin::GuestFuture(
+                ComponentInstanceId::from_u32(0),
+                TypeFutureTableIndex::from_u32(0),
+            ),
+            TransmitOrigin::GuestStream(
+                ComponentInstanceId::from_u32(0),
+                TypeStreamTableIndex::from_u32(0),
+            ),
+        ] {
+            for available in 0..3 {
+                let mut state = ConcurrentState::default();
+                let existing = state.push(())?;
+                state.table().set_max_capacity(1 + available);
+                for _ in 0..2 {
+                    let error = state.new_transmit(origin).unwrap_err();
+                    assert!(matches!(
+                        error.downcast_ref::<ResourceTableError>(),
+                        Some(ResourceTableError::Full),
+                    ));
+                    assert_eq!(state.table().len(), 1);
+                    assert!(state.get_mut(existing).is_ok());
+                }
+
+                state.table().set_max_capacity(4);
+                let (write, read) = state.new_transmit(origin)?;
+                assert_eq!(state.table().len(), 4);
+                let transmit = state.get_mut(write)?.state;
+                assert_eq!(state.get_mut(read)?.state, transmit);
+                state.delete_transmit(transmit)?;
+                assert_eq!(state.table().len(), 1);
+                state.delete(existing)?;
+                assert!(state.table().is_empty());
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn new_transmit_reuses_free_slots() -> Result<()> {
+        let mut state = ConcurrentState::default();
+        state.table().set_max_capacity(3);
+        for _ in 0..2 {
+            let (write, read) = state.new_transmit(TransmitOrigin::Host)?;
+            assert_eq!(state.table().len(), 3);
+            let transmit = state.get_mut(write)?.state;
+            assert_eq!(state.get_mut(read)?.state, transmit);
+            state.delete_transmit(transmit)?;
+            assert!(state.table().is_empty());
+        }
+        Ok(())
+    }
 
     fn poll_future_producer<T>(rx: Pin<&mut T>, finish: bool) -> Poll<Result<Option<T::Item>>>
     where

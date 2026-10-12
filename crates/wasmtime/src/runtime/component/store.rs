@@ -523,6 +523,17 @@ impl<T> Store<T> {
     ///
     /// Returns `None` if [`Config::concurrency_support`] is disabled.
     ///
+    /// Use [`ResourceTable::set_max_capacity`] on this table to bound component
+    /// async allocations, including guest-created streams, futures, and waitable
+    /// sets. Configure the capacity before instantiating components or starting
+    /// tasks: lowering it later does not evict entries or prevent reuse of
+    /// existing slots. This table is separate from any resource table maintained
+    /// by the embedder for host resources.
+    ///
+    /// [`ResourceTable::len`] returns the number of live entries in constant
+    /// time. Internal tasks, threads, and scratch waitable sets also occupy
+    /// entries; some are allocated lazily as execution requires them.
+    ///
     /// [`Config::concurrency_support`]: crate::Config::concurrency_support
     #[cfg(feature = "component-model-async")]
     pub fn concurrent_resource_table(&mut self) -> Option<&mut ResourceTable> {

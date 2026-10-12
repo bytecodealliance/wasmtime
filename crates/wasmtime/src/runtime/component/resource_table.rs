@@ -37,6 +37,7 @@ pub struct ResourceTable {
     entries: Vec<Entry>,
     free_head: Option<usize>,
     max_capacity: usize,
+    live: usize,
 }
 
 #[derive(Debug)]
@@ -114,15 +115,48 @@ impl ResourceTable {
         ResourceTable::with_capacity(0)
     }
 
-    /// Returns whether or not this table is empty.
+    /// Returns the number of live resources in this table.
     ///
-    /// Note that this is an `O(n)` operation, where `n` is the number of
-    /// entries in the backing `Vec`.
+    /// Deleted resources, including debug tombstones, are not counted. This is
+    /// an `O(1)` operation.
+    pub fn len(&self) -> usize {
+        self.live
+    }
+
+    /// Returns whether or not this table is empty in `O(1)` time.
     pub fn is_empty(&self) -> bool {
-        self.entries.iter().all(|entry| match entry {
-            Entry::Free { .. } => true,
-            Entry::Occupied { entry } => entry.entry.downcast_ref::<Tombstone>().is_some(),
-        })
+        self.len() == 0
+    }
+
+    /// Checks that a batch of pushes has enough free or appendable slots.
+    ///
+    /// Free slots are reused even if the maximum capacity has been lowered below
+    /// the number of backing slots. Debug tombstones are not reusable. No table
+    /// mutations may occur between this check and the batch of pushes.
+    #[cfg(any(feature = "component-model-async", test))]
+    pub(crate) fn ensure_capacity(&self, mut additional: usize) -> Result<(), ResourceTableError> {
+        let mut free = self.free_head;
+        while additional > 0 {
+            let Some(index) = free else { break };
+            let Entry::Free { next } = &self.entries[index] else {
+                unreachable!()
+            };
+            free = *next;
+            additional -= 1;
+        }
+        if additional == 0 {
+            return Ok(());
+        }
+        if additional > self.max_capacity.saturating_sub(self.entries.len()) {
+            return Err(ResourceTableError::Full);
+        }
+        let last_index = self
+            .entries
+            .len()
+            .checked_add(additional - 1)
+            .ok_or(ResourceTableError::Full)?;
+        u32::try_from(last_index).map_err(|_| ResourceTableError::Full)?;
+        Ok(())
     }
 
     /// Returns the maximum capacity of this table, in elements, before adding
@@ -147,6 +181,7 @@ impl ResourceTable {
             entries: Vec::with_capacity(capacity),
             free_head: None,
             max_capacity: DEFAULT_MAX_CAPACITY,
+            live: 0,
         }
     }
 
@@ -176,7 +211,7 @@ impl ResourceTable {
 
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
     fn free_entry(&mut self, ix: usize, debug: bool) -> TableEntry {
-        if debug {
+        let entry = if debug {
             // Instead of making this entry available for reuse, we leave a
             // tombstone in debug mode.  This helps detect use-after-delete and
             // double-delete bugs.
@@ -207,7 +242,11 @@ impl ResourceTable {
             self.free_head = Some(ix);
 
             entry
+        };
+        if !entry.entry.is::<Tombstone>() {
+            self.live -= 1;
         }
+        entry
     }
 
     /// Push a new entry into the table, returning its handle. This will prefer to use free entries
@@ -215,6 +254,7 @@ impl ResourceTable {
     fn push_(&mut self, e: TableEntry) -> Result<u32, ResourceTableError> {
         if let Some(free) = self.pop_free_list() {
             self.entries[free] = Entry::Occupied { entry: e };
+            self.live += 1;
             Ok(free.try_into().unwrap())
         } else {
             if self.entries.len() >= self.max_capacity {
@@ -226,6 +266,7 @@ impl ResourceTable {
                 .try_into()
                 .map_err(|_| ResourceTableError::Full)?;
             self.entries.push(Entry::Occupied { entry: e });
+            self.live += 1;
             Ok(ix)
         }
     }
@@ -502,4 +543,137 @@ fn test_max_capacity() {
     }
 
     table.push(()).unwrap();
+}
+
+#[test]
+fn test_len_and_slot_reuse() {
+    let mut table = ResourceTable::with_capacity(16);
+    assert_eq!(table.len(), 0);
+    assert_eq!(table.entries.len(), 0);
+    assert!(table.is_empty());
+    table.set_max_capacity(2);
+
+    let first = table.push(1u32).unwrap();
+    let second = table.push(2u32).unwrap();
+    assert_eq!(table.len(), 2);
+    assert!(matches!(table.push(3u32), Err(ResourceTableError::Full)));
+    assert_eq!(table.len(), 2);
+    table.delete_maybe_debug(first, false).unwrap();
+    assert_eq!(table.len(), 1);
+    let reused = table.push(3u32).unwrap();
+    assert_eq!(reused.rep(), 0);
+    assert_eq!(table.len(), 2);
+    assert_eq!(table.entries.len(), 2);
+    table.delete_maybe_debug(second, false).unwrap();
+    table.delete_maybe_debug(reused, false).unwrap();
+    assert_eq!(table.len(), 0);
+    assert!(table.is_empty());
+}
+
+#[test]
+fn test_len_and_delete_errors() {
+    let mut table = ResourceTable::new();
+    let parent = table.push(()).unwrap();
+    let child = table.push_child(1u32, &parent).unwrap();
+    assert_eq!(table.len(), 2);
+    table.set_max_capacity(2);
+    assert!(matches!(
+        table.push_child(2u32, &parent),
+        Err(ResourceTableError::Full)
+    ));
+    assert_eq!(table.len(), 2);
+    assert!(matches!(
+        table.delete(Resource::<()>::new_own(parent.rep())),
+        Err(ResourceTableError::HasChildren)
+    ));
+    assert_eq!(table.len(), 2);
+    assert!(matches!(
+        table.push_child((), &Resource::<()>::new_own(100)),
+        Err(ResourceTableError::NotPresent)
+    ));
+    assert_eq!(table.len(), 2);
+    assert!(matches!(
+        table.delete(Resource::<()>::new_own(child.rep())),
+        Err(ResourceTableError::WrongType)
+    ));
+    assert_eq!(table.len(), 1);
+    assert!(matches!(
+        table.delete(Resource::<()>::new_own(100)),
+        Err(ResourceTableError::NotPresent)
+    ));
+    assert_eq!(table.len(), 1);
+    table.delete(parent).unwrap();
+    assert!(table.is_empty());
+}
+
+#[test]
+fn test_len_and_tombstones() {
+    let mut table = ResourceTable::new();
+    table.set_max_capacity(1);
+    let value = table.push(1u32).unwrap();
+    let rep = value.rep();
+    table.delete_maybe_debug(value, true).unwrap();
+    assert_eq!(table.len(), 0);
+    assert!(table.is_empty());
+    assert_eq!(table.entries.len(), 1);
+    assert!(matches!(
+        table.ensure_capacity(1),
+        Err(ResourceTableError::Full)
+    ));
+    assert!(matches!(
+        table.delete_maybe_debug(Resource::<u32>::new_own(rep), true),
+        Err(ResourceTableError::WrongType)
+    ));
+    assert_eq!(table.len(), 0);
+    assert!(matches!(
+        table.delete_maybe_debug(Resource::<u32>::new_own(rep), false),
+        Err(ResourceTableError::WrongType)
+    ));
+    assert_eq!(table.len(), 0);
+    table.ensure_capacity(1).unwrap();
+    assert_eq!(table.push(()).unwrap().rep(), rep);
+    assert_eq!(table.len(), 1);
+}
+
+#[test]
+fn test_batch_capacity() {
+    let mut table = ResourceTable::new();
+    table.set_max_capacity(3);
+    table.ensure_capacity(0).unwrap();
+    table.ensure_capacity(3).unwrap();
+    assert!(matches!(
+        table.ensure_capacity(4),
+        Err(ResourceTableError::Full)
+    ));
+    assert_eq!(table.entries.len(), 0);
+    let first = table.push(()).unwrap();
+    table.ensure_capacity(2).unwrap();
+    assert!(matches!(
+        table.ensure_capacity(3),
+        Err(ResourceTableError::Full)
+    ));
+    table.delete_maybe_debug(first, false).unwrap();
+    // A batch can combine free slots and new slots.
+    table.ensure_capacity(3).unwrap();
+    let handles = (0..3).map(|_| table.push(()).unwrap()).collect::<Vec<_>>();
+    for handle in handles {
+        table.delete_maybe_debug(handle, false).unwrap();
+    }
+    table.set_max_capacity(0);
+    // Reusing slots remains valid even after lowering the maximum capacity.
+    table.ensure_capacity(3).unwrap();
+    assert!(matches!(
+        table.ensure_capacity(4),
+        Err(ResourceTableError::Full)
+    ));
+    assert_eq!(table.len(), 0);
+    assert_eq!(table.entries.len(), 3);
+    #[cfg(target_pointer_width = "64")]
+    {
+        table.set_max_capacity(usize::MAX);
+        assert!(matches!(
+            table.ensure_capacity(usize::MAX),
+            Err(ResourceTableError::Full)
+        ));
+    }
 }

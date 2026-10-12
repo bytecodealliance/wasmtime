@@ -1165,13 +1165,7 @@ impl<T> StoreContextMut<'_, T> {
     /// Only intended for use in Wasmtime's own testing.
     #[doc(hidden)]
     pub fn concurrent_state_table_size(&mut self) -> usize {
-        self.0
-            .concurrent_state_mut()
-            .unwrap()
-            .table
-            .get_mut()
-            .iter_mut()
-            .count()
+        self.0.concurrent_state_mut().unwrap().table.get_mut().len()
     }
 
     /// Spawn a background task to run as part of this instance's event loop.
@@ -4207,6 +4201,8 @@ impl Instance {
         let state = store.0.concurrent_state_mut()?;
         let parent_task = current_thread.task;
 
+        // The thread and its scratch waitable set must fit together.
+        state.table().ensure_capacity(2)?;
         let new_thread = GuestThread::new_explicit(state, parent_task, start_func)?;
         let thread_id = state.push(new_thread)?;
         state.get_mut(parent_task)?.threads.insert(thread_id);
@@ -5534,6 +5530,13 @@ impl GuestTask {
         async_typed: bool,
         async_lifted: bool,
     ) -> Result<QualifiedThreadId> {
+        // Check the entire allocation before creating a task group or changing
+        // its reference count. A task needs its implicit thread and scratch set;
+        // a host-created task also needs a group when task-group hooks are enabled.
+        let additional = 3 + usize::from(
+            cfg!(feature = "task-group-hook") && matches!(&caller, Caller::Host { .. }),
+        );
+        state.table().ensure_capacity(additional)?;
         let group = match caller {
             Caller::Guest { thread } => {
                 let group = state.get_mut(thread.task)?.group;
@@ -6531,6 +6534,7 @@ impl ConcurrentState {
         };
 
         // Push first so allocation failure leaves the deferred state intact.
+        self.table().ensure_capacity(1)?;
         let task = HostTask::new(self, HostTaskState::CalleeStarted, caller)?;
         let task = self.push(task)?;
         let call_context = self
