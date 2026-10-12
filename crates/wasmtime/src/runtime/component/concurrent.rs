@@ -4016,15 +4016,10 @@ impl Instance {
                 .handle_table()
                 .waitable_set_rep(set_handle)?;
 
-            let state = store.concurrent_state_mut()?;
-            if let Some(old) = waitable.common(state)?.set
-                && state.get_mut(old)?.is_sync_call_set
-            {
-                bail!(Trap::WaitableSyncAndAsync);
-            }
-
             Some(TableId::<WaitableSet>::new(set))
         };
+
+        waitable.trap_if_has_sync_waiter(store.concurrent_state_mut()?)?;
 
         log::trace!(
             "waitable {waitable:?} (handle {waitable_handle}) join set {set:?} (handle {set_handle})",
@@ -5735,6 +5730,20 @@ impl Waitable {
     /// being watched by a waitable set.
     fn trap_if_in_waitable_set(&self, state: &mut ConcurrentState) -> Result<()> {
         if self.common(state)?.set.is_some() {
+            bail!(Trap::WaitableSyncAndAsync);
+        }
+        Ok(())
+    }
+
+    /// Trap if a thread is currently synchronously waiting on this waitable.
+    ///
+    /// This corresponds to the spec's `trap_if(w.has_sync_waiter)` and is
+    /// used to prevent other threads from stealing or otherwise interfering
+    /// with the event the sync waiter is expecting.
+    fn trap_if_has_sync_waiter(&self, state: &mut ConcurrentState) -> Result<()> {
+        if let Some(set) = self.common(state)?.set
+            && state.get_mut(set)?.is_sync_call_set
+        {
             bail!(Trap::WaitableSyncAndAsync);
         }
         Ok(())
