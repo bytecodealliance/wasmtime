@@ -342,6 +342,7 @@ impl<'a> TrampolineCompiler<'a> {
                                 me.index_value(*instance),
                                 me.index_value(*ty),
                                 me.index_value(*options),
+                                // FIXME(#4311): needs memory64 handling
                                 me.builder
                                     .ins()
                                     .iconst(ir::types::I32, i64::from(info.size32)),
@@ -379,6 +380,7 @@ impl<'a> TrampolineCompiler<'a> {
                                 me.index_value(*instance),
                                 me.index_value(*ty),
                                 me.index_value(*options),
+                                // FIXME(#4311): needs memory64 handling
                                 me.builder
                                     .ins()
                                     .iconst(ir::types::I32, i64::from(info.size32)),
