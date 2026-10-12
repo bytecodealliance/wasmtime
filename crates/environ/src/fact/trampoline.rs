@@ -776,14 +776,17 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // are all translated.
         //
         // Note that for this call the callee's previous context is shuffled
-        // in-and-then-back-out after the call.
+        // in-and-then-back-out after the call. Additionally the callee cannot
+        // leave its instance during post-return, so `may_leave` is cleared.
         if let Some(func) = adapter.lift.post_return {
             let caller_context = self.save_context();
             self.restore_context(callee_context);
+            let saved_lift_may_leave = self.clear_may_leave(adapter.lift.flags);
             for (result, _) in result_locals.iter() {
                 self.instruction(LocalGet(*result));
             }
             self.instruction(Call(func.as_u32()));
+            self.restore_may_leave(adapter.lift.flags, saved_lift_may_leave);
             self.restore_context(caller_context);
         } else {
             assert!(callee_context.is_empty());
