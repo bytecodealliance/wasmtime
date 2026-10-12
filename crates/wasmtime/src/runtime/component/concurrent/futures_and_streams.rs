@@ -3742,10 +3742,6 @@ impl Instance {
                     bail_bug!("expected guest_offset to be 0");
                 }
 
-                if let TransmitIndex::Future(_) = ty {
-                    transmit.done = true;
-                }
-
                 set_guest_ready(concurrent_state)?;
                 self.consume(
                     store.0,
