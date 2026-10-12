@@ -3,8 +3,8 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{
-    AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle, Func,
-    Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Result, Store,
+    AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle,
+    Func, Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Result, Store,
     StoreContextMut, Val, ValType,
 };
 
@@ -1759,4 +1759,36 @@ async fn take_exception_in_debug_handler() -> Result<()> {
             async move {}
         }
     }
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn gc_in_func_without_program_points() -> wasmtime::Result<()> {
+    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+        let mut config = Config::default();
+        config.guest_debug(true).wasm_gc(true).collector(collector);
+        let engine = Engine::new(&config)?;
+        let module = Module::new(
+            &engine,
+            r#"
+            (module
+              (type $a (array (mut i8)))
+              (func (export "f")
+                (local externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref))
+              (global (ref $a) (array.new_default $a (i32.const 100000)))
+              (global (ref $a) (array.new_default $a (i32.const 100000)))
+              (global (ref $a) (array.new_default $a (i32.const 100000))))
+            "#,
+        )?;
+        let mut store = Store::new(&engine, ());
+        Instance::new(&mut store, &module, &[])?;
+    }
+    Ok(())
 }

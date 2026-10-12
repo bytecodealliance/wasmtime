@@ -58,6 +58,8 @@ pub struct FrameTable<'a> {
     breakpoint_patch_data_ends: &'a [U32<LittleEndian>],
     breakpoint_patch_data: &'a [u8],
 
+    func_starts: &'a [U32<LittleEndian>],
+
     original_text: &'a [u8],
 }
 
@@ -79,6 +81,10 @@ impl<'a> FrameTable<'a> {
             .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read breakpoint count prefix"))?;
         let num_breakpoints = usize::try_from(num_breakpoints.get(LittleEndian))?;
+        let num_funcs = data
+            .read::<U32<LittleEndian>>()
+            .map_err(|_| anyhow::anyhow!("Unable to read function count prefix"))?;
+        let num_funcs = usize::try_from(num_funcs.get(LittleEndian))?;
 
         let frame_descriptor_pool_length = data
             .read::<U32<LittleEndian>>()
@@ -118,6 +124,8 @@ impl<'a> FrameTable<'a> {
         let (breakpoint_patch_data_ends, data) =
             object::slice_from_bytes::<U32<LittleEndian>>(data, num_breakpoints)
                 .map_err(|_| anyhow::anyhow!("Unable to read breakpoint patch data ends slice"))?;
+        let (func_starts, data) = object::slice_from_bytes::<U32<LittleEndian>>(data, num_funcs)
+            .map_err(|_| anyhow::anyhow!("Unable to read function starts slice"))?;
 
         let (frame_descriptor_data, data) = data
             .split_at_checked(frame_descriptor_pool_length)
@@ -142,6 +150,7 @@ impl<'a> FrameTable<'a> {
             breakpoint_patch_offsets,
             breakpoint_patch_data_ends,
             breakpoint_patch_data,
+            func_starts,
             original_text,
         })
     }
@@ -175,6 +184,11 @@ impl<'a> FrameTable<'a> {
 
     /// Get frames for the program point at the PC upper-bounded by a
     /// given search PC (offset in text section).
+    ///
+    /// The search is bounded by the start of the function containing
+    /// the search PC: if that function has no program point at or
+    /// before the search PC, `None` is returned, rather than a
+    /// program point from a preceding function.
     pub fn find_program_point(
         &self,
         search_pc: u32,
@@ -189,6 +203,22 @@ impl<'a> FrameTable<'a> {
             Err(idx) if idx > 0 => idx - 1,
             Err(_) => return None,
         };
+
+        // Find the start of the function containing the search
+        // point. If the result of the search above falls before the
+        // start of the function, that means that the function has no
+        // program points; so return `None`.
+        let func_start = match self.func_starts.binary_search_by_key(&key, |entry| {
+            FrameInstPos::encode(entry.get(LittleEndian), FrameInstPos::Pre)
+        }) {
+            Ok(idx) => self.func_starts[idx].get(LittleEndian),
+            Err(idx) if idx > 0 => self.func_starts[idx - 1].get(LittleEndian),
+            Err(_) => return None,
+        };
+        let func_start_key = FrameInstPos::encode(func_start, FrameInstPos::Pre);
+        if self.progpoint_pcs[index].get(LittleEndian) < func_start_key {
+            return None;
+        }
 
         Some(self.program_point_frame_iter(index))
     }

@@ -762,6 +762,9 @@ impl wasmtime_environ::Compiler for Compiler {
                 range.clone(),
                 func.buffer.call_sites(),
             )?;
+            if self.tunables.debug_guest {
+                frame_tables.add_func_start(u32::try_from(range.start).unwrap());
+            }
             if self.tunables.debug_guest
                 && let Some(frame_layout) = func.buffer.frame_layout()
             {
