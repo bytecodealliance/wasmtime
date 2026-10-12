@@ -4,6 +4,7 @@ use crate::code::{EngineCode, EngineCodePC, ModuleWithCode, StoreCode, StoreCode
 #[cfg(feature = "component-model")]
 use crate::component::Component;
 use crate::runtime::vm::VMWasmCallFunction;
+#[cfg(has_native_signals)]
 use crate::sync::{OnceLock, RwLock};
 use crate::vm::CompiledModuleId;
 use crate::{Engine, FrameInfo, Module, code_memory::CodeMemory, prelude::*};
@@ -398,15 +399,25 @@ impl ModuleRegistry {
 // it is also automatically registered with the singleton global module
 // registry. When a `ModuleRegistry` is destroyed then all of its entries
 // are removed from the global registry.
+//
+// Note that this global registry only exists when native signals are used to
+// implement traps (`cfg(has_native_signals)`). Without native signals, traps
+// are only ever raised synchronously from contexts that have access to a
+// `Store`'s own `ModuleRegistry`. In that configuration there is no global
+// registry at all, which means that loading and unloading modules performs no
+// cross-thread synchronization.
+#[cfg(has_native_signals)]
 fn global_code() -> &'static RwLock<GlobalRegistry> {
     static GLOBAL_CODE: OnceLock<RwLock<GlobalRegistry>> = OnceLock::new();
     GLOBAL_CODE.get_or_init(Default::default)
 }
 
+#[cfg(has_native_signals)]
 type GlobalRegistry = TryBTreeMap<usize, (usize, Arc<CodeMemory>)>;
 
 /// Find which registered region of code contains the given program counter, and
 /// what offset that PC is within that module's code.
+#[cfg(has_native_signals)]
 pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
     let all_modules = global_code().read();
     let (_end, (start, module)) = all_modules.range(pc..).next()?;
@@ -422,6 +433,7 @@ pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
 /// This is required to enable traps to work correctly since the signal handler
 /// will lookup in the `GLOBAL_CODE` list to determine which a particular pc
 /// is a trap or not.
+#[cfg(has_native_signals)]
 pub fn register_code(image: &Arc<CodeMemory>, address: Range<usize>) -> Result<(), OutOfMemory> {
     if address.is_empty() {
         return Ok(());
@@ -436,6 +448,7 @@ pub fn register_code(image: &Arc<CodeMemory>, address: Range<usize>) -> Result<(
 /// Unregisters a code mmap from the global map.
 ///
 /// Must have been previously registered with `register`.
+#[cfg(has_native_signals)]
 pub fn unregister_code(address: Range<usize>) {
     if address.is_empty() {
         return;
@@ -444,6 +457,18 @@ pub fn unregister_code(address: Range<usize>) {
     let code = global_code().write().remove(end);
     assert!(code.is_some());
 }
+
+/// Without native signals there is no global registry: trap lookups happen
+/// through the store's own [`ModuleRegistry`] instead. See the comment on
+/// `global_code` above.
+#[cfg(not(has_native_signals))]
+pub fn register_code(_image: &Arc<CodeMemory>, _address: Range<usize>) -> Result<(), OutOfMemory> {
+    Ok(())
+}
+
+/// See `register_code` above.
+#[cfg(not(has_native_signals))]
+pub fn unregister_code(_address: Range<usize>) {}
 
 #[test]
 #[cfg_attr(miri, ignore)]
