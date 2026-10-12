@@ -11,7 +11,7 @@ use crate::{
 };
 use cranelift_codegen::{
     CallInfo, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
-    MachLabel, PatchRegion, Writable,
+    MachLabel, PatchRegion, RelocDistance, Writable,
     binemit::Reloc,
     ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, Type, UserExternalNameRef, types},
     isa::{
@@ -1627,6 +1627,17 @@ impl Assembler {
     pub fn call_with_name(&mut self, cc: CallingConvention, name: UserExternalNameRef) {
         self.emit(Inst::CallKnown {
             info: Box::new(CallInfo::empty(ExternalName::user(name), cc.into())),
+        });
+    }
+
+    /// Load the address of the function referenced by `name`, which must be
+    /// located within the same text section, into `dst`.
+    pub fn load_func_addr(&mut self, name: UserExternalNameRef, dst: WritableReg) {
+        self.emit(Inst::LoadExtName {
+            dst: dst.map(Into::into),
+            name: Box::new(ExternalName::user(name)),
+            offset: 0,
+            distance: RelocDistance::Near,
         });
     }
 

@@ -588,6 +588,15 @@ impl<'a, Offsets> Field<'a, Offsets> {
             .ins()
             .store(flags, value, ptr, i32::try_from(self.offset).unwrap());
     }
+
+    /// TODO: seems bad and probably wants something else...
+    pub fn store_init(&mut self, cursor: &mut FuncCursor<'_>, ptr: ir::Value, value: ir::Value) {
+        let region = self.region(cursor.func);
+        let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
+        cursor
+            .ins()
+            .store(flags, value, ptr, i32::try_from(self.offset).unwrap());
+    }
 }
 
 /// Define, for each `VM*` type, an `AliasRegions` accessor that returns a
