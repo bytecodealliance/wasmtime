@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use wasmtime::{
     AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle,
     Func, Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Result, Store,
-    StoreContextMut, Val, ValType,
+    StoreContextMut, Trap, Val, ValType,
 };
 
 use crate::async_functions::PollOnce;
@@ -1790,5 +1790,82 @@ fn gc_in_func_without_program_points() -> wasmtime::Result<()> {
         let mut store = Store::new(&engine, ());
         Instance::new(&mut store, &module, &[])?;
     }
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn fuel_visible_and_mutable_in_debug_handler() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::default();
+    config.guest_debug(true).consume_fuel(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+    (module
+      (func (export "count") (param $n i32) (result i32)
+        (local $i i32)
+        (loop $l
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br_if $l (i32.lt_u (local.get $i) (local.get $n))))
+        (local.get $i)))
+    "#,
+    )?;
+
+    #[derive(Clone)]
+    struct FuelHandler {
+        observed: Arc<Mutex<Vec<u64>>>,
+        zero_fuel_at: usize,
+    }
+    impl DebugHandler for FuelHandler {
+        type Data = ();
+        async fn handle(&self, mut store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+            if let DebugEvent::Breakpoint = event {
+                let mut observed = self.observed.lock().unwrap();
+                observed.push(store.get_fuel().unwrap());
+                if observed.len() == self.zero_fuel_at {
+                    store.set_fuel(0).unwrap();
+                }
+            }
+        }
+    }
+
+    // First, run to completion and check that the fuel observed at each
+    // breakpoint reflects consumption so far.
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(1_000_000)?;
+    store.edit_breakpoints().unwrap().single_step(true)?;
+    let observed = Arc::new(Mutex::new(vec![]));
+    store.set_debug_handler(FuelHandler {
+        observed: observed.clone(),
+        zero_fuel_at: usize::MAX,
+    });
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let count = instance.get_typed_func::<i32, i32>(&mut store, "count")?;
+    assert_eq!(count.call_async(&mut store, 100).await?, 100);
+    {
+        let observed = observed.lock().unwrap();
+        assert!(observed.len() > 100);
+        assert!(observed.windows(2).all(|w| w[0] >= w[1]));
+        assert!(observed.first().unwrap() > observed.last().unwrap());
+        assert!(*observed.last().unwrap() >= store.get_fuel()?);
+    }
+
+    // Then, zero out fuel partway through, which must cause an out-of-fuel
+    // trap rather than running to completion.
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(1_000_000)?;
+    store.edit_breakpoints().unwrap().single_step(true)?;
+    store.set_debug_handler(FuelHandler {
+        observed: Arc::new(Mutex::new(vec![])),
+        zero_fuel_at: 10,
+    });
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let count = instance.get_typed_func::<i32, i32>(&mut store, "count")?;
+    let err = count.call_async(&mut store, 100).await.unwrap_err();
+    assert_eq!(err.downcast::<Trap>()?, Trap::OutOfFuel);
+
     Ok(())
 }

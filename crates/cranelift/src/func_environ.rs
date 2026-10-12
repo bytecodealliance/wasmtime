@@ -5310,15 +5310,28 @@ impl FuncEnvironment<'_> {
         _operand_types: Option<&[WasmValType]>,
         builder: &mut FunctionBuilder,
     ) -> WasmResult<()> {
-        if self.tunables.consume_fuel {
-            self.fuel_before_op(op, builder, self.is_reachable());
-        }
         if self.is_reachable() && self.state_slot.is_some() {
+            // The breakpoint may invoke the debug handler, which may observe
+            // or modify the store's fuel, so synchronize our locally cached
+            // fuel with the store around it. This happens before
+            // `fuel_before_op` so that the fuel visible at the breakpoint
+            // accounts for all operators prior to (but not including) this
+            // one.
+            if self.tunables.consume_fuel {
+                self.fuel_increment_var(builder);
+                self.fuel_save_from_var(builder);
+            }
             let builtin = self.builtin_functions.patchable_breakpoint(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
             let inst = builder.ins().call(builtin, &[vmctx]);
             let tags = self.debug_tags(builder.srcloc());
             builder.func.debug_tags.set(inst, tags);
+            if self.tunables.consume_fuel {
+                self.fuel_load_into_var(builder);
+            }
+        }
+        if self.tunables.consume_fuel {
+            self.fuel_before_op(op, builder, self.is_reachable());
         }
 
         Ok(())
