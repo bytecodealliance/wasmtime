@@ -1027,6 +1027,16 @@ fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
                 },
             };
             let state = store.concurrent_state_mut()?;
+            // If this thread was woken up by an event in `set` but is instead
+            // receiving its own task's event (e.g. a cancellation), then the
+            // set's event is left for another thread waiting on it, so wake
+            // the next waiter up if there is one.
+            if let Some(set) = set
+                && waitable.is_none()
+                && !state.get_mut(set)?.ready.is_empty()
+            {
+                state.wake_waiter(set)?;
+            }
             let task = state.get_mut(call.thread.task)?;
             let runtime_instance = task.instance;
             let handle = waitable.map(|(_, v)| v).unwrap_or(0);
