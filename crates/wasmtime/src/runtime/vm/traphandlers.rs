@@ -122,8 +122,15 @@ pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
 /// This function acts as a bridge between the two to appropriately handle
 /// encoding host values to Cranelift-understood ABIs via the `HostResult`
 /// trait.
+///
+/// The `uncaught_exception` parameter controls what happens when `f` throws an
+/// exception (returns a `ThrownException` error). Core wasm host functions
+/// propagate the exception to their wasm caller, but component host functions
+/// and intrinsics are a component boundary which exceptions cannot cross, so
+/// there the exception is instead turned into a trap.
 pub fn catch_unwind_and_record_trap<R>(
     store: &mut dyn VMStore,
+    uncaught_exception: UncaughtException,
     f: impl FnOnce(&mut dyn VMStore) -> R,
 ) -> R::Abi
 where
@@ -134,7 +141,10 @@ where
     // (e.g. `ret` is a "false"-y value) then it's recorded in TLS for the
     // unwind operation that's about to happen from Cranelift-generated code.
     let (ret, unwind) = R::maybe_catch_unwind(store, |store| f(store));
-    if let Some(unwind) = unwind {
+    if let Some(mut unwind) = unwind {
+        if let UnwindReason::Trap(Ok(trap)) = &mut unwind {
+            uncaught_exception.apply(&mut trap.reason);
+        }
         tls::with(|info| info.unwrap().record_unwind(unwind));
     }
     ret
@@ -461,6 +471,21 @@ pub enum UncaughtException {
     /// Convert the escaping exception into a `Trap::UncaughtException`.
     #[cfg(feature = "component-model")]
     Trap,
+}
+
+impl UncaughtException {
+    fn apply(self, reason: &mut TrapReason) {
+        #[cfg(all(feature = "gc", feature = "component-model"))]
+        if self == UncaughtException::Trap
+            && let TrapReason::User(err) = reason
+            && err.is::<ThrownException>()
+        {
+            // FIXME: this throws away the entire `err` and replaces it with a
+            // `Trap`, so any context on `err` is lost.
+            *err = crate::Trap::UncaughtException.into();
+        }
+        let _ = (self, reason);
+    }
 }
 
 /// Catches any wasm traps that happen within the execution of `closure`,
@@ -936,19 +961,7 @@ impl CallThreadState {
 
                 // Handle `UncaughtException` if we've come this far (as caught
                 // exceptions are handled above).
-                //
-                // FIXME: this throws away the entire `err` and replaces it with
-                // a `Trap`, so any context on `err` is lost.
-                #[cfg(all(feature = "gc", feature = "component-model"))]
-                if self.uncaught_exception == UncaughtException::Trap
-                    && matches!(
-                        &trap.reason,
-                        TrapReason::User(err) if err.is::<ThrownException>()
-                    )
-                {
-                    trap.reason = TrapReason::User(crate::Trap::UncaughtException.into());
-                }
-                let _ = &self.uncaught_exception;
+                self.uncaught_exception.apply(&mut trap.reason);
             }
 
             // If this wasn't a wasm-caught exception, then catch the exception
