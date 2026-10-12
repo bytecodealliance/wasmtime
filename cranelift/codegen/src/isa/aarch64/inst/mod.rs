@@ -3225,6 +3225,16 @@ pub enum LabelUse {
     /// 32-bit PC relative constant offset (from address of constant itself),
     /// signed. Used in jump tables.
     PCRel32,
+    /// 21-bit page offset for ADRP. The immediate is the signed difference
+    /// between the 4KiB page of the label and the 4KiB page of the ADRP
+    /// instruction, with high 19 bits in bits 23:5 and low 2 bits in bits
+    /// 30:29. Equivalent to the `R_AARCH64_ADR_PREL_PG_HI21` relocation.
+    AdrpPage21,
+    /// Low 12 bits of the label's address in the 12-bit immediate of an ADD
+    /// (immediate), bits 21:10. Equivalent to the `R_AARCH64_ADD_ABS_LO12_NC`
+    /// relocation. This has the same 4KiB-alignment requirement as
+    /// `AdrpPage21`, with which it is paired.
+    AddLo12,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -3245,6 +3255,10 @@ impl MachInstLabelUse for LabelUse {
             // range.
             LabelUse::Adr21 => (1 << 20) - 1,
             LabelUse::PCRel32 => 0x7fffffff,
+            // `adrp` technically has +/-4GiB of range, but cap it to the same
+            // range as other 32-bit uses to keep offset arithmetic within
+            // `u32`.
+            LabelUse::AdrpPage21 | LabelUse::AddLo12 => 0x7fffffff,
         }
     }
 
@@ -3263,11 +3277,27 @@ impl MachInstLabelUse for LabelUse {
 
     /// Perform the patch.
     fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
+        let insn_word = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+        match self {
+            LabelUse::AdrpPage21 => {
+                let page_delta = i64::from(label_offset >> 12) - i64::from(use_offset >> 12);
+                let imm = page_delta as u32;
+                let insn_word = (insn_word & !0x60ffffe0) | (imm & 0x1ffffc) << 3 | (imm & 3) << 29;
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn_word));
+                return;
+            }
+            LabelUse::AddLo12 => {
+                let imm12 = label_offset & 0xfff;
+                let insn_word = (insn_word & !(0xfff << 10)) | imm12 << 10;
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn_word));
+                return;
+            }
+            _ => {}
+        }
         let pc_rel = (label_offset as i64) - (use_offset as i64);
         assert!(pc_rel <= self.max_pos_range() as i64);
         assert!(pc_rel >= -(self.max_neg_range() as i64));
         let pc_rel = pc_rel as u32;
-        let insn_word = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
         let mask = match self {
             LabelUse::Branch14 => 0x0007ffe0, // bits 18..5 inclusive
             LabelUse::Branch19 => 0x00ffffe0, // bits 23..5 inclusive
@@ -3275,6 +3305,7 @@ impl MachInstLabelUse for LabelUse {
             LabelUse::Ldr19 => 0x00ffffe0,    // bits 23..5 inclusive
             LabelUse::Adr21 => 0x60ffffe0,    // bits 30..29, 25..5 inclusive
             LabelUse::PCRel32 => 0xffffffff,
+            LabelUse::AdrpPage21 | LabelUse::AddLo12 => unreachable!(),
         };
         let pc_rel_shifted = match self {
             LabelUse::Adr21 | LabelUse::PCRel32 => pc_rel,
@@ -3291,6 +3322,7 @@ impl MachInstLabelUse for LabelUse {
             // *high* bits (30, 29).
             LabelUse::Adr21 => (pc_rel_shifted & 0x1ffffc) << 3 | (pc_rel_shifted & 3) << 29,
             LabelUse::PCRel32 => pc_rel_shifted,
+            LabelUse::AdrpPage21 | LabelUse::AddLo12 => unreachable!(),
         };
         let is_add = match self {
             LabelUse::PCRel32 => true,
@@ -3381,6 +3413,8 @@ impl MachInstLabelUse for LabelUse {
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
         match (reloc, addend) {
             (Reloc::Arm64Call, 0) => Some(LabelUse::Branch26),
+            (Reloc::Aarch64AdrPrelPgHi21, 0) => Some(LabelUse::AdrpPage21),
+            (Reloc::Aarch64AddAbsLo12Nc, 0) => Some(LabelUse::AddLo12),
             _ => None,
         }
     }
