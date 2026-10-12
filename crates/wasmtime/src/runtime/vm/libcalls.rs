@@ -65,7 +65,6 @@ use crate::runtime::vm::{self, HostResultHasUnwindSentinel, VMStore, f32x4, f64x
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::vmcontext::VMRawContObj;
 use core::convert::Infallible;
-use core::ptr::NonNull;
 #[cfg(feature = "threads")]
 use core::time::Duration;
 use wasmtime_core::math::WasmFloat;
@@ -635,6 +634,7 @@ unsafe fn get_interned_contref(
     out_result: *mut u8,
 ) -> Result<()> {
     use crate::store::AutoAssertNoGc;
+    use core::ptr::NonNull;
 
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
     let contobj = store.unwrap_gc_store().cont_ref_table.get(contref_id)?;
