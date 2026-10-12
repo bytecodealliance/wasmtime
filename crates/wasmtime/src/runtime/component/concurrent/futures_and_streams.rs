@@ -3343,6 +3343,9 @@ impl Instance {
 
         // Validate `write_ty` w.r.t. `write_address` to ensure it's properly
         // aligned and in-bounds.
+        //
+        // FIXME(#4311): this and the rest of this function use the 32-bit
+        // layout of payloads, which needs memory64 handling.
         let write_payload_ty = write_ty.payload(write_types);
         let write_abi = match write_payload_ty {
             Some(ty) => write_types.canonical_abi(ty),
@@ -3534,6 +3537,7 @@ impl Instance {
             return Ok(());
         }
         let abi = types.canonical_abi(&payload);
+        // FIXME(#4311): needs memory64 handling
         let size = usize::try_from(abi.size32)?;
         let align = usize::try_from(abi.align32)?;
         if address % align != 0 {
@@ -3682,6 +3686,7 @@ impl Instance {
 
                 let instance = read_instance.id().get(store.0);
                 let types = instance.component().types();
+                // FIXME(#4311): needs memory64 handling
                 let item_size = match read_ty.payload(types) {
                     Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
@@ -3928,6 +3933,7 @@ impl Instance {
 
                 let instance = write_instance.id().get(store.0);
                 let types = instance.component().types();
+                // FIXME(#4311): needs memory64 handling
                 let item_size = match write_ty.payload(types) {
                     Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
