@@ -3556,6 +3556,7 @@ impl Instance {
 
         let address = usize::try_from(address)?;
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
+        let async_ = self.options(store.0, options).async_;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Write { done } = *state else {
             bail!(Trap::ConcurrentFutureStreamOp);
@@ -3577,6 +3578,11 @@ impl Instance {
                 TransmitIndex::Stream(_) => Trap::WriteToDroppedStream,
             });
         }
+
+        if !async_ {
+            Waitable::Transmit(transmit_handle).trap_if_in_waitable_set(concurrent_state)?;
+        }
+        let transmit = concurrent_state.get_mut(transmit_id)?;
 
         let new_state = if let ReadState::Dropped = &transmit.read {
             ReadState::Dropped
@@ -3781,7 +3787,7 @@ impl Instance {
             }
         };
 
-        if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
+        if result == ReturnCode::Blocked && !async_ {
             result = self.wait_for_write(store.0, caller, transmit_handle)?;
         }
 
@@ -3815,6 +3821,7 @@ impl Instance {
 
         let address = usize::try_from(address)?;
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
+        let async_ = self.options(store.0, options).async_;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Read { done } = *state else {
             bail!(Trap::ConcurrentFutureStreamOp);
@@ -3839,6 +3846,11 @@ impl Instance {
                 TransmitIndex::Stream(_) => bail!(Trap::ReadFromDroppedStream),
             }
         }
+
+        if !async_ {
+            Waitable::Transmit(transmit_handle).trap_if_in_waitable_set(concurrent_state)?;
+        }
+        let transmit = concurrent_state.get_mut(transmit_id)?;
 
         let new_state = if let WriteState::Dropped = &transmit.write {
             WriteState::Dropped
@@ -4023,7 +4035,7 @@ impl Instance {
             }
         };
 
-        if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
+        if result == ReturnCode::Blocked && !async_ {
             result = self.wait_for_read(store.0, caller_instance, transmit_handle)?;
         }
 
@@ -4080,6 +4092,7 @@ impl Instance {
         );
         let waitable = Waitable::Transmit(transmit.write_handle);
 
+        waitable.trap_if_has_sync_waiter(state)?;
         if !async_ {
             waitable.trap_if_in_waitable_set(state)?;
         }
@@ -4174,6 +4187,7 @@ impl Instance {
 
         let waitable = Waitable::Transmit(transmit.read_handle);
 
+        waitable.trap_if_has_sync_waiter(state)?;
         if !async_ {
             waitable.trap_if_in_waitable_set(state)?;
         }
