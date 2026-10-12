@@ -2432,6 +2432,7 @@ impl StoreOpaque {
         };
 
         let write_handle = transmit.write_handle;
+        let done = transmit.done;
 
         match mem::replace(&mut transmit.write, new_state) {
             // If a guest is waiting to write, notify it that the read end has
@@ -2452,6 +2453,9 @@ impl StoreOpaque {
                 )?;
             }
 
+            // Otherwise notify the idle write end that the read end has been
+            // dropped, unless it's already done.
+            WriteState::Open if done => {}
             WriteState::Open => {
                 state.update_event(
                     write_handle.rep(),
@@ -2528,6 +2532,7 @@ impl StoreOpaque {
         };
 
         let read_handle = transmit.read_handle;
+        let done = transmit.done;
 
         // Swap in the new read state
         match mem::replace(&mut transmit.read, new_state) {
@@ -2551,7 +2556,8 @@ impl StoreOpaque {
                 )?;
             }
 
-            // If the read state is open, then there are no registered readers of the stream/future
+            // Notify the read-end of the drop, unless we're already done.
+            ReadState::Open if done => {}
             ReadState::Open => {
                 self.concurrent_state_mut()?.update_event(
                     read_handle.rep(),
