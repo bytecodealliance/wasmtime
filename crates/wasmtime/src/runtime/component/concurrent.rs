@@ -4550,6 +4550,13 @@ impl Instance {
         } else {
             let guest_task = TableId::<GuestTask>::new(rep);
             let task = concurrent_state.get_mut(guest_task)?;
+
+            // Cancellation was already requested, so fail as the task can't be
+            // cancelled twice.
+            if task.cancel_requested {
+                bail!(Trap::SubtaskCancelAfterTerminal);
+            }
+
             if !task.already_lowered_parameters() {
                 store.cancel_guest_subtask_without_lowered_parameters(
                     self.runtime_instance(caller_instance),
@@ -4561,9 +4568,9 @@ impl Instance {
                 // `CANCELLED` event
                 //
                 // Note that this might overwrite an event that was set earlier
-                // (e.g. `Event::None` if the task is yielding, or
-                // `Event::Cancelled` if it was already cancelled), but that's
+                // (e.g. `Event::None` if the task is yielding), but that's
                 // okay -- this should supersede the previous state.
+                task.cancel_requested = true;
                 task.event = Some(Event::Cancelled);
                 let runtime_instance = task.instance;
                 for thread in task.threads.clone() {
@@ -5494,6 +5501,11 @@ pub(crate) struct GuestTask {
     /// cancellation request has been delivered to the task, and thus whether
     /// the task is permitted to call `task.cancel`).
     cancel_request_delivered: bool,
+    /// Whether or not the caller has requested cancellation of this task via
+    /// `subtask.cancel` while it was still unresolved. A subsequent
+    /// `subtask.cancel` of the same task traps. This matches the spec's
+    /// `Subtask.cancellation_requested`.
+    cancel_requested: bool,
     /// Whether or not we've sent a `Status::Starting` event to any current or
     /// future waiters for this waitable.
     starting_sent: bool,
@@ -5602,6 +5614,7 @@ impl GuestTask {
             call_context: CallContext::default(),
             sync_result: SyncResult::NotProduced,
             cancel_request_delivered: false,
+            cancel_requested: false,
             starting_sent: false,
             instance,
             event: None,
