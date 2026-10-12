@@ -1826,6 +1826,41 @@ mod test_programs {
     }
 
     #[test]
+    fn p2_cli_serve_reject_zero_concurrency() -> Result<()> {
+        // Both limits are handed to a semaphore, so a zero leaves the server
+        // listening but never serving anything.
+        let component = P2_CLI_SERVE_HELLO_WORLD_COMPONENT;
+        for option in [
+            "--max-concurrent-requests=0",
+            "--max-concurrent-connections=0",
+        ] {
+            let mut cmd = super::get_wasmtime_command()?;
+            cmd.args(["serve", "-Scli", option, component])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped());
+            let mut child = cmd.spawn()?;
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while child.try_wait()?.is_none() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "`{option}` was accepted and the server kept running"
+                );
+                thread::sleep(Duration::from_millis(100));
+            }
+            let output = child.wait_with_output()?;
+            assert!(!output.status.success(), "`{option}` was accepted");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.contains("invalid value"),
+                "expected `{option}` to be rejected, got: {stderr}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn p2_cli_run_outgoing_body_chunk_size() -> Result<()> {
         // Without the option an outgoing body keeps its 1 MiB default budget.
         let stdout = run_wasmtime(&[
