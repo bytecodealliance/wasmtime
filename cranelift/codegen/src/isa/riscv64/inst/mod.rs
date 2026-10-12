@@ -1822,6 +1822,12 @@ impl MachInstLabelUse for LabelUse {
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
         match (reloc, addend) {
             (Reloc::RiscvCallPlt, _) => Some(Self::PCRel32),
+            (Reloc::RiscvPCRelHi20, 0) => Some(Self::PCRelHi20),
+            // Note that, unlike `R_RISCV_PCREL_LO12_I`, `PCRelLo12I` is
+            // resolved against the final target rather than the label of the
+            // paired `auipc`, which must be the immediately preceding
+            // instruction. This is the shape of `LoadExtNameNear`.
+            (Reloc::RiscvPCRelLo12I, 0) => Some(Self::PCRelLo12I),
             _ => None,
         }
     }

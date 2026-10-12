@@ -2,8 +2,8 @@ use std::ops::Range;
 
 use crate::{Relocation, mach_reloc_to_reloc, mach_trap_to_trap};
 use cranelift_codegen::{
-    MachBufferFinalized, MachBufferFrameLayout, MachSrcLoc, ValueLabelsRanges, ir,
-    isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo,
+    MachBufferFinalized, MachBufferFrameLayout, MachSrcLoc, RelocTarget, ValueLabelsRanges,
+    binemit::Reloc, ir, isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo,
 };
 use wasmtime_environ::{
     FilePos, FrameStateSlotBuilder, InstructionAddressMap, ModulePC, PrimaryMap, TrapInformation,
@@ -145,10 +145,31 @@ impl CompiledFunction {
 
     /// Returns an iterator to the function's relocation information.
     pub fn relocations(&self) -> impl Iterator<Item = Relocation> + '_ {
-        self.buffer
-            .relocs()
-            .iter()
-            .map(|r| mach_reloc_to_reloc(r, &self.name_map))
+        let mut prev_hi20 = None;
+        self.buffer.relocs().iter().map(move |r| {
+            // On riscv64 the this relocation points to the previous instruction
+            // which is `auipc` and has its own relocation. To more easily
+            // handle that here the target of the relocation is rewritten to the
+            // target of the previous `auipc` relocation.
+            if let (Reloc::RiscvPCRelLo12I, RelocTarget::Label(_)) = (r.kind, &r.target) {
+                let hi20: Relocation = prev_hi20
+                    .take()
+                    .expect("PCREL_LO12_I relocation without a preceding PCREL_HI20");
+                assert_eq!(hi20.offset + 4, r.offset);
+                return Relocation {
+                    offset: r.offset,
+                    reloc: r.kind,
+                    ..hi20
+                };
+            }
+            let reloc = mach_reloc_to_reloc(r, &self.name_map);
+            prev_hi20 = if reloc.reloc == Reloc::RiscvPCRelHi20 {
+                Some(reloc.clone())
+            } else {
+                None
+            };
+            reloc
+        })
     }
 
     /// Returns an iterator to the function's trap information.
