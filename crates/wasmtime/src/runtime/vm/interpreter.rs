@@ -7,7 +7,7 @@ use crate::{Engine, ValRaw};
 use core::marker;
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
-use pulley_interpreter::{Reg, XReg};
+use pulley_interpreter::{Opcode, Reg, XReg};
 use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
 use wasmtime_unwinder::Handler;
 use wasmtime_unwinder::Unwind;
@@ -475,9 +475,29 @@ impl InterpreterRef<'_> {
         kind: Option<TrapKind>,
         caller: NonNull<VMContext>,
     ) -> NonNull<u8> {
+        // Pulley checks for stack overflow whenever the stack pointer is
+        // decremented, including in the `push_frame` and `push_frame_save`
+        // instructions at the start of a function. A stack overflow there
+        // happens before the trapping function has pushed its frame, so `fp` is
+        // still its caller's and its return address is still in `lr`.
+        let lr = match kind {
+            Some(TrapKind::StackOverflow) => {
+                // SAFETY: `pc` points to the start of the trapping
+                // instruction, so its first byte is the opcode.
+                let opcode = Opcode::new(unsafe { *pc.as_ptr() });
+                match opcode {
+                    Some(Opcode::PushFrame | Opcode::PushFrameSave) => {
+                        Some(self.vm().lr() as usize)
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
         let regs = TrapRegisters {
             pc: pc.as_ptr() as usize,
             fp: self.vm().fp() as usize,
+            lr,
         };
         let trap = match kind {
             Some(kind) => match kind {

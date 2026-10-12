@@ -50,6 +50,15 @@ pub use traphandlers::SignalHandler;
 pub(crate) struct TrapRegisters {
     pub pc: usize,
     pub fp: usize,
+    /// The return address of the trapping function, on platforms where it is
+    /// held in a register (rather than on the stack) until the function sets
+    /// up its frame.
+    ///
+    /// This is only consulted for stack-overflow traps, which on such
+    /// platforms (s390x and Pulley) occur before the trapping function has
+    /// set up its frame, while `fp` is still its caller's frame pointer. See
+    /// `set_jit_trap` for how this is used.
+    pub lr: Option<usize>,
 }
 
 /// Return value from `test_if_trap`.
@@ -1085,20 +1094,40 @@ impl CallThreadState {
 
     pub(crate) fn set_jit_trap(
         &self,
-        TrapRegisters { pc, fp, .. }: TrapRegisters,
+        TrapRegisters { pc, fp, lr }: TrapRegisters,
         faulting_addr: Option<usize>,
         trap: wasmtime_environ::CompiledTrap,
     ) {
+        // The backtrace starts at the trapping PC and FP, except for stack
+        // overflows that are detected before the trapping function has set up
+        // its frame (indicated by the presence of `lr`). In that case we
+        // attribute the stack overflow to the call site in the caller, as if the
+        // caller were responsible for allocating the callee's frame: we start
+        // the backtrace at the return address in the caller, with the caller's
+        // FP, which is still the current one. The PC recorded in the trap
+        // reason remains the actual trapping PC, so the backtrace's youngest
+        // frame is treated like any other return address and resolves to the
+        // call instruction.
+        let backtrace_pc = match trap {
+            wasmtime_environ::CompiledTrap::Normal(wasmtime_environ::Trap::StackOverflow) => {
+                lr.unwrap_or(pc)
+            }
+            _ => pc,
+        };
         let mut unwind = UnwindReason::from(TrapReason::Jit {
             pc,
             faulting_addr,
             trap,
         });
         if let UnwindReason::Trap(Ok(trap)) = &mut unwind {
-            trap.backtrace =
-                self.capture_backtrace(self.vm_store_context.get().as_ptr(), Some((pc, fp)));
-            trap.coredumpstack =
-                self.capture_coredump(self.vm_store_context.get().as_ptr(), Some((pc, fp)));
+            trap.backtrace = self.capture_backtrace(
+                self.vm_store_context.get().as_ptr(),
+                Some((backtrace_pc, fp)),
+            );
+            trap.coredumpstack = self.capture_coredump(
+                self.vm_store_context.get().as_ptr(),
+                Some((backtrace_pc, fp)),
+            );
         }
         self.record_unwind(unwind);
     }
