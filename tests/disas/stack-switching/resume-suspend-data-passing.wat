@@ -55,7 +55,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, i32) -> i8 tail
-;;     fn0 = colocated u805306368:44 sig0
+;;     fn0 = colocated u805306368:43 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -202,19 +202,18 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
-;;     sig0 = (i64 vmctx, i32) -> i64 tail
-;;     sig1 = (i64 vmctx, i64, i32, i32, i32) -> i64 tail
-;;     sig2 = (i64 vmctx) tail
-;;     fn0 = colocated u805306368:6 sig0
-;;     fn1 = colocated u805306368:42 sig1
-;;     fn2 = colocated u805306368:41 sig2
+;;     sig0 = (i64 vmctx, i64, i32, i32, i32) -> i64 tail
+;;     sig1 = (i64 vmctx) tail
+;;     fn0 = colocated u805306368:41 sig0
+;;     fn1 = colocated u805306368:40 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0056                               v2 = iconst.i32 0
-;; @0056                               v3 = call fn0(v0, v2)  ; v2 = 0
-;; @0058                               trapz v3, user16
-;; @0058                               v7 = call fn1(v0, v3, v2, v2, v2)  ; v2 = 0, v2 = 0, v2 = 0
+;; @0056                               trapz v2, user12  ; v2 = 0
+;; @0056                               v3 = iconst.i64 0
+;; @0058                               trapz v3, user16  ; v3 = 0
+;; @0058                               v7 = call fn0(v0, v3, v2, v2, v2)  ; v3 = 0, v2 = 0, v2 = 0, v2 = 0
 ;; @0058                               v8 = load.i64 notrap aligned region2 v7+104
 ;; @0058                               v10 = uextend.i128 v8
 ;; @0058                               v11 = iconst.i64 64
@@ -223,7 +222,6 @@
 ;; @0058                               v14 = bor v139, v9
 ;; @0062                               v23 = iconst.i64 1
 ;; @0062                               v26 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0062                               v29 = iconst.i64 0
 ;; @0062                               v30 = iconst.i64 2
 ;; @0062                               v34 = iconst.i32 1
 ;; @0062                               v35 = iconst.i32 2
@@ -341,7 +339,7 @@
 ;; @0062                               store notrap aligned region17 v174, v179  ; v174 = 0
 ;; @0062                               store notrap aligned region14 v174, v179+4  ; v174 = 0
 ;; @0062                               store notrap aligned region15 v177, v179+8  ; v177 = 0
-;; @0062                               try_call fn2(v0), sig2, block11, [ context v0 ]
+;; @0062                               try_call fn1(v0), sig1, block11, [ context v0 ]
 ;;
 ;;                                 block11:
 ;; @0062                               trap user12

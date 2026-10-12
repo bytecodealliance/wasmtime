@@ -51,22 +51,21 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
-;;     sig0 = (i64 vmctx, i32) -> i64 tail
-;;     sig1 = (i64 vmctx, i64, i32, i32, i32) -> i64 tail
-;;     sig2 = (i64 vmctx, i32) -> i8 tail
-;;     fn0 = colocated u805306368:6 sig0
-;;     fn1 = colocated u805306368:42 sig1
-;;     fn2 = colocated u805306368:44 sig2
+;;     sig0 = (i64 vmctx, i64, i32, i32, i32) -> i64 tail
+;;     sig1 = (i64 vmctx, i32) -> i8 tail
+;;     fn0 = colocated u805306368:41 sig0
+;;     fn1 = colocated u805306368:43 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @003a                               v2 = iconst.i32 1
-;; @003a                               v3 = call fn0(v0, v2)  ; v2 = 1
-;; @003c                               trapz v3, user16
+;; @003a                               v2 = iconst.i32 0
+;; @003a                               trapz v2, user12  ; v2 = 0
+;; @003a                               v3 = iconst.i64 0
+;; @003c                               trapz v3, user16  ; v3 = 0
 ;; @003c                               v4 = iconst.i32 1
 ;; @003c                               v5 = iconst.i32 0
 ;; @003c                               v6 = iconst.i32 0
-;; @003c                               v7 = call fn1(v0, v3, v4, v5, v6)  ; v4 = 1, v5 = 0, v6 = 0
+;; @003c                               v7 = call fn0(v0, v3, v4, v5, v6)  ; v3 = 0, v4 = 1, v5 = 0, v6 = 0
 ;; @003c                               v8 = load.i64 notrap aligned region2 v7+104
 ;; @003c                               v9 = uextend.i128 v7
 ;; @003c                               v10 = uextend.i128 v8
@@ -270,7 +269,7 @@
 ;; @003e                               store notrap aligned region10 v148, v144+4  ; v148 = 0
 ;; @003e                               v149 = iconst.i64 0
 ;; @003e                               store notrap aligned region5 v149, v144+8  ; v149 = 0
-;; @003e                               try_call fn2(v0, v146), sig2, block13, [ context v0 ]
+;; @003e                               try_call fn1(v0, v146), sig1, block13, [ context v0 ]
 ;;
 ;;                                 block13:
 ;; @003e                               trap user12
@@ -330,22 +329,21 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
-;;     sig0 = (i64 vmctx, i32) -> i64 tail
-;;     sig1 = (i64 vmctx, i64, i32, i32, i32) -> i64 tail
-;;     sig2 = (i64 vmctx) tail
-;;     fn0 = colocated u805306368:6 sig0
-;;     fn1 = colocated u805306368:42 sig1
-;;     fn2 = colocated u805306368:41 sig2
+;;     sig0 = (i64 vmctx, i64, i32, i32, i32) -> i64 tail
+;;     sig1 = (i64 vmctx) tail
+;;     fn0 = colocated u805306368:41 sig0
+;;     fn1 = colocated u805306368:40 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0047                               v2 = iconst.i32 0
-;; @0047                               v3 = call fn0(v0, v2)  ; v2 = 0
-;; @0049                               trapz v3, user16
+;; @0047                               trapz v2, user12  ; v2 = 0
+;; @0047                               v3 = iconst.i64 0
+;; @0049                               trapz v3, user16  ; v3 = 0
 ;; @0049                               v4 = iconst.i32 0
 ;; @0049                               v5 = iconst.i32 0
 ;; @0049                               v6 = iconst.i32 0
-;; @0049                               v7 = call fn1(v0, v3, v4, v5, v6)  ; v4 = 0, v5 = 0, v6 = 0
+;; @0049                               v7 = call fn0(v0, v3, v4, v5, v6)  ; v3 = 0, v4 = 0, v5 = 0, v6 = 0
 ;; @0049                               v8 = load.i64 notrap aligned region2 v7+104
 ;; @0049                               v9 = uextend.i128 v7
 ;; @0049                               v10 = uextend.i128 v8
@@ -485,7 +483,7 @@
 ;; @004b                               store notrap aligned region14 v95, v93+4  ; v95 = 0
 ;; @004b                               v96 = iconst.i64 0
 ;; @004b                               store notrap aligned region15 v96, v93+8  ; v96 = 0
-;; @004b                               try_call fn2(v0), sig2, block8, [ context v0 ]
+;; @004b                               try_call fn1(v0), sig1, block8, [ context v0 ]
 ;;
 ;;                                 block8:
 ;; @004b                               trap user12

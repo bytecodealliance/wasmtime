@@ -3363,14 +3363,12 @@ impl FuncEnvironment<'_> {
     pub fn translate_ref_func(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
-        func_index: FuncIndex,
+        _func_index: FuncIndex,
     ) -> WasmResult<ir::Value> {
-        let func_index = pos.ins().iconst(I32, func_index.as_u32() as i64);
-        let ref_func = self.builtin_functions.ref_func(&mut pos.func);
-        let vmctx = self.vmctx_val(&mut pos);
-
-        let call_inst = pos.ins().call(ref_func, &[vmctx, func_index]);
-        Ok(pos.func.dfg.first_result(call_inst))
+        // TODO: implement this in the next commit...
+        let zero = pos.ins().iconst(I32, 0);
+        pos.ins().trapz(zero, crate::TRAP_UNREACHABLE);
+        Ok(pos.ins().iconst(self.pointer_type(), 0))
     }
 
     pub(crate) fn translate_global_get(
