@@ -723,6 +723,14 @@ opt-level = 's'
 [profile.dev.package.tokio]
 overflow-checks = false
 
+# Some CI jobs (e.g. QEMU) build everything in the `dev` profile with
+# optimizations via `CARGO_PROFILE_DEV_OPT_LEVEL`. That's not worth it for this
+# crate though: its `tests/all` binary is huge and expensive to optimize but is
+# mostly glue around the (still optimized) runtime. This is a no-op by default
+# since `dev` is already unoptimized.
+[profile.dev.package.wasmtime-cli]
+opt-level = 0
+
 [profile.profiling]
 inherits = "bench"
 debug = "line-tables-only"
