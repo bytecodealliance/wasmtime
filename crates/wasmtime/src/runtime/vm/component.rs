@@ -269,7 +269,6 @@ impl ComponentInstance {
         component: &Component,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-        handle_counter: &Arc<HandleCounter>,
         store: NonNull<dyn VMStore>,
     ) -> OwnedComponentInstance {
         let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
@@ -277,7 +276,7 @@ impl ComponentInstance {
         let mut instance_resource_tables =
             PrimaryMap::with_capacity(num_instances.try_into().unwrap());
         for _ in 0..num_instances {
-            instance_resource_tables.push(ResourceTable::new(handle_counter.clone()));
+            instance_resource_tables.push(ResourceTable::default());
         }
 
         let mut ret = OwnedInstance::new(ComponentInstance {

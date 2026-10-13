@@ -1,7 +1,6 @@
 use crate::runtime::vm::component::{ComponentInstance, HandleCounter, OwnedComponentInstance};
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Store, StoreContextMut};
-use alloc::sync::Arc;
 #[cfg(feature = "component-model-async")]
 use alloc::vec::Vec;
 use core::pin::Pin;
@@ -33,9 +32,9 @@ pub struct ComponentStoreData {
     /// effectively.
     hostcall_fuel: usize,
 
-    /// Live-handle counter shared with every `ResourceTable` in this store (the
-    /// host table and each instance's tables). See `HandleCounter`.
-    handle_counter: Arc<HandleCounter>,
+    /// Live-handle counter for every `ResourceTable` in this store (the host
+    /// table and each instance's tables). See `HandleCounter`.
+    handle_counter: HandleCounter,
 }
 
 impl Default for ComponentStoreData {
@@ -43,7 +42,7 @@ impl Default for ComponentStoreData {
         Self {
             instances: PrimaryMap::default(),
             hostcall_fuel: DEFAULT_HOSTCALL_FUEL,
-            handle_counter: Arc::new(HandleCounter::new(DEFAULT_MAX_COMPONENT_HANDLES)),
+            handle_counter: HandleCounter::new(DEFAULT_MAX_COMPONENT_HANDLES),
         }
     }
 }
@@ -67,11 +66,6 @@ impl StoreData {
 impl ComponentStoreData {
     pub fn next_component_instance_id(&self) -> ComponentInstanceId {
         self.instances.next_key()
-    }
-
-    /// Returns the counter all of this store's resource tables are charged to.
-    pub(crate) fn handle_counter(&self) -> &Arc<HandleCounter> {
-        &self.handle_counter
     }
 
     #[cfg(feature = "component-model-async")]
@@ -108,6 +102,24 @@ impl StoreData {
     ) -> Pin<&mut ComponentInstance> {
         self.components.instances[id].as_mut().unwrap().get_mut()
     }
+
+    /// Returns a component instance alongside the store's `HandleCounter`,
+    /// splitting the borrow so both can be used at once.
+    pub(crate) fn component_instance_and_handle_counter_mut(
+        &mut self,
+        id: ComponentInstanceId,
+    ) -> (Pin<&mut ComponentInstance>, &mut HandleCounter) {
+        let data = &mut self.components;
+        (
+            data.instances[id].as_mut().unwrap().get_mut(),
+            &mut data.handle_counter,
+        )
+    }
+
+    /// Returns the store's `HandleCounter`.
+    pub(crate) fn handle_counter_mut(&mut self) -> &mut HandleCounter {
+        &mut self.components.handle_counter
+    }
 }
 
 impl StoreOpaque {
@@ -128,7 +140,10 @@ impl StoreOpaque {
     }
 
     pub(crate) fn set_max_component_handles(&mut self, limit: usize) {
-        self.store_data().components.handle_counter.set_limit(limit);
+        self.store_data_mut()
+            .components
+            .handle_counter
+            .set_limit(limit);
     }
 }
 

@@ -555,12 +555,6 @@ impl<T> Store<T> {
         let store_data = StoreData::new();
         log::trace!("creating new store {:?}", store_data.id());
 
-        // The host resource table shares the store-wide live-handle counter with
-        // every per-instance table so the cap spans the whole store.
-        #[cfg(feature = "component-model")]
-        let component_host_table =
-            vm::component::ResourceTable::new(store_data.components.handle_counter().clone());
-
         let pkey = engine.allocator().next_available_pkey();
 
         let inner = StoreOpaque {
@@ -599,7 +593,7 @@ impl<T> Store<T> {
             wasm_val_raw_storage: Vec::new(),
             pkey,
             #[cfg(feature = "component-model")]
-            component_host_table,
+            component_host_table: Default::default(),
             #[cfg(feature = "component-model")]
             component_calls: Default::default(),
             #[cfg(feature = "component-model")]
@@ -1976,11 +1970,13 @@ at https://bytecodealliance.org/security.
     ) -> (
         &mut vm::component::CallContexts,
         &mut vm::component::ResourceTable,
+        &mut vm::component::HandleCounter,
         &mut crate::component::HostResourceData,
     ) {
         (
             &mut self.component_calls,
             &mut self.component_host_table,
+            self.store_data.handle_counter_mut(),
             &mut self.host_resource_data,
         )
     }
@@ -2003,14 +1999,20 @@ at https://bytecodealliance.org/security.
     ) -> (
         &mut vm::component::CallContexts,
         &mut vm::component::ResourceTable,
+        &mut vm::component::HandleCounter,
         &mut crate::component::HostResourceData,
         Pin<&mut vm::component::ComponentInstance>,
     ) {
+        instance.id().assert_belongs_to(self.store_data.id());
+        let (instance, handle_counter) = self
+            .store_data
+            .component_instance_and_handle_counter_mut(instance.id().instance());
         (
             &mut self.component_calls,
             &mut self.component_host_table,
+            handle_counter,
             &mut self.host_resource_data,
-            instance.id().from_data_get_mut(&mut self.store_data),
+            instance,
         )
     }
 

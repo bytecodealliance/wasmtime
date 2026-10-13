@@ -9,7 +9,8 @@ use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, ResourceTables, TypedResource, TypedResourceIndex,
+    CallContexts, ComponentInstance, HandleCounter, ResourceTables, TypedResource,
+    TypedResourceIndex,
 };
 use crate::runtime::vm::{self, VMFuncRef};
 use crate::store::StoreOpaque;
@@ -381,8 +382,8 @@ impl Instance {
         ty: TypeResourceTableIndex,
         rep: u32,
     ) -> Result<u32> {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).resource_new(TypedResource::Component { ty, rep })
+        let (calls, _, counter, _, instance) = store.component_resource_state_with_instance(self);
+        resource_tables(calls, counter, instance).resource_new(TypedResource::Component { ty, rep })
     }
 
     /// Implementation of the `resource.rep` intrinsic for `i32`
@@ -393,8 +394,9 @@ impl Instance {
         ty: TypeResourceTableIndex,
         index: u32,
     ) -> Result<u32> {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).resource_rep(TypedResourceIndex::Component { ty, index })
+        let (calls, _, counter, _, instance) = store.component_resource_state_with_instance(self);
+        resource_tables(calls, counter, instance)
+            .resource_rep(TypedResourceIndex::Component { ty, index })
     }
 
     /// Implementation of the `resource.drop` intrinsic.
@@ -404,8 +406,9 @@ impl Instance {
         ty: TypeResourceTableIndex,
         index: u32,
     ) -> Result<Option<u32>> {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).resource_drop(TypedResourceIndex::Component { ty, index })
+        let (calls, _, counter, _, instance) = store.component_resource_state_with_instance(self);
+        resource_tables(calls, counter, instance)
+            .resource_drop(TypedResourceIndex::Component { ty, index })
     }
 
     pub(crate) fn resource_transfer_own(
@@ -415,8 +418,8 @@ impl Instance {
         src: TypeResourceTableIndex,
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        let mut tables = resource_tables(calls, instance);
+        let (calls, _, counter, _, instance) = store.component_resource_state_with_instance(self);
+        let mut tables = resource_tables(calls, counter, instance);
         let rep = tables.resource_lift_own(TypedResourceIndex::Component { ty: src, index })?;
         tables.resource_lower_own(TypedResource::Component { ty: dst, rep })
     }
@@ -429,8 +432,8 @@ impl Instance {
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
         let dst_owns_resource = self.id().get(store).resource_owned_by_own_instance(dst);
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        let mut tables = resource_tables(calls, instance);
+        let (calls, _, counter, _, instance) = store.component_resource_state_with_instance(self);
+        let mut tables = resource_tables(calls, counter, instance);
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
         // Implement `lower_borrow`'s special case here where if a borrow's
         // resource type is owned by `dst` then the destination receives the
@@ -447,13 +450,13 @@ impl Instance {
     }
 
     pub(crate) fn resource_enter_call(self, store: &mut StoreOpaque) {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).enter_call()
+        let (calls, _, counter, _, instance) = store.component_resource_state_with_instance(self);
+        resource_tables(calls, counter, instance).enter_call()
     }
 
     pub(crate) fn resource_exit_call(self, store: &mut StoreOpaque) -> Result<()> {
-        let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
-        resource_tables(calls, instance).exit_call()
+        let (calls, _, counter, _, instance) = store.component_resource_state_with_instance(self);
+        resource_tables(calls, counter, instance).exit_call()
     }
 
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {
@@ -523,10 +526,12 @@ where
 
 fn resource_tables<'a>(
     calls: &'a mut CallContexts,
+    handle_counter: &'a mut HandleCounter,
     instance: Pin<&'a mut ComponentInstance>,
 ) -> ResourceTables<'a> {
     ResourceTables {
         host_table: None,
+        handle_counter,
         calls,
         guest: Some(instance.guest_tables()),
     }
@@ -624,7 +629,6 @@ impl<'a> Instantiator<'a> {
             component,
             Arc::new(imported_resources),
             imports,
-            store.store_data().components.handle_counter(),
             store.traitobj(),
         );
         let id = store.store_data_mut().push_component_instance(instance);

@@ -750,11 +750,12 @@ impl Func {
             // of the component.
             flags.set_may_enter(true);
 
-            let (calls, host_table, _, instance) = store
+            let (calls, host_table, handle_counter, _, instance) = store
                 .0
                 .component_resource_state_with_instance(self.instance);
             ResourceTables {
                 host_table: Some(host_table),
+                handle_counter,
                 calls,
                 guest: Some(instance.guest_tables()),
             }
