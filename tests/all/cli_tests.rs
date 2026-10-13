@@ -3557,6 +3557,54 @@ start a print 1234
         Ok(())
     }
 
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn serve_survives_accept_error() -> Result<()> {
+        use rustix::process::{Pid, Resource, Rlimit, getrlimit, prlimit};
+
+        // `prlimit` has to target the wasmtime process itself, not an emulator.
+        if wasmtime_test_util::cargo_test_runner().is_some() {
+            return Ok(());
+        }
+
+        let server = WasmtimeServe::new(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+        let pid = Pid::from_child(server.child.as_ref().unwrap());
+        let request = || {
+            hyper::Request::builder()
+                .uri("http://localhost/")
+                .body(String::new())
+                .context("failed to make request")
+        };
+
+        // With a soft fd limit of 0 the server's next `accept` fails with EMFILE.
+        let old = prlimit(
+            Some(pid),
+            Resource::Nofile,
+            Rlimit {
+                current: Some(0),
+                ..getrlimit(Resource::Nofile)
+            },
+        )?;
+        let (mut send, conn_task) = server.start_requests().await?;
+        let response = tokio::task::spawn(async move {
+            WasmtimeServe::send_request_with(&mut send, request()?).await
+        });
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        prlimit(Some(pid), Resource::Nofile, old)?;
+
+        // The server retries the accept and answers the queued connection.
+        let resp = response.await??;
+        assert!(resp.status().is_success());
+        assert_eq!(resp.body(), "Hello, WASI!");
+        conn_task.await??;
+
+        let (_, stderr) = server.finish()?;
+        assert!(stderr.contains("failed to accept connection"), "{stderr}");
+        Ok(())
+    }
+
     async fn cli_serve_hello_world(
         component: &str,
         connection_count: usize,
