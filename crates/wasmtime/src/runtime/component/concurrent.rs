@@ -4667,7 +4667,7 @@ impl Instance {
 
             // For cancelling host tasks save and later restore
             // `next_switch_item` so that our caller (or canceller) isn't
-            // resumed in the meantime. This is our perrogative as a runtime
+            // resumed in the meantime. This is our prerogative as a runtime
             // where we get to decide whether cancellation of host things blocks
             // or doesn't, and here we just need to get the final status from
             // the host side so it shouldn't block.
