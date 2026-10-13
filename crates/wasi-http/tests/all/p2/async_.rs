@@ -43,6 +43,12 @@ async fn p2_http_outbound_request_large_post() -> Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_http_outbound_request_long_path() -> Result<()> {
+    let server = Server::http1(1)?;
+    run(P2_HTTP_OUTBOUND_REQUEST_LONG_PATH_COMPONENT, &server).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_http_outbound_request_put() -> Result<()> {
     let server = Server::http1(1)?;
     run(P2_HTTP_OUTBOUND_REQUEST_PUT_COMPONENT, &server).await
