@@ -437,7 +437,7 @@
 (rule iabs_64 2 (lower (iabs $I64 x))
       (abs (OperandSize.Size64) x))
 
-(rule iabs_8_16_32 1 (lower (iabs (fits_in_32 ty) x))
+(rule iabs_8_16_32 1 (lower (iabs (fits_in_32 (ty_int ty)) x))
       (abs (OperandSize.Size32) (put_in_reg_sext32 x)))
 
 ; `rustc` implementation.
@@ -908,7 +908,7 @@
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
-(rule ineg_base_case 1 (lower (ineg (fits_in_64 ty) x))
+(rule ineg_base_case 1 (lower (ineg (fits_in_64 (ty_int ty)) x))
       (sub ty (zero_reg) x))
 
 ;; `i128`
@@ -917,6 +917,8 @@
 
 ;; vectors.
 (rule (lower (ineg (ty_vec128 ty) x))
+      (neg x (vector_size ty)))
+(rule -1 (lower (ineg (ty_vec64 ty) x))
       (neg x (vector_size ty)))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1110,7 +1112,7 @@
 (rule smulhi_64 1 (lower (smulhi $I64 x y))
       (smulh $I64 x y))
 
-(rule smulhi_fits_in_32 (lower (smulhi (fits_in_32 ty) x y))
+(rule smulhi_fits_in_32 (lower (smulhi (fits_in_32 (ty_int ty)) x y))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_in_reg_sext64 y))
             (mul Reg (madd $I64 x64 y64 (zero_reg)))
@@ -1122,7 +1124,7 @@
 (rule umulhi_64 1 (lower (umulhi $I64 x y))
       (umulh $I64 x y))
 
-(rule umulhi_fits_in_32 (lower (umulhi (fits_in_32 ty) x y))
+(rule umulhi_fits_in_32 (lower (umulhi (fits_in_32 (ty_int ty)) x y))
       (let (
           (x64 Reg (put_in_reg_zext64 x))
           (y64 Reg (put_in_reg_zext64 y))
@@ -1562,13 +1564,13 @@
 ;; anything CLIF-wise and this should compile down to a `bor` operation. Leave
 ;; that edge case to the mid-end and only lower to `extr` here.
 (rule extr_32_or_64 5 (lower
-  (bor (ty_32_or_64 ty) (ishl _ x (u8_from_iconst xs)) (ushr _ y (u8_from_iconst ys))))
+  (bor (ty_32_or_64 (ty_int ty)) (ishl _ x (u8_from_iconst xs)) (ushr _ y (u8_from_iconst ys))))
   (if-let true (u64_eq (ty_bits ty) (u64_wrapping_add xs ys)))
   (if-let true (u64_gt xs 0))
   (if-let true (u64_gt ys 0))
   (a64_extr ty x y (imm_shift_from_u8 ys)))
 (rule extr_32_or_64_2 5 (lower
-  (bor (ty_32_or_64 ty) (ushr _ y (u8_from_iconst ys)) (ishl _ x (u8_from_iconst xs))))
+  (bor (ty_32_or_64 (ty_int ty)) (ushr _ y (u8_from_iconst ys)) (ishl _ x (u8_from_iconst xs))))
   (if-let true (u64_eq (ty_bits ty) (u64_wrapping_add xs ys)))
   (if-let true (u64_gt xs 0))
   (if-let true (u64_gt ys 0))
@@ -1605,7 +1607,7 @@
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Shift for i8/i16/i32.
-(rule ishl_fits_in_32 -1 (lower (ishl (fits_in_32 ty) x y))
+(rule ishl_fits_in_32 -1 (lower (ishl (fits_in_32 (ty_int ty)) x y))
       (do_shift (ALUOp.Lsl) ty x y))
 
 ;; Shift for i64.
@@ -1649,6 +1651,13 @@
             (shift Reg (vec_dup masked_shift_amt size)))
         (sshl x shift size)))
 (rule -2 (lower (ishl (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))
+        (ushl_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
+(rule -5 (lower (ishl (ty_vec64 ty) x y))
+      (let ((size VectorSize (vector_size ty))
+            (masked_shift_amt Reg (and_imm $I32 (lo_reg y) (shift_mask ty)))
+            (shift Reg (vec_dup masked_shift_amt size)))
+        (sshl x shift size)))
+(rule -4 (lower (ishl (ty_vec64 ty) x (iconst _ (u64_from_imm64 n))))
         (ushl_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
 
 (decl pure shift_masked_imm (Type u64) u8)
@@ -1698,7 +1707,7 @@
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Shift for i8/i16/i32.
-(rule ushr_fits_in_32 -1 (lower (ushr (fits_in_32 ty) x y))
+(rule ushr_fits_in_32 -1 (lower (ushr (fits_in_32 (ty_int ty)) x y))
       (do_shift (ALUOp.Lsr) ty (put_in_reg_zext32 x) y))
 
 ;; Shift for i64.
@@ -1722,6 +1731,16 @@
 (rule -3 (lower (ushr (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))
          (ushr_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
 (rule -2 (lower (ushr (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))
+          (if-let 0 (shift_masked_imm ty n))
+          x)
+(rule -7 (lower (ushr (ty_vec64 ty) x y))
+      (let ((size VectorSize (vector_size ty))
+            (masked_shift_amt Reg (and_imm $I32 (lo_reg y) (shift_mask ty)))
+            (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
+        (ushl x shift size)))
+(rule -6 (lower (ushr (ty_vec64 ty) x (iconst _ (u64_from_imm64 n))))
+         (ushr_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
+(rule -5 (lower (ushr (ty_vec64 ty) x (iconst _ (u64_from_imm64 n))))
           (if-let 0 (shift_masked_imm ty n))
           x)
 
@@ -1755,7 +1774,7 @@
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Shift for i8/i16/i32.
-(rule sshr_fits_in_32 -4 (lower (sshr (fits_in_32 ty) x y))
+(rule sshr_fits_in_32 -4 (lower (sshr (fits_in_32 (ty_int ty)) x y))
       (do_shift (ALUOp.Asr) ty (put_in_reg_sext32 x) y))
 
 ;; Shift for i64.
@@ -1797,6 +1816,16 @@
 (rule -2 (lower (sshr (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))
           (sshr_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
 (rule -1 (lower (sshr (ty_vec128 ty) x (iconst _ (u64_from_imm64 n))))
+          (if-let 0 (shift_masked_imm ty n))
+          x)
+(rule -7 (lower (sshr (ty_vec64 ty) x y))
+      (let ((size VectorSize (vector_size ty))
+            (masked_shift_amt Reg (and_imm $I32 (lo_reg y) (shift_mask ty)))
+            (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
+        (sshl x shift size)))
+(rule -6 (lower (sshr (ty_vec64 ty) x (iconst _ (u64_from_imm64 n))))
+          (sshr_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
+(rule -5 (lower (sshr (ty_vec64 ty) x (iconst _ (u64_from_imm64 n))))
           (if-let 0 (shift_masked_imm ty n))
           x)
 
