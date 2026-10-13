@@ -2669,6 +2669,17 @@
 (rule (x64_shld $I32 src1 src2 amt) (x64_shldl_mri src1 src2 amt))
 (rule (x64_shld $I64 src1 src2 amt) (x64_shldq_mri src1 src2 amt))
 
+;; With APX the result can go to a third register, which removes the move the
+;; rules above need to preserve `src1`. ($I16 is left alone: a 16-bit NDD form
+;; would need the operand-size prefix, and the lowering is rare enough there not
+;; to be worth a second encoding.)
+(rule 1 (x64_shld $I32 src1 src2 amt)
+        (if-let true (use_apx))
+        (x64_shldl_rvmi src2 (gpr_to_gpr_mem_32 src1) amt))
+(rule 1 (x64_shld $I64 src1 src2 amt)
+        (if-let true (use_apx))
+        (x64_shldq_rvmi src2 (gpr_to_gpr_mem_64 src1) amt))
+
 ;; Helper for creating zeroing-of-high-bits instructions bzhi
 (decl x64_bzhi (Type GprMem Gpr) Gpr)
 (rule (x64_bzhi ty @ $I32 src1 src2) (x64_bzhil_rmv (gpr_mem_32_for_ty ty src1) src2))

@@ -95,6 +95,17 @@ pub fn list() -> Vec<Inst> {
         inst("shldq", fmt("MRI", [rw(rm64), r(r64), r(imm8)]), rex([0x0F, 0xA4]).ib().w(), _64b),
         inst("shldl", fmt("MRC", [rw(rm32), r(r32), r(cl)]), rex([0x0F, 0xA5]).ib(), _64b | compat),
         inst("shldq", fmt("MRC", [rw(rm64), r(r64), r(cl)]), rex([0x0F, 0xA5]).ib().w(), _64b),
+        // APX: "new data destination" form of the double-precision left shift.
+        // Only the immediate form is defined, because the lowering only ever
+        // produces a constant shift amount.
+        //
+        // Note the opcode. Most promotions keep their legacy value, but map 4
+        // reassigns this one: `0F A4` becomes `0x24`. (The `cl` form, `0F A5`,
+        // does keep its opcode.) The destination is `vvvv`, so the DSL lists
+        // ModRM.reg first and the written operand second, which is what the
+        // `RVM`-shaped slot assignment expects.
+        inst("shldl", fmt("RVMI", [r(r32b), w(r32a), r(rm32), r(imm8)]), evex(L128, Full).map4().w0().nd().op(0x24).r().ib(), _64b & apx),
+        inst("shldq", fmt("RVMI", [r(r64b), w(r64a), r(rm64), r(imm8)]), evex(L128, Full).map4().w1().nd().op(0x24).r().ib(), _64b & apx),
 
         // BMI2 shifts
         inst("sarxl", fmt("RMV", [w(r32a), r(rm32), r(r32b)]), vex(LZ)._f3()._0f38().w0().op(0xF7), (_64b | compat) & bmi2),
