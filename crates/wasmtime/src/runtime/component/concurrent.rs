@@ -737,9 +737,6 @@ enum GuestCallKind {
     },
     /// Indicates that a new guest task call is pending and may be executed
     /// using the specified closure.
-    ///
-    /// If the closure returns `Ok(Some(call))`, the `call` should be run
-    /// immediately using `handle_guest_call`.
     StartImplicit(Box<dyn FnOnce(&mut dyn VMStore) -> Result<()> + Send + Sync>),
     StartExplicit(Box<dyn FnOnce(&mut dyn VMStore) -> Result<()> + Send + Sync>),
 }
@@ -1046,37 +1043,9 @@ fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
                 call.thread,
             );
 
-            let old_thread = store.set_thread(call.thread)?;
-            log::trace!(
-                "GuestCallKind::DeliverEvent: replaced {old_thread:?} with {:?} as current thread",
-                call.thread
-            );
-
-            store.enter_instance(runtime_instance);
-
-            let Some(callback) = store
-                .concurrent_state_mut()?
-                .get_mut(call.thread.task)?
-                .callback
-                .take()
-            else {
-                bail_bug!("guest task callback field not present")
-            };
-
-            let code = callback(store, event, handle)?;
-
-            store
-                .concurrent_state_mut()?
-                .get_mut(call.thread.task)?
-                .callback = Some(callback);
-
-            store.exit_instance(runtime_instance)?;
-
-            store.set_thread(old_thread)?;
-
-            instance.handle_callback_code(store, call.thread, runtime_instance.index, code)?;
-
-            log::trace!("GuestCallKind::DeliverEvent: restored {old_thread:?} as current thread");
+            instance.handle_callback_code(store, call.thread, runtime_instance, |store| {
+                invoke_callback(store, call.thread.task, event, handle)
+            })?;
         }
         GuestCallKind::StartImplicit(fun) => {
             fun(store)?;
@@ -1087,6 +1056,25 @@ fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Invoke the callback of the callback-lifted `task` with `event` and
+/// `handle`, returning the callback code it produces.
+fn invoke_callback(
+    store: &mut dyn VMStore,
+    task: TableId<GuestTask>,
+    event: Event,
+    handle: u32,
+) -> Result<u32> {
+    let Some(callback) = store.concurrent_state_mut()?.get_mut(task)?.callback.take() else {
+        bail_bug!("guest task callback field not present")
+    };
+
+    let code = callback(store, event, handle)?;
+
+    store.concurrent_state_mut()?.get_mut(task)?.callback = Some(callback);
+
+    Ok(code)
 }
 
 impl<T> Store<T> {
@@ -2793,18 +2781,52 @@ impl Instance {
         Ok(Some((event, Some((waitable, handle)))))
     }
 
-    /// Handle the `CallbackCode` returned from an async-lifted export or its
-    /// callback.
+    /// Run `call` for the callback-lifted `guest_thread` and then handle the
+    /// `CallbackCode` it returns.
     ///
-    /// If this returns `Ok(Some(call))`, then `call` should be run immediately
-    /// using `handle_guest_call`.
+    /// `call` runs with `guest_thread` as the current thread and with
+    /// `runtime_instance` entered; both are restored before the final code is
+    /// handled.
     fn handle_callback_code(
         self,
-        store: &mut StoreOpaque,
+        store: &mut dyn VMStore,
         guest_thread: QualifiedThreadId,
-        runtime_instance: RuntimeComponentInstanceIndex,
-        code: u32,
+        runtime_instance: RuntimeInstance,
+        call: impl FnOnce(&mut dyn VMStore) -> Result<u32>,
     ) -> Result<()> {
+        let old_thread = store.set_thread(guest_thread)?;
+        log::trace!(
+            "callback-lifted call: replaced {old_thread:?} with {guest_thread:?} as current thread"
+        );
+
+        store.enter_instance(runtime_instance);
+
+        let mut code = call(store)?;
+
+        // Implement the spec behavior here of effectively ignoring the return
+        // code if there's a pending cancellation for this task available.
+        //
+        // TODO: the spec doesn't validate anything here, but seems like the
+        // waitable set may want to be validated?
+        if matches!(
+            unpack_callback_code(code).0,
+            callback_code::YIELD | callback_code::WAIT
+        ) && let Some((event, _)) = self.get_event(store, guest_thread.task, None, true)?
+        {
+            let (unpacked, set) = unpack_callback_code(code);
+            log::trace!(
+                "{guest_thread:?} returned callback code {unpacked} (set: {set}) with a pending \
+                 cancellation; delivering it via callback"
+            );
+            code = invoke_callback(store, guest_thread.task, event, 0)?;
+        }
+
+        store.exit_instance(runtime_instance)?;
+
+        store.set_thread(old_thread)?;
+        log::trace!("callback-lifted call: restored {old_thread:?} as current thread");
+
+        let store = store.store_opaque_mut();
         let (code, set) = unpack_callback_code(code);
 
         log::trace!("received callback code from {guest_thread:?}: {code} (set: {set})");
@@ -2815,7 +2837,7 @@ impl Instance {
 
         let get_set = |store: &mut StoreOpaque, handle| -> Result<_> {
             let set = store
-                .instance_state(self.runtime_instance(runtime_instance))
+                .instance_state(runtime_instance)
                 .handle_table()
                 .waitable_set_rep(handle)?;
 
@@ -2828,8 +2850,6 @@ impl Instance {
                 let task = store.concurrent_state_mut()?.get_mut(guest_thread.task)?;
                 task.exited = true;
                 task.callback = None;
-
-                let runtime_instance = self.runtime_instance(runtime_instance);
 
                 // Since we're async-typed, returning control to our caller
                 // won't help resolve any outstanding sync-typed call which
@@ -2866,7 +2886,7 @@ impl Instance {
                 // Push this thread onto the "low priority" queue so it runs
                 // after any other threads have had a chance to run.
                 state.push_low_priority(WorkItem::GuestCall {
-                    instance: self.runtime_instance(runtime_instance),
+                    instance: runtime_instance,
                     call,
                 });
             }
@@ -3055,35 +3075,13 @@ impl Instance {
                     store,
                     callee_instance.index,
                 )?;
-                let old_thread = store.set_thread(guest_thread)?;
-                log::trace!(
-                    "stackless call: replaced {old_thread:?} with {guest_thread:?} as current thread"
-                );
+                self.handle_callback_code(store, guest_thread, callee_instance, |store| {
+                    let storage = call(store)?;
 
-                store.enter_instance(callee_instance);
-
-                // SAFETY: See the documentation for `make_call` to review the
-                // contract we must uphold for `call` here.
-                //
-                // Per the contract described in the `stage_call`
-                // documentation, the `callee` pointer which `call` closes
-                // over must be valid.
-                let storage = call(store)?;
-
-                store.exit_instance(callee_instance)?;
-
-                store.set_thread(old_thread)?;
-                let state = store.concurrent_state_mut()?;
-                if let Some(t) = old_thread.guest() {
-                    state.set_thread_running(t.thread)?;
-                }
-                log::trace!("stackless call: restored {old_thread:?} as current thread");
-
-                // SAFETY: `wasmparser` will have validated that the callback
-                // function returns a `i32` result.
-                let code = unsafe { storage[0].assume_init() }.get_i32() as u32;
-
-                self.handle_callback_code(store, guest_thread, callee_instance.index, code)
+                    // SAFETY: `wasmparser` will have validated that the
+                    // callback function returns a `i32` result.
+                    Ok(unsafe { storage[0].assume_init() }.get_i32() as u32)
+                })
             }) as Box<dyn FnOnce(&mut dyn VMStore) -> Result<()> + Send + Sync>
         } else {
             let token = StoreToken::new(store.as_context_mut());
