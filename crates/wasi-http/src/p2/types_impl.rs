@@ -31,6 +31,9 @@ impl types::Host for WasiHttpCtxView<'_> {
         if let Some(e) = e.downcast_ref::<crate::Error>() {
             return Ok(Some(self.hooks.error_to_p2(e)));
         }
+        if let Some(e) = e.downcast_ref::<std::sync::Arc<crate::Error>>() {
+            return Ok(Some(self.hooks.error_to_p2(e)));
+        }
         Ok(e.downcast_ref::<types::ErrorCode>().cloned())
     }
 }
