@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use wasmtime::Result;
 use wasmtime::component::{TaskGroupHook, TaskGroupId};
-use wasmtime::{AsContextMut, Config, Engine, Store, StoreContextMut, Trap, component::*};
+use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, component::*};
 use wasmtime_component_util::REALLOC_AND_FREE;
 
 /// This is super::func::thunks, except with an async store.
