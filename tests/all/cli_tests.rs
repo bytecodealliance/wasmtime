@@ -2234,7 +2234,12 @@ start a print 1234
 
     #[test]
     fn cli_many_resources() -> Result<()> {
-        let err = run_wasmtime(&["run", CLI_MANY_RESOURCES_COMPONENT]).unwrap_err();
+        let err = run_wasmtime(&[
+            "run",
+            "-Smax-component-handles=10000000",
+            CLI_MANY_RESOURCES_COMPONENT,
+        ])
+        .unwrap_err();
         assert!(
             err.to_string().contains("resource table has no free keys"),
             "bad error message: {err}"
