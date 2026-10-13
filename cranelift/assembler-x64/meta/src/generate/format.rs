@@ -70,12 +70,14 @@ impl dsl::Format {
     /// Normally this is just the reverse of the DSL's Intel-style order. APX
     /// "new data destination" (NDD) forms are the exception: their
     /// architectural destination is the `vvvv`-encoded register, which the DSL
-    /// must list in the middle so that the positional slot assignment in
-    /// `generate_vex_or_evex_prefix` maps operands to `reg`/`vvvv`/`rm`
-    /// correctly. Blindly reversing would therefore print the destination in
-    /// the middle. Instead, for `ND = 1` the sources keep their DSL order and
-    /// the destination is printed last, which matches both AT&T convention and
-    /// the XED disassembly used as a fuzzing oracle.
+    /// must list wherever the positional slot assignment in
+    /// `generate_vex_or_evex_prefix` demands so that operands map to
+    /// `reg`/`vvvv`/`rm` correctly. Blindly reversing would therefore print the
+    /// destination in the wrong place. Instead, for `ND = 1` the destination is
+    /// printed last and the sources are printed in their DSL order, except that
+    /// an immediate always comes first: AT&T (and XED) lead with the immediate,
+    /// whereas the DSL must list it last because the encoder appends it after
+    /// the ModRM/SIB/displacement bytes.
     #[must_use]
     fn ordered_operands(&self, nd: bool, xed_style: bool) -> String {
         let ops = self
@@ -83,9 +85,12 @@ impl dsl::Format {
             .iter()
             .filter(|o| !o.implicit && !(xed_style && o.location == dsl::Location::xmm0));
         let ordered: Vec<&dsl::Operand> = if nd {
-            let (dst, srcs): (Vec<_>, Vec<_>) =
+            let (dst, srcs): (Vec<&dsl::Operand>, Vec<&dsl::Operand>) =
                 ops.partition(|o| matches!(o.mutability, dsl::Mutability::Write));
-            srcs.into_iter().chain(dst).collect()
+            let (imms, rest): (Vec<&dsl::Operand>, Vec<&dsl::Operand>) = srcs
+                .into_iter()
+                .partition(|o| matches!(o.location.kind(), dsl::OperandKind::Imm(_)));
+            imms.into_iter().chain(rest).chain(dst).collect()
         } else {
             ops.rev().collect()
         };

@@ -915,4 +915,88 @@ mod test {
             "62F47C18F7D2"
         );
     }
+
+    /// Byte-level encoding checks for the APX NDD forms that take an immediate
+    /// source.
+    ///
+    /// These reuse the legacy group-1 opcodes (`0x81` with a full-width
+    /// immediate, `0x83` with a sign-extended byte) and keep the `/0` extension
+    /// for `ADD` in ModRM.reg. Because `ND = 1` moves the destination into
+    /// `vvvv`, ModRM.rm is a read-only source here, unlike the legacy `MI`
+    /// encodings where it is read-modify-write.
+    #[test]
+    fn apx_vmi_ndd_encodings() {
+        use crate::inst::{addl_vmi, addl_vmi_sxb, addq_vmi_sxb, addq_vmi_sxl};
+
+        // `addq $imm, %rdx, %rax`: vvvv = %rax, ModRM.rm = %rdx, so ModRM is
+        // mod=11 reg=/0 rm=%rdx = 0xC2.
+        let (vvvv, rm) = (FuzzReg::new(0), FuzzReg::new(2));
+
+        let inst = addq_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1883C205"
+        );
+
+        let inst = addq_vmi_sxl::<FuzzRegs>::new(vvvv, rm, 0x1234);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1881C234120000"
+        );
+
+        let inst = addl_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1883C205"
+        );
+
+        let inst = addl_vmi::<FuzzRegs>::new(vvvv, rm, 0x1234);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1881C234120000"
+        );
+    }
+
+    /// Check that the remaining group-1 operations select the right `/N` opcode
+    /// extension in their NDD immediate forms.
+    ///
+    /// Only the ModRM byte varies between these: `mod = 11`, `rm = %rdx`, and
+    /// `reg` carries the extension (`SUB` is `/5`, `AND` `/4`, `OR` `/1`, and
+    /// `XOR` `/6`).
+    #[test]
+    fn apx_vmi_ndd_opcode_extensions() {
+        use crate::inst::{andq_vmi_sxb, orq_vmi_sxb, subq_vmi_sxb, xorl_vmi, xorq_vmi_sxb};
+
+        let (vvvv, rm) = (FuzzReg::new(0), FuzzReg::new(2));
+
+        let inst = subq_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1883EA05"
+        );
+
+        let inst = andq_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1883E205"
+        );
+
+        let inst = orq_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1883CA05"
+        );
+
+        let inst = xorq_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1883F205"
+        );
+
+        let inst = xorl_vmi::<FuzzRegs>::new(vvvv, rm, 0x1234);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1881F234120000"
+        );
+    }
 }

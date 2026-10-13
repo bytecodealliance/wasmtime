@@ -25,6 +25,12 @@ pub fn list() -> Vec<Inst> {
         // APX: NDD form of `XOR`, promoted into EVEX map 4.
         inst("xorq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x31).r(), _64b & apx),
         inst("xorl", fmt("RVM", [r(r32b), w(r32a), r(rm32)]), evex(L128, Full).map4().w0().nd().op(0x31).r(), _64b & apx),
+        // APX: NDD forms taking an immediate source; see `add.rs` for why
+        // these are needed. `XOR` uses the `/6` group-1 extension.
+        inst("xorq", fmt("VMI_SXL", [w(r64a), r(rm64), sxq(imm32)]), evex(L128, Full).map4().w1().nd().op(0x81).digit(6), _64b & apx),
+        inst("xorl", fmt("VMI", [w(r32a), r(rm32), r(imm32)]), evex(L128, Full).map4().w0().nd().op(0x81).digit(6), _64b & apx),
+        inst("xorq", fmt("VMI_SXB", [w(r64a), r(rm64), sxq(imm8)]), evex(L128, Full).map4().w1().nd().op(0x83).digit(6).ib(), _64b & apx),
+        inst("xorl", fmt("VMI_SXB", [w(r32a), r(rm32), sxl(imm8)]), evex(L128, Full).map4().w0().nd().op(0x83).digit(6).ib(), _64b & apx),
         // `LOCK`-prefixed memory-writing instructions.
         inst("lock_xorb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(6).ib(), _64b | compat).custom(Mnemonic),
         inst("lock_xorw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(6).iw(), _64b | compat).custom(Mnemonic),

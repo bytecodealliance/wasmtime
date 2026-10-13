@@ -2235,6 +2235,135 @@
 (rule (x64_andn ty @ $I32 src1 src2) (x64_andnl_rvm src1 (gpr_mem_32_for_ty ty src2)))
 (rule (x64_andn ty @ $I64 src1 src2) (x64_andnq_rvm src1 (gpr_mem_64_for_ty ty src2)))
 
+;;;; APX NDD ("new data destination") constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; These mirror the legacy helpers above, but select the APX three-operand
+;; encodings, which write their result to a fresh register instead of
+;; overwriting one of their sources. Callers must gate them on `use_apx`.
+;;
+;; Every one of them computes `src1 <op> src2` and ends with a fallback to the
+;; corresponding legacy helper, so they are safe to apply unconditionally: a
+;; type with no NDD encoding simply produces the code it would have produced
+;; without APX.
+;;
+;; The `vmi` rules exist so that a constant operand can stay inside the
+;; instruction. Without them a constant would reach the `Value`-to-`GprMem`
+;; conversion, which parks it in a constant pool and loads it back at run time;
+;; the same hazard is why constants that are too wide for an immediate are
+;; explicitly steered into a register below.
+;;
+;; Note the operand placement: the APX NDD form of `sub` computes
+;; `dest = rm - reg`, so for `sub` the *minuend* is ModRM.rm. The commutative
+;; operations put `src2` in ModRM.rm instead, which keeps a sinkable load on
+;; the right-hand side foldable exactly as it is in the legacy lowering.
+;;
+;; As with `x64_add_break_deps` above, `i8`/`i16` use the 32-bit encoding: a
+;; 32-bit write zero-extends and so breaks the false dependency on the
+;; destination's previous value, whereas an 8/16-bit write merges with it. The
+;; upper bits of a narrow result are don't-care.
+
+(decl x64_add_ndd (Type Value Value) Gpr)
+;; `add` commutes, so a constant on either side can feed the immediate slot.
+(rule 7 (x64_add_ndd $I64 (i8_from_iconst x) y)  (x64_addq_vmi_sxb y x))
+(rule 7 (x64_add_ndd $I32 (i8_from_iconst x) y)  (x64_addl_vmi_sxb y x))
+(rule 6 (x64_add_ndd $I64 (i32_from_iconst x) y) (x64_addq_vmi_sxl y x))
+(rule 6 (x64_add_ndd $I32 (u32_from_iconst x) y) (x64_addl_vmi y x))
+(rule 5 (x64_add_ndd $I64 x (i8_from_iconst y))  (x64_addq_vmi_sxb x y))
+(rule 5 (x64_add_ndd $I32 x (i8_from_iconst y))  (x64_addl_vmi_sxb x y))
+(rule 5 (x64_add_ndd $I16 x (i8_from_iconst y))  (x64_addl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 5 (x64_add_ndd $I8  x (i8_from_iconst y))  (x64_addl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 4 (x64_add_ndd $I64 x (i32_from_iconst y)) (x64_addq_vmi_sxl x y))
+(rule 4 (x64_add_ndd $I32 x (u32_from_iconst y)) (x64_addl_vmi x y))
+;; An `i64` constant too wide for the sign-extended `imm32` form above would be
+;; spilled to a constant pool by the `Value`-to-`GprMem` conversion; materialise
+;; it into a register instead. (`i8`/`i16`/`i32` need no such guard: the former
+;; two route both operands through `put_in_gpr`, and every `i32` constant fits
+;; the immediate form.)
+(rule 3 (x64_add_ndd $I64 x y @ (i64_from_iconst _)) (x64_addq_rvm (put_in_gpr x) (gpr_to_gpr_mem_64 (put_in_gpr y))))
+(rule 2 (x64_add_ndd $I64 x y) (x64_addq_rvm (put_in_gpr x) y))
+(rule 2 (x64_add_ndd $I32 x y) (x64_addl_rvm (put_in_gpr x) y))
+(rule 2 (x64_add_ndd $I16 x y) (x64_addl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 2 (x64_add_ndd $I8  x y) (x64_addl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 0 (x64_add_ndd ty x y) (x64_add ty (put_in_gpr x) y))
+
+(decl x64_sub_ndd (Type Value Value) Gpr)
+(rule 5 (x64_sub_ndd $I64 x (i8_from_iconst y))  (x64_subq_vmi_sxb x y))
+(rule 5 (x64_sub_ndd $I32 x (i8_from_iconst y))  (x64_subl_vmi_sxb x y))
+(rule 5 (x64_sub_ndd $I16 x (i8_from_iconst y))  (x64_subl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 5 (x64_sub_ndd $I8  x (i8_from_iconst y))  (x64_subl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 4 (x64_sub_ndd $I64 x (i32_from_iconst y)) (x64_subq_vmi_sxl x y))
+(rule 4 (x64_sub_ndd $I32 x (u32_from_iconst y)) (x64_subl_vmi x y))
+;; `sub` does not commute, so the minuend has to stay in ModRM.rm. A constant
+;; minuend therefore cannot be moved into the immediate slot; materialise it
+;; into a register rather than letting it become a constant-pool load.
+(rule 3 (x64_sub_ndd $I64 x @ (i64_from_iconst _) y) (x64_subq_rvm (put_in_gpr y) (gpr_to_gpr_mem_64 (put_in_gpr x))))
+(rule 3 (x64_sub_ndd $I32 x @ (i64_from_iconst _) y) (x64_subl_rvm (put_in_gpr y) (gpr_to_gpr_mem_32 (put_in_gpr x))))
+(rule 2 (x64_sub_ndd $I64 x y) (x64_subq_rvm (put_in_gpr y) x))
+(rule 2 (x64_sub_ndd $I32 x y) (x64_subl_rvm (put_in_gpr y) x))
+(rule 2 (x64_sub_ndd $I16 x y) (x64_subl_rvm (put_in_gpr y) (gpr_to_gpr_mem_32 (put_in_gpr x))))
+(rule 2 (x64_sub_ndd $I8  x y) (x64_subl_rvm (put_in_gpr y) (gpr_to_gpr_mem_32 (put_in_gpr x))))
+(rule 0 (x64_sub_ndd ty x y) (x64_sub ty (put_in_gpr x) y))
+
+(decl x64_and_ndd (Type Value Value) Gpr)
+;; `and` commutes; see `x64_add_ndd`.
+(rule 7 (x64_and_ndd $I64 (i8_from_iconst x) y)  (x64_andq_vmi_sxb y x))
+(rule 7 (x64_and_ndd $I32 (i8_from_iconst x) y)  (x64_andl_vmi_sxb y x))
+(rule 6 (x64_and_ndd $I64 (i32_from_iconst x) y) (x64_andq_vmi_sxl y x))
+(rule 6 (x64_and_ndd $I32 (u32_from_iconst x) y) (x64_andl_vmi y x))
+(rule 5 (x64_and_ndd $I64 x (i8_from_iconst y))  (x64_andq_vmi_sxb x y))
+(rule 5 (x64_and_ndd $I32 x (i8_from_iconst y))  (x64_andl_vmi_sxb x y))
+(rule 5 (x64_and_ndd $I16 x (i8_from_iconst y))  (x64_andl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 5 (x64_and_ndd $I8  x (i8_from_iconst y))  (x64_andl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 4 (x64_and_ndd $I64 x (i32_from_iconst y)) (x64_andq_vmi_sxl x y))
+(rule 4 (x64_and_ndd $I32 x (u32_from_iconst y)) (x64_andl_vmi x y))
+;; Keep wide constants out of ModRM.rm; see `x64_add_ndd`.
+(rule 3 (x64_and_ndd $I64 x y @ (i64_from_iconst _)) (x64_andq_rvm (put_in_gpr x) (gpr_to_gpr_mem_64 (put_in_gpr y))))
+(rule 2 (x64_and_ndd $I64 x y) (x64_andq_rvm (put_in_gpr x) y))
+(rule 2 (x64_and_ndd $I32 x y) (x64_andl_rvm (put_in_gpr x) y))
+(rule 2 (x64_and_ndd $I16 x y) (x64_andl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 2 (x64_and_ndd $I8  x y) (x64_andl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 0 (x64_and_ndd ty x y) (x64_and ty (put_in_gpr x) y))
+
+(decl x64_or_ndd (Type Value Value) Gpr)
+;; `or` commutes; see `x64_add_ndd`.
+(rule 7 (x64_or_ndd $I64 (i8_from_iconst x) y)  (x64_orq_vmi_sxb y x))
+(rule 7 (x64_or_ndd $I32 (i8_from_iconst x) y)  (x64_orl_vmi_sxb y x))
+(rule 6 (x64_or_ndd $I64 (i32_from_iconst x) y) (x64_orq_vmi_sxl y x))
+(rule 6 (x64_or_ndd $I32 (u32_from_iconst x) y) (x64_orl_vmi y x))
+(rule 5 (x64_or_ndd $I64 x (i8_from_iconst y))  (x64_orq_vmi_sxb x y))
+(rule 5 (x64_or_ndd $I32 x (i8_from_iconst y))  (x64_orl_vmi_sxb x y))
+(rule 5 (x64_or_ndd $I16 x (i8_from_iconst y))  (x64_orl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 5 (x64_or_ndd $I8  x (i8_from_iconst y))  (x64_orl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 4 (x64_or_ndd $I64 x (i32_from_iconst y)) (x64_orq_vmi_sxl x y))
+(rule 4 (x64_or_ndd $I32 x (u32_from_iconst y)) (x64_orl_vmi x y))
+;; Keep wide constants out of ModRM.rm; see `x64_add_ndd`.
+(rule 3 (x64_or_ndd $I64 x y @ (i64_from_iconst _)) (x64_orq_rvm (put_in_gpr x) (gpr_to_gpr_mem_64 (put_in_gpr y))))
+(rule 2 (x64_or_ndd $I64 x y) (x64_orq_rvm (put_in_gpr x) y))
+(rule 2 (x64_or_ndd $I32 x y) (x64_orl_rvm (put_in_gpr x) y))
+(rule 2 (x64_or_ndd $I16 x y) (x64_orl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 2 (x64_or_ndd $I8  x y) (x64_orl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 0 (x64_or_ndd ty x y) (x64_or ty (put_in_gpr x) y))
+
+(decl x64_xor_ndd (Type Value Value) Gpr)
+;; `xor` commutes; see `x64_add_ndd`.
+(rule 7 (x64_xor_ndd $I64 (i8_from_iconst x) y)  (x64_xorq_vmi_sxb y x))
+(rule 7 (x64_xor_ndd $I32 (i8_from_iconst x) y)  (x64_xorl_vmi_sxb y x))
+(rule 6 (x64_xor_ndd $I64 (i32_from_iconst x) y) (x64_xorq_vmi_sxl y x))
+(rule 6 (x64_xor_ndd $I32 (u32_from_iconst x) y) (x64_xorl_vmi y x))
+(rule 5 (x64_xor_ndd $I64 x (i8_from_iconst y))  (x64_xorq_vmi_sxb x y))
+(rule 5 (x64_xor_ndd $I32 x (i8_from_iconst y))  (x64_xorl_vmi_sxb x y))
+(rule 5 (x64_xor_ndd $I16 x (i8_from_iconst y))  (x64_xorl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 5 (x64_xor_ndd $I8  x (i8_from_iconst y))  (x64_xorl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 4 (x64_xor_ndd $I64 x (i32_from_iconst y)) (x64_xorq_vmi_sxl x y))
+(rule 4 (x64_xor_ndd $I32 x (u32_from_iconst y)) (x64_xorl_vmi x y))
+;; Keep wide constants out of ModRM.rm; see `x64_add_ndd`.
+(rule 3 (x64_xor_ndd $I64 x y @ (i64_from_iconst _)) (x64_xorq_rvm (put_in_gpr x) (gpr_to_gpr_mem_64 (put_in_gpr y))))
+(rule 2 (x64_xor_ndd $I64 x y) (x64_xorq_rvm (put_in_gpr x) y))
+(rule 2 (x64_xor_ndd $I32 x y) (x64_xorl_rvm (put_in_gpr x) y))
+(rule 2 (x64_xor_ndd $I16 x y) (x64_xorl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 2 (x64_xor_ndd $I8  x y) (x64_xorl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 0 (x64_xor_ndd ty x y) (x64_xor ty (put_in_gpr x) y))
+
 ;; Helper for emitting immediates with an `i64` value. Note that
 ;; integer constants in ISLE are always parsed as `i128`s; this enables
 ;; negative numbers to be used as immediates.

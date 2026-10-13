@@ -30,6 +30,12 @@ pub fn list() -> Vec<Inst> {
         // the `W` bit is set (`.w1()`); use `.w0()` for the 32-bit `subl` form.
         inst("subq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x29).r(), _64b & apx),
         inst("subl", fmt("RVM", [r(r32b), w(r32a), r(rm32)]), evex(L128, Full).map4().w0().nd().op(0x29).r(), _64b & apx),
+        // APX: NDD forms taking an immediate source; see `add.rs` for why
+        // these are needed. `SUB` uses the `/5` group-1 extension.
+        inst("subq", fmt("VMI_SXL", [w(r64a), r(rm64), sxq(imm32)]), evex(L128, Full).map4().w1().nd().op(0x81).digit(5), _64b & apx),
+        inst("subl", fmt("VMI", [w(r32a), r(rm32), r(imm32)]), evex(L128, Full).map4().w0().nd().op(0x81).digit(5), _64b & apx),
+        inst("subq", fmt("VMI_SXB", [w(r64a), r(rm64), sxq(imm8)]), evex(L128, Full).map4().w1().nd().op(0x83).digit(5).ib(), _64b & apx),
+        inst("subl", fmt("VMI_SXB", [w(r32a), r(rm32), sxl(imm8)]), evex(L128, Full).map4().w0().nd().op(0x83).digit(5).ib(), _64b & apx),
         // Subtract with borrow.
         inst("sbbb", fmt("I", [rw(al), r(imm8)]), rex(0x1C).ib(), _64b | compat),
         inst("sbbw", fmt("I", [rw(ax), r(imm16)]), rex([0x66, 0x1D]).iw(), _64b | compat),

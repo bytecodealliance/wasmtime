@@ -95,28 +95,17 @@
       (x64_lea ty (to_amode_add (mem_flags_trusted_data) x y (zero_offset))))
 
 ;; APX: when the `has_apx` feature is enabled, use the NDD (new-data-
-;; destination) form of `add` for 64-bit adds. Unlike the legacy two-operand
-;; `add`, the NDD form writes its result to a fresh register encoded in the
-;; EVEX `vvvv` field, so the register allocator does not need to insert a move
-;; to preserve either input.
-(rule iadd_apx_ndd 1 (lower (iadd $I64 x y))
+;; destination) form of `add`. Unlike the legacy two-operand `add`, the NDD
+;; form writes its result to a fresh register encoded in the EVEX `vvvv` field,
+;; so the register allocator does not need to insert a move to preserve either
+;; input.
+;;
+;; `x64_add_ndd` is partial: operand shapes with no profitable NDD encoding
+;; fall through to the legacy rules above rather than forcing a constant into
+;; a register or a constant pool just to satisfy the three-operand form.
+(rule iadd_apx_ndd 4 (lower (iadd (fits_in_64 ty) x y))
       (if-let true (use_apx))
-      (x64_addq_rvm x y))
-
-;; APX: the same for `i32` and narrower. Note that `i8`/`i16` deliberately use
-;; the 32-bit NDD form rather than a byte/word-sized one: writing a 32-bit
-;; register breaks the false dependency on the destination's previous value,
-;; which is the same reason `x64_add_break_deps` widens these types for the
-;; legacy encoding. The upper bits of a narrow result are don't-care.
-(rule iadd_apx_ndd_32 1 (lower (iadd $I32 x y))
-      (if-let true (use_apx))
-      (x64_addl_rvm x y))
-(rule iadd_apx_ndd_16 1 (lower (iadd $I16 x y))
-      (if-let true (use_apx))
-      (x64_addl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
-(rule iadd_apx_ndd_8 1 (lower (iadd $I8 x y))
-      (if-let true (use_apx))
-      (x64_addl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+      (x64_add_ndd ty x y))
 
 ;; Higher-priority cases than the previous two where a load can be sunk into
 ;; the add instruction itself. Note that both operands are tested for
@@ -303,29 +292,10 @@
 
 ;; `i64` and smaller.
 
-;; APX: when the `has_apx` feature is enabled, use the NDD (new-data-
-;; destination) form of `sub` for 64-bit subtracts. Unlike the legacy two-
-;; operand `sub`, the NDD form writes its result to a fresh register encoded in
-;; the EVEX `vvvv` field, so the register allocator does not need to insert a
-;; move to preserve either input.
-;;
-;; Note that the NDD form computes `dest = rm - reg`, so the minuend goes in
-;; ModRM.rm (the second argument here) and the subtrahend in ModRM.reg.
-(rule isub_apx_ndd 1 (lower (isub $I64 x y))
+;; APX: use the NDD form of `sub`; see `iadd_apx_ndd`.
+(rule isub_apx_ndd 4 (lower (isub (fits_in_64 ty) x y))
       (if-let true (use_apx))
-      (x64_subq_rvm (put_in_gpr y) x))
-
-;; APX: the same for `i32` and narrower; see `iadd_apx_ndd_32` for why `i8` and
-;; `i16` use the 32-bit form.
-(rule isub_apx_ndd_32 1 (lower (isub $I32 x y))
-      (if-let true (use_apx))
-      (x64_subl_rvm (put_in_gpr y) x))
-(rule isub_apx_ndd_16 1 (lower (isub $I16 x y))
-      (if-let true (use_apx))
-      (x64_subl_rvm (put_in_gpr y) (gpr_to_gpr_mem_32 (put_in_gpr x))))
-(rule isub_apx_ndd_8 1 (lower (isub $I8 x y))
-      (if-let true (use_apx))
-      (x64_subl_rvm (put_in_gpr y) (gpr_to_gpr_mem_32 (put_in_gpr x))))
+      (x64_sub_ndd ty x y))
 
 ;; Sub two registers.
 (rule -3 (lower (isub (fits_in_64 ty) x y))
@@ -391,23 +361,11 @@
 
 ;; `{i,b}64` and smaller.
 
-;; APX: when the `has_apx` feature is enabled, use the NDD form of `and` for
-;; 64-bit integer values.
-(rule band_apx_ndd 3 (lower (band $I64 x y))
+;; APX: use the NDD form of `and`; see `iadd_apx_ndd`.
+(rule band_apx_ndd 3 (lower (band ty x y))
+      (if (ty_int_ref_scalar_64 ty))
       (if-let true (use_apx))
-      (x64_andq_rvm x y))
-
-;; APX: the same for `i32` and narrower; see `iadd_apx_ndd_32` for why `i8` and
-;; `i16` use the 32-bit form.
-(rule band_apx_ndd_32 3 (lower (band $I32 x y))
-      (if-let true (use_apx))
-      (x64_andl_rvm x y))
-(rule band_apx_ndd_16 3 (lower (band $I16 x y))
-      (if-let true (use_apx))
-      (x64_andl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
-(rule band_apx_ndd_8 3 (lower (band $I8 x y))
-      (if-let true (use_apx))
-      (x64_andl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+      (x64_and_ndd ty x y))
 
 ;; And two registers.
 (rule 0 (lower (band ty x y))
@@ -535,23 +493,11 @@
 
 ;; `{i,b}64` and smaller.
 
-;; APX: when the `has_apx` feature is enabled, use the NDD form of `or` for
-;; 64-bit integer values.
-(rule bor_apx_ndd 3 (lower (bor $I64 x y))
+;; APX: use the NDD form of `or`; see `iadd_apx_ndd`.
+(rule bor_apx_ndd 3 (lower (bor ty x y))
+      (if (ty_int_ref_scalar_64 ty))
       (if-let true (use_apx))
-      (x64_orq_rvm x y))
-
-;; APX: the same for `i32` and narrower; see `iadd_apx_ndd_32` for why `i8` and
-;; `i16` use the 32-bit form.
-(rule bor_apx_ndd_32 3 (lower (bor $I32 x y))
-      (if-let true (use_apx))
-      (x64_orl_rvm x y))
-(rule bor_apx_ndd_16 3 (lower (bor $I16 x y))
-      (if-let true (use_apx))
-      (x64_orl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
-(rule bor_apx_ndd_8 3 (lower (bor $I8 x y))
-      (if-let true (use_apx))
-      (x64_orl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+      (x64_or_ndd ty x y))
 
 ;; Or two registers.
 (rule 0 (lower (bor ty x y))
@@ -626,21 +572,13 @@
 
 ;; APX: when the `has_apx` feature is enabled, use the NDD form of `xor` for
 ;; 64-bit integer values.
-(rule bxor_apx_ndd 3 (lower (bxor $I64 x y))
+;; APX: use the NDD form of `xor`; see `iadd_apx_ndd`. Note that the legacy
+;; rule handling a left-hand immediate sits at priority 4, so the commuting
+;; rule here has to outrank it.
+(rule bxor_apx_ndd 8 (lower (bxor ty x y))
+      (if (ty_int_ref_scalar_64 ty))
       (if-let true (use_apx))
-      (x64_xorq_rvm x y))
-
-;; APX: the same for `i32` and narrower; see `iadd_apx_ndd_32` for why `i8` and
-;; `i16` use the 32-bit form.
-(rule bxor_apx_ndd_32 3 (lower (bxor $I32 x y))
-      (if-let true (use_apx))
-      (x64_xorl_rvm x y))
-(rule bxor_apx_ndd_16 3 (lower (bxor $I16 x y))
-      (if-let true (use_apx))
-      (x64_xorl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
-(rule bxor_apx_ndd_8 3 (lower (bxor $I8 x y))
-      (if-let true (use_apx))
-      (x64_xorl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+      (x64_xor_ndd ty x y))
 
 ;; Xor two registers.
 (rule 0 (lower (bxor ty x y))
@@ -685,11 +623,11 @@
 
 ;; Specialization of `blsmsk` for BMI1
 
-(rule 8 (lower (bxor (ty_32_or_64 ty) x y))
+(rule 9 (lower (bxor (ty_32_or_64 ty) x y))
         (if-let true (has_bmi1))
         (if-let x (val_minus_one y))
         (x64_blsmsk ty x))
-(rule 9 (lower (bxor (ty_32_or_64 ty) y x))
+(rule 10 (lower (bxor (ty_32_or_64 ty) y x))
         (if-let true (has_bmi1))
         (if-let x (val_minus_one y))
         (x64_blsmsk ty x))
