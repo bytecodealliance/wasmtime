@@ -1646,6 +1646,134 @@ fn sync_call_async_typed() -> Result<()> {
             .contains("cannot synchronously call an async-lifted export"),
         "{error}"
     );
+    Ok(())
+}
 
+/// A `call_async` whose start fails because no fiber stack is available
+/// returns that error rather than panicking when its future is dropped.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn call_async_start_fails_without_fiber_stack() -> Result<()> {
+    let mut pool = crate::small_pool_config();
+    pool.total_memories(4);
+    pool.total_stacks(4);
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(pool));
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (component $Blocker
+                (core module $libc (memory (export "mem") 1))
+                (core instance $libc (instantiate $libc))
+                (core func $waitable-set.new (canon waitable-set.new))
+                (core func $waitable-set.wait
+                    (canon waitable-set.wait (memory (core memory $libc "mem"))))
+                (core module $m
+                    (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+                    (import "" "waitable-set.wait"
+                        (func $waitable-set.wait (param i32 i32) (result i32)))
+                    ;; Blocks forever, holding a fiber.
+                    (func (export "block")
+                        (drop (call $waitable-set.wait (call $waitable-set.new) (i32.const 0)))
+                        unreachable))
+                (core instance $i (instantiate $m (with "" (instance
+                    (export "waitable-set.new" (func $waitable-set.new))
+                    (export "waitable-set.wait" (func $waitable-set.wait))))))
+                (func (export "block") async (canon lift (core func $i "block"))))
+            (component $Nop
+                (core module $m (func (export "nop")))
+                (core instance $i (instantiate $m))
+                (func (export "nop") async (canon lift (core func $i "nop"))))
+            (instance $b1 (instantiate $Blocker))
+            (instance $b2 (instantiate $Blocker))
+            (instance $b3 (instantiate $Blocker))
+            (instance $b4 (instantiate $Blocker))
+            (instance $n (instantiate $Nop))
+            (export "block1" (func $b1 "block"))
+            (export "block2" (func $b2 "block"))
+            (export "block3" (func $b3 "block"))
+            (export "block4" (func $b4 "block"))
+            (export "nop" (func $n "nop"))
+        )"#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    for name in ["block1", "block2", "block3", "block4"] {
+        let f = instance.get_typed_func::<(), ()>(&mut store, name)?;
+        drop(f.start_call_concurrent(&mut store, ())?);
+    }
+    let nop = instance.get_typed_func::<(), ()>(&mut store, "nop")?;
+    let err = nop.call_async(&mut store, ()).await.unwrap_err();
+    assert!(
+        format!("{err:?}").contains("maximum concurrent limit of 4 for fibers reached"),
+        "unexpected error: {err:?}"
+    );
+    Ok(())
+}
+
+/// `call_async` from within a host function, while the event loop is already
+/// running, fails, and dropping that call's future (whose start has already
+/// been queued) doesn't panic. The dropped call fails once the event loop
+/// reaches it, here in the next call.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn call_async_from_host_function() -> Result<()> {
+    use futures::FutureExt as _;
+
+    let engine = Engine::new(Config::new().wasm_component_model_async(true))?;
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "host" (func $host))
+            (component $Nop
+                (core func $task.return (canon task.return))
+                (core module $m
+                    (import "" "task.return" (func $task.return))
+                    (func (export "nop") (result i32)
+                        (call $task.return)
+                        (i32.const 0 (; EXIT ;)))
+                    (func (export "cb") (param i32 i32 i32) (result i32) unreachable))
+                (core instance $i (instantiate $m
+                    (with "" (instance (export "task.return" (func $task.return))))))
+                (func (export "nop") async
+                    (canon lift (core func $i "nop") async (callback (core func $i "cb")))))
+            (instance $nop (instantiate $Nop))
+            (core func $host (canon lower (func $host)))
+            (core module $m
+                (import "" "host" (func $host))
+                (func (export "run") (call $host)))
+            (core instance $i (instantiate $m (with "" (instance (export "host" (func $host))))))
+            (export "nop" (func $nop "nop"))
+            (func (export "run") (canon lift (core func $i "run")))
+        )"#,
+    )?;
+    let nop = Arc::new(Mutex::new(None::<TypedFunc<(), ()>>));
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap("host", {
+        let nop = nop.clone();
+        move |mut store, ()| {
+            let nop = nop.lock().unwrap().unwrap();
+            let result = nop.call_async(&mut store, ()).now_or_never();
+            assert!(matches!(result, Some(Err(_))));
+            Ok(())
+        }
+    })?;
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    *nop.lock().unwrap() = Some(instance.get_typed_func::<(), ()>(&mut store, "nop")?);
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call_async(&mut store, ()).await?;
+    let nop = nop.lock().unwrap().unwrap();
+    let err = nop.call_async(&mut store, ()).await.unwrap_err();
+    assert!(
+        format!("{err:?}").contains("dropped before it started"),
+        "unexpected error: {err:?}"
+    );
     Ok(())
 }

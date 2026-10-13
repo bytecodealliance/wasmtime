@@ -2452,11 +2452,7 @@ impl StoreOpaque {
     /// actually run any wasm code yet. This requires cleaning up metadata such
     /// as thread information attached to the task.
     ///
-    /// The main two entrypoints for this function are:
-    ///
-    /// * Task cancellation via `subtask.cancel`, the intrinsic.
-    /// * Dropping a host `call_async` future which needs to cancel the task
-    ///   because it cannot reference its parameters any more.
+    /// This is used for task cancellation via `subtask.cancel`, the intrinsic.    
     fn cancel_guest_subtask_without_lowered_parameters(
         &mut self,
         caller_instance: RuntimeInstance,
@@ -6223,8 +6219,6 @@ pub(crate) struct PreparedCall<R> {
     /// The `oneshot::Receiver` to which the result of the call will be
     /// delivered when it is available.
     rx: oneshot::Receiver<LiftedResult>,
-    /// The instance that this call is prepared for.
-    runtime_instance: RuntimeInstance,
     _phantom: PhantomData<R>,
 }
 
@@ -6233,7 +6227,6 @@ impl<R> PreparedCall<R> {
     pub(crate) fn task_id(&self) -> TaskId {
         TaskId {
             task: self.thread.task,
-            runtime_instance: self.runtime_instance,
         }
     }
 }
@@ -6241,29 +6234,40 @@ impl<R> PreparedCall<R> {
 /// Represents a task created by `prepare_call`.
 pub(crate) struct TaskId {
     task: TableId<GuestTask>,
-    runtime_instance: RuntimeInstance,
 }
 
 impl TaskId {
-    /// The host future for an async task was dropped. If the parameters have not been lowered yet,
-    /// it is no longer valid to do so, as the lowering closure would see a dangling pointer. In this case,
-    /// we delete the task eagerly. Otherwise, there may be running threads, or ones that are suspended
-    /// and can be resumed by other tasks for this component, so we mark the future as dropped
-    /// and delete the task when all threads are done.
+    /// The host future for an async task was dropped.
+    ///
+    /// If the parameters have not been lowered yet, it is no longer valid to
+    /// do so, as the lowering closure would see a dangling pointer. In this
+    /// case the closure is replaced with one that fails, so the call fails if
+    /// it's ever started. This can't fail, since the task can't be deleted
+    /// while its host future is live.
+    ///
+    /// Otherwise, there may be running threads, or ones that are suspended and
+    /// can be resumed by other tasks for this component, so we mark the future
+    /// as dropped and delete the task when all threads are done.
     pub(crate) fn host_future_dropped(&self, store: &mut StoreOpaque) -> Result<()> {
         let task = store.concurrent_state_mut()?.get_mut(self.task)?;
-        let delete = if !task.already_lowered_parameters() {
-            store.cancel_guest_subtask_without_lowered_parameters(
-                self.runtime_instance,
-                self.task,
-            )?;
-            true
+        if !task.already_lowered_parameters() {
+            // TODO: avoid leaking the task and trapping in this case, e.g. by
+            // allowing the replacement callback to return a value that tells
+            // the event loop "nevermind, the host gave up on this call; just
+            // skip it, clean up the task, and carry on with other work".
+            task.lower_params = Some(Box::new(|store, _| {
+                store.set_trapped();
+                bail!("the host future for this call was dropped before it started")
+            }));
         } else {
             task.host_future_state = HostFutureState::Dropped;
-            task.ready_to_delete()
-        };
-        if delete {
-            Waitable::Guest(self.task).delete_from(store.concurrent_state_mut()?)?
+            if task.ready_to_delete() {
+                // TODO: we're temporarily ignoring any error here to avoid a
+                // panic-on-unwrap in `call_async_concurrent`.  Instead, we
+                // should determine a safe way to defer the decrement (and any
+                // error it might produce) outside of a `drop` call.
+                _ = Waitable::Guest(self.task).delete_from(store.concurrent_state_mut()?)
+            }
         }
         Ok(())
     }
@@ -6351,7 +6355,6 @@ pub(crate) fn prepare_call<T, R>(
         handle,
         thread,
         param_count,
-        runtime_instance: instance,
         rx,
         _phantom: PhantomData,
     })

@@ -245,12 +245,12 @@ where
             // of rustc and the signature of `prepare_call`.
             //
             // Note the use of `SignalOnDrop` in the code that follows
-            // this closure, which ensures that the task will be removed
-            // from the concurrent state to which it belongs when the
-            // containing `Future` is dropped, so long as the parameters
-            // have not yet been lowered. Since this closure is removed from
-            // the task after the parameters are lowered, it will never be called
-            // after the containing `Future` is dropped.
+            // this closure, which removes this closure from its task when
+            // the containing `Future` is dropped, so long as the parameters
+            // have not yet been lowered (see `TaskId::host_future_dropped`).
+            // Since this closure is also removed from the task when the
+            // parameters are lowered, it will never be called after the
+            // containing `Future` is dropped.
             let params = unsafe { ptr.cast::<Params>().as_ref() };
             Self::lower_args(cx, ty, dst, params)
         })?;
