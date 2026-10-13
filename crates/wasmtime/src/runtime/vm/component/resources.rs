@@ -20,7 +20,7 @@
 //! about ABI details can be found in lifting/lowering throughout Wasmtime,
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
-use super::{HandleTable, InstanceState, RemovedResource};
+use super::{HandleCounter, HandleTable, InstanceState, RemovedResource};
 use crate::bail_bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
@@ -68,6 +68,10 @@ pub struct ResourceTables<'a> {
     /// that this is a heterogeneous table instead of only containing a single
     /// type.
     pub host_table: &'a mut HandleTable,
+
+    /// The store-wide live-handle counter, charged by every insertion into and
+    /// removal from any of the tables above.
+    pub handle_counter: &'a mut HandleCounter,
 
     /// Task information about calls actively in use to track information such
     /// as borrow counts.
@@ -179,39 +183,47 @@ pub struct CallContext {
 }
 
 impl ResourceTables<'_> {
-    fn table_for_resource(&mut self, resource: &TypedResource) -> &mut HandleTable {
-        match resource {
-            TypedResource::Host(_) => self.host_table,
+    fn table_for_resource(
+        &mut self,
+        resource: &TypedResource,
+    ) -> (&mut HandleTable, &mut HandleCounter) {
+        let table = match resource {
+            TypedResource::Host(_) => &mut *self.host_table,
             TypedResource::Component { ty, .. } => {
                 let (states, types) = self.guest.as_mut().unwrap();
                 states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
-        }
+        };
+        (table, &mut *self.handle_counter)
     }
 
-    fn table_for_index(&mut self, index: &TypedResourceIndex) -> &mut HandleTable {
-        match index {
-            TypedResourceIndex::Host(_) => self.host_table,
+    fn table_for_index(
+        &mut self,
+        index: &TypedResourceIndex,
+    ) -> (&mut HandleTable, &mut HandleCounter) {
+        let table = match index {
+            TypedResourceIndex::Host(_) => &mut *self.host_table,
             TypedResourceIndex::Component { ty, .. } => {
                 let (states, types) = self.guest.as_mut().unwrap();
                 states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
-        }
+        };
+        (table, &mut *self.handle_counter)
     }
 
     /// Implementation of the `resource.new` canonical intrinsic.
     ///
     /// Note that this is the same as `resource_lower_own`.
     pub fn resource_new(&mut self, resource: TypedResource) -> Result<u32> {
-        self.table_for_resource(&resource)
-            .resource_own_insert(resource)
+        let (table, counter) = self.table_for_resource(&resource);
+        table.resource_own_insert(counter, resource)
     }
 
     /// Implementation of the `resource.rep` canonical intrinsic.
     ///
     /// This one's one of the simpler ones: "just get the rep please"
     pub fn resource_rep(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        self.table_for_index(&index).resource_rep(index)
+        self.table_for_index(&index).0.resource_rep(index)
     }
 
     /// Implementation of the `resource.drop` canonical intrinsic minus the
@@ -228,7 +240,8 @@ impl ResourceTables<'_> {
     /// to run. If `None` is returned then that means a `borrow` handle was
     /// removed and no destructor is necessary.
     pub fn resource_drop(&mut self, index: TypedResourceIndex) -> Result<Option<u32>> {
-        match self.table_for_index(&index).remove_resource(index)? {
+        let (table, counter) = self.table_for_index(&index);
+        match table.remove_resource(counter, index)? {
             RemovedResource::Own { rep } => Ok(Some(rep)),
             RemovedResource::Borrow { scope } => {
                 self.task_state.call_context(scope)?.borrow_count -= 1;
@@ -247,8 +260,8 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lower_own` function.
     pub fn resource_lower_own(&mut self, resource: TypedResource) -> Result<u32> {
-        self.table_for_resource(&resource)
-            .resource_own_insert(resource)
+        let (table, counter) = self.table_for_resource(&resource);
+        table.resource_own_insert(counter, resource)
     }
 
     /// Attempts to remove an "own" handle from the specified table and its
@@ -260,7 +273,8 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lift_own` function.
     pub fn resource_lift_own(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        match self.table_for_index(&index).remove_resource(index)? {
+        let (table, counter) = self.table_for_index(&index);
+        match table.remove_resource(counter, index)? {
             RemovedResource::Own { rep } => Ok(rep),
             RemovedResource::Borrow { .. } => bail!("cannot lift own resource from a borrow"),
         }
@@ -283,7 +297,7 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        let (rep, is_own) = self.table_for_index(&index).resource_lend(index)?;
+        let (rep, is_own) = self.table_for_index(&index).0.resource_lend(index)?;
         if is_own {
             let current = self.current_scope_id()?;
             self.task_state.call_context(current)?.lenders.push(index);
@@ -307,8 +321,8 @@ impl ResourceTables<'_> {
         let scope = self.current_scope_id()?;
         let cx = self.task_state.call_context(scope)?;
         cx.borrow_count = cx.borrow_count.checked_add(1).unwrap();
-        self.table_for_resource(&resource)
-            .resource_borrow_insert(resource, scope)
+        let (table, counter) = self.table_for_resource(&resource);
+        table.resource_borrow_insert(counter, resource, scope)
     }
 
     /// Validates that the current scope can be exited.
@@ -327,6 +341,7 @@ impl ResourceTables<'_> {
             // due to the dynamic tracking of borrows and such employed for
             // resources.
             self.table_for_index(&lender)
+                .0
                 .resource_undo_lend(lender)
                 .unwrap();
         }

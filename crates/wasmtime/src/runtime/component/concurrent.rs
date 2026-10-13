@@ -64,7 +64,7 @@ use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 #[cfg(feature = "gc")]
 use crate::vm::GcRootsList;
-use crate::vm::component::{CallContext, ComponentInstance, InstanceState};
+use crate::vm::component::{CallContext, ComponentInstance, HandleCounter, InstanceState};
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMLazyThread, VMMemoryDefinition, VMStore};
 use crate::{
     AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType, bail,
@@ -1909,6 +1909,18 @@ impl StoreOpaque {
             .instance_state(instance.index)
     }
 
+    /// Same as `instance_state`, but also returns the store's `HandleCounter`
+    /// for inserting into or removing from the instance's handle tables.
+    fn instance_state_and_handle_counter(
+        &mut self,
+        instance: RuntimeInstance,
+    ) -> (&mut InstanceState, &mut HandleCounter) {
+        let (component, counter) = self
+            .store_data_mut()
+            .component_instance_and_handle_counter_mut(instance.instance);
+        (component.instance_state(instance.index), counter)
+    }
+
     /// Configure the currently running `thread`.
     ///
     /// This will save off any state necessary for the previous thread, if
@@ -2284,9 +2296,10 @@ impl StoreOpaque {
         let thread_data = state.get_mut(guest_thread.thread)?;
         let sync_call_set = thread_data.sync_call_set;
         if let Some(guest_id) = thread_data.instance_rep {
-            self.instance_state(runtime_instance)
+            let (state, counter) = self.instance_state_and_handle_counter(runtime_instance);
+            state
                 .thread_handle_table()
-                .guest_thread_remove(guest_id)?;
+                .guest_thread_remove(counter, guest_id)?;
         }
         let state = self.concurrent_state_mut()?;
 
@@ -3198,11 +3211,10 @@ impl Instance {
                 // It hasn't returned yet, but the caller is calling via an
                 // async-lowered import, so we generate a handle for the task
                 // waitable and return the status.
-                let handle = store
-                    .0
-                    .instance_state(caller_instance)
+                let (state, counter) = store.0.instance_state_and_handle_counter(caller_instance);
+                let handle = state
                     .handle_table()
-                    .subtask_insert_guest(guest_thread.task.rep())?;
+                    .subtask_insert_guest(counter, guest_thread.task.rep())?;
                 store
                     .0
                     .concurrent_state_mut()?
@@ -3364,11 +3376,10 @@ impl Instance {
         let state = store.0.concurrent_state_mut()?;
         state.push_future(future);
         let instance = state.get_mut(caller.task)?.instance;
-        let handle = store
-            .0
-            .instance_state(instance)
+        let (state, counter) = store.0.instance_state_and_handle_counter(instance);
+        let handle = state
             .handle_table()
-            .subtask_insert_host(task.rep())?;
+            .subtask_insert_host(counter, task.rep())?;
         store.0.concurrent_state_mut()?.get_mut(task)?.common.handle = Some(handle);
         log::trace!("assign {task:?} handle {handle} for {caller:?} instance {instance:?}");
 
@@ -3497,10 +3508,11 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
     ) -> Result<u32> {
         let set = store.concurrent_state_mut()?.push(WaitableSet::default())?;
-        let handle = store
-            .instance_state(self.runtime_instance(caller_instance))
+        let (state, counter) =
+            store.instance_state_and_handle_counter(self.runtime_instance(caller_instance));
+        let handle = state
             .handle_table()
-            .waitable_set_insert(set.rep())?;
+            .waitable_set_insert(counter, set.rep())?;
         log::trace!("new waitable set {set:?} (handle {handle})");
         Ok(handle)
     }
@@ -3512,10 +3524,9 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
         set: u32,
     ) -> Result<()> {
-        let rep = store
-            .instance_state(self.runtime_instance(caller_instance))
-            .handle_table()
-            .waitable_set_remove(set)?;
+        let (state, counter) =
+            store.instance_state_and_handle_counter(self.runtime_instance(caller_instance));
+        let rep = state.handle_table().waitable_set_remove(counter, set)?;
 
         log::trace!("drop waitable set {rep} (handle {set})");
 
@@ -3583,10 +3594,9 @@ impl Instance {
     ) -> Result<()> {
         self.waitable_join(store, caller_instance, task_id, 0)?;
 
-        let (rep, is_host) = store
-            .instance_state(self.runtime_instance(caller_instance))
-            .handle_table()
-            .subtask_remove(task_id)?;
+        let (state, counter) =
+            store.instance_state_and_handle_counter(self.runtime_instance(caller_instance));
+        let (rep, is_host) = state.handle_table().subtask_remove(counter, task_id)?;
 
         let concurrent_state = store.concurrent_state_mut()?;
         let (waitable, delete) = if is_host {
@@ -3830,10 +3840,11 @@ impl Instance {
         store: &mut StoreOpaque,
         runtime_instance: RuntimeComponentInstanceIndex,
     ) -> Result<u32> {
-        let guest_id = store
-            .instance_state(self.runtime_instance(runtime_instance))
+        let (state, counter) =
+            store.instance_state_and_handle_counter(self.runtime_instance(runtime_instance));
+        let guest_id = state
             .thread_handle_table()
-            .guest_thread_insert(thread_id.rep())?;
+            .guest_thread_insert(counter, thread_id.rep())?;
         store
             .concurrent_state_mut()?
             .get_mut(thread_id)?
