@@ -2287,6 +2287,15 @@
 (rule 0 (x64_add_ndd ty x y) (x64_add ty (put_in_gpr x) y))
 
 (decl x64_sub_ndd (Type Value Value) Gpr)
+;; Only ModRM.rm can name a memory operand, and the `rm - reg` encoding used
+;; below holds the *minuend* there. A subtrahend that is a sinkable load
+;; therefore needs the other direction, `reg - rm`; without it the load has to
+;; be materialised into a register first, which is strictly worse than the
+;; two-operand `sub` the legacy lowering would have emitted. (`i8`/`i16` are
+;; absent on purpose: they widen to the 32-bit encoding below, and a narrow
+;; load cannot be folded into a 32-bit memory operand without reading too far.)
+(rule 6 (x64_sub_ndd $I64 x (sinkable_load_64 y)) (x64_subq_mrv (sink_load_64_to_gpr_mem_64 y) (put_in_gpr x)))
+(rule 6 (x64_sub_ndd $I32 x (sinkable_load_32 y)) (x64_subl_mrv (sink_load_32_to_gpr_mem_32 y) (put_in_gpr x)))
 (rule 5 (x64_sub_ndd $I64 x (i8_from_iconst y))  (x64_subq_vmi_sxb x y))
 (rule 5 (x64_sub_ndd $I32 x (i8_from_iconst y))  (x64_subl_vmi_sxb x y))
 (rule 5 (x64_sub_ndd $I16 x (i8_from_iconst y))  (x64_subl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))

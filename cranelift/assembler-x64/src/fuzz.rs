@@ -1053,4 +1053,46 @@ mod test {
             "62F47C1881F234120000"
         );
     }
+
+    /// Check that the two NDD directions of `SUB` really are distinct, and that
+    /// each puts the operand it is supposed to into ModRM.rm.
+    ///
+    /// `0x29` computes `ndd := rm - reg` and `0x2B` computes `ndd := reg - rm`,
+    /// so assembling both with the same registers must produce different bytes
+    /// in the opcode position while the ModRM byte stays the same.
+    #[test]
+    fn apx_sub_ndd_both_directions() {
+        use crate::inst::{subl_mrv, subl_rvm, subq_mrv, subq_rvm};
+
+        // vvvv (the destination) = %rax, ModRM.reg = %rcx, ModRM.rm = %rdx, so
+        // ModRM is mod=11 reg=%rcx rm=%rdx = 0xCA in both cases.
+        let (vvvv, reg, rm) = (FuzzReg::new(0), FuzzReg::new(1), FuzzReg::new(2));
+
+        // `%rax := %rdx - %rcx`
+        let inst = subq_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1829CA"
+        );
+
+        // `%rax := %rcx - %rdx`
+        let inst = subq_mrv::<FuzzRegs>::new(rm, reg, vvvv);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC182BCA"
+        );
+
+        // The 32-bit forms differ only in the `W` bit of the EVEX payload.
+        let inst = subl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1829CA"
+        );
+
+        let inst = subl_mrv::<FuzzRegs>::new(rm, reg, vvvv);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C182BCA"
+        );
+    }
 }

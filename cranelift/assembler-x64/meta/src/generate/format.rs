@@ -411,7 +411,8 @@ impl dsl::Format {
             [Reg(reg), Reg(vvvv), RegMem(rm)]
             | [Reg(reg), Reg(vvvv), Mem(rm)]
             | [Reg(reg), Reg(vvvv), RegMem(rm), Imm(_) | FixedReg(_)]
-            | [Reg(reg), RegMem(rm), Reg(vvvv)] => {
+            | [Reg(reg), RegMem(rm), Reg(vvvv)]
+            | [RegMem(rm), Reg(reg), Reg(vvvv)] => {
                 assert!(!is4);
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let vvvv = self.{vvvv}.enc();");

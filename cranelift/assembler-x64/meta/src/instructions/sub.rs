@@ -30,6 +30,14 @@ pub fn list() -> Vec<Inst> {
         // the `W` bit is set (`.w1()`); use `.w0()` for the 32-bit `subl` form.
         inst("subq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x29).r(), _64b & apx),
         inst("subl", fmt("RVM", [r(r32b), w(r32a), r(rm32)]), evex(L128, Full).map4().w0().nd().op(0x29).r(), _64b & apx),
+        // APX: the other direction of the same subtract. `0x29` computes
+        // `ndd := rm - reg`, so its ModRM.rm operand is the *minuend*; `0x2B`
+        // computes `ndd := reg - rm` and so puts the *subtrahend* there. Both
+        // are needed because only ModRM.rm can be a memory operand: without
+        // this form a subtract whose subtrahend is a load cannot fold it, and
+        // APX would emit a separate load that the legacy encoding avoids.
+        inst("subq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]), evex(L128, Full).map4().w1().nd().op(0x2B).r(), _64b & apx),
+        inst("subl", fmt("MRV", [r(rm32), r(r32b), w(r32a)]), evex(L128, Full).map4().w0().nd().op(0x2B).r(), _64b & apx),
         // APX: NDD forms taking an immediate source; see `add.rs` for why
         // these are needed. `SUB` uses the `/5` group-1 extension.
         inst("subq", fmt("VMI_SXL", [w(r64a), r(rm64), sxq(imm32)]), evex(L128, Full).map4().w1().nd().op(0x81).digit(5), _64b & apx),

@@ -24,3 +24,99 @@ block0(v0: i64, v1: i64):
 ;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x29, 0xf7, 0x48, 0x89
 ;   .byte 0xec, 0x5d, 0xc3
 
+function %sub_mem_rhs_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = load.i64 v1
+    v3 = isub v0, v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   subq (%rsi), %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x2b, 0x3e, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
+function %sub_mem_lhs_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = load.i64 v1
+    v3 = isub v2, v0
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   subq %rdi, (%rsi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x29, 0x3e, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
+function %sub_mem_rhs_i32(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+    v2 = load.i32 v0
+    v3 = isub v1, v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   subl (%rdi), %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x2b, 0x37, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
+function %sub_mem_lhs_i32(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+    v2 = load.i32 v0
+    v3 = isub v2, v1
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   subl %esi, (%rdi), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x29, 0x37, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
