@@ -2740,6 +2740,47 @@
 (rule 1 (cmove ty @ $I64 (CC.P)   c a) (x64_cmovpq_rm  a (gpr_mem_64_for_ty ty c)))
 (rule 1 (cmove ty @ $I64 (CC.NP)  c a) (x64_cmovnpq_rm a (gpr_mem_64_for_ty ty c)))
 
+;; With APX the result can go to a third register. The rules above have to
+;; receive `a` in the register they write, so a `select` whose "else" value is
+;; live afterwards pays for a move; these do not. `c` keeps its place in ModRM.rm
+;; so that a sinkable load still folds there.
+;;
+;; The NDD operand order is `dst, reg, rm` and the move is `dst = cc ? rm : reg`,
+;; which is why `a` (the "else" value, previously the read-write destination)
+;; becomes the second argument.
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.O)   c a) (if-let true (use_apx)) (x64_cmovol_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NO)  c a) (if-let true (use_apx)) (x64_cmovnol_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.B)   c a) (if-let true (use_apx)) (x64_cmovbl_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NB)  c a) (if-let true (use_apx)) (x64_cmovael_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.Z)   c a) (if-let true (use_apx)) (x64_cmovel_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NZ)  c a) (if-let true (use_apx)) (x64_cmovnel_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.BE)  c a) (if-let true (use_apx)) (x64_cmovbel_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NBE) c a) (if-let true (use_apx)) (x64_cmoval_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.S)   c a) (if-let true (use_apx)) (x64_cmovsl_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NS)  c a) (if-let true (use_apx)) (x64_cmovnsl_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.L)   c a) (if-let true (use_apx)) (x64_cmovll_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NL)  c a) (if-let true (use_apx)) (x64_cmovgel_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.LE)  c a) (if-let true (use_apx)) (x64_cmovlel_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NLE) c a) (if-let true (use_apx)) (x64_cmovgl_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.P)   c a) (if-let true (use_apx)) (x64_cmovpl_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NP)  c a) (if-let true (use_apx)) (x64_cmovnpl_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.O)   c a) (if-let true (use_apx)) (x64_cmovoq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NO)  c a) (if-let true (use_apx)) (x64_cmovnoq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.B)   c a) (if-let true (use_apx)) (x64_cmovbq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NB)  c a) (if-let true (use_apx)) (x64_cmovaeq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.Z)   c a) (if-let true (use_apx)) (x64_cmoveq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NZ)  c a) (if-let true (use_apx)) (x64_cmovneq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.BE)  c a) (if-let true (use_apx)) (x64_cmovbeq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NBE) c a) (if-let true (use_apx)) (x64_cmovaq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.S)   c a) (if-let true (use_apx)) (x64_cmovsq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NS)  c a) (if-let true (use_apx)) (x64_cmovnsq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.L)   c a) (if-let true (use_apx)) (x64_cmovlq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NL)  c a) (if-let true (use_apx)) (x64_cmovgeq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.LE)  c a) (if-let true (use_apx)) (x64_cmovleq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NLE) c a) (if-let true (use_apx)) (x64_cmovgq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.P)   c a) (if-let true (use_apx)) (x64_cmovpq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NP)  c a) (if-let true (use_apx)) (x64_cmovnpq_mrv (gpr_mem_64_for_ty ty c) a))
+
 (decl cmove_xmm (Type CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
       (let ((dst WritableXmm (temp_writable_xmm)))

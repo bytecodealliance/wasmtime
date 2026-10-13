@@ -1,5 +1,5 @@
-use crate::dsl::{Eflags::*, Feature::*, Inst, Location::*};
-use crate::dsl::{fmt, inst, r, rex, rw};
+use crate::dsl::{Eflags::*, Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{evex, fmt, inst, r, rex, rw, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -69,5 +69,47 @@ pub fn list() -> Vec<Inst> {
         inst("cmovsl", fmt("RM", [rw(r32), r(rm32)]).flags(R), rex([0x0f, 0x48]).r(), _64b | compat),
         inst("cmovsq", fmt("RM", [rw(r64), r(rm64)]).flags(R), rex([0x0f, 0x48]).w().r(), _64b),
         // NB: cmovz* is omitted here as it has the same encoding as cmove*
+
+        // APX: "new data destination" forms. The legacy conditional move reads
+        // and writes ModRM.reg, so a select whose "else" value is still needed
+        // afterwards has to copy it into the destination first; these name a
+        // separate destination instead.
+        //
+        // As with `imul`, the legacy opcode is an RM form, so the NDD operand
+        // order is `ndd, reg, rm` and the format is MRV. These are the map 1
+        // opcodes promoted into map 4. Only the widths the lowering uses are
+        // defined; narrower selects already go through the 32-bit rules.
+        inst("cmoval",  fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x47).r(), _64b & apx),
+        inst("cmovaq",  fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x47).r(), _64b & apx),
+        inst("cmovael", fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x43).r(), _64b & apx),
+        inst("cmovaeq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x43).r(), _64b & apx),
+        inst("cmovbl",  fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x42).r(), _64b & apx),
+        inst("cmovbq",  fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x42).r(), _64b & apx),
+        inst("cmovbel", fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x46).r(), _64b & apx),
+        inst("cmovbeq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x46).r(), _64b & apx),
+        inst("cmovel",  fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x44).r(), _64b & apx),
+        inst("cmoveq",  fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x44).r(), _64b & apx),
+        inst("cmovgl",  fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x4f).r(), _64b & apx),
+        inst("cmovgq",  fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x4f).r(), _64b & apx),
+        inst("cmovgel", fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x4d).r(), _64b & apx),
+        inst("cmovgeq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x4d).r(), _64b & apx),
+        inst("cmovll",  fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x4c).r(), _64b & apx),
+        inst("cmovlq",  fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x4c).r(), _64b & apx),
+        inst("cmovlel", fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x4e).r(), _64b & apx),
+        inst("cmovleq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x4e).r(), _64b & apx),
+        inst("cmovnel", fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x45).r(), _64b & apx),
+        inst("cmovneq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x45).r(), _64b & apx),
+        inst("cmovnol", fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x41).r(), _64b & apx),
+        inst("cmovnoq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x41).r(), _64b & apx),
+        inst("cmovnpl", fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x4b).r(), _64b & apx),
+        inst("cmovnpq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x4b).r(), _64b & apx),
+        inst("cmovnsl", fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x49).r(), _64b & apx),
+        inst("cmovnsq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x49).r(), _64b & apx),
+        inst("cmovol",  fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x40).r(), _64b & apx),
+        inst("cmovoq",  fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x40).r(), _64b & apx),
+        inst("cmovpl",  fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x4a).r(), _64b & apx),
+        inst("cmovpq",  fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x4a).r(), _64b & apx),
+        inst("cmovsl",  fmt("MRV", [r(rm32), r(r32b), w(r32a)]).flags(R), evex(L128, Full).map4().w0().nd().op(0x48).r(), _64b & apx),
+        inst("cmovsq",  fmt("MRV", [r(rm64), r(r64b), w(r64a)]).flags(R), evex(L128, Full).map4().w1().nd().op(0x48).r(), _64b & apx),
     ]
 }

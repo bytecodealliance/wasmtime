@@ -1,0 +1,167 @@
+test compile precise-output
+set opt_level=none
+target x86_64 has_apx
+
+;; APX gives `cmov` a separate destination, so the "else" value no longer has to
+;; be copied into the register the move writes.
+
+; want: cmove with three operands, no preceding mov
+function %sel_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = icmp eq v0, v1
+  v4 = select v3, v1, v2
+  return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   cmpq %rsi, %rdi
+;   cmoveq %rsi, %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpq %rsi, %rdi
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x44, 0xd6, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+
+function %sel_live_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = icmp eq v0, v1
+  v4 = select v3, v1, v2
+  v5 = iadd v4, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   cmpq %rsi, %rdi
+;   cmoveq %rsi, %rdx, %rsi
+;   addq %rsi, %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpq %rsi, %rdi
+;   .byte 0x62, 0xf4, 0xcc, 0x18, 0x44, 0xd6, 0x62, 0xf4
+;   .byte 0xfc, 0x18, 0x01, 0xf2, 0x48, 0x89, 0xec, 0x5d
+;   .byte 0xc3
+
+function %sel_i32(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v3 = icmp slt v0, v1
+  v4 = select v3, v1, v2
+  return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   cmpl %esi, %edi
+;   cmovll %esi, %edx, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpl %esi, %edi
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x4c, 0xd6, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+
+function %sel_mem_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = load.i64 v0
+  v4 = icmp eq v1, v2
+  v5 = select v4, v3, v2
+  return v5
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   cmpq %rdx, %rsi
+;   cmoveq (%rdi), %rdx, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpq %rdx, %rsi
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x44, 0x17, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
+function %sel_i8(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = icmp ugt v0, v1
+  v4 = select v3, v1, v2
+  return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   cmpb %sil, %dil
+;   cmoval %esi, %edx, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpb %sil, %dil
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x47, 0xd6, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+
+function %smax_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = smax v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   cmpq %rdi, %rsi
+;   cmovgeq %rsi, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpq %rdi, %rsi
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x4d, 0xfe, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+
