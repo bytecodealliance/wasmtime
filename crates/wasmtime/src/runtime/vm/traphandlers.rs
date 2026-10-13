@@ -53,6 +53,7 @@ pub(crate) struct TrapRegisters {
 }
 
 /// Return value from `test_if_trap`.
+#[cfg(has_native_signals)]
 pub(crate) enum TrapTest {
     /// Not a wasm trap, need to delegate to whatever process handler is next.
     NotWasm,
@@ -531,15 +532,6 @@ mod call_thread_state {
         pub(super) uncaught_exception: UncaughtException,
         #[cfg(all(has_native_signals))]
         pub(super) signal_handler: Option<*const SignalHandler>,
-        /// The store that this call is executing within. Without native
-        /// signals there is no process-global code registry, so trap
-        /// lookups are performed in this store's own module registry.
-        ///
-        /// The compiled-code explicit-trap path passes in a store
-        /// pointer to the libcall; this pointer is needed only for
-        /// the Pulley case.
-        #[cfg(not(has_native_signals))]
-        pub(super) store: NonNull<dyn VMStore>,
         pub(super) capture_backtrace: bool,
         #[cfg(feature = "coredump")]
         pub(super) capture_coredump: bool,
@@ -581,8 +573,6 @@ mod call_thread_state {
                 unwinder: store.unwinder(),
                 #[cfg(all(has_native_signals))]
                 signal_handler: store.signal_handler(),
-                #[cfg(not(has_native_signals))]
-                store: store.traitobj(),
                 capture_backtrace: store.engine().config().wasm_backtrace_max_frames.is_some(),
                 #[cfg(feature = "coredump")]
                 capture_coredump: store.engine().config().coredump_on_trap,
@@ -1042,6 +1032,7 @@ impl CallThreadState {
     ///   this signal, nothing else to do.
     /// * `TrapTest::Trap` - this is a wasm trap an the stack needs to be
     ///   unwound now.
+    #[cfg(has_native_signals)]
     pub(crate) fn test_if_trap(
         &self,
         regs: TrapRegisters,
@@ -1059,11 +1050,16 @@ impl CallThreadState {
             }
         }
 
-        // If this fault wasn't in wasm code, then it's not our problem. If the
-        // fault was at a location that was not marked as potentially trapping,
-        // then that's a bug in Cranelift/Winch/etc. Don't try to catch the trap
-        // and pretend this isn't wasm so the program likely aborts.
-        let Some(trap) = self.lookup_trap_code(regs.pc) else {
+        // If this fault wasn't in wasm code, then it's not our problem
+        let Some((code, text_offset)) = lookup_code(regs.pc) else {
+            return TrapTest::NotWasm;
+        };
+
+        // If the fault was at a location that was not marked as potentially
+        // trapping, then that's a bug in Cranelift/Winch/etc. Don't try to
+        // catch the trap and pretend this isn't wasm so the program likely
+        // aborts.
+        let Some(trap) = code.lookup_trap_code(text_offset) else {
             return TrapTest::NotWasm;
         };
 
@@ -1072,34 +1068,6 @@ impl CallThreadState {
         self.set_jit_trap(regs, faulting_addr, trap);
         let entry_handler = self.entry_trap_handler();
         TrapTest::Trap(entry_handler)
-    }
-
-    /// Looks up the trap code, if any, for the wasm code at `pc`.
-    ///
-    /// With native signals this consults the process-global code registry,
-    /// as this may be called from a signal handler (or, on macOS, a
-    /// separate exception-handling thread).
-    #[cfg(has_native_signals)]
-    fn lookup_trap_code(&self, pc: usize) -> Option<wasmtime_environ::CompiledTrap> {
-        let (code, text_offset) = lookup_code(pc)?;
-        code.lookup_trap_code(text_offset)
-    }
-
-    /// Looks up the trap code, if any, for the wasm code at `pc`.
-    ///
-    /// Without native signals, traps are only raised synchronously by
-    /// compiled code calling a libcall, or by the Pulley interpreter,
-    /// while executing wasm within a known Store, so that store's own
-    /// module registry is consulted rather than any global state.
-    #[cfg(not(has_native_signals))]
-    fn lookup_trap_code(&self, pc: usize) -> Option<wasmtime_environ::CompiledTrap> {
-        // SAFETY: the store outlives this `CallThreadState`, and we are
-        // currently executing wasm (not host code) in this store, so there
-        // are no other active borrows of the store. This is the same
-        // pointer that libcalls use to access the store.
-        let store = unsafe { self.store.as_ref() };
-        let (code, text_offset) = store.store_opaque().modules().store_code_by_pc(pc)?;
-        code.code_memory().lookup_trap_code(text_offset)
     }
 
     pub(crate) fn set_jit_trap(
