@@ -148,3 +148,40 @@ pub fn prepare_extreme_mtime_fixture(dir: &std::path::Path) -> Result<()> {
     let _ = f.set_times(times);
     Ok(())
 }
+
+/// A `sandbox` directory to preopen next to an `outside` directory which isn't
+/// preopened, for checking that the guest can't move `outside` into `sandbox`.
+pub struct SandboxFixture {
+    tempdir: TempDir,
+}
+
+impl SandboxFixture {
+    pub fn new() -> Result<Self> {
+        let tempdir = prepare_workspace("sandbox")?;
+        std::fs::create_dir(tempdir.path().join("sandbox"))?;
+        std::fs::create_dir(tempdir.path().join("outside"))?;
+        std::fs::write(tempdir.path().join("outside/secret"), b"secret\n")?;
+        Ok(Self { tempdir })
+    }
+
+    pub fn configure_wasi(&self, builder: &mut WasiCtxBuilder) {
+        builder
+            .preopened_dir(
+                self.tempdir.path().join("sandbox"),
+                "sandbox",
+                FsPerms::ReadWrite,
+            )
+            .unwrap();
+    }
+
+    pub fn assert_secure(&self) {
+        assert!(
+            self.tempdir.path().join("outside/secret").exists(),
+            "`outside` was moved out of place"
+        );
+        assert!(
+            !self.tempdir.path().join("sandbox/stolen").exists(),
+            "`outside` was moved into the sandbox"
+        );
+    }
+}
