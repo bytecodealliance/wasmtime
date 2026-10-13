@@ -167,7 +167,8 @@ async fn run_http<E: Into<Error> + 'static>(
     wasmtime_wasi_http::p3::add_to_linker(&mut linker)
         .context("failed to link `wasi:http@0.3.x`")?;
     let service = Service::instantiate_async(&mut store, &component, &linker).await?;
-    let (req, io) = Request::from_http(&mut store.data_mut().hooks, req);
+    let data = store.data_mut();
+    let (req, io) = Request::from_http(&data.http, &mut data.hooks, req)?;
     store
         .run_concurrent(async |store| {
             let (res, ()) = try_join!(

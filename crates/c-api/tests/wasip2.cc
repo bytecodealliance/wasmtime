@@ -44,3 +44,26 @@ TEST(wasip2, smoke) {
   linker.add_wasip2().unwrap();
   linker.instantiate(context, component).unwrap();
 }
+
+#ifdef WASMTIME_FEATURE_WASI_HTTP
+TEST(wasip2, http_limits) {
+  wasmtime::Engine engine;
+  wasmtime::Store store(engine);
+  auto context = store.context();
+
+  // Setting limits before the WASI HTTP context exists is an error.
+  auto err = context.set_wasi_http_field_size_limit(1024);
+  EXPECT_FALSE(err);
+  EXPECT_NE(err.err().message().find("wasmtime_context_set_wasi_http"),
+            std::string::npos);
+  err = context.set_wasi_http_request_strings_size_limit(1024);
+  EXPECT_FALSE(err);
+  EXPECT_NE(err.err().message().find("wasmtime_context_set_wasi_http"),
+            std::string::npos);
+
+  context.set_wasi(wasmtime::WasiConfig()).unwrap();
+  context.set_wasi_http();
+  context.set_wasi_http_field_size_limit(1024).unwrap();
+  context.set_wasi_http_request_strings_size_limit(1024).unwrap();
+}
+#endif // WASMTIME_FEATURE_WASI_HTTP

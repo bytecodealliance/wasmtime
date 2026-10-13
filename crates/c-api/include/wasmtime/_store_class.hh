@@ -152,6 +152,37 @@ public:
     }
 #endif // WASMTIME_FEATURE_WASI
 
+#ifdef WASMTIME_FEATURE_WASI_HTTP
+    /// Initializes the WASI HTTP state used by this store.
+    void set_wasi_http() { wasmtime_context_set_wasi_http(ptr); }
+
+    /// Sets the maximum size, in bytes, of each WASI HTTP `fields` resource
+    /// (headers and trailers).
+    ///
+    /// Fails if `set_wasi_http` has not been called on this store.
+    Result<std::monostate> set_wasi_http_field_size_limit(size_t limit) {
+      auto *error = wasmtime_context_set_wasi_http_field_size_limit(ptr, limit);
+      if (error != nullptr) {
+        return Error(error);
+      }
+      return std::monostate();
+    }
+
+    /// Sets the maximum combined size, in bytes, of a WASI HTTP request's
+    /// method, scheme, authority, and path-with-query strings.
+    ///
+    /// Fails if `set_wasi_http` has not been called on this store.
+    Result<std::monostate>
+    set_wasi_http_request_strings_size_limit(size_t limit) {
+      auto *error =
+          wasmtime_context_set_wasi_http_request_strings_size_limit(ptr, limit);
+      if (error != nullptr) {
+        return Error(error);
+      }
+      return std::monostate();
+    }
+#endif // WASMTIME_FEATURE_WASI_HTTP
+
     /// Configures this store's epoch deadline to be the specified number of
     /// ticks beyond the engine's current epoch.
     ///

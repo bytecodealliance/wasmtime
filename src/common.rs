@@ -389,6 +389,9 @@ impl RunCommon {
         if let Some(limit) = self.common.wasi.max_http_fields_size {
             http.set_field_size_limit(limit);
         }
+        if let Some(limit) = self.common.wasi.max_http_request_strings_size {
+            http.set_request_strings_size_limit(limit);
+        }
         Ok(http)
     }
 

@@ -120,11 +120,15 @@ pub struct WasiHttpCtxView<'a> {
 /// completely full `HeaderMap` doesn't break the bank in terms of memory
 /// consumption.
 const DEFAULT_FIELD_SIZE_LIMIT: usize = 128 * 1024;
+/// Default limit on the combined size of a request's method, scheme,
+/// authority, and path-with-query strings, to limit host memory use.
+const DEFAULT_REQUEST_STRINGS_SIZE_LIMIT: usize = 16 * 1024;
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 #[derive(Debug, Clone)]
 pub struct WasiHttpCtx {
     pub(crate) field_size_limit: usize,
+    pub(crate) request_strings_size_limit: usize,
 }
 
 impl WasiHttpCtx {
@@ -132,6 +136,7 @@ impl WasiHttpCtx {
     pub fn new() -> Self {
         Self {
             field_size_limit: DEFAULT_FIELD_SIZE_LIMIT,
+            request_strings_size_limit: DEFAULT_REQUEST_STRINGS_SIZE_LIMIT,
         }
     }
 
@@ -144,6 +149,17 @@ impl WasiHttpCtx {
     /// names/values/etc.
     pub fn set_field_size_limit(&mut self, limit: usize) {
         self.field_size_limit = limit;
+    }
+
+    /// Set the maximum combined size, in bytes, of a request's method,
+    /// scheme, authority, and path-with-query strings.
+    ///
+    /// Built-in methods (`GET`, `POST`, ...) and schemes (`http`, `https`)
+    /// don't count toward this limit. Guest setters which would exceed the
+    /// limit return an error, and incoming requests which exceed it are
+    /// rejected with a `400 Bad Request` before reaching the guest.
+    pub fn set_request_strings_size_limit(&mut self, limit: usize) {
+        self.request_strings_size_limit = limit;
     }
 }
 

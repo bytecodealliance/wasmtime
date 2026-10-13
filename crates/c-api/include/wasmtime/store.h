@@ -208,6 +208,39 @@ wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
 WASM_API_EXTERN void
 wasmtime_context_set_wasi_http(wasmtime_context_t *context);
 
+/**
+ * \brief Sets the maximum size, in bytes, of each WASI HTTP `fields` resource
+ * (headers and trailers).
+ *
+ * This is roughly a limit on the in-memory representation of the fields, so it
+ * needs to be larger than their size on the wire. Operations that would
+ * exceed it fail. Defaults to 128 KiB.
+ *
+ * Returns an error if #wasmtime_context_set_wasi_http has not been called on
+ * this store. Calling #wasmtime_context_set_wasi_http again resets the limit to
+ * the default.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_context_set_wasi_http_field_size_limit(wasmtime_context_t *context,
+                                                size_t limit);
+
+/**
+ * \brief Sets the maximum combined size, in bytes, of a WASI HTTP request's
+ * method, scheme, authority, and path-with-query strings.
+ *
+ * Built-in methods (`GET`, `POST`, ...) and the `http`/`https` schemes don't
+ * count toward the limit. Guest setters that would exceed it return an error,
+ * and incoming requests that exceed it are rejected before reaching the guest.
+ * Defaults to 16 KiB.
+ *
+ * Returns an error if #wasmtime_context_set_wasi_http has not been called on
+ * this store. Calling #wasmtime_context_set_wasi_http again resets the limit to
+ * the default.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_context_set_wasi_http_request_strings_size_limit(
+    wasmtime_context_t *context, size_t limit);
+
 #endif // WASMTIME_FEATURE_WASI_HTTP
 
 /**

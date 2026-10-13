@@ -239,6 +239,7 @@ where
         headers,
         options: options.map(Into::into),
         body,
+        strings: crate::request_strings::RequestStringsValidator::new(cx.ctx),
     };
     let req = cx
         .table
@@ -291,8 +292,18 @@ impl HostRequest for WasiHttpCtxView<'_> {
         method: Method,
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = get_request_mut(self.table, &req)?;
-        let Ok(method) = method.try_into() else {
-            return Ok(Err(()));
+        let method = match method {
+            Method::Other(m) => match req.strings.set_other_method(&m) {
+                Ok(m) => m,
+                Err(()) => return Ok(Err(())),
+            },
+            builtin => {
+                let Ok(m) = builtin.try_into() else {
+                    return Ok(Err(()));
+                };
+                req.strings.set_builtin_method();
+                m
+            }
         };
         req.method = method;
         Ok(Ok(()))
@@ -311,15 +322,11 @@ impl HostRequest for WasiHttpCtxView<'_> {
         path_with_query: Option<String>,
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = get_request_mut(self.table, &req)?;
-
-        let Some(path_with_query) = path_with_query else {
-            req.path_with_query = None;
-            return Ok(Ok(()));
-        };
-        let Some(path_with_query) = crate::parse_path_with_query(&path_with_query) else {
+        let Ok(path_with_query) = req.strings.set_path_with_query(path_with_query.as_deref())
+        else {
             return Ok(Err(()));
         };
-        req.path_with_query = Some(path_with_query);
+        req.path_with_query = path_with_query;
         Ok(Ok(()))
     }
 
@@ -334,14 +341,24 @@ impl HostRequest for WasiHttpCtxView<'_> {
         scheme: Option<Scheme>,
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = get_request_mut(self.table, &req)?;
-        let Some(scheme) = scheme else {
-            req.scheme = None;
-            return Ok(Ok(()));
+        let scheme = match scheme {
+            Some(Scheme::Other(s)) => match req.strings.set_other_scheme(&s) {
+                Ok(s) => Some(s),
+                Err(()) => return Ok(Err(())),
+            },
+            Some(builtin) => {
+                let Ok(s) = builtin.try_into() else {
+                    return Ok(Err(()));
+                };
+                req.strings.set_builtin_scheme();
+                Some(s)
+            }
+            None => {
+                req.strings.set_builtin_scheme();
+                None
+            }
         };
-        let Ok(scheme) = scheme.try_into() else {
-            return Ok(Err(()));
-        };
-        req.scheme = Some(scheme);
+        req.scheme = scheme;
         Ok(Ok(()))
     }
 
@@ -356,14 +373,10 @@ impl HostRequest for WasiHttpCtxView<'_> {
         authority: Option<String>,
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = get_request_mut(self.table, &req)?;
-        let Some(authority) = authority else {
-            req.authority = None;
-            return Ok(Ok(()));
-        };
-        let Ok(authority) = crate::parse_authority(authority) else {
+        let Ok(authority) = req.strings.set_authority(authority) else {
             return Ok(Err(()));
         };
-        req.authority = Some(authority);
+        req.authority = authority;
         Ok(Ok(()))
     }
 
