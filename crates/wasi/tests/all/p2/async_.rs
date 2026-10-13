@@ -93,6 +93,18 @@ async fn p1_poll_oneoff_files() {
 async fn p1_readlink() {
     run(P1_READLINK_COMPONENT, |_| {}).await.unwrap()
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p1_path_rename_trailing_slashes() {
+    let fixture = crate::store::SandboxFixture::new().unwrap();
+    run(P1_PATH_RENAME_TRAILING_SLASHES_COMPONENT, |b| {
+        fixture.configure_wasi(b)
+    })
+    .await
+    .expect("run guest");
+    fixture.assert_secure();
+}
+
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p1_renumber() {
     run(P1_RENUMBER_COMPONENT, |_| {}).await.unwrap()
@@ -280,12 +292,18 @@ async fn p2_path_open_create_existing() {
 async fn p2_path_open_missing() {
     run(P2_PATH_OPEN_MISSING_COMPONENT, |_| {}).await.unwrap()
 }
+
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn p2_path_rename_dir_trailing_slashes() {
-    run(P2_PATH_RENAME_DIR_TRAILING_SLASHES_COMPONENT, |_| {})
-        .await
-        .unwrap()
+async fn p2_path_rename_trailing_slashes() {
+    let fixture = crate::store::SandboxFixture::new().unwrap();
+    run(P2_PATH_RENAME_TRAILING_SLASHES_COMPONENT, |b| {
+        fixture.configure_wasi(b)
+    })
+    .await
+    .expect("run guest");
+    fixture.assert_secure();
 }
+
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_remove_nonempty_directory() {
     run(P2_REMOVE_NONEMPTY_DIRECTORY_COMPONENT, |_| {})
