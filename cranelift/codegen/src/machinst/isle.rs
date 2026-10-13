@@ -544,11 +544,26 @@ macro_rules! isle_lower_prelude_methods {
             stack_slot: StackSlot,
             offset: Offset32,
         ) -> MInst {
-            let offset = u32::try_from(i32::from(offset)).unwrap();
             self.lower_ctx
                 .abi()
-                .sized_stackslot_addr(stack_slot, offset, dst)
+                .sized_stackslot_addr(stack_slot, i32::from(offset), dst)
                 .into()
+        }
+
+        fn abi_stackslot_large_offset(
+            &mut self,
+            stack_slot: StackSlot,
+            offset: Offset32,
+        ) -> Option<i64> {
+            let offset = i64::from(i32::from(offset));
+            match self
+                .lower_ctx
+                .abi()
+                .sized_stackslot_area_offset(stack_slot, offset)
+            {
+                Some(_) => None,
+                None => Some(offset),
+            }
         }
 
         fn abi_stackslot_offset_into_slot_region(

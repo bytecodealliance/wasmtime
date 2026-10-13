@@ -1976,6 +1976,14 @@
   (lower (stack_addr _ ss offset))
   (gen_stack_addr ss offset))
 
+;; An offset too large to fold into the stack slot's address computation is
+;; added separately.
+(rule 1
+  (lower (stack_addr _ ss offset))
+  (if-let large_offset (abi_stackslot_large_offset ss offset))
+  (rv_add (gen_stack_addr ss (i32_to_offset32 0))
+          (imm $I64 (i64_cast_unsigned large_offset))))
+
 ;;;;;  Rules for `select`;;;;;;;;;
 
 ;; Manually matching (iconst 0) here is a bit of a hack. We can't do that as part

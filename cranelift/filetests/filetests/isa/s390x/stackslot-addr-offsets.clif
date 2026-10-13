@@ -1,0 +1,137 @@
+; `stack_addr` is ordinary pointer arithmetic, so its offset may point
+; anywhere, including before or after the stack slot. Offsets that are too
+; large to fold into the stack slot's address are added separately.
+test compile precise-output
+target s390x
+
+function %negative_offset() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss1-8
+    return v0
+}
+
+; VCode:
+;   aghi %r15, -16
+; block0:
+;   la %r2, 0(%r15)
+;   aghi %r15, 16
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   aghi %r15, -0x10
+; block1: ; offset 0x4
+;   la %r2, 0(%r15)
+;   aghi %r15, 0x10
+;   br %r14
+
+function %offset_past_slot() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss0+16
+    return v0
+}
+
+; VCode:
+;   aghi %r15, -16
+; block0:
+;   la %r2, 16(%r15)
+;   aghi %r15, 16
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   aghi %r15, -0x10
+; block1: ; offset 0x4
+;   la %r2, 0x10(%r15)
+;   aghi %r15, 0x10
+;   br %r14
+
+function %large_offset() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss1+2147483647
+    return v0
+}
+
+; VCode:
+;   aghi %r15, -16
+; block0:
+;   la %r2, 8(%r15)
+;   lgfi %r3, 2147483647
+;   agr %r2, %r3
+;   aghi %r15, 16
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   aghi %r15, -0x10
+; block1: ; offset 0x4
+;   la %r2, 8(%r15)
+;   lgfi %r3, 0x7fffffff
+;   agr %r2, %r3
+;   aghi %r15, 0x10
+;   br %r14
+
+function %large_negative_offset() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss1-2147483648
+    return v0
+}
+
+; VCode:
+;   aghi %r15, -16
+; block0:
+;   la %r2, 8(%r15)
+;   lgfi %r3, -2147483648
+;   agr %r2, %r3
+;   aghi %r15, 16
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   aghi %r15, -0x10
+; block1: ; offset 0x4
+;   la %r2, 8(%r15)
+;   lgfi %r3, -0x80000000
+;   agr %r2, %r3
+;   aghi %r15, 0x10
+;   br %r14
+
+function %large_offset_load() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss1+2147483647
+    v1 = load.i64 notrap v0-2147483648
+    return v1
+}
+
+; VCode:
+;   aghi %r15, -16
+; block0:
+;   la %r2, 8(%r15)
+;   lgfi %r3, 2147483647
+;   agrk %r5, %r2, %r3
+;   lgfi %r1, -2147483648 ; lg %r2, 0(%r1,%r5)
+;   aghi %r15, 16
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   aghi %r15, -0x10
+; block1: ; offset 0x4
+;   la %r2, 8(%r15)
+;   lgfi %r3, 0x7fffffff
+;   agrk %r5, %r2, %r3
+;   lgfi %r1, -0x80000000
+;   lg %r2, 0(%r1, %r5)
+;   aghi %r15, 0x10
+;   br %r14
+

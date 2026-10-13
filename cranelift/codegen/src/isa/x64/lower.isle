@@ -4460,6 +4460,14 @@
 (rule (lower (stack_addr _ stack_slot offset))
       (stack_addr_impl stack_slot offset))
 
+;; An offset too large to fold into the stack slot's address computation is
+;; added separately.
+(rule 1 (lower (stack_addr _ stack_slot offset))
+      (if-let large_offset (abi_stackslot_large_offset stack_slot offset))
+      (x64_add $I64
+               (stack_addr_impl stack_slot (i32_to_offset32 0))
+               (imm $I64 (i64_cast_unsigned large_offset))))
+
 ;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; NB: a `RegMem` divisor, while allowed in the instruction encoding, isn't

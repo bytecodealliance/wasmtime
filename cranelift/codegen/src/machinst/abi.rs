@@ -1331,26 +1331,9 @@ impl<M: ABIMachineSpec> Callee<M> {
 
         // The whole frame must fit in `maximum_frame_size` (checked with the
         // final layout in `compute_frame_layout`), so reject oversized stack
-        // slots now. Also check the offsets that `stack_addr` adds to them, so
-        // that every stack slot address computed during lowering is in range.
+        // slots now.
         if stackslots_size > M::maximum_frame_size() {
             return Err(CodegenError::ImplLimitExceeded);
-        }
-        for block in f.layout.blocks() {
-            for inst in f.layout.block_insts(block) {
-                if let ir::InstructionData::StackAddr {
-                    stack_slot, offset, ..
-                } = f.dfg.insts[inst]
-                {
-                    let offset = i64::from(offset);
-                    if offset < 0
-                        || stackslot_area_offset::<M>(sized_stackslots[stack_slot], offset)
-                            .is_none()
-                    {
-                        return Err(CodegenError::ImplLimitExceeded);
-                    }
-                }
-            }
         }
 
         let mut dynamic_type_sizes = HashMap::with_capacity(f.dfg.dynamic_types.len());
@@ -2255,16 +2238,21 @@ impl<M: ABIMachineSpec> Callee<M> {
     }
 
     /// Produce an instruction that computes a sized stackslot address.
+    ///
+    /// The offset must be small enough to address directly (see
+    /// `sized_stackslot_area_offset`); larger offsets must be added to the
+    /// stackslot's address separately.
     pub fn sized_stackslot_addr(
         &self,
         slot: StackSlot,
-        offset: u32,
+        offset: i32,
         into_reg: Writable<Reg>,
     ) -> M::I {
         // Offset from beginning of stackslot area.
-        let stack_off = self.sized_stackslots[slot] as i64;
-        let sp_off: i64 = stack_off + (offset as i64);
-        M::gen_get_stack_addr(StackAMode::Slot(sp_off), into_reg)
+        let sp_off = self
+            .sized_stackslot_area_offset(slot, i64::from(offset))
+            .expect("stackslot offset too large to address directly");
+        M::gen_get_stack_addr(StackAMode::Slot(i64::from(sp_off)), into_reg)
     }
 
     /// Produce an instruction that computes a dynamic stackslot address.

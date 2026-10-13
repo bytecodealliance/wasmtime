@@ -2978,6 +2978,14 @@
 (rule (lower (stack_addr _ stack_slot offset))
       (compute_stack_addr stack_slot offset))
 
+;; An offset too large to fold into the stack slot's address computation is
+;; added separately.
+(rule 1 (lower (stack_addr _ stack_slot offset))
+      (if-let large_offset (abi_stackslot_large_offset stack_slot offset))
+      (add $I64
+           (compute_stack_addr stack_slot (i32_to_offset32 0))
+           (imm $I64 (ImmExtend.Sign) (i64_cast_unsigned large_offset))))
+
 ;;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; All three sequences use one integer temporary and two vector
