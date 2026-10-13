@@ -75,9 +75,13 @@ impl dsl::Format {
     /// `reg`/`vvvv`/`rm` correctly. Blindly reversing would therefore print the
     /// destination in the wrong place. Instead, for `ND = 1` the destination is
     /// printed last and the sources are printed in their DSL order, except that
-    /// an immediate always comes first: AT&T (and XED) lead with the immediate,
-    /// whereas the DSL must list it last because the encoder appends it after
-    /// the ModRM/SIB/displacement bytes.
+    /// an immediate or fixed register always comes first.
+    ///
+    /// That exception is the operand Intel syntax puts last, and which AT&T (and
+    /// XED) therefore puts first: the immediate of a group-1 `VMI` form, or the
+    /// `cl` shift count of a `VMC` form. The DSL has to list it last instead,
+    /// because the encoder appends it after the ModRM/SIB/displacement bytes
+    /// (for an immediate) or does not encode it at all (for `cl`).
     #[must_use]
     fn ordered_operands(&self, nd: bool, xed_style: bool) -> String {
         let ops = self
@@ -87,10 +91,14 @@ impl dsl::Format {
         let ordered: Vec<&dsl::Operand> = if nd {
             let (dst, srcs): (Vec<&dsl::Operand>, Vec<&dsl::Operand>) =
                 ops.partition(|o| matches!(o.mutability, dsl::Mutability::Write));
-            let (imms, rest): (Vec<&dsl::Operand>, Vec<&dsl::Operand>) = srcs
-                .into_iter()
-                .partition(|o| matches!(o.location.kind(), dsl::OperandKind::Imm(_)));
-            imms.into_iter().chain(rest).chain(dst).collect()
+            let (last, rest): (Vec<&dsl::Operand>, Vec<&dsl::Operand>) =
+                srcs.into_iter().partition(|o| {
+                    matches!(
+                        o.location.kind(),
+                        dsl::OperandKind::Imm(_) | dsl::OperandKind::FixedReg(_)
+                    )
+                });
+            last.into_iter().chain(rest).chain(dst).collect()
         } else {
             ops.rev().collect()
         };
@@ -445,7 +453,8 @@ impl dsl::Format {
             }
             [Reg(reg_or_vvvv), RegMem(rm)]
             | [RegMem(rm), Reg(reg_or_vvvv)]
-            | [Reg(reg_or_vvvv), RegMem(rm), Imm(_)] => match unwrap_digit() {
+            | [Reg(reg_or_vvvv), RegMem(rm), Imm(_)]
+            | [Reg(reg_or_vvvv), RegMem(rm), FixedReg(_)] => match unwrap_digit() {
                 Some(digit) => {
                     assert!(!is4);
                     let vvvv = reg_or_vvvv;

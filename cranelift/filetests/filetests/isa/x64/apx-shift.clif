@@ -1,0 +1,236 @@
+test compile precise-output
+target x86_64 has_bmi2 has_apx
+
+; APX NDD shifts and rotates. The win is the destination register: the legacy
+; forms shift in place, so preserving the input costs a move first.
+;
+; BMI2 keeps the cases it already does better. `shlx`/`shrx`/`sarx` take the
+; amount in any register rather than `cl`, and `rorx` rotates by an immediate
+; without writing flags, so those are deliberately left alone below.
+
+; want: one instruction, rax = rdi << 7
+function %shl_imm_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 7
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   shlq $0x7, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0xc1, 0xe7, 0x07, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+function %shr_imm_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 7
+    v2 = ushr v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   shrq $0x7, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0xc1, 0xef, 0x07, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+function %sar_imm_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 7
+    v2 = sshr v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   sarl $0x7, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0xc1, 0xff, 0x07, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+function %shl_one_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 1
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   shlq $0x1, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0xc1, 0xe7, 0x01, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+function %rotl_var_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = rotl v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rsi, %rcx
+;   rolq %cl, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rsi, %rcx
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0xd3, 0xc7, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+
+function %rotr_var_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = rotr v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rsi, %rcx
+;   rorl %cl, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rsi, %rcx
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0xd3, 0xcf, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+
+function %shl_var_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   shlxq %rsi, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   shlxq %rsi, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %rotl_imm_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 7
+    v2 = rotl v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   rorxq $0x39, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   rorxq $0x39, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %shl_imm_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 3
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdi, %rax
+;   shlb $0x3, %al
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   shlb $3, %al
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
