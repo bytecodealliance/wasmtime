@@ -11,6 +11,7 @@ use crate::packed_option::ReservedValue;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::{self, Write};
+use cranelift_codegen_shared::join_display::JoinDisplayExt;
 
 /// A `FuncWriter` used to decorate functions during printing.
 pub trait FuncWriter {
@@ -574,13 +575,8 @@ fn write_debug_tags(
 ) -> fmt::Result {
     let tags = func.debug_tags.get(inst);
     if !tags.is_empty() {
-        let tags = tags
-            .iter()
-            .map(|tag| format!("{tag}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let s = format!("<{tags}> ");
-        write!(w, "{s}")?;
+        let s = format!("<{}> ", tags.join_display(", "));
+        w.write_str(&s)?;
         *indent = indent.saturating_sub(s.len());
     }
     Ok(())

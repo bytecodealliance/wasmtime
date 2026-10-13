@@ -9,6 +9,9 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use cranelift_codegen_shared::join_display::JoinDisplayVecExt;
+use cranelift_codegen_shared::join_display::display_once;
+
 use core::fmt::Write;
 use smallvec::SmallVec;
 pub mod regs;
@@ -1283,15 +1286,16 @@ impl MachInst for Inst {
 
 fn mem_finalize_for_show(mem: &MemArg, state: &EmitState, mi: MemInstType) -> (String, MemArg) {
     let (mem_insts, mem) = mem_finalize(mem, state, mi);
-    let mut mem_str = mem_insts
-        .into_iter()
-        .map(|inst| inst.print_with_state(&mut EmitState::default()))
-        .collect::<Vec<_>>()
-        .join(" ; ");
-    if !mem_str.is_empty() {
-        mem_str += " ; ";
-    }
-
+    let mem_str = format!(
+        "{}",
+        display_once(|f| {
+            for inst in mem_insts.as_slice() {
+                f.write_str(&inst.print_with_state(&mut EmitState::default()))?;
+                f.write_str(" ; ")?;
+            }
+            Ok(())
+        })
+    );
     (mem_str, mem)
 }
 
@@ -3339,14 +3343,17 @@ impl Inst {
                     CallInstDest::Indirect { reg } => ("basr", pretty_print_reg(*reg)),
                 };
                 state.outgoing_sp_offset = info.callee_pop_size;
-                let mut retval_loads = S390xMachineDeps::gen_retval_loads(info)
-                    .into_iter()
-                    .map(|inst| inst.print_with_state(state))
-                    .collect::<Vec<_>>()
-                    .join(" ; ");
-                if !retval_loads.is_empty() {
-                    retval_loads = " ; ".to_string() + &retval_loads;
-                }
+                let insts_retval_loads = S390xMachineDeps::gen_retval_loads(info);
+                let retval_loads = format!(
+                    "{}",
+                    display_once(|f| {
+                        for inst in insts_retval_loads.as_slice() {
+                            f.write_str(" ; ")?;
+                            f.write_str(&inst.print_with_state(state))?;
+                        }
+                        Ok(())
+                    })
+                );
                 state.outgoing_sp_offset = 0;
                 let try_call = if let Some(try_call_info) = &info.try_call_info {
                     format!(
@@ -3378,14 +3385,16 @@ impl Inst {
                     info.callee_pop_size,
                     &info.dest,
                 );
-                let mut epilogue_str = epilogue_insts
-                    .into_iter()
-                    .map(|inst| inst.print_with_state(state))
-                    .collect::<Vec<_>>()
-                    .join(" ; ");
-                if !epilogue_str.is_empty() {
-                    epilogue_str += " ; ";
-                }
+                let epilogue_str = format!(
+                    "{}",
+                    display_once(|f| {
+                        for inst in epilogue_insts.as_slice() {
+                            f.write_str(&inst.print_with_state(state))?;
+                            f.write_str(" ; ")?;
+                        }
+                        Ok(())
+                    })
+                );
                 let (opcode, dest) = match &info.dest {
                     CallInstDest::Direct { name } => ("jg", name.display(None).to_string()),
                     CallInstDest::Indirect { reg } => {
@@ -3591,7 +3600,7 @@ impl Inst {
                     .into_iter()
                     .map(|inst| inst.print_with_state(state))
                     .collect::<Vec<_>>()
-                    .join(" ; ");
+                    .join_display(" ; ");
                 let cond = cond.pretty_print_default();
                 format!("0: {body} ; jg{cond} 0b ; 1:")
             }

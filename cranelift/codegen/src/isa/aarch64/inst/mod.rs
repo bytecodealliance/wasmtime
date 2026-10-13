@@ -13,6 +13,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::Write;
 use core::slice;
+use cranelift_codegen_shared::join_display::display_once;
 use smallvec::{SmallVec, smallvec};
 
 pub(crate) mod regs;
@@ -1310,14 +1311,17 @@ impl MachInst for Inst {
 
 fn mem_finalize_for_show(mem: &AMode, access_ty: Type, state: &EmitState) -> (String, String) {
     let (mem_insts, mem) = mem_finalize(None, mem, access_ty, state);
-    let mut mem_str = mem_insts
-        .into_iter()
-        .map(|inst| inst.print_with_state(&mut EmitState::default()))
-        .collect::<Vec<_>>()
-        .join(" ; ");
-    if !mem_str.is_empty() {
-        mem_str += " ; ";
-    }
+
+    let mem_str = format!(
+        "{}",
+        display_once(|f| {
+            for inst in mem_insts.as_slice() {
+                f.write_str(&inst.print_with_state(&mut EmitState::default()))?;
+                f.write_str(" ; ")?;
+            }
+            Ok(())
+        })
+    );
 
     let mem = mem.pretty_print(access_ty.bytes() as u8);
     (mem_str, mem)

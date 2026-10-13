@@ -109,7 +109,9 @@ use crate::settings::ProbestackStrategy;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
+use alloc::string::ToString;
 use core::marker::PhantomData;
+use cranelift_codegen_shared::join_display::JoinDisplayVecExt;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::smallvec;
 
@@ -2713,7 +2715,8 @@ impl TryCallInfo {
                 TryCallHandler::Context(loc) => format!("context {loc:?}"),
             })
             .collect::<Vec<_>>()
-            .join(", ")
+            .join_display(", ")
+            .to_string()
     }
 
     pub(crate) fn collect_operands(&mut self, collector: &mut impl OperandVisitor) {

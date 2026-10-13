@@ -3,6 +3,7 @@
 use cranelift_assembler_x64_meta::dsl::{
     Feature, Format, Inst, Location, Mutability, Operand, OperandKind, RegClass,
 };
+use cranelift_codegen_shared::join_display::JoinDisplayVecExt;
 use cranelift_srcgen::{Formatter, fmtln};
 
 /// This factors out use of the assembler crate name.
@@ -120,7 +121,7 @@ fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
             None
         })
         .collect::<Vec<_>>()
-        .join(", ");
+        .join_display(", ");
     f.add_block(
         &format!("fn x64_{struct_name}_raw(&mut self, {rust_params}) -> AssemblerOutputs"),
         |f| {
@@ -137,7 +138,7 @@ fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
             if inst.has_trap {
                 args.push(format!("{ASM}::TrapCode(trap.as_raw())"));
             }
-            let args = args.join(", ");
+            let args = args.join_display(", ");
             f.empty_line();
 
             f.comment("Build the instruction.");
@@ -553,7 +554,7 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
         .map(|o| isle_param_raw(o))
         .chain(trap_type.clone())
         .collect::<Vec<_>>()
-        .join(" ");
+        .join_display(" ");
     fmtln!(f, "(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)");
     fmtln!(f, "(extern constructor {raw_name} {raw_name})");
 
@@ -595,7 +596,7 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
             .map(|o| o.location.to_string())
             .chain(trap_name.clone())
             .collect::<Vec<_>>()
-            .join(" ");
+            .join_display(" ");
         let convert = ctor.conversion_constructor();
 
         // Generate implicit parameters to the `*_raw` constructor. Currently
@@ -619,7 +620,7 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
                 }
             })
             .collect::<Vec<_>>()
-            .join(" ");
+            .join_display(" ");
 
         fmtln!(f, "(decl {rule_name} ({param_tys}) {result_ty})");
         fmtln!(

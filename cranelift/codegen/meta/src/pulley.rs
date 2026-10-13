@@ -1,3 +1,4 @@
+use cranelift_codegen_shared::join_display::JoinDisplayVecExt;
 use cranelift_srcgen::error::Error;
 use std::path::Path;
 
@@ -391,7 +392,7 @@ pub fn generate_isle(filename: &str, out_dir: &Path) -> Result<(), Error> {
         }
         isle.push_str(") ");
         rule.push_str(")");
-        let ops = ops.join(" ");
+        let ops = ops.join_display(" ");
         match &results[..] {
             [result] => {
                 isle.push_str(result);

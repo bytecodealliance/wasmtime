@@ -5,6 +5,7 @@ use crate::cdsl::settings::{BoolSetting, Preset, Setting, SettingGroup, Specific
 use crate::constant_hash::generate_table;
 use crate::unique_table::UniqueSeqTable;
 use cranelift_codegen_shared::constant_hash::simple_hash;
+use cranelift_codegen_shared::join_display::JoinDisplayVecExt;
 use cranelift_srcgen::{Formatter, Language, Match, error, fmtln};
 use std::collections::HashMap;
 
@@ -320,7 +321,10 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
             fmt.comment(format_args!(
                 "{}: {}",
                 preset.name,
-                preset.setting_names(group).collect::<Vec<_>>().join(", ")
+                preset
+                    .setting_names(group)
+                    .collect::<Vec<_>>()
+                    .join_display(", ")
             ));
             for (mask, value) in preset.layout(group) {
                 fmtln!(fmt, "(0b{:08b}, 0b{:08b}),", mask, value);
@@ -337,7 +341,7 @@ fn gen_template(group: &SettingGroup, fmt: &mut Formatter) {
     }
 
     let default_bytes: Vec<String> = default_bytes.iter().map(|x| format!("{x:#04x}")).collect();
-    let default_bytes_str = default_bytes.join(", ");
+    let default_bytes_str = default_bytes.join_display(", ");
 
     fmt.add_block(
         "static TEMPLATE: detail::Template = detail::Template",

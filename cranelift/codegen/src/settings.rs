@@ -27,6 +27,8 @@ use alloc::string::{String, ToString};
 use core::fmt;
 use core::str;
 
+use cranelift_codegen_shared::join_display::JoinDisplayExt;
+
 /// A string-based configurator for settings groups.
 ///
 /// The `Configurable` protocol allows settings to be modified by name before a finished `Flags`
@@ -233,7 +235,7 @@ fn parse_enum_value(value: &str, choices: &[&str]) -> SetResult<u8> {
         Some(idx) => Ok(idx as u8),
         None => Err(SetError::BadValue(format!(
             "any among {}",
-            choices.join(", ")
+            choices.join_display(", ")
         ))),
     }
 }

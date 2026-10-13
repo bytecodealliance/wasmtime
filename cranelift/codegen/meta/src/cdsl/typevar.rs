@@ -5,6 +5,8 @@ use std::hash;
 use std::ops;
 use std::rc::Rc;
 
+use cranelift_codegen_shared::join_display::JoinDisplayVecExt;
+
 use crate::cdsl::types::{LaneType, ValueType};
 
 const MAX_LANES: u16 = 256;
@@ -532,29 +534,29 @@ impl fmt::Debug for TypeSet {
         if !self.lanes.is_empty() {
             subsets.push(format!(
                 "lanes={{{}}}",
-                Vec::from_iter(self.lanes.iter().map(|x| x.to_string())).join(", ")
+                Vec::from_iter(self.lanes.iter().map(|x| x.to_string())).join_display(", ")
             ));
         }
         if !self.dynamic_lanes.is_empty() {
             subsets.push(format!(
                 "dynamic_lanes={{{}}}",
-                Vec::from_iter(self.dynamic_lanes.iter().map(|x| x.to_string())).join(", ")
+                Vec::from_iter(self.dynamic_lanes.iter().map(|x| x.to_string())).join_display(", ")
             ));
         }
         if !self.ints.is_empty() {
             subsets.push(format!(
                 "ints={{{}}}",
-                Vec::from_iter(self.ints.iter().map(|x| x.to_string())).join(", ")
+                Vec::from_iter(self.ints.iter().map(|x| x.to_string())).join_display(", ")
             ));
         }
         if !self.floats.is_empty() {
             subsets.push(format!(
                 "floats={{{}}}",
-                Vec::from_iter(self.floats.iter().map(|x| x.to_string())).join(", ")
+                Vec::from_iter(self.floats.iter().map(|x| x.to_string())).join_display(", ")
             ));
         }
 
-        write!(fmt, "{})", subsets.join(", "))?;
+        write!(fmt, "{})", subsets.join_display(", "))?;
         Ok(())
     }
 }

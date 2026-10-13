@@ -7,6 +7,9 @@ use crate::cdsl::operands::{Operand, OperandKindFields};
 use crate::cdsl::typevar::{TypeSet, TypeVar};
 use crate::unique_table::{UniqueSeqTable, UniqueTable};
 use cranelift_codegen_shared::constant_hash;
+use cranelift_codegen_shared::join_display::JoinDisplayVecExt;
+use cranelift_codegen_shared::join_display::display_once;
+
 use cranelift_srcgen::{Formatter, Language, Match, error, fmtln};
 use std::fmt;
 use std::rc::Rc;
@@ -268,8 +271,20 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                         members.push(field.member);
                     }
 
-                    let pat1 = members.iter().map(|x| format!("{x}: ref {x}1")).collect::<Vec<_>>().join(", ");
-                    let pat2 = members.iter().map(|x| format!("{x}: ref {x}2")).collect::<Vec<_>>().join(", ");
+                    let members = members.as_slice();
+
+                    let pattern_ref = |suffix| {
+                        display_once(move |f|{
+                            let mut sep = "";
+                            for member in members {
+                                write!(f, "{sep}{member}: ref {member}{suffix}")?;
+                                sep = ", ";
+                            }
+                            Ok(())
+                        })
+                    };
+                    let pat1 = pattern_ref("1");
+                    let pat2 = pattern_ref("2");
                     fmt.add_block(&format!("({name} {{ {pat1} }}, {name} {{ {pat2} }}) => "), |fmt| {
                         fmt.line("opcode1 == opcode2");
                         for field in &format.imm_fields {
@@ -344,7 +359,7 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                     for field in &format.imm_fields {
                         members.push(field.member);
                     }
-                    let members = members.join(", ");
+                    let members = members.join_display(", ");
 
                     fmt.add_block(&format!("{name}{{{members}}} => "), |fmt| {
                         fmt.line("::core::hash::Hash::hash( &::core::mem::discriminant(self), state);");
@@ -420,7 +435,7 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                     for field in &format.imm_fields {
                         members.push(field.member);
                     }
-                    let members = members.join(", ");
+                    let members = members.join_display(", ");
 
                     fmt.add_block(&format!("{name}{{{members}}} => "),|fmt| {
                         fmt.add_block(&format!("Self::{}", format.name), |fmt| {
@@ -500,7 +515,7 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                     for field in &format.imm_fields {
                         members.push(field.member);
                     }
-                    let members = members.join(", ");
+                    let members = members.join_display(", ");
 
                     fmt.add_block(&format!("{name}{{{members}}} => "), |fmt| {
                         fmt.add_block(&format!("Self::{}", format.name), |fmt| {
@@ -513,8 +528,8 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                             } else if format.num_value_operands > 0 {
                                 let maps = (0..format.num_value_operands)
                                     .map(|i| format!("mapper.map_value(args[{i}])"))
-                                    .collect::<Box<[_]>>()
-                                    .join(", ");
+                                    .collect::<Vec<_>>()
+                                    .join_display(", ");
                                 fmtln!(fmt, "args: [{maps}],");
                             }
 
@@ -832,7 +847,7 @@ fn iterable_to_string<I: fmt::Display, T: IntoIterator<Item = I>>(iterable: T) -
         .into_iter()
         .map(|x| x.to_string())
         .collect::<Vec<_>>()
-        .join(", ");
+        .join_display(", ");
     format!("{{{elems}}}")
 }
 
@@ -949,7 +964,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
                 .iter()
                 .map(|x| format!("'{x}'"))
                 .collect::<Vec<_>>()
-                .join(", ")));
+                .join_display(", ")));
             if let Some(poly) = &inst.polymorphic_info {
                 fmt.comment(format_args!("Polymorphic over {}", typeset_to_string(poly.ctrl_typevar.get_raw_typeset())));
             }
@@ -1011,7 +1026,7 @@ fn gen_member_inits(format: &InstructionFormat, fmt: &mut Formatter) {
         for i in 0..format.num_value_operands {
             args.push(format!("arg{i}"));
         }
-        fmtln!(fmt, "args: [{}],", args.join(", "));
+        fmtln!(fmt, "args: [{}],", args.join_display(", "));
     }
 
     // Block operands
@@ -1023,7 +1038,7 @@ fn gen_member_inits(format: &InstructionFormat, fmt: &mut Formatter) {
             for i in 0..n {
                 blocks.push(format!("block{i}"));
             }
-            fmtln!(fmt, "blocks: [{}],", blocks.join(", "));
+            fmtln!(fmt, "blocks: [{}],", blocks.join_display(", "));
         }
     }
 
@@ -1073,7 +1088,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
     let proto = format!(
         "{}({}) -> (Inst, &'f mut ir::DataFlowGraph)",
         format.name,
-        args.join(", ")
+        args.join_display(", ")
     );
 
     let imms_need_masking = format
@@ -1195,11 +1210,14 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     let rtype = match inst.value_results.len() {
         0 => "Inst".into(),
         1 => "Value".into(),
-        _ => format!("({})", vec!["Value"; inst.value_results.len()].join(", ")),
+        _ => format!(
+            "({})",
+            vec!["Value"; inst.value_results.len()].join_display(", ")
+        ),
     };
 
     let tmpl = if !tmpl_types.is_empty() {
-        format!("<{}>", tmpl_types.join(", "))
+        format!("<{}>", tmpl_types.join_display(", "))
     } else {
         "".into()
     };
@@ -1208,7 +1226,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         "{}{}({}) -> {}",
         inst.snake_name(),
         tmpl,
-        args.join(", "),
+        args.join_display(", "),
         rtype
     );
 
@@ -1311,7 +1329,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         }
 
         // Call to the format constructor,
-        let fcall = format!("self.{}({})", format.name, args.join(", "));
+        let fcall = format!("self.{}({})", format.name, args.join_display(", "));
 
         fmtln!(fmt, "let (inst, dfg) = {};", fcall);
         fmtln!(
@@ -1340,7 +1358,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
                     .enumerate()
                     .map(|(i, _)| format!("results[{i}]"))
                     .collect::<Vec<_>>()
-                    .join(", ")
+                    .join_display(", ")
             );
         }
     });
@@ -1436,7 +1454,7 @@ fn gen_one_imm_inst_builder(
     let proto = format!(
         "{}{suffix}<T: Into<ir::immediates::Imm64>>({}) -> Value",
         inst.snake_name(),
-        args.join(", "),
+        args.join_display(", "),
     );
 
     let extends = if signed {
@@ -1476,7 +1494,7 @@ fn gen_one_imm_inst_builder(
             .iter()
             .map(|op| op.name)
             .collect::<Vec<_>>()
-            .join(", ");
+            .join_display(", ");
         fmtln!(fmt, "self.{}({call_args})", inst.snake_name());
     });
 }
