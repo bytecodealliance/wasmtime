@@ -1199,7 +1199,7 @@ jobs:
       working-directory: ./examples/min-platform
       env:
         WASMTIME_SIGNALS_BASED_TRAPS: 1
-        MIN_PLATFORM_TEST_DISABLE_WASI: 1
+        MIN_PLATFORM_EXAMPLE_DISABLE_WASI: 1
 
     # Add the `wasmtime-platform.h` file as a release artifact
     - uses: actions/upload-artifact@v6

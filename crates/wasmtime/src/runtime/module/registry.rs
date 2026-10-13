@@ -4,9 +4,8 @@ use crate::code::{EngineCode, EngineCodePC, ModuleWithCode, StoreCode, StoreCode
 #[cfg(feature = "component-model")]
 use crate::component::Component;
 use crate::runtime::vm::VMWasmCallFunction;
-use crate::sync::{OnceLock, RwLock};
 use crate::vm::CompiledModuleId;
-use crate::{Engine, FrameInfo, Module, code_memory::CodeMemory, prelude::*};
+use crate::{Engine, FrameInfo, Module, prelude::*};
 use alloc::sync::Arc;
 #[cfg(not(feature = "debug"))]
 use core::marker::PhantomData;
@@ -385,64 +384,109 @@ impl ModuleRegistry {
     }
 }
 
-// This is the global code registry that stores information for all loaded code
-// objects that are currently in use by any `Store` in the current process.
-//
-// The purpose of this map is to be called from signal handlers to determine
-// whether a program counter is a wasm trap or not. Specifically macOS has
-// no contextual information about the thread available, hence the necessity
-// for global state rather than using thread local state.
-//
-// This is similar to `ModuleRegistry` except that it has less information and
-// supports removal. Any time anything is registered with a `ModuleRegistry`
-// it is also automatically registered with the singleton global module
-// registry. When a `ModuleRegistry` is destroyed then all of its entries
-// are removed from the global registry.
-fn global_code() -> &'static RwLock<GlobalRegistry> {
-    static GLOBAL_CODE: OnceLock<RwLock<GlobalRegistry>> = OnceLock::new();
-    GLOBAL_CODE.get_or_init(Default::default)
-}
+#[cfg(has_native_signals)]
+pub use global_registry::*;
+#[cfg(not(has_native_signals))]
+pub use no_global_registry::*;
 
-type GlobalRegistry = TryBTreeMap<usize, (usize, Arc<CodeMemory>)>;
-
-/// Find which registered region of code contains the given program counter, and
-/// what offset that PC is within that module's code.
-pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
-    let all_modules = global_code().read();
-    let (_end, (start, module)) = all_modules.range(pc..).next()?;
-    let text_offset = pc.checked_sub(*start)?;
-    Some((module.clone(), text_offset))
-}
-
-/// Registers a new region of code.
+/// This is the global code registry that stores information for all loaded
+/// code objects that are currently in use by any `Store` in the current
+/// process.
 ///
-/// Must not have been previously registered and must be `unregister`'d to
-/// prevent leaking memory.
+/// The purpose of this map is to be called from signal handlers to determine
+/// whether a program counter is a wasm trap or not. Specifically macOS has no
+/// contextual information about the thread available, hence the necessity for
+/// global state rather than using thread local state.
 ///
-/// This is required to enable traps to work correctly since the signal handler
-/// will lookup in the `GLOBAL_CODE` list to determine which a particular pc
-/// is a trap or not.
-pub fn register_code(image: &Arc<CodeMemory>, address: Range<usize>) -> Result<(), OutOfMemory> {
-    if address.is_empty() {
-        return Ok(());
+/// This is similar to `ModuleRegistry` except that it has less information
+/// and supports removal. Any time anything is registered with a
+/// `ModuleRegistry` it is also automatically registered with the singleton
+/// global module registry. When a `ModuleRegistry` is destroyed then all of
+/// its entries are removed from the global registry.
+///
+/// Note that this global registry only exists when native signals are used to
+/// implement traps (`cfg(has_native_signals)`); see `no_global_registry`
+/// below for the alternative.
+#[cfg(has_native_signals)]
+mod global_registry {
+    use crate::code_memory::CodeMemory;
+    use crate::prelude::*;
+    use crate::sync::{OnceLock, RwLock};
+    use alloc::sync::Arc;
+    use core::ops::Range;
+
+    fn global_code() -> &'static RwLock<GlobalRegistry> {
+        static GLOBAL_CODE: OnceLock<RwLock<GlobalRegistry>> = OnceLock::new();
+        GLOBAL_CODE.get_or_init(Default::default)
     }
-    let start = address.start;
-    let end = address.end - 1;
-    let prev = global_code().write().insert(end, (start, image.clone()))?;
-    assert!(prev.is_none());
-    Ok(())
+
+    type GlobalRegistry = TryBTreeMap<usize, (usize, Arc<CodeMemory>)>;
+
+    /// Find which registered region of code contains the given program
+    /// counter, and what offset that PC is within that module's code.
+    pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
+        let all_modules = global_code().read();
+        let (_end, (start, module)) = all_modules.range(pc..).next()?;
+        let text_offset = pc.checked_sub(*start)?;
+        Some((module.clone(), text_offset))
+    }
+
+    /// Registers a new region of code.
+    ///
+    /// Must not have been previously registered and must be `unregister`'d to
+    /// prevent leaking memory.
+    ///
+    /// This is required to enable traps to work correctly since the signal
+    /// handler will lookup in the `GLOBAL_CODE` list to determine which a
+    /// particular pc is a trap or not.
+    pub fn register_code(
+        image: &Arc<CodeMemory>,
+        address: Range<usize>,
+    ) -> Result<(), OutOfMemory> {
+        if address.is_empty() {
+            return Ok(());
+        }
+        let start = address.start;
+        let end = address.end - 1;
+        let prev = global_code().write().insert(end, (start, image.clone()))?;
+        assert!(prev.is_none());
+        Ok(())
+    }
+
+    /// Unregisters a code mmap from the global map.
+    ///
+    /// Must have been previously registered with `register`.
+    pub fn unregister_code(address: Range<usize>) {
+        if address.is_empty() {
+            return;
+        }
+        let end = address.end - 1;
+        let code = global_code().write().remove(end);
+        assert!(code.is_some());
+    }
 }
 
-/// Unregisters a code mmap from the global map.
-///
-/// Must have been previously registered with `register`.
-pub fn unregister_code(address: Range<usize>) {
-    if address.is_empty() {
-        return;
+/// Without native signals there is no global registry: traps are only ever
+/// raised synchronously from contexts that have access to a `Store`'s own
+/// `ModuleRegistry`, so trap lookups happen there instead. This means that
+/// loading and unloading modules performs no cross-thread synchronization.
+#[cfg(not(has_native_signals))]
+mod no_global_registry {
+    use crate::code_memory::CodeMemory;
+    use crate::prelude::*;
+    use alloc::sync::Arc;
+    use core::ops::Range;
+
+    /// No-op: there is no global registry in this configuration.
+    pub fn register_code(
+        _image: &Arc<CodeMemory>,
+        _address: Range<usize>,
+    ) -> Result<(), OutOfMemory> {
+        Ok(())
     }
-    let end = address.end - 1;
-    let code = global_code().write().remove(end);
-    assert!(code.is_some());
+
+    /// No-op: there is no global registry in this configuration.
+    pub fn unregister_code(_address: Range<usize>) {}
 }
 
 #[test]

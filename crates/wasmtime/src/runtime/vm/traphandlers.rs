@@ -22,6 +22,7 @@ pub use self::signals::*;
 
 #[cfg(feature = "gc")]
 use crate::ThrownException;
+#[cfg(has_native_signals)]
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
@@ -52,6 +53,7 @@ pub(crate) struct TrapRegisters {
 }
 
 /// Return value from `test_if_trap`.
+#[cfg(has_native_signals)]
 pub(crate) enum TrapTest {
     /// Not a wasm trap, need to delegate to whatever process handler is next.
     NotWasm,
@@ -1043,6 +1045,7 @@ impl CallThreadState {
     ///   this signal, nothing else to do.
     /// * `TrapTest::Trap` - this is a wasm trap an the stack needs to be
     ///   unwound now.
+    #[cfg(has_native_signals)]
     pub(crate) fn test_if_trap(
         &self,
         regs: TrapRegisters,

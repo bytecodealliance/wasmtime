@@ -1,7 +1,7 @@
 use crate::error::OutOfMemory;
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
 use crate::runtime::vm::{
-    StoreBox, TrapRegisters, TrapTest, VMContext, VMOpaqueContext, f32x4, f64x2, i8x16, tls,
+    Instance, StoreBox, TrapRegisters, VMContext, VMOpaqueContext, f32x4, f64x2, i8x16, tls,
 };
 use crate::{Engine, ValRaw};
 use core::marker;
@@ -224,7 +224,12 @@ impl InterpreterRef<'_> {
                 }
                 // If the VM trapped then process that here and return `false`.
                 DoneReason::Trap { pc, kind } => {
-                    bytecode = self.trap(pc, kind);
+                    // SAFETY: `caller` is the `VMContext` this
+                    // function was invoked with, which is valid per
+                    // this function's contract, and Wasm is currently
+                    // executing so no other borrows of its store are
+                    // active.
+                    bytecode = unsafe { self.trap(pc, kind, caller) };
                     vm = self.vm();
                 }
             }
@@ -452,46 +457,64 @@ impl InterpreterRef<'_> {
     }
 
     /// Handles an interpreter trap. This will initialize the trap state stored
-    /// in TLS via the `test_if_trap` helper below by reading the pc/fp of the
-    /// interpreter and seeing if that's a valid opcode to trap at.
-    fn trap(&mut self, pc: NonNull<u8>, kind: Option<TrapKind>) -> NonNull<u8> {
+    /// in TLS by reading the pc/fp of the interpreter and seeing if that's a
+    /// valid opcode to trap at.
+    ///
+    /// Trap codes are looked up in the module registry of the store that
+    /// `caller` belongs to, rather than in any process-global state.
+    ///
+    /// # Safety
+    ///
+    /// `caller` must be the valid `VMContext` passed to the `call` that is
+    /// currently executing, and there must be no other active borrows of its
+    /// store (as is the case when wasm traps), since it is used to enter the
+    /// host via `Instance::enter_host_from_wasm`.
+    unsafe fn trap(
+        &mut self,
+        pc: NonNull<u8>,
+        kind: Option<TrapKind>,
+        caller: NonNull<VMContext>,
+    ) -> NonNull<u8> {
         let regs = TrapRegisters {
             pc: pc.as_ptr() as usize,
             fp: self.vm().fp() as usize,
         };
-        let handler = tls::with(|s| {
-            let s = s.unwrap();
-            match kind {
-                Some(kind) => {
-                    let trap = match kind {
-                        TrapKind::IntegerOverflow => Trap::IntegerOverflow.into(),
-                        TrapKind::DivideByZero => Trap::IntegerDivisionByZero.into(),
-                        TrapKind::BadConversionToInteger => Trap::BadConversionToInteger.into(),
-                        TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds.into(),
-                        TrapKind::DisabledOpcode => Trap::DisabledOpcode.into(),
-                        TrapKind::StackOverflow => Trap::StackOverflow.into(),
-                    };
-                    s.set_jit_trap(regs, None, trap);
-                    s.entry_trap_handler()
+        let trap = match kind {
+            Some(kind) => match kind {
+                TrapKind::IntegerOverflow => Trap::IntegerOverflow.into(),
+                TrapKind::DivideByZero => Trap::IntegerDivisionByZero.into(),
+                TrapKind::BadConversionToInteger => Trap::BadConversionToInteger.into(),
+                TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds.into(),
+                TrapKind::DisabledOpcode => Trap::DisabledOpcode.into(),
+                TrapKind::StackOverflow => Trap::StackOverflow.into(),
+            },
+            None => {
+                let mut trap = None;
+                // SAFETY: `caller` is valid and its store is not otherwise
+                // borrowed, per this function's contract.
+                unsafe {
+                    Instance::enter_host_from_wasm(caller, |store, _instance| {
+                        trap = store
+                            .store_opaque()
+                            .modules()
+                            .store_code_by_pc(regs.pc)
+                            .and_then(|(code, text_offset)| {
+                                code.code_memory().lookup_trap_code(text_offset)
+                            });
+                    });
                 }
-                None => {
-                    match s.test_if_trap(regs, None, |_| false) {
-                        // This shouldn't be possible, so this is a fatal error
-                        // if it happens.
-                        TrapTest::NotWasm => {
-                            panic!("pulley trap at {pc:?} without trap code registered")
-                        }
-
-                        // Not possible with our closure above returning `false`.
-                        #[cfg(has_native_signals)]
-                        TrapTest::HandledByEmbedder => unreachable!(),
-
-                        // Trap was handled, yay! Configure interpreter state
-                        // to resume at the exception handler.
-                        TrapTest::Trap(handler) => handler,
-                    }
+                match trap {
+                    Some(trap) => trap,
+                    // This shouldn't be possible, so this is a fatal error if
+                    // it happens.
+                    None => panic!("pulley trap at {pc:?} without trap code registered"),
                 }
             }
+        };
+        let handler = tls::with(|s| {
+            let s = s.unwrap();
+            s.set_jit_trap(regs, None, trap);
+            s.entry_trap_handler()
         });
         unsafe {
             self.resume_to_exception_handler(&handler, 0, 0);
