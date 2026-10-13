@@ -4,7 +4,7 @@ use super::node::Removed;
 use super::{Comparator, Forest, MAX_PATH, Node, NodeData, NodePool, slice_insert, slice_shift};
 use core::borrow::Borrow;
 use core::marker::PhantomData;
-use wasmtime_core::error::OutOfMemory;
+use wasmtime_core::{alloc::PanicOnOom, error::OutOfMemory};
 
 #[cfg(test)]
 use core::fmt;
@@ -311,9 +311,7 @@ impl<F: Forest> Path<F> {
             let mut node = self.node[level];
             let mut entry = self.entry[level].into();
             split = pool[node].split(entry);
-            let rhs_node = pool.alloc_node(split.rhs_data);
-            debug_assert!(rhs_node.is_ok());
-            let rhs_node = rhs_node?;
+            let rhs_node = pool.alloc_node(split.rhs_data).panic_on_oom();
 
             // Should the path be moved to the new RHS node?
             // Prefer the smaller node if we're right in the middle.
@@ -373,9 +371,9 @@ impl<F: Forest> Path<F> {
 
         // If we get here we have split the original root node and need to add an extra level.
         let rhs_node = ins_node.expect("empty path");
-        let root = pool.alloc_node(NodeData::inner(orig_root, key, rhs_node));
-        debug_assert!(root.is_ok());
-        let root = root?;
+        let root = pool
+            .alloc_node(NodeData::inner(orig_root, key, rhs_node))
+            .panic_on_oom();
         let entry = if self.node[0] == rhs_node { 1 } else { 0 };
         self.size += 1;
         slice_insert(&mut self.node[0..self.size], 0, root);
