@@ -73,6 +73,8 @@
 //! }
 //!
 //! let config = WasmBenchConfig {
+//!     version: WASM_BENCH_CONFIG_VERSION,
+//!     size: std::mem::size_of::<WasmBenchConfig>(),
 //!     working_dir_ptr: working_dir.as_ptr(),
 //!     working_dir_len: working_dir.len(),
 //!     stdout_path_ptr: stdout_path.as_ptr(),
@@ -96,7 +98,7 @@
 //!
 //! let mut bench_api = ptr::null_mut();
 //! unsafe {
-//!     let code = wasm_bench_create(config, &mut bench_api);
+//!     let code = wasm_bench_create(&config, &mut bench_api);
 //!     assert_eq!(code, OK);
 //!     assert!(!bench_api.is_null());
 //! };
@@ -151,6 +153,13 @@ pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
 pub const ERR: ExitCode = -1;
 
+/// The current version of `WasmBenchConfig`.
+///
+/// Bumped once per release that appends a field, and never otherwise, so a
+/// field added in version `N` is present exactly when the caller's `version` is
+/// at least `N`.
+pub const WASM_BENCH_CONFIG_VERSION: u32 = 0;
+
 // Randomize the location of heap objects to avoid accidental locality being an
 // uncontrolled variable that obscures performance evaluation in our
 // experiments.
@@ -160,50 +169,108 @@ static ALLOC: shuffling_allocator::ShufflingAllocator<std::alloc::System> =
     shuffling_allocator::wrap!(&std::alloc::System);
 
 /// Configuration options for the benchmark.
+///
+/// This structure is always passed across the bench API by pointer, and new
+/// fields are only ever appended to the end, so that a caller built against an
+/// older version of this structure can still drive a newer bench API library.
 #[repr(C)]
 pub struct WasmBenchConfig {
+    /// The version of this structure that the caller was built against.
+    ///
+    /// Each field's documentation names the version that added it; a field is
+    /// only present when `version` is at least that.
+    pub version: u32,
+
+    /// The size of this structure, in bytes, as the caller knows it.
+    ///
+    /// Fields beyond these first `size` bytes were not allocated by the caller
+    /// and must not be read.
+    ///
+    /// This acts as a secondary backstop to `version`.
+    pub size: usize,
+
     /// The working directory where benchmarks should be executed.
+    ///
+    /// Added in version 0.
     pub working_dir_ptr: *const u8,
     pub working_dir_len: usize,
 
     /// The file path that should be created and used as `stdout`.
+    ///
+    /// Added in version 0.
     pub stdout_path_ptr: *const u8,
     pub stdout_path_len: usize,
 
     /// The file path that should be created and used as `stderr`.
+    ///
+    /// Added in version 0.
     pub stderr_path_ptr: *const u8,
     pub stderr_path_len: usize,
 
     /// The (optional) file path that should be opened and used as `stdin`. If
     /// not provided, then the WASI context will not have a `stdin` initialized.
+    ///
+    /// Added in version 0.
     pub stdin_path_ptr: *const u8,
     pub stdin_path_len: usize,
 
     /// The functions to start and stop performance timers/counters during Wasm
     /// compilation.
+    ///
+    /// Added in version 0.
     pub compilation_timer: *mut u8,
     pub compilation_start: extern "C" fn(*mut u8),
     pub compilation_end: extern "C" fn(*mut u8),
 
     /// The functions to start and stop performance timers/counters during Wasm
     /// instantiation.
+    ///
+    /// Added in version 0.
     pub instantiation_timer: *mut u8,
     pub instantiation_start: extern "C" fn(*mut u8),
     pub instantiation_end: extern "C" fn(*mut u8),
 
     /// The functions to start and stop performance timers/counters during Wasm
     /// execution.
+    ///
+    /// Added in version 0.
     pub execution_timer: *mut u8,
     pub execution_start: extern "C" fn(*mut u8),
     pub execution_end: extern "C" fn(*mut u8),
 
     /// The (optional) flags to use when running Wasmtime. These correspond to
     /// the flags used when running Wasmtime from the command line.
+    ///
+    /// Added in version 0.
     pub execution_flags_ptr: *const u8,
     pub execution_flags_len: usize,
 }
 
 impl WasmBenchConfig {
+    /// The fields every caller must provide, regardless of how old it is.
+    const MIN_SIZE: usize =
+        std::mem::offset_of!(WasmBenchConfig, execution_flags_len) + size_of::<usize>();
+
+    /// Borrow a caller-provided config, after checking it is long enough to
+    /// contain every required field.
+    ///
+    /// # Safety
+    ///
+    /// `config` must be non-null, aligned, and point to a `size` field that
+    /// accurately describes how many bytes of `WasmBenchConfig` follow it.
+    unsafe fn from_ptr<'a>(config: *const WasmBenchConfig) -> Result<&'a Self> {
+        assert!(!config.is_null());
+        let config = unsafe { &*config };
+        if config.size < Self::MIN_SIZE {
+            return Err(format_err!(
+                "given `WasmBenchConfig` is {} bytes, but at least {} are required",
+                config.size,
+                Self::MIN_SIZE,
+            ));
+        }
+        Ok(config)
+    }
+
     fn working_dir(&self) -> Result<PathBuf> {
         let working_dir =
             unsafe { std::slice::from_raw_parts(self.working_dir_ptr, self.working_dir_len) };
@@ -267,12 +334,17 @@ impl WasmBenchConfig {
 /// that contains the engine's initialized state, and `0` is returned. On
 /// failure, a non-zero status code is returned and `out_bench_ptr` is left
 /// untouched.
+///
+/// The `config` pointer only needs to remain valid for the duration of this
+/// call, as does everything it points to.
 #[unsafe(no_mangle)]
 pub extern "C" fn wasm_bench_create(
-    config: WasmBenchConfig,
+    config: *const WasmBenchConfig,
     out_bench_ptr: *mut *mut c_void,
 ) -> ExitCode {
     let result = (|| -> Result<_> {
+        let config = unsafe { WasmBenchConfig::from_ptr(config)? };
+
         // Clone paths for the core Wasm WASI closure.
         let working_dir = config.working_dir()?;
         let stdout_path = config.stdout_path()?;
