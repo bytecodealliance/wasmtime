@@ -378,19 +378,24 @@ fn define_control_flow(
         Load from a memory location to possibly trigger a resumeable
         interruption.
 
-        - Load a pointer-sized value from memory at `load_ptr`, and throw it
-          away.
-        - Keep `context` in a fixed register.
-        - Reserve a second register as scratch space. (Exact choices of
-          registers are ISA-specific; see each backend's `get_operands` for
-          which registers and the reasoning behind them.)
-        - Record the address of the load instruction in the binary's trap table.
+        This sequence of operations captures the semantic:
+            - register A := context
+            - Reserve register B as scratch space.
+            - register C := load_ptr
+            - _ := memory[load_ptr]
+            - result := register C
+
+        Exact choices of registers are ISA-specific; see each backend's
+        `get_operands` for the registers and the reasoning behind them.
+
+        In addition, at codegen time, the address of the load instruction is
+        recorded in the binary's trap table.
 
         This instruction aids in implementing virtual-memory-triggered
         interrupts, with the load trapping if the loaded location is
         inaccessible. The trap handler can then take further action, first using
         the trap table to confirm that this instruction was the cause. The
-        handler receives further arbitrary input in `context`. It can use the
+        handler can receive further arbitrary input in `context`. It can use the
         second reserved register as scratch space: for example, to record the
         original resumption address so it can arrange to "return to" a
         trampoline first, which can ultimately then jump to the original
@@ -399,16 +404,16 @@ fn define_control_flow(
         execution will ultimately resume at the load, re-running it; care must
         be taken to ensure it succeeds the second time, lest the whole process
         repeat. This is where the output `next_load_ptr` comes in, carrying a
-        new location to load from. All current backends (x64 and aarch64) pin
-        `load_ptr` and `next_load_ptr` to the same register so a move from the
-        latter to the former does not even need to be emitted.
+        new location to load from. All current implementations (x64 and aarch64)
+        pin `load_ptr` and `next_load_ptr` to the same register so a move from
+        the latter to the former does not even need to be emitted.
         "#,
             &formats.int_add_trap,
         )
         .operands_in(&[
             Operand::new("load_ptr", iAddr).with_doc("memory location to load from"),
             Operand::new("context", iAddr)
-                .with_doc("arbitrary address-sized context to pass to signal handler"),
+                .with_doc("arbitrary address-sized context to place into a known register"),
             Operand::new("code", &imm.trapcode)
                 .with_doc("trap code to record at the load's address"),
         ])

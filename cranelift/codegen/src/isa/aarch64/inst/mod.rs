@@ -979,16 +979,13 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             // `next_load_ptr` updates this as well. x10 is chosen because it is
             // a caller-saved scratch reg with no special role.
             collector.reg_fixed_use(load_ptr, regs::xreg(10));
-            // Demand `context` (the vmctx) go into x0, where the signal
-            // handler can find it and hand it straight to
-            // `task_switch_trampoline` as its first argument.
+            // Demand `context` (the vmctx) go into x0.
             collector.reg_fixed_use(context, regs::xreg(0));
-            // Reserve x9 as a place for the signal handler to put the address
-            // at which to resume once the task switch is done. x9 is caller
-            // saved and has no special role.
+            // Reserve x9 as scratch space. x9 is caller saved and has no
+            // special role.
             //
-            // Define it, so we can use it as the destination of the dead
-            // load rather than consuming another arbitrary reg.
+            // Define it, so we can use it as the destination of the dead load
+            // rather than consuming another arbitrary reg.
             collector.reg_fixed_def(dst, regs::xreg(9));
             // `next_load_ptr` is pinned so embedders know where to write to
             // fill it. It shares x10 with `load_ptr`, above, so filling this

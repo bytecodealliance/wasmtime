@@ -2567,11 +2567,12 @@
             (context Reg (put_in_reg context))
             (dst WritableReg (temp_writable_reg $I64))
             (next_load_ptr WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.InterruptPoll dst
-                                                     load_ptr
-                                                     context
-                                                     trap_code
-                                                     next_load_ptr))))
+            (_ Unit (emit (MInst.InterruptPoll
+                              dst
+                              load_ptr
+                              context
+                              trap_code
+                              next_load_ptr))))
        (output_reg next_load_ptr)))
 
 ;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
