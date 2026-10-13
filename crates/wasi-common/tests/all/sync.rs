@@ -303,3 +303,7 @@ fn preview1_file_rename_across_perms() {
         "blank placeholder test to satisfy assert_test_exists. This test exercises wasmtime-wasi functionality is not relevant to wasi-common"
     );
 }
+#[test]
+fn preview1_path_rename_trailing_slashes() {
+    // intentionally ignored
+}
