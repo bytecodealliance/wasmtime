@@ -4665,16 +4665,29 @@ impl Instance {
                 return Ok(BLOCKED);
             }
 
-            // Save and later restore `next_switch_item` during a sync cancel so
-            // we don't try to switch to it while blocking.
-            let old_next_switch_item = store.concurrent_state_mut()?.save_next_switch_item()?;
+            // For cancelling host tasks save and later restore
+            // `next_switch_item` so that our caller (or canceller) isn't
+            // resumed in the meantime. This is our perrogative as a runtime
+            // where we get to decide whether cancellation of host things blocks
+            // or doesn't, and here we just need to get the final status from
+            // the host side so it shouldn't block.
+            //
+            // A guest subtask, however, may genuinely block, so skip this in
+            // that case.
+            let old_next_switch_item = if is_host {
+                Some(store.concurrent_state_mut()?.save_next_switch_item()?)
+            } else {
+                None
+            };
 
             // Wait for this waitable to get signaled with its terminal
             // status. Once that's done fall through to the shared code.
             store.wait_for_event(self.runtime_instance(caller_instance), waitable)?;
 
-            let state = store.concurrent_state_mut()?;
-            state.restore_next_switch_item(old_next_switch_item)?;
+            if let Some(item) = old_next_switch_item {
+                let state = store.concurrent_state_mut()?;
+                state.restore_next_switch_item(item)?;
+            }
 
             // .. fall through to determine what event's in store for us.
         }
