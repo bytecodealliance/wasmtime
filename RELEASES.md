@@ -7,6 +7,9 @@ Released 2026-10-14.
 * Component-model handle tables are capped only per instance and charged to no limit.
   [GHSA-q554-3cjc-rx7p](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-q554-3cjc-rx7p)
 
+* Filesystem sandbox escape when renaming symlinks with trailing slashes.
+  [GHSA-m9f7-9w4p-gv38](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m9f7-9w4p-gv38)
+
 --------------------------------------------------------------------------------
 
 ## 36.0.17

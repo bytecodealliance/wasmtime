@@ -161,6 +161,16 @@ async fn preview1_path_rename_dir_trailing_slashes() {
         .unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview1_path_rename_trailing_slashes() {
+    let fixture = SandboxFixture::new().unwrap();
+    run(PREVIEW1_PATH_RENAME_TRAILING_SLASHES, |b| {
+        fixture.configure_wasi(b)
+    })
+    .await
+    .expect("run guest");
+    fixture.assert_secure();
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_rename() {
     run(PREVIEW1_PATH_RENAME, |_| {}).await.unwrap()
 }
