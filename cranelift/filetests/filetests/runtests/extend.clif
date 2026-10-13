@@ -551,3 +551,377 @@ block0(v0: i8, v1: i8):
 ; run: %eq_mixed_sign_and_zero_extend(0, 0) == 1
 ; run: %eq_mixed_sign_and_zero_extend(127, 127) == 1
 ; run: %eq_mixed_sign_and_zero_extend(-128, -128) == 0
+
+function %ne_sextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; run: %ne_sextend_i8_i64(0, 0) == 0
+; run: %ne_sextend_i8_i64(0, 1) == 1
+; run: %ne_sextend_i8_i64(1, 0) == 1
+; run: %ne_sextend_i8_i64(-1, 0) == 1
+; run: %ne_sextend_i8_i64(0, -1) == 1
+; run: %ne_sextend_i8_i64(-1, -1) == 0
+; run: %ne_sextend_i8_i64(-128, 127) == 1
+; run: %ne_sextend_i8_i64(127, -128) == 1
+
+function %ne_uextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i64 v0
+    v3 = uextend.i64 v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; run: %ne_uextend_i8_i64(0, 0) == 0
+; run: %ne_uextend_i8_i64(0, 1) == 1
+; run: %ne_uextend_i8_i64(1, 0) == 1
+; run: %ne_uextend_i8_i64(-1, 0) == 1
+; run: %ne_uextend_i8_i64(0, -1) == 1
+; run: %ne_uextend_i8_i64(-1, -1) == 0
+; run: %ne_uextend_i8_i64(-128, 127) == 1
+; run: %ne_uextend_i8_i64(127, -128) == 1
+
+function %sge_sextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp sge v2, v3
+    return v4
+}
+
+; run: %sge_sextend_i8_i64(0, 0) == 1
+; run: %sge_sextend_i8_i64(0, 1) == 0
+; run: %sge_sextend_i8_i64(1, 0) == 1
+; run: %sge_sextend_i8_i64(-1, 0) == 0
+; run: %sge_sextend_i8_i64(0, -1) == 1
+; run: %sge_sextend_i8_i64(-1, -1) == 1
+; run: %sge_sextend_i8_i64(-128, 127) == 0
+; run: %sge_sextend_i8_i64(127, -128) == 1
+
+function %sle_sextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp sle v2, v3
+    return v4
+}
+
+; run: %sle_sextend_i8_i64(0, 0) == 1
+; run: %sle_sextend_i8_i64(0, 1) == 1
+; run: %sle_sextend_i8_i64(1, 0) == 0
+; run: %sle_sextend_i8_i64(-1, 0) == 1
+; run: %sle_sextend_i8_i64(0, -1) == 0
+; run: %sle_sextend_i8_i64(-1, -1) == 1
+; run: %sle_sextend_i8_i64(-128, 127) == 1
+; run: %sle_sextend_i8_i64(127, -128) == 0
+
+function %sge_uextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i64 v0
+    v3 = uextend.i64 v1
+    v4 = icmp sge v2, v3
+    return v4
+}
+
+; run: %sge_uextend_i8_i64(0, 0) == 1
+; run: %sge_uextend_i8_i64(0, 1) == 0
+; run: %sge_uextend_i8_i64(1, 0) == 1
+; run: %sge_uextend_i8_i64(-1, 0) == 1
+; run: %sge_uextend_i8_i64(0, -1) == 0
+; run: %sge_uextend_i8_i64(-1, -1) == 1
+; run: %sge_uextend_i8_i64(-128, 127) == 1
+; run: %sge_uextend_i8_i64(127, -128) == 0
+
+function %sgt_uextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i64 v0
+    v3 = uextend.i64 v1
+    v4 = icmp sgt v2, v3
+    return v4
+}
+
+; run: %sgt_uextend_i8_i64(0, 0) == 0
+; run: %sgt_uextend_i8_i64(0, 1) == 0
+; run: %sgt_uextend_i8_i64(1, 0) == 1
+; run: %sgt_uextend_i8_i64(-1, 0) == 1
+; run: %sgt_uextend_i8_i64(0, -1) == 0
+; run: %sgt_uextend_i8_i64(-1, -1) == 0
+; run: %sgt_uextend_i8_i64(-128, 127) == 1
+; run: %sgt_uextend_i8_i64(127, -128) == 0
+
+function %sle_uextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i64 v0
+    v3 = uextend.i64 v1
+    v4 = icmp sle v2, v3
+    return v4
+}
+
+; run: %sle_uextend_i8_i64(0, 0) == 1
+; run: %sle_uextend_i8_i64(0, 1) == 1
+; run: %sle_uextend_i8_i64(1, 0) == 0
+; run: %sle_uextend_i8_i64(-1, 0) == 0
+; run: %sle_uextend_i8_i64(0, -1) == 1
+; run: %sle_uextend_i8_i64(-1, -1) == 1
+; run: %sle_uextend_i8_i64(-128, 127) == 0
+; run: %sle_uextend_i8_i64(127, -128) == 1
+
+function %slt_uextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i64 v0
+    v3 = uextend.i64 v1
+    v4 = icmp slt v2, v3
+    return v4
+}
+
+; run: %slt_uextend_i8_i64(0, 0) == 0
+; run: %slt_uextend_i8_i64(0, 1) == 1
+; run: %slt_uextend_i8_i64(1, 0) == 0
+; run: %slt_uextend_i8_i64(-1, 0) == 0
+; run: %slt_uextend_i8_i64(0, -1) == 1
+; run: %slt_uextend_i8_i64(-1, -1) == 0
+; run: %slt_uextend_i8_i64(-128, 127) == 0
+; run: %slt_uextend_i8_i64(127, -128) == 1
+
+function %uge_sextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp uge v2, v3
+    return v4
+}
+
+; run: %uge_sextend_i8_i64(0, 0) == 1
+; run: %uge_sextend_i8_i64(0, 1) == 0
+; run: %uge_sextend_i8_i64(1, 0) == 1
+; run: %uge_sextend_i8_i64(-1, 0) == 1
+; run: %uge_sextend_i8_i64(0, -1) == 0
+; run: %uge_sextend_i8_i64(-1, -1) == 1
+; run: %uge_sextend_i8_i64(-128, 127) == 1
+; run: %uge_sextend_i8_i64(127, -128) == 0
+
+function %ugt_sextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp ugt v2, v3
+    return v4
+}
+
+; run: %ugt_sextend_i8_i64(0, 0) == 0
+; run: %ugt_sextend_i8_i64(0, 1) == 0
+; run: %ugt_sextend_i8_i64(1, 0) == 1
+; run: %ugt_sextend_i8_i64(-1, 0) == 1
+; run: %ugt_sextend_i8_i64(0, -1) == 0
+; run: %ugt_sextend_i8_i64(-1, -1) == 0
+; run: %ugt_sextend_i8_i64(-128, 127) == 1
+; run: %ugt_sextend_i8_i64(127, -128) == 0
+
+function %ule_sextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp ule v2, v3
+    return v4
+}
+
+; run: %ule_sextend_i8_i64(0, 0) == 1
+; run: %ule_sextend_i8_i64(0, 1) == 1
+; run: %ule_sextend_i8_i64(1, 0) == 0
+; run: %ule_sextend_i8_i64(-1, 0) == 0
+; run: %ule_sextend_i8_i64(0, -1) == 1
+; run: %ule_sextend_i8_i64(-1, -1) == 1
+; run: %ule_sextend_i8_i64(-128, 127) == 0
+; run: %ule_sextend_i8_i64(127, -128) == 1
+
+function %ult_sextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp ult v2, v3
+    return v4
+}
+
+; run: %ult_sextend_i8_i64(0, 0) == 0
+; run: %ult_sextend_i8_i64(0, 1) == 1
+; run: %ult_sextend_i8_i64(1, 0) == 0
+; run: %ult_sextend_i8_i64(-1, 0) == 0
+; run: %ult_sextend_i8_i64(0, -1) == 1
+; run: %ult_sextend_i8_i64(-1, -1) == 0
+; run: %ult_sextend_i8_i64(-128, 127) == 0
+; run: %ult_sextend_i8_i64(127, -128) == 1
+
+function %uge_uextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i64 v0
+    v3 = uextend.i64 v1
+    v4 = icmp uge v2, v3
+    return v4
+}
+
+; run: %uge_uextend_i8_i64(0, 0) == 1
+; run: %uge_uextend_i8_i64(0, 1) == 0
+; run: %uge_uextend_i8_i64(1, 0) == 1
+; run: %uge_uextend_i8_i64(-1, 0) == 1
+; run: %uge_uextend_i8_i64(0, -1) == 0
+; run: %uge_uextend_i8_i64(-1, -1) == 1
+; run: %uge_uextend_i8_i64(-128, 127) == 1
+; run: %uge_uextend_i8_i64(127, -128) == 0
+
+function %ule_uextend_i8_i64(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i64 v0
+    v3 = uextend.i64 v1
+    v4 = icmp ule v2, v3
+    return v4
+}
+
+; run: %ule_uextend_i8_i64(0, 0) == 1
+; run: %ule_uextend_i8_i64(0, 1) == 1
+; run: %ule_uextend_i8_i64(1, 0) == 0
+; run: %ule_uextend_i8_i64(-1, 0) == 0
+; run: %ule_uextend_i8_i64(0, -1) == 1
+; run: %ule_uextend_i8_i64(-1, -1) == 1
+; run: %ule_uextend_i8_i64(-128, 127) == 0
+; run: %ule_uextend_i8_i64(127, -128) == 1
+
+function %sge_uextend_i8_i16(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i16 v0
+    v3 = uextend.i16 v1
+    v4 = icmp sge v2, v3
+    return v4
+}
+
+; run: %sge_uextend_i8_i16(0, 0) == 1
+; run: %sge_uextend_i8_i16(0, 1) == 0
+; run: %sge_uextend_i8_i16(1, 0) == 1
+; run: %sge_uextend_i8_i16(-1, 0) == 1
+; run: %sge_uextend_i8_i16(0, -1) == 0
+; run: %sge_uextend_i8_i16(-1, -1) == 1
+; run: %sge_uextend_i8_i16(-128, 127) == 1
+; run: %sge_uextend_i8_i16(127, -128) == 0
+
+function %sgt_uextend_i8_i16(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i16 v0
+    v3 = uextend.i16 v1
+    v4 = icmp sgt v2, v3
+    return v4
+}
+
+; run: %sgt_uextend_i8_i16(0, 0) == 0
+; run: %sgt_uextend_i8_i16(0, 1) == 0
+; run: %sgt_uextend_i8_i16(1, 0) == 1
+; run: %sgt_uextend_i8_i16(-1, 0) == 1
+; run: %sgt_uextend_i8_i16(0, -1) == 0
+; run: %sgt_uextend_i8_i16(-1, -1) == 0
+; run: %sgt_uextend_i8_i16(-128, 127) == 1
+; run: %sgt_uextend_i8_i16(127, -128) == 0
+
+function %sle_uextend_i8_i16(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i16 v0
+    v3 = uextend.i16 v1
+    v4 = icmp sle v2, v3
+    return v4
+}
+
+; run: %sle_uextend_i8_i16(0, 0) == 1
+; run: %sle_uextend_i8_i16(0, 1) == 1
+; run: %sle_uextend_i8_i16(1, 0) == 0
+; run: %sle_uextend_i8_i16(-1, 0) == 0
+; run: %sle_uextend_i8_i16(0, -1) == 1
+; run: %sle_uextend_i8_i16(-1, -1) == 1
+; run: %sle_uextend_i8_i16(-128, 127) == 0
+; run: %sle_uextend_i8_i16(127, -128) == 1
+
+function %slt_uextend_i8_i16(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = uextend.i16 v0
+    v3 = uextend.i16 v1
+    v4 = icmp slt v2, v3
+    return v4
+}
+
+; run: %slt_uextend_i8_i16(0, 0) == 0
+; run: %slt_uextend_i8_i16(0, 1) == 1
+; run: %slt_uextend_i8_i16(1, 0) == 0
+; run: %slt_uextend_i8_i16(-1, 0) == 0
+; run: %slt_uextend_i8_i16(0, -1) == 1
+; run: %slt_uextend_i8_i16(-1, -1) == 0
+; run: %slt_uextend_i8_i16(-128, 127) == 0
+; run: %slt_uextend_i8_i16(127, -128) == 1
+
+function %sge_sextend_i8_i64_different_input_types(i8, i16) -> i8 {
+block0(v0: i8, v1: i16):
+    v2 = sextend.i64 v0
+    v3 = sextend.i64 v1
+    v4 = icmp sge v2, v3
+    return v4
+}
+
+; run: %sge_sextend_i8_i64_different_input_types(0, 0) == 1
+; run: %sge_sextend_i8_i64_different_input_types(0, 1) == 0
+; run: %sge_sextend_i8_i64_different_input_types(1, 0) == 1
+; run: %sge_sextend_i8_i64_different_input_types(-1, 0) == 0
+; run: %sge_sextend_i8_i64_different_input_types(0, -1) == 1
+; run: %sge_sextend_i8_i64_different_input_types(-1, -1) == 1
+; run: %sge_sextend_i8_i64_different_input_types(-128, 32767) == 0
+; run: %sge_sextend_i8_i64_different_input_types(127, -32768) == 1
+
+function %uge_uextend_i8_i64_different_input_types(i8, i16) -> i8 {
+block0(v0: i8, v1: i16):
+    v2 = uextend.i64 v0
+    v3 = uextend.i64 v1
+    v4 = icmp uge v2, v3
+    return v4
+}
+
+; run: %uge_uextend_i8_i64_different_input_types(0, 0) == 1
+; run: %uge_uextend_i8_i64_different_input_types(0, 1) == 0
+; run: %uge_uextend_i8_i64_different_input_types(1, 0) == 1
+; run: %uge_uextend_i8_i64_different_input_types(-1, 0) == 1
+; run: %uge_uextend_i8_i64_different_input_types(0, -1) == 0
+; run: %uge_uextend_i8_i64_different_input_types(-1, -1) == 0
+; run: %uge_uextend_i8_i64_different_input_types(-128, 32767) == 0
+; run: %uge_uextend_i8_i64_different_input_types(127, -32768) == 0
+
+function %uge_sextend_i64_i128(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = sextend.i128 v0
+    v3 = sextend.i128 v1
+    v4 = icmp uge v2, v3
+    return v4
+}
+
+; run: %uge_sextend_i64_i128(0, 0) == 1
+; run: %uge_sextend_i64_i128(0, 1) == 0
+; run: %uge_sextend_i64_i128(1, 0) == 1
+; run: %uge_sextend_i64_i128(-1, 0) == 1
+; run: %uge_sextend_i64_i128(0, -1) == 0
+; run: %uge_sextend_i64_i128(-1, -1) == 1
+; run: %uge_sextend_i64_i128(-9223372036854775808, 0x7fffffffffffffff) == 1
+; run: %uge_sextend_i64_i128(0x7fffffffffffffff, -9223372036854775808) == 0
+
+function %sgt_uextend_i64_i128(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = icmp sgt v2, v3
+    return v4
+}
+
+; run: %sgt_uextend_i64_i128(0, 0) == 0
+; run: %sgt_uextend_i64_i128(0, 1) == 0
+; run: %sgt_uextend_i64_i128(1, 0) == 1
+; run: %sgt_uextend_i64_i128(-1, 0) == 1
+; run: %sgt_uextend_i64_i128(0, -1) == 0
+; run: %sgt_uextend_i64_i128(-1, -1) == 0
+; run: %sgt_uextend_i64_i128(-9223372036854775808, 0x7fffffffffffffff) == 1
+; run: %sgt_uextend_i64_i128(0x7fffffffffffffff, -9223372036854775808) == 0

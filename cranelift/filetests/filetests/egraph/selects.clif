@@ -946,3 +946,165 @@ block0(v0: i32, v1: i32):
 ;     v5 = select v3, v0, v4
 ;     return v5
 ; }
+
+function %bor_select_constants_right_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 5
+    v5 = bor v3, v4
+    return v5
+}
+
+; function %bor_select_constants_right_i64(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 21
+;     v7 = iconst.i64 37
+;     v8 = select v0, v6, v7  ; v6 = 21, v7 = 37
+;     return v8
+; }
+
+function %bor_select_constants_left_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 5
+    v5 = bor v4, v3
+    return v5
+}
+
+; function %bor_select_constants_left_i64(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 21
+;     v7 = iconst.i64 37
+;     v8 = select v0, v6, v7  ; v6 = 21, v7 = 37
+;     return v8
+; }
+
+function %bxor_select_constants_right_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 5
+    v5 = bxor v3, v4
+    return v5
+}
+
+; function %bxor_select_constants_right_i64(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 20
+;     v7 = iconst.i64 36
+;     v8 = select v0, v6, v7  ; v6 = 20, v7 = 36
+;     return v8
+; }
+
+function %bxor_select_constants_left_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 5
+    v5 = bxor v4, v3
+    return v5
+}
+
+; function %bxor_select_constants_left_i64(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 20
+;     v7 = iconst.i64 36
+;     v8 = select v0, v6, v7  ; v6 = 20, v7 = 36
+;     return v8
+; }
+
+function %isub_select_constants_left_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 85
+    v5 = isub v4, v3
+    return v5
+}
+
+; function %isub_select_constants_left_i64(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 68
+;     v7 = iconst.i64 52
+;     v8 = select v0, v6, v7  ; v6 = 68, v7 = 52
+;     return v8
+; }
+
+function %isub_select_constants_right_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 85
+    v5 = isub v3, v4
+    return v5
+}
+
+; function %isub_select_constants_right_i64(i8) -> i64 fast {
+; block0(v0: i8):
+;     v6 = iconst.i64 -68
+;     v7 = iconst.i64 -52
+;     v8 = select v0, v6, v7  ; v6 = -68, v7 = -52
+;     return v8
+; }
+
+function %isub_select_constants_left_i8_wrapping(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 127
+    v2 = iconst.i8 -128
+    v3 = select v0, v1, v2
+    v4 = iconst.i8 1
+    v5 = isub v4, v3
+    return v5
+}
+
+; function %isub_select_constants_left_i8_wrapping(i8) -> i8 fast {
+; block0(v0: i8):
+;     v6 = iconst.i8 -126
+;     v7 = iconst.i8 -127
+;     v8 = select v0, v6, v7  ; v6 = -126, v7 = -127
+;     return v8
+; }
+
+function %isub_select_constants_right_i8_wrapping(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 127
+    v2 = iconst.i8 -128
+    v3 = select v0, v1, v2
+    v4 = iconst.i8 1
+    v5 = isub v3, v4
+    return v5
+}
+
+; function %isub_select_constants_right_i8_wrapping(i8) -> i8 fast {
+; block0(v0: i8):
+;     v6 = iconst.i8 126
+;     v1 = iconst.i8 127
+;     v7 = select v0, v6, v1  ; v6 = 126, v1 = 127
+;     return v7
+; }
+
+function %bor_select_nonconstant_branch_i64(i8, i64) -> i64 {
+block0(v0: i8, v1: i64):
+    v2 = iconst.i64 17
+    v3 = select v0, v2, v1
+    v4 = iconst.i64 5
+    v5 = bor v3, v4
+    return v5
+}
+
+; function %bor_select_nonconstant_branch_i64(i8, i64) -> i64 fast {
+; block0(v0: i8, v1: i64):
+;     v2 = iconst.i64 17
+;     v3 = select v0, v2, v1  ; v2 = 17
+;     v4 = iconst.i64 5
+;     v5 = bor v3, v4  ; v4 = 5
+;     return v5
+; }

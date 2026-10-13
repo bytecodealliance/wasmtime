@@ -1302,3 +1302,165 @@ block0(v0: i8):
 ; run: %select_constant_shift_masked_i8(1) == 12
 ; run: %select_constant_shift_masked_i8(2) == 12
 ; run: %select_constant_shift_masked_i8(-1) == 12
+
+function %bor_sshr_sshr_same_count_i32(i32, i32, i8) -> i32 {
+block0(v0: i32, v1: i32, v2: i8):
+    v3 = sshr v0, v2
+    v4 = sshr v1, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %bor_sshr_sshr_same_count_i32(0, 0, 0) == 0
+; run: %bor_sshr_sshr_same_count_i32(-1, -2147483648, 0) == -1
+; run: %bor_sshr_sshr_same_count_i32(-1, -2147483648, 1) == -1
+; run: %bor_sshr_sshr_same_count_i32(-2147483648, 2147483647, 1) == -1
+; run: %bor_sshr_sshr_same_count_i32(-1, -2147483648, 31) == -1
+; run: %bor_sshr_sshr_same_count_i32(-1, -2147483648, 32) == -1
+; run: %bor_sshr_sshr_same_count_i32(-1, -2147483648, 33) == -1
+; run: %bor_sshr_sshr_same_count_i32(-1, -2147483648, -1) == -1
+; run: %bor_sshr_sshr_same_count_i32(1431655765, 0xaaaaaaaa, 7) == -1
+
+function %bor_ushr_ushr_same_count_i32(i32, i32, i8) -> i32 {
+block0(v0: i32, v1: i32, v2: i8):
+    v3 = ushr v0, v2
+    v4 = ushr v1, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %bor_ushr_ushr_same_count_i32(0, 0, 0) == 0
+; run: %bor_ushr_ushr_same_count_i32(-1, -2147483648, 0) == -1
+; run: %bor_ushr_ushr_same_count_i32(-1, -2147483648, 1) == 2147483647
+; run: %bor_ushr_ushr_same_count_i32(-2147483648, 2147483647, 1) == 2147483647
+; run: %bor_ushr_ushr_same_count_i32(-1, -2147483648, 31) == 1
+; run: %bor_ushr_ushr_same_count_i32(-1, -2147483648, 32) == -1
+; run: %bor_ushr_ushr_same_count_i32(-1, -2147483648, 33) == 2147483647
+; run: %bor_ushr_ushr_same_count_i32(-1, -2147483648, -1) == 1
+; run: %bor_ushr_ushr_same_count_i32(1431655765, 0xaaaaaaaa, 7) == 33554431
+
+function %band_sshr_sshr_same_count_i32(i32, i32, i8) -> i32 {
+block0(v0: i32, v1: i32, v2: i8):
+    v3 = sshr v0, v2
+    v4 = sshr v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_sshr_sshr_same_count_i32(0, 0, 0) == 0
+; run: %band_sshr_sshr_same_count_i32(-1, -2147483648, 0) == -2147483648
+; run: %band_sshr_sshr_same_count_i32(-1, -2147483648, 1) == -1073741824
+; run: %band_sshr_sshr_same_count_i32(-2147483648, 2147483647, 1) == 0
+; run: %band_sshr_sshr_same_count_i32(-1, -2147483648, 31) == -1
+; run: %band_sshr_sshr_same_count_i32(-1, -2147483648, 32) == -2147483648
+; run: %band_sshr_sshr_same_count_i32(-1, -2147483648, 33) == -1073741824
+; run: %band_sshr_sshr_same_count_i32(-1, -2147483648, -1) == -1
+; run: %band_sshr_sshr_same_count_i32(1431655765, 0xaaaaaaaa, 7) == 0
+
+function %band_ushr_ushr_same_count_i32(i32, i32, i8) -> i32 {
+block0(v0: i32, v1: i32, v2: i8):
+    v3 = ushr v0, v2
+    v4 = ushr v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_ushr_ushr_same_count_i32(0, 0, 0) == 0
+; run: %band_ushr_ushr_same_count_i32(-1, -2147483648, 0) == -2147483648
+; run: %band_ushr_ushr_same_count_i32(-1, -2147483648, 1) == 1073741824
+; run: %band_ushr_ushr_same_count_i32(-2147483648, 2147483647, 1) == 0
+; run: %band_ushr_ushr_same_count_i32(-1, -2147483648, 31) == 1
+; run: %band_ushr_ushr_same_count_i32(-1, -2147483648, 32) == -2147483648
+; run: %band_ushr_ushr_same_count_i32(-1, -2147483648, 33) == 1073741824
+; run: %band_ushr_ushr_same_count_i32(-1, -2147483648, -1) == 1
+; run: %band_ushr_ushr_same_count_i32(1431655765, 0xaaaaaaaa, 7) == 0
+
+function %band_sshr_ushr_same_count_i32(i32, i32, i8) -> i32 {
+block0(v0: i32, v1: i32, v2: i8):
+    v3 = sshr v0, v2
+    v4 = ushr v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_sshr_ushr_same_count_i32(0, 0, 0) == 0
+; run: %band_sshr_ushr_same_count_i32(-1, -2147483648, 0) == -2147483648
+; run: %band_sshr_ushr_same_count_i32(-1, -2147483648, 1) == 1073741824
+; run: %band_sshr_ushr_same_count_i32(-2147483648, 2147483647, 1) == 0
+; run: %band_sshr_ushr_same_count_i32(-1, -2147483648, 31) == 1
+; run: %band_sshr_ushr_same_count_i32(-1, -2147483648, 32) == -2147483648
+; run: %band_sshr_ushr_same_count_i32(-1, -2147483648, 33) == 1073741824
+; run: %band_sshr_ushr_same_count_i32(-1, -2147483648, -1) == 1
+; run: %band_sshr_ushr_same_count_i32(1431655765, 0xaaaaaaaa, 7) == 0
+
+function %band_ushr_sshr_same_count_i32(i32, i32, i8) -> i32 {
+block0(v0: i32, v1: i32, v2: i8):
+    v3 = ushr v0, v2
+    v4 = sshr v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_ushr_sshr_same_count_i32(0, 0, 0) == 0
+; run: %band_ushr_sshr_same_count_i32(-1, -2147483648, 0) == -2147483648
+; run: %band_ushr_sshr_same_count_i32(-1, -2147483648, 1) == 1073741824
+; run: %band_ushr_sshr_same_count_i32(-2147483648, 2147483647, 1) == 0
+; run: %band_ushr_sshr_same_count_i32(-1, -2147483648, 31) == 1
+; run: %band_ushr_sshr_same_count_i32(-1, -2147483648, 32) == -2147483648
+; run: %band_ushr_sshr_same_count_i32(-1, -2147483648, 33) == 1073741824
+; run: %band_ushr_sshr_same_count_i32(-1, -2147483648, -1) == 1
+; run: %band_ushr_sshr_same_count_i32(1431655765, 0xaaaaaaaa, 7) == 0
+
+function %band_ushr_different_counts_i32(i32, i32, i8, i8) -> i32 {
+block0(v0: i32, v1: i32, v2: i8, v3: i8):
+    v4 = ushr v0, v2
+    v5 = ushr v1, v3
+    v6 = band v4, v5
+    return v6
+}
+
+; run: %band_ushr_different_counts_i32(-1, -2147483648, 1, 2) == 536870912
+; run: %band_ushr_different_counts_i32(-1, -2147483648, 31, 0) == 0
+; run: %band_ushr_different_counts_i32(1431655765, 0xaaaaaaaa, 3, 4) == 178956970
+
+function %masked_ishl_low_mask_i32(i32, i8) -> i32 {
+block0(v0: i32, v1: i8):
+    v2 = iconst.i32 255
+    v3 = band v0, v2
+    v4 = ishl v3, v1
+    v5 = band v4, v2
+    return v5
+}
+
+; run: %masked_ishl_low_mask_i32(0, 0) == 0
+; run: %masked_ishl_low_mask_i32(-1, 0) == 255
+; run: %masked_ishl_low_mask_i32(-1, 1) == 254
+; run: %masked_ishl_low_mask_i32(1, 7) == 128
+; run: %masked_ishl_low_mask_i32(2, 1) == 4
+; run: %masked_ishl_low_mask_i32(2, 2) == 8
+; run: %masked_ishl_low_mask_i32(256, 0) == 0
+; run: %masked_ishl_low_mask_i32(257, 1) == 2
+; run: %masked_ishl_low_mask_i32(-1, 32) == 255
+; run: %masked_ishl_low_mask_i32(-1, 33) == 254
+; run: %masked_ishl_low_mask_i32(-1, -1) == 0
+
+function %masked_ishl_noncontiguous_mask_i32(i32, i8) -> i32 {
+block0(v0: i32, v1: i8):
+    v2 = iconst.i32 5
+    v3 = band v0, v2
+    v4 = ishl v3, v1
+    v5 = band v4, v2
+    return v5
+}
+
+; run: %masked_ishl_noncontiguous_mask_i32(0, 0) == 0
+; run: %masked_ishl_noncontiguous_mask_i32(-1, 0) == 5
+; run: %masked_ishl_noncontiguous_mask_i32(-1, 1) == 0
+; run: %masked_ishl_noncontiguous_mask_i32(1, 7) == 0
+; run: %masked_ishl_noncontiguous_mask_i32(2, 1) == 0
+; run: %masked_ishl_noncontiguous_mask_i32(2, 2) == 0
+; run: %masked_ishl_noncontiguous_mask_i32(256, 0) == 0
+; run: %masked_ishl_noncontiguous_mask_i32(257, 1) == 0
+; run: %masked_ishl_noncontiguous_mask_i32(-1, 32) == 5
+; run: %masked_ishl_noncontiguous_mask_i32(-1, 33) == 0
+; run: %masked_ishl_noncontiguous_mask_i32(-1, -1) == 0

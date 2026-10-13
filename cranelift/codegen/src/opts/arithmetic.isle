@@ -2,19 +2,19 @@
 ;; eg: `iadd`, `isub`, `ineg`, `imul`, `fadd`, `fsub`, `fmul`
 
 ;; For commutative instructions, we depend on cprop.isle pushing immediates to
-;; the right, and thus only simplify patterns like `x+0`, not `0+x`.
+;; the right, and thus only simplify patterns like `x+0`, not `0+x`
 
-;; x+0 == x.
+;; x+0 == x
 (rule iadd_x_plus_zero (simplify (iadd ty
                       x
                       (all_zero ty)))
       (subsume x))
-;; x-0 == x.
+;; x-0 == x
 (rule (simplify (isub ty
                       x
                       (all_zero ty)))
       (subsume x))
-;; 0-x == (ineg x).
+;; 0-x == (ineg x)
 (rule (simplify (isub ty
                       (all_zero ty)
                       x))
@@ -31,37 +31,37 @@
 (rule (simplify (isub ty x (ineg ty y)))
       (iadd ty x y))
 
-;; ineg(ineg(x)) == x.
+;; ineg(ineg(x)) == x
 (rule (simplify (ineg ty (ineg ty x))) (subsume x))
 
-;; ineg(x) * ineg(y) == x*y.
+;; ineg(x) * ineg(y) == x*y
 (rule (simplify (imul ty (ineg ty x) (ineg ty y)))
       (subsume (imul ty x y)))
 
-;; iabs(ineg(x)) == iabs(x).
+;; iabs(ineg(x)) == iabs(x)
 (rule (simplify (iabs ty (ineg ty x)))
       (iabs ty x))
 
-;; iabs(iabs(x)) == iabs(x).
+;; iabs(iabs(x)) == iabs(x)
 (rule (simplify (iabs ty inner @ (iabs ty x)))
       (subsume inner))
 
-;; x-x == 0.
+;; x-x == 0
 (rule (simplify (isub ty x x)) (subsume (all_zero ty)))
 
-;; x*1 == x.
+;; x*1 == x
 (rule (simplify (imul ty
                       x
                       (iconst_u ty 1)))
       (subsume x))
 
-;; x*0 == 0.
+;; x*0 == 0
 (rule (simplify (imul ty
                       _
                       zero @ (all_zero ty)))
       (subsume zero))
 
-;; x*-1 == ineg(x).
+;; x*-1 == ineg(x)
 (rule (simplify (imul ty x (iconst_s ty -1)))
       (ineg ty x))
 
@@ -75,15 +75,15 @@
 (rule (simplify (bnot ty (iadd ty x (iconst_s ty -1))))
       (ineg ty x))
 
-;; x / 1 == x.
+;; x / 1 == x
 (rule (simplify_skeleton (sdiv x (iconst_s ty 1))) x)
 (rule (simplify_skeleton (udiv x (iconst_u ty 1))) x)
 
-;; Unsigned `x / d == x >> ilog2(d)` when d is a power of two.
+;; Unsigned `x / d == x >> ilog2(d)` when d is a power of two
 (rule (simplify_skeleton (udiv x (iconst_u ty (u64_extract_power_of_two d))))
       (ushr ty x (iconst_u ty (u64_ilog2 d))))
 
-;; Signed `x / d` when d is a power of two is a bit more involved...
+;; Signed `x / d` when d is a power of two is a bit more involved
 (rule (simplify_skeleton (sdiv x (iconst_u ty (u64_extract_power_of_two d))))
       (if-let true (u64_gt d 1))
       ;; This rule musn't fire for the most negative number - which looks like
@@ -98,7 +98,7 @@
         t4))
 
 ;; And signed `x / d` when d is a negative power of two is the same, but with a
-;; negation.
+;; negation
 (rule (simplify_skeleton (sdiv x (iconst_s ty d)))
       (if-let true (i64_is_negative_power_of_two d))
       (if-let true (i64_ne d -1))
@@ -110,7 +110,7 @@
             (t5 Value (ineg ty t4)))
         t5))
 
-;; General cases for `udiv` with constant divisors.
+;; General cases for `udiv` with constant divisors
 (rule (simplify_skeleton (udiv x (iconst_u $I32 (u64_extract_non_zero (u32_from_u64 d)))))
       (if-let false (u32_is_power_of_two d))
       (apply_div_const_magic_u32 (Opcode.Udiv) x d))
@@ -118,7 +118,7 @@
       (if-let false (u64_is_power_of_two d))
       (apply_div_const_magic_u64 (Opcode.Udiv) x d))
 
-;; General cases for `sdiv` with constant divisors.
+;; General cases for `sdiv` with constant divisors
 (rule (simplify_skeleton (sdiv x (iconst_s $I32 (i64_extract_non_zero (i32_from_i64 d)))))
       (if-let false (i64_is_any_sign_power_of_two d))
       (apply_div_const_magic_s32 (Opcode.Sdiv) x d))
@@ -131,17 +131,17 @@
 (rule (simplify_skeleton (srem x (iconst_u ty 1))) (all_zero ty))
 (rule (simplify_skeleton (srem x (iconst_s ty -1))) (all_zero ty))
 
-;; Unsigned `x % d == x & ((1 << ilog2(d)) - 1)` when `d` is a power of two.
+;; Unsigned `x % d == x & ((1 << ilog2(d)) - 1)` when `d` is a power of two
 (rule (simplify_skeleton (urem x (iconst_u ty (u64_extract_power_of_two d))))
       (if-let true (u64_gt d 1))
       (let ((mask Value (iconst_u ty (u64_sub (u64_shl 1 (u64_ilog2 d)) 1))))
         (band ty x mask)))
 
 ;; Signed `x % d` when `d` is a (possibly negative) power of two is a little
-;; more complicated.
+;; more complicated
 (rule (simplify_skeleton (srem x d_val @ (iconst_s ty d)))
       ;; Interestingly, this same sequence works for both positive and negative
-      ;; powers of two.
+      ;; powers of two
       (if-let true (i64_is_any_sign_power_of_two d))
       (if-let true (i64_ne d 1))
       (if-let true (i64_ne d -1))
@@ -153,7 +153,7 @@
             (t5 Value (isub ty x t4)))
         t5))
 
-;; General cases for `urem` with constant divisors.
+;; General cases for `urem` with constant divisors
 (rule (simplify_skeleton (urem x (iconst_u $I32 (u64_extract_non_zero (u32_from_u64 d)))))
       (if-let false (u32_is_power_of_two d))
       (apply_div_const_magic_u32 (Opcode.Urem) x d))
@@ -161,7 +161,7 @@
       (if-let false (u64_is_power_of_two d))
       (apply_div_const_magic_u64 (Opcode.Urem) x d))
 
-;; General cases for `srem` with constant divisors.
+;; General cases for `srem` with constant divisors
 (rule (simplify_skeleton (srem x (iconst_s $I32 (i64_extract_non_zero (i32_from_i64 d)))))
       (if-let false (i64_is_any_sign_power_of_two d))
       (apply_div_const_magic_s32 (Opcode.Srem) x d))
@@ -169,28 +169,28 @@
       (if-let false (i64_is_any_sign_power_of_two d))
       (apply_div_const_magic_s64 (Opcode.Srem) x d))
 
-;; x*2 == x+x.
+;; x*2 == x+x
 (rule (simplify (imul ty x (iconst_u _ 2)))
       (iadd ty x x))
 
-;; x*c == x<<log2(c) when c is a power of two.
+;; x*c == x<<log2(c) when c is a power of two
 ;;
 ;; Note that the type of `iconst` must be the same as the type of `imul`,
 ;; so these rules can only fire in situations where it's safe to construct an
-;; `iconst` of that type.
+;; `iconst` of that type
 (rule (simplify (imul ty x (iconst _ (imm64_power_of_two c))))
       (ishl ty x (iconst ty (imm64 c))))
 
-;; fneg(fneg(x)) == x.
+;; fneg(fneg(x)) == x
 (rule (simplify (fneg ty (fneg ty x))) (subsume x))
 
 ;; If both of the multiplied arguments to an `fma` are negated then remove
-;; both of them since they cancel out.
+;; both of them since they cancel out
 (rule (simplify (fma ty (fneg ty x) (fneg ty y) z))
       (fma ty x y z))
 
 ;; If both of the multiplied arguments to an `fmul` are negated then remove
-;; both of them since they cancel out.
+;; both of them since they cancel out
 (rule fmul_fneg_fneg (simplify (fmul ty (fneg ty x) (fneg ty y)))
       (fmul ty x y))
 
@@ -214,7 +214,7 @@
 ;; type so remove any unnecessary `uextend` or `sextend` to give backends
 ;; the chance to convert from the smallest integral type to the float. This
 ;; can help lowerings on x64 for example which has a less efficient u64-to-float
-;; conversion than other bit widths.
+;; conversion than other bit widths
 (rule (simplify (fcvt_from_uint ty (uextend _ val)))
       (fcvt_from_uint ty val))
 (rule (simplify (fcvt_from_sint ty (sextend _ val)))
@@ -291,7 +291,7 @@
   (eq ty y (iconst ty1 (imm64 (u64_div z x)))))
 
 ;; (x + y) + (-y) ==> x
-;; and equivalent operand-order variants.
+;; and equivalent operand-order variants
 (rule (simplify (iadd ty (iadd ty x y) (ineg ty y))) x)
 (rule (simplify (iadd ty (ineg ty y) (iadd ty x y))) x)
 (rule (simplify (iadd ty (iadd ty y x) (ineg ty y))) x)
@@ -394,8 +394,8 @@
 ;; a value of 1 but for vectors this is -1 since each lane is filled with all
 ;; 1s. We use `(all_zero ty)` for falses for both integers and vectors. This is
 ;; because of the Cranelift semantics:
-;; When comparing scalars, the result is 1 if the condition holds, or 0 otherwise.
-;; When comparing vectors, the result is -1 (all-ones) if the condition holds, or 0 otherwise.
+;; When comparing scalars, the result is 1 if the condition holds, or 0 otherwise
+;; When comparing vectors, the result is -1 (all-ones) if the condition holds, or 0 otherwise
 (decl cmp_true (Type) Value)
 (rule 0 (cmp_true (ty_int ty)) (iconst_u ty 1))
 (rule 1 (cmp_true (ty_vec128 ty)) (iconst_s ty -1))
@@ -589,17 +589,17 @@
 ;; -(~x) --> x + 1
 (rule (simplify (ineg (ty_int ty) (bnot ty x))) (iadd ty x (iconst_u ty 1)))
 
-;; ~(-x) --> x - 1.
+;; ~(-x) --> x - 1
 (rule (simplify (bnot (ty_int ty) (ineg ty x))) (isub ty x (iconst_u ty 1)))
 
 ;; -1 - x --> ~x
 (rule (simplify (isub ty (iconst_s ty -1) x)) (bnot ty x))
 
-;; Negate integer constants at compile time.
+;; -iconst(C) --> iconst(-C)
 (rule (simplify (ineg (fits_in_64 ty) (iconst ty x)))
       (iconst ty (imm64_neg ty x)))
 
-;; -(X * C) = X * (-C)
+;; -(x * C) --> x * (-C)
 (rule (simplify (ineg (fits_in_64 ty) (imul ty x (iconst ty c))))
       (imul ty x (iconst ty (imm64_neg ty c))))
 
@@ -625,11 +625,11 @@
 (rule (simplify_skeleton (udiv x (ishl ty (iconst_u ty 1) y)))
       (ushr ty x y))
 
-;; x %u (1 << k) --> x & ((1 << k) - 1).
+;; x %u (1 << k) --> x & ((1 << k) - 1)
 (rule (simplify_skeleton (urem x divisor @ (ishl ty (iconst_u ty 1) k)))
       (band ty x (isub ty divisor (iconst_u ty 1))))
 
-;; (x - (y & M)) + y --> (y & ~M) + x.
+;; (x - (y & M)) + y --> (y & ~M) + x
 (rule (simplify (iadd (fits_in_64 ty)
                       (isub ty x (band ty y (iconst ty z)))
                       y))
@@ -647,7 +647,7 @@
                       (band ty y (iconst ty z))))
       (iadd ty (band ty y (iconst ty (imm64_not ty z))) x))
 
-;; ((1 << k) + 1) * y --> (y << k) + y.
+;; ((1 << k) + 1) * y --> (y << k) + y
 (rule (simplify (imul ty
                       (iadd ty (ishl ty (iconst_u ty 1) x) (iconst_u ty 1))
                       y))
@@ -657,11 +657,11 @@
                       (iadd ty (ishl ty (iconst_u ty 1) y) (iconst_u ty 1))))
       (iadd ty (ishl ty x y) x))
 
-;; x - (x & M) --> x & ~M.
+;; x - (x & M) --> x & ~M
 (rule (simplify (isub (fits_in_64 ty) x (band ty x (iconst ty y))))
       (band ty x (iconst ty (imm64_not ty y))))
 
-;; (x + C1) - (y + C2) --> (x - y) + (C1 - C2).
+;; (x + C1) - (y + C2) --> (x - y) + (C1 - C2)
 (rule (simplify (isub (fits_in_64 ty)
                       (iadd ty x (iconst ty y))
                       (iadd ty z (iconst ty p))))
@@ -675,7 +675,7 @@
                       (isub ty z (iconst ty p))))
       (iadd ty (isub ty x z) (iconst ty (imm64_sub ty p y))))
 
-;; (x + C1) + (C2 - y) --> (x - y) + (C1 + C2).
+;; (x + C1) + (C2 - y) --> (x - y) + (C1 + C2)
 (rule (simplify (iadd (fits_in_64 ty)
                       (iadd ty x (iconst ty y))
                       (isub ty (iconst ty z) p)))

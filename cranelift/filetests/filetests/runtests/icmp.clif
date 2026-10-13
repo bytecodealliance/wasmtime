@@ -527,3 +527,39 @@ block0(v0: i32, v1: i32, v2: i32):
 ; run: %eq_rotr_shared(1, 1, 1) == [1, -2147483648]
 ; run: %eq_rotr_shared(1, 2, 1) == [0, -2147483648]
 ; run: %eq_rotr_shared(7, 7, 32) == [1, 7]
+
+function %bor_ne_zero_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp ne v0, v2
+    v4 = icmp ne v1, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %bor_ne_zero_i32(0, 0) == 0
+; run: %bor_ne_zero_i32(0, 1) == 1
+; run: %bor_ne_zero_i32(1, 0) == 1
+; run: %bor_ne_zero_i32(-1, 0) == 1
+; run: %bor_ne_zero_i32(0, -1) == 1
+; run: %bor_ne_zero_i32(-1, -1) == 1
+; run: %bor_ne_zero_i32(-2147483648, 2147483647) == 1
+; run: %bor_ne_zero_i32(1431655765, 0xaaaaaaaa) == 1
+
+function %band_eq_zero_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp eq v0, v2
+    v4 = icmp eq v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_eq_zero_i32(0, 0) == 1
+; run: %band_eq_zero_i32(0, 1) == 0
+; run: %band_eq_zero_i32(1, 0) == 0
+; run: %band_eq_zero_i32(-1, 0) == 0
+; run: %band_eq_zero_i32(0, -1) == 0
+; run: %band_eq_zero_i32(-1, -1) == 0
+; run: %band_eq_zero_i32(-2147483648, 2147483647) == 0
+; run: %band_eq_zero_i32(1431655765, 0xaaaaaaaa) == 0

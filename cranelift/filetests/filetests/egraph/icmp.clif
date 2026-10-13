@@ -1447,3 +1447,37 @@ block0(v0: i32, v1: i32, v2: i32):
 ;     v3 = rotr v0, v2
 ;     return v6, v3
 ; }
+
+function %bor_ne_zero_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp ne v0, v2
+    v4 = icmp ne v1, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; function %bor_ne_zero_i32(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = bor v0, v1
+;     v2 = iconst.i32 0
+;     v7 = icmp ne v6, v2  ; v2 = 0
+;     return v7
+; }
+
+function %band_eq_zero_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp eq v0, v2
+    v4 = icmp eq v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; function %band_eq_zero_i32(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = bor v0, v1
+;     v2 = iconst.i32 0
+;     v7 = icmp eq v6, v2  ; v2 = 0
+;     return v7
+; }
