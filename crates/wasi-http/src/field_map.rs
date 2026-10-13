@@ -223,9 +223,11 @@ impl FieldMap {
         } else {
             *size + val_size
         };
-        update_size(size, limit, new_size)?;
+        if new_size > limit {
+            return Err(FieldMapError::TotalSizeTooBig);
+        }
         let already_present = map.try_append(key, value)?;
-        self.size = new_size;
+        *size = new_size;
         Ok(already_present)
     }
 
@@ -362,6 +364,7 @@ mod tests {
     use super::{FieldMap, FieldMapError, parse_header_value};
     use crate::default_hooks;
     use http::header::{CONTENT_LENGTH, CONTENT_TYPE};
+    use http::{HeaderName, HeaderValue};
 
     #[test]
     fn test_immutable() {
@@ -445,6 +448,21 @@ mod tests {
         assert_eq!(map.size, 0);
 
         Ok(())
+    }
+
+    #[test]
+    fn append_raw_too_many_fields_keeps_size() {
+        let mut map = FieldMap::new_mutable(usize::MAX);
+        let mut i = 0;
+        let err = loop {
+            let name = HeaderName::try_from(format!("foo{i}")).unwrap();
+            match map.append_raw(name, HeaderValue::from_static("bar")) {
+                Ok(_) => i += 1,
+                Err(e) => break e,
+            }
+        };
+        assert_eq!(err, FieldMapError::TooManyFields);
+        assert_eq!(map.size, FieldMap::content_size(&map));
     }
 
     #[test]
