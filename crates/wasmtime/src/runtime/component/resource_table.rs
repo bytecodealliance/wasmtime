@@ -36,6 +36,8 @@ impl core::error::Error for ResourceTableError {}
 pub struct ResourceTable {
     entries: Vec<Entry>,
     free_head: Option<usize>,
+    // Number of reusable slots on the free list, excluding debug tombstones.
+    free_count: usize,
     max_capacity: usize,
     live: usize,
 }
@@ -134,16 +136,8 @@ impl ResourceTable {
     /// the number of backing slots. Debug tombstones are not reusable. No table
     /// mutations may occur between this check and the batch of pushes.
     #[cfg(any(feature = "component-model-async", test))]
-    pub(crate) fn ensure_capacity(&self, mut additional: usize) -> Result<(), ResourceTableError> {
-        let mut free = self.free_head;
-        while additional > 0 {
-            let Some(index) = free else { break };
-            let Entry::Free { next } = &self.entries[index] else {
-                unreachable!()
-            };
-            free = *next;
-            additional -= 1;
-        }
+    pub(crate) fn ensure_capacity(&self, additional: usize) -> Result<(), ResourceTableError> {
+        let additional = additional.saturating_sub(self.free_count);
         if additional == 0 {
             return Ok(());
         }
@@ -180,6 +174,7 @@ impl ResourceTable {
         ResourceTable {
             entries: Vec::with_capacity(capacity),
             free_head: None,
+            free_count: 0,
             max_capacity: DEFAULT_MAX_CAPACITY,
             live: 0,
         }
@@ -203,6 +198,7 @@ impl ResourceTable {
                 Entry::Free { next } => self.free_head = *next,
                 Entry::Occupied { .. } => unreachable!(),
             }
+            self.free_count -= 1;
             Some(ix)
         } else {
             None
@@ -240,6 +236,7 @@ impl ResourceTable {
             };
 
             self.free_head = Some(ix);
+            self.free_count += 1;
 
             entry
         };
@@ -633,6 +630,10 @@ fn test_len_and_tombstones() {
     table.ensure_capacity(1).unwrap();
     assert_eq!(table.push(()).unwrap().rep(), rep);
     assert_eq!(table.len(), 1);
+    assert!(matches!(
+        table.ensure_capacity(1),
+        Err(ResourceTableError::Full)
+    ));
 }
 
 #[test]
