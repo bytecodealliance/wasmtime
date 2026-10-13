@@ -1,0 +1,31 @@
+test interpret
+test run
+target aarch64
+target aarch64 has_lse
+target s390x
+target x86_64
+target riscv64 has_a
+target riscv64 has_c has_zcb
+
+; `atomic_cas.i32` must only compare the low 32 bits of the expected value.
+; On aarch64 without LSE, the 32-bit case was comparing the full 64-bit
+; register holding the `ireduce`'d expected value, so garbage in the upper
+; 32 bits (which `ireduce` is allowed to leave behind) made the comparison
+; fail even though the low 32 bits actually matched.
+function %cas_i32_junk_upper_bits(i64) -> i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i64):
+    v1 = iconst.i32 7
+    v2 = stack_addr.i64 ss0
+    store.i32 v1, v2
+
+    v3 = ireduce.i32 v0
+    v4 = iconst.i32 9
+    v5 = atomic_cas.i32 v2, v3, v4
+
+    v6 = load.i32 v2
+    return v6
+}
+; run: %cas_i32_junk_upper_bits(7) == 9
+; run: %cas_i32_junk_upper_bits(0x1_0000_0007) == 9
