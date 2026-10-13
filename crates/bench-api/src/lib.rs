@@ -94,6 +94,7 @@
 //!     execution_end,
 //!     execution_flags_ptr: ptr::null(),
 //!     execution_flags_len: 0,
+//!     cache: false,
 //! };
 //!
 //! let mut bench_api = ptr::null_mut();
@@ -158,7 +159,7 @@ pub const ERR: ExitCode = -1;
 /// Bumped once per release that appends a field, and never otherwise, so a
 /// field added in version `N` is present exactly when the caller's `version` is
 /// at least `N`.
-pub const WASM_BENCH_CONFIG_VERSION: u32 = 0;
+pub const WASM_BENCH_CONFIG_VERSION: u32 = 1;
 
 // Randomize the location of heap objects to avoid accidental locality being an
 // uncontrolled variable that obscures performance evaluation in our
@@ -244,12 +245,32 @@ pub struct WasmBenchConfig {
     /// Added in version 0.
     pub execution_flags_ptr: *const u8,
     pub execution_flags_len: usize,
+
+    /// Whether to enable Wasmtime's compilation cache.
+    ///
+    /// Benchmark runs that measure compilation want this off, so that they
+    /// measure compilation rather than a cache lookup. Benchmark runs that
+    /// measure only instantiation or execution want this on, to avoid spending
+    /// time recompiling the Wasm.
+    ///
+    /// Added in version 1.
+    pub cache: bool,
 }
 
 impl WasmBenchConfig {
     /// The fields every caller must provide, regardless of how old it is.
     const MIN_SIZE: usize =
         std::mem::offset_of!(WasmBenchConfig, execution_flags_len) + size_of::<usize>();
+
+    /// Did the caller provide the field that version `version` added, which
+    /// occupies `field_size` bytes at `offset`?
+    ///
+    /// Both checks must pass for the field to be safe to use.
+    ///
+    /// This enables future extensibility while maintaining ABI compatibility.
+    fn has_field(&self, version: u32, offset: usize, field_size: usize) -> bool {
+        self.version >= version && self.size >= offset + field_size
+    }
 
     /// Borrow a caller-provided config, after checking it is long enough to
     /// contain every required field.
@@ -269,6 +290,18 @@ impl WasmBenchConfig {
             ));
         }
         Ok(config)
+    }
+
+    /// Whether to enable the compilation cache.
+    ///
+    /// Conservatively defaults to disabled for callers that predate the `cache`
+    /// field, so we don't break compilation measurements.
+    fn cache(&self) -> bool {
+        self.has_field(
+            1,
+            std::mem::offset_of!(WasmBenchConfig, cache),
+            size_of::<bool>(),
+        ) && self.cache
     }
 
     fn working_dir(&self) -> Result<PathBuf> {
@@ -354,6 +387,7 @@ pub extern "C" fn wasm_bench_create(
 
         let state = Box::new(BenchState::new(
             options,
+            config.cache(),
             config.compilation_timer,
             config.compilation_start,
             config.compilation_end,
@@ -496,6 +530,7 @@ impl WasiView for HostState {
 impl BenchState {
     fn new(
         mut options: CommonOptions,
+        cache: bool,
         compilation_timer: *mut u8,
         compilation_start: extern "C" fn(*mut u8),
         compilation_end: extern "C" fn(*mut u8),
@@ -508,8 +543,15 @@ impl BenchState {
         make_wasi_cx: impl FnMut() -> Result<WasiP1Ctx> + 'static,
     ) -> Result<Self> {
         let mut config = options.config(None)?;
-        // NB: always disable the compilation cache.
-        config.cache(None);
+
+        // NB: set this either way, since `CommonOptions` enables the cache by
+        // default and we must not break compilation benchmarks.
+        config.cache(if cache {
+            Some(wasmtime::Cache::from_file(None)?)
+        } else {
+            None
+        });
+
         let engine = Engine::new(&config)?;
         let mut linker = Linker::<HostState>::new(&engine);
         let mut component_linker = wasmtime::component::Linker::<HostState>::new(&engine);
