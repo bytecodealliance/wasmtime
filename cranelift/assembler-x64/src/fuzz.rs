@@ -597,6 +597,60 @@ mod test {
         .budget_ms(1_000);
     }
 
+    /// Check every APX form we define against the XED oracle, deterministically.
+    ///
+    /// [`roundtrip`] bails out on APX entirely, because the bundled Capstone
+    /// cannot decode "map 4" encodings at all. That leaves XED as the only
+    /// oracle that ever sees these instructions, and [`smoke_xed`] only reaches
+    /// them by random sampling inside a time budget — so whether a given APX
+    /// form gets checked varies from run to run.
+    ///
+    /// This test instead walks a fixed pseudo-random sequence, so the set of
+    /// instructions it exercises is identical on every run, and it fails if APX
+    /// coverage silently collapses (e.g. if the generated `Arbitrary` impl stops
+    /// producing these variants).
+    #[cfg(all(feature = "fuzz-xed", target_arch = "x86_64", target_os = "linux"))]
+    #[test]
+    fn apx_xed_oracle() {
+        use std::collections::BTreeSet;
+
+        // A fixed LCG rather than `Unstructured::arbitrary` over random input:
+        // reproducibility is the whole point of this test.
+        let mut state: u64 = 0x2545_f491_4f6c_dd1d;
+        let mut buf = [0u8; 64];
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+
+        for _ in 0..50_000 {
+            for b in buf.iter_mut() {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                *b = (state >> 33) as u8;
+            }
+            let mut u = Unstructured::new(&buf);
+            let Ok(inst) = Inst::<FuzzRegs>::arbitrary(&mut u) else {
+                continue;
+            };
+            if !features_mention(inst.features(), Feature::apx) {
+                continue;
+            }
+            roundtrip_xed(&inst);
+            // The debug rendering is `<form>(<form> { .. })`; keep the name so
+            // we can report which forms were actually covered.
+            let rendered = format!("{inst:x?}");
+            seen.insert(rendered.split('(').next().unwrap_or("?").to_string());
+        }
+
+        println!("APX forms exercised against XED ({}):", seen.len());
+        for form in &seen {
+            println!("  {form}");
+        }
+        assert!(
+            seen.len() >= 30,
+            "APX coverage of the XED oracle collapsed; only saw {seen:?}"
+        );
+    }
+
     /// Byte-level encoding check for the APX NDD (new-data-destination) form of
     /// `ADD`, promoted into EVEX "map 4" via the extended-EVEX prefix.
     ///
