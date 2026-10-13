@@ -28,35 +28,49 @@ fn assert_full(error: wasmtime::Error) {
     );
 }
 
-#[test]
-fn host_transmits_refuse_without_retaining_partial_allocations() -> Result<()> {
+fn check_capacity<R>(
+    new: impl Fn(&mut Store<()>) -> Result<R>,
+    close: impl Fn(&mut R, &mut Store<()>) -> Result<()>,
+) -> Result<()> {
     let engine = engine()?;
-    for capacity in 0..3 {
+    let mut probe = Store::new(&engine, ());
+    let mut resource = new(&mut probe)?;
+    let required = len(&mut probe);
+    assert!(required > 0);
+    close(&mut resource, &mut probe)?;
+    assert_eq!(len(&mut probe), 0);
+
+    for capacity in 0..required {
+        // A fresh store has no previously allocated slots that could be reused
+        // even after lowering the capacity.
         let mut store = Store::new(&engine, ());
         set_capacity(&mut store, capacity);
         for _ in 0..2 {
-            assert_full(StreamReader::new(&mut store, Vec::<u8>::new()).unwrap_err());
-            assert_eq!(len(&mut store), 0);
-            assert_full(
-                FutureReader::new(&mut store, async { wasmtime::error::Ok(0_u8) }).unwrap_err(),
-            );
+            let error = match new(&mut store) {
+                Ok(_) => panic!("allocation succeeded with insufficient capacity"),
+                Err(error) => error,
+            };
+            assert_full(error);
             assert_eq!(len(&mut store), 0);
         }
-        set_capacity(&mut store, 3);
+        set_capacity(&mut store, required);
         for _ in 0..2 {
-            let mut stream = StreamReader::new(&mut store, Vec::<u8>::new())?;
-            assert_eq!(len(&mut store), 3);
-            assert_full(
-                FutureReader::new(&mut store, async { wasmtime::error::Ok(0_u8) }).unwrap_err(),
-            );
-            assert_eq!(len(&mut store), 3);
-            stream.close(&mut store)?;
-            assert_eq!(len(&mut store), 0);
-            let mut future = FutureReader::new(&mut store, async { wasmtime::error::Ok(0_u8) })?;
-            assert_eq!(len(&mut store), 3);
-            future.close(&mut store)?;
+            let mut resource = new(&mut store)?;
+            close(&mut resource, &mut store)?;
             assert_eq!(len(&mut store), 0);
         }
     }
     Ok(())
+}
+
+#[test]
+fn host_transmits_refuse_without_retaining_partial_allocations() -> Result<()> {
+    check_capacity(
+        |store| StreamReader::new(store, Vec::<u8>::new()),
+        |reader, store| reader.close(store),
+    )?;
+    check_capacity(
+        |store| FutureReader::new(store, async { wasmtime::error::Ok(0_u8) }),
+        |reader, store| reader.close(store),
+    )
 }
