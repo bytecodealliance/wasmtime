@@ -293,6 +293,37 @@ fn test_trap_stack_overflow() -> Result<()> {
     Ok(())
 }
 
+#[wasmtime_test]
+fn test_trap_stack_overflow_mutual_recursion(config: &mut Config) -> Result<()> {
+    let max_frames = NonZeroUsize::new(32).unwrap();
+    let wat = r#"
+        (module $rec_mod
+            (func $even (export "even") (call $odd))
+            (func $odd (call $even))
+        )
+    "#;
+
+    config.wasm_backtrace_max_frames(Some(max_frames));
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, wat)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let even = instance.get_typed_func::<(), ()>(&mut store, "even")?;
+
+    let e = even.call(&mut store, ()).unwrap_err();
+
+    // No frame may be skipped, so the frames must alternate between the two
+    // functions.
+    let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
+    assert_eq!(trace.len(), max_frames.get());
+    for pair in trace.windows(2) {
+        assert_ne!(pair[0].func_index(), pair[1].func_index(), "{trace:?}");
+    }
+    assert_eq!(e.downcast::<Trap>()?, Trap::StackOverflow);
+
+    Ok(())
+}
+
 #[test]
 fn trap_display_pretty() -> Result<()> {
     let mut store = Store::<()>::default();
