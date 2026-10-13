@@ -70,7 +70,11 @@ fn parse_path_with_query(path_with_query: &str) -> Option<http::uri::PathAndQuer
     {
         return None;
     }
-    path_with_query.parse().ok()
+    http::uri::Builder::new()
+        .path_and_query(path_with_query)
+        .build()
+        .ok()
+        .and_then(|uri| uri.path_and_query().cloned())
 }
 
 #[cfg(all(test, any(feature = "p2", feature = "p3")))]
