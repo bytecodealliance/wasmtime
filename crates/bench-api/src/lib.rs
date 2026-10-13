@@ -169,144 +169,236 @@ pub const WASM_BENCH_CONFIG_VERSION: u32 = 1;
 static ALLOC: shuffling_allocator::ShufflingAllocator<std::alloc::System> =
     shuffling_allocator::wrap!(&std::alloc::System);
 
-/// Configuration options for the benchmark.
+/// Generate `WasmBenchConfig` and a `Config` accessor for each of its fields.
 ///
-/// This structure is always passed across the bench API by pointer, and new
-/// fields are only ever appended to the end, so that a caller built against an
-/// older version of this structure can still drive a newer bench API library.
-#[repr(C)]
-pub struct WasmBenchConfig {
-    /// The version of this structure that the caller was built against.
-    ///
-    /// Each field's documentation names the version that added it; a field is
-    /// only present when `version` is at least that.
-    pub version: u32,
+/// Tag each field with the `#[since_version = N]` that introduced it. Version 0
+/// fields are mandatory, so their accessors return the field directly; later
+/// fields may be missing from an older caller, so theirs return `Option`.
+macro_rules! define_config {
+    (
+        $(#[doc = $struct_doc:expr])*
+        pub struct $name:ident {
+            $(
+                $(#[doc = $field_doc:expr])*
+                #[since_version = $version:tt]
+                pub $field:ident : $ty:ty,
+            )*
+        }
+    ) => {
+        $(#[doc = $struct_doc])*
+        #[repr(C)]
+        pub struct $name {
+            $(
+                $(#[doc = $field_doc])*
+                pub $field : $ty,
+            )*
+        }
 
-    /// The size of this structure, in bytes, as the caller knows it.
-    ///
-    /// Fields beyond these first `size` bytes were not allocated by the caller
-    /// and must not be read.
-    ///
-    /// This acts as a secondary backstop to `version`.
-    pub size: usize,
+        impl Config<'_> {
+            $(
+                define_config!(@accessor $name, $field, $ty, $version);
+            )*
+        }
+    };
 
-    /// The working directory where benchmarks should be executed.
-    ///
-    /// Added in version 0.
-    pub working_dir_ptr: *const u8,
-    pub working_dir_len: usize,
+    // Version 0 fields are mandatory. `Config::new` rejects any caller too
+    // small to hold them, so they are always in bounds.
+    (@accessor $name:ident, $field:ident, $ty:ty, 0) => {
+        fn $field(&self) -> $ty {
+            unsafe { self.read(std::ptr::addr_of!((*self.ptr).$field)) }
+        }
+    };
 
-    /// The file path that should be created and used as `stdout`.
-    ///
-    /// Added in version 0.
-    pub stdout_path_ptr: *const u8,
-    pub stdout_path_len: usize,
-
-    /// The file path that should be created and used as `stderr`.
-    ///
-    /// Added in version 0.
-    pub stderr_path_ptr: *const u8,
-    pub stderr_path_len: usize,
-
-    /// The (optional) file path that should be opened and used as `stdin`. If
-    /// not provided, then the WASI context will not have a `stdin` initialized.
-    ///
-    /// Added in version 0.
-    pub stdin_path_ptr: *const u8,
-    pub stdin_path_len: usize,
-
-    /// The functions to start and stop performance timers/counters during Wasm
-    /// compilation.
-    ///
-    /// Added in version 0.
-    pub compilation_timer: *mut u8,
-    pub compilation_start: extern "C" fn(*mut u8),
-    pub compilation_end: extern "C" fn(*mut u8),
-
-    /// The functions to start and stop performance timers/counters during Wasm
-    /// instantiation.
-    ///
-    /// Added in version 0.
-    pub instantiation_timer: *mut u8,
-    pub instantiation_start: extern "C" fn(*mut u8),
-    pub instantiation_end: extern "C" fn(*mut u8),
-
-    /// The functions to start and stop performance timers/counters during Wasm
-    /// execution.
-    ///
-    /// Added in version 0.
-    pub execution_timer: *mut u8,
-    pub execution_start: extern "C" fn(*mut u8),
-    pub execution_end: extern "C" fn(*mut u8),
-
-    /// The (optional) flags to use when running Wasmtime. These correspond to
-    /// the flags used when running Wasmtime from the command line.
-    ///
-    /// Added in version 0.
-    pub execution_flags_ptr: *const u8,
-    pub execution_flags_len: usize,
-
-    /// Whether to enable Wasmtime's compilation cache.
-    ///
-    /// Benchmark runs that measure compilation want this off, so that they
-    /// measure compilation rather than a cache lookup. Benchmark runs that
-    /// measure only instantiation or execution want this on, to avoid spending
-    /// time recompiling the Wasm.
-    ///
-    /// Added in version 1.
-    pub cache: bool,
+    // Fields added later may lie outside an older caller's allocation, so they
+    // are only read once `has_field` confirms this caller provided them.
+    (@accessor $name:ident, $field:ident, $ty:ty, $version:tt) => {
+        fn $field(&self) -> Option<$ty> {
+            let offset = std::mem::offset_of!($name, $field);
+            if self.has_field($version, offset, size_of::<$ty>()) {
+                Some(unsafe { self.read(std::ptr::addr_of!((*self.ptr).$field)) })
+            } else {
+                None
+            }
+        }
+    };
 }
 
-impl WasmBenchConfig {
+define_config! {
+    /// Configuration options for the benchmark.
+    ///
+    /// This structure is always passed across the bench API by pointer, and new
+    /// fields are only ever appended to the end, so that a caller built against
+    /// an older version of this structure can still drive a newer bench API
+    /// library.
+    ///
+    /// We only ever read one through [`Config`], never as a reference.
+    pub struct WasmBenchConfig {
+        /// The version of this structure that the caller was built against.
+        ///
+        /// Each field's documentation names the version that added it; a field
+        /// is only present when `version` is at least that.
+        #[since_version = 0]
+        pub version: u32,
+
+        /// The size of this structure, in bytes, as the caller knows it.
+        ///
+        /// Fields beyond these first `size` bytes were not allocated by the
+        /// caller and must not be read.
+        ///
+        /// This acts as a secondary backstop to `version`.
+        #[since_version = 0]
+        pub size: usize,
+
+        /// The working directory where benchmarks should be executed.
+        #[since_version = 0]
+        pub working_dir_ptr: *const u8,
+        #[since_version = 0]
+        pub working_dir_len: usize,
+
+        /// The file path that should be created and used as `stdout`.
+        #[since_version = 0]
+        pub stdout_path_ptr: *const u8,
+        #[since_version = 0]
+        pub stdout_path_len: usize,
+
+        /// The file path that should be created and used as `stderr`.
+        #[since_version = 0]
+        pub stderr_path_ptr: *const u8,
+        #[since_version = 0]
+        pub stderr_path_len: usize,
+
+        /// The (optional) file path that should be opened and used as `stdin`.
+        /// If not provided, then the WASI context will not have a `stdin`
+        /// initialized.
+        #[since_version = 0]
+        pub stdin_path_ptr: *const u8,
+        #[since_version = 0]
+        pub stdin_path_len: usize,
+
+        /// The functions to start and stop performance timers/counters during
+        /// Wasm compilation.
+        #[since_version = 0]
+        pub compilation_timer: *mut u8,
+        #[since_version = 0]
+        pub compilation_start: extern "C" fn(*mut u8),
+        #[since_version = 0]
+        pub compilation_end: extern "C" fn(*mut u8),
+
+        /// The functions to start and stop performance timers/counters during
+        /// Wasm instantiation.
+        #[since_version = 0]
+        pub instantiation_timer: *mut u8,
+        #[since_version = 0]
+        pub instantiation_start: extern "C" fn(*mut u8),
+        #[since_version = 0]
+        pub instantiation_end: extern "C" fn(*mut u8),
+
+        /// The functions to start and stop performance timers/counters during
+        /// Wasm execution.
+        #[since_version = 0]
+        pub execution_timer: *mut u8,
+        #[since_version = 0]
+        pub execution_start: extern "C" fn(*mut u8),
+        #[since_version = 0]
+        pub execution_end: extern "C" fn(*mut u8),
+
+        /// The (optional) flags to use when running Wasmtime. These correspond
+        /// to the flags used when running Wasmtime from the command line.
+        #[since_version = 0]
+        pub execution_flags_ptr: *const u8,
+        #[since_version = 0]
+        pub execution_flags_len: usize,
+
+        /// Whether to enable Wasmtime's compilation cache.
+        ///
+        /// Benchmark runs that measure compilation want this off, so that they
+        /// measure compilation rather than a cache lookup. Benchmark runs that
+        /// measure only instantiation or execution want this on, to avoid
+        /// spending time recompiling the Wasm.
+        #[since_version = 1]
+        pub cache: bool,
+    }
+}
+
+/// A caller-provided [`WasmBenchConfig`], read through its pointer.
+///
+/// Holding the pointer rather than a reference is what keeps this sound. A
+/// `&WasmBenchConfig` would assert that the whole struct is initialized, which
+/// is not true of its padding bytes, nor of the fields belonging to versions
+/// newer than the caller's.
+pub struct Config<'a> {
+    ptr: *const WasmBenchConfig,
+    _lifetime: std::marker::PhantomData<&'a WasmBenchConfig>,
+}
+
+impl<'a> Config<'a> {
     /// The fields every caller must provide, regardless of how old it is.
     const MIN_SIZE: usize =
         std::mem::offset_of!(WasmBenchConfig, execution_flags_len) + size_of::<usize>();
 
-    /// Did the caller provide the field that version `version` added, which
-    /// occupies `field_size` bytes at `offset`?
-    ///
-    /// Both checks must pass for the field to be safe to use.
-    ///
-    /// This enables future extensibility while maintaining ABI compatibility.
-    fn has_field(&self, version: u32, offset: usize, field_size: usize) -> bool {
-        self.version >= version && self.size >= offset + field_size
-    }
-
-    /// Borrow a caller-provided config, after checking it is long enough to
-    /// contain every required field.
+    /// Wrap a caller-provided config pointer, after checking it is large enough
+    /// to hold every mandatory field.
     ///
     /// # Safety
     ///
-    /// `config` must be non-null, aligned, and point to a `size` field that
-    /// accurately describes how many bytes of `WasmBenchConfig` follow it.
-    unsafe fn from_ptr<'a>(config: *const WasmBenchConfig) -> Result<&'a Self> {
-        assert!(!config.is_null());
-        let config = unsafe { &*config };
-        if config.size < Self::MIN_SIZE {
+    /// `ptr` must be non-null, aligned, and point to a `version` and `size`
+    /// that accurately describe the fields that follow, all of which must
+    /// remain valid for `'a`.
+    unsafe fn new(ptr: *const WasmBenchConfig) -> Result<Config<'a>> {
+        assert!(!ptr.is_null());
+        let config = Config {
+            ptr,
+            _lifetime: std::marker::PhantomData,
+        };
+
+        // Reads `size`, which every caller provides, so this is in bounds even
+        // for the oldest one.
+        let size = config.size();
+        if size < Self::MIN_SIZE {
             return Err(format_err!(
                 "given `WasmBenchConfig` is {} bytes, but at least {} are required",
-                config.size,
+                size,
                 Self::MIN_SIZE,
             ));
         }
+
         Ok(config)
+    }
+
+    /// Read one field out of the caller's config.
+    ///
+    /// # Safety
+    ///
+    /// `field` must be a pointer to a field this caller actually provided,
+    /// derived from `self.ptr`.
+    unsafe fn read<T>(&self, field: *const T) -> T {
+        assert!(!field.is_null());
+        assert!(field.is_aligned());
+        unsafe { field.read() }
+    }
+
+    /// Did the caller provide the field that version `version` added, which
+    /// occupies `field_size` bytes at `offset`?
+    ///
+    /// Both checks must pass. `version` alone is the field's real name, but
+    /// trusting it would let a caller that bumped its version without growing
+    /// the struct send us past its allocation; `size` alone cannot tell a field
+    /// apart from the padding that may follow the one before it.
+    fn has_field(&self, version: u32, offset: usize, field_size: usize) -> bool {
+        self.version() >= version && self.size() >= offset + field_size
     }
 
     /// Whether to enable the compilation cache.
     ///
     /// Conservatively defaults to disabled for callers that predate the `cache`
     /// field, so we don't break compilation measurements.
-    fn cache(&self) -> bool {
-        self.has_field(
-            1,
-            std::mem::offset_of!(WasmBenchConfig, cache),
-            size_of::<bool>(),
-        ) && self.cache
+    fn cache_enabled(&self) -> bool {
+        self.cache().unwrap_or(false)
     }
 
     fn working_dir(&self) -> Result<PathBuf> {
         let working_dir =
-            unsafe { std::slice::from_raw_parts(self.working_dir_ptr, self.working_dir_len) };
+            unsafe { std::slice::from_raw_parts(self.working_dir_ptr(), self.working_dir_len()) };
         let working_dir = std::str::from_utf8(working_dir)
             .context("given working directory is not valid UTF-8")?;
         Ok(working_dir.into())
@@ -314,7 +406,7 @@ impl WasmBenchConfig {
 
     fn stdout_path(&self) -> Result<PathBuf> {
         let stdout_path =
-            unsafe { std::slice::from_raw_parts(self.stdout_path_ptr, self.stdout_path_len) };
+            unsafe { std::slice::from_raw_parts(self.stdout_path_ptr(), self.stdout_path_len()) };
         let stdout_path =
             std::str::from_utf8(stdout_path).context("given stdout path is not valid UTF-8")?;
         Ok(stdout_path.into())
@@ -322,30 +414,32 @@ impl WasmBenchConfig {
 
     fn stderr_path(&self) -> Result<PathBuf> {
         let stderr_path =
-            unsafe { std::slice::from_raw_parts(self.stderr_path_ptr, self.stderr_path_len) };
+            unsafe { std::slice::from_raw_parts(self.stderr_path_ptr(), self.stderr_path_len()) };
         let stderr_path =
             std::str::from_utf8(stderr_path).context("given stderr path is not valid UTF-8")?;
         Ok(stderr_path.into())
     }
 
     fn stdin_path(&self) -> Result<Option<PathBuf>> {
-        if self.stdin_path_ptr.is_null() {
+        let stdin_path_ptr = self.stdin_path_ptr();
+        if stdin_path_ptr.is_null() {
             return Ok(None);
         }
 
         let stdin_path =
-            unsafe { std::slice::from_raw_parts(self.stdin_path_ptr, self.stdin_path_len) };
+            unsafe { std::slice::from_raw_parts(stdin_path_ptr, self.stdin_path_len()) };
         let stdin_path =
             std::str::from_utf8(stdin_path).context("given stdin path is not valid UTF-8")?;
         Ok(Some(stdin_path.into()))
     }
 
     fn execution_flags(&self) -> Result<CommonOptions> {
-        let flags = if self.execution_flags_ptr.is_null() {
+        let execution_flags_ptr = self.execution_flags_ptr();
+        let flags = if execution_flags_ptr.is_null() {
             ""
         } else {
             let execution_flags = unsafe {
-                std::slice::from_raw_parts(self.execution_flags_ptr, self.execution_flags_len)
+                std::slice::from_raw_parts(execution_flags_ptr, self.execution_flags_len())
             };
             std::str::from_utf8(execution_flags)
                 .context("given execution flags string is not valid UTF-8")?
@@ -376,7 +470,7 @@ pub extern "C" fn wasm_bench_create(
     out_bench_ptr: *mut *mut c_void,
 ) -> ExitCode {
     let result = (|| -> Result<_> {
-        let config = unsafe { WasmBenchConfig::from_ptr(config)? };
+        let config = unsafe { Config::new(config)? };
 
         // Clone paths for the core Wasm WASI closure.
         let working_dir = config.working_dir()?;
@@ -387,16 +481,16 @@ pub extern "C" fn wasm_bench_create(
 
         let state = Box::new(BenchState::new(
             options,
-            config.cache(),
-            config.compilation_timer,
-            config.compilation_start,
-            config.compilation_end,
-            config.instantiation_timer,
-            config.instantiation_start,
-            config.instantiation_end,
-            config.execution_timer,
-            config.execution_start,
-            config.execution_end,
+            config.cache_enabled(),
+            config.compilation_timer(),
+            config.compilation_start(),
+            config.compilation_end(),
+            config.instantiation_timer(),
+            config.instantiation_start(),
+            config.instantiation_end(),
+            config.execution_timer(),
+            config.execution_start(),
+            config.execution_end(),
             move || {
                 let mut cx = WasiCtx::builder();
 
