@@ -135,6 +135,16 @@ pub extern "C" fn wasmtime_memory_grow(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_memory_discard(
+    store: WasmtimeStoreContextMut<'_>,
+    mem: &Memory,
+    start: u64,
+    count: u64,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(mem.discard(store, start, count), |()| {})
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_memory_page_size(store: WasmtimeStoreContext<'_>, mem: &Memory) -> u64 {
     mem.page_size(store)
 }

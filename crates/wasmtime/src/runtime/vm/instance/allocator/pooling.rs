@@ -715,9 +715,9 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 // Note that at this point it's not clear how many bytes are
                 // resident in memory, so it's inevitably going to leave statistics
                 // a little off. Also note though that non-Linux platforms don't
-                // keep track of resident bytes anyway, and this path is only
-                // reachable on non-Linux platforms because Linux can't return an
-                // error.
+                // keep track of resident bytes anyway, and on Linux this path is
+                // only reachable if removing an image that `Memory::discard`
+                // partly replaced fails.
                 unsafe {
                     self.memories.deallocate(allocation_index, None, 0);
                 }

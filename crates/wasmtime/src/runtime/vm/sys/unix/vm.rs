@@ -58,31 +58,45 @@ pub unsafe fn decommit_pages(iov: &[iovec]) -> io::Result<()> {
         }
     }
     for iov in iov {
-        if iov.iov_len == 0 {
-            continue;
-        }
-
         unsafe {
-            cfg_select! {
-                target_os = "linux" => {
-                    use rustix::mm::{madvise, Advice};
+            discard_pages(iov.iov_base.cast(), iov.iov_len)?;
+        }
+    }
+    Ok(())
+}
 
-                    // On Linux, this is enough to cause the kernel to initialize
-                    // the pages to 0 on next access
-                    madvise(iov.iov_base, iov.iov_len, Advice::LinuxDontNeed)?;
-                }
-                _ => {
-                    // By creating a new mapping at the same location, this will
-                    // discard the mapping for the pages in the given range.
-                    // The new mapping will be to the CoW zero page, so this
-                    // effectively zeroes the pages.
-                    mmap_anonymous(
-                        iov.iov_base,
-                        iov.iov_len,
-                        ProtFlags::READ | ProtFlags::WRITE,
-                        MapFlags::PRIVATE | super::mmap::MMAP_NORESERVE_FLAG | MapFlags::FIXED,
-                    )?;
-                }
+/// Releases the physical memory backing `len` bytes at `ptr`, leaving them
+/// readable and writable.
+///
+/// The contents of the pages afterwards are described by
+/// [`decommit_behavior`]: on Linux the original mapping is restored (zeros for
+/// anonymous memory, the file's contents for a file mapping), elsewhere the
+/// pages are zero.
+pub unsafe fn discard_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
+    if len == 0 {
+        return Ok(());
+    }
+
+    unsafe {
+        cfg_select! {
+            target_os = "linux" => {
+                use rustix::mm::{madvise, Advice};
+
+                // On Linux, this is enough to cause the kernel to initialize
+                // the pages to 0 on next access
+                madvise(ptr.cast(), len, Advice::LinuxDontNeed)?;
+            }
+            _ => {
+                // By creating a new mapping at the same location, this will
+                // discard the mapping for the pages in the given range.
+                // The new mapping will be to the CoW zero page, so this
+                // effectively zeroes the pages.
+                mmap_anonymous(
+                    ptr.cast(),
+                    len,
+                    ProtFlags::READ | ProtFlags::WRITE,
+                    MapFlags::PRIVATE | super::mmap::MMAP_NORESERVE_FLAG | MapFlags::FIXED,
+                )?;
             }
         }
     }

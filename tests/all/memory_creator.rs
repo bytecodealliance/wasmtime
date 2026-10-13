@@ -350,6 +350,21 @@ mod linux_only {
     }
 }
 
+#[test]
+fn host_memory_discard() -> Result<()> {
+    let (mut store, _counters) = store(CustomMemoryCreator::new(ImageMode::ReturnFalse), |_| {});
+    let module = Module::new(store.engine(), r#"(module (memory (export "memory") 2))"#)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+
+    memory.data_mut(&mut store).fill(0xa5);
+    memory.discard(&mut store, 1, 1)?;
+    assert!(memory.data(&store)[..0x10000].iter().all(|b| *b == 0xa5));
+    assert!(memory.data(&store)[0x10000..].iter().all(|b| *b == 0));
+    assert!(memory.discard(&mut store, 1, 2).is_err());
+    Ok(())
+}
+
 // With CoW disabled `init_from_image` should not be called,
 // and the data segments should be copied into the custom memory.
 #[test]

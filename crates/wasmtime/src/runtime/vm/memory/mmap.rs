@@ -2,6 +2,7 @@
 //! platform mmap primitive.
 
 use crate::prelude::*;
+use crate::runtime::vm::sys::{DecommitBehavior, vm};
 use crate::runtime::vm::{HostAlignedByteCount, Mmap, mmap::AlignedLength};
 use crate::{LinearMemory, MemoryImage};
 use alloc::sync::Arc;
@@ -51,6 +52,11 @@ pub struct MmapMemory {
     // optimize loads and stores with constant offsets.
     pre_guard_size: HostAlignedByteCount,
     offset_guard_size: HostAlignedByteCount,
+
+    // The copy-on-write image mapped into this memory by `init_from_image`, if
+    // any. This is cleared when growth moves the memory to a new mapping,
+    // which holds a copy of the contents instead.
+    image: Option<MemoryImage>,
 }
 
 impl MmapMemory {
@@ -129,6 +135,7 @@ impl MmapMemory {
             pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
             extra_to_reserve_on_growth,
+            image: None,
         })
     }
 
@@ -206,6 +213,7 @@ unsafe impl LinearMemory for MmapMemory {
             }
 
             self.mmap = try_new::<Arc<_>>(new_mmap)?;
+            self.image = None;
         } else {
             // If the new size of this heap fits within the existing allocation
             // then all we need to do is to make the new pages accessible. This
@@ -265,6 +273,28 @@ unsafe impl LinearMemory for MmapMemory {
         unsafe {
             image.vm().map_at(&base)?;
         }
+        self.image = Some(image.clone());
         Ok(true)
+    }
+
+    fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
+        // The Wasm page size is a multiple of the host page size, so a range
+        // aligned to the former is aligned to the latter.
+        let start = HostAlignedByteCount::new(offset)?;
+        let len = HostAlignedByteCount::new(len)?;
+        let end = start.checked_add(len)?;
+        assert!(end <= self.accessible());
+        let base = self.as_ptr();
+        // SAFETY: the range is within the accessible part of this mmap, and
+        // `&mut self` means nothing else is accessing it.
+        unsafe {
+            match (vm::decommit_behavior(), &self.image) {
+                (DecommitBehavior::RestoreOriginalMapping, Some(image)) => {
+                    image.vm().discard_at(base, start..end)?;
+                }
+                _ => vm::discard_pages(base.add(start.byte_count()), len.byte_count())?,
+            }
+        }
+        Ok(())
     }
 }
