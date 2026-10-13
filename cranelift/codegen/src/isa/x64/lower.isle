@@ -308,21 +308,24 @@
 ;; operand `sub`, the NDD form writes its result to a fresh register encoded in
 ;; the EVEX `vvvv` field, so the register allocator does not need to insert a
 ;; move to preserve either input.
+;;
+;; Note that the NDD form computes `dest = rm - reg`, so the minuend goes in
+;; ModRM.rm (the second argument here) and the subtrahend in ModRM.reg.
 (rule isub_apx_ndd 1 (lower (isub $I64 x y))
       (if-let true (use_apx))
-      (x64_subq_rvm x y))
+      (x64_subq_rvm (put_in_gpr y) x))
 
 ;; APX: the same for `i32` and narrower; see `iadd_apx_ndd_32` for why `i8` and
 ;; `i16` use the 32-bit form.
 (rule isub_apx_ndd_32 1 (lower (isub $I32 x y))
       (if-let true (use_apx))
-      (x64_subl_rvm x y))
+      (x64_subl_rvm (put_in_gpr y) x))
 (rule isub_apx_ndd_16 1 (lower (isub $I16 x y))
       (if-let true (use_apx))
-      (x64_subl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+      (x64_subl_rvm (put_in_gpr y) (gpr_to_gpr_mem_32 (put_in_gpr x))))
 (rule isub_apx_ndd_8 1 (lower (isub $I8 x y))
       (if-let true (use_apx))
-      (x64_subl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+      (x64_subl_rvm (put_in_gpr y) (gpr_to_gpr_mem_32 (put_in_gpr x))))
 
 ;; Sub two registers.
 (rule -3 (lower (isub (fits_in_64 ty) x y))

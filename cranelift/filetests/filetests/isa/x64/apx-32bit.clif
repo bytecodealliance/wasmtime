@@ -34,7 +34,7 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   subl %edi, %esi, %eax
+;   subl %esi, %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -44,7 +44,7 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x29, 0xfe, 0x48, 0x89
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x29, 0xf7, 0x48, 0x89
 ;   .byte 0xec, 0x5d, 0xc3
 
 function %and_i32(i32, i32) -> i32 {
