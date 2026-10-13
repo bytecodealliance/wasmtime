@@ -1,0 +1,144 @@
+test compile precise-output
+set opt_level=none
+target x86_64 has_apx
+
+;; The halves of a 128-bit add or subtract are built from the raw `add`/`adc`
+;; and `sub`/`sbb` constructors rather than from the `iadd`/`isub` lowering, so
+;; they need their own APX rules. Without them each half pays for a copy into
+;; the register the instruction overwrites.
+
+; want: add + adc, no copies
+function %add128(i64, i64, i64, i64) -> i64, i64 {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  v4 = iconcat v0, v1
+  v5 = iconcat v2, v3
+  v6 = iadd v4, v5
+  v7, v8 = isplit v6
+  return v7, v8
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq %rdi, %rdx, %rax
+;   adcq %rsi, %rcx, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x01, 0xfa, 0x62, 0xf4
+;   .byte 0xec, 0x18, 0x11, 0xf1, 0x48, 0x89, 0xec, 0x5d
+;   .byte 0xc3
+
+function %sub128(i64, i64, i64, i64) -> i64, i64 {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  v4 = iconcat v0, v1
+  v5 = iconcat v2, v3
+  v6 = isub v4, v5
+  v7, v8 = isplit v6
+  return v7, v8
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   subq %rdx, %rdi, %rax
+;   sbbq %rcx, %rsi, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x2b, 0xfa, 0x62, 0xf4
+;   .byte 0xec, 0x18, 0x1b, 0xf1, 0x48, 0x89, 0xec, 0x5d
+;   .byte 0xc3
+
+function %add128_imm(i64, i64) -> i64, i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconcat v0, v1
+  v3 = iconst.i64 7
+  v4 = iconst.i64 0
+  v5 = iconcat v3, v4
+  v6 = iadd v2, v5
+  v7, v8 = isplit v6
+  return v7, v8
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq $0x7, %rdi, %rax
+;   adcq $0x0, %rsi, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x83, 0xc7, 0x07, 0x62
+;   .byte 0xf4, 0xec, 0x18, 0x83, 0xd6, 0x00, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+
+function %uaddo(i64, i64) -> i64, i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = uadd_overflow v0, v1
+  return v2, v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq %rdi, %rsi, %rax
+;   setb %dl
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x01, 0xfe, 0x0f, 0x92
+;   .byte 0xc2, 0x48, 0x89, 0xec, 0x5d, 0xc3
+
+function %usubo(i64, i64) -> i64, i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = usub_overflow v0, v1
+  return v2, v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   subq %rsi, %rdi, %rax
+;   setb %dl
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x2b, 0xfe, 0x0f, 0x92
+;   .byte 0xc2, 0x48, 0x89, 0xec, 0x5d, 0xc3
+

@@ -1927,6 +1927,19 @@
 ;; Helper for creating raw `add` instructions.
 (decl x64_add_raw (Type Gpr GprMemImm) AssemblerOutputs)
 
+;; With APX the result can go to a third register. `x64_add_ndd` already covers
+;; the plain `iadd` lowering; these rules cover the paths that reach the raw
+;; constructor instead, which is how the halves of an `i128` and the
+;; overflow-checked forms are built. `src1` moves into ModRM.rm for the
+;; immediate forms and into ModRM.reg for the rest, which keeps `src2` in
+;; ModRM.rm where a memory operand can still be encoded.
+(rule 5 (x64_add_raw $I32 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_addl_vmi_sxb_raw (gpr_to_gpr_mem_32 src1) src2))
+(rule 5 (x64_add_raw $I64 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_addq_vmi_sxb_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 4 (x64_add_raw $I32 src1 (is_imm32 src2))  (if-let true (use_apx)) (x64_addl_vmi_raw     (gpr_to_gpr_mem_32 src1) src2))
+(rule 4 (x64_add_raw $I64 src1 (is_simm32 src2)) (if-let true (use_apx)) (x64_addq_vmi_sxl_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 3 (x64_add_raw ty @ $I32 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_addl_rvm_raw src1 (gpr_mem_32_for_ty ty src2)))
+(rule 3 (x64_add_raw ty @ $I64 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_addq_rvm_raw src1 (gpr_mem_64_for_ty ty src2)))
+
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
 (rule 2 (x64_add_raw $I32 src1 (is_simm8 src2))   (x64_addl_mi_sxb_raw src1 src2))
 (rule 2 (x64_add_raw $I64 src1 (is_simm8 src2))   (x64_addq_mi_sxb_raw src1 src2))
@@ -1967,6 +1980,10 @@
 ;; variant of this instruction. As with `add`, we match 8-bit immediates first;
 ;; this allows a smaller instruction encoding.
 (decl x64_adc_raw (Type Gpr GprMemImm) AssemblerOutputs)
+;; See `x64_add_raw` for the APX rules; `adc` commutes the same way.
+(rule 5 (x64_adc_raw $I64 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_adcq_vmi_sxb_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 4 (x64_adc_raw $I64 src1 (is_simm32 src2)) (if-let true (use_apx)) (x64_adcq_vmi_sxl_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 3 (x64_adc_raw ty @ $I64 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_adcq_rvm_raw src1 (gpr_mem_64_for_ty ty src2)))
 (rule 2 (x64_adc_raw $I64 src1 (is_simm8 src2))   (x64_adcq_mi_sxb_raw src1 src2))
 (rule 1 (x64_adc_raw $I64 src1 (is_simm32 src2))  (x64_adcq_mi_sxl_raw src1 src2))
 (rule 0 (x64_adc_raw ty @ $I64 src1 (is_gpr_mem src2)) (x64_adcq_rm_raw src1 (gpr_mem_64_for_ty ty src2)))
@@ -1983,6 +2000,16 @@
 
 ;; Helper for emitting raw `sub` instructions.
 (decl x64_sub_raw (Type Gpr GprMemImm) AssemblerOutputs)
+
+;; See `x64_add_raw` for the APX rules. `sub` does not commute, so the
+;; register/memory form is the `MRV` one, which computes `reg - rm` and so
+;; leaves the subtrahend in ModRM.rm.
+(rule 6 (x64_sub_raw $I32 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_subl_vmi_sxb_raw (gpr_to_gpr_mem_32 src1) src2))
+(rule 6 (x64_sub_raw $I64 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_subq_vmi_sxb_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 5 (x64_sub_raw $I32 src1 (is_imm32 src2))  (if-let true (use_apx)) (x64_subl_vmi_raw     (gpr_to_gpr_mem_32 src1) src2))
+(rule 5 (x64_sub_raw $I64 src1 (is_simm32 src2)) (if-let true (use_apx)) (x64_subq_vmi_sxl_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 4 (x64_sub_raw ty @ $I32 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_subl_mrv_raw (gpr_mem_32_for_ty ty src2) src1))
+(rule 4 (x64_sub_raw ty @ $I64 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_subq_mrv_raw (gpr_mem_64_for_ty ty src2) src1))
 
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
 (rule 3 (x64_sub_raw $I32 src1 (is_simm8 src2))   (x64_subl_mi_sxb_raw src1 src2))
@@ -2022,6 +2049,14 @@
 ;; Helper for creating raw `sbb` instructions; Cranelift only uses the 64-bit
 ;; variant of this instruction.
 (decl x64_sbb_raw (Type Gpr GprMemImm) AssemblerOutputs)
+
+;; See `x64_sub_raw` for the APX rules; `sbb` borrows in the same direction.
+(rule 5 (x64_sbb_raw $I32 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_sbbl_vmi_sxb_raw (gpr_to_gpr_mem_32 src1) src2))
+(rule 5 (x64_sbb_raw $I64 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_sbbq_vmi_sxb_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 4 (x64_sbb_raw $I32 src1 (is_imm32 src2))  (if-let true (use_apx)) (x64_sbbl_vmi_raw     (gpr_to_gpr_mem_32 src1) src2))
+(rule 4 (x64_sbb_raw $I64 src1 (is_simm32 src2)) (if-let true (use_apx)) (x64_sbbq_vmi_sxl_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 3 (x64_sbb_raw ty @ $I32 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_sbbl_mrv_raw (gpr_mem_32_for_ty ty src2) src1))
+(rule 3 (x64_sbb_raw ty @ $I64 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_sbbq_mrv_raw (gpr_mem_64_for_ty ty src2) src1))
 
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
 (rule 2 (x64_sbb_raw $I32 src1 (is_simm8 src2))   (x64_sbbl_mi_sxb_raw src1 src2))
