@@ -1,3 +1,14 @@
+## 36.0.18
+
+Released 2026-10-02.
+
+### Fixed
+
+* Component-model handle tables are capped only per instance and charged to no limit.
+  [GHSA-q554-3cjc-rx7p](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-q554-3cjc-rx7p)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.17
 
 Released 2026-10-02.
