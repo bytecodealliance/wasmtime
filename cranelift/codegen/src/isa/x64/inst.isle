@@ -2113,6 +2113,16 @@
 (rule (x64_imul ty @ $I16 src1 src2) (x64_imulw_rm src1 (gpr_mem_16_for_ty ty src2)))
 (rule (x64_imul ty @ $I32 src1 src2) (x64_imull_rm src1 (gpr_mem_32_for_ty ty src2)))
 (rule (x64_imul ty @ $I64 src1 src2) (x64_imulq_rm src1 (gpr_mem_64_for_ty ty src2)))
+;; With APX the product can go to a third register, which saves the move the
+;; two-operand forms above need. `src2` keeps its place in ModRM.rm so that a
+;; sinkable load can still be folded there. ($I16 is left alone: it would have
+;; to widen to the 32-bit encoding, and a 16-bit load cannot come along.)
+(rule 1 (x64_imul ty @ $I32 src1 src2)
+        (if-let true (use_apx))
+        (x64_imull_mrv (gpr_mem_32_for_ty ty src2) src1))
+(rule 1 (x64_imul ty @ $I64 src1 src2)
+        (if-let true (use_apx))
+        (x64_imulq_mrv (gpr_mem_64_for_ty ty src2) src1))
 
 ;; Helper for creating `imul` instructions with an immediate operand. Match
 ;; 8-bit immediates first to allow a smaller instruction encoding.
