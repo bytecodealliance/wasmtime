@@ -122,7 +122,11 @@ impl FieldMap {
             .collect::<Result<Vec<_>, _>>()?;
         let values_size = values.iter().map(header_value_size).sum::<usize>();
         let mut values = values.into_iter();
-        let mut entry = match map.try_entry(key)? {
+        // try_entry reports MaxSizeReached as InvalidHeaderName (http map.rs:1149).
+        let mut entry = match map
+            .try_entry(key)
+            .map_err(|_| FieldMapError::TooManyFields)?
+        {
             Entry::Vacant(e) => match values.next() {
                 Some(v) => {
                     update_size(size, limit, *size + values_size + key_size)?;
@@ -165,19 +169,18 @@ impl FieldMap {
             return Err(FieldMapError::Forbidden);
         }
         let (map, _limit, size) = self.mutable()?;
-        match map.try_entry(key)? {
-            Entry::Vacant { .. } => Ok(Vec::new()),
-            Entry::Occupied(e) => {
-                let (name, value_drain) = e.remove_entry_mult();
-                let mut removed = header_name_size(&name);
-                let values = value_drain.collect::<Vec<_>>();
-                for v in values.iter() {
-                    removed += header_value_size(v);
-                }
-                *size -= removed;
-                Ok(values)
-            }
+        // try_entry misreports a full map as InvalidHeaderName.
+        let values = map.get_all(&key).iter().cloned().collect::<Vec<_>>();
+        if values.is_empty() {
+            return Ok(Vec::new());
         }
+        let mut removed = header_name_size(&key);
+        for v in values.iter() {
+            removed += header_value_size(v);
+        }
+        let _ = map.remove(&key);
+        *size -= removed;
+        Ok(values)
     }
 
     fn mutable(&mut self) -> Result<(&mut HeaderMap, usize, &mut usize), FieldMapError> {
@@ -478,5 +481,35 @@ mod tests {
 
         // other header names are unaffected
         assert!(parse_header_value(&CONTENT_TYPE, b"text/plain".to_vec()).is_ok());
+    }
+
+    #[test]
+    fn full_map_is_not_invalid_syntax() {
+        // try_entry reports MaxSizeReached as InvalidHeaderName (http map.rs:1149),
+        // so a full map must report valid names as too many fields instead.
+        let mut map = FieldMap::new_mutable(usize::MAX);
+        let mut i = 0;
+        let err = loop {
+            match map.set(default_hooks(), format!("k{i}"), vec![b"v".to_vec()]) {
+                Ok(()) => i += 1,
+                Err(e) => break e,
+            }
+        };
+        assert_eq!(err, FieldMapError::TooManyFields);
+        assert_eq!(map.size, FieldMap::content_size(&map.map));
+
+        let err = map
+            .set(default_hooks(), "k0".to_owned(), vec![b"v".to_vec()])
+            .unwrap_err();
+        assert_eq!(err, FieldMapError::TooManyFields);
+        assert_eq!(map.size, FieldMap::content_size(&map.map));
+
+        // Removing a field never needs new capacity.
+        assert_eq!(
+            map.remove_all(default_hooks(), "k0".to_owned())
+                .map(|v| v.len()),
+            Ok(1)
+        );
+        assert_eq!(map.size, FieldMap::content_size(&map.map));
     }
 }
