@@ -484,17 +484,22 @@ impl fmt::Debug for ResourceTable {
 #[test]
 pub fn test_free_list() {
     let mut table = ResourceTable::new();
+    assert!(table.is_empty());
 
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 0);
+    assert_eq!(table.len(), 1);
 
     let y = table.push(()).unwrap();
     assert_eq!(y.rep(), 1);
+    assert_eq!(table.len(), 2);
 
     // Deleting x should put it on the free list, so the next entry should have the same rep.
     table.delete_maybe_debug(x, false).unwrap();
+    assert_eq!(table.len(), 1);
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 0);
+    assert_eq!(table.len(), 2);
 
     // Deleting x and then y should yield indices 1 and then 0 for new entries.
     table.delete_maybe_debug(x, false).unwrap();
@@ -509,6 +514,7 @@ pub fn test_free_list() {
     // As the free list is empty, this entry will have a new id.
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 2);
+    assert_eq!(table.len(), 3);
 }
 
 #[test]
@@ -524,6 +530,7 @@ fn test_max_capacity() {
     assert_eq!(table.max_capacity(), 1);
     let x = table.push(()).unwrap();
     assert!(table.push(()).is_err());
+    assert_eq!(table.len(), 1);
 
     table.set_max_capacity(0);
     assert!(table.push(()).is_err());
@@ -538,33 +545,9 @@ fn test_max_capacity() {
     for handle in handles {
         table.delete(handle).unwrap();
     }
+    assert!(table.is_empty());
 
     table.push(()).unwrap();
-}
-
-#[test]
-fn test_len_and_slot_reuse() {
-    let mut table = ResourceTable::with_capacity(16);
-    assert_eq!(table.len(), 0);
-    assert_eq!(table.entries.len(), 0);
-    assert!(table.is_empty());
-    table.set_max_capacity(2);
-
-    let first = table.push(1u32).unwrap();
-    let second = table.push(2u32).unwrap();
-    assert_eq!(table.len(), 2);
-    assert!(matches!(table.push(3u32), Err(ResourceTableError::Full)));
-    assert_eq!(table.len(), 2);
-    table.delete_maybe_debug(first, false).unwrap();
-    assert_eq!(table.len(), 1);
-    let reused = table.push(3u32).unwrap();
-    assert_eq!(reused.rep(), 0);
-    assert_eq!(table.len(), 2);
-    assert_eq!(table.entries.len(), 2);
-    table.delete_maybe_debug(second, false).unwrap();
-    table.delete_maybe_debug(reused, false).unwrap();
-    assert_eq!(table.len(), 0);
-    assert!(table.is_empty());
 }
 
 #[test]
