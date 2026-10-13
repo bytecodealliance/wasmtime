@@ -6,7 +6,6 @@ use crate::runtime::vm::component::{
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
-use alloc::sync::Arc;
 use core::pin::Pin;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::prelude::TryPrimaryMap;
@@ -47,10 +46,10 @@ pub struct ComponentStoreData {
     /// resources in the instance allocator.
     num_component_instances: usize,
 
-    /// Live-handle counter shared with every `HandleTable` in this store (the
+    /// Live-handle counter for every `HandleTable` in this store (the
     /// `component_host_table` below and each instance's tables). See
     /// `HandleCounter`.
-    handle_counter: Arc<HandleCounter>,
+    handle_counter: HandleCounter,
 
     /// Runtime state for components used in the handling of resources, borrow,
     /// and calls. These also interact with the `ResourceAny` type and its
@@ -94,13 +93,12 @@ pub struct RuntimeInstance {
 
 impl ComponentStoreData {
     pub fn new(engine: &Engine) -> ComponentStoreData {
-        let handle_counter = Arc::new(HandleCounter::new(DEFAULT_MAX_COMPONENT_HANDLES));
         ComponentStoreData {
             instances: Default::default(),
             trapped: false,
             num_component_instances: 0,
-            component_host_table: HandleTable::new(handle_counter.clone()),
-            handle_counter,
+            component_host_table: Default::default(),
+            handle_counter: HandleCounter::new(DEFAULT_MAX_COMPONENT_HANDLES),
             host_resource_data: Default::default(),
             task_state: if engine.tunables().concurrency_support {
                 #[cfg(feature = "component-model-async")]
@@ -146,11 +144,6 @@ impl ComponentStoreData {
 
     pub fn next_component_instance_id(&self) -> ComponentInstanceId {
         self.instances.next_key()
-    }
-
-    /// Returns the counter all of this store's handle tables are charged to.
-    pub(crate) fn handle_counter(&self) -> &Arc<HandleCounter> {
-        &self.handle_counter
     }
 
     #[cfg(feature = "component-model-async")]
@@ -253,6 +246,21 @@ impl StoreComponentInstanceId {
         self.from_data_get_mut(store.store_data_mut())
     }
 
+    /// Same as `get_mut`, but also returns the store's `HandleCounter`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` does not belong to `store`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn get_mut_and_handle_counter<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> (Pin<&'a mut ComponentInstance>, &'a mut HandleCounter) {
+        let store = store.store_data_mut();
+        self.assert_belongs_to(store.id());
+        store.component_instance_and_handle_counter_mut(self.instance)
+    }
+
     /// Return a mutable `ComponentInstance` and a `ModuleRegistry`
     /// from the store.
     ///
@@ -299,6 +307,18 @@ impl StoreData {
         id: ComponentInstanceId,
     ) -> Pin<&mut ComponentInstance> {
         self.components.instances[id].as_mut().unwrap().get_mut()
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn component_instance_and_handle_counter_mut(
+        &mut self,
+        id: ComponentInstanceId,
+    ) -> (Pin<&mut ComponentInstance>, &mut HandleCounter) {
+        let data = &mut self.components;
+        (
+            data.instances[id].as_mut().unwrap().get_mut(),
+            &mut data.handle_counter,
+        )
     }
 }
 
@@ -391,6 +411,7 @@ impl StoreOpaque {
     ) -> (
         &mut ComponentTaskState,
         &mut HandleTable,
+        &mut HandleCounter,
         &mut HostResourceData,
         Pin<&mut ComponentInstance>,
     ) {
@@ -400,6 +421,7 @@ impl StoreOpaque {
         (
             &mut data.task_state,
             &mut data.component_host_table,
+            &mut data.handle_counter,
             &mut data.host_resource_data,
             data.instances[instance.instance]
                 .as_mut()
@@ -441,6 +463,7 @@ impl StoreOpaque {
         Ok((
             vm::component::ResourceTables {
                 host_table: &mut data.component_host_table,
+                handle_counter: &mut data.handle_counter,
                 task_state: &mut data.task_state,
                 guest,
                 current_scope,
@@ -481,7 +504,7 @@ impl StoreOpaque {
     }
 
     pub(crate) fn set_max_component_handles(&mut self, limit: usize) {
-        self.component_data().handle_counter.set_limit(limit);
+        self.component_data_mut().handle_counter.set_limit(limit);
     }
 
     #[cfg(feature = "component-model-async")]
