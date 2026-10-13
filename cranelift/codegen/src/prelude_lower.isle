@@ -1454,9 +1454,18 @@
 (decl abi_unwrap_ret_area_ptr () Reg)
 (extern constructor abi_unwrap_ret_area_ptr abi_unwrap_ret_area_ptr)
 
-;; StackSlot addr
+;; StackSlot addr. The offset must be small enough to address directly; see
+;; `abi_stackslot_large_offset`.
 (decl abi_stackslot_addr (WritableReg StackSlot Offset32) MInst)
 (extern constructor abi_stackslot_addr abi_stackslot_addr)
+
+;; Matches an offset into a StackSlot that is too large to address directly
+;; with `abi_stackslot_addr`, returning it as an `i64`. Such an offset must
+;; instead be added to the StackSlot's address separately. (`stack_addr` is
+;; ordinary pointer arithmetic, so its offset may point anywhere, including
+;; outside of the StackSlot or the frame.)
+(decl pure partial abi_stackslot_large_offset (StackSlot Offset32) i64)
+(extern constructor abi_stackslot_large_offset abi_stackslot_large_offset)
 
 ;; StackSlot raw offset into slot region, if it is small enough to address
 ;; directly; otherwise, the address must be computed in a register.
