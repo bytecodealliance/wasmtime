@@ -680,6 +680,76 @@ impl Memory {
         }
     }
 
+    /// Sets `count` pages of this memory starting at page `start` to zero, and
+    /// returns the physical memory that backed them to the operating system
+    /// where possible.
+    ///
+    /// This is the host-side equivalent of the [`memory.discard`] instruction
+    /// from the memory-control proposal. It is semantically the same as
+    /// writing zeros over those pages: the size of the memory does not
+    /// change and the discarded range remains accessible. Rather than writing
+    /// to the pages, however, this hands them back to the operating system (for
+    /// example with `madvise(MADV_DONTNEED)` on Linux), so they stop counting
+    /// towards the process's resident memory until they are next written.
+    ///
+    /// This is useful for embedders that know a guest has freed a large region
+    /// of its linear memory, for example through a cooperating allocator.
+    ///
+    /// Discarding is not free: it is at least one system call, and on
+    /// multi-threaded hosts the operating system may need to interrupt other
+    /// threads to flush their TLBs. Reading or writing a discarded page later
+    /// takes a page fault to bring in a fresh zero page. This method is
+    /// intended for large ranges released infrequently, not as a replacement
+    /// for zeroing small amounts of memory.
+    ///
+    /// Memories created by a custom [`MemoryCreator`] are zeroed by writing to
+    /// them, since Wasmtime does not control how they are mapped, as are
+    /// memories in configurations without virtual memory. The result is the
+    /// same but no memory is released.
+    ///
+    /// [`memory.discard`]: https://github.com/WebAssembly/memory-control
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    ///
+    /// * `start + count` is beyond the current size of this memory, in pages,
+    /// * this memory uses a [custom page size](crate::MemoryTypeBuilder::page_size_log2),
+    /// * or the operating system fails to discard the pages.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> Result<()> {
+    /// let engine = Engine::default();
+    /// let mut store = Store::new(&engine, ());
+    /// let module = Module::new(&engine, "(module (memory (export \"mem\") 2))")?;
+    /// let instance = Instance::new(&mut store, &module, &[])?;
+    /// let memory = instance.get_memory(&mut store, "mem").unwrap();
+    ///
+    /// memory.data_mut(&mut store)[0x10000..].fill(0xff);
+    /// // Discard the second page.
+    /// memory.discard(&mut store, 1, 1)?;
+    /// assert!(memory.data(&store)[0x10000..].iter().all(|b| *b == 0));
+    /// assert_eq!(memory.size(&store), 2);
+    ///
+    /// // The pages must be within the memory.
+    /// assert!(memory.discard(&mut store, 1, 2).is_err());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn discard(&self, mut store: impl AsContextMut, start: u64, count: u64) -> Result<()> {
+        let store = store.as_context_mut().0;
+        self.instance
+            .get_mut(store)
+            .memory_discard(self.index, start, count)
+    }
+
     /// Creates a new memory from its raw component parts.
     ///
     /// # Safety

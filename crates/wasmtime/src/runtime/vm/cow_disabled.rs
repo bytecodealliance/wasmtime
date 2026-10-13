@@ -44,4 +44,8 @@ impl MemoryImageSlot {
     pub(crate) fn has_image(&self) -> bool {
         match *self {}
     }
+
+    pub(crate) fn discard(&mut self, _offset: usize, _len: usize) -> Result<()> {
+        match *self {}
+    }
 }

@@ -1649,3 +1649,107 @@ fn mpk_protects_memory_images() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn memory_discard_and_reuse() -> Result<()> {
+    if skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+
+    const PAGE: usize = 0x10000;
+    let wat = r#"
+        (module
+            (memory (export "m") 4)
+            (data (i32.const 0x10000) "first")
+            (data (i32.const 0x2fffb) "last!")
+        )
+    "#;
+
+    // With and without keeping memory resident, which resets a slot by
+    // writing to it rather than by decommitting it.
+    for keep_resident in [0, 2 * PAGE, 4 * PAGE] {
+        let mut pool = crate::small_pool_config();
+        pool.max_memory_size(4 * PAGE)
+            .table_elements(0)
+            .linear_memory_keep_resident(keep_resident);
+        let mut config = Config::new();
+        config.allocation_strategy(pool);
+        let engine = Engine::new(&config)?;
+
+        let module = Module::new(&engine, wat)?;
+        let other = Module::new(&engine, r#"(module (memory (export "m") 4))"#)?;
+
+        // Instantiate repeatedly into the pool's single slot, discarding
+        // across the image each time; every instance must start from the
+        // pristine image.
+        for _ in 0..3 {
+            let mut store = Store::new(&engine, ());
+            let instance = Instance::new(&mut store, &module, &[])?;
+            let memory = instance.get_memory(&mut store, "m").unwrap();
+            let data = memory.data(&store);
+            assert_eq!(&data[0x10000..0x10005], b"first");
+            assert_eq!(&data[0x2fffb..0x30000], b"last!");
+            assert!(data[..0x10000].iter().all(|b| *b == 0));
+            assert!(data[0x30000..].iter().all(|b| *b == 0));
+
+            memory.data_mut(&mut store).fill(0xa5);
+            memory.discard(&mut store, 1, 2)?;
+            let data = memory.data(&store);
+            assert!(data[..PAGE].iter().all(|b| *b == 0xa5));
+            assert!(data[PAGE..3 * PAGE].iter().all(|b| *b == 0));
+            assert!(data[3 * PAGE..].iter().all(|b| *b == 0xa5));
+        }
+
+        // A different module in the same slot sees all zeros.
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &other, &[])?;
+        let memory = instance.get_memory(&mut store, "m").unwrap();
+        assert!(memory.data(&store).iter().all(|b| *b == 0));
+        drop(store);
+
+        // And the original module sees its image again.
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let memory = instance.get_memory(&mut store, "m").unwrap();
+        assert_eq!(&memory.data(&store)[0x10000..0x10005], b"first");
+        assert_eq!(&memory.data(&store)[0x2fffb..0x30000], b"last!");
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn memory_discard_then_grow() -> Result<()> {
+    if skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+
+    const PAGE: usize = 0x10000;
+    let mut pool = crate::small_pool_config();
+    pool.max_memory_size(8 * PAGE).table_elements(0);
+    let mut config = Config::new();
+    config.allocation_strategy(pool);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 2 8) (data (i32.const 0x10000) "image"))"#,
+    )?;
+
+    for _ in 0..2 {
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let memory = instance.get_memory(&mut store, "m").unwrap();
+        assert_eq!(&memory.data(&store)[0x10000..0x10005], b"image");
+        memory.data_mut(&mut store).fill(0xa5);
+        memory.discard(&mut store, 1, 1)?;
+        memory.grow(&mut store, 6)?;
+        let data = memory.data(&store);
+        assert!(data[..PAGE].iter().all(|b| *b == 0xa5));
+        assert!(data[PAGE..].iter().all(|b| *b == 0));
+        memory.data_mut(&mut store).fill(0x5a);
+        memory.discard(&mut store, 0, 8)?;
+        assert!(memory.data(&store).iter().all(|b| *b == 0));
+    }
+    Ok(())
+}

@@ -191,6 +191,22 @@ pub trait RuntimeLinearMemory: Send + Sync {
         let _ = len;
         panic!("CoW images used with this memory and it doesn't support it");
     }
+
+    /// Sets `len` bytes starting at `offset` to zero, releasing the memory
+    /// that backed them if this allocation is able to.
+    ///
+    /// The range is within `self.byte_size()`. The default implementation
+    /// writes zeros, which is what memories without virtual memory and
+    /// embedder-provided memories use.
+    fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
+        debug_assert!(offset.checked_add(len).unwrap() <= self.byte_size());
+        // SAFETY: the range is in bounds of this allocation's accessible
+        // bytes, and `&mut self` means nothing else is accessing them.
+        unsafe {
+            self.base().as_mut_ptr().add(offset).write_bytes(0, len);
+        }
+        Ok(())
+    }
 }
 
 /// The base pointer of a memory allocation.
@@ -526,6 +542,32 @@ impl Memory {
             Memory::Shared(mem) => mem.ty(),
         }
     }
+
+    /// Implementation of `wasmtime::Memory::discard`: zeroes `len` bytes at
+    /// `offset`, returning the memory behind them to the operating system
+    /// where possible.
+    pub fn discard(&mut self, start: u64, count: u64) -> Result<()> {
+        let mem = match self {
+            Memory::Local(mem) => mem,
+            Memory::Shared(_) => bail!("cannot discard pages of a shared memory"),
+        };
+        if mem.ty().page_size_log2 != wasmtime_environ::Memory::DEFAULT_PAGE_SIZE_LOG2 {
+            bail!("cannot discard pages of a memory with a custom page size");
+        }
+        let page_size = mem.ty().page_size();
+        let pages = u64::try_from(mem.byte_size()).unwrap() / page_size;
+        match start.checked_add(count) {
+            Some(end) if end <= pages => {}
+            _ => bail!(
+                "discarding {count} pages at page {start} is out of bounds of memory of \
+                 {pages} pages"
+            ),
+        }
+        // The range is within the memory, so its byte offsets fit in `usize`.
+        let offset = usize::try_from(start * page_size).unwrap();
+        let len = usize::try_from(count * page_size).unwrap();
+        mem.discard(offset, len)
+    }
 }
 
 /// An owned allocation of a wasm linear memory.
@@ -761,6 +803,19 @@ impl LocalMemory {
     #[cfg(feature = "pooling-allocator")]
     pub fn unwrap_static_image(self) -> MemoryImageSlot {
         self.memory_image.unwrap()
+    }
+
+    /// Zeroes `len` bytes at `offset`, which `Memory::discard` has checked
+    /// are in bounds and aligned to the Wasm page size.
+    fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
+        if len == 0 {
+            return Ok(());
+        }
+        // A CoW slot, if any, knows which pages are backed by its image.
+        if let Some(image) = &mut self.memory_image {
+            return image.discard(offset, len);
+        }
+        self.alloc.discard(offset, len)
     }
 }
 

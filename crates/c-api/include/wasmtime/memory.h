@@ -127,6 +127,29 @@ wasmtime_memory_grow(wasmtime_context_t *store, const wasmtime_memory_t *memory,
                      uint64_t delta, uint64_t *prev_size);
 
 /**
+ * \brief Zeroes `count` pages of the specified memory, starting at page
+ * `start`, and returns the physical memory behind them to the operating
+ * system where possible.
+ *
+ * \param store the store that owns `memory`
+ * \param memory the memory to discard pages of
+ * \param start the first page to discard
+ * \param count the number of pages to discard
+ *
+ * The size of the memory does not change, and the pages read as zeros
+ * afterwards. If the pages are out of bounds, or the memory uses a custom page
+ * size, an error is returned and the memory is unchanged. Otherwise `NULL` is
+ * returned.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Memory.html#method.discard.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_memory_discard(wasmtime_context_t *store,
+                        const wasmtime_memory_t *memory, uint64_t start,
+                        uint64_t count);
+
+/**
  * \brief Returns the size of a page, in bytes, for this memory.
  *
  * \param store the store that owns `memory`
