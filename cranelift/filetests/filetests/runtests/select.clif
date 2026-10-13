@@ -1290,3 +1290,144 @@ block0(v0: i32, v1: i32):
 ; run: %select_nonzero_count_ishl(7, 0) == 7
 ; run: %select_nonzero_count_ishl(7, 1) == 7
 ; run: %select_nonzero_count_ishl(7, 2) == 28
+
+function %bor_select_constants_right_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 5
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %bor_select_constants_right_i64(0) == 37
+; run: %bor_select_constants_right_i64(1) == 21
+; run: %bor_select_constants_right_i64(2) == 21
+; run: %bor_select_constants_right_i64(-1) == 21
+; run: %bor_select_constants_right_i64(-128) == 21
+
+function %bor_select_constants_left_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 5
+    v5 = bor v4, v3
+    return v5
+}
+
+; run: %bor_select_constants_left_i64(0) == 37
+; run: %bor_select_constants_left_i64(1) == 21
+; run: %bor_select_constants_left_i64(2) == 21
+; run: %bor_select_constants_left_i64(-1) == 21
+; run: %bor_select_constants_left_i64(-128) == 21
+
+function %bxor_select_constants_right_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 5
+    v5 = bxor v3, v4
+    return v5
+}
+
+; run: %bxor_select_constants_right_i64(0) == 36
+; run: %bxor_select_constants_right_i64(1) == 20
+; run: %bxor_select_constants_right_i64(2) == 20
+; run: %bxor_select_constants_right_i64(-1) == 20
+; run: %bxor_select_constants_right_i64(-128) == 20
+
+function %bxor_select_constants_left_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 5
+    v5 = bxor v4, v3
+    return v5
+}
+
+; run: %bxor_select_constants_left_i64(0) == 36
+; run: %bxor_select_constants_left_i64(1) == 20
+; run: %bxor_select_constants_left_i64(2) == 20
+; run: %bxor_select_constants_left_i64(-1) == 20
+; run: %bxor_select_constants_left_i64(-128) == 20
+
+function %isub_select_constants_left_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 85
+    v5 = isub v4, v3
+    return v5
+}
+
+; run: %isub_select_constants_left_i64(0) == 52
+; run: %isub_select_constants_left_i64(1) == 68
+; run: %isub_select_constants_left_i64(2) == 68
+; run: %isub_select_constants_left_i64(-1) == 68
+; run: %isub_select_constants_left_i64(-128) == 68
+
+function %isub_select_constants_right_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 33
+    v3 = select v0, v1, v2
+    v4 = iconst.i64 85
+    v5 = isub v3, v4
+    return v5
+}
+
+; run: %isub_select_constants_right_i64(0) == -52
+; run: %isub_select_constants_right_i64(1) == -68
+; run: %isub_select_constants_right_i64(2) == -68
+; run: %isub_select_constants_right_i64(-1) == -68
+; run: %isub_select_constants_right_i64(-128) == -68
+
+function %isub_select_constants_left_i8_wrapping(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 127
+    v2 = iconst.i8 -128
+    v3 = select v0, v1, v2
+    v4 = iconst.i8 1
+    v5 = isub v4, v3
+    return v5
+}
+
+; run: %isub_select_constants_left_i8_wrapping(0) == -127
+; run: %isub_select_constants_left_i8_wrapping(1) == -126
+; run: %isub_select_constants_left_i8_wrapping(2) == -126
+; run: %isub_select_constants_left_i8_wrapping(-1) == -126
+
+function %isub_select_constants_right_i8_wrapping(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 127
+    v2 = iconst.i8 -128
+    v3 = select v0, v1, v2
+    v4 = iconst.i8 1
+    v5 = isub v3, v4
+    return v5
+}
+
+; run: %isub_select_constants_right_i8_wrapping(0) == 127
+; run: %isub_select_constants_right_i8_wrapping(1) == 126
+; run: %isub_select_constants_right_i8_wrapping(2) == 126
+; run: %isub_select_constants_right_i8_wrapping(-1) == 126
+
+function %bor_select_nonconstant_branch_i64(i8, i64) -> i64 {
+block0(v0: i8, v1: i64):
+    v2 = iconst.i64 17
+    v3 = select v0, v2, v1
+    v4 = iconst.i64 5
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %bor_select_nonconstant_branch_i64(0, 0) == 5
+; run: %bor_select_nonconstant_branch_i64(0, -1) == -1
+; run: %bor_select_nonconstant_branch_i64(0, 128) == 133
+; run: %bor_select_nonconstant_branch_i64(1, 0) == 21
+; run: %bor_select_nonconstant_branch_i64(-1, 128) == 21

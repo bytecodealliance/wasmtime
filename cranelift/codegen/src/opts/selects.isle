@@ -201,23 +201,23 @@
 (rule (simplify (select ty x (eq ty y z) (eq ty (iconst_u cty p) y))) (eq ty y (select cty x z (iconst_u cty p))))
 (rule (simplify (select ty x (eq ty y z) (eq ty y (iconst_u cty p)))) (eq ty y (select cty x z (iconst_u cty p))))
 
-;; (x == y) ? 0 : (x - y) ==> x - y
+;; (x == y) ? 0 : (x - y) --> x - y
 (rule (simplify (select ty (eq cty x y) (all_zero ty) (isub ty x y)))
       (isub ty x y))
 
-;; (c ? y : z) + (c ? z : y) ==> z + y
+;; (c ? y : z) + (c ? z : y) --> z + y
 (rule (simplify (iadd ty (select ty c y z) (select ty c z y)))
       (iadd ty z y))
 
-;; (x != y) ? (x - y) : 0 ==> x - y
+;; (x != y) ? (x - y) : 0 --> x - y
 (rule (simplify (select ty (ne cty x y) (isub ty x y) (all_zero ty)))
       (isub ty x y))
 
-;; (c ? x : y) + (c ? p : q) --> c ? (x + p) : (y + q).
+;; (c ? x : y) + (c ? p : q) --> c ? (x + p) : (y + q)
 (rule (simplify (iadd ty (select ty x y z) (select ty x p q)))
       (select ty x (iadd ty y p) (iadd ty z q)))
 
-;; (c ? C1 : C2) & M --> c ? (C1 & M) : (C2 & M).
+;; (c ? C1 : C2) & M --> c ? (C1 & M) : (C2 & M)
 (rule (simplify (band (fits_in_64 ty)
                       (select ty x (iconst ty y) (iconst ty z))
                       (iconst ty p)))
@@ -238,7 +238,7 @@
                  (iconst ty (imm64_and ty y (imm64 p)))
                  (iconst_u ty z)))
 
-;; (x == 0) ? y : (x + y) --> y + x, and its dual.
+;; (x == 0) ? y : (x + y) --> y + x
 (rule (simplify (select ty
                         (eq cty x (iconst_u ty 0))
                         y
@@ -260,7 +260,7 @@
                         y))
       (iadd ty y x))
 
-;; (c ? x : y) OP (c ? y : x) --> x OP y, where OP = {&, |, ^}.
+;; (c ? x : y) OP (c ? y : x) --> x OP y (OP = {&, |, ^})
 (rule (simplify (band ty (select ty c x y) (select ty c y x)))
       (subsume (band ty x y)))
 (rule (simplify (bor ty (select ty c x y) (select ty c y x)))
@@ -268,7 +268,7 @@
 (rule (simplify (bxor ty (select ty c x y) (select ty c y x)))
       (subsume (bxor ty x y)))
 
-;; (x == y) ? 0 : (x ^ y) --> x ^ y, and its variants
+;; (x == y) ? 0 : (x ^ y) --> x ^ y
 (rule (simplify (select ty (eq cty x y) (all_zero ty) (bxor ty x y)))
       (bxor ty x y))
 (rule (simplify (select ty (eq cty x y) (all_zero ty) (bxor ty y x)))
@@ -278,7 +278,7 @@
 (rule (simplify (select ty (ne cty x y) (bxor ty y x) (all_zero ty)))
       (bxor ty x y))
 
-;; (k == 0) ? x : (x shift k) --> x shift k
+;; (k == 0) ? x : OP(x, k) --> OP(x, k) (OP = {ishl, ushr, sshr, rotl, rotr})
 (rule (simplify (select ty (eq cty k (all_zero _)) x (ishl ty x k)))
       (ishl ty x k))
 (rule (simplify (select ty (ne cty k (all_zero _)) (ishl ty x k) x))
@@ -299,3 +299,17 @@
       (rotr ty x k))
 (rule (simplify (select ty (ne cty k (all_zero _)) (rotr ty x k) x))
       (rotr ty x k))
+
+;; (c ? C1 : C2) | M --> c ? (C1 | M) : (C2 | M)
+(rule (simplify (bor (fits_in_64 ty) (select ty x (iconst ty y) (iconst ty z)) (iconst ty p))) (select ty x (iconst ty (imm64_or ty y p)) (iconst ty (imm64_or ty z p))))
+(rule (simplify (bor (fits_in_64 ty) (iconst ty x) (select ty y (iconst ty z) (iconst ty p)))) (select ty y (iconst ty (imm64_or ty x z)) (iconst ty (imm64_or ty x p))))
+
+;; (c ? C1 : C2) ^ M --> c ? (C1 ^ M) : (C2 ^ M)
+(rule (simplify (bxor (fits_in_64 ty) (select ty x (iconst ty y) (iconst ty z)) (iconst ty p))) (select ty x (iconst ty (imm64_xor ty y p)) (iconst ty (imm64_xor ty z p))))
+(rule (simplify (bxor (fits_in_64 ty) (iconst ty x) (select ty y (iconst ty z) (iconst ty p)))) (select ty y (iconst ty (imm64_xor ty x z)) (iconst ty (imm64_xor ty x p))))
+
+;; C - (c ? C1 : C2) --> c ? (C - C1) : (C - C2)
+(rule (simplify (isub (fits_in_64 ty) (iconst ty x) (select ty y (iconst ty z) (iconst ty p)))) (select ty y (iconst ty (imm64_sub ty x z)) (iconst ty (imm64_sub ty x p))))
+
+;; (c ? C1 : C2) - C --> c ? (C1 - C) : (C2 - C)
+(rule (simplify (isub (fits_in_64 ty) (select ty x (iconst ty y) (iconst ty z)) (iconst ty p))) (select ty x (iconst ty (imm64_sub ty y p)) (iconst ty (imm64_sub ty z p))))
