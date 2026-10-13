@@ -1,9 +1,3 @@
-#![cfg(all(
-    feature = "component-model-async",
-    feature = "cranelift",
-    feature = "wat"
-))]
-
 use wasmtime::component::{
     Accessor, Component, FutureReader, Linker, ResourceTableError, StreamReader,
 };
