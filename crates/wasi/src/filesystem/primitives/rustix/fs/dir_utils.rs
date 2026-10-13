@@ -1,18 +1,12 @@
 use crate::filesystem::primitives::OpenOptions;
 use rustix::fs::OFlags;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 use std::ops::Deref;
 #[cfg(unix)]
-use std::os::unix::{
-    ffi::{OsStrExt, OsStringExt},
-    fs::OpenOptionsExt,
-};
+use std::os::unix::{ffi::OsStrExt, fs::OpenOptionsExt};
 #[cfg(target_os = "wasi")]
-use std::os::wasi::{
-    ffi::{OsStrExt, OsStringExt},
-    fs::OpenOptionsExt,
-};
-use std::path::{Path, PathBuf};
+use std::os::wasi::{ffi::OsStrExt, fs::OpenOptionsExt};
+use std::path::Path;
 use std::{fs, io};
 
 /// Rust's `Path` implicitly strips redundant slashes, however they aren't
@@ -52,14 +46,6 @@ pub(crate) fn path_has_trailing_slash(path: &Path) -> bool {
     let bytes = path.as_os_str().as_bytes();
 
     bytes.ends_with(b"/")
-}
-
-/// Append a trailing `/`. This can be used to require that the given `path`
-/// names a directory.
-pub(crate) fn append_dir_suffix(path: PathBuf) -> PathBuf {
-    let mut bytes = path.into_os_string().into_vec();
-    bytes.push(b'/');
-    OsString::from_vec(bytes).into()
 }
 
 /// Strip trailing `/`s, unless this reduces `path` to `/` itself. This is

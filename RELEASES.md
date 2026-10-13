@@ -38,7 +38,7 @@ Released 2026-10-14.
 * Exception tags can cause host data structures to be unaligned.
   [GHSA-p79w-pv2r-29qp](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-p79w-pv2r-29qp)
 
-* Filesystem sandbox escape via `rename` of a trailing-slash symlink on macOS/FreeBSD.
+* Filesystem sandbox escape when renaming symlinks with trailing slashes.
   [GHSA-m9f7-9w4p-gv38](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m9f7-9w4p-gv38)
 
 * Overlapping string transcode in a fused adapter can panic.
