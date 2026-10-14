@@ -2248,7 +2248,7 @@ async fn host_to_host_stream_buffer_type_mismatch() -> wasmtime::Result<()> {
             _finish: bool,
         ) -> Poll<Result<StreamResult>> {
             let mut buffer = self.0.try_lock().unwrap();
-            buffer.reserve(source.remaining(store.as_context_mut()));
+            buffer.reserve(source.remaining(&mut store)?);
             source.read(store, buffer.deref_mut())?;
             Poll::Ready(Ok(StreamResult::Completed))
         }
