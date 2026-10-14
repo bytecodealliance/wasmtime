@@ -41,6 +41,12 @@ Released 2026-10-14.
 * Filesystem sandbox escape when renaming symlinks with trailing slashes.
   [GHSA-m9f7-9w4p-gv38](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m9f7-9w4p-gv38)
 
+* Guests can send absolute-form HTTP requests to different hosts.
+  [GHSA-5qpp-g3j2-8frx](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5qpp-g3j2-8frx)
+
+* `wasi-http`: Request with long url before query parameter crashes host.
+  [GHSA-w36r-2hch-9xp9](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-w36r-2hch-9xp9)
+
 --------------------------------------------------------------------------------
 
 ## 48.0.5
