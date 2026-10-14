@@ -2469,6 +2469,24 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             .map_err(types::Error::trap)?
             .into_iter()
             .collect();
+
+        // While `Drop` below does a version of this, this executes in the
+        // normal case to be able to call the `async drop` methods on these
+        // resources in case any synchronization is needed there.
+        while let Some(p) = temp.pollables.pop() {
+            use wasmtime_wasi_io::bindings::wasi::io::poll::HostPollable;
+            temp.ctx.table.drop(p).map_err(types::Error::trap)?;
+        }
+        while let Some(s) = temp.inputs.pop() {
+            streams::HostInputStream::drop(&mut temp.ctx.table, s)
+                .await
+                .map_err(types::Error::trap)?;
+        }
+        while let Some(s) = temp.outputs.pop() {
+            streams::HostOutputStream::drop(&mut temp.ctx.table, s)
+                .await
+                .map_err(types::Error::trap)?;
+        }
         drop(temp);
 
         let mut count: types::Size = 0;
