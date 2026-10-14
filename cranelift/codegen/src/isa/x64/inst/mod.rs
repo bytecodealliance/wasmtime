@@ -684,7 +684,7 @@ impl PrettyPrint for Inst {
                 let context = pretty_print_reg(**context, 8);
                 let next_load_ptr = pretty_print_reg(*next_load_ptr.to_reg(), 8);
                 format!(
-                    "{next_load_ptr} = interrupt_poll {dst}, {load_ptr}, {context} #trap={trap_code}"
+                    "{next_load_ptr} = interrupt_poll load_ptr={load_ptr}, context={context}, scratch={dst} #trap={trap_code}"
                 )
             }
 
@@ -1081,11 +1081,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_fixed_use(load_ptr, regs::r11());
             // Demand context (vmctx) go into RDI.
             collector.reg_fixed_use(context, regs::rdi());
-            // Reserve r10 as a place for a signal handler to stow the original
-            // resume address. This allows the handler to twiddle saved machine
-            // state to return to a custom trampoline when it exits, allowing it
-            // to accomplish things that are unsafe at interrupt time. The
-            // trampoline can jump to the address in r10 when done to resume.
+            // Reserve r10 as scratch space.
             //
             // r10 is chosen because it is caller-saved and not used for
             // arg passing in Linux/x64. It is used as "a static chain pointer

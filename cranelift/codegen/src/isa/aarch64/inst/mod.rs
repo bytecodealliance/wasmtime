@@ -3054,7 +3054,7 @@ impl Inst {
                 let context = pretty_print_reg(context);
                 let next_load_ptr = pretty_print_reg(next_load_ptr.to_reg());
                 format!(
-                    "{next_load_ptr} = interrupt_poll {dst}, {load_ptr}, {context} #trap={trap_code}"
+                    "{next_load_ptr} = interrupt_poll load_ptr={load_ptr}, context={context}, scratch={dst} #trap={trap_code}"
                 )
             }
         }
