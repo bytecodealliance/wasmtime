@@ -87,6 +87,17 @@ async fn require_async_after_linker_with_func_new() -> Result<()> {
 }
 
 #[test]
+fn require_async_after_linker_get() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(store.engine());
+    linker.func_wrap_async("", "", |_, ()| Box::new(async {}))?;
+    linker.get(&mut store, "", "").unwrap();
+    assert_requires_async(&mut store);
+    Ok(())
+}
+
+#[test]
 fn require_async_after_epochs() -> Result<()> {
     let mut config = Config::new();
     config.epoch_interruption(true);
