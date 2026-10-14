@@ -1826,6 +1826,41 @@ mod test_programs {
     }
 
     #[test]
+    fn p2_cli_serve_reject_zero_concurrency() -> Result<()> {
+        // Both limits are handed to a semaphore, so a zero leaves the server
+        // listening but never serving anything.
+        let component = P2_CLI_SERVE_HELLO_WORLD_COMPONENT;
+        for option in [
+            "--max-concurrent-requests=0",
+            "--max-concurrent-connections=0",
+        ] {
+            let mut cmd = super::get_wasmtime_command()?;
+            cmd.args(["serve", "-Scli", option, component])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped());
+            let mut child = cmd.spawn()?;
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while child.try_wait()?.is_none() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "`{option}` was accepted and the server kept running"
+                );
+                thread::sleep(Duration::from_millis(100));
+            }
+            let output = child.wait_with_output()?;
+            assert!(!output.status.success(), "`{option}` was accepted");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.contains("invalid value"),
+                "expected `{option}` to be rejected, got: {stderr}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn p2_cli_run_outgoing_body_chunk_size() -> Result<()> {
         // Without the option an outgoing body keeps its 1 MiB default budget.
         let stdout = run_wasmtime(&[
@@ -2136,6 +2171,77 @@ start a print 1234
             "unexpected response: {response:?}",
         );
         drop(stream);
+
+        server.finish()?;
+        Ok(())
+    }
+
+    // A body can fail to parse after the guest read part of it.
+    // `future-trailers` must report an error, not a successful body.
+    #[tokio::test]
+    async fn p2_cli_serve_trailers_result() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_TRAILERS_RESULT_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        async fn request(server: &WasmtimeServe, raw: &[u8]) -> Result<String> {
+            let mut stream = TcpStream::connect(server.first_addr()).await?;
+            stream.write_all(raw).await?;
+            let mut response = Vec::new();
+            let mut buf = [0; 1024];
+            loop {
+                let n = tokio::time::timeout(Duration::from_secs(10), stream.read(&mut buf))
+                    .await
+                    .expect("timed out waiting for a response")?;
+                if n == 0 {
+                    break;
+                }
+                response.extend_from_slice(&buf[..n]);
+            }
+            String::from_utf8(response).map_err(Into::into)
+        }
+
+        let malformed: &[(&str, &[u8])] = &[
+            (
+                "empty trailer name",
+                b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n: v\r\n\r\n",
+            ),
+            (
+                "trailer without a colon",
+                b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\nBadTrailer\r\n\r\n",
+            ),
+            (
+                "trailer with a NUL",
+                b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\nX-T: a\x00b\r\n\r\n",
+            ),
+            (
+                "extra zero chunk",
+                b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n0\r\n\r\n",
+            ),
+        ];
+        for (name, raw) in malformed {
+            let response = request(&server, raw).await?;
+            assert!(
+                response.contains("trailers=error-code=ErrorCode::HttpProtocolError"),
+                "{name}: {response:?}",
+            );
+        }
+
+        // A well-formed body still reports success: once without trailers and
+        // once with a single trailer.
+        let response = request(
+            &server,
+            b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n",
+        )
+        .await?;
+        assert!(response.contains("trailers=none"), "{response:?}");
+
+        let response = request(
+            &server,
+            b"POST / HTTP/1.1\r\nHost: a\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\nX-T: v\r\n\r\n",
+        )
+        .await?;
+        assert!(response.contains("trailers=field-count=1"), "{response:?}");
 
         server.finish()?;
         Ok(())

@@ -3,9 +3,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{
-    AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle, Func,
-    Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Result, Store,
-    StoreContextMut, Val, ValType,
+    AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle,
+    Func, Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Result, Store,
+    StoreContextMut, Trap, Val, ValType,
 };
 
 use crate::async_functions::PollOnce;
@@ -813,6 +813,69 @@ async fn hostcall_error_events() -> wasmtime::Result<()> {
     assert!(result.is_err()); // Uncaught trap.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
     Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn hostcall_error_handler_panic_propagates() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let (module, mut store) = get_module_and_store(
+        |_config| {},
+        r#"
+    (module
+      (import "" "fail" (func))
+      (func (export "main")
+        call 0))
+    "#,
+    )?;
+
+    store.set_debug_handler(PanicOnHostcallError);
+
+    let fail = Func::wrap(
+        &mut store,
+        |_caller: Caller<'_, ()>| -> wasmtime::Result<()> {
+            Err(wasmtime::format_err!("host error"))
+        },
+    );
+    let instance = Instance::new_async(&mut store, &module, &[Extern::Func(fail)]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+
+    // The handler's panic should propagate out of `call_async` like a panic
+    // in a host function, rather than aborting the process.
+    let err = tokio::spawn(async move {
+        let mut results = [];
+        let _ = func.call_async(&mut store, &[], &mut results).await;
+    })
+    .await
+    .unwrap_err();
+    assert!(err.is_panic());
+    let panic = err.into_panic();
+    assert_eq!(
+        panic.downcast_ref::<&str>(),
+        Some(&"debug handler panic on hostcall error")
+    );
+    return Ok(());
+
+    #[derive(Clone)]
+    struct PanicOnHostcallError;
+
+    impl DebugHandler for PanicOnHostcallError {
+        type Data = ();
+
+        fn handle(
+            &self,
+            _store: StoreContextMut<'_, ()>,
+            event: DebugEvent<'_>,
+        ) -> impl Future<Output = ()> + Send {
+            let is_hostcall_error = matches!(event, DebugEvent::HostcallError(_));
+            async move {
+                if is_hostcall_error {
+                    panic!("debug handler panic on hostcall error");
+                }
+            }
+        }
+    }
 }
 
 #[tokio::test]
@@ -1694,6 +1757,224 @@ async fn take_exception_in_debug_handler() -> Result<()> {
                 let _ = store.take_pending_exception();
             }
             async move {}
+        }
+    }
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn gc_in_func_without_program_points() -> wasmtime::Result<()> {
+    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+        let mut config = Config::default();
+        config.guest_debug(true).wasm_gc(true).collector(collector);
+        let engine = Engine::new(&config)?;
+        let module = Module::new(
+            &engine,
+            r#"
+            (module
+              (type $a (array (mut i8)))
+              (func (export "f")
+                (local externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref
+                       externref externref externref externref))
+              (global (ref $a) (array.new_default $a (i32.const 100000)))
+              (global (ref $a) (array.new_default $a (i32.const 100000)))
+              (global (ref $a) (array.new_default $a (i32.const 100000))))
+            "#,
+        )?;
+        let mut store = Store::new(&engine, ());
+        Instance::new(&mut store, &module, &[])?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn fuel_visible_and_mutable_in_debug_handler() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::default();
+    config.guest_debug(true).consume_fuel(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+    (module
+      (func (export "count") (param $n i32) (result i32)
+        (local $i i32)
+        (loop $l
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br_if $l (i32.lt_u (local.get $i) (local.get $n))))
+        (local.get $i)))
+    "#,
+    )?;
+
+    #[derive(Clone)]
+    struct FuelHandler {
+        observed: Arc<Mutex<Vec<u64>>>,
+        zero_fuel_at: usize,
+    }
+    impl DebugHandler for FuelHandler {
+        type Data = ();
+        async fn handle(&self, mut store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+            if let DebugEvent::Breakpoint = event {
+                let mut observed = self.observed.lock().unwrap();
+                observed.push(store.get_fuel().unwrap());
+                if observed.len() == self.zero_fuel_at {
+                    store.set_fuel(0).unwrap();
+                }
+            }
+        }
+    }
+
+    // First, run to completion and check that the fuel observed at each
+    // breakpoint reflects consumption so far.
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(1_000_000)?;
+    store.edit_breakpoints().unwrap().single_step(true)?;
+    let observed = Arc::new(Mutex::new(vec![]));
+    store.set_debug_handler(FuelHandler {
+        observed: observed.clone(),
+        zero_fuel_at: usize::MAX,
+    });
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let count = instance.get_typed_func::<i32, i32>(&mut store, "count")?;
+    assert_eq!(count.call_async(&mut store, 100).await?, 100);
+    {
+        let observed = observed.lock().unwrap();
+        assert!(observed.len() > 100);
+        assert!(observed.windows(2).all(|w| w[0] >= w[1]));
+        assert!(observed.first().unwrap() > observed.last().unwrap());
+        assert!(*observed.last().unwrap() >= store.get_fuel()?);
+    }
+
+    // Then, zero out fuel partway through, which must cause an out-of-fuel
+    // trap rather than running to completion.
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(1_000_000)?;
+    store.edit_breakpoints().unwrap().single_step(true)?;
+    store.set_debug_handler(FuelHandler {
+        observed: Arc::new(Mutex::new(vec![])),
+        zero_fuel_at: 10,
+    });
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let count = instance.get_typed_func::<i32, i32>(&mut store, "count")?;
+    let err = count.call_async(&mut store, 100).await.unwrap_err();
+    assert_eq!(err.downcast::<Trap>()?, Trap::OutOfFuel);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn uninit_non_nullable_ref_local_in_single_step() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    // `$dirty` fills its frame with a garbage pattern so that `$victim`'s
+    // frame, which occupies the same stack space afterwards, starts with
+    // that garbage in it. `$victim`'s non-nullable local must still read as
+    // null, and must not be traced by the GC, before it is first set.
+    //
+    // Single-stepping is enabled by a host call at the start of `$victim`,
+    // not up front: a debug event in `main` between the two calls would run
+    // host code in the stack space `$dirty` used, overwriting the garbage.
+    let dirty_sets = (0..128)
+        .map(|i| format!("(local.set {i} (i64.const 0x0000123400001234))"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let wat = format!(
+        r#"
+    (module
+      (type $s (struct (field i32)))
+      (import "" "enable_single_step" (func $enable_single_step))
+      (func $dirty
+        (local {i64s})
+        {dirty_sets})
+      (func $victim (result i32)
+        (local $r (ref $s))
+        (call $enable_single_step)
+        (local.set $r (struct.new $s (i32.const 42)))
+        (struct.get $s 0 (local.get $r)))
+      (func (export "main") (result i32)
+        (call $dirty)
+        (call $victim)))
+    "#,
+        i64s = "i64 ".repeat(128),
+    );
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            config.wasm_gc(true);
+        },
+        &wat,
+    )?;
+
+    let handler = UninitLocalHandler::default();
+    store.set_debug_handler(handler.clone());
+
+    let enable_single_step = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| {
+        caller
+            .edit_breakpoints()
+            .unwrap()
+            .single_step(true)
+            .unwrap();
+    });
+    let instance =
+        Instance::new_async(&mut store, &module, &[Extern::Func(enable_single_step)]).await?;
+    let main = instance.get_typed_func::<(), i32>(&mut store, "main")?;
+    assert_eq!(main.call_async(&mut store, ()).await?, 42);
+
+    // We should have stopped at least once in `$victim` before the
+    // `local.set`, and then seen the local initialized afterwards.
+    assert!(handler.uninit_steps.load(Ordering::Relaxed) > 0);
+    assert!(handler.init_steps.load(Ordering::Relaxed) > 0);
+    return Ok(());
+
+    #[derive(Clone, Default)]
+    struct UninitLocalHandler {
+        uninit_steps: Arc<AtomicUsize>,
+        init_steps: Arc<AtomicUsize>,
+    }
+
+    impl DebugHandler for UninitLocalHandler {
+        type Data = ();
+
+        fn handle(
+            &self,
+            mut store: StoreContextMut<'_, ()>,
+            event: DebugEvent<'_>,
+        ) -> impl Future<Output = ()> + Send {
+            if let DebugEvent::Breakpoint = event {
+                let frame = store.debug_exit_frames().next().unwrap();
+                let (func, _pc) = frame
+                    .wasm_function_index_and_pc(&mut store)
+                    .unwrap()
+                    .unwrap();
+                // Only look at `$victim`, defined function 1.
+                if func.as_u32() == 1 {
+                    // A GC here traces the frame's state slot, including the
+                    // entry for `$r`, whether or not it's been set yet.
+                    store.gc(None).unwrap();
+                    let is_set = frame
+                        .local(&mut store, 0)
+                        .unwrap()
+                        .unwrap_any_ref()
+                        .is_some();
+                    if is_set {
+                        self.init_steps.fetch_add(1, Ordering::Relaxed);
+                    } else {
+                        // Before the `local.set`, the local reads as null.
+                        assert_eq!(self.init_steps.load(Ordering::Relaxed), 0);
+                        self.uninit_steps.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            }
+            async {}
         }
     }
 }

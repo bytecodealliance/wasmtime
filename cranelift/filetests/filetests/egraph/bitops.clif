@@ -1498,3 +1498,154 @@ block0(v0: f32):
     ; check: v3 = f32const 0.0
     ; check: return v3
 }
+
+function %band_bnot_bor_xy_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = bor v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; check: function %band_bnot_bor_xy_i32(i32, i32) -> i32 fast {
+; nextln: block0(v0: i32, v1: i32):
+; nextln:     v2 = bnot v0
+; nextln:     v5 = band v2, v1
+; nextln:     return v5
+; nextln: }
+
+function %band_bnot_bor_yx_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = bor v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; check: function %band_bnot_bor_yx_i32(i32, i32) -> i32 fast {
+; nextln: block0(v0: i32, v1: i32):
+; nextln:     v2 = bnot v0
+; nextln:     v5 = band v2, v1
+; nextln:     return v5
+; nextln: }
+
+function %band_bor_bnot_x_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bnot v0
+    v4 = band v2, v3
+    return v4
+}
+
+; check: function %band_bor_bnot_x_i32(i32, i32) -> i32 fast {
+; nextln: block0(v0: i32, v1: i32):
+; nextln:     v3 = bnot v0
+; nextln:     v5 = band v3, v1
+; nextln:     return v5
+; nextln: }
+
+function %band_bor_bnot_y_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bnot v1
+    v4 = band v2, v3
+    return v4
+}
+
+; check: function %band_bor_bnot_y_i32(i32, i32) -> i32 fast {
+; nextln: block0(v0: i32, v1: i32):
+; nextln:     v3 = bnot v1
+; nextln:     v5 = band v3, v0
+; nextln:     return v5
+; nextln: }
+
+function %bnot_xor_constant_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = bnot v0
+    v2 = iconst.i64 85
+    v3 = bxor v1, v2
+    return v3
+}
+
+; check: function %bnot_xor_constant_i64(i64) -> i64 fast {
+; nextln: block0(v0: i64):
+; nextln:     v4 = iconst.i64 -86
+; nextln:     v5 = bxor v0, v4  ; v4 = -86
+; nextln:     return v5
+; nextln: }
+
+function %bnot_xor_constant_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = bnot v0
+    v2 = iconst.i8 85
+    v3 = bxor v1, v2
+    return v3
+}
+
+; check: function %bnot_xor_constant_i8(i8) -> i8 fast {
+; nextln: block0(v0: i8):
+; nextln:     v4 = iconst.i8 -86
+; nextln:     v5 = bxor v0, v4  ; v4 = -86
+; nextln:     return v5
+; nextln: }
+
+function %band_bnot_band_bor_to_xor_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = bnot v2
+    v4 = bor v0, v1
+    v5 = band v3, v4
+    return v5
+}
+
+; check: function %band_bnot_band_bor_to_xor_i32(i32, i32) -> i32 fast {
+; nextln: block0(v0: i32, v1: i32):
+; nextln:     v6 = bxor v0, v1
+; nextln:     return v6
+; nextln: }
+
+function %bor_bnot_band_absorb_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = bnot v2
+    v4 = bor v3, v0
+    return v4
+}
+
+; check: function %bor_bnot_band_absorb_i32(i32, i32) -> i32 fast {
+; nextln: block0(v0: i32, v1: i32):
+; nextln:     v5 = iconst.i32 -1
+; nextln:     return v5  ; v5 = -1
+; nextln: }
+
+
+function %band_bnot_band_bor_to_xor_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = band v0, v1
+    v3 = bnot v2
+    v4 = bor v0, v1
+    v5 = band v3, v4
+    return v5
+}
+
+; check: function %band_bnot_band_bor_to_xor_i32x4(i32x4, i32x4) -> i32x4 fast {
+; nextln: block0(v0: i32x4, v1: i32x4):
+; nextln:     v6 = bxor v0, v1
+; nextln:     return v6
+; nextln: }
+
+function %bor_bnot_band_absorb_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = band v0, v1
+    v3 = bnot v2
+    v4 = bor v3, v0
+    return v4
+}
+
+; check: function %bor_bnot_band_absorb_i32x4(i32x4, i32x4) -> i32x4 fast {
+; nextln:     const0 = 0xffffffffffffffffffffffffffffffff
+; nextln: $(=^$)
+; nextln: block0(v0: i32x4, v1: i32x4):
+; nextln:     v7 = vconst.i32x4 const0
+; nextln:     return v7  ; v7 = const0
+; nextln: }

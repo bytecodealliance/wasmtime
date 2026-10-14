@@ -544,11 +544,26 @@ macro_rules! isle_lower_prelude_methods {
             stack_slot: StackSlot,
             offset: Offset32,
         ) -> MInst {
-            let offset = u32::try_from(i32::from(offset)).unwrap();
             self.lower_ctx
                 .abi()
-                .sized_stackslot_addr(stack_slot, offset, dst)
+                .sized_stackslot_addr(stack_slot, i32::from(offset), dst)
                 .into()
+        }
+
+        fn abi_stackslot_large_offset(
+            &mut self,
+            stack_slot: StackSlot,
+            offset: Offset32,
+        ) -> Option<i64> {
+            let offset = i64::from(i32::from(offset));
+            match self
+                .lower_ctx
+                .abi()
+                .sized_stackslot_area_offset(stack_slot, offset)
+            {
+                Some(_) => None,
+                None => Some(offset),
+            }
         }
 
         fn abi_stackslot_offset_into_slot_region(
@@ -556,15 +571,11 @@ macro_rules! isle_lower_prelude_methods {
             stack_slot: StackSlot,
             offset1: Offset32,
             offset2: Offset32,
-        ) -> i32 {
-            let offset1 = i32::from(offset1);
-            let offset2 = i32::from(offset2);
-            i32::try_from(self.lower_ctx.abi().sized_stackslot_offset(stack_slot))
-                .expect("Stack slot region cannot be larger than 2GiB")
-                .checked_add(offset1)
-                .expect("Stack slot region cannot be larger than 2GiB")
-                .checked_add(offset2)
-                .expect("Stack slot region cannot be larger than 2GiB")
+        ) -> Option<i32> {
+            let offset = i64::from(i32::from(offset1)) + i64::from(i32::from(offset2));
+            self.lower_ctx
+                .abi()
+                .sized_stackslot_area_offset(stack_slot, offset)
         }
 
         fn abi_dynamic_stackslot_addr(

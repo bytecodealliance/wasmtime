@@ -2166,11 +2166,11 @@ at https://bytecodealliance.org/security.
             let asan_range = stack
                 .asan_range()
                 .expect("supported continuation stacks have a usable range");
-            continuation.common_stack_information.asan_stack_bottom = Some(vm::VmPtr::from(
+            continuation.common_stack_information.asan.stack_bottom = Some(vm::VmPtr::from(
                 NonNull::new(asan_range.start as *mut u8)
                     .expect("a continuation stack's ASan range must have a non-null bottom"),
             ));
-            continuation.common_stack_information.asan_stack_size = asan_range.len();
+            continuation.common_stack_information.asan.stack_size = asan_range.len();
         }
         continuation.stack = stack;
         let ptr = continuation.deref_mut() as *mut VMContRef;

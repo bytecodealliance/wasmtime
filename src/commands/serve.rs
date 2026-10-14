@@ -7,6 +7,7 @@ use pin_project_lite::pin_project;
 use std::convert::Infallible;
 use std::ffi::OsString;
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -179,11 +180,11 @@ pub struct ServeCommand {
     /// Maximum number of concurrent requests that can be processed at any one
     /// point in time.
     #[arg(long)]
-    max_concurrent_requests: Option<usize>,
+    max_concurrent_requests: Option<NonZeroUsize>,
     /// Maximum number of concurrent connections that can be held at any one
     /// point in time.
     #[arg(long)]
-    max_concurrent_connections: Option<usize>,
+    max_concurrent_connections: Option<NonZeroUsize>,
 
     #[arg(skip)]
     inherited_sockets: InheritedSockets,
@@ -717,9 +718,11 @@ impl ServeCommand {
 
         let max_concurrent_connections = self
             .max_concurrent_connections
+            .map(|n| n.get())
             .unwrap_or(if debuggee_store.is_some() { 1 } else { 1000 });
         let max_concurrent_requests = self
             .max_concurrent_requests
+            .map(|n| n.get())
             .unwrap_or(if debuggee_store.is_some() { 1 } else { 1000 });
         if debuggee_store.is_some() && max_concurrent_connections != 1 {
             bail!("cannot have more than 1 max concurrent connections with a debugger");

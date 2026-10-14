@@ -1,0 +1,134 @@
+; A `tail` function that grows its incoming argument area for a
+; `return_call` with more stack arguments than it received. The frame is
+; defined for unwinding before the saved FP and return address are moved,
+; and FP is only updated once both have been moved.
+test compile precise-output
+set unwind_info=true
+set preserve_frame_pointers=true
+target riscv64
+
+function %f(i64) -> i64 tail {
+    fn0 = %g(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+    fn1 = %h() -> i64 tail
+block0(v0: i64):
+    v1 = call fn1()
+    v2 = call fn1()
+    v3 = iadd v0, v1
+    v4 = call fn1()
+    v5 = iadd v3, v2
+    v6 = iadd v5, v4
+    return_call fn0(v6, v0, v1, v2, v3, v4, v5, v6, v0, v1)
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   mv fp,sp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 32 }
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   ld t6,16(sp)
+;   sd t6,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-32
+;   sd s2,24(sp)
+;   unwind SaveReg { clobber_offset: 24, reg: p18i }
+;   sd s3,16(sp)
+;   unwind SaveReg { clobber_offset: 16, reg: p19i }
+;   sd s4,8(sp)
+;   unwind SaveReg { clobber_offset: 8, reg: p20i }
+;   sd s5,0(sp)
+;   unwind SaveReg { clobber_offset: 0, reg: p21i }
+; block0:
+;   mv s2,a0
+;   load_ext_name_far a1,%h+0
+;   callind a1
+;   mv s5,a0
+;   load_ext_name_far a1,%h+0
+;   callind a1
+;   mv s4,a0
+;   mv a0,s5
+;   add s3,s2,a0
+;   load_ext_name_far a1,%h+0
+;   callind a1
+;   mv a1,s4
+;   add a6,s3,a1
+;   add a7,a6,a0
+;   sd s2,-16(incoming_arg)
+;   mv a2,s5
+;   sd a2,-8(incoming_arg)
+;   load_ext_name_far t0,%g+0
+;   mv a5,a0
+;   mv a4,s3
+;   mv a3,a1
+;   mv a1,s2
+;   mv a0,a7
+;   return_call_ind t0 new_stack_arg_size:16 a0=a0 a1=a1 a2=a2 a3=a3 a4=a4 a5=a5 a6=a6 a7=a7
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   ld t6, 0x10(sp)
+;   sd t6, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x20
+;   sd s2, 0x18(sp)
+;   sd s3, 0x10(sp)
+;   sd s4, 8(sp)
+;   sd s5, 0(sp)
+; block1: ; offset 0x38
+;   mv s2, a0
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %h 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr a1
+;   mv s5, a0
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %h 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr a1
+;   mv s4, a0
+;   mv a0, s5
+;   add s3, s2, a0
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %h 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr a1
+;   mv a1, s4
+;   add a6, s3, a1
+;   add a7, a6, a0
+;   sd s2, 0x30(sp)
+;   mv a2, s5
+;   sd a2, 0x38(sp)
+;   auipc t0, 0
+;   ld t0, 0xc(t0)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   mv a5, a0
+;   mv a4, s3
+;   mv a3, a1
+;   mv a1, s2
+;   mv a0, a7
+;   ld s2, 0x18(sp)
+;   ld s3, 0x10(sp)
+;   ld s4, 8(sp)
+;   ld s5, 0(sp)
+;   ld ra, 0x28(sp)
+;   ld s0, 0x20(sp)
+;   addi sp, sp, 0x30
+;   jr t0
+

@@ -1251,3 +1251,54 @@ fn hostcall_fuel_limits_val() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn host_throw_is_trap() -> Result<()> {
+    for concurrency in [true, false] {
+        let mut config = Config::new();
+        config.wasm_exceptions(true);
+        config.wasm_component_model(true);
+        config.concurrency_support(concurrency);
+        let engine = Engine::new(&config)?;
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (import "f" (func $f))
+                    (core func $f (canon lower (func $f)))
+                    (core module $m
+                        (import "" "f" (func $f))
+                        (func (export "run")
+                            (block $caught
+                                (try_table (catch_all $caught)
+                                    (call $f))
+                                return)
+                            unreachable)
+                    )
+                    (core instance $i (instantiate $m
+                        (with "" (instance (export "f" (func $f))))
+                    ))
+                    (func (export "run") (canon lift (core func $i "run")))
+                )
+            "#,
+        )?;
+        let mut linker = Linker::<()>::new(&engine);
+        linker.root().func_wrap("f", |mut store, (): ()| {
+            let ty = wasmtime::TagType::new(wasmtime::FuncType::new(store.engine(), [], []));
+            let tag = wasmtime::Tag::new(&mut store, &ty)?;
+            let pre = wasmtime::ExnRefPre::new(&mut store, wasmtime::ExnType::from_tag_type(&ty)?);
+            let exn = wasmtime::ExnRef::new(&mut store, &pre, &tag, &[])?;
+            store.throw::<()>(exn)
+        })?;
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+        let err = run.call(&mut store, ()).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<wasmtime::Trap>(),
+            Some(&wasmtime::Trap::UncaughtException),
+            "{err:?}",
+        );
+    }
+    Ok(())
+}

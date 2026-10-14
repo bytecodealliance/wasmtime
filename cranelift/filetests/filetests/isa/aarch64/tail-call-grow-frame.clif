@@ -1,0 +1,121 @@
+; A `tail` function that grows its incoming argument area for a
+; `return_call` with more stack arguments than it received. The frame is
+; defined for unwinding before the saved FP and return address are moved,
+; and FP is only updated once both have been moved.
+test compile precise-output
+set unwind_info=true
+set preserve_frame_pointers=true
+target aarch64
+
+function %f(i64) -> i64 tail {
+    fn0 = %g(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+    fn1 = %h() -> i64 tail
+block0(v0: i64):
+    v1 = call fn1()
+    v2 = call fn1()
+    v3 = iadd v0, v1
+    v4 = call fn1()
+    v5 = iadd v3, v2
+    v6 = iadd v5, v4
+    return_call fn0(v6, v0, v1, v2, v3, v4, v5, v6, v0, v1)
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   mov fp, sp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 32 }
+;   sub sp, sp, #32
+;   unwind StackAlloc { size: 32 }
+;   ldr x16, [sp, #32]
+;   stp x16, lr, [sp]
+;   mov fp, sp
+;   stp x21, x22, [sp, #-16]!
+;   unwind SaveReg { clobber_offset: 16, reg: p21i }
+;   unwind SaveReg { clobber_offset: 24, reg: p22i }
+;   stp x19, x20, [sp, #-16]!
+;   unwind SaveReg { clobber_offset: 0, reg: p19i }
+;   unwind SaveReg { clobber_offset: 8, reg: p20i }
+; block0:
+;   mov x19, x2
+;   load_ext_name_far x11, TestCase(%h)+0
+;   blr x11
+;   mov x22, x2
+;   load_ext_name_far x11, TestCase(%h)+0
+;   blr x11
+;   mov x21, x2
+;   mov x2, x22
+;   add x20, x19, x2
+;   load_ext_name_far x11, TestCase(%h)+0
+;   blr x11
+;   mov x0, x21
+;   add x12, x20, x0
+;   add x11, x12, x2
+;   mov x7, x2
+;   str x12, [sp, #48]
+;   str x11, [sp, #56]
+;   str x19, [sp, #64]
+;   mov x2, x22
+;   str x2, [sp, #72]
+;   load_ext_name_far x1, TestCase(%g)+0
+;   mov x6, x20
+;   mov x5, x0
+;   mov x4, x2
+;   mov x3, x19
+;   mov x2, x11
+;   return_call_ind x1 new_stack_arg_size:32 x2=x2 x3=x3 x4=x4 x5=x5 x6=x6 x7=x7
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x20
+;   ldur x16, [sp, #0x20]
+;   stp x16, x30, [sp]
+;   mov x29, sp
+;   stp x21, x22, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
+; block1: ; offset 0x20
+;   mov x19, x2
+;   ldr x11, #0x2c
+;   b #0x34
+;   udf #0 ; reloc_external Abs8 %h 0
+;   udf #0
+;   blr x11
+;   mov x22, x2
+;   ldr x11, #0x44
+;   b #0x4c
+;   udf #0 ; reloc_external Abs8 %h 0
+;   udf #0
+;   blr x11
+;   mov x21, x2
+;   mov x2, x22
+;   add x20, x19, x2
+;   ldr x11, #0x64
+;   b #0x6c
+;   udf #0 ; reloc_external Abs8 %h 0
+;   udf #0
+;   blr x11
+;   mov x0, x21
+;   add x12, x20, x0
+;   add x11, x12, x2
+;   mov x7, x2
+;   stur x12, [sp, #0x30]
+;   stur x11, [sp, #0x38]
+;   stur x19, [sp, #0x40]
+;   mov x2, x22
+;   stur x2, [sp, #0x48]
+;   ldr x1, #0x9c
+;   b #0xa4
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
+;   mov x6, x20
+;   mov x5, x0
+;   mov x4, x2
+;   mov x3, x19
+;   mov x2, x11
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   br x1
+

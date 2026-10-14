@@ -1,0 +1,125 @@
+; `ineg` and shifts on 64-bit vectors. Shift amounts are masked to the lane
+; width. The `bor` cases match aarch64's `extr` rules, which should not apply to
+; vectors.
+test interpret
+test run
+target aarch64
+
+function %ineg_i8x8(i8x8) -> i8x8 {
+block0(v0: i8x8):
+    v1 = ineg v0
+    return v1
+}
+; run: %ineg_i8x8([1 0 -1 127 -128 2 3 4]) == [-1 0 1 -127 -128 -2 -3 -4]
+
+function %ineg_i16x4(i16x4) -> i16x4 {
+block0(v0: i16x4):
+    v1 = ineg v0
+    return v1
+}
+; run: %ineg_i16x4([1 0 -1 -32768]) == [-1 0 1 -32768]
+
+function %ineg_i32x2(i32x2) -> i32x2 {
+block0(v0: i32x2):
+    v1 = ineg v0
+    return v1
+}
+; run: %ineg_i32x2([1 0]) == [-1 0]
+; run: %ineg_i32x2([-2147483648 7]) == [-2147483648 -7]
+
+function %ishl_i8x8(i8x8, i32) -> i8x8 {
+block0(v0: i8x8, v1: i32):
+    v2 = ishl v0, v1
+    return v2
+}
+; run: %ishl_i8x8([1 2 3 4 5 6 7 -128], 1) == [2 4 6 8 10 12 14 0]
+; run: %ishl_i8x8([1 2 3 4 5 6 7 8], 9) == [2 4 6 8 10 12 14 16]
+; run: %ishl_i8x8([1 2 3 4 5 6 7 8], 0) == [1 2 3 4 5 6 7 8]
+
+function %ishl_imm_i16x4(i16x4) -> i16x4 {
+block0(v0: i16x4):
+    v1 = iconst.i32 3
+    v2 = ishl v0, v1
+    return v2
+}
+; run: %ishl_imm_i16x4([1 2 -1 0x1000]) == [8 16 -8 -32768]
+
+function %ishl_imm_masked_i32x2(i32x2) -> i32x2 {
+block0(v0: i32x2):
+    v1 = iconst.i32 33
+    v2 = ishl v0, v1
+    return v2
+}
+; run: %ishl_imm_masked_i32x2([1 0x40000000]) == [2 -2147483648]
+
+function %ushr_i16x4(i16x4, i64) -> i16x4 {
+block0(v0: i16x4, v1: i64):
+    v2 = ushr v0, v1
+    return v2
+}
+; run: %ushr_i16x4([-1 0x100 2 1], 4) == [0x0fff 0x10 0 0]
+; run: %ushr_i16x4([-1 0x100 2 1], 20) == [0x0fff 0x10 0 0]
+; run: %ushr_i16x4([-1 0x100 2 1], 0) == [-1 0x100 2 1]
+
+function %ushr_imm_i32x2(i32x2) -> i32x2 {
+block0(v0: i32x2):
+    v1 = iconst.i32 31
+    v2 = ushr v0, v1
+    return v2
+}
+; run: %ushr_imm_i32x2([-1 0x7fffffff]) == [1 0]
+
+function %ushr_imm_zero_i8x8(i8x8) -> i8x8 {
+block0(v0: i8x8):
+    v1 = iconst.i32 8
+    v2 = ushr v0, v1
+    return v2
+}
+; run: %ushr_imm_zero_i8x8([-1 1 2 3 4 5 6 7]) == [-1 1 2 3 4 5 6 7]
+
+function %sshr_i32x2(i32x2, i8) -> i32x2 {
+block0(v0: i32x2, v1: i8):
+    v2 = sshr v0, v1
+    return v2
+}
+; run: %sshr_i32x2([-8 8], 2) == [-2 2]
+; run: %sshr_i32x2([-8 8], 34) == [-2 2]
+; run: %sshr_i32x2([-8 8], 0) == [-8 8]
+
+function %sshr_imm_i8x8(i8x8) -> i8x8 {
+block0(v0: i8x8):
+    v1 = iconst.i32 7
+    v2 = sshr v0, v1
+    return v2
+}
+; run: %sshr_imm_i8x8([-128 127 -1 1 -64 64 0 -2]) == [-1 0 -1 0 -1 0 0 -1]
+
+function %sshr_imm_zero_i16x4(i16x4) -> i16x4 {
+block0(v0: i16x4):
+    v1 = iconst.i32 16
+    v2 = sshr v0, v1
+    return v2
+}
+; run: %sshr_imm_zero_i16x4([-1 1 -32768 32767]) == [-1 1 -32768 32767]
+
+function %ishl_ushr_bor_i32x2(i32x2, i32x2) -> i32x2 {
+block0(v0: i32x2, v1: i32x2):
+    v2 = iconst.i64 2
+    v3 = ishl v0, v2
+    v4 = iconst.i64 62
+    v5 = ushr v1, v4
+    v6 = bor v3, v5
+    return v6
+}
+; run: %ishl_ushr_bor_i32x2([1 2], [0x80000000 0xc0000000]) == [6 11]
+
+function %ushr_ishl_bor_i32x2(i32x2, i32x2) -> i32x2 {
+block0(v0: i32x2, v1: i32x2):
+    v2 = iconst.i64 62
+    v3 = ushr v1, v2
+    v4 = iconst.i64 2
+    v5 = ishl v0, v4
+    v6 = bor v3, v5
+    return v6
+}
+; run: %ushr_ishl_bor_i32x2([1 2], [0x80000000 0xc0000000]) == [6 11]

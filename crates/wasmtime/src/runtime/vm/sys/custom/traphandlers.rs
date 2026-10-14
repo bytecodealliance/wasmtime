@@ -31,7 +31,7 @@ extern "C" fn handle_trap(pc: usize, fp: usize, has_faulting_addr: bool, faultin
         } else {
             None
         };
-        let regs = TrapRegisters { pc, fp };
+        let regs = TrapRegisters { pc, fp, lr: None };
         let test = info.test_if_trap(regs, faulting_addr, |_handler| {
             panic!("custom signal handlers are not supported on this platform");
         });

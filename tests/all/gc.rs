@@ -885,6 +885,34 @@ fn table_copy_doesnt_leak() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn table_copy_without_root_scope_doesnt_leak() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut store = Store::<()>::default();
+    let flag = Arc::new(AtomicBool::new(false));
+
+    let table = Table::new(
+        &mut store,
+        TableType::new(RefType::EXTERNREF, 10, Some(10))?,
+        Ref::Extern(None),
+    )?;
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        let x = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?;
+        table.fill(&mut scope, 2, x.into(), 3)?;
+    }
+
+    Table::copy(&mut store, &table, 5, &table, 2, 3)?;
+    table.fill(&mut store, 0, Ref::Extern(None), 10)?;
+
+    store.gc(None)?;
+    assert!(flag.load(SeqCst));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn table_set_doesnt_leak() -> Result<()> {
     let _ = env_logger::try_init();
 

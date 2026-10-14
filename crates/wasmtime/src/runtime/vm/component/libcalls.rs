@@ -1296,7 +1296,7 @@ fn thread_new_indirect(
     store.component_async_store().thread_new_indirect(
         instance,
         RuntimeComponentInstanceIndex::from_u32(caller),
-        TypeFuncIndex::from_u32(func_ty_id),
+        wasmtime_environ::ModuleInternedTypeIndex::from_u32(func_ty_id),
         RuntimeTableIndex::from_u32(func_table_idx),
         func_idx,
         context as i32,

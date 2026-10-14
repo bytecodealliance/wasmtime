@@ -292,6 +292,70 @@ check: 42
     Ok(())
 }
 
+/// Hitting a breakpoint in a module's `(start)` function should not
+/// panic when the debugger inspects the stack. The start function is
+/// called from a compiled module-startup function that has no
+/// program points of its own; that frame must not be mistaken for a
+/// Wasm frame (#14609).
+#[test]
+#[ignore]
+fn guest_debug_cli_breakpoint_in_start_func() -> Result<()> {
+    let mut module = tempfile::Builder::new().suffix(".wat").tempfile()?;
+    module.write_all(
+        br#"(module
+  (func $run)
+  (start $run))
+"#,
+    )?;
+    let module = module.into_temp_path();
+    let module_path = module
+        .to_str()
+        .ok_or_else(|| format_err!("temporary module path is not UTF-8"))?;
+
+    let port = free_port();
+    let mut wt = WasmtimeWithGdbstub::spawn(
+        "run",
+        port,
+        &["-Ccache=n", module_path],
+        Duration::from_secs(30),
+    )?;
+
+    let output = lldb_with_gdbstub_script(
+        port,
+        r#"
+b run
+c
+bt
+c
+"#,
+    )?;
+
+    // Wasmtime should run to completion rather than panicking.
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    let status = loop {
+        if let Some(status) = wt.child.try_wait()? {
+            break status;
+        }
+        if std::time::Instant::now() > deadline {
+            wt.child.kill().ok();
+            wt.child.wait()?;
+            bail!("timed out waiting for wasmtime to exit");
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    assert!(status.success(), "wasmtime exited with {status}");
+
+    check_output(
+        &output,
+        r#"
+check: stop reason
+check: run
+check: exited with status = 0
+"#,
+    )?;
+    Ok(())
+}
+
 /// Helper: send an HTTP/1.0 request and return the full response.
 fn http_request(addr: SocketAddr, path: &str) -> Result<String> {
     let mut tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(5))?;

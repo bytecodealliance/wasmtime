@@ -1,0 +1,39 @@
+; Issue #14566: `(x >> k) << k --> x & mask` built `iconst` at a 64-bit
+; vector type because its `fits_in_64` guard admits vectors.
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; `(ishl (ushr x k) k)` should not fire on 64-bit vector type.
+function %ushr_ishl_i32x2(i32x2) -> i32x2 {
+block0(v0: i32x2):
+    v1 = iconst.i32 4
+    v2 = ushr v0, v1
+    v3 = ishl v2, v1
+    return v3
+}
+
+; function %ushr_ishl_i32x2(i32x2) -> i32x2 fast {
+; block0(v0: i32x2):
+;     v1 = iconst.i32 4
+;     v2 = ushr v0, v1  ; v1 = 4
+;     v3 = ishl v2, v1  ; v1 = 4
+;     return v3
+; }
+
+;; `(ishl (sshr x k) k)` should not fire on 64-bit vector type.
+function %sshr_ishl_i32x2(i32x2) -> i32x2 {
+block0(v0: i32x2):
+    v1 = iconst.i32 4
+    v2 = sshr v0, v1
+    v3 = ishl v2, v1
+    return v3
+}
+
+; function %sshr_ishl_i32x2(i32x2) -> i32x2 fast {
+; block0(v0: i32x2):
+;     v1 = iconst.i32 4
+;     v2 = sshr v0, v1  ; v1 = 4
+;     v3 = ishl v2, v1  ; v1 = 4
+;     return v3
+; }

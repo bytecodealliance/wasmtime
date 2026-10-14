@@ -24,8 +24,13 @@ fn main() {
         .map(|s| s.split(" ").map(|s| s.to_string()).collect::<Vec<_>>());
 
     // List of supported compilers, filtered by what our current host supports.
+    // If the current host doesn't support anything native, then test pulley
+    // instead.
     let mut compilers = vec![Compiler::CraneliftNative, Compiler::Winch];
     compilers.retain(|c| c.supports_host());
+    if compilers.is_empty() {
+        compilers.push(Compiler::CraneliftPulley);
+    }
 
     // Only test one compiler in ASAN since we're mostly interested in testing
     // runtime code, not compiler-generated code.

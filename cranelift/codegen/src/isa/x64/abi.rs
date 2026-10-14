@@ -154,6 +154,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             let last_param = ix == params.len() - 1;
 
             if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
+                if is_tail {
+                    return Err(crate::CodegenError::Unsupported(
+                        "struct arguments (`sarg`) in `tail` signatures".to_owned(),
+                    ));
+                }
                 let offset = next_stack as i64;
                 let size = size;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
@@ -408,6 +413,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         next_stack = align_to(next_stack, 16);
 
+        if args_or_rets == ArgsOrRets::Args
+            && matches!(call_conv, CallConv::Tail | CallConv::Winch)
+            && next_stack > u32::from(u16::MAX)
+        {
+            return Err(crate::CodegenError::ImplLimitExceeded);
+        }
+
         Ok((next_stack, extra_arg_idx))
     }
 
@@ -642,7 +654,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let probe_count = frame_size / guard_size;
         if probe_count == 0 {
             // No probe necessary
-        } else if probe_count <= PROBE_MAX_UNROLL {
+        } else if probe_count <= PROBE_MAX_UNROLL || call_conv == isa::CallConv::PreserveAll {
+            // The probe loop needs a temporary register, but probes run
+            // before any registers are saved, and a `preserve_all` function
+            // must not clobber any register. The unrolled probes don't use
+            // any registers, so always use them for `preserve_all`.
             Self::gen_probestack_unroll(insts, guard_size, probe_count)
         } else {
             Self::gen_probestack_loop(insts, call_conv, frame_size, guard_size)
@@ -656,6 +672,26 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
 
+        // Emit unwind info: start the frame. The frame (from unwind consumers'
+        // point of view) starts at clobbers, just below the FP and return
+        // address. Spill slots and stack slots are part of our actual frame but
+        // do not concern the unwinder.
+        //
+        // This is emitted before the incoming argument area is resized below so
+        // that the CFA is defined in terms of RBP while the saved RBP and return
+        // address are being moved: RBP keeps pointing at the original copies
+        // until both have been moved, and then points at the new copies. In both
+        // cases the caller's frame is `setup_area_size` above RBP, and the
+        // clobbers are just below RBP.
+        if flags.unwind_info() && frame_layout.setup_area_size > 0 {
+            insts.push(Inst::Unwind {
+                inst: UnwindInst::DefineNewFrame {
+                    offset_downward_to_clobbers: frame_layout.clobber_size,
+                    offset_upward_to_caller_sp: frame_layout.setup_area_size,
+                },
+            });
+        }
+
         // When a return_call within this function required more stack arguments than we have
         // present, resize the incoming argument area of the frame to accommodate those arguments.
         let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
@@ -667,14 +703,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 i32::try_from(incoming_args_diff)
                     .expect("`incoming_args_diff` is too large to fit in a 32-bit immediate"),
             ));
-
-            // Make sure to keep the frame pointer and stack pointer in sync at
-            // this point.
-            let rbp = Gpr::RBP;
-            let rsp = Gpr::RSP;
-            insts.push(Inst::External {
-                inst: asm::inst::movq_mr::new(Writable::from_reg(rbp), rsp).into(),
-            });
 
             let incoming_args_diff = i32::try_from(incoming_args_diff).unwrap();
 
@@ -692,22 +720,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             insts.push(Inst::External { inst });
             let inst = asm::inst::movq_mr::new(Amode::imm_reg(8, regs::rsp()), r11.to_reg()).into();
             insts.push(Inst::External { inst });
-        }
 
-        // We need to factor `incoming_args_diff` into the offset upward here, as we have grown
-        // the argument area -- `setup_area_size` alone will not be the correct offset up to the
-        // original caller's SP.
-        let offset_upward_to_caller_sp = frame_layout.setup_area_size + incoming_args_diff;
-        if flags.unwind_info() && offset_upward_to_caller_sp > 0 {
-            // Emit unwind info: start the frame. The frame (from unwind
-            // consumers' point of view) starts at clobbbers, just below
-            // the FP and return address. Spill slots and stack slots are
-            // part of our actual frame but do not concern the unwinder.
-            insts.push(Inst::Unwind {
-                inst: UnwindInst::DefineNewFrame {
-                    offset_downward_to_clobbers: frame_layout.clobber_size,
-                    offset_upward_to_caller_sp,
-                },
+            // Now that the saved frame pointer and return address have been
+            // moved, point the frame pointer at the new frame record.
+            let rbp = Gpr::RBP;
+            let rsp = Gpr::RSP;
+            insts.push(Inst::External {
+                inst: asm::inst::movq_mr::new(Writable::from_reg(rbp), rsp).into(),
             });
         }
 

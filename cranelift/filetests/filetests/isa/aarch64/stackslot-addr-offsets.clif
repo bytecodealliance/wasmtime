@@ -1,0 +1,162 @@
+; `stack_addr` is ordinary pointer arithmetic, so its offset may point
+; anywhere, including before or after the stack slot. Offsets that are too
+; large to fold into the stack slot's address are added separately.
+test compile precise-output
+target aarch64
+
+function %negative_offset() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss1-8
+    return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   mov x0, sp
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x0, sp
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %offset_past_slot() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss0+16
+    return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   add x0, sp, #16
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   add x0, sp, #0x10
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %large_offset() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss1+2147483647
+    return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   add x0, sp, #8
+;   movn w2, #32768, LSL #16
+;   add x0, x0, x2
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   add x0, sp, #8
+;   mov w2, #0x7fffffff
+;   add x0, x0, x2
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %large_negative_offset() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss1-2147483648
+    return v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   add x0, sp, #8
+;   movn x3, #65535
+;   movk x3, x3, #32768, LSL #16
+;   add x0, x0, x3
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   add x0, sp, #8
+;   mov x3, #-0x10000
+;   movk x3, #0x8000, lsl #16
+;   add x0, x0, x3
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %large_offset_load() -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i64 ss1+2147483647
+    v1 = load.i64 notrap v0-2147483648
+    return v1
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   ldr x0, [sp, #7]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   ldur x0, [sp, #7]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

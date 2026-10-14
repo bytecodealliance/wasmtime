@@ -380,3 +380,186 @@ block0(v0: i32, v1: i32):
 ; run: %signed_bounds_variable_limit(-1, -1) == 0
 ; run: %signed_bounds_variable_limit(0, 1) == 1
 ; run: %signed_bounds_variable_limit(100, 100) == 0
+
+function %xor_eq_one_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    v3 = iconst.i8 1
+    v4 = bxor v2, v3
+    return v4
+}
+; run: %xor_eq_one_i32(0, 0) == 0
+; run: %xor_eq_one_i32(0, 1) == 1
+; run: %xor_eq_one_i32(-1, -1) == 0
+; run: %xor_eq_one_i32(-1, 2147483647) == 1
+; run: %xor_eq_one_i32(-2147483648, -2147483648) == 0
+; run: %xor_eq_one_i32(-2147483648, 0) == 1
+
+function %xor_eq_one_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp eq v0, v1
+    v3 = iconst.i8 1
+    v4 = bxor v2, v3
+    return v4
+}
+; run: %xor_eq_one_i64(0, 0) == 0
+; run: %xor_eq_one_i64(0, 1) == 1
+; run: %xor_eq_one_i64(-1, -1) == 0
+; run: %xor_eq_one_i64(-1, 9223372036854775807) == 1
+; run: %xor_eq_one_i64(-9223372036854775808, -9223372036854775808) == 0
+; run: %xor_eq_one_i64(-9223372036854775808, 0) == 1
+
+function %ugt_sub_one_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = isub v0, v1
+    v3 = icmp ugt v0, v2
+    return v3
+}
+; run: %ugt_sub_one_i32(0) == 0
+; run: %ugt_sub_one_i32(1) == 1
+; run: %ugt_sub_one_i32(-1) == 1
+; run: %ugt_sub_one_i32(-2147483648) == 1
+; run: %ugt_sub_one_i32(2147483647) == 1
+
+function %ugt_sub_one_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 1
+    v2 = isub v0, v1
+    v3 = icmp ugt v0, v2
+    return v3
+}
+; run: %ugt_sub_one_i64(0) == 0
+; run: %ugt_sub_one_i64(1) == 1
+; run: %ugt_sub_one_i64(-1) == 1
+; run: %ugt_sub_one_i64(-9223372036854775808) == 1
+; run: %ugt_sub_one_i64(9223372036854775807) == 1
+
+function %ult_sub_one_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = isub v0, v1
+    v3 = icmp ult v2, v0
+    return v3
+}
+; run: %ult_sub_one_i32(0) == 0
+; run: %ult_sub_one_i32(1) == 1
+; run: %ult_sub_one_i32(-1) == 1
+; run: %ult_sub_one_i32(-2147483648) == 1
+; run: %ult_sub_one_i32(2147483647) == 1
+
+function %ult_sub_one_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 1
+    v2 = isub v0, v1
+    v3 = icmp ult v2, v0
+    return v3
+}
+; run: %ult_sub_one_i64(0) == 0
+; run: %ult_sub_one_i64(1) == 1
+; run: %ult_sub_one_i64(-1) == 1
+; run: %ult_sub_one_i64(-9223372036854775808) == 1
+; run: %ult_sub_one_i64(9223372036854775807) == 1
+
+function %eq_rotr_i32(i32, i32, i32) -> i8 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = rotr v0, v2
+    v4 = rotr v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+; run: %eq_rotr_i32(0, 0, 0) == 1
+; run: %eq_rotr_i32(1, 2, 1) == 0
+; run: %eq_rotr_i32(-1, -1, 1) == 1
+; run: %eq_rotr_i32(-2147483648, 2147483647, 31) == 0
+; run: %eq_rotr_i32(7, 7, 32) == 1
+; run: %eq_rotr_i32(7, 8, 33) == 0
+; run: %eq_rotr_i32(7, 7, -1) == 1
+
+function %eq_rotr_i64(i64, i64, i64) -> i8 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = rotr v0, v2
+    v4 = rotr v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+; run: %eq_rotr_i64(0, 0, 0) == 1
+; run: %eq_rotr_i64(1, 2, 1) == 0
+; run: %eq_rotr_i64(-1, -1, 1) == 1
+; run: %eq_rotr_i64(-9223372036854775808, 9223372036854775807, 63) == 0
+; run: %eq_rotr_i64(7, 7, 64) == 1
+; run: %eq_rotr_i64(7, 8, 65) == 0
+; run: %eq_rotr_i64(7, 7, -1) == 1
+
+function %eq_rotr_i32_i8_count(i32, i32, i8) -> i8 {
+block0(v0: i32, v1: i32, v2: i8):
+    v3 = rotr v0, v2
+    v4 = rotr v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+; run: %eq_rotr_i32_i8_count(0, 0, 0) == 1
+; run: %eq_rotr_i32_i8_count(1, 2, 1) == 0
+; run: %eq_rotr_i32_i8_count(-1, -1, 1) == 1
+; run: %eq_rotr_i32_i8_count(-2147483648, 2147483647, 31) == 0
+; run: %eq_rotr_i32_i8_count(7, 7, 32) == 1
+; run: %eq_rotr_i32_i8_count(7, 8, 33) == 0
+; run: %eq_rotr_i32_i8_count(7, 7, -1) == 1
+
+function %eq_rotr_different_counts(i32, i32, i32, i32) -> i8 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = rotr v0, v2
+    v5 = rotr v1, v3
+    v6 = icmp eq v4, v5
+    return v6
+}
+; run: %eq_rotr_different_counts(1, 2, 0, 1) == 1
+; run: %eq_rotr_different_counts(1, 1, 0, 1) == 0
+; run: %eq_rotr_different_counts(7, 7, 0, 32) == 1
+
+function %eq_rotr_shared(i32, i32, i32) -> i8, i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = rotr v0, v2
+    v4 = rotr v1, v2
+    v5 = icmp eq v3, v4
+    return v5, v3
+}
+; run: %eq_rotr_shared(1, 1, 1) == [1, -2147483648]
+; run: %eq_rotr_shared(1, 2, 1) == [0, -2147483648]
+; run: %eq_rotr_shared(7, 7, 32) == [1, 7]
+
+function %bor_ne_zero_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp ne v0, v2
+    v4 = icmp ne v1, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %bor_ne_zero_i32(0, 0) == 0
+; run: %bor_ne_zero_i32(0, 1) == 1
+; run: %bor_ne_zero_i32(1, 0) == 1
+; run: %bor_ne_zero_i32(-1, 0) == 1
+; run: %bor_ne_zero_i32(0, -1) == 1
+; run: %bor_ne_zero_i32(-1, -1) == 1
+; run: %bor_ne_zero_i32(-2147483648, 2147483647) == 1
+; run: %bor_ne_zero_i32(1431655765, 0xaaaaaaaa) == 1
+
+function %band_eq_zero_i32(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    v3 = icmp eq v0, v2
+    v4 = icmp eq v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_eq_zero_i32(0, 0) == 1
+; run: %band_eq_zero_i32(0, 1) == 0
+; run: %band_eq_zero_i32(1, 0) == 0
+; run: %band_eq_zero_i32(-1, 0) == 0
+; run: %band_eq_zero_i32(0, -1) == 0
+; run: %band_eq_zero_i32(-1, -1) == 0
+; run: %band_eq_zero_i32(-2147483648, 2147483647) == 0
+; run: %band_eq_zero_i32(1431655765, 0xaaaaaaaa) == 0

@@ -282,12 +282,12 @@ criteria = "safe-to-deploy"
 version = "0.9.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.directories-next]]
-version = "2.0.0"
+[[exemptions.directories]]
+version = "6.0.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.dirs-sys-next]]
-version = "0.1.2"
+[[exemptions.dirs-sys]]
+version = "0.5.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.futures-task]]
@@ -330,6 +330,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.libloading]]
 version = "0.7.3"
+criteria = "safe-to-deploy"
+
+[[exemptions.libredox]]
+version = "0.1.25"
 criteria = "safe-to-deploy"
 
 [[exemptions.logos]]
@@ -428,7 +432,7 @@ version = "0.2.13"
 criteria = "safe-to-deploy"
 
 [[exemptions.redox_users]]
-version = "0.4.3"
+version = "0.5.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.region]]
