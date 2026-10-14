@@ -10,6 +10,17 @@ target pulley32be
 target pulley64
 target pulley64be
 
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64 has_m
+target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
 function %add_i64(i64, i64) -> i64 {
 block0(v0: i64,v1: i64):
     v2 = iadd v0, v1
@@ -1119,3 +1130,463 @@ block0(v0: i32):
 ; run: %imul_umax_ineg_rt(-1) == 1
 ; run: %imul_umax_ineg_rt(0x7fffffff) == 1
 ; run: %imul_umax_ineg_rt(0x80000000) == 0
+
+function %sub_mask_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 15
+    v2 = band v0, v1
+    v3 = isub v0, v2
+    return v3
+}
+; run: %sub_mask_i32(0) == 0
+; run: %sub_mask_i32(1) == 0
+; run: %sub_mask_i32(15) == 0
+; run: %sub_mask_i32(16) == 16
+; run: %sub_mask_i32(31) == 16
+; run: %sub_mask_i32(-1) == -16
+; run: %sub_mask_i32(2147483647) == 2147483632
+; run: %sub_mask_i32(-2147483648) == -2147483648
+
+function %sub_mask_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 15
+    v2 = band v0, v1
+    v3 = isub v0, v2
+    return v3
+}
+; run: %sub_mask_i64(0) == 0
+; run: %sub_mask_i64(1) == 0
+; run: %sub_mask_i64(15) == 0
+; run: %sub_mask_i64(16) == 16
+; run: %sub_mask_i64(31) == 16
+; run: %sub_mask_i64(-1) == -16
+; run: %sub_mask_i64(9223372036854775807) == 9223372036854775792
+; run: %sub_mask_i64(-9223372036854775808) == -9223372036854775808
+
+function %sub_offsets_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 5
+    v3 = iconst.i32 7
+    v4 = iadd v0, v2
+    v5 = iadd v1, v3
+    v6 = isub v4, v5
+    return v6
+}
+; run: %sub_offsets_i32(0, 0) == -2
+; run: %sub_offsets_i32(10, 3) == 5
+; run: %sub_offsets_i32(-1, 2) == -5
+; run: %sub_offsets_i32(-2147483648, 0) == 2147483646
+; run: %sub_offsets_i32(2147483647, -1) == 2147483646
+; run: %sub_offsets_i32(2147483647, -2147483648) == -3
+
+function %sub_offsets_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 5
+    v3 = iconst.i64 7
+    v4 = iadd v0, v2
+    v5 = iadd v1, v3
+    v6 = isub v4, v5
+    return v6
+}
+; run: %sub_offsets_i64(0, 0) == -2
+; run: %sub_offsets_i64(10, 3) == 5
+; run: %sub_offsets_i64(-1, 2) == -5
+; run: %sub_offsets_i64(-9223372036854775808, 0) == 9223372036854775806
+; run: %sub_offsets_i64(9223372036854775807, -1) == 9223372036854775806
+; run: %sub_offsets_i64(9223372036854775807, -9223372036854775808) == -3
+
+function %add_sub_offsets_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 5
+    v3 = iconst.i32 7
+    v4 = iadd v0, v2
+    v5 = isub v3, v1
+    v6 = iadd v4, v5
+    return v6
+}
+; run: %add_sub_offsets_i32(0, 0) == 12
+; run: %add_sub_offsets_i32(10, 3) == 19
+; run: %add_sub_offsets_i32(-1, 2) == 9
+; run: %add_sub_offsets_i32(-2147483648, 0) == -2147483636
+; run: %add_sub_offsets_i32(2147483647, -1) == -2147483636
+; run: %add_sub_offsets_i32(2147483647, -2147483648) == 11
+
+function %add_sub_offsets_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 5
+    v3 = iconst.i64 7
+    v4 = iadd v0, v2
+    v5 = isub v3, v1
+    v6 = iadd v4, v5
+    return v6
+}
+; run: %add_sub_offsets_i64(0, 0) == 12
+; run: %add_sub_offsets_i64(10, 3) == 19
+; run: %add_sub_offsets_i64(-1, 2) == 9
+; run: %add_sub_offsets_i64(-9223372036854775808, 0) == -9223372036854775796
+; run: %add_sub_offsets_i64(9223372036854775807, -1) == -9223372036854775796
+; run: %add_sub_offsets_i64(9223372036854775807, -9223372036854775808) == 11
+
+function %add_sub_mask_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 15
+    v3 = band v1, v2
+    v4 = isub v0, v3
+    v5 = iadd v4, v1
+    return v5
+}
+; run: %add_sub_mask_i32(0, 0) == 0
+; run: %add_sub_mask_i32(0, 31) == 16
+; run: %add_sub_mask_i32(1, 31) == 17
+; run: %add_sub_mask_i32(-1, -1) == -17
+; run: %add_sub_mask_i32(2147483647, 16) == -2147483633
+; run: %add_sub_mask_i32(-2147483648, -1) == 2147483632
+
+function %add_sub_mask_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 15
+    v3 = band v1, v2
+    v4 = isub v0, v3
+    v5 = iadd v4, v1
+    return v5
+}
+; run: %add_sub_mask_i64(0, 0) == 0
+; run: %add_sub_mask_i64(0, 31) == 16
+; run: %add_sub_mask_i64(1, 31) == 17
+; run: %add_sub_mask_i64(-1, -1) == -17
+; run: %add_sub_mask_i64(9223372036854775807, 16) == -9223372036854775793
+; run: %add_sub_mask_i64(-9223372036854775808, -1) == 9223372036854775792
+
+function %mul_shift_plus_one_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = ishl v2, v0
+    v4 = iadd v3, v2
+    v5 = imul v4, v1
+    return v5
+}
+; run: %mul_shift_plus_one_i32(0, 3) == 6
+; run: %mul_shift_plus_one_i32(1, 3) == 9
+; run: %mul_shift_plus_one_i32(31, 1) == -2147483647
+; run: %mul_shift_plus_one_i32(31, 2) == 2
+; run: %mul_shift_plus_one_i32(32, 3) == 6
+; run: %mul_shift_plus_one_i32(33, -7) == -21
+; run: %mul_shift_plus_one_i32(-1, -1) == 2147483647
+; run: %mul_shift_plus_one_i32(1, 2147483647) == 2147483645
+
+function %mul_shift_plus_one_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = ishl v2, v0
+    v4 = iadd v3, v2
+    v5 = imul v4, v1
+    return v5
+}
+; run: %mul_shift_plus_one_i64(0, 3) == 6
+; run: %mul_shift_plus_one_i64(1, 3) == 9
+; run: %mul_shift_plus_one_i64(63, 1) == -9223372036854775807
+; run: %mul_shift_plus_one_i64(63, 2) == 2
+; run: %mul_shift_plus_one_i64(64, 3) == 6
+; run: %mul_shift_plus_one_i64(65, -7) == -21
+; run: %mul_shift_plus_one_i64(-1, -1) == 9223372036854775807
+; run: %mul_shift_plus_one_i64(1, 9223372036854775807) == 9223372036854775805
+
+function %sub_offsets_wrap_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 100
+    v3 = iconst.i8 -100
+    v4 = iadd v0, v2
+    v5 = iadd v1, v3
+    v6 = isub v4, v5
+    return v6
+}
+; run: %sub_offsets_wrap_i8(0, 0) == -56
+; run: %sub_offsets_wrap_i8(10, 3) == -49
+; run: %sub_offsets_wrap_i8(-1, 2) == -59
+; run: %sub_offsets_wrap_i8(-128, 0) == 72
+; run: %sub_offsets_wrap_i8(127, -1) == 72
+; run: %sub_offsets_wrap_i8(127, -128) == -57
+
+function %add_sub_offsets_wrap_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 100
+    v3 = iconst.i8 100
+    v4 = iadd v0, v2
+    v5 = isub v3, v1
+    v6 = iadd v4, v5
+    return v6
+}
+; run: %add_sub_offsets_wrap_i8(0, 0) == -56
+; run: %add_sub_offsets_wrap_i8(10, 3) == -49
+; run: %add_sub_offsets_wrap_i8(-1, 2) == -59
+; run: %add_sub_offsets_wrap_i8(-128, 0) == 72
+; run: %add_sub_offsets_wrap_i8(127, -1) == 72
+; run: %add_sub_offsets_wrap_i8(127, -128) == -57
+
+function %sub_mask_noncontiguous_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0xaa
+    v2 = band v0, v1
+    v3 = isub v0, v2
+    return v3
+}
+; run: %sub_mask_noncontiguous_i8(0) == 0
+; run: %sub_mask_noncontiguous_i8(1) == 1
+; run: %sub_mask_noncontiguous_i8(15) == 5
+; run: %sub_mask_noncontiguous_i8(16) == 16
+; run: %sub_mask_noncontiguous_i8(31) == 21
+; run: %sub_mask_noncontiguous_i8(-1) == 85
+; run: %sub_mask_noncontiguous_i8(127) == 85
+; run: %sub_mask_noncontiguous_i8(-128) == 0
+
+function %add_sub_offsets_commuted_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 5
+    v3 = iconst.i32 7
+    v4 = iadd v0, v2
+    v5 = isub v3, v1
+    v6 = iadd v5, v4
+    return v6
+}
+; run: %add_sub_offsets_commuted_i32(0, 0) == 12
+; run: %add_sub_offsets_commuted_i32(10, 3) == 19
+; run: %add_sub_offsets_commuted_i32(-1, 2) == 9
+; run: %add_sub_offsets_commuted_i32(-2147483648, 0) == -2147483636
+; run: %add_sub_offsets_commuted_i32(2147483647, -1) == -2147483636
+; run: %add_sub_offsets_commuted_i32(2147483647, -2147483648) == 11
+
+function %add_sub_offsets_commuted_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 5
+    v3 = iconst.i64 7
+    v4 = iadd v0, v2
+    v5 = isub v3, v1
+    v6 = iadd v5, v4
+    return v6
+}
+; run: %add_sub_offsets_commuted_i64(0, 0) == 12
+; run: %add_sub_offsets_commuted_i64(10, 3) == 19
+; run: %add_sub_offsets_commuted_i64(-1, 2) == 9
+; run: %add_sub_offsets_commuted_i64(-9223372036854775808, 0) == -9223372036854775796
+; run: %add_sub_offsets_commuted_i64(9223372036854775807, -1) == -9223372036854775796
+; run: %add_sub_offsets_commuted_i64(9223372036854775807, -9223372036854775808) == 11
+
+function %add_sub_mask_commuted_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 15
+    v3 = band v1, v2
+    v4 = isub v0, v3
+    v5 = iadd v1, v4
+    return v5
+}
+; run: %add_sub_mask_commuted_i32(0, 0) == 0
+; run: %add_sub_mask_commuted_i32(0, 31) == 16
+; run: %add_sub_mask_commuted_i32(1, 31) == 17
+; run: %add_sub_mask_commuted_i32(-1, -1) == -17
+; run: %add_sub_mask_commuted_i32(2147483647, 16) == -2147483633
+; run: %add_sub_mask_commuted_i32(-2147483648, -1) == 2147483632
+
+function %add_sub_mask_commuted_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 15
+    v3 = band v1, v2
+    v4 = isub v0, v3
+    v5 = iadd v1, v4
+    return v5
+}
+; run: %add_sub_mask_commuted_i64(0, 0) == 0
+; run: %add_sub_mask_commuted_i64(0, 31) == 16
+; run: %add_sub_mask_commuted_i64(1, 31) == 17
+; run: %add_sub_mask_commuted_i64(-1, -1) == -17
+; run: %add_sub_mask_commuted_i64(9223372036854775807, 16) == -9223372036854775793
+; run: %add_sub_mask_commuted_i64(-9223372036854775808, -1) == 9223372036854775792
+
+function %mul_shift_plus_one_commuted_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    v3 = ishl v2, v0
+    v4 = iadd v3, v2
+    v5 = imul v1, v4
+    return v5
+}
+; run: %mul_shift_plus_one_commuted_i32(0, 3) == 6
+; run: %mul_shift_plus_one_commuted_i32(1, 3) == 9
+; run: %mul_shift_plus_one_commuted_i32(31, 1) == -2147483647
+; run: %mul_shift_plus_one_commuted_i32(31, 2) == 2
+; run: %mul_shift_plus_one_commuted_i32(32, 3) == 6
+; run: %mul_shift_plus_one_commuted_i32(33, -7) == -21
+; run: %mul_shift_plus_one_commuted_i32(-1, -1) == 2147483647
+; run: %mul_shift_plus_one_commuted_i32(1, 2147483647) == 2147483645
+
+function %mul_shift_plus_one_commuted_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = ishl v2, v0
+    v4 = iadd v3, v2
+    v5 = imul v1, v4
+    return v5
+}
+; run: %mul_shift_plus_one_commuted_i64(0, 3) == 6
+; run: %mul_shift_plus_one_commuted_i64(1, 3) == 9
+; run: %mul_shift_plus_one_commuted_i64(63, 1) == -9223372036854775807
+; run: %mul_shift_plus_one_commuted_i64(63, 2) == 2
+; run: %mul_shift_plus_one_commuted_i64(64, 3) == 6
+; run: %mul_shift_plus_one_commuted_i64(65, -7) == -21
+; run: %mul_shift_plus_one_commuted_i64(-1, -1) == 9223372036854775807
+; run: %mul_shift_plus_one_commuted_i64(1, 9223372036854775807) == 9223372036854775805
+
+function %sub_constant_offsets_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 5
+    v3 = iconst.i32 7
+    v4 = isub v2, v0
+    v5 = isub v3, v1
+    v6 = isub v4, v5
+    return v6
+}
+; run: %sub_constant_offsets_i32(0, 0) == -2
+; run: %sub_constant_offsets_i32(10, 3) == -9
+; run: %sub_constant_offsets_i32(-1, 2) == 1
+; run: %sub_constant_offsets_i32(-2147483648, 0) == 2147483646
+; run: %sub_constant_offsets_i32(2147483647, -1) == 2147483646
+; run: %sub_constant_offsets_i32(2147483647, -2147483648) == -1
+
+function %sub_constant_offsets_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 5
+    v3 = iconst.i64 7
+    v4 = isub v2, v0
+    v5 = isub v3, v1
+    v6 = isub v4, v5
+    return v6
+}
+; run: %sub_constant_offsets_i64(0, 0) == -2
+; run: %sub_constant_offsets_i64(10, 3) == -9
+; run: %sub_constant_offsets_i64(-1, 2) == 1
+; run: %sub_constant_offsets_i64(-9223372036854775808, 0) == 9223372036854775806
+; run: %sub_constant_offsets_i64(9223372036854775807, -1) == 9223372036854775806
+; run: %sub_constant_offsets_i64(9223372036854775807, -9223372036854775808) == -1
+
+function %sub_sub_offsets_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 5
+    v3 = iconst.i32 7
+    v4 = isub v0, v2
+    v5 = isub v1, v3
+    v6 = isub v4, v5
+    return v6
+}
+; run: %sub_sub_offsets_i32(0, 0) == 2
+; run: %sub_sub_offsets_i32(10, 3) == 9
+; run: %sub_sub_offsets_i32(-1, 2) == -1
+; run: %sub_sub_offsets_i32(-2147483648, 0) == -2147483646
+; run: %sub_sub_offsets_i32(2147483647, -1) == -2147483646
+; run: %sub_sub_offsets_i32(2147483647, -2147483648) == 1
+
+function %sub_sub_offsets_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 5
+    v3 = iconst.i64 7
+    v4 = isub v0, v2
+    v5 = isub v1, v3
+    v6 = isub v4, v5
+    return v6
+}
+; run: %sub_sub_offsets_i64(0, 0) == 2
+; run: %sub_sub_offsets_i64(10, 3) == 9
+; run: %sub_sub_offsets_i64(-1, 2) == -1
+; run: %sub_sub_offsets_i64(-9223372036854775808, 0) == -9223372036854775806
+; run: %sub_sub_offsets_i64(9223372036854775807, -1) == -9223372036854775806
+; run: %sub_sub_offsets_i64(9223372036854775807, -9223372036854775808) == 1
+
+function %add_sub_left_mask_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 15
+    v3 = band v0, v2
+    v4 = iadd v0, v1
+    v5 = isub v4, v3
+    return v5
+}
+; run: %add_sub_left_mask_i32(0, 0) == 0
+; run: %add_sub_left_mask_i32(0, 31) == 31
+; run: %add_sub_left_mask_i32(1, 31) == 31
+; run: %add_sub_left_mask_i32(-1, -1) == -17
+; run: %add_sub_left_mask_i32(2147483647, 16) == -2147483648
+; run: %add_sub_left_mask_i32(-2147483648, -1) == 2147483647
+
+function %add_sub_left_mask_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 15
+    v3 = band v0, v2
+    v4 = iadd v0, v1
+    v5 = isub v4, v3
+    return v5
+}
+; run: %add_sub_left_mask_i64(0, 0) == 0
+; run: %add_sub_left_mask_i64(0, 31) == 31
+; run: %add_sub_left_mask_i64(1, 31) == 31
+; run: %add_sub_left_mask_i64(-1, -1) == -17
+; run: %add_sub_left_mask_i64(9223372036854775807, 16) == -9223372036854775808
+; run: %add_sub_left_mask_i64(-9223372036854775808, -1) == 9223372036854775807
+
+function %add_sub_right_mask_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 15
+    v3 = band v1, v2
+    v4 = iadd v0, v1
+    v5 = isub v4, v3
+    return v5
+}
+; run: %add_sub_right_mask_i32(0, 0) == 0
+; run: %add_sub_right_mask_i32(0, 31) == 16
+; run: %add_sub_right_mask_i32(1, 31) == 17
+; run: %add_sub_right_mask_i32(-1, -1) == -17
+; run: %add_sub_right_mask_i32(2147483647, 16) == -2147483633
+; run: %add_sub_right_mask_i32(-2147483648, -1) == 2147483632
+
+function %add_sub_right_mask_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 15
+    v3 = band v1, v2
+    v4 = iadd v0, v1
+    v5 = isub v4, v3
+    return v5
+}
+; run: %add_sub_right_mask_i64(0, 0) == 0
+; run: %add_sub_right_mask_i64(0, 31) == 16
+; run: %add_sub_right_mask_i64(1, 31) == 17
+; run: %add_sub_right_mask_i64(-1, -1) == -17
+; run: %add_sub_right_mask_i64(9223372036854775807, 16) == -9223372036854775793
+; run: %add_sub_right_mask_i64(-9223372036854775808, -1) == 9223372036854775792
+
+function %sub_constant_offsets_wrap_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 100
+    v3 = iconst.i8 -100
+    v4 = isub v2, v0
+    v5 = isub v3, v1
+    v6 = isub v4, v5
+    return v6
+}
+; run: %sub_constant_offsets_wrap_i8(0, 0) == -56
+; run: %sub_constant_offsets_wrap_i8(10, 3) == -63
+; run: %sub_constant_offsets_wrap_i8(-1, 2) == -53
+; run: %sub_constant_offsets_wrap_i8(-128, 0) == 72
+; run: %sub_constant_offsets_wrap_i8(127, -1) == 72
+; run: %sub_constant_offsets_wrap_i8(127, -128) == -55
+
+function %sub_sub_offsets_wrap_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 100
+    v3 = iconst.i8 -100
+    v4 = isub v0, v2
+    v5 = isub v1, v3
+    v6 = isub v4, v5
+    return v6
+}
+; run: %sub_sub_offsets_wrap_i8(0, 0) == 56
+; run: %sub_sub_offsets_wrap_i8(10, 3) == 63
+; run: %sub_sub_offsets_wrap_i8(-1, 2) == 53
+; run: %sub_sub_offsets_wrap_i8(-128, 0) == -72
+; run: %sub_sub_offsets_wrap_i8(127, -1) == -72
+; run: %sub_sub_offsets_wrap_i8(127, -128) == 55

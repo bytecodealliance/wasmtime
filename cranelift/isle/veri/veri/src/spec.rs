@@ -625,6 +625,8 @@ pub struct SpecEnv {
 
     /// Model for the given type.
     pub type_model: HashMap<TypeId, Compound>,
+    /// Widths from `(bv (w1 w2 ...))` models.
+    pub type_model_widths: HashMap<TypeId, Vec<usize>>,
 
     /// Value for the given constant.
     pub const_value: HashMap<Sym, Expr>,
@@ -645,6 +647,7 @@ impl SpecEnv {
             priority: HashSet::new(),
             rule_tags: HashMap::new(),
             type_model: HashMap::new(),
+            type_model_widths: HashMap::new(),
             const_value: HashMap::new(),
             macros: HashMap::new(),
         };
@@ -755,6 +758,9 @@ impl SpecEnv {
         );
         self.type_model
             .insert(type_id, Compound::from_ast(model_type));
+        if let ModelType::BitVecOneOf(widths) = model_type {
+            self.type_model_widths.insert(type_id, widths.clone());
+        }
     }
 
     fn collect_state(&mut self, defs: &[Def]) -> Result<()> {
@@ -919,7 +925,8 @@ impl SpecEnv {
     ) -> Result<()> {
         for (term_id, spec) in &self.term_spec {
             let term = &termenv.terms[term_id.index()];
-            if !Self::term_returns_option(term, tyenv) {
+            // An extractor's requires are assumed, so only constructors apply.
+            if !term.has_constructor() || !Self::term_returns_option(term, tyenv) {
                 continue;
             }
             if !spec.requires.is_empty() {

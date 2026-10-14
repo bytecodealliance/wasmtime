@@ -169,3 +169,33 @@
   (export "run" (func $a "run")))
 
 (assert_trap (invoke "run") "cannot leave component instance")
+
+;; post-return reached through a guest-to-guest sync call uses a built-in and
+;; that should trap.
+(component
+  (component $C
+    (core module $m
+      (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+      (func (export "f") (result i32) i32.const 7)
+      (func (export "post") (param i32)
+        (drop (call $waitable-set.new))))
+    (core func $waitable-set.new (canon waitable-set.new))
+    (core instance $i (instantiate $m (with "" (instance
+      (export "waitable-set.new" (func $waitable-set.new))))))
+    (func (export "f") (result u32)
+      (canon lift (core func $i "f") (post-return (core func $i "post")))))
+  (instance $c (instantiate $C))
+
+  (component $B
+    (import "f" (func $f (result u32)))
+    (core func $f (canon lower (func $f)))
+    (core module $m
+      (import "" "f" (func $f (result i32)))
+      (func (export "run") (result i32) (call $f)))
+    (core instance $i (instantiate $m (with "" (instance
+      (export "f" (func $f))))))
+    (func (export "run") (result u32) (canon lift (core func $i "run"))))
+  (instance $b (instantiate $B (with "f" (func $c "f"))))
+  (export "run" (func $b "run")))
+
+(assert_trap (invoke "run") "cannot leave component instance")

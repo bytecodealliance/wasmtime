@@ -1,0 +1,185 @@
+; Bitwise operations on `f16` and `f128` on baseline x86-64 (SSE2): they use
+; the full XMM register, like the `f32`/`f64` lowerings.
+test compile precise-output
+target x86_64
+
+function %band_f16(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+    v2 = band v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   andps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   andps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bor_f16(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+    v2 = bor v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   orps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   orps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bitselect_f16(f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16):
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqa %xmm0, %xmm3
+;   andps %xmm1, %xmm3
+;   uninit  %xmm7
+;   pcmpeqd %xmm7, %xmm7
+;   xorps %xmm7, %xmm0
+;   andps %xmm2, %xmm0
+;   movdqa %xmm0, %xmm1
+;   movdqa %xmm3, %xmm0
+;   orps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm3
+;   andps %xmm1, %xmm3
+;   pcmpeqd %xmm7, %xmm7
+;   xorps %xmm7, %xmm0
+;   andps %xmm2, %xmm0
+;   movdqa %xmm0, %xmm1
+;   movdqa %xmm3, %xmm0
+;   orps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %band_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+    v2 = band v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   andps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   andps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bor_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+    v2 = bor v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   orps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   orps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bitselect_f128(f128, f128, f128) -> f128 {
+block0(v0: f128, v1: f128, v2: f128):
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqa %xmm0, %xmm3
+;   andps %xmm1, %xmm3
+;   uninit  %xmm7
+;   pcmpeqd %xmm7, %xmm7
+;   xorps %xmm7, %xmm0
+;   andps %xmm2, %xmm0
+;   movdqa %xmm0, %xmm1
+;   movdqa %xmm3, %xmm0
+;   orps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqa %xmm0, %xmm3
+;   andps %xmm1, %xmm3
+;   pcmpeqd %xmm7, %xmm7
+;   xorps %xmm7, %xmm0
+;   andps %xmm2, %xmm0
+;   movdqa %xmm0, %xmm1
+;   movdqa %xmm3, %xmm0
+;   orps %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

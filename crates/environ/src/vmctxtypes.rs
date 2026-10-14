@@ -229,6 +229,8 @@ macro_rules! for_each_vmctx_type {
                         tags[num_defined_tags; DefinedTagIndex]: VMTagDefinition
                     }
 
+                    align { ptr }
+
                     array {
                         #[aggregate]
                         func_refs[num_escaped_funcs; FuncRefIndex]: VMFuncRef

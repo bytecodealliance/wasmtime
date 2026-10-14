@@ -16,7 +16,7 @@ fn table_new() -> Result<()> {
         .allow_alloc_after_oom(true)
         .test(|| {
             let mut store = Store::try_new(&engine, ())?;
-            let ty = TableType::new(RefType::FUNCREF, 1, None);
+            let ty = TableType::new(RefType::FUNCREF, 1, None)?;
             let _table = wasmtime::Table::new(&mut store, ty, Ref::Func(None))?;
             Ok(())
         })
@@ -33,7 +33,7 @@ async fn table_new_async() -> Result<()> {
         .allow_alloc_after_oom(true)
         .test_async(|| async {
             let mut store = Store::try_new(&engine, ())?;
-            let ty = TableType::new(RefType::FUNCREF, 1, None);
+            let ty = TableType::new(RefType::FUNCREF, 1, None)?;
             let _table = Table::new_async(&mut store, ty, Ref::Func(None)).await?;
             Ok(())
         })
@@ -49,7 +49,7 @@ fn table_grow() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let ty = TableType::new(RefType::FUNCREF, 1, None);
+        let ty = TableType::new(RefType::FUNCREF, 1, None)?;
         let table = Table::new(&mut store, ty, Ref::Func(None))?;
         let _old_size = table.grow(&mut store, 4, Ref::Func(None))?;
         Ok(())
@@ -67,7 +67,7 @@ async fn table_grow_async() -> Result<()> {
         .allow_alloc_after_oom(true)
         .test_async(|| async {
             let mut store = Store::try_new(&engine, ())?;
-            let ty = TableType::new(RefType::FUNCREF, 1, None);
+            let ty = TableType::new(RefType::FUNCREF, 1, None)?;
             let table = Table::new_async(&mut store, ty, Ref::Func(None)).await?;
             let _old_size = table.grow_async(&mut store, 4, Ref::Func(None)).await?;
             Ok(())
@@ -84,7 +84,7 @@ fn table_set() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let ty = TableType::new(RefType::FUNCREF, 1, None);
+        let ty = TableType::new(RefType::FUNCREF, 1, None)?;
         let table = Table::new(&mut store, ty, Ref::Func(None))?;
         table.set(&mut store, 0, Ref::Func(None))?;
         Ok(())
@@ -100,7 +100,7 @@ fn table_copy() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let ty = TableType::new(RefType::FUNCREF, 4, None);
+        let ty = TableType::new(RefType::FUNCREF, 4, None)?;
         let table = Table::new(&mut store, ty, Ref::Func(None))?;
         Table::copy(&mut store, &table, 0, &table, 2, 2)?;
         Ok(())
@@ -116,7 +116,7 @@ fn table_fill() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let ty = TableType::new(RefType::FUNCREF, 4, None);
+        let ty = TableType::new(RefType::FUNCREF, 4, None)?;
         let table = Table::new(&mut store, ty, Ref::Func(None))?;
         table.fill(&mut store, 0, Ref::Func(None), 4)?;
         Ok(())
@@ -132,7 +132,7 @@ fn table_get() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let ty = TableType::new(RefType::FUNCREF, 1, None);
+        let ty = TableType::new(RefType::FUNCREF, 1, None)?;
         let table = Table::new(&mut store, ty, Ref::Func(None))?;
         let val = table.get(&mut store, 0);
         assert!(val.is_some());
@@ -149,7 +149,7 @@ fn table_ty() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let ty = TableType::new(RefType::FUNCREF, 1, None);
+        let ty = TableType::new(RefType::FUNCREF, 1, None)?;
         let table = Table::new(&mut store, ty, Ref::Func(None))?;
         let _ty = table.ty(&store);
         Ok(())
@@ -165,7 +165,7 @@ fn table_size() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let ty = TableType::new(RefType::FUNCREF, 2, None);
+        let ty = TableType::new(RefType::FUNCREF, 2, None)?;
         let table = Table::new(&mut store, ty, Ref::Func(None))?;
         assert_eq!(table.size(&store), 2);
         Ok(())

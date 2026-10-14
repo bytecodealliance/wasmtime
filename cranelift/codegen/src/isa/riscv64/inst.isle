@@ -1072,6 +1072,11 @@
 (decl ty_supported_vec (Type) Type)
 (extern extractor ty_supported_vec ty_supported_vec)
 
+;; Some vector operations only need the bit representation to be supported.
+;; Check support using the corresponding integer vector type.
+(decl ty_supported_vec_repr (Type) Type)
+(extern extractor ty_supported_vec_repr ty_supported_vec_repr)
+
 ;; Helper that matches types which are stored in a pair of integer registers (I128 and F128)
 (decl ty_reg_pair (Type) Type)
 (extern extractor ty_reg_pair ty_reg_pair)
@@ -3056,13 +3061,13 @@
 ;; and int-to-float bitcasts, so this can only recurse once.
 (decl rec gen_bitcast (Reg Type Type) Reg)
 
-(rule 9 (gen_bitcast r (ty_supported_float_size $F16) (ty_supported_vec _)) (if-let false (has_zvfh)) (rv_vfmv_sf r (vstate_from_type $F32)))
-(rule 8 (gen_bitcast r (ty_supported_vec ty) (ty_supported_float_size $F16)) (if-let false (has_zvfh)) (gen_bitcast (gen_bitcast r ty $I16) $I16 $F16))
-(rule 7 (gen_bitcast r (ty_supported_float_min src_ty) (ty_supported_vec _)) (rv_vfmv_sf r src_ty))
-(rule 6 (gen_bitcast r (ty_supported_vec _) (ty_supported_float_min dst_ty)) (rv_vfmv_fs r dst_ty))
+(rule 9 (gen_bitcast r (ty_supported_float_size $F16) (ty_supported_vec_repr _)) (if-let false (has_zvfh)) (rv_vfmv_sf r (vstate_from_type $F32)))
+(rule 8 (gen_bitcast r (ty_supported_vec_repr ty) (ty_supported_float_size $F16)) (if-let false (has_zvfh)) (gen_bitcast (gen_bitcast r ty $I16) $I16 $F16))
+(rule 7 (gen_bitcast r (ty_supported_float_min src_ty) (ty_supported_vec_repr _)) (rv_vfmv_sf r src_ty))
+(rule 6 (gen_bitcast r (ty_supported_vec_repr _) (ty_supported_float_min dst_ty)) (rv_vfmv_fs r dst_ty))
 
-(rule 5 (gen_bitcast r (ty_int_ref_scalar_64_extract src_ty) (ty_supported_vec _)) (rv_vmv_sx r src_ty))
-(rule 4 (gen_bitcast r (ty_supported_vec _) (ty_int_ref_scalar_64_extract dst_ty)) (rv_vmv_xs r dst_ty))
+(rule 5 (gen_bitcast r (ty_int_ref_scalar_64_extract src_ty) (ty_supported_vec_repr _)) (rv_vmv_sx r src_ty))
+(rule 4 (gen_bitcast r (ty_supported_vec_repr _) (ty_int_ref_scalar_64_extract dst_ty)) (rv_vmv_xs r dst_ty))
 (rule 3 (gen_bitcast r (ty_supported_float_min $F16) $I16) (rv_fmvxh r))
 (rule 2 (gen_bitcast r (ty_supported_float_size $F16) $I16) (rv_fmvxw r))
 (rule 2 (gen_bitcast r (ty_supported_float_size $F32) $I32) (rv_fmvxw r))
@@ -3077,7 +3082,7 @@
 (rule 0 (gen_bitcast r $I64 (ty_supported_float_size $F64)) (rv_fmvdx r))
 (rule -1 (gen_bitcast r (ty_supported_float_size _) (ty_supported_float_size _)) r)
 (rule -2 (gen_bitcast r (ty_int_ref_scalar_64_extract _) (ty_int_ref_scalar_64_extract _)) r)
-(rule -3 (gen_bitcast r (ty_supported_vec _) (ty_supported_vec _)) r)
+(rule -3 (gen_bitcast r (ty_supported_vec_repr _) (ty_supported_vec_repr _)) r)
 
 (decl move_f_to_x (FReg Type) XReg)
 (rule (move_f_to_x r ty) (gen_bitcast r ty (float_int_of_same_size ty)))

@@ -1,0 +1,8 @@
+test compile expect-fail
+target x86_64
+
+function %winch(i64 sarg(70000)) -> i64 winch {
+block0(v0: i64):
+    v1 = load.i64 v0
+    return v1
+}

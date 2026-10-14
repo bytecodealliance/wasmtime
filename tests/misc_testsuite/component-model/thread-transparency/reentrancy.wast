@@ -5,19 +5,20 @@
 
 ;; Sync-to-sync adapters between sibling instances have no dynamic `may_enter`
 ;; check, so a guest that cares about reentrance has to guard against it itself.
-;; This exercises the case where it actually happens:
+;; This exercises a case where it could happen:
 ;;
 ;;   host --async-lift--> $Outer --adapter--> $Mid --async-typed--> $Inner
 ;;
-;; $Inner blocks on a fresh, empty waitable set. Blocking in a sync-typed call
-;; no longer traps outright: the scheduler first looks for another eligible
-;; thread to run, and $Outer has started a second one. That second thread calls
-;; $Mid.f while the first call's frame is still live, reentrance now being
-;; permitted, so $Mid's own `$inside` guard is what fires.
+;; $Inner blocks on a fresh, empty waitable set, and $Outer has started a second
+;; thread which would call $Mid.f while the first call's frame is still live.
+;; However, since $Inner.g is `async`-typed, blocking in it returns control to
+;; $Mid.f's sync-lowered call, which then blocks waiting for $Inner.g to
+;; return. $Mid.f is sync-typed, so when it blocks the only threads eligible to
+;; run are those in $Mid's own instance (see `canon_lift` in the spec), of
+;; which there are none, so this traps before $Mid.f can be reentered.
 ;;
-;; This is not an artifact of dropping the `{enter,exit}-sync-call` window: the
-;; $Outer -> $Mid adapter is opaque here anyway, because $Mid lowers an
-;; `async`-typed lift.
+;; Note that the $Outer -> $Mid adapter is opaque here regardless of the
+;; `{enter,exit}-sync-call` elision, because $Mid lowers an `async`-typed lift.
 
 (component definition $Tester
   (component $Inner
@@ -111,4 +112,4 @@
 )
 
 (component instance $i $Tester)
-(assert_trap (invoke "run") "wasm `unreachable` instruction executed")
+(assert_trap (invoke "run") "cannot block a synchronous task before returning")

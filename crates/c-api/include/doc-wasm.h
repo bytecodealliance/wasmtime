@@ -510,6 +510,9 @@
  * This function takes ownership of the #wasm_valtype_t argument, but does not
  * take ownership of the #wasm_limits_t.
  *
+ * Returns `NULL` if the value type is not a reference type or if the limits
+ * are invalid (e.g. the minimum is greater than the maximum).
+ *
  * The caller is responsible for deallocating the returned type.
  *
  * \fn const wasm_valtype_t* wasm_tabletype_element(const wasm_tabletype_t *);
@@ -595,6 +598,9 @@
  *
  * This function takes ownership of the #wasm_valtype_t argument, but does not
  * take ownership of the #wasm_limits_t.
+ *
+ * Returns `NULL` if the limits are invalid (e.g. the minimum is greater than
+ * the maximum or the limits exceed the 32-bit address space).
  *
  * The caller is responsible for deallocating the returned type.
  *

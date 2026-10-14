@@ -122,9 +122,8 @@ impl ComponentStoreData {
         // be called from with in the context of a `tls::set` closure.
         #[cfg(feature = "component-model-async")]
         if store.0.component_data().task_state.is_concurrent() {
-            store.0.clean_up_task_groups();
-
             ComponentStoreData::drop_fibers_and_futures(store.0);
+            store.0.clean_up_task_groups();
         }
         #[cfg(not(feature = "component-model-async"))]
         let _ = store;
@@ -290,7 +289,6 @@ impl StoreOpaque {
 
     pub(crate) fn set_trapped(&mut self) {
         self.store_data_mut().components.trapped = true;
-        self.clean_up_task_groups();
     }
 
     /// Determine whether an instance may be entered from the host.

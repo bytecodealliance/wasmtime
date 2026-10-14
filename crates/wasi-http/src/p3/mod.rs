@@ -20,6 +20,11 @@ mod response;
 pub use request::Request;
 pub use response::Response;
 
+/// The default value configured for [`WasiHttpHooks::p3_outgoing_body_buffer_chunks`].
+///
+/// [`WasiHttpHooks::p3_outgoing_body_buffer_chunks`]: crate::WasiHttpHooks::p3_outgoing_body_buffer_chunks
+pub const DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS: usize = 1;
+
 /// The default value configured for [`WasiHttpHooks::p3_outgoing_body_chunk_size`].
 ///
 /// [`WasiHttpHooks::p3_outgoing_body_chunk_size`]: crate::WasiHttpHooks::p3_outgoing_body_chunk_size

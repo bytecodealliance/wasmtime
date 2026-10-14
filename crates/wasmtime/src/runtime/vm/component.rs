@@ -15,7 +15,7 @@ use crate::runtime::component::{ComponentInstanceId, RuntimeInstance};
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::{
-    HostResult, SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition,
+    HostResult, SendSyncPtr, UncaughtException, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition,
     VMMemoryDefinition, VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableImport, VMWasmCallFunction,
     ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
 };
@@ -269,7 +269,7 @@ impl ComponentInstance {
         let store = unsafe { &mut *reference.store.0.as_ptr() };
 
         let instance = Instance::from_wasmtime(store, reference.id);
-        catch_unwind_and_record_trap(store, |store| f(store, instance))
+        catch_unwind_and_record_trap(store, UncaughtException::Trap, |store| f(store, instance))
     }
 
     /// Returns the `InstanceId` associated with the `vmctx` provided.

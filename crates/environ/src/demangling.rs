@@ -7,10 +7,14 @@ pub fn demangle_function_name(writer: &mut impl core::fmt::Write, name: &str) ->
     #[cfg(feature = "demangle")]
     if let Ok(demangled) = rustc_demangle::try_demangle(name) {
         return write!(writer, "{demangled}");
-    } else if let Ok(symbol) = cpp_demangle::Symbol::new(name) {
-        if let Ok(demangled) = symbol.demangle() {
-            return write!(writer, "{demangled}");
-        }
+    } else if name.starts_with("_Z")
+        // Only attempt to demangle Itanium C++ mangled symbols, which all
+        // start with `_Z`, as otherwise short names such as `i` are
+        // "demangled" as types such as `int`.
+        && let Ok(symbol) = cpp_demangle::Symbol::new(name)
+        && let Ok(demangled) = symbol.demangle()
+    {
+        return write!(writer, "{demangled}");
     }
 
     write!(writer, "{name}")

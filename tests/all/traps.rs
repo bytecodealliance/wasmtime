@@ -293,6 +293,37 @@ fn test_trap_stack_overflow() -> Result<()> {
     Ok(())
 }
 
+#[wasmtime_test]
+fn test_trap_stack_overflow_mutual_recursion(config: &mut Config) -> Result<()> {
+    let max_frames = NonZeroUsize::new(32).unwrap();
+    let wat = r#"
+        (module $rec_mod
+            (func $even (export "even") (call $odd))
+            (func $odd (call $even))
+        )
+    "#;
+
+    config.wasm_backtrace_max_frames(Some(max_frames));
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, wat)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let even = instance.get_typed_func::<(), ()>(&mut store, "even")?;
+
+    let e = even.call(&mut store, ()).unwrap_err();
+
+    // No frame may be skipped, so the frames must alternate between the two
+    // functions.
+    let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
+    assert_eq!(trace.len(), max_frames.get());
+    for pair in trace.windows(2) {
+        assert_ne!(pair[0].func_index(), pair[1].func_index(), "{trace:?}");
+    }
+    assert_eq!(e.downcast::<Trap>()?, Trap::StackOverflow);
+
+    Ok(())
+}
+
 #[test]
 fn trap_display_pretty() -> Result<()> {
     let mut store = Store::<()>::default();
@@ -320,6 +351,36 @@ error while executing at wasm backtrace:
     );
 
     e.assert_contains("wasm trap: wasm `unreachable` instruction executed");
+    Ok(())
+}
+
+#[test]
+fn trap_display_demangled_names() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let wat = r#"
+        (module $m
+            (func $c unreachable)
+            (func $i call $c)
+            (func $_Z3foov call $i)
+            (func (export "bar") call $_Z3foov)
+        )
+    "#;
+
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run_func = instance.get_typed_func::<(), ()>(&mut store, "bar")?;
+
+    // Short names like `c` and `i` shouldn't be "demangled" as C++ types, but
+    // C++ mangled names should still be demangled.
+    let e = run_func.call(&mut store, ()).unwrap_err();
+    e.assert_contains(
+        "\
+error while executing at wasm backtrace:
+    0:     0x23 - m!c
+    1:     0x27 - m!i
+    2:     0x2c - m!foo()
+    3:     0x31 - m!<wasm function 3>",
+    );
     Ok(())
 }
 

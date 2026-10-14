@@ -681,19 +681,20 @@ impl VirtualFrame {
             .expect("Wasm frame PC does not correspond to a module");
         let table = store_code.code_memory().frame_table().unwrap();
         let pc = u32::try_from(pc).expect("PC offset too large");
-        let program_points = table.find_program_point(pc, FrameInstPos::Post)
-            .expect("There must be a program point record in every frame when debug instrumentation is enabled");
+        // Functions without any program points (e.g. the module
+        // start function, or trampolines) have no virtual frames.
+        let frames = table
+            .find_program_point(pc, FrameInstPos::Post)
+            .into_iter()
+            .flatten()
+            .map(|(wasm_pc, frame_descriptor, stack_shape)| VirtualFrame {
+                wasm_pc,
+                frame_descriptor,
+                stack_shape,
+            })
+            .collect();
 
-        (
-            store_code,
-            program_points
-                .map(|(wasm_pc, frame_descriptor, stack_shape)| VirtualFrame {
-                    wasm_pc,
-                    frame_descriptor,
-                    stack_shape,
-                })
-                .collect(),
-        )
+        (store_code, frames)
     }
 }
 

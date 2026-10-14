@@ -392,3 +392,132 @@ block0(v0: i64, v1: i64):
 }
 ; run: %not_sub_not_i64(9223372036854775807, 1) == -9223372036854775808
 ; run: %not_sub_not_i64(-9223372036854775808, -1) == 9223372036854775807
+
+function %band_bnot_bor_xy_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = bor v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; run: %band_bnot_bor_xy_i32(0, 0) == 0
+; run: %band_bnot_bor_xy_i32(-1, 0) == 0
+; run: %band_bnot_bor_xy_i32(0, -1) == -1
+; run: %band_bnot_bor_xy_i32(-1, -1) == 0
+; run: %band_bnot_bor_xy_i32(-2147483648, 2147483647) == 2147483647
+; run: %band_bnot_bor_xy_i32(1431655765, 0xaaaaaaaa) == -1431655766
+; run: %band_bnot_bor_xy_i32(240, 204) == 12
+
+function %band_bnot_bor_yx_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = bor v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; run: %band_bnot_bor_yx_i32(0, 0) == 0
+; run: %band_bnot_bor_yx_i32(-1, 0) == 0
+; run: %band_bnot_bor_yx_i32(0, -1) == -1
+; run: %band_bnot_bor_yx_i32(-1, -1) == 0
+; run: %band_bnot_bor_yx_i32(-2147483648, 2147483647) == 2147483647
+; run: %band_bnot_bor_yx_i32(1431655765, 0xaaaaaaaa) == -1431655766
+; run: %band_bnot_bor_yx_i32(240, 204) == 12
+
+function %band_bor_bnot_x_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bnot v0
+    v4 = band v2, v3
+    return v4
+}
+
+; run: %band_bor_bnot_x_i32(0, 0) == 0
+; run: %band_bor_bnot_x_i32(-1, 0) == 0
+; run: %band_bor_bnot_x_i32(0, -1) == -1
+; run: %band_bor_bnot_x_i32(-1, -1) == 0
+; run: %band_bor_bnot_x_i32(-2147483648, 2147483647) == 2147483647
+; run: %band_bor_bnot_x_i32(1431655765, 0xaaaaaaaa) == -1431655766
+; run: %band_bor_bnot_x_i32(240, 204) == 12
+
+function %band_bor_bnot_y_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bnot v1
+    v4 = band v2, v3
+    return v4
+}
+
+; run: %band_bor_bnot_y_i32(0, 0) == 0
+; run: %band_bor_bnot_y_i32(-1, 0) == -1
+; run: %band_bor_bnot_y_i32(0, -1) == 0
+; run: %band_bor_bnot_y_i32(-1, -1) == 0
+; run: %band_bor_bnot_y_i32(-2147483648, 2147483647) == -2147483648
+; run: %band_bor_bnot_y_i32(1431655765, 0xaaaaaaaa) == 1431655765
+; run: %band_bor_bnot_y_i32(240, 204) == 48
+
+function %bnot_xor_constant_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = bnot v0
+    v2 = iconst.i64 85
+    v3 = bxor v1, v2
+    return v3
+}
+
+; run: %bnot_xor_constant_i64(0) == -86
+; run: %bnot_xor_constant_i64(1) == -85
+; run: %bnot_xor_constant_i64(-1) == 85
+; run: %bnot_xor_constant_i64(-9223372036854775808) == 0x7fffffffffffffaa
+; run: %bnot_xor_constant_i64(0x7fffffffffffffff) == -9223372036854775723
+; run: %bnot_xor_constant_i64(85) == -1
+; run: %bnot_xor_constant_i64(-86) == 0
+
+function %bnot_xor_constant_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = bnot v0
+    v2 = iconst.i8 85
+    v3 = bxor v1, v2
+    return v3
+}
+
+; run: %bnot_xor_constant_i8(0) == -86
+; run: %bnot_xor_constant_i8(1) == -85
+; run: %bnot_xor_constant_i8(-1) == 85
+; run: %bnot_xor_constant_i8(-128) == 42
+; run: %bnot_xor_constant_i8(127) == -43
+; run: %bnot_xor_constant_i8(85) == -1
+; run: %bnot_xor_constant_i8(-86) == 0
+
+function %band_bnot_band_bor_to_xor_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = bnot v2
+    v4 = bor v0, v1
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_bnot_band_bor_to_xor_i32(0, 0) == 0
+; run: %band_bnot_band_bor_to_xor_i32(-1, 0) == -1
+; run: %band_bnot_band_bor_to_xor_i32(0, -1) == -1
+; run: %band_bnot_band_bor_to_xor_i32(-1, -1) == 0
+; run: %band_bnot_band_bor_to_xor_i32(-2147483648, 2147483647) == -1
+; run: %band_bnot_band_bor_to_xor_i32(1431655765, 0xaaaaaaaa) == -1
+; run: %band_bnot_band_bor_to_xor_i32(240, 204) == 60
+
+function %bor_bnot_band_absorb_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = bnot v2
+    v4 = bor v3, v0
+    return v4
+}
+
+; run: %bor_bnot_band_absorb_i32(0, 0) == -1
+; run: %bor_bnot_band_absorb_i32(-1, 0) == -1
+; run: %bor_bnot_band_absorb_i32(0, -1) == -1
+; run: %bor_bnot_band_absorb_i32(-1, -1) == -1
+; run: %bor_bnot_band_absorb_i32(-2147483648, 2147483647) == -1
+; run: %bor_bnot_band_absorb_i32(1431655765, 0xaaaaaaaa) == -1
+; run: %bor_bnot_band_absorb_i32(240, 204) == -1

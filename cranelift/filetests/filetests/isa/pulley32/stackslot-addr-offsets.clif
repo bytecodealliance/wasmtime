@@ -1,0 +1,130 @@
+; `stack_addr` is ordinary pointer arithmetic, so its offset may point
+; anywhere, including before or after the stack slot. Offsets that are too
+; large to fold into the stack slot's address are added separately.
+test compile precise-output
+target pulley32
+
+function %negative_offset() -> i32 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i32 ss1-8
+    return v0
+}
+
+; VCode:
+;   push_frame_save 16, {}
+; block0:
+;   x0 = load_addr Slot(0)
+;   pop_frame_restore 16, {}
+;   ret
+;
+; Disassembled:
+; push_frame_save 16, 
+; xmov x0, sp
+; pop_frame_restore 16, 
+; ret
+
+function %offset_past_slot() -> i32 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i32 ss0+16
+    return v0
+}
+
+; VCode:
+;   push_frame_save 16, {}
+; block0:
+;   x0 = load_addr Slot(16)
+;   pop_frame_restore 16, {}
+;   ret
+;
+; Disassembled:
+; push_frame_save 16, 
+; xconst8 x0, 16
+; xadd32 x0, sp, x0
+; pop_frame_restore 16, 
+; ret
+
+function %large_offset() -> i32 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i32 ss1+2147483647
+    return v0
+}
+
+; VCode:
+;   push_frame_save 16, {}
+; block0:
+;   x0 = load_addr Slot(8)
+;   xconst32 x2, 2147483647
+;   xadd32 x0, x0, x2
+;   pop_frame_restore 16, {}
+;   ret
+;
+; Disassembled:
+; push_frame_save 16, 
+; xconst8 x0, 8
+; xadd32 x0, sp, x0
+; xconst32 x2, 2147483647
+; xadd32 x0, x0, x2
+; pop_frame_restore 16, 
+; ret
+
+function %large_negative_offset() -> i32 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i32 ss1-2147483648
+    return v0
+}
+
+; VCode:
+;   push_frame_save 16, {}
+; block0:
+;   x0 = load_addr Slot(8)
+;   xconst32 x2, -2147483648
+;   xadd32 x0, x0, x2
+;   pop_frame_restore 16, {}
+;   ret
+;
+; Disassembled:
+; push_frame_save 16, 
+; xconst8 x0, 8
+; xadd32 x0, sp, x0
+; xconst32 x2, -2147483648
+; xadd32 x0, x0, x2
+; pop_frame_restore 16, 
+; ret
+
+function %large_offset_load() -> i32 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0:
+    v0 = stack_addr.i32 ss1+2147483647
+    v1 = load.i32 notrap v0-2147483648
+    return v1
+}
+
+; VCode:
+;   push_frame_save 16, {}
+; block0:
+;   x1 = load_addr Slot(8)
+;   xconst32 x3, 2147483647
+;   xadd32 x5, x1, x3
+;   xload32le_o32 x0, x5, -2147483648
+;   pop_frame_restore 16, {}
+;   ret
+;
+; Disassembled:
+; push_frame_save 16, 
+; xconst8 x1, 8
+; xadd32 x1, sp, x1
+; xconst32 x3, 2147483647
+; xadd32 x5, x1, x3
+; xload32le_o32 x0, x5, -2147483648
+; pop_frame_restore 16, 
+; ret
+

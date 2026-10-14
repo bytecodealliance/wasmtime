@@ -25,6 +25,26 @@ async fn p2_http_outbound_request_get() -> Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_http_outbound_request_between_bytes_timeout() -> Result<()> {
+    let server = Server::http1_stalled_body(1, std::time::Duration::from_secs(5))?;
+    run(
+        P2_HTTP_OUTBOUND_REQUEST_BETWEEN_BYTES_TIMEOUT_COMPONENT,
+        &server,
+    )
+    .await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_http_outbound_request_first_byte_timeout() -> Result<()> {
+    let server = Server::http1_delayed(1, std::time::Duration::from_secs(5))?;
+    run(
+        P2_HTTP_OUTBOUND_REQUEST_FIRST_BYTE_TIMEOUT_COMPONENT,
+        &server,
+    )
+    .await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_http_outbound_request_timeout() -> Result<()> {
     let server = Server::http1(3)?;
     run(P2_HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server).await

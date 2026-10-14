@@ -90,8 +90,7 @@ impl VMCommonStackInformation {
             state: VMStackState::Running,
             handlers: VMHostArray::empty(),
             first_switch_handler_index: 0,
-            asan_stack_bottom: None,
-            asan_stack_size: 0,
+            asan: Default::default(),
         }
     }
 }
@@ -158,8 +157,7 @@ impl VMContRef {
             state,
             handlers,
             first_switch_handler_index: 0,
-            asan_stack_bottom: None,
-            asan_stack_size: 0,
+            asan: Default::default(),
         };
         let parent_chain = VMStackChain::Absent;
         let last_ancestor = None;

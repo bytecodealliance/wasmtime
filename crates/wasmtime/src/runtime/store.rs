@@ -900,6 +900,7 @@ impl<T> Store<T> {
     ///     limits: StoreLimits,
     /// }
     ///
+    /// # fn main() -> Result<()> {
     /// let engine = Engine::default();
     /// let my_state = MyApplicationState {
     ///     my_state: 42,
@@ -912,18 +913,20 @@ impl<T> Store<T> {
     /// store.limiter(|state| &mut state.limits);
     ///
     /// // Creation of smaller memories is allowed
-    /// Memory::new(&mut store, MemoryType::new(1, None)).unwrap();
+    /// Memory::new(&mut store, MemoryType::new(1, None)?)?;
     ///
     /// // Creation of a larger memory, however, will exceed the 1MB limit we've
     /// // configured
-    /// assert!(Memory::new(&mut store, MemoryType::new(1000, None)).is_err());
+    /// assert!(Memory::new(&mut store, MemoryType::new(1000, None)?).is_err());
     ///
     /// // The number of instances in this store is limited to 2, so the third
     /// // instance here should fail.
-    /// let module = Module::new(&engine, "(module)").unwrap();
-    /// assert!(Instance::new(&mut store, &module, &[]).is_ok());
-    /// assert!(Instance::new(&mut store, &module, &[]).is_ok());
+    /// let module = Module::new(&engine, "(module)")?;
+    /// Instance::new(&mut store, &module, &[])?;
+    /// Instance::new(&mut store, &module, &[])?;
     /// assert!(Instance::new(&mut store, &module, &[]).is_err());
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// [`ResourceLimiter`]: crate::ResourceLimiter
@@ -1072,6 +1075,13 @@ impl<T> Store<T> {
     /// this method is invoked, the deadline is reached when
     /// [`Engine::increment_epoch()`] has been invoked at least
     /// `ticks_beyond_current` times.
+    ///
+    /// Note that when this method is called while WebAssembly is already
+    /// executing, for example from within a host function called by wasm,
+    /// raising the deadline takes effect immediately but lowering it is
+    /// unsupported. Lowering the deadline does not affect WebAssembly frames
+    /// already executing and only takes effect for new WebAssembly stack frames
+    /// made after this function was called.
     ///
     /// By default a store will trap immediately with an epoch deadline of 0
     /// (which has always "elapsed"). This method is required to be configured
@@ -2156,11 +2166,11 @@ at https://bytecodealliance.org/security.
             let asan_range = stack
                 .asan_range()
                 .expect("supported continuation stacks have a usable range");
-            continuation.common_stack_information.asan_stack_bottom = Some(vm::VmPtr::from(
+            continuation.common_stack_information.asan.stack_bottom = Some(vm::VmPtr::from(
                 NonNull::new(asan_range.start as *mut u8)
                     .expect("a continuation stack's ASan range must have a non-null bottom"),
             ));
-            continuation.common_stack_information.asan_stack_size = asan_range.len();
+            continuation.common_stack_information.asan.stack_size = asan_range.len();
         }
         continuation.stack = stack;
         let ptr = continuation.deref_mut() as *mut VMContRef;

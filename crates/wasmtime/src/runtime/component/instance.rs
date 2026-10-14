@@ -10,7 +10,7 @@ use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, TypedResource, TypedResourceIndex};
-use crate::runtime::vm::{self, VMFuncRef, VMStore};
+use crate::runtime::vm::{self, UncaughtException, VMFuncRef, VMStore};
 use crate::store::{AsStoreOpaque, Asyncness, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
@@ -1089,7 +1089,7 @@ pub(crate) fn start_raw<T>(
     if let Some(callee) = callee {
         store.0.enter_guest_sync_call(false, callee)?;
     }
-    instance.start_raw(store)?;
+    instance.start_raw(store, UncaughtException::Trap)?;
     if callee.is_some() {
         store.0.exit_guest_sync_call()?;
     }

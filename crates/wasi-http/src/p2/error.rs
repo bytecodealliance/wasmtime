@@ -1,5 +1,5 @@
 use crate::p2::bindings::http::types::{self, ErrorCode};
-use crate::{Error, FieldMapError, WasiHttpCtxView};
+use crate::{Error, FieldMapError, WasiHttpHooks};
 use std::error::Error as _;
 use std::fmt;
 use std::io::ErrorKind;
@@ -273,8 +273,8 @@ impl From<ErrorCode> for Error {
     }
 }
 
-impl WasiHttpCtxView<'_> {
-    pub(crate) fn error_to_p2(&mut self, e: Error) -> ErrorCode {
+impl dyn WasiHttpHooks + '_ {
+    pub(crate) fn error_to_p2(&mut self, e: &Error) -> ErrorCode {
         match e {
             Error::Hyper(err) => {
                 // If there's a source, we might be able to extract a wasi-http error from it.
@@ -282,9 +282,12 @@ impl WasiHttpCtxView<'_> {
                     if let Some(err) = cause.downcast_ref::<ErrorCode>() {
                         return err.clone();
                     }
+                    if let Some(err) = cause.downcast_ref::<Error>() {
+                        return self.error_to_p2(err);
+                    }
                 }
 
-                self.hooks.p2_error_from_hyper(&err)
+                self.p2_error_from_hyper(err)
             }
             Error::Connect(err) => {
                 if err.kind() == ErrorKind::AddrNotAvailable {
@@ -304,15 +307,16 @@ impl WasiHttpCtxView<'_> {
                     });
                 }
 
-                self.hooks.p2_error_from_connect(&err)
+                self.p2_error_from_connect(err)
             }
-            Error::Tls(err) => self.hooks.p2_error_from_tls(&err),
+            Error::Tls(err) => self.p2_error_from_tls(err),
             #[cfg(feature = "default-send-request")]
-            Error::InvalidDnsNameError(err) => self.hooks.p2_error_from_dns(&err),
+            Error::InvalidDnsNameError(err) => self.p2_error_from_dns(err),
             Error::DnsTimeout => ErrorCode::DnsTimeout,
-            Error::DnsError { rcode, info_code } => {
-                ErrorCode::DnsError(types::DnsErrorPayload { rcode, info_code })
-            }
+            Error::DnsError { rcode, info_code } => ErrorCode::DnsError(types::DnsErrorPayload {
+                rcode: rcode.clone(),
+                info_code: *info_code,
+            }),
             Error::DestinationNotFound => ErrorCode::DestinationNotFound,
             Error::DestinationUnavailable => ErrorCode::DestinationUnavailable,
             Error::DestinationIpProhibited => ErrorCode::DestinationIpProhibited,
@@ -329,69 +333,69 @@ impl WasiHttpCtxView<'_> {
                 alert_id,
                 alert_message,
             } => ErrorCode::TlsAlertReceived(types::TlsAlertReceivedPayload {
-                alert_id,
-                alert_message,
+                alert_id: *alert_id,
+                alert_message: alert_message.clone(),
             }),
             Error::HttpRequestDenied => ErrorCode::HttpRequestDenied,
             Error::HttpRequestLengthRequired => ErrorCode::HttpRequestLengthRequired,
-            Error::HttpRequestBodySize(payload) => ErrorCode::HttpRequestBodySize(payload),
+            Error::HttpRequestBodySize(payload) => ErrorCode::HttpRequestBodySize(*payload),
             Error::HttpRequestMethodInvalid => ErrorCode::HttpRequestMethodInvalid,
             Error::HttpRequestUriInvalid => ErrorCode::HttpRequestUriInvalid,
             Error::HttpRequestUriTooLong => ErrorCode::HttpRequestUriTooLong,
             Error::HttpRequestHeaderSectionSize(payload) => {
-                ErrorCode::HttpRequestHeaderSectionSize(payload)
+                ErrorCode::HttpRequestHeaderSectionSize(*payload)
             }
             Error::HttpRequestHeaderSize {
                 field_name,
                 field_size,
             } => ErrorCode::HttpRequestHeaderSize(Some(types::FieldSizePayload {
-                field_name,
-                field_size,
+                field_name: field_name.clone(),
+                field_size: *field_size,
             })),
             Error::HttpRequestTrailerSectionSize(payload) => {
-                ErrorCode::HttpRequestTrailerSectionSize(payload)
+                ErrorCode::HttpRequestTrailerSectionSize(*payload)
             }
             Error::HttpRequestTrailerSize {
                 field_name,
                 field_size,
             } => ErrorCode::HttpRequestTrailerSize(types::FieldSizePayload {
-                field_name,
-                field_size,
+                field_name: field_name.clone(),
+                field_size: *field_size,
             }),
             Error::HttpResponseIncomplete => ErrorCode::HttpResponseIncomplete,
             Error::HttpResponseHeaderSectionSize(payload) => {
-                ErrorCode::HttpResponseHeaderSectionSize(payload)
+                ErrorCode::HttpResponseHeaderSectionSize(*payload)
             }
             Error::HttpResponseHeaderSize {
                 field_name,
                 field_size,
             } => ErrorCode::HttpResponseHeaderSize(types::FieldSizePayload {
-                field_name,
-                field_size,
+                field_name: field_name.clone(),
+                field_size: *field_size,
             }),
-            Error::HttpResponseBodySize(payload) => ErrorCode::HttpResponseBodySize(payload),
+            Error::HttpResponseBodySize(payload) => ErrorCode::HttpResponseBodySize(*payload),
             Error::HttpResponseTrailerSectionSize(payload) => {
-                ErrorCode::HttpResponseTrailerSectionSize(payload)
+                ErrorCode::HttpResponseTrailerSectionSize(*payload)
             }
             Error::HttpResponseTrailerSize {
                 field_name,
                 field_size,
             } => ErrorCode::HttpResponseTrailerSize(types::FieldSizePayload {
-                field_name,
-                field_size,
+                field_name: field_name.clone(),
+                field_size: *field_size,
             }),
             Error::HttpResponseTransferCoding(payload) => {
-                ErrorCode::HttpResponseTransferCoding(payload)
+                ErrorCode::HttpResponseTransferCoding(payload.clone())
             }
             Error::HttpResponseContentCoding(payload) => {
-                ErrorCode::HttpResponseContentCoding(payload)
+                ErrorCode::HttpResponseContentCoding(payload.clone())
             }
             Error::HttpResponseTimeout => ErrorCode::HttpResponseTimeout,
             Error::HttpUpgradeFailed => ErrorCode::HttpUpgradeFailed,
             Error::HttpProtocolError => ErrorCode::HttpProtocolError,
             Error::LoopDetected => ErrorCode::LoopDetected,
             Error::ConfigurationError => ErrorCode::ConfigurationError,
-            Error::InternalError(payload) => ErrorCode::InternalError(payload),
+            Error::InternalError(payload) => ErrorCode::InternalError(payload.clone()),
         }
     }
 }

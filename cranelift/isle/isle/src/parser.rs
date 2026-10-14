@@ -857,6 +857,22 @@ impl<'a> Parser<'a> {
         } else if self.is_lparen() {
             self.expect_lparen()?;
             if self.eat_sym_str("bv")? {
+                // (bv (w1 w2 ...))
+                if self.is_lparen() {
+                    self.expect_lparen()?;
+                    let mut widths = Vec::new();
+                    while !self.is_rparen() {
+                        widths.push(usize::try_from(self.expect_int()?).map_err(|err| {
+                            self.error(pos, format!("Invalid BitVector width: {err}"))
+                        })?);
+                    }
+                    self.expect_rparen()?;
+                    self.expect_rparen()?;
+                    if widths.is_empty() {
+                        return Err(self.error(pos, "Empty BitVector width set".to_string()));
+                    }
+                    return Ok(ModelType::BitVecOneOf(widths));
+                }
                 let width = if self.is_rparen() {
                     None
                 } else if self.is_int() {
