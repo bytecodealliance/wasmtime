@@ -50,7 +50,7 @@ where
         };
 
         let mut dst = dst.as_direct(store, pipe::CAPACITY);
-        let remaining = dst.remaining();
+        let remaining = dst.remaining()?;
 
         // A zero-remaining destination means the guest is waiting for
         // readiness rather than requesting data. AsyncRead has no
@@ -125,7 +125,7 @@ where
         };
 
         let mut src = src.as_direct(store);
-        let remaining = src.remaining();
+        let remaining = src.remaining()?;
 
         if remaining.is_empty() {
             // Zero-length consume = readiness check. AsyncWrite has no

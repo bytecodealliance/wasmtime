@@ -68,9 +68,21 @@ fn get_content_length(headers: &http::HeaderMap) -> wasmtime::Result<Option<u64>
 ///
 /// ...and they are still allowed when using
 /// `http::uri::Builder::path_and_query` per
-/// https://github.com/hyperium/http/pull/853, so we use that here:
+/// https://github.com/hyperium/http/pull/853, so we use that here.
+///
+/// The same section of RFC 3986 also requires a non-empty path to begin with
+/// `/`, which `PathAndQuery` doesn't check: it accepts `http://example.com/`,
+/// `*`, and `x`. Those are rejected here, as they would otherwise end up
+/// verbatim in the request line of outgoing requests, and an absolute URI
+/// there addresses the request to a different host than the one it's sent to.
 #[cfg(any(feature = "p2", feature = "p3"))]
 fn parse_path_with_query(path_with_query: &str) -> Option<http::uri::PathAndQuery> {
+    if !(path_with_query.is_empty()
+        || path_with_query.starts_with('/')
+        || path_with_query.starts_with('?'))
+    {
+        return None;
+    }
     http::uri::Builder::new()
         .path_and_query(path_with_query)
         .build()

@@ -142,7 +142,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
             // Once a blocking file, always a blocking file, so assert as such.
             assert!(self.task.is_none());
             let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
-            let buf = dst.remaining();
+            let buf = dst.remaining()?;
             if buf.is_empty() {
                 return Poll::Ready(Ok(StreamResult::Completed));
             }
@@ -298,7 +298,7 @@ impl<D> StreamProducer<D> for ReadDirStream {
         // API to wait for an item to be available without taking it out of the
         // channel. In lieu of that just say that we're complete and ready for a
         // read.
-        if dst.remaining(&mut store) == Some(0) {
+        if dst.remaining(&mut store)? == Some(0) {
             return Poll::Ready(Ok(StreamResult::Completed));
         }
 
@@ -415,7 +415,7 @@ impl<D> StreamConsumer<D> for WriteStreamConsumer {
         if let Some(file) = self.file.as_blocking_file() {
             // Once a blocking file, always a blocking file, so assert as such.
             assert!(self.task.is_none());
-            return match self.location.write(file, src.remaining()) {
+            return match self.location.write(file, src.remaining()?) {
                 Ok(n) => {
                     src.mark_read(n);
                     Poll::Ready(Ok(self.complete_write(n)))
@@ -427,9 +427,9 @@ impl<D> StreamConsumer<D> for WriteStreamConsumer {
             };
         }
         let me = &mut *self;
+        let remaining = src.remaining()?;
         let task = me.task.get_or_insert_with(|| {
             debug_assert!(me.buffer.is_empty());
-            let remaining = src.remaining();
             let n = remaining.len().min(DEFAULT_BUFFER_CAPACITY);
             me.buffer.extend_from_slice(&remaining[..n]);
             let buf = mem::take(&mut me.buffer);
