@@ -382,7 +382,7 @@ fn define_control_flow(
             - register A := context
             - Reserve register B as scratch space.
             - register C := load_ptr
-            - _ := memory[load_ptr]
+            - _ := memory\[load_ptr\]
             - result := register C
 
         Exact choices of registers are ISA-specific; see each backend's
