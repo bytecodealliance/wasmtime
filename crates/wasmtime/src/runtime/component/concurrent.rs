@@ -1583,7 +1583,9 @@ impl<T> StoreContextMut<'_, T> {
                     //
                     // While we're yielded put the item back on the queue so it
                     // stays live within the store, and then if/when we come
-                    // back take it back out.
+                    // back take it back out. Note that the `await` point here
+                    // owns the entire `StoreContextMut` so what we push should
+                    // be what we pop.
                     if low_priority {
                         if let Some(item) = ready.take() {
                             self.0.concurrent_state_mut()?.low_priority.push_back(item);
