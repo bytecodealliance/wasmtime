@@ -204,6 +204,12 @@
 
 ;;;; Rules for `sadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; As for `uadd_overflow`: no `setcc` when the flags have no non-folded uses.
+(rule 3 (lower i @ (sadd_overflow (fits_in_64 ty) x y))
+        (if-let (second_result flags) i)
+        (if-let false (value_used flags))
+        (output_pair (value_reg (x64_add ty x y)) (value_regs_invalid)))
+
 (rule 1 (lower (sadd_overflow _ x y @ (value_type (fits_in_64 ty))))
       (construct_overflow_op_alu ty (CC.O) (ProduceFlagsOp.Add) x y))
 
@@ -212,6 +218,12 @@
 
 ;;;; Rules for `usub_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; As for `uadd_overflow`: no `setcc` when the flags have no non-folded uses.
+(rule 3 (lower i @ (usub_overflow (fits_in_64 ty) x y))
+        (if-let (second_result flags) i)
+        (if-let false (value_used flags))
+        (output_pair (value_reg (x64_sub ty x y)) (value_regs_invalid)))
+
 (rule 1 (lower (usub_overflow _ x y @ (value_type (fits_in_64 ty))))
       (construct_overflow_op_alu ty (CC.B) (ProduceFlagsOp.Sub) x y))
 
@@ -219,6 +231,12 @@
         (construct_overflow_op_alu_128 (CC.B) (ProduceFlagsOp.Sub) (ChainFlagsOp.Sbb) x y))
 
 ;;;; Rules for `ssub_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; As for `uadd_overflow`: no `setcc` when the flags have no non-folded uses.
+(rule 3 (lower i @ (ssub_overflow (fits_in_64 ty) x y))
+        (if-let (second_result flags) i)
+        (if-let false (value_used flags))
+        (output_pair (value_reg (x64_sub ty x y)) (value_regs_invalid)))
 
 (rule 1 (lower (ssub_overflow _ x y @ (value_type (fits_in_64 ty))))
       (construct_overflow_op_alu ty (CC.O) (ProduceFlagsOp.Sub) x y))
