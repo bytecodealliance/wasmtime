@@ -29,8 +29,19 @@ use wasmtime_wasi_http::{
 
 foreach_p3_http!(assert_test_exists);
 
+#[derive(Default)]
 struct TestHooks {
     request_tx: Option<oneshot::Sender<http::Request<WasiBody>>>,
+    io_dropped_tx: Option<oneshot::Sender<()>>,
+}
+
+impl TestHooks {
+    fn new(request_tx: oneshot::Sender<http::Request<WasiBody>>) -> Self {
+        Self {
+            request_tx: Some(request_tx),
+            ..Self::default()
+        }
+    }
 }
 
 impl WasiHttpHooks for TestHooks {
@@ -63,6 +74,23 @@ impl WasiHttpHooks for TestHooks {
                     Box::new(async { Ok(()) }) as Box<dyn Future<Output = _> + Send>,
                 ))
             })
+        } else if let Some("p3-test-keep-open") = request.uri().authority().map(|v| v.as_str()) {
+            // Simulate a long-running connection by returning an `io` future
+            // that owns the request and never resolves. `io_dropped_tx` is
+            // dropped along with it, which the test observes to tell whether
+            // the I/O was cancelled.
+            let io_dropped_tx = self.io_dropped_tx.take();
+            Box::new(async {
+                Ok((
+                    http::Response::new(Default::default()),
+                    Box::new(async move {
+                        let _request = request;
+                        let _io_dropped_tx = io_dropped_tx;
+                        std::future::pending::<()>().await;
+                        Ok(())
+                    }) as Box<dyn Future<Output = _> + Send>,
+                ))
+            })
         } else {
             Box::new(async move {
                 use http_body_util::BodyExt;
@@ -86,13 +114,15 @@ struct Ctx {
 
 impl Ctx {
     fn new(request_tx: oneshot::Sender<http::Request<WasiBody>>) -> Self {
+        Self::with_hooks(TestHooks::new(request_tx))
+    }
+
+    fn with_hooks(hooks: TestHooks) -> Self {
         Self {
             table: ResourceTable::default(),
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             http: WasiHttpCtx::new(),
-            hooks: TestHooks {
-                request_tx: Some(request_tx),
-            },
+            hooks,
         }
     }
 }
@@ -152,13 +182,21 @@ async fn run_http<E: Into<Error> + 'static>(
     req: http::Request<impl Body<Data = Bytes, Error = E> + Send + Sync + 'static>,
     request_tx: oneshot::Sender<http::Request<WasiBody>>,
 ) -> wasmtime::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
+    run_http_with_hooks(component_filename, req, TestHooks::new(request_tx)).await
+}
+
+async fn run_http_with_hooks<E: Into<Error> + 'static>(
+    component_filename: &str,
+    req: http::Request<impl Body<Data = Bytes, Error = E> + Send + Sync + 'static>,
+    hooks: TestHooks,
+) -> wasmtime::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
         config.wasm_component_model_async(true);
     });
     let component = Component::from_file(&engine, component_filename)?;
 
-    let mut store = Store::new(&engine, Ctx::new(request_tx));
+    let mut store = Store::new(&engine, Ctx::with_hooks(hooks));
 
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
@@ -660,6 +698,44 @@ async fn p3_http_proxy() -> Result<()> {
     );
 
     assert_eq!(request_body, body.as_slice());
+    Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_proxy_store_drop_cancels_io() -> Result<()> {
+    let (_body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(1);
+
+    // Tell the guest to forward the request to `http://p3-test-keep-open/`,
+    // which we handle specially in `TestHooks::send_request` above by
+    // immediately returning a response paired with an I/O future that never
+    // resolves.
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET)
+        .header("url", "http://p3-test-keep-open/");
+
+    let (io_dropped_tx, io_dropped_rx) = oneshot::channel();
+    let response = run_http_with_hooks(
+        P3_HTTP_PROXY_COMPONENT,
+        request.body(http_body_util::StreamBody::new(body_rx))?,
+        TestHooks {
+            io_dropped_tx: Some(io_dropped_tx),
+            ..TestHooks::default()
+        },
+    )
+    .await?
+    .unwrap();
+    assert_eq!(response.status().as_u16(), 200);
+
+    // The guest has exited, the response body has been consumed and the store
+    // has been dropped, so nothing references the I/O task anymore and it
+    // must be cancelled.
+    let result = tokio::time::timeout(std::time::Duration::from_secs(10), io_dropped_rx).await;
+    assert_eq!(
+        result,
+        Ok(Err(oneshot::Canceled)),
+        "I/O task should have been cancelled"
+    );
     Ok(())
 }
 
