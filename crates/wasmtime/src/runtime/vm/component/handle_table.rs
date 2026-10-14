@@ -9,6 +9,32 @@ use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
 /// currently and keeps the upper bits free for use in the component and ABI.
 const MAX_HANDLE: u32 = 1 << 28;
 
+/// Live-handle count for all `HandleTable`s in a store.
+///
+/// The count tracks live handles (incremented in `insert`, decremented in
+/// `remove`), since freed slots are reused.
+pub struct HandleCounter {
+    live: usize,
+    limit: usize,
+}
+
+impl HandleCounter {
+    /// Creates a counter with no live handles and the given `limit`.
+    pub fn new(limit: usize) -> HandleCounter {
+        HandleCounter { live: 0, limit }
+    }
+
+    /// Returns the configured limit on simultaneously-live handles.
+    pub fn limit(&self) -> usize {
+        self.limit
+    }
+
+    /// Updates the limit. Does not retroactively trap tables already over it.
+    pub fn set_limit(&mut self, limit: usize) {
+        self.limit = limit;
+    }
+}
+
 /// Represents the state of a stream or future handle from the perspective of a
 /// given component instance.
 #[derive(Debug, Eq, PartialEq)]
@@ -134,7 +160,7 @@ impl HandleTable {
             .all(|slot| matches!(slot, Slot::Free { .. }))
     }
 
-    fn insert(&mut self, slot: Slot) -> Result<u32> {
+    fn insert(&mut self, counter: &mut HandleCounter, slot: Slot) -> Result<u32> {
         let next = self.next;
 
         // The component model reserves index 0 as never allocatable so add one
@@ -148,6 +174,12 @@ impl HandleTable {
             bail!("cannot allocate another handle: index overflow");
         }
 
+        // Also enforce the store-wide cap; `MAX_HANDLE` alone scales with the
+        // guest-controlled instance count. See `HandleCounter`.
+        if counter.live >= counter.limit {
+            bail!("cannot allocate another handle: store handle limit exceeded");
+        }
+
         if next as usize == self.slots.len() {
             self.slots.push(Slot::Free {
                 next: next.checked_add(1).unwrap(),
@@ -158,14 +190,21 @@ impl HandleTable {
             _ => unreachable!(),
         };
 
+        // Count the handle only once its slot is committed; pairs with the
+        // decrement in `remove`.
+        counter.live += 1;
+
         Ok(next + 1)
     }
 
-    fn remove(&mut self, idx: u32) -> Result<()> {
+    fn remove(&mut self, counter: &mut HandleCounter, idx: u32) -> Result<()> {
         let to_fill = Slot::Free { next: self.next };
+        // Decrement only after this `?`: `get_mut` rejects a freed slot, so a
+        // failed removal must not touch the counter.
         let slot = self.get_mut(idx)?;
         *slot = to_fill;
         self.next = idx - 1;
+        counter.live -= 1;
         Ok(())
     }
 
@@ -188,18 +227,30 @@ impl HandleTable {
 
     /// Inserts a new `own` resource into this table whose type/rep are
     /// specified by `resource`.
-    pub fn resource_own_insert(&mut self, resource: TypedResource) -> Result<u32> {
-        self.insert(Slot::ResourceOwn {
-            resource,
-            lend_count: 0,
-        })
+    pub fn resource_own_insert(
+        &mut self,
+        counter: &mut HandleCounter,
+        resource: TypedResource,
+    ) -> Result<u32> {
+        self.insert(
+            counter,
+            Slot::ResourceOwn {
+                resource,
+                lend_count: 0,
+            },
+        )
     }
 
     /// Inserts a new `borrow` resource into this table whose type/rep are
     /// specified by `resource`. The `scope` specified is used by
     /// `CallContexts` to manage lending information.
-    pub fn resource_borrow_insert(&mut self, resource: TypedResource, scope: u32) -> Result<u32> {
-        self.insert(Slot::ResourceBorrow { resource, scope })
+    pub fn resource_borrow_insert(
+        &mut self,
+        counter: &mut HandleCounter,
+        resource: TypedResource,
+        scope: u32,
+    ) -> Result<u32> {
+        self.insert(counter, Slot::ResourceBorrow { resource, scope })
     }
 
     /// Returns the internal "rep" of the resource specified by `idx`.
@@ -252,9 +303,12 @@ impl HandleTable {
 
     /// Removes the resource specified by `idx` from the table.
     ///
-    /// This can fail if `idx` doesn't point to a resource, points to a
     /// borrowed resource, or points to a resource of the wrong type.
-    pub fn remove_resource(&mut self, idx: TypedResourceIndex) -> Result<RemovedResource> {
+    pub fn remove_resource(
+        &mut self,
+        counter: &mut HandleCounter,
+        idx: TypedResourceIndex,
+    ) -> Result<RemovedResource> {
         let ret = match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn {
                 resource,
@@ -274,7 +328,7 @@ impl HandleTable {
             }
             _ => bail!("index {} is not a resource", idx.raw_index()),
         };
-        self.remove(idx.raw_index())?;
+        self.remove(counter, idx.raw_index())?;
         Ok(ret)
     }
 
@@ -282,24 +336,40 @@ impl HandleTable {
     /// into this table.
     ///
     /// Returns the table-local index of the stream.
-    pub fn stream_insert_read(&mut self, ty: TypeStreamTableIndex, rep: u32) -> Result<u32> {
-        self.insert(Slot::Stream {
-            rep,
-            ty,
-            state: TransmitLocalState::Read { done: false },
-        })
+    pub fn stream_insert_read(
+        &mut self,
+        counter: &mut HandleCounter,
+        ty: TypeStreamTableIndex,
+        rep: u32,
+    ) -> Result<u32> {
+        self.insert(
+            counter,
+            Slot::Stream {
+                rep,
+                ty,
+                state: TransmitLocalState::Read { done: false },
+            },
+        )
     }
 
     /// Inserts a writable-end stream of type `ty` and with the specified `rep`
     /// into this table.
     ///
     /// Returns the table-local index of the stream.
-    pub fn stream_insert_write(&mut self, ty: TypeStreamTableIndex, rep: u32) -> Result<u32> {
-        self.insert(Slot::Stream {
-            rep,
-            ty,
-            state: TransmitLocalState::Write { done: false },
-        })
+    pub fn stream_insert_write(
+        &mut self,
+        counter: &mut HandleCounter,
+        ty: TypeStreamTableIndex,
+        rep: u32,
+    ) -> Result<u32> {
+        self.insert(
+            counter,
+            Slot::Stream {
+                rep,
+                ty,
+                state: TransmitLocalState::Write { done: false },
+            },
+        )
     }
 
     /// Returns the `rep` and `state` associated with the stream pointed to by
@@ -332,6 +402,7 @@ impl HandleTable {
     /// "done" or the writable end was witnessed as being done.
     pub fn stream_remove_readable(
         &mut self,
+        counter: &mut HandleCounter,
         expected_ty: TypeStreamTableIndex,
         idx: u32,
     ) -> Result<(u32, bool)> {
@@ -351,13 +422,14 @@ impl HandleTable {
             }
             _ => bail!("handle is not a stream"),
         };
-        self.remove(idx)?;
+        self.remove(counter, idx)?;
         Ok(ret)
     }
 
     /// Removes the writable stream handle from `idx`, returning its `rep`.
     pub fn stream_remove_writable(
         &mut self,
+        counter: &mut HandleCounter,
         expected_ty: TypeStreamTableIndex,
         idx: u32,
     ) -> Result<u32> {
@@ -377,7 +449,7 @@ impl HandleTable {
             }
             _ => bail!("handle is not a stream"),
         };
-        self.remove(idx)?;
+        self.remove(counter, idx)?;
         Ok(ret)
     }
 
@@ -385,24 +457,40 @@ impl HandleTable {
     /// into this table.
     ///
     /// Returns the table-local index of the future.
-    pub fn future_insert_read(&mut self, ty: TypeFutureTableIndex, rep: u32) -> Result<u32> {
-        self.insert(Slot::Future {
-            rep,
-            ty,
-            state: TransmitLocalState::Read { done: false },
-        })
+    pub fn future_insert_read(
+        &mut self,
+        counter: &mut HandleCounter,
+        ty: TypeFutureTableIndex,
+        rep: u32,
+    ) -> Result<u32> {
+        self.insert(
+            counter,
+            Slot::Future {
+                rep,
+                ty,
+                state: TransmitLocalState::Read { done: false },
+            },
+        )
     }
 
     /// Inserts a writable-end future of type `ty` and with the specified `rep`
     /// into this table.
     ///
     /// Returns the table-local index of the future.
-    pub fn future_insert_write(&mut self, ty: TypeFutureTableIndex, rep: u32) -> Result<u32> {
-        self.insert(Slot::Future {
-            rep,
-            ty,
-            state: TransmitLocalState::Write { done: false },
-        })
+    pub fn future_insert_write(
+        &mut self,
+        counter: &mut HandleCounter,
+        ty: TypeFutureTableIndex,
+        rep: u32,
+    ) -> Result<u32> {
+        self.insert(
+            counter,
+            Slot::Future {
+                rep,
+                ty,
+                state: TransmitLocalState::Write { done: false },
+            },
+        )
     }
 
     /// Returns the `rep` and `state` associated with the future pointed to by
@@ -435,6 +523,7 @@ impl HandleTable {
     /// "done" or the writable end was witnessed as being done.
     pub fn future_remove_readable(
         &mut self,
+        counter: &mut HandleCounter,
         expected_ty: TypeFutureTableIndex,
         idx: u32,
     ) -> Result<(u32, bool)> {
@@ -454,7 +543,7 @@ impl HandleTable {
             }
             _ => bail!("handle is not a future"),
         };
-        self.remove(idx)?;
+        self.remove(counter, idx)?;
         Ok(ret)
     }
 
@@ -463,6 +552,7 @@ impl HandleTable {
     /// value or was notified that the readable end was dropped).
     pub fn future_remove_writable(
         &mut self,
+        counter: &mut HandleCounter,
         expected_ty: TypeFutureTableIndex,
         idx: u32,
     ) -> Result<(u32, bool)> {
@@ -482,14 +572,14 @@ impl HandleTable {
             }
             _ => bail!("handle is not a future"),
         };
-        self.remove(idx)?;
+        self.remove(counter, idx)?;
         Ok(ret)
     }
 
     /// Inserts the error-context `rep` into this table, returning the index it
     /// now resides at.
-    pub fn error_context_insert(&mut self, rep: u32) -> Result<u32> {
-        self.insert(Slot::ErrorContext { rep })
+    pub fn error_context_insert(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
+        self.insert(counter, Slot::ErrorContext { rep })
     }
 
     /// Returns the `rep` of an error-context pointed to by `idx`.
@@ -503,23 +593,23 @@ impl HandleTable {
     /// Drops the error-context pointed to by `idx`.
     ///
     /// Returns the internal `rep`.
-    pub fn error_context_drop(&mut self, idx: u32) -> Result<u32> {
+    pub fn error_context_drop(&mut self, counter: &mut HandleCounter, idx: u32) -> Result<u32> {
         let rep = match self.get_mut(idx)? {
             Slot::ErrorContext { rep } => *rep,
             _ => bail!("handle is not an error-context"),
         };
-        self.remove(idx)?;
+        self.remove(counter, idx)?;
         Ok(rep)
     }
 
     /// Inserts `rep` as a guest subtask into this table.
-    pub fn subtask_insert_guest(&mut self, rep: u32) -> Result<u32> {
-        self.insert(Slot::GuestTask { rep })
+    pub fn subtask_insert_guest(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
+        self.insert(counter, Slot::GuestTask { rep })
     }
 
     /// Inserts `rep` as a host subtask into this table.
-    pub fn subtask_insert_host(&mut self, rep: u32) -> Result<u32> {
-        self.insert(Slot::HostTask { rep })
+    pub fn subtask_insert_host(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
+        self.insert(counter, Slot::HostTask { rep })
     }
 
     /// Returns the `rep` of the subtask at `idx` as well as if it's a host
@@ -533,19 +623,19 @@ impl HandleTable {
     }
 
     /// Removes the subtask set at `idx`, returning its `rep`.
-    pub fn subtask_remove(&mut self, idx: u32) -> Result<(u32, bool)> {
+    pub fn subtask_remove(&mut self, counter: &mut HandleCounter, idx: u32) -> Result<(u32, bool)> {
         let ret = match self.get_mut(idx)? {
             Slot::GuestTask { rep } => (*rep, false),
             Slot::HostTask { rep } => (*rep, true),
             _ => bail!("handle is not a subtask"),
         };
-        self.remove(idx)?;
+        self.remove(counter, idx)?;
         Ok(ret)
     }
 
     /// Inserts `rep` as a waitable set into this table.
-    pub fn waitable_set_insert(&mut self, rep: u32) -> Result<u32> {
-        self.insert(Slot::WaitableSet { rep })
+    pub fn waitable_set_insert(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
+        self.insert(counter, Slot::WaitableSet { rep })
     }
 
     /// Returns the `rep` of an waitable-set pointed to by `idx`.
@@ -557,12 +647,12 @@ impl HandleTable {
     }
 
     /// Removes the waitable set at `idx`, returning its `rep`.
-    pub fn waitable_set_remove(&mut self, idx: u32) -> Result<u32> {
+    pub fn waitable_set_remove(&mut self, counter: &mut HandleCounter, idx: u32) -> Result<u32> {
         let ret = match self.get_mut(idx)? {
             Slot::WaitableSet { rep } => *rep,
             _ => bail!("handle is not a waitable-set"),
         };
-        self.remove(idx)?;
+        self.remove(counter, idx)?;
         Ok(ret)
     }
 
@@ -587,8 +677,8 @@ pub struct ThreadHandleTable(HandleTable);
 impl ThreadHandleTable {
     /// Inserts the guest thread `rep` into this table, returning the index it
     /// now resides at.
-    pub fn guest_thread_insert(&mut self, rep: u32) -> Result<u32> {
-        self.0.insert(Slot::GuestThread { rep })
+    pub fn guest_thread_insert(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
+        self.0.insert(counter, Slot::GuestThread { rep })
     }
 
     /// Returns the `rep` of a guest thread pointed to by `idx`.
@@ -602,12 +692,12 @@ impl ThreadHandleTable {
     /// Removes the guest thread pointed to by `idx`.
     ///
     /// Returns the internal `rep`.
-    pub fn guest_thread_remove(&mut self, idx: u32) -> Result<u32> {
+    pub fn guest_thread_remove(&mut self, counter: &mut HandleCounter, idx: u32) -> Result<u32> {
         let rep = match self.0.get_mut(idx)? {
             Slot::GuestThread { rep } => *rep,
             _ => bail!("handle is not a guest thread"),
         };
-        self.0.remove(idx)?;
+        self.0.remove(counter, idx)?;
         Ok(rep)
     }
 }

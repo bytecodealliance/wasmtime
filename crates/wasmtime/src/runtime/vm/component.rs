@@ -42,7 +42,7 @@ mod handle_table;
 mod libcalls;
 mod resources;
 
-pub use self::handle_table::{HandleTable, RemovedResource};
+pub use self::handle_table::{HandleCounter, HandleTable, RemovedResource};
 #[cfg(feature = "component-model-async")]
 pub use self::handle_table::{ThreadHandleTable, TransmitLocalState, Waitable};
 pub use self::resources::{CallContext, ResourceTables, TypedResource, TypedResourceIndex};

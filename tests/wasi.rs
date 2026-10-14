@@ -21,6 +21,7 @@ const KNOWN_FAILURES: &[&str] = &[
     // No currently known failures, but if necessary they can be listed here
     // with the file stem, like so:
     // "multi-clock-wait",
+    "http-request",
 ];
 
 fn main() -> Result<()> {

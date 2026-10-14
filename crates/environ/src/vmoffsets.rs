@@ -980,6 +980,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 = cmul(ret.num_defined_globals, ret.ptr.vm_global_definition().size()),
             size(defined_tags)
                 = cmul(ret.num_defined_tags, ret.ptr.vm_tag_definition().size()),
+            align(u32::from(ret.ptr.size())),
             size(defined_func_refs) = cmul(
                 ret.num_escaped_funcs,
                 ret.ptr.vm_func_ref().size(),
@@ -1358,7 +1359,7 @@ pub const VM_ARRAY_CALL_HOST_FUNC_MAGIC: u32 = u32::from_le_bytes(*b"ACHF");
 
 #[cfg(test)]
 mod tests {
-    use crate::vmoffsets::align;
+    use crate::vmoffsets::{VMOffsets, VMOffsetsFields, align};
 
     #[test]
     fn alignment() {
@@ -1369,6 +1370,34 @@ mod tests {
         assert!(is_aligned(align(32, 16)));
         assert!(is_aligned(align(33, 16)));
         assert!(is_aligned(align(31, 16)));
+    }
+
+    #[test]
+    fn pointer_fields_aligned_after_tags() {
+        for ptr in [4u8, 8] {
+            for num_defined_tags in 0..4 {
+                let offsets = VMOffsets::from(VMOffsetsFields {
+                    ptr,
+                    num_imported_functions: 0,
+                    num_imported_tables: 0,
+                    num_imported_memories: 0,
+                    num_imported_globals: 0,
+                    num_imported_tags: 0,
+                    num_defined_tables: 0,
+                    num_defined_memories: 0,
+                    num_owned_memories: 0,
+                    num_defined_globals: 0,
+                    num_defined_tags,
+                    num_escaped_funcs: 1,
+                    num_runtime_data: 1,
+                    has_startup_func: true,
+                });
+                let ptr = u32::from(ptr);
+                assert_eq!(offsets.defined_func_refs % ptr, 0);
+                assert_eq!(offsets.startup_func_ref % ptr, 0);
+                assert_eq!(offsets.runtime_data_bases % ptr, 0);
+            }
+        }
     }
 }
 

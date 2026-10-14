@@ -1358,6 +1358,9 @@ impl RunCommand {
         if let Some(fuel) = self.run.common.wasi.hostcall_fuel {
             store.set_hostcall_fuel(fuel);
         }
+        if let Some(max) = self.run.common.wasi.max_component_handles {
+            store.set_max_component_handles(max);
+        }
         store.data_mut().wasip1_ctx = Some(ctx);
         Ok(())
     }
