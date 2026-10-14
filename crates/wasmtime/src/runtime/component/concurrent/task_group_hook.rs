@@ -1,3 +1,4 @@
+use crate::bail_bug;
 use crate::component::concurrent::table::{TableDebug, TableId};
 use crate::component::concurrent::{ConcurrentState, CurrentThread};
 use crate::error::Result;
@@ -195,7 +196,9 @@ impl ConcurrentState {
 
     pub(super) fn decrement_group_ref_count(&mut self, group: TaskGroupId) -> Result<()> {
         let count = &mut self.get_mut(group.0)?.ref_count;
-        assert!(*count >= 1);
+        if *count == 0 {
+            bail_bug!("can't decrement task group ref count that's already zero");
+        }
         *count -= 1;
         log::trace!("decrement {group:?} to {count}");
         if *count == 0 {

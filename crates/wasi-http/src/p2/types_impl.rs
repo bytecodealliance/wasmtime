@@ -28,6 +28,12 @@ impl types::Host for WasiHttpCtxView<'_> {
         err: wasmtime::component::Resource<types::IoError>,
     ) -> wasmtime::Result<Option<types::ErrorCode>> {
         let e = self.table.get(&err)?;
+        if let Some(e) = e.downcast_ref::<crate::Error>() {
+            return Ok(Some(self.hooks.error_to_p2(e)));
+        }
+        if let Some(e) = e.downcast_ref::<std::sync::Arc<crate::Error>>() {
+            return Ok(Some(self.hooks.error_to_p2(e)));
+        }
         Ok(e.downcast_ref::<types::ErrorCode>().cloned())
     }
 }
@@ -475,7 +481,7 @@ impl types::HostFutureTrailers for WasiHttpCtxView<'_> {
             Ok(Some(fields)) => fields,
             Ok(None) => return Ok(Some(Ok(Ok(None)))),
             Err(e) => {
-                let e = self.error_to_p2(e);
+                let e = self.hooks.error_to_p2(&e);
                 return Ok(Some(Ok(Err(e))));
             }
         };
@@ -578,8 +584,8 @@ impl types::HostOutgoingResponse for WasiHttpCtxView<'_> {
         let resp = self.table.get_mut(&id)?;
 
         match http::StatusCode::from_u16(status) {
-            Ok(status) => resp.status = status,
-            Err(_) => return Ok(Err(())),
+            Ok(parsed) if matches!(status, 100..=599) => resp.status = parsed,
+            _ => return Ok(Err(())),
         };
 
         Ok(Ok(()))
@@ -623,7 +629,7 @@ impl types::HostFutureIncomingResponse for WasiHttpCtxView<'_> {
             match std::mem::replace(resp, HostFutureIncomingResponse::Consumed).unwrap_ready() {
                 Ok(pair) => pair,
                 Err(e) => {
-                    let e = self.error_to_p2(e);
+                    let e = self.hooks.error_to_p2(&e);
                     return Ok(Some(Ok(Err(e))));
                 }
             };
@@ -1391,6 +1397,55 @@ mod named {
             rep: Resource<types::RequestOptions>,
         ) -> wasmtime::Result<()> {
             super::types::HostRequestOptions::drop(&mut self.0.http(id), rep)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::p2::bindings::http::types::HostOutgoingResponse as _;
+    use crate::p2::types::HostOutgoingResponse;
+    use crate::{FieldMap, WasiHttpCtx, WasiHttpCtxView};
+
+    fn push(view: &mut WasiHttpCtxView<'_>) -> wasmtime::component::Resource<HostOutgoingResponse> {
+        view.table
+            .push(HostOutgoingResponse {
+                status: http::StatusCode::OK,
+                headers: FieldMap::new_mutable(1024),
+                body: None,
+            })
+            .expect("push outgoing-response")
+    }
+
+    /// `set-status-code` must fail for codes outside the RFC 9110 range, as the
+    /// `wasi:http` contract promises and the p3 implementation already does.
+    #[test]
+    fn set_status_code_range() {
+        let mut table = wasmtime::component::ResourceTable::new();
+        let mut http = WasiHttpCtx::new();
+        let hooks: &mut dyn crate::WasiHttpHooks = crate::default_hooks();
+        let mut view = WasiHttpCtxView {
+            ctx: &mut http,
+            table: &mut table,
+            hooks,
+        };
+
+        for code in [100u16, 199, 200, 599] {
+            let id = push(&mut view);
+            let r = view.set_status_code(id, code);
+            assert!(
+                matches!(r, Ok(Ok(()))),
+                "code {code} should be accepted: {r:?}"
+            );
+        }
+
+        for code in [0u16, 99, 600, 999, 1000, 65535] {
+            let id = push(&mut view);
+            let r = view.set_status_code(id, code);
+            assert!(
+                matches!(r, Ok(Err(()))),
+                "code {code} should be rejected: {r:?}"
+            );
         }
     }
 }

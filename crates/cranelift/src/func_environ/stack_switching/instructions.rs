@@ -96,19 +96,23 @@ pub(crate) mod stack_switching_helpers {
     /// Provides information about the layout of a type when it is used as an
     /// element in a host array. This is used for `VMHostArrayRef`.
     pub(crate) trait VMHostArrayEntry {
-        /// Returns `(align, size)` in bytes.
+        /// Returns `(align_shift, size)`: the log2 of the alignment, as used by
+        /// `StackSlotData`, and the size in bytes.
         fn vmhostarray_entry_layout<P: wasmtime_environ::PtrSize>(p: &P) -> (u8, u32);
     }
 
     impl VMHostArrayEntry for u128 {
         fn vmhostarray_entry_layout<P: wasmtime_environ::PtrSize>(_p: &P) -> (u8, u32) {
-            (16, 16)
+            (4, 16)
         }
     }
 
     impl<T> VMHostArrayEntry for *mut T {
         fn vmhostarray_entry_layout<P: wasmtime_environ::PtrSize>(p: &P) -> (u8, u32) {
-            (p.size(), p.size().into())
+            (
+                u8::try_from(p.size().trailing_zeros()).unwrap(),
+                p.size().into(),
+            )
         }
     }
 
@@ -2470,7 +2474,7 @@ pub(crate) fn translate_switch<'a>(
         let slot_size = ir::StackSlotData::new(
             ir::StackSlotKind::ExplicitSlot,
             u32::from(cctx_size),
-            u8::try_from(env.pointer_type().bytes()).unwrap(),
+            u8::try_from(env.pointer_type().bytes().trailing_zeros()).unwrap(),
         );
         let slot = builder.create_sized_stack_slot(slot_size);
         let tmp_control_context = builder.ins().stack_addr(env.pointer_type(), slot, 0);

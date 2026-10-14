@@ -35,47 +35,52 @@ struct MyAllocator;
 
 unsafe impl GlobalAlloc for MyGlobalDmalloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        unsafe {
-            self.dlmalloc
-                .try_lock()
-                .unwrap()
-                .malloc(layout.size(), layout.align())
-        }
+        let size = alloc_size(layout.size(), layout.align());
+        unsafe { self.dlmalloc.lock().malloc(size, layout.align()) }
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        unsafe {
-            self.dlmalloc
-                .try_lock()
-                .unwrap()
-                .calloc(layout.size(), layout.align())
-        }
+        let size = alloc_size(layout.size(), layout.align());
+        unsafe { self.dlmalloc.lock().calloc(size, layout.align()) }
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let old_size = alloc_size(layout.size(), layout.align());
+        let new_size = alloc_size(new_size, layout.align());
         unsafe {
             self.dlmalloc
-                .try_lock()
-                .unwrap()
-                .realloc(ptr, layout.size(), layout.align(), new_size)
+                .lock()
+                .realloc(ptr, old_size, layout.align(), new_size)
         }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe {
-            self.dlmalloc
-                .try_lock()
-                .unwrap()
-                .free(ptr, layout.size(), layout.align())
-        }
+        let size = alloc_size(layout.size(), layout.align());
+        unsafe { self.dlmalloc.lock().free(ptr, size, layout.align()) }
     }
 }
 
-#[cfg(not(feature = "wasi"))]
-const INITIAL_HEAP_SIZE: usize = 64 * 1024;
-// The wasi component requires a larger heap than the module tests
-#[cfg(feature = "wasi")]
-const INITIAL_HEAP_SIZE: usize = 4 * 1024 * 1024;
+pub const PAGE_SIZE: usize = 4096;
+
+/// Returns the size to actually allocate for a request of `size` bytes with
+/// alignment `align`.
+///
+/// Page-aligned allocations are rounded up to a whole number of pages so that
+/// they never share a page with any other allocation. This is relied upon by
+/// the custom code memory in `lib.rs`: Wasmtime allocates code images with
+/// page alignment, and the embedding changes the protection of the pages
+/// containing code, which must not affect unrelated allocations.
+fn alloc_size(size: usize, align: usize) -> usize {
+    if align >= PAGE_SIZE {
+        size.next_multiple_of(align)
+    } else {
+        size
+    }
+}
+
+// Note that this is large enough to accommodate the wasi component as well as
+// multiple threads concurrently loading and running modules.
+const INITIAL_HEAP_SIZE: usize = 16 * 1024 * 1024;
 
 static mut INITIAL_HEAP: [u8; INITIAL_HEAP_SIZE] = [0; INITIAL_HEAP_SIZE];
 static mut INITIAL_HEAP_ALLOCATED: bool = false;
@@ -113,12 +118,13 @@ unsafe impl dlmalloc::Allocator for MyAllocator {
     }
 
     fn page_size(&self) -> usize {
-        4096
+        PAGE_SIZE
     }
 }
 
-// Simple mutex which only supports `try_lock` at this time. This would probably
-// be replaced with a "real" mutex in a "real" embedding.
+// Simple spin lock, which is sufficient for this example's allocator as it may
+// be used concurrently from multiple threads. This would probably be replaced
+// with a "real" mutex in a "real" embedding.
 struct Mutex<T> {
     data: UnsafeCell<T>,
     locked: AtomicBool,
@@ -135,12 +141,11 @@ impl<T> Mutex<T> {
         }
     }
 
-    fn try_lock(&self) -> Option<impl DerefMut<Target = T> + '_> {
-        if self.locked.swap(true, Acquire) {
-            None
-        } else {
-            Some(MutexGuard { lock: self })
+    fn lock(&self) -> impl DerefMut<Target = T> + '_ {
+        while self.locked.swap(true, Acquire) {
+            core::hint::spin_loop();
         }
+        MutexGuard { lock: self }
     }
 }
 

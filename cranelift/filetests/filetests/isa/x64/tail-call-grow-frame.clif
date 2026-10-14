@@ -1,0 +1,122 @@
+; A `tail` function that grows its incoming argument area for a
+; `return_call` with more stack arguments than it received. The frame is
+; defined for unwinding before the saved RBP and return address are moved,
+; and RBP is only updated once both have been moved.
+test compile precise-output
+set unwind_info=true
+set preserve_frame_pointers=true
+target x86_64-unknown-linux-gnu
+
+function %f(i64) -> i64 tail {
+    fn0 = %g(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+    fn1 = %h() -> i64 tail
+block0(v0: i64):
+    v1 = call fn1()
+    v2 = call fn1()
+    v3 = iadd v0, v1
+    v4 = call fn1()
+    v5 = iadd v3, v2
+    v6 = iadd v5, v4
+    return_call fn0(v6, v0, v1, v2, v3, v4, v5, v6, v0, v1)
+}
+
+; VCode:
+;   pushq %rbp
+;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
+;   movq %rsp, %rbp
+;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 48 }
+;   subq $0x20, %rsp
+;   movq 0x20(%rsp), %r11
+;   movq %r11, (%rsp)
+;   movq 0x28(%rsp), %r11
+;   movq %r11, 8(%rsp)
+;   movq %rsp, %rbp
+;   subq $0x30, %rsp
+;   movq %rbx, (%rsp)
+;   unwind SaveReg { clobber_offset: 0, reg: p3i }
+;   movq %r12, 8(%rsp)
+;   unwind SaveReg { clobber_offset: 8, reg: p12i }
+;   movq %r13, 0x10(%rsp)
+;   unwind SaveReg { clobber_offset: 16, reg: p13i }
+;   movq %r14, 0x18(%rsp)
+;   unwind SaveReg { clobber_offset: 24, reg: p14i }
+;   movq %r15, 0x20(%rsp)
+;   unwind SaveReg { clobber_offset: 32, reg: p15i }
+; block0:
+;   movq %rdi, %r14
+;   load_ext_name %h+0, %rax
+;   call    *%rax
+;   movq %rax, %r15
+;   load_ext_name %h+0, %rcx
+;   call    *%rcx
+;   movq %rax, %r13
+;   movq %r14, %rbx
+;   movq %r15, %rax
+;   leaq (%rbx, %rax), %r12
+;   load_ext_name %h+0, %rax
+;   call    *%rax
+;   movq %r13, %rcx
+;   leaq (%r12, %rcx), %rdx
+;   leaq (%rdx, %rax), %rdi
+;   movq %rdx, <offset:0>+-0x20(%rbp)
+;   movq %rdi, <offset:0>+-0x18(%rbp)
+;   movq %rbx, <offset:0>+-0x10(%rbp)
+;   movq %r15, %rdx
+;   movq %rdx, <offset:0>+-8(%rbp)
+;   load_ext_name %g+0, %r10
+;   movq %rbx, %rsi
+;   movq %r12, %r8
+;   movq %rax, %r9
+;   return_call_unknown %r10 (32) tmp=%r11 %rdi=%rdi %rsi=%rsi %rdx=%rdx %rcx=%rcx %r8=%r8 %r9=%r9
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x20, %rsp
+;   movq 0x20(%rsp), %r11
+;   movq %r11, (%rsp)
+;   movq 0x28(%rsp), %r11
+;   movq %r11, 8(%rsp)
+;   movq %rsp, %rbp
+;   subq $0x30, %rsp
+;   movq %rbx, (%rsp)
+;   movq %r12, 8(%rsp)
+;   movq %r13, 0x10(%rsp)
+;   movq %r14, 0x18(%rsp)
+;   movq %r15, 0x20(%rsp)
+; block1: ; offset 0x3a
+;   movq %rdi, %r14
+;   movabsq $0, %rax ; reloc_external Abs8 %h 0
+;   callq *%rax
+;   movq %rax, %r15
+;   movabsq $0, %rcx ; reloc_external Abs8 %h 0
+;   callq *%rcx
+;   movq %rax, %r13
+;   movq %r14, %rbx
+;   movq %r15, %rax
+;   leaq (%rbx, %rax), %r12
+;   movabsq $0, %rax ; reloc_external Abs8 %h 0
+;   callq *%rax
+;   movq %r13, %rcx
+;   leaq (%r12, %rcx), %rdx
+;   leaq (%rdx, %rax), %rdi
+;   movq %rdx, 0x10(%rbp)
+;   movq %rdi, 0x18(%rbp)
+;   movq %rbx, 0x20(%rbp)
+;   movq %r15, %rdx
+;   movq %rdx, 0x28(%rbp)
+;   movabsq $0, %r10 ; reloc_external Abs8 %g 0
+;   movq %rbx, %rsi
+;   movq %r12, %r8
+;   movq %rax, %r9
+;   movq (%rsp), %rbx
+;   movq 8(%rsp), %r12
+;   movq 0x10(%rsp), %r13
+;   movq 0x18(%rsp), %r14
+;   movq 0x20(%rsp), %r15
+;   addq $0x30, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   jmpq *%r10
+

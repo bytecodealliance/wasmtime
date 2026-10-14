@@ -1586,6 +1586,12 @@
 (rule (lower (bitselect (vr128_ty ty) x y z))
       (vec_select ty y z x))
 
+;; Bitselect float registers, using vector overlay (as for `band`/`bor`/`bxor`
+;; on scalar floats). This must take priority over the `fits_in_64` rules above,
+;; which use GPR instructions.
+(rule 8 (lower (bitselect (ty_scalar_float _) x y z))
+      (vec_select $F64X2 y z x))
+
 ;; Bitselect-not vector registers.
 (rule 5 (lower (bitselect (vr128_ty ty) x (bnot _ y) z))
       (if-let true (has_vxrs_ext3))
@@ -2791,6 +2797,14 @@
 ;; Load the address of a stack slot.
 (rule (lower (stack_addr ty stack_slot offset))
       (stack_addr_impl ty stack_slot offset))
+
+;; An offset too large to fold into the stack slot's address computation is
+;; added separately.
+(rule 1 (lower (stack_addr ty stack_slot offset))
+      (if-let large_offset (abi_stackslot_large_offset stack_slot offset))
+      (add_reg ty
+               (stack_addr_impl ty stack_slot (i32_to_offset32 0))
+               (imm ty (i64_cast_unsigned large_offset))))
 
 
 ;;;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

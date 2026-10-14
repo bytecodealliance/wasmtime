@@ -10,18 +10,18 @@ target s390x
     function u1:0(i64x2, i128 uext, i16x8, f64, i64, i16, i32x4, f32, f32x4, i8x16, f64x2, i32, i8 sext) -> i8, i8 sext, i8 uext, i8x16, i8 sext, i32 sext, i8 sext, i8 sext, i16 sext, f32x4, i8 sext, i8, i64x2, f64 system_v {
         ss0 = explicit_slot 81
         ss1 = explicit_slot 80
-        ss2 = explicit_slot 16, align = 16
+        ss2 = explicit_slot 16, align = 8
         ss3 = explicit_slot 2, align = 2
         ss4 = explicit_slot 4, align = 4
         ss5 = explicit_slot 2, align = 2
-        ss6 = explicit_slot 16, align = 16
-        ss7 = explicit_slot 16, align = 16
+        ss6 = explicit_slot 16, align = 8
+        ss7 = explicit_slot 16, align = 8
         ss8 = explicit_slot 8, align = 8
         ss9 = explicit_slot 2, align = 2
-        ss10 = explicit_slot 16, align = 16
+        ss10 = explicit_slot 16, align = 8
         ss11 = explicit_slot 8, align = 8
         ss12 = explicit_slot 4, align = 4
-        ss13 = explicit_slot 16, align = 16
+        ss13 = explicit_slot 16, align = 8
         ss14 = explicit_slot 2, align = 2
         sig0 = (i8 sext, i64x2, f64, f64, f64x2, i64 uext, i16x8, f64x2, i16 sext) fast
         sig1 = (f32) -> f32 system_v

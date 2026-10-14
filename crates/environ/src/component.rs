@@ -122,8 +122,10 @@ macro_rules! foreach_builtin_component_function {
             task_cancel(vmctx: vmctx, caller_instance: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             waitable_set_new(vmctx: vmctx, caller_instance: u32) -> u64;
+            // FIXME(#4311): `payload` needs to be a `u64` for memory64
             #[cfg(feature = "component-model-async")]
             waitable_set_wait(vmctx: vmctx, caller_instance: u32, options: u32, set: u32, payload: u32) -> u64;
+            // FIXME(#4311): `payload` needs to be a `u64` for memory64
             #[cfg(feature = "component-model-async")]
             waitable_set_poll(vmctx: vmctx, caller_instance: u32, options: u32, set: u32, payload: u32) -> u64;
             #[cfg(feature = "component-model-async")]
@@ -153,8 +155,10 @@ macro_rules! foreach_builtin_component_function {
             start_call(vmctx: vmctx, callback: ptr_u8, post_return: ptr_u8, storage: ptr_u8, storage_len: size, callee: ptr_u8, param_count: u32, result_count: u32, flags: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             future_new(vmctx: vmctx, caller_instance: u32, ty: u32) -> u64;
+            // FIXME(#4311): `address` needs to be a `u64` for memory64
             #[cfg(feature = "component-model-async")]
             future_write(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, future: u32, address: u32) -> u64;
+            // FIXME(#4311): `address` needs to be a `u64` for memory64
             #[cfg(feature = "component-model-async")]
             future_read(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, future: u32, address: u32) -> u64;
             #[cfg(feature = "component-model-async")]
@@ -167,8 +171,10 @@ macro_rules! foreach_builtin_component_function {
             future_drop_readable(vmctx: vmctx, caller_instance: u32, ty: u32, reader: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             stream_new(vmctx: vmctx, caller_instance: u32, ty: u32) -> u64;
+            // FIXME(#4311): `address` and `count` need to be `u64`s for memory64
             #[cfg(feature = "component-model-async")]
             stream_write(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, stream: u32, address: u32, count: u32) -> u64;
+            // FIXME(#4311): `address` and `count` need to be `u64`s for memory64
             #[cfg(feature = "component-model-async")]
             stream_read(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]
@@ -179,12 +185,16 @@ macro_rules! foreach_builtin_component_function {
             stream_drop_writable(vmctx: vmctx, caller_instance: u32, ty: u32, writer: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             stream_drop_readable(vmctx: vmctx, caller_instance: u32, ty: u32, reader: u32) -> bool;
+            // FIXME(#4311): `address` and `count` need to be `u64`s for memory64
             #[cfg(feature = "component-model-async")]
             flat_stream_write(vmctx: vmctx, caller_instance: u32, ty: u32, options:u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
+            // FIXME(#4311): `address` and `count` need to be `u64`s for memory64
             #[cfg(feature = "component-model-async")]
             flat_stream_read(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
+            // FIXME(#4311): `debug_msg_address` and `debug_msg_len` need to be `u64`s for memory64
             #[cfg(feature = "component-model-async")]
             error_context_new(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, debug_msg_address: u32, debug_msg_len: u32) -> u64;
+            // FIXME(#4311): `debug_msg_address` needs to be a `u64` for memory64
             #[cfg(feature = "component-model-async")]
             error_context_debug_message(vmctx: vmctx, caller_instance: u32, ty: u32, options: u32, err_ctx_handle: u32, debug_msg_address: u32) -> bool;
             #[cfg(feature = "component-model-async")]

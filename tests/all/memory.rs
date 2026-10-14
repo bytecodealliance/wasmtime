@@ -794,6 +794,59 @@ fn non_page_aligned_static_memory() -> Result<()> {
     Ok(())
 }
 
+// When a memory's minimum size exceeds `memory_reservation`, the runtime sizes
+// the allocation from the minimum, so compilers must not treat the reservation
+// as an upper bound on accessible memory.
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn minimum_larger_than_reservation_without_moving(cfg: &mut Config) -> Result<()> {
+    cfg.memory_reservation(0);
+    cfg.memory_may_move(false);
+    let engine = Engine::new(cfg)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 2)
+                (func (export "store") (param i32 i32)
+                    local.get 0
+                    local.get 1
+                    i32.store)
+                (func (export "load") (param i32) (result i32)
+                    local.get 0
+                    i32.load)
+                (func (export "load_offset") (param i32) (result i32)
+                    local.get 0
+                    i32.load offset=70000)
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let store_fn = instance.get_typed_func::<(u32, u32), ()>(&mut store, "store")?;
+    let load = instance.get_typed_func::<u32, u32>(&mut store, "load")?;
+    let load_offset = instance.get_typed_func::<u32, u32>(&mut store, "load_offset")?;
+
+    store_fn.call(&mut store, (0, 42))?;
+    assert_eq!(load.call(&mut store, 0)?, 42);
+    store_fn.call(&mut store, (70_000, 7))?;
+    assert_eq!(load_offset.call(&mut store, 0)?, 7);
+    assert_eq!(load.call(&mut store, 2 * 65536 - 4)?, 0);
+
+    // Accesses past the minimum size must still trap.
+    let trap = load
+        .call(&mut store, 2 * 65536 - 3)
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::MemoryOutOfBounds);
+    let trap = load_offset
+        .call(&mut store, 2 * 65536 - 70_000 - 3)
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::MemoryOutOfBounds);
+    Ok(())
+}
+
 #[test]
 fn new_memory_with_custom_page_size() -> Result<()> {
     let engine = Engine::default();

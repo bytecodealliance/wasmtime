@@ -186,6 +186,4 @@ impl StoreOpaque {
             .current_scope_id_not_concurrent()?
             .map(|id| CurrentScope::Id(Scope::Id(id))))
     }
-
-    pub(crate) fn clean_up_task_groups(&mut self) {}
 }

@@ -50,7 +50,7 @@ fi
 # which ensures that Rust & C agree on types and such.
 cbindgen "$REPO_DIR/crates/wasmtime/src/runtime/vm/sys/custom/capi.rs" \
     --config "$EMBEDDING_DIR/cbindgen.toml" > "$EMBEDDING_DIR/wasmtime-platform.h"
-clang -shared -O2 -o "$HOST_DIR/libwasmtime-platform.so" "$EMBEDDING_DIR/wasmtime-platform.c" \
+clang -shared -fPIC -O2 -o "$HOST_DIR/libwasmtime-platform.so" "$EMBEDDING_DIR/wasmtime-platform.c" \
   -D_GNU_SOURCE $cflags
 
 # Next the embedding itself is built.

@@ -233,8 +233,10 @@ macro_rules! bitop {
             (DataValue::I32(a), DataValue::I32(b)) => DataValue::I32(a $op b),
             (DataValue::I64(a), DataValue::I64(b)) => DataValue::I64(a $op b),
             (DataValue::I128(a), DataValue::I128(b)) => DataValue::I128(a $op b),
+            (DataValue::F16(a), DataValue::F16(b)) => DataValue::F16(a $op b),
             (DataValue::F32(a), DataValue::F32(b)) => DataValue::F32(a $op b),
             (DataValue::F64(a), DataValue::F64(b)) => DataValue::F64(a $op b),
+            (DataValue::F128(a), DataValue::F128(b)) => DataValue::F128(a $op b),
             (DataValue::V64(a), DataValue::V64(b)) => {
                 let mut a2 = a.clone();
                 for (a, b) in a2.iter_mut().zip(b.iter()) {
@@ -630,14 +632,15 @@ impl DataValueExt for DataValue {
     fn srem(self, other: Self) -> ValueResult<Self> {
         let denominator = other.clone().into_int_signed()?;
 
-        // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
-        let min = DataValueExt::int(1i128 << (self.ty().bits() - 1), self.ty())?;
-        if self == min && denominator == -1 {
-            return Err(ValueError::IntegerOverflow);
-        }
-
         if denominator == 0 {
             return Err(ValueError::IntegerDivisionByZero);
+        }
+
+        // The remainder of any value divided by -1 is 0. Unlike `sdiv`, this
+        // does not trap on INT_MIN / -1; return early to avoid Rust's
+        // overflow panic on `INT_MIN % -1`.
+        if denominator == -1 {
+            return DataValueExt::int(0, self.ty());
         }
 
         binary_match!(%(&self, &other); [I8, I16, I32, I64, I128])
@@ -843,8 +846,10 @@ impl DataValueExt for DataValue {
             DataValue::I32(a) => DataValue::I32(!a),
             DataValue::I64(a) => DataValue::I64(!a),
             DataValue::I128(a) => DataValue::I128(!a),
+            DataValue::F16(a) => DataValue::F16(!a),
             DataValue::F32(a) => DataValue::F32(!a),
             DataValue::F64(a) => DataValue::F64(!a),
+            DataValue::F128(a) => DataValue::F128(!a),
             DataValue::V64(mut a) => {
                 for byte in a.iter_mut() {
                     *byte = !*byte;

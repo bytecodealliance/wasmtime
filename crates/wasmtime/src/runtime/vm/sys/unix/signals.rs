@@ -244,6 +244,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_RIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize,
+                lr: None,
             }
         }
         all(target_os = "linux", target_arch = "x86") => {
@@ -251,6 +252,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.uc_mcontext.gregs[libc::REG_EIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_EBP as usize] as usize,
+                lr: None,
             }
         }
         all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64") => {
@@ -258,6 +260,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.uc_mcontext.pc as usize,
                 fp: cx.uc_mcontext.regs[29] as usize,
+                lr: None,
             }
         }
         all(target_os = "linux", target_arch = "s390x") => {
@@ -280,6 +283,9 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 TrapRegisters {
                     pc: (cx.uc_mcontext.psw.addr - trap_offset) as usize,
                     fp: *(cx.uc_mcontext.gregs[15] as *const usize),
+                    // Stack-limit checks in the prologue happen before the frame is
+                    // set up, while the return address is still in %r14.
+                    lr: Some(cx.uc_mcontext.gregs[14] as usize),
                 }
             }
         }
@@ -289,6 +295,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 TrapRegisters {
                     pc: (*cx.uc_mcontext).__ss.__rip as usize,
                     fp: (*cx.uc_mcontext).__ss.__rbp as usize,
+                    lr: None,
                 }
             }
         }
@@ -298,6 +305,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 TrapRegisters {
                     pc: (*cx.uc_mcontext).__ss.__pc as usize,
                     fp: (*cx.uc_mcontext).__ss.__fp as usize,
+                    lr: None,
                 }
             }
         }
@@ -306,6 +314,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.uc_mcontext.mc_rip as usize,
                 fp: cx.uc_mcontext.mc_rbp as usize,
+                lr: None,
             }
         }
         all(target_os = "linux", target_arch = "riscv64") => {
@@ -313,6 +322,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.uc_mcontext.__gregs[libc::REG_PC] as usize,
                 fp: cx.uc_mcontext.__gregs[libc::REG_S0] as usize,
+                lr: None,
             }
         }
         all(target_os = "freebsd", target_arch = "aarch64") => {
@@ -320,6 +330,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.uc_mcontext.mc_gpregs.gp_elr as usize,
                 fp: cx.uc_mcontext.mc_gpregs.gp_x[29] as usize,
+                lr: None,
             }
         }
         all(target_os = "openbsd", target_arch = "x86_64") => {
@@ -327,6 +338,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.sc_rip as usize,
                 fp: cx.sc_rbp as usize,
+                lr: None,
             }
         }
         all(target_os = "linux", target_arch = "arm") => {
@@ -334,6 +346,15 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.uc_mcontext.arm_pc as usize,
                 fp: cx.uc_mcontext.arm_fp as usize,
+                lr: None,
+            }
+        }
+        all(target_os = "redox", target_arch = "x86_64") => {
+            let cx = unsafe { &*(cx as *const libc::ucontext_t) };
+            TrapRegisters {
+                pc: cx.uc_mcontext.rip as usize,
+                fp: cx.uc_mcontext.rbp as usize,
+                lr: None,
             }
         }
         _ => {
@@ -423,6 +444,14 @@ unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
             cx.uc_mcontext.__gregs[libc::REG_SP] = handler.sp as _;
             cx.uc_mcontext.__gregs[libc::REG_A0] = 0;
             cx.uc_mcontext.__gregs[libc::REG_A0 + 1] = 0;
+        }
+        all(target_os = "redox", target_arch = "x86_64") => {
+            let cx = unsafe { cx.cast::<libc::ucontext_t>().as_mut().unwrap() };
+            cx.uc_mcontext.rip = handler.pc as _;
+            cx.uc_mcontext.rbp = handler.fp as _;
+            cx.uc_mcontext.rsp = handler.sp as _;
+            cx.uc_mcontext.rax = 0;
+            cx.uc_mcontext.rdx = 0;
         }
         _ => {
             compile_error!("unsupported platform");

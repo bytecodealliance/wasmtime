@@ -3,9 +3,10 @@
 #[macro_use]
 extern crate alloc;
 
-use alloc::string::ToString;
-use core::ptr;
-use wasmtime::{Config, Engine, Instance, Linker, Module, Result, Store, ensure};
+use alloc::sync::Arc;
+use wasmtime::{
+    Config, CustomCodeMemory, Engine, Instance, Linker, Module, Result, Store, Trap, ensure,
+};
 
 mod allocator;
 mod panic;
@@ -48,6 +49,66 @@ pub unsafe extern "C" fn run(
             }
         }
     }
+}
+
+/// Entrypoint for a test which is run concurrently on multiple threads.
+///
+/// Each invocation creates its own `Engine` and then repeatedly loads,
+/// instantiates, runs, and drops the given precompiled `module`, including
+/// executing some traps. The intent is to verify that when Wasmtime is not
+/// using native signals for traps, separate engines on separate threads do not
+/// contend on any process-global state (such as a global registry of loaded
+/// code), since the default `no_std` synchronization primitives in Wasmtime
+/// panic on contention.
+///
+/// This is only expected to work without the `custom` feature (i.e. without
+/// signals-based traps).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn run_concurrent_module_load_test(
+    error_buf: *mut u8,
+    error_size: usize,
+    module: *const u8,
+    module_size: usize,
+    iterations: usize,
+) -> usize {
+    unsafe {
+        let buf = core::slice::from_raw_parts_mut(error_buf, error_size);
+        let module = core::slice::from_raw_parts(module, module_size);
+        match run_concurrent_module_load_test_result(module, iterations) {
+            Ok(()) => 0,
+            Err(e) => {
+                let msg = format!("{e:?}");
+                let len = buf.len().min(msg.len());
+                buf[..len].copy_from_slice(&msg.as_bytes()[..len]);
+                len
+            }
+        }
+    }
+}
+
+fn run_concurrent_module_load_test_result(module: &[u8], iterations: usize) -> Result<()> {
+    let engine = Engine::new(&config())?;
+
+    for i in 0..iterations {
+        // Load a fresh copy of the module each iteration so that its code is
+        // registered and unregistered every time.
+        let module = deserialize(&engine, module)?;
+        let mut store = Store::new(&engine, ());
+        let instance = Linker::new(&engine).instantiate(&mut store, &module)?;
+
+        let add = instance.get_typed_func::<(u32, u32), u32>(&mut store, "add")?;
+        ensure!(add.call(&mut store, (i as u32, 3))? == (i as u32).wrapping_add(3));
+
+        let unreachable = instance.get_typed_func::<(), ()>(&mut store, "unreachable")?;
+        let err = unreachable.call(&mut store, ()).unwrap_err();
+        ensure!(err.downcast_ref::<Trap>() == Some(&Trap::UnreachableCodeReached));
+
+        let load = instance.get_typed_func::<u32, u32>(&mut store, "load")?;
+        ensure!(load.call(&mut store, 0)? == 0);
+        let err = load.call(&mut store, 0x10000).unwrap_err();
+        ensure!(err.downcast_ref::<Trap>() == Some(&Trap::MemoryOutOfBounds));
+    }
+    Ok(())
 }
 
 fn run_result(
@@ -101,25 +162,59 @@ fn config() -> Config {
         }
     }
 
+    // Without the `custom` feature Wasmtime has no virtual memory support, so
+    // it can't make loaded native code executable itself. Instead the embedding
+    // provides that capability through a custom code memory.
+    if !cfg!(feature = "custom") {
+        config.with_custom_code_memory(Some(Arc::new(CodeMemory)));
+    }
+
     config
+}
+
+/// A `CustomCodeMemory` implementation which delegates to the
+/// `embedding_{publish,unpublish}_executable` functions provided by this
+/// embedding's platform (see `wasmtime-platform.c`).
+///
+/// Note that the code images given to this are allocated from this embedding's
+/// heap, so the page-granular protection changes made here rely on the
+/// allocator not sharing pages of code images with other allocations (see
+/// `allocator.rs`).
+struct CodeMemory;
+
+unsafe extern "C" {
+    fn embedding_publish_executable(ptr: *const u8, len: usize) -> i32;
+    fn embedding_unpublish_executable(ptr: *const u8, len: usize) -> i32;
+}
+
+impl CustomCodeMemory for CodeMemory {
+    fn required_alignment(&self) -> usize {
+        allocator::PAGE_SIZE
+    }
+
+    fn publish_executable(&self, ptr: *const u8, len: usize) -> Result<()> {
+        let rc = unsafe { embedding_publish_executable(ptr, len) };
+        ensure!(rc == 0, "failed to publish executable code memory");
+        Ok(())
+    }
+
+    fn unpublish_executable(&self, ptr: *const u8, len: usize) -> Result<()> {
+        let rc = unsafe { embedding_unpublish_executable(ptr, len) };
+        ensure!(rc == 0, "failed to unpublish executable code memory");
+        Ok(())
+    }
 }
 
 fn smoke(module: &[u8]) -> Result<()> {
     let engine = Engine::new(&config())?;
-    let module = match deserialize(&engine, module)? {
-        Some(module) => module,
-        None => return Ok(()),
-    };
+    let module = deserialize(&engine, module)?;
     Instance::new(&mut Store::new(&engine, ()), &module, &[])?;
     Ok(())
 }
 
 fn simple_add(module: &[u8]) -> Result<()> {
     let engine = Engine::new(&config())?;
-    let module = match deserialize(&engine, module)? {
-        Some(module) => module,
-        None => return Ok(()),
-    };
+    let module = deserialize(&engine, module)?;
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &module)?;
     let func = instance.get_typed_func::<(u32, u32), u32>(&mut store, "add")?;
@@ -129,10 +224,7 @@ fn simple_add(module: &[u8]) -> Result<()> {
 
 fn simple_host_fn(module: &[u8]) -> Result<()> {
     let engine = Engine::new(&config())?;
-    let module = match deserialize(&engine, module)? {
-        Some(module) => module,
-        None => return Ok(()),
-    };
+    let module = deserialize(&engine, module)?;
     let mut linker = Linker::<()>::new(&engine);
     linker.func_wrap("host", "multiply", |a: u32, b: u32| a.saturating_mul(b))?;
     let mut store = Store::new(&engine, ());
@@ -144,10 +236,7 @@ fn simple_host_fn(module: &[u8]) -> Result<()> {
 
 fn simple_floats(module: &[u8]) -> Result<()> {
     let engine = Engine::new(&config())?;
-    let module = match deserialize(&engine, module)? {
-        Some(module) => module,
-        None => return Ok(()),
-    };
+    let module = deserialize(&engine, module)?;
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &module)?;
     let func = instance.get_typed_func::<(f32, f32), f32>(&mut store, "frob")?;
@@ -155,38 +244,9 @@ fn simple_floats(module: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn deserialize(engine: &Engine, module: &[u8]) -> Result<Option<Module>> {
-    let result = if cfg!(feature = "custom") {
-        // If a custom virtual memory system is in use use the raw `deserialize`
-        // API to let Wasmtime handle publishing the executable and such.
-        unsafe { Module::deserialize(engine, module) }
-    } else {
-        // NOTE: deserialize_raw avoids creating a copy of the module code. See
-        // the safety notes before using in your embedding.
-        //
-        // Also note that this will only work for native code with a custom code
-        // publisher which isn't configured in this example. Such custom code
-        // publisher will need to handle making this executable for example.
-        let memory_ptr = ptr::slice_from_raw_parts(module.as_ptr(), module.len());
-        let module_memory = ptr::NonNull::new(memory_ptr.cast_mut()).unwrap();
-        unsafe { Module::deserialize_raw(engine, module_memory) }
-    };
-    match result {
-        Ok(module) => Ok(Some(module)),
-        Err(e) => {
-            // Currently if custom signals/virtual memory are disabled then this
-            // example is expected to fail to load since loading native code
-            // requires virtual memory. In the future this will go away as when
-            // signals-based-traps is disabled then that means that the
-            // interpreter should be used which should work here.
-            if !cfg!(feature = "custom")
-                && e.to_string()
-                    .contains("requires virtual memory to be enabled")
-            {
-                Ok(None)
-            } else {
-                Err(e)
-            }
-        }
-    }
+fn deserialize(engine: &Engine, module: &[u8]) -> Result<Module> {
+    // Note that this copies `module` into memory owned by Wasmtime and aligned
+    // per `CustomCodeMemory::required_alignment`, if configured, which is then
+    // made executable.
+    unsafe { Module::deserialize(engine, module) }
 }

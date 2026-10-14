@@ -211,12 +211,14 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
                 let regs = TrapRegisters {
                     pc: context.Rip as usize,
                     fp: context.Rbp as usize,
+                    lr: None,
                 };
             }
             target_arch = "aarch64" => {
                 let regs = TrapRegisters {
                     pc: context.Pc as usize,
                     fp: unsafe { context.Anonymous.Anonymous.Fp as usize },
+                    lr: None,
                 };
             }
             _ => {

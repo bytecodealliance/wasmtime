@@ -2432,6 +2432,7 @@ impl StoreOpaque {
         };
 
         let write_handle = transmit.write_handle;
+        let done = transmit.done;
 
         match mem::replace(&mut transmit.write, new_state) {
             // If a guest is waiting to write, notify it that the read end has
@@ -2452,6 +2453,9 @@ impl StoreOpaque {
                 )?;
             }
 
+            // Otherwise notify the idle write end that the read end has been
+            // dropped, unless it's already done.
+            WriteState::Open if done => {}
             WriteState::Open => {
                 state.update_event(
                     write_handle.rep(),
@@ -2528,6 +2532,7 @@ impl StoreOpaque {
         };
 
         let read_handle = transmit.read_handle;
+        let done = transmit.done;
 
         // Swap in the new read state
         match mem::replace(&mut transmit.read, new_state) {
@@ -2551,7 +2556,8 @@ impl StoreOpaque {
                 )?;
             }
 
-            // If the read state is open, then there are no registered readers of the stream/future
+            // Notify the read-end of the drop, unless we're already done.
+            ReadState::Open if done => {}
             ReadState::Open => {
                 self.concurrent_state_mut()?.update_event(
                     read_handle.rep(),
@@ -3337,6 +3343,9 @@ impl Instance {
 
         // Validate `write_ty` w.r.t. `write_address` to ensure it's properly
         // aligned and in-bounds.
+        //
+        // FIXME(#4311): this and the rest of this function use the 32-bit
+        // layout of payloads, which needs memory64 handling.
         let write_payload_ty = write_ty.payload(write_types);
         let write_abi = match write_payload_ty {
             Some(ty) => write_types.canonical_abi(ty),
@@ -3515,27 +3524,30 @@ impl Instance {
         count: usize,
     ) -> Result<()> {
         let types = self.id().get(store).component().types();
-        let size = usize::try_from(
-            match ty {
-                TransmitIndex::Future(ty) => types[types[ty].ty]
-                    .payload
-                    .map(|ty| types.canonical_abi(&ty).size32),
-                TransmitIndex::Stream(ty) => types[types[ty].ty]
-                    .payload
-                    .map(|ty| types.canonical_abi(&ty).size32),
-            }
-            .unwrap_or(0),
-        )?;
-
-        if count > 0 && size > 0 {
-            self.options_memory(store, options)
-                .get(address..)
-                .and_then(|b| b.get(..size.checked_mul(count)?))
-                .map(drop)
-                .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))
-        } else {
-            Ok(())
+        let payload = match ty {
+            TransmitIndex::Future(ty) => types[types[ty].ty].payload,
+            TransmitIndex::Stream(ty) => types[types[ty].ty].payload,
+        };
+        let Some(payload) = payload else {
+            return Ok(());
+        };
+        // As-written the spec currently exempts zero-length reads/writes from
+        // bounds/alignment checks.
+        if count == 0 {
+            return Ok(());
         }
+        let abi = types.canonical_abi(&payload);
+        // FIXME(#4311): needs memory64 handling
+        let size = usize::try_from(abi.size32)?;
+        let align = usize::try_from(abi.align32)?;
+        if address % align != 0 {
+            bail!("buffer pointer not aligned");
+        }
+        self.options_memory(store, options)
+            .get(address..)
+            .and_then(|b| b.get(..size.checked_mul(count)?))
+            .map(drop)
+            .ok_or_else(|| crate::format_err!("buffer pointer out of bounds of memory"))
     }
 
     /// Write to the specified stream or future from the guest.
@@ -3554,6 +3566,7 @@ impl Instance {
 
         let address = usize::try_from(address)?;
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
+        let async_ = self.options(store.0, options).async_;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Write { done } = *state else {
             bail!(Trap::ConcurrentFutureStreamOp);
@@ -3575,6 +3588,11 @@ impl Instance {
                 TransmitIndex::Stream(_) => Trap::WriteToDroppedStream,
             });
         }
+
+        if !async_ {
+            Waitable::Transmit(transmit_handle).trap_if_in_waitable_set(concurrent_state)?;
+        }
+        let transmit = concurrent_state.get_mut(transmit_id)?;
 
         let new_state = if let ReadState::Dropped = &transmit.read {
             ReadState::Dropped
@@ -3668,6 +3686,7 @@ impl Instance {
 
                 let instance = read_instance.id().get(store.0);
                 let types = instance.component().types();
+                // FIXME(#4311): needs memory64 handling
                 let item_size = match read_ty.payload(types) {
                     Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
@@ -3734,10 +3753,6 @@ impl Instance {
                     bail_bug!("expected guest_offset to be 0");
                 }
 
-                if let TransmitIndex::Future(_) = ty {
-                    transmit.done = true;
-                }
-
                 set_guest_ready(concurrent_state)?;
                 self.consume(
                     store.0,
@@ -3779,7 +3794,7 @@ impl Instance {
             }
         };
 
-        if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
+        if result == ReturnCode::Blocked && !async_ {
             result = self.wait_for_write(store.0, caller, transmit_handle)?;
         }
 
@@ -3813,6 +3828,7 @@ impl Instance {
 
         let address = usize::try_from(address)?;
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
+        let async_ = self.options(store.0, options).async_;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Read { done } = *state else {
             bail!(Trap::ConcurrentFutureStreamOp);
@@ -3837,6 +3853,11 @@ impl Instance {
                 TransmitIndex::Stream(_) => bail!(Trap::ReadFromDroppedStream),
             }
         }
+
+        if !async_ {
+            Waitable::Transmit(transmit_handle).trap_if_in_waitable_set(concurrent_state)?;
+        }
+        let transmit = concurrent_state.get_mut(transmit_id)?;
 
         let new_state = if let WriteState::Dropped = &transmit.write {
             WriteState::Dropped
@@ -3912,6 +3933,7 @@ impl Instance {
 
                 let instance = write_instance.id().get(store.0);
                 let types = instance.component().types();
+                // FIXME(#4311): needs memory64 handling
                 let item_size = match write_ty.payload(types) {
                     Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
@@ -4021,7 +4043,7 @@ impl Instance {
             }
         };
 
-        if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
+        if result == ReturnCode::Blocked && !async_ {
             result = self.wait_for_read(store.0, caller_instance, transmit_handle)?;
         }
 
@@ -4078,6 +4100,7 @@ impl Instance {
         );
         let waitable = Waitable::Transmit(transmit.write_handle);
 
+        waitable.trap_if_has_sync_waiter(state)?;
         if !async_ {
             waitable.trap_if_in_waitable_set(state)?;
         }
@@ -4172,6 +4195,7 @@ impl Instance {
 
         let waitable = Waitable::Transmit(transmit.read_handle);
 
+        waitable.trap_if_has_sync_waiter(state)?;
         if !async_ {
             waitable.trap_if_in_waitable_set(state)?;
         }
@@ -4251,17 +4275,21 @@ impl Instance {
             TransmitLocalState::Read { .. } => {
                 bail!("passed read end to `{{stream|future}}.cancel-write`")
             }
+            TransmitLocalState::Cancelling => {
+                bail!("stream or future write cancelled when a cancellation is already pending")
+            }
             TransmitLocalState::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
         let code = self.cancel_write(store, caller, transmit_id, async_)?;
-        if !matches!(code, ReturnCode::Blocked) {
-            let state =
-                get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?
-                    .1;
-            if let TransmitLocalState::Busy = state {
-                *state = TransmitLocalState::Write { done: false };
-            }
+        let state =
+            get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?.1;
+        if let TransmitLocalState::Busy = state {
+            *state = if matches!(code, ReturnCode::Blocked) {
+                TransmitLocalState::Cancelling
+            } else {
+                TransmitLocalState::Write { done: false }
+            };
         }
         Ok(code)
     }
@@ -4286,17 +4314,21 @@ impl Instance {
             TransmitLocalState::Write { .. } => {
                 bail!("passed write end to `{{stream|future}}.cancel-read`")
             }
+            TransmitLocalState::Cancelling => {
+                bail!("stream or future read cancelled when a cancellation is already pending")
+            }
             TransmitLocalState::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
         let code = self.cancel_read(store, caller, transmit_id, async_)?;
-        if !matches!(code, ReturnCode::Blocked) {
-            let state =
-                get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?
-                    .1;
-            if let TransmitLocalState::Busy = state {
-                *state = TransmitLocalState::Read { done: false };
-            }
+        let state =
+            get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?.1;
+        if let TransmitLocalState::Busy = state {
+            *state = if matches!(code, ReturnCode::Blocked) {
+                TransmitLocalState::Cancelling
+            } else {
+                TransmitLocalState::Read { done: false }
+            };
         }
         Ok(code)
     }
@@ -4389,6 +4421,9 @@ impl Instance {
 
         let lower_cx = &mut LowerContext::new(store, options, self);
         let debug_msg_address = usize::try_from(debug_msg_address)?;
+        if debug_msg_address % usize::try_from(<str as ComponentType>::ALIGN32)? != 0 {
+            bail!("invalid debug message pointer: not aligned");
+        }
         // Lower the string into the component's memory.
         //
         // Note that the "8" here is the size of a WIT `string` in linear
@@ -4981,8 +5016,11 @@ impl Waitable {
         if rep != self.rep() {
             bail_bug!("unexpected rep mismatch");
         }
-        if *state != TransmitLocalState::Busy {
-            bail_bug!("expected state to be busy");
+        if !matches!(
+            *state,
+            TransmitLocalState::Busy | TransmitLocalState::Cancelling
+        ) {
+            bail_bug!("expected state to be busy or cancelling");
         }
         let done = matches!(code, ReturnCode::Dropped(_));
         *state = match event {

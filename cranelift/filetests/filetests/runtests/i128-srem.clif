@@ -15,6 +15,7 @@ block0(v0: i128,v1: i128):
 ; run: %srem_i128(0xC0FFEEEE_DECAFFFF_C0FFEEEE_DECAFFFF, 8) == -1
 ; run: %srem_i128(0xC0FFEEEE_DECAFFFF_C0FFEEEE_DECAFFFF, -8) == -1
 ; run: %srem_i128(0x80000000_00000000_00000000_00000000, -2) == 0
+; run: %srem_i128(0x80000000_00000000_00000000_00000000, -1) == 0
 
 
 function %srem_imm_i128(i128) -> i128 {

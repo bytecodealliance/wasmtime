@@ -35,6 +35,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`reference-types`]                        |
 | WebAssembly Proposal | [`simd`]                                   |
 | WebAssembly Proposal | [`component-model`]                        |
+| WebAssembly Proposal | [`component-model-async`]                  |
 | WebAssembly Proposal | [`relaxed-simd`]                           |
 | WebAssembly Proposal | [`multi-memory`]                           |
 | WebAssembly Proposal | [`tail-call`]                              |
@@ -99,6 +100,7 @@ For explanations of what each tier means see below.
 [`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
 [`threads`]: https://github.com/WebAssembly/threads
 [`component-model`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
+[`component-model-async`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md
 [`relaxed-simd`]: https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
 [`wide-arithmetic`]: https://github.com/WebAssembly/wide-arithmetic/blob/main/proposals/wide-arithmetic/Overview.md
 [`stack-switching`]: https://github.com/WebAssembly/stack-switching
@@ -225,6 +227,7 @@ by default and therefore supported as tier 1.  The legend here is:
 | [`reference-types`]                     | ✅        | ❌[^a] |
 | [`simd`]                                | ✅        | ✅     |
 | [`component-model`]                     | ✅        | ✅     |
+| [`component-model-async`]               | ✅        | ✅     |
 | [`relaxed-simd`]                        | ✅        | ❌     |
 | [`multi-memory`]                        | ✅        | ✅     |
 | [`threads`]                             | ✅        | ✅     |
@@ -250,6 +253,7 @@ by default and therefore supported as tier 1.  The legend here is:
 | [`reference-types`]                     | ✅        | ❌[^a]    |
 | [`simd`]                                | ✅        | ✅        |
 | [`component-model`]                     | ✅        | ✅        |
+| [`component-model-async`]               | ✅        | ✅        |
 | [`relaxed-simd`]                        | ✅        | ❌        |
 | [`multi-memory`]                        | ✅        | ✅        |
 | [`threads`]                             | ✅        | ❌        |
@@ -275,6 +279,7 @@ by default and therefore supported as tier 1.  The legend here is:
 | [`reference-types`]                     | ✅        | ❌[^a] |
 | [`simd`]                                | ✅        | ❌     |
 | [`component-model`]                     | ✅        | ❌     |
+| [`component-model-async`]               | ✅        | ❌     |
 | [`relaxed-simd`]                        | ✅        | ❌     |
 | [`multi-memory`]                        | ✅        | ❌     |
 | [`threads`]                             | ✅        | ❌     |
@@ -300,6 +305,7 @@ by default and therefore supported as tier 1.  The legend here is:
 | [`reference-types`]                     | ✅        | ❌[^a] |
 | [`simd`]                                | ✅        | ❌     |
 | [`component-model`]                     | ✅        | ❌     |
+| [`component-model-async`]               | ✅        | ❌     |
 | [`relaxed-simd`]                        | ✅        | ❌     |
 | [`multi-memory`]                        | ✅        | ❌     |
 | [`threads`]                             | ✅        | ❌     |
@@ -330,6 +336,7 @@ emitting Pulley bytecode.
 | [`reference-types`]                     | ✅        | ❌[^a] |
 | [`simd`]                                | ✅        | ❌     |
 | [`component-model`]                     | ✅        | ❌     |
+| [`component-model-async`]               | ✅        | ❌     |
 | [`relaxed-simd`]                        | ✅        | ❌     |
 | [`multi-memory`]                        | ✅        | ❌     |
 | [`threads`]                             | ❌[^b]    | ❌     |

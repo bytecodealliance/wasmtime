@@ -18,6 +18,7 @@ block0(v0: i64,v1: i64):
 ; run: %srem_i64(0, 1) == 0
 ; run: %srem_i64(2, 2) == 0
 ; run: %srem_i64(1, -1) == 0
+; run: %srem_i64(0x80000000_00000000, -1) == 0
 ; run: %srem_i64(3, 2) == 1
 ; run: %srem_i64(19, 7) == 5
 ; run: %srem_i64(3, -2) == 1
@@ -37,6 +38,7 @@ block0(v0: i32,v1: i32):
 ; run: %srem_i32(0, 1) == 0
 ; run: %srem_i32(2, 2) == 0
 ; run: %srem_i32(1, -1) == 0
+; run: %srem_i32(0x80000000, -1) == 0
 ; run: %srem_i32(3, 2) == 1
 ; run: %srem_i32(19, 7) == 5
 ; run: %srem_i32(3, -2) == 1
@@ -56,6 +58,7 @@ block0(v0: i16,v1: i16):
 ; run: %srem_i16(0, 1) == 0
 ; run: %srem_i16(2, 2) == 0
 ; run: %srem_i16(1, -1) == 0
+; run: %srem_i16(0x8000, -1) == 0
 ; run: %srem_i16(3, 2) == 1
 ; run: %srem_i16(19, 7) == 5
 ; run: %srem_i16(3, -2) == 1
@@ -75,6 +78,7 @@ block0(v0: i8,v1: i8):
 ; run: %srem_i8(0, 1) == 0
 ; run: %srem_i8(2, 2) == 0
 ; run: %srem_i8(1, -1) == 0
+; run: %srem_i8(0x80, -1) == 0
 ; run: %srem_i8(2, 7) == 2
 ; run: %srem_i8(3, 2) == 1
 ; run: %srem_i8(19, 7) == 5

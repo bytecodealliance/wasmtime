@@ -49,6 +49,9 @@ fn main() -> Result<()> {
         match sym.name()? {
             "memmove" | "memset" | "memcmp" | "memcpy" | "bcmp" | "__tls_get_addr" => {}
             s if s.starts_with("wasmtime_") => {}
+            // Hooks used by the embedding's `CustomCodeMemory`, also provided by
+            // `wasmtime-platform.c`.
+            "embedding_publish_executable" | "embedding_unpublish_executable" => {}
             other => {
                 panic!("unexpected dependency on symbol `{other}`")
             }
@@ -185,6 +188,61 @@ fn main() -> Result<()> {
 
         if len > 0 {
             bail!("{}", String::from_utf8_lossy(&error_buf));
+        }
+
+        // Without signals-based traps Wasmtime should not touch any
+        // process-global synchronized state when loading, running, and
+        // unloading modules (and trapping). The embedding is built without
+        // custom sync primitives, meaning that Wasmtime's internal locks panic
+        // on contention, so this tests that guarantee by running separate
+        // engines in separate threads concurrently.
+        if !cfg!(feature = "custom") {
+            let concurrent = engine.precompile_module(
+                br#"
+                    (module
+                        (memory 1 1)
+                        (func (export "add") (param i32 i32) (result i32)
+                            (i32.add (local.get 0) (local.get 1)))
+                        (func (export "unreachable")
+                            unreachable)
+                        (func (export "load") (param i32) (result i32)
+                            (i32.load (local.get 0)))
+                    )
+                "#,
+            )?;
+
+            let run_concurrent_module_load_test: Symbol<
+                extern "C" fn(*mut u8, usize, *const u8, usize, usize) -> usize,
+            > = lib.get(b"run_concurrent_module_load_test").context(
+                "failed to find the `run_concurrent_module_load_test` symbol in the library",
+            )?;
+
+            const THREADS: usize = 2;
+            const ITERATIONS: usize = 2000;
+            let barrier = std::sync::Barrier::new(THREADS);
+            std::thread::scope(|s| {
+                let threads = (0..THREADS)
+                    .map(|_| {
+                        s.spawn(|| {
+                            barrier.wait();
+                            let mut error_buf = Vec::with_capacity(1024);
+                            let len = run_concurrent_module_load_test(
+                                error_buf.as_mut_ptr(),
+                                error_buf.capacity(),
+                                concurrent.as_ptr(),
+                                concurrent.len(),
+                                ITERATIONS,
+                            );
+                            error_buf.set_len(len);
+                            if len > 0 {
+                                bail!("{}", String::from_utf8_lossy(&error_buf));
+                            }
+                            Ok(())
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                threads.into_iter().try_for_each(|t| t.join().unwrap())
+            })?;
         }
 
         #[cfg(feature = "wasi")]

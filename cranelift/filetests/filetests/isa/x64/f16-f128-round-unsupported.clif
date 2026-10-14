@@ -1,0 +1,54 @@
+; There's no x86-64 lowering for rounding `f16` or `f128` values (it would need
+; floating-point arithmetic in those formats); compilation must fail cleanly
+; with an unsupported-feature error rather than panicking.
+test compile expect-fail
+target x86_64
+target x86_64 has_sse41 has_avx
+
+function %ceil_f16(f16) -> f16 {
+block0(v0: f16):
+    v1 = ceil v0
+    return v1
+}
+
+function %floor_f16(f16) -> f16 {
+block0(v0: f16):
+    v1 = floor v0
+    return v1
+}
+
+function %trunc_f16(f16) -> f16 {
+block0(v0: f16):
+    v1 = trunc v0
+    return v1
+}
+
+function %nearest_f16(f16) -> f16 {
+block0(v0: f16):
+    v1 = nearest v0
+    return v1
+}
+
+function %ceil_f128(f128) -> f128 {
+block0(v0: f128):
+    v1 = ceil v0
+    return v1
+}
+
+function %floor_f128(f128) -> f128 {
+block0(v0: f128):
+    v1 = floor v0
+    return v1
+}
+
+function %trunc_f128(f128) -> f128 {
+block0(v0: f128):
+    v1 = trunc v0
+    return v1
+}
+
+function %nearest_f128(f128) -> f128 {
+block0(v0: f128):
+    v1 = nearest v0
+    return v1
+}
