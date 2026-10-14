@@ -729,6 +729,19 @@ impl<'a> Verifier<'a> {
                 self.verify_try_call_handler_index(inst, block, imm.into(), errors)?;
             }
 
+            IntAddTrap {
+                opcode: Opcode::InterruptPoll,
+                ..
+            } => {
+                if self.func.signature.call_conv != CallConv::Tail {
+                    return errors.fatal((
+                        inst,
+                        self.context(inst),
+                        "`interrupt_poll` requires the `tail` calling convention",
+                    ));
+                }
+            }
+
             // Exhaustive list so we can't forget to add new formats
             AtomicCas { .. }
             | AtomicRmw { .. }

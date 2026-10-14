@@ -96,6 +96,7 @@ impl Inst {
             | Inst::Args { .. }
             | Inst::Rets { .. }
             | Inst::StackSwitchBasic { .. }
+            | Inst::InterruptPoll { .. }
             | Inst::TrapIf { .. }
             | Inst::TrapIfAnd { .. }
             | Inst::TrapIfOr { .. }
@@ -671,6 +672,22 @@ impl PrettyPrint for Inst {
                 )
             }
 
+            Inst::InterruptPoll {
+                dst,
+                load_ptr,
+                context,
+                trap_code,
+                next_load_ptr,
+            } => {
+                let dst = pretty_print_reg(*dst.to_reg(), 8);
+                let load_ptr = pretty_print_reg(**load_ptr, 8);
+                let context = pretty_print_reg(**context, 8);
+                let next_load_ptr = pretty_print_reg(*next_load_ptr.to_reg(), 8);
+                format!(
+                    "{next_load_ptr} = interrupt_poll load_ptr={load_ptr}, context={context}, scratch={dst} #trap={trap_code}"
+                )
+            }
+
             Inst::JmpKnown { dst } => {
                 let op = ljustify("jmp".to_string());
                 let dst = dst.to_string();
@@ -1049,6 +1066,41 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                     .into(),
             );
             collector.reg_clobbers(clobbers);
+        }
+
+        Inst::InterruptPoll {
+            dst,
+            load_ptr,
+            context,
+            trap_code: _,
+            next_load_ptr,
+        } => {
+            // `load_ptr` is an input param. It is pinned to r11 so an update of
+            // `next_load_ptr` updates this as well. r11 is chosen because it is
+            // a caller-saved reg not used for arg-passing in Linux/x64.
+            collector.reg_fixed_use(load_ptr, regs::r11());
+            // Demand context (vmctx) go into RDI.
+            collector.reg_fixed_use(context, regs::rdi());
+            // Reserve r10 as scratch space.
+            //
+            // r10 is chosen because it is caller-saved and not used for
+            // arg passing in Linux/x64. It is used as "a static chain pointer
+            // in case of nested functions" according to SystemV, but Cranelift
+            // does not emit those. (Do take care if you are interacting with
+            // external ones.) It is also used to store the function stack limit
+            // in Cranelift, but the stack-limit check is confined to the
+            // function prologue and thus over by the time this instruction is
+            // used.
+            //
+            // Also def it so we can use it as the destination of the dead load
+            // rather than consuming another arbitrary reg.
+            collector.reg_fixed_def(dst, regs::r10());
+            // `next_load_ptr` is pinned so embedders know where to write to
+            // fill it. It takes on the value of `load_ptr` unless a signal
+            // handler invoked at the load overwrites it. We constrain
+            // `next_load_ptr` and `load_ptr` to the same register so this
+            // dataflow happens without a move.
+            collector.reg_fixed_def(next_load_ptr, regs::r11());
         }
 
         Inst::ReturnCallKnown { info } => {

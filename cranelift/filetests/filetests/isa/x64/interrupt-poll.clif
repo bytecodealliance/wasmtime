@@ -1,0 +1,35 @@
+test compile precise-output
+target x86_64
+
+;; Operands deliberately arrive outside r11/rdi so the pinning moves show.
+function %interrupt_poll(i64, i64, i64) -> i64 tail {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = interrupt_poll v1, v2, user3
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rdx, %rdi
+;   movq %rsi, %r11
+;   %r11 = interrupt_poll load_ptr=%r11, context=%rdi, scratch=%r10 #trap=user3
+;   movq %r11, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdx, %rdi
+;   movq %rsi, %r11
+;   movq (%r11), %r10 ; trap: user3
+;   movq %r11, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
