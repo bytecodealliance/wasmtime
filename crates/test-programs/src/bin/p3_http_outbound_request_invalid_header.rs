@@ -49,6 +49,17 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         ));
 
         assert!(matches!(
+            hdrs.append("Content-Length", b"5".as_ref()),
+            Ok(())
+        ));
+
+        // RFC 9110 section 8.6: `Content-Length` is a single value.
+        assert!(matches!(
+            hdrs.append("Content-Length", b"5".as_ref()),
+            Err(HeaderError::InvalidSyntax)
+        ));
+
+        assert!(matches!(
             Headers::from_list(&[("bad header".to_owned(), b"value".to_vec())]),
             Err(HeaderError::InvalidSyntax)
         ));

@@ -120,6 +120,11 @@ impl FieldMap {
             .into_iter()
             .map(|v| parse_header_value(&key, v))
             .collect::<Result<Vec<_>, _>>()?;
+        // RFC 9110 section 5.3 forbids repeating a field line unless the field
+        // allows a comma-separated list, and `Content-Length` is `1*DIGIT`.
+        if key == http::header::CONTENT_LENGTH && values.len() > 1 {
+            return Err(FieldMapError::InvalidHeaderValue);
+        }
         let values_size = values.iter().map(header_value_size).sum::<usize>();
         let mut values = values.into_iter();
         // try_entry reports MaxSizeReached as InvalidHeaderName (http map.rs:1149).
@@ -219,6 +224,10 @@ impl FieldMap {
         value: HeaderValue,
     ) -> Result<bool, FieldMapError> {
         let (map, limit, size) = self.mutable()?;
+        // `Content-Length` is a single-value field (RFC 9110 section 8.6).
+        if key == http::header::CONTENT_LENGTH && map.contains_key(&key) {
+            return Err(FieldMapError::InvalidHeaderValue);
+        }
         let key_size = header_name_size(&key);
         let val_size = header_value_size(&value);
         let new_size = if !map.contains_key(&key) {
@@ -481,6 +490,38 @@ mod tests {
 
         // other header names are unaffected
         assert!(parse_header_value(&CONTENT_TYPE, b"text/plain".to_vec()).is_ok());
+    }
+
+    #[test]
+    fn content_length_is_single_valued() {
+        let mut map = FieldMap::new_mutable(1024);
+        let hooks = default_hooks();
+
+        assert_eq!(
+            map.append(hooks, "content-length".to_owned(), b"5".to_vec()),
+            Ok(false)
+        );
+        assert_eq!(
+            map.append(hooks, "content-length".to_owned(), b"5".to_vec()),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(
+            map.set(
+                hooks,
+                "content-length".to_owned(),
+                vec![b"5".to_vec(), b"6".to_vec()]
+            ),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(
+            map.set(hooks, "content-length".to_owned(), vec![b"6".to_vec()]),
+            Ok(())
+        );
+        assert_eq!(
+            map.get("content-length"),
+            Some(&HeaderValue::from_static("6"))
+        );
+        assert_eq!(map.size, FieldMap::content_size(&map.map));
     }
 
     #[test]
