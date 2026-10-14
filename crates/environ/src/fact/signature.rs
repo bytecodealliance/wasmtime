@@ -162,6 +162,9 @@ impl ComponentTypesBuilder {
         let lower_result_tys = &self[lower_ty.results];
         let results = if lower.options.async_ {
             // Add return pointer
+            //
+            // FIXME(#4311): the return pointer points into the caller's
+            // memory, so this should be the lower side's pointer type.
             if !lower_result_tys.types.is_empty() {
                 params.push(lift_ptr_ty);
             }
@@ -175,6 +178,10 @@ impl ComponentTypesBuilder {
                 Some(list) => list,
                 None => {
                     // Add return pointer
+                    //
+                    // FIXME(#4311): the return pointer points into the
+                    // caller's memory, so this should be the lower side's
+                    // pointer type.
                     params.push(lift_ptr_ty);
                     Vec::new()
                 }
