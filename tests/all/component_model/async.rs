@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::future::{self, Future};
 use std::iter;
 use std::mem;
+use std::ops::DerefMut;
 use std::pin::{Pin, pin};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -2345,6 +2346,76 @@ async fn drop_call_async_with_queued_start() -> Result<()> {
     assert_eq!(
         err.downcast_ref::<Trap>(),
         Some(&Trap::UnreachableCodeReached)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn host_to_host_stream_buffer_type_mismatch() -> wasmtime::Result<()> {
+    // A component that echoes a `stream<list<u8>>` back to the caller.
+    const WAT: &str = r#"
+(component
+  (type $s (stream (list u8)))
+  (core module $m
+    (func (export "echo") (param i32) (result i32) local.get 0))
+  (core instance $i (instantiate $m))
+  (func (export "echo-stream") (param "s" $s) (result $s)
+    (canon lift (core func $i "echo")))
+)
+"#;
+
+    let engine = Engine::default();
+    let component = Component::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+
+    // Created as `Vec<u8>` items, read back as `WasmList<u8>` items.
+    let echo = instance.get_typed_func::<(StreamReader<Vec<u8>>,), (StreamReader<WasmList<u8>>,)>(
+        &mut store,
+        "echo-stream",
+    )?;
+    let input = vec![1u8, 2, 3];
+    let reader = StreamReader::new(&mut store, vec![input.clone()])?;
+    let (reader,) = echo.call_async(&mut store, (reader,)).await?;
+
+    struct Consumer(Arc<Mutex<Vec<WasmList<u8>>>>);
+
+    impl StreamConsumer<()> for Consumer {
+        type Item = WasmList<u8>;
+
+        fn poll_consume(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            mut store: StoreContextMut<()>,
+            mut source: Source<'_, WasmList<u8>>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            let mut buffer = self.0.try_lock().unwrap();
+            buffer.reserve(source.remaining(&mut store)?);
+            source.read(store, buffer.deref_mut())?;
+            Poll::Ready(Ok(StreamResult::Completed))
+        }
+    }
+
+    let buffer = Arc::new(Mutex::new(Vec::new()));
+    reader.pipe(&mut store, Consumer(buffer.clone()))?;
+
+    let error = store
+        .run_concurrent(async |_| {
+            while buffer.try_lock().unwrap().is_empty() {
+                tokio::task::yield_now().await
+            }
+        })
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.to_string().contains("host stream item type mismatch"),
+        "{error}"
     );
 
     Ok(())
