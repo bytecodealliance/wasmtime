@@ -6,7 +6,9 @@ use crate::component::resources::{HostResourceData, HostResourceIndex, HostResou
 use crate::component::store::ComponentTaskState;
 use crate::component::{Instance, ResourceType, RuntimeInstance};
 use crate::prelude::*;
-use crate::runtime::vm::component::{ComponentInstance, CurrentScope, HandleTable, ResourceTables};
+use crate::runtime::vm::component::{
+    ComponentInstance, CurrentScope, HandleCounter, HandleTable, ResourceTables,
+};
 use crate::runtime::vm::{UncaughtException, VMFuncRef};
 use crate::store::{StoreId, StoreOpaque};
 use alloc::sync::Arc;
@@ -344,6 +346,7 @@ pub struct LiftContext<'a> {
     instance_handle: Instance,
 
     host_table: &'a mut HandleTable,
+    handle_counter: &'a mut HandleCounter,
     host_resource_data: &'a mut HostResourceData,
 
     task_state: &'a mut ComponentTaskState,
@@ -375,7 +378,7 @@ impl<'a> LiftContext<'a> {
         // at this time.
         let memory =
             instance_handle.options_memory(unsafe { &*(store as *const StoreOpaque) }, options);
-        let (task_state, host_table, host_resource_data, instance) =
+        let (task_state, host_table, handle_counter, host_resource_data, instance) =
             store.lift_context_parts(instance_handle);
         let (component, instance) = instance.component_and_self();
 
@@ -389,6 +392,7 @@ impl<'a> LiftContext<'a> {
             instance_handle,
             task_state,
             host_table,
+            handle_counter,
             host_resource_data,
             hostcall_fuel,
         })
@@ -433,10 +437,15 @@ impl<'a> LiftContext<'a> {
     #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state_and_instance_mut(
         &mut self,
-    ) -> (&mut ConcurrentState, Pin<&mut ComponentInstance>) {
+    ) -> (
+        &mut ConcurrentState,
+        Pin<&mut ComponentInstance>,
+        &mut HandleCounter,
+    ) {
         (
             self.task_state.concurrent_state_mut(),
             self.instance.as_mut(),
+            self.handle_counter,
         )
     }
 
@@ -497,6 +506,7 @@ impl<'a> LiftContext<'a> {
         HostResourceTables::from_parts(
             ResourceTables {
                 host_table: self.host_table,
+                handle_counter: self.handle_counter,
                 task_state: self.task_state,
                 guest: Some(self.instance.as_mut().instance_states()),
                 current_scope: self.current_scope,
