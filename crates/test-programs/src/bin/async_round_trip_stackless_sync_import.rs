@@ -2,7 +2,7 @@ mod bindings {
     wit_bindgen::generate!({
         path: "../misc/component-async-tests/wit",
         world: "round-trip",
-        async: ["-import:local:local/baz#foo"],
+        sync: ["import:local:local/baz#foo"],
     });
 
     use super::Component;

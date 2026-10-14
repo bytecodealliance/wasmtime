@@ -89,6 +89,18 @@ async fn p1_poll_oneoff_files() {
 async fn p1_readlink() {
     run(P1_READLINK, |_| {}).await.unwrap()
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p1_path_rename_trailing_slashes() {
+    let fixture = crate::store::SandboxFixture::new().unwrap();
+    run(P1_PATH_RENAME_TRAILING_SLASHES, |b| {
+        fixture.configure_wasi(b)
+    })
+    .await
+    .expect("run guest");
+    fixture.assert_secure();
+}
+
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p1_renumber() {
     run(P1_RENUMBER, |_| {}).await.unwrap()
