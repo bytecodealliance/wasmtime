@@ -779,7 +779,6 @@ fn drop_long_chain_of_guest_func_types() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(miri, ignore)]
 /// Check that dropping a long host-defined type from the registry doesn't stack
 /// overflow.
 fn drop_long_chain_of_host_func_types() -> Result<()> {
@@ -787,7 +786,8 @@ fn drop_long_chain_of_host_func_types() -> Result<()> {
     // references the previous, should not overflow the stack.
     let engine = Engine::default();
     let mut ty = FuncType::new(&engine, [], []);
-    for _ in 0..100_000 {
+    let amt = if cfg!(miri) { 10 } else { 100_000 };
+    for _ in 0..amt {
         let param = ValType::Ref(RefType::new(true, HeapType::ConcreteFunc(ty)));
         ty = FuncType::new(&engine, [param], []);
     }
