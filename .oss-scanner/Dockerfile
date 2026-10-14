@@ -22,8 +22,7 @@ WORKDIR /src
 # The spec, WASI, and component-model test suites are git submodules.
 RUN git submodule update --init --recursive
 
-# Like CI, turn off incremental compilation and reduce debug info: with full
-# debug info, the builds below need well over 100GB of disk. Line tables still
+# Like CI, turn off incremental compilation to reduce image size. Line tables still
 # give file and line numbers in backtraces and gdb. These stay set in the final
 # image so that later `cargo` invocations reuse the prebuilt artifacts.
 ENV RUSTUP_HOME=/usr/local/rustup \
@@ -33,21 +32,21 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_PROFILE_DEV_DEBUG=line-tables-only \
     CARGO_PROFILE_TEST_DEBUG=line-tables-only
 
-# Install the same toolchains as CI (see `.github/actions/install-rust`): stable
-# is MSRV + 2, and the nightly is the one pinned to match OSS-Fuzz, used for the
-# fuzz targets.
-ARG FUZZ_NIGHTLY=nightly-2026-07-09
-RUN msrv=$(grep 'rust-version.*1' Cargo.toml | sed 's/.*\.\([0-9]*\)\..*/\1/') \
+# Use the nightly that CI pins to match OSS-Fuzz (`wasmtime-ci-oss-fuzz-pin`
+# in `.github/actions/install-rust/action.yml`) for everything: the fuzz
+# targets need a nightly, and a single toolchain keeps things simple.
+RUN toolchain=$(sed -n '/wasmtime-ci-oss-fuzz-pin/,/version=/s/.*version=\(nightly-[0-9-]*\).*/\1/p' \
+                  .github/actions/install-rust/action.yml) \
+    && test -n "$toolchain" \
     && curl -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path \
-         --profile minimal --default-toolchain "1.$((msrv + 2)).0" \
+         --profile minimal --default-toolchain "$toolchain" \
     && rustup target add wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown \
-    && rustup toolchain install "$FUZZ_NIGHTLY" --profile minimal \
-    && cargo install --locked cargo-fuzz --version 0.13.2 \
-    && cargo install --locked wasm-tools
+    && cargo install cargo-fuzz --version 0.13.2 \
+    && cargo install wasm-tools
 
 # Download every crate the workspace (including the fuzz targets and the test
 # programs compiled to wasm) could need, so offline builds work later.
-RUN cargo fetch --locked
+RUN cargo fetch
 
 # Everything below is built in the dev profile, so debug assertions are on.
 #
@@ -57,27 +56,22 @@ RUN cargo fetch --locked
 # 1. The `wasmtime` CLI at `target/debug/wasmtime`, and the tests at the
 #    repository root (`tests/all`, `tests/wast.rs`, `tests/disas.rs`, ...) with
 #    default features, as used by `cargo run` and `cargo test`.
-RUN cargo build --locked && cargo test --locked --no-run
+RUN cargo build && cargo test --no-run
 # 2. `clif-util` at `target/debug/clif-util`, for Cranelift's `.clif` tests.
-RUN cargo build --locked -p cranelift-tools
+RUN cargo build -p cranelift-tools
 # 3. The full test suite as CI runs it, with all features enabled.
-RUN ./ci/run-tests.py --locked --no-run
+RUN ./ci/run-tests.py --no-run
 
 # A release build of the CLI at `target/release/wasmtime`, to check whether a
 # bug also reproduces without debug assertions.
-RUN cargo build --locked --release
+RUN cargo build --release
 
 # Build the fuzz targets the same way OSS-Fuzz does: optimized, with
 # AddressSanitizer and debug assertions. They end up in
-# `target/x86_64-unknown-linux-gnu/release/`. A failure here should not make
-# the rest of the image unusable, so only warn about it.
-RUN cargo "+$FUZZ_NIGHTLY" fuzz build --debug-assertions \
-    || echo "WARNING: building the fuzz targets failed"
+# `target/x86_64-unknown-linux-gnu/release/`. 
+RUN cargo fuzz build --debug-assertions
 
 # Smoke-test the build: run the spec test suite on the CLI's test harness. A
 # failure here should be visible in the build log, but not abort the build.
 RUN cargo test --locked --test wast -- --quiet \
     || echo "WARNING: wast tests reported failures"
-
-# No network from here on.
-ENV CARGO_NET_OFFLINE=true
