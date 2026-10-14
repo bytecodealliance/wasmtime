@@ -686,6 +686,39 @@ fn component_invoke_multiple_run_exports() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_unknown_imports_default() -> Result<()> {
+    let path = "tests/all/cli_tests/component-unknown-imports.wat";
+
+    // The component traps unless its undefined import returns the default.
+    run_wasmtime(&["run", "-Wunknown-imports-default", path])?;
+
+    // Without the flag the component cannot even be instantiated.
+    let output = get_wasmtime_command()?.arg("run").arg(path).output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("a matching implementation was not found in the linker"),
+        "bad stderr: {stderr}"
+    );
+
+    // `unknown-imports-trap` still traps rather than returning defaults.
+    let output = get_wasmtime_command()?
+        .arg("run")
+        .arg("-Wunknown-imports-trap")
+        .arg(path)
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("unknown import: `unknown:pkg/iface#f` has not been defined"),
+        "bad stderr: {stderr}"
+    );
+
+    Ok(())
+}
+
 // If the text format is invalid then the filename should be mentioned in the
 // error message.
 #[test]

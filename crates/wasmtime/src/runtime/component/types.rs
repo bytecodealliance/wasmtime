@@ -2,6 +2,7 @@
 
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentType;
+use crate::component::Val;
 use crate::component::matching::InstanceType;
 use crate::{Engine, ExternType, FuncType, prelude::*};
 use alloc::sync::Arc;
@@ -949,6 +950,166 @@ impl Type {
                 Type::FixedLengthList(FixedLengthList::from(*index, instance))
             }
         }
+    }
+
+    /// Construct a default value of this type, if one exists.
+    ///
+    /// Defaults are the "empty" or "zero" value of each type: zero for the
+    /// numerics, the empty `string`/`list`, `none` for `option`, `ok` for
+    /// `result`, no flags set, and the first case of a `variant` or `enum`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for the handle types (`own`, `borrow`, `future`,
+    /// `stream`, `error-context`), and for any aggregate containing one, as a
+    /// handle is only meaningful relative to a particular store.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error
+    /// when memory allocation fails. See the `OutOfMemory` type's
+    /// documentation for details on Wasmtime's out-of-memory handling.
+    pub fn default_value(&self) -> Result<Val> {
+        // Types come from untrusted guests and may nest arbitrarily deeply,
+        // so this uses an explicit stack rather than recursing.
+        enum Work {
+            Visit(Type),
+            Build(Build),
+        }
+
+        enum Build {
+            Record(Record),
+            Tuple(usize),
+            Variant(String),
+            ResultOk,
+            /// Every element has the same type, so one value is cloned.
+            FixedLengthList(usize),
+        }
+
+        let mut work = TryVec::new();
+        let mut finished = TryVec::<Val>::new();
+        work.push(Work::Visit(self.clone()))?;
+
+        while let Some(step) = work.pop() {
+            match step {
+                Work::Visit(ty) => match ty {
+                    Type::Bool => finished.push(Val::Bool(false))?,
+                    Type::S8 => finished.push(Val::S8(0))?,
+                    Type::U8 => finished.push(Val::U8(0))?,
+                    Type::S16 => finished.push(Val::S16(0))?,
+                    Type::U16 => finished.push(Val::U16(0))?,
+                    Type::S32 => finished.push(Val::S32(0))?,
+                    Type::U32 => finished.push(Val::U32(0))?,
+                    Type::S64 => finished.push(Val::S64(0))?,
+                    Type::U64 => finished.push(Val::U64(0))?,
+                    Type::Float32 => finished.push(Val::Float32(0.0))?,
+                    Type::Float64 => finished.push(Val::Float64(0.0))?,
+                    Type::Char => finished.push(Val::Char('\0'))?,
+                    Type::String => finished.push(Val::String(String::new()))?,
+
+                    // These never visit their payload types.
+                    Type::List(_) => finished.push(Val::List(Vec::new()))?,
+                    Type::Map(_) => finished.push(Val::Map(Vec::new()))?,
+                    Type::Option(_) => finished.push(Val::Option(None))?,
+                    Type::Flags(_) => finished.push(Val::Flags(Vec::new()))?,
+
+                    Type::Enum(e) => {
+                        let name = e.names().next().ok_or_else(|| {
+                            format_err!("no default value exists for an `enum` with no cases")
+                        })?;
+                        finished.push(Val::Enum(name.to_string()))?;
+                    }
+
+                    Type::Record(record) => {
+                        work.push(Work::Build(Build::Record(record.clone())))?;
+                        for field in record.fields() {
+                            work.push(Work::Visit(field.ty))?;
+                        }
+                    }
+
+                    Type::Tuple(tuple) => {
+                        work.push(Work::Build(Build::Tuple(tuple.types().len())))?;
+                        for ty in tuple.types() {
+                            work.push(Work::Visit(ty))?;
+                        }
+                    }
+
+                    Type::Variant(variant) => {
+                        let case = variant.cases().next().ok_or_else(|| {
+                            format_err!("no default value exists for a `variant` with no cases")
+                        })?;
+                        match case.ty {
+                            Some(payload) => {
+                                work.push(Work::Build(Build::Variant(case.name.to_string())))?;
+                                work.push(Work::Visit(payload))?;
+                            }
+                            None => {
+                                finished.push(Val::Variant(case.name.to_string(), None))?;
+                            }
+                        }
+                    }
+
+                    Type::Result(result) => match result.ok() {
+                        Some(payload) => {
+                            work.push(Work::Build(Build::ResultOk))?;
+                            work.push(Work::Visit(payload))?;
+                        }
+                        None => finished.push(Val::Result(Ok(None)))?,
+                    },
+
+                    Type::FixedLengthList(list) => {
+                        let len = usize::try_from(list.len())?;
+                        work.push(Work::Build(Build::FixedLengthList(len)))?;
+                        work.push(Work::Visit(list.ty()))?;
+                    }
+
+                    Type::Own(_)
+                    | Type::Borrow(_)
+                    | Type::Future(_)
+                    | Type::Stream(_)
+                    | Type::ErrorContext => {
+                        bail!("no default value exists for type `{}`", ty.desc())
+                    }
+                },
+
+                Work::Build(build) => {
+                    let val = match build {
+                        Build::Record(record) => {
+                            let mut fields = TryVec::with_capacity(record.fields().len())?;
+                            for field in record.fields() {
+                                let val = finished.pop().expect("field value was pushed");
+                                fields.push((field.name.to_string(), val))?;
+                            }
+                            Val::Record(fields.into())
+                        }
+                        Build::Tuple(len) => {
+                            let mut vals = TryVec::with_capacity(len)?;
+                            for _ in 0..len {
+                                vals.push(finished.pop().expect("element value was pushed"))?;
+                            }
+                            Val::Tuple(vals.into())
+                        }
+                        Build::Variant(name) => {
+                            let payload = finished.pop().expect("payload value was pushed");
+                            Val::Variant(name, Some(Box::new(payload)))
+                        }
+                        Build::ResultOk => {
+                            let payload = finished.pop().expect("payload value was pushed");
+                            Val::Result(Ok(Some(Box::new(payload))))
+                        }
+                        Build::FixedLengthList(len) => {
+                            let element = finished.pop().expect("element value was pushed");
+                            let mut vals = TryVec::with_capacity(len)?;
+                            for _ in 0..len {
+                                vals.push(element.clone())?;
+                            }
+                            Val::FixedLengthList(vals.into())
+                        }
+                    };
+                    finished.push(val)?;
+                }
+            }
+        }
+
+        Ok(finished.pop().expect("the root value was pushed"))
     }
 
     fn desc(&self) -> &'static str {

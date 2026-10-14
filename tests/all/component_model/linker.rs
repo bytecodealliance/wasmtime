@@ -1,6 +1,6 @@
 use wasmtime::Result;
 use wasmtime::component::types::ComponentItem;
-use wasmtime::component::{Component, Linker, ResourceType};
+use wasmtime::component::{Component, Linker, ResourceType, Val};
 use wasmtime::{Config, Engine, Module, Store};
 
 #[test]
@@ -253,6 +253,273 @@ fn linker_fails_to_define_unknown_core_module_imports_as_traps() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_defines_unknown_imports_as_default_values() -> Result<()> {
+    let engine = Engine::default();
+
+    // Cover every aggregate, so the traversal is exercised in full.
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (type (;0;) (record (field "a" u32) (field "b" string)))
+            (import "rec" (type $rec (eq 0)))
+            (type (;2;) (variant (case "x" s64) (case "y")))
+            (import "var" (type $var (eq 2)))
+            (type (;4;) (flags "p" "q"))
+            (import "fl" (type $fl (eq 4)))
+            (type (;6;) (enum "e1" "e2"))
+            (import "en" (type $en (eq 6)))
+
+            (type $ret (tuple u32 float64 string bool char (list u8)
+                              (option u64) (result u32 (error string))
+                              $rec $var $fl $en))
+            (type $f (func (result $ret)))
+            (import "f" (func $fn (type $f)))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker.define_unknown_imports_as_default_values(&component)?;
+
+    let mut store = Store::new(&engine, ());
+    linker.instantiate(&mut store, &component)?;
+
+    // Check the values the stub returns by asking the import's type.
+    let ty = component.component_type();
+    let func = ty
+        .imports(&engine)
+        .find_map(|(name, item)| match item.ty {
+            ComponentItem::ComponentFunc(f) if name == "f" => Some(f),
+            _ => None,
+        })
+        .expect("component imports a function named `f`");
+    let results = func.results().collect::<Vec<_>>();
+    assert_eq!(results.len(), 1);
+
+    let Val::Tuple(fields) = results[0].default_value()? else {
+        panic!("expected a tuple");
+    };
+    assert_eq!(
+        fields,
+        [
+            Val::U32(0),
+            Val::Float64(0.0),
+            Val::String(String::new()),
+            Val::Bool(false),
+            Val::Char('\0'),
+            Val::List(Vec::new()),
+            Val::Option(None),
+            Val::Result(Ok(Some(Box::new(Val::U32(0))))),
+            Val::Record(vec![
+                ("a".to_string(), Val::U32(0)),
+                ("b".to_string(), Val::String(String::new())),
+            ]),
+            Val::Variant("x".to_string(), Some(Box::new(Val::S64(0)))),
+            Val::Flags(Vec::new()),
+            Val::Enum("e1".to_string()),
+        ]
+    );
+
+    Ok(())
+}
+
+/// A defaulted import is callable from wasm, not merely present.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_default_value_imports_are_callable() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "f" (func $f (result u32)))
+            (core func $lowered (canon lower (func $f)))
+            (core module $m
+                (import "" "f" (func $f (result i32)))
+                (func (export "run") (result i32) call $f)
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance (export "f" (func $lowered))))))
+            (func (export "run") (result u32) (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker.define_unknown_imports_as_default_values(&component)?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let mut results = [Val::Bool(false)];
+    run.call(&mut store, &[], &mut results)?;
+    assert_eq!(results[0], Val::U32(0));
+
+    Ok(())
+}
+
+/// A function returning an imported resource gets a dummy handle.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_defines_unknown_resource_imports_as_default_values() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "r" (type $r (sub resource)))
+            (type $f (func (result (own $r))))
+            (import "f" (func $fn (type $f)))
+
+            (core func $lowered (canon lower (func $fn)))
+            (core module $m
+                (import "" "f" (func $f (result i32)))
+                (func (export "run") (result i32)
+                    (drop (call $f))
+                    (call $f))
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance (export "f" (func $lowered))))))
+            (func (export "run") (result (own $r))
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker.define_unknown_imports_as_default_values(&component)?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let mut results = [Val::Bool(false)];
+    run.call(&mut store, &[], &mut results)?;
+    assert!(matches!(results[0], Val::Resource(_)));
+
+    Ok(())
+}
+
+/// Nested instances and resource imports are stubbed out.
+#[test]
+fn linker_defines_unknown_nested_imports_as_default_values() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "foo" (func))
+            (import "bar" (instance (export "baz" (func))))
+            (import "qux" (type (sub resource)))
+        )"#,
+    )?;
+    linker.define_unknown_imports_as_default_values(&component)?;
+
+    let mut store = Store::new(&engine, ());
+    linker.instantiate(&mut store, &component)?;
+
+    Ok(())
+}
+
+/// A type with no default does not prevent instantiation, but instead gets a
+/// trapping stub.
+#[tokio::test]
+async fn linker_defines_undefaultable_imports_as_traps() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (type $f (func (result (future u32))))
+            (import "f" (func $fn (type $f)))
+
+            (core func $lowered (canon lower (func $fn)))
+            (core module $m
+                (import "" "f" (func $f (result i32)))
+                (func (export "run") (result i32) call $f)
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance (export "f" (func $lowered))))))
+            (func (export "run") (result (future u32))
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<()>::new(&engine);
+
+    // Defining succeeds even though `future<u32>` has no default...
+    linker.define_unknown_imports_as_default_values(&component)?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+
+    // ...but calling the import traps.
+    let run = instance.get_func(&mut store, "run").unwrap();
+    let mut results = [Val::Bool(false)];
+    let err = run
+        .call_async(&mut store, &[], &mut results)
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{err:?}").contains("unknown import: `f` has not been defined"),
+        "unexpected error: {err:?}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn linker_defines_unknown_async_imports_as_default_values() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut linker = Linker::<()>::new(&engine);
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "foo" (func async (result u32)))
+            (import "bar" (instance (export "baz" (func async))))
+            (import "qux" (type (sub resource)))
+        )"#,
+    )?;
+    linker.define_unknown_imports_as_default_values(&component)?;
+
+    let mut store = Store::new(&engine, ());
+    let _ = linker.instantiate_async(&mut store, &component).await?;
+
+    Ok(())
+}
+
+/// Build default values for a deeply nested type.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_defines_deeply_nested_imports_as_default_values() -> Result<()> {
+    // Stay within the max component type depth of 100.
+    const DEPTH: usize = 97;
+
+    let engine = Engine::default();
+
+    // A chain of `DEPTH` tuple types, each wrapping the previous.
+    let mut wat = String::from("(component\n  (type $t0 u32)\n");
+    for i in 1..=DEPTH {
+        wat.push_str(&format!("  (type $t{i} (tuple $t{}))\n", i - 1));
+    }
+    wat.push_str(&format!("  (type $f (func (result $t{DEPTH})))\n"));
+    wat.push_str("  (import \"f\" (func $fn (type $f)))\n)");
+
+    let component = Component::new(&engine, &wat)?;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker.define_unknown_imports_as_default_values(&component)?;
+
+    let mut store = Store::new(&engine, ());
+    // Should not overflow the stack.
+    linker.instantiate(&mut store, &component)?;
+
+    Ok(())
+}
 #[test]
 fn open_instance_twice() -> Result<()> {
     let engine = Engine::default();
