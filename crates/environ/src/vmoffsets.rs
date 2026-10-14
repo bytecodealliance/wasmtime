@@ -905,7 +905,7 @@ pub const VM_ARRAY_CALL_HOST_FUNC_MAGIC: u32 = u32::from_le_bytes(*b"ACHF");
 
 #[cfg(test)]
 mod tests {
-    use crate::vmoffsets::align;
+    use crate::vmoffsets::{VMOffsets, VMOffsetsFields, align};
 
     #[test]
     fn alignment() {
@@ -916,6 +916,36 @@ mod tests {
         assert!(is_aligned(align(32, 16)));
         assert!(is_aligned(align(33, 16)));
         assert!(is_aligned(align(31, 16)));
+    }
+
+    #[test]
+    fn vmctx_function_references_are_aligned_after_tags() {
+        // On 64-bit targets each tag consumes four bytes, so an odd number
+        // of tags used to misalign this and subsequent pointer-sized fields.
+        for ptr in [4u8, 8u8] {
+            for num_defined_tags in 0..=3 {
+                let offsets = VMOffsets::from(VMOffsetsFields {
+                    ptr,
+                    num_imported_functions: 0,
+                    num_imported_tables: 0,
+                    num_imported_memories: 0,
+                    num_imported_globals: 0,
+                    num_imported_tags: 0,
+                    num_defined_tables: 0,
+                    num_defined_memories: 0,
+                    num_owned_memories: 0,
+                    num_defined_globals: 0,
+                    num_defined_tags,
+                    num_escaped_funcs: 1,
+                    num_runtime_data: 1,
+                    has_startup_func: true,
+                });
+                let pointer_alignment = u32::from(ptr);
+                assert_eq!(offsets.func_refs().begin() % pointer_alignment, 0);
+                assert_eq!(offsets.startup_func_ref() % pointer_alignment, 0);
+                assert_eq!(offsets.runtime_data_bases().begin() % pointer_alignment, 0);
+            }
+        }
     }
 }
 
