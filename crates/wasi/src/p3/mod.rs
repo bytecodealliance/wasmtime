@@ -63,7 +63,7 @@ where
     ) -> Poll<wasmtime::Result<StreamResult>> {
         // Take up to `count` items as requested by the guest, or pick some
         // reasonable-ish number for the host.
-        let count = dst.remaining(&mut store).unwrap_or(32);
+        let count = dst.remaining(&mut store)?.unwrap_or(32);
 
         // Handle 0-length reads which test for readiness as saying "we're
         // always ready" since, in theory, this is.

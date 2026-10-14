@@ -53,7 +53,7 @@ impl<D, S: Stream<Item = u8> + Send + 'static> StreamProducer<D> for DirectPipeP
             }
             Poll::Ready(Some(item)) => {
                 let mut destination = destination.as_direct(store, 1);
-                destination.remaining()[0] = item;
+                destination.remaining()?[0] = item;
                 destination.mark_written(1);
                 Poll::Ready(Ok(StreamResult::Completed))
             }
@@ -97,7 +97,7 @@ impl<D, S: Sink<u8, Error: std::error::Error + Send + Sync> + Send + 'static> St
                     Poll::Ready(result) => {
                         result?;
                         let mut source = source.as_direct(store);
-                        let item = source.remaining()[0];
+                        let item = source.remaining()?[0];
                         source.mark_read(1);
                         sink.start_send(item)?;
                         Poll::Ready(Ok(StreamResult::Completed))

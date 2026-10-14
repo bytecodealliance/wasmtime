@@ -126,7 +126,7 @@ impl StreamProducer<()> for TestProducer {
                     dst.set_buffer(vec![1, 2, 3].into());
                 } else {
                     let mut dst = dst.as_direct(store, 3);
-                    dst.remaining().copy_from_slice(&[1, 2, 3]);
+                    dst.remaining()?.copy_from_slice(&[1, 2, 3]);
                     dst.mark_written(3);
                 }
                 StreamResult::Completed
@@ -179,7 +179,7 @@ impl StreamConsumer<()> for TestConsumer {
         _finish: bool,
     ) -> Poll<Result<StreamResult>> {
         if self.take {
-            let mut buf = Vec::with_capacity(src.remaining(&mut store));
+            let mut buf = Vec::with_capacity(src.remaining(&mut store)?);
             src.read(&mut store, &mut buf)?;
             self.taken.extend(buf);
         }

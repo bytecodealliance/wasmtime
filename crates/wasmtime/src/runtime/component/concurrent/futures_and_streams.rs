@@ -410,11 +410,8 @@ impl<'a, T, B> Destination<'a, T, B> {
     /// Readiness" in the component-model repo][docs].
     ///
     /// [docs]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md#stream-readiness
-    pub fn remaining(&self, mut store: impl AsContextMut) -> Option<usize> {
-        // Note that this unwrap should only trigger for bugs in Wasmtime, and
-        // this is modeled here to centralize the `.unwrap()` for this method in
-        // one location.
-        self.remaining_(store.as_context_mut().0).unwrap()
+    pub fn remaining(&self, mut store: impl AsContextMut) -> Result<Option<usize>> {
+        self.remaining_(store.as_context_mut().0)
     }
 
     fn remaining_(&self, store: &mut StoreOpaque) -> Result<Option<usize>> {
@@ -472,7 +469,7 @@ pub struct DirectDestination<'a, D: 'static> {
 #[cfg(feature = "std")]
 impl<D: 'static> std::io::Write for DirectDestination<'_, D> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let rem = self.remaining();
+        let rem = self.remaining().map_err(std::io::Error::other)?;
         let n = rem.len().min(buf.len());
         rem[..n].copy_from_slice(&buf[..n]);
         self.mark_written(n);
@@ -486,14 +483,7 @@ impl<D: 'static> std::io::Write for DirectDestination<'_, D> {
 
 impl<D: 'static> DirectDestination<'_, D> {
     /// Provide direct access to the writer's buffer.
-    pub fn remaining(&mut self) -> &mut [u8] {
-        // Note that this unwrap should only trigger for bugs in Wasmtime, and
-        // this is modeled here to centralize the `.unwrap()` for this method in
-        // one location.
-        self.remaining_().unwrap()
-    }
-
-    fn remaining_(&mut self) -> Result<&mut [u8]> {
+    pub fn remaining(&mut self) -> Result<&mut [u8]> {
         if let Some(buffer) = self.host_buffer.as_mut() {
             return Ok(buffer.dst);
         }
@@ -521,7 +511,13 @@ impl<D: 'static> DirectDestination<'_, D> {
 
         let memory = instance
             .options_memory_mut(self.store.0, options)
-            .get_mut((address + guest_offset.as_usize())..)
+            .get_mut(
+                if count == 0 {
+                    0
+                } else {
+                    address + guest_offset.as_usize()
+                }..,
+            )
             .and_then(|b| b.get_mut(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -937,14 +933,11 @@ impl<'a, T> Source<'a, T> {
 
     /// Return the number of items remaining to be read from the current write
     /// operation.
-    pub fn remaining(&self, mut store: impl AsContextMut) -> usize
+    pub fn remaining(&self, mut store: impl AsContextMut) -> Result<usize>
     where
         T: 'static,
     {
-        // Note that this unwrap should only trigger for bugs in Wasmtime, and
-        // this is modeled here to centralize the `.unwrap()` for this method in
-        // one location.
-        self.remaining_(store.as_context_mut().0).unwrap()
+        self.remaining_(store.as_context_mut().0)
     }
 
     fn remaining_(&self, store: &mut StoreOpaque) -> Result<usize>
@@ -989,7 +982,7 @@ pub struct DirectSource<'a, D: 'static> {
 #[cfg(feature = "std")]
 impl<D: 'static> std::io::Read for DirectSource<'_, D> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let rem = self.remaining();
+        let rem = self.remaining().map_err(std::io::Error::other)?;
         let n = rem.len().min(buf.len());
         buf[..n].copy_from_slice(&rem[..n]);
         self.mark_read(n);
@@ -999,14 +992,7 @@ impl<D: 'static> std::io::Read for DirectSource<'_, D> {
 
 impl<D: 'static> DirectSource<'_, D> {
     /// Provide direct access to the writer's buffer.
-    pub fn remaining(&mut self) -> &[u8] {
-        // Note that this unwrap should only trigger for bugs in Wasmtime, and
-        // this is modeled here to centralize the `.unwrap()` for this method in
-        // one location.
-        self.remaining_().unwrap()
-    }
-
-    fn remaining_(&mut self) -> Result<&[u8]> {
+    pub fn remaining(&mut self) -> Result<&[u8]> {
         if let Some(buffer) = self.host_buffer.as_deref_mut() {
             return Ok(buffer.remaining());
         }
@@ -1034,7 +1020,13 @@ impl<D: 'static> DirectSource<'_, D> {
 
         let memory = instance
             .options_memory(self.store.0, options)
-            .get((address + guest_offset.as_usize())..)
+            .get(
+                if count == 0 {
+                    0
+                } else {
+                    address + guest_offset.as_usize()
+                }..,
+            )
             .and_then(|b| b.get(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -1385,7 +1377,7 @@ impl<T> FutureReader<T> {
                     finish
                 ))?;
 
-                Poll::Ready(Ok(if source.remaining(store) == 0 {
+                Poll::Ready(Ok(if source.remaining(store)? == 0 {
                     // Here we return `StreamResult::Completed` even though
                     // we've consumed the last item we'll ever consume.  That's
                     // because the ABI expects `ReturnCode::Completed(1)` rather
