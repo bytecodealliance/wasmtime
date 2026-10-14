@@ -247,6 +247,7 @@ impl Func {
     /// * The function calls a host function which returns an error
     /// * The `store` used requires the use of [`Func::call_async`] instead. See
     ///   [store documentation](crate#async) for more information.
+    /// * The call is recursive from within e.g. a `call_async` invocation.
     /// * If the function is async-lifted, in which case either
     ///   [`Self::call_async`] or [`Self::call_concurrent`] must be used.
     ///

@@ -126,6 +126,7 @@ where
     ///   instance is currently calling a host function.
     /// * If `store` requires using [`Self::call_async`] instead, see
     ///   [crate documentation](crate#async) for more info.
+    /// * The call is recursive from within e.g. a `call_async` invocation.
     /// * If the function is async-lifted, in which case either
     ///   [`Self::call_async`] or [`Self::call_concurrent`] must be used.
     ///

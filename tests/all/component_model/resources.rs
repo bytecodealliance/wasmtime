@@ -2133,15 +2133,15 @@ mod multiple_host_borrows {
         run(Kind::New).await
     }
 
-    fn drop_val(store: &mut wasmtime::StoreContextMut<'_, ()>, val: &Val) -> Result<()> {
+    async fn drop_val(store: &mut wasmtime::StoreContextMut<'_, ()>, val: &Val) -> Result<()> {
         match val {
             Val::Resource(r) => {
                 assert!(!r.owned());
-                r.resource_drop(&mut *store)
+                r.resource_drop_async(&mut *store).await
             }
             Val::List(vals) => {
                 for v in vals {
-                    drop_val(store, v)?;
+                    Box::pin(drop_val(store, v)).await?;
                 }
                 Ok(())
             }
@@ -2162,26 +2162,32 @@ mod multiple_host_borrows {
 
         match kind {
             Kind::Wrap => {
-                root.func_wrap("two", |mut store, (a, b): (ResourceAny, ResourceAny)| {
-                    a.resource_drop(&mut store)?;
-                    b.resource_drop(&mut store)?;
-                    Ok(())
+                root.func_wrap_async("two", |mut store, (a, b): (ResourceAny, ResourceAny)| {
+                    Box::new(async move {
+                        a.resource_drop_async(&mut store).await?;
+                        b.resource_drop_async(&mut store).await?;
+                        Ok(())
+                    })
                 })?;
-                root.func_wrap("list", |mut store, (list,): (Vec<ResourceAny>,)| {
-                    assert_eq!(list.len(), 3);
-                    for r in list {
-                        r.resource_drop(&mut store)?;
-                    }
-                    Ok(())
+                root.func_wrap_async("list", |mut store, (list,): (Vec<ResourceAny>,)| {
+                    Box::new(async move {
+                        assert_eq!(list.len(), 3);
+                        for r in list {
+                            r.resource_drop_async(&mut store).await?;
+                        }
+                        Ok(())
+                    })
                 })?;
             }
             Kind::New => {
                 for name in ["two", "list"] {
-                    root.func_new(name, |mut store, _ty, params, _results| {
-                        for p in params {
-                            drop_val(&mut store, p)?;
-                        }
-                        Ok(())
+                    root.func_new_async(name, |mut store, _ty, params, _results| {
+                        Box::new(async move {
+                            for p in params {
+                                drop_val(&mut store, p).await?;
+                            }
+                            Ok(())
+                        })
                     })?;
                 }
             }
