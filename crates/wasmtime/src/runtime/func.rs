@@ -943,6 +943,7 @@ impl Func {
     ///   via [`Func::new`], for example.
     /// * The `store` provided is configured to require `call_async` to be used
     ///   instead, such as with epochs or fuel.
+    /// * The call is recursive from within e.g. a `call_async` invocation.
     ///
     /// Errors typically indicate that execution of WebAssembly was halted
     /// mid-way and did not complete after the error condition happened.
@@ -1004,6 +1005,7 @@ impl Func {
     ///   types and such.
     /// * Reference types like `externref` and `funcref` are valid at the
     ///   time of this call and for the `store` specified.
+    /// * The call is _not_ recursive from within e.g. a `call_async` invocation.
     ///
     /// These invariants are all upheld for you with [`Func::call`] and
     /// [`TypedFunc::call`].

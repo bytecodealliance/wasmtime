@@ -201,6 +201,17 @@ fn p1_poll_oneoff_stdio() {
 fn p1_readlink() {
     run(P1_READLINK_COMPONENT, |_| {}).unwrap()
 }
+
+#[test_log::test]
+fn p1_path_rename_trailing_slashes() {
+    let fixture = crate::store::SandboxFixture::new().unwrap();
+    run(P1_PATH_RENAME_TRAILING_SLASHES_COMPONENT, |b| {
+        fixture.configure_wasi(b)
+    })
+    .expect("run guest");
+    fixture.assert_secure();
+}
+
 #[test_log::test]
 fn p1_remove_directory() {
     run(P1_REMOVE_DIRECTORY_COMPONENT, |_| {}).unwrap()
@@ -452,6 +463,16 @@ fn p1_file_rename_across_perms() {
 #[test_log::test]
 fn p2_file_rename_across_perms() {
     run_with_readonly_testfile(P2_FILE_RENAME_ACROSS_PERMS_COMPONENT)
+}
+
+#[test_log::test]
+fn p2_path_rename_trailing_slashes() {
+    let fixture = crate::store::SandboxFixture::new().unwrap();
+    run(P2_PATH_RENAME_TRAILING_SLASHES_COMPONENT, |b| {
+        fixture.configure_wasi(b)
+    })
+    .expect("run guest");
+    fixture.assert_secure();
 }
 
 #[test_log::test]

@@ -56,6 +56,32 @@ fn get_content_length(headers: &http::HeaderMap) -> wasmtime::Result<Option<u64>
     Ok(Some(v))
 }
 
+/// Parse the specified string as an `http::uri::PathAndQuery`, if possible.
+///
+/// https://datatracker.ietf.org/doc/html/rfc3986#section-3.3 says:
+///
+/// > If a URI contains an authority component, then the path component must
+/// > either be empty or begin with a slash ("/") character.
+///
+/// `PathAndQuery` doesn't check this: it accepts `http://example.com/`, `*`,
+/// and `x`. Those are rejected here, as they would otherwise end up verbatim in
+/// the request line of outgoing requests, and an absolute URI there addresses
+/// the request to a different host than the one it's sent to.
+#[cfg(any(feature = "p2", feature = "p3"))]
+fn parse_path_with_query(path_with_query: &str) -> Option<http::uri::PathAndQuery> {
+    if !(path_with_query.is_empty()
+        || path_with_query.starts_with('/')
+        || path_with_query.starts_with('?'))
+    {
+        return None;
+    }
+    http::uri::Builder::new()
+        .path_and_query(path_with_query)
+        .build()
+        .ok()
+        .and_then(|uri| uri.path_and_query().cloned())
+}
+
 #[cfg(all(test, any(feature = "p2", feature = "p3")))]
 mod content_length_tests {
     use super::get_content_length;

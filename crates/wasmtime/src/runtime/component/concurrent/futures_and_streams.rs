@@ -12,7 +12,7 @@ use crate::component::{
 use crate::prelude::*;
 use crate::store::{StoreOpaque, StoreToken};
 use crate::try_mutex::{TryMutex, TryMutexGuard};
-use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
+use crate::vm::component::{ComponentInstance, HandleCounter, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use crate::{
@@ -520,7 +520,13 @@ impl<D: 'static> DirectDestination<'_, D> {
 
         let memory = instance
             .options_memory_mut(self.store.0, options)
-            .get_mut((address + guest_offset.as_usize())..)
+            .get_mut(
+                if count == 0 {
+                    0
+                } else {
+                    address + guest_offset.as_usize()
+                }..,
+            )
             .and_then(|b| b.get_mut(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -1030,7 +1036,13 @@ impl<D: 'static> DirectSource<'_, D> {
 
         let memory = instance
             .options_memory(self.store.0, options)
-            .get((address + guest_offset.as_usize())..)
+            .get(
+                if count == 0 {
+                    0
+                } else {
+                    address + guest_offset.as_usize()
+                }..,
+            )
             .and_then(|b| b.get(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -1492,8 +1504,8 @@ pub(super) fn lift_index_to_future(
 ) -> Result<TableId<TransmitHandle>> {
     match ty {
         InterfaceType::Future(src) => {
-            let (state, instance) = cx.concurrent_state_and_instance_mut();
-            lift_index_to_transmit(instance, state, TransmitIndex::Future(src), index)
+            let (state, instance, counter) = cx.concurrent_state_and_instance_mut();
+            lift_index_to_transmit(instance, counter, state, TransmitIndex::Future(src), index)
         }
         _ => func::bad_type_info(),
     }
@@ -1851,8 +1863,8 @@ pub(super) fn lift_index_to_stream(
 ) -> Result<TableId<TransmitHandle>> {
     match ty {
         InterfaceType::Stream(src) => {
-            let (state, instance) = cx.concurrent_state_and_instance_mut();
-            lift_index_to_transmit(instance, state, TransmitIndex::Stream(src), index)
+            let (state, instance, counter) = cx.concurrent_state_and_instance_mut();
+            lift_index_to_transmit(instance, counter, state, TransmitIndex::Stream(src), index)
         }
         _ => func::bad_type_info(),
     }
@@ -2054,8 +2066,13 @@ pub(crate) fn lower_error_context_to_index<U>(
 ) -> Result<u32> {
     match ty {
         InterfaceType::ErrorContext(dst) => {
-            let tbl = cx.instance_mut().table_for_error_context(dst);
-            tbl.error_context_insert(rep)
+            let (instance, counter) = cx
+                .instance_handle()
+                .id()
+                .get_mut_and_handle_counter(cx.store.0);
+            instance
+                .table_for_error_context(dst)
+                .error_context_insert(counter, rep)
         }
         _ => func::bad_type_info(),
     }
@@ -2940,7 +2957,7 @@ impl<T> StoreContextMut<'_, T> {
                 transmit.read = ReadState::HostToHost {
                     accept: Box::new(move |input| {
                         let consume = consume_with_buffer.clone();
-                        async move { consume(Some(input.get_mut::<C::Item>())).await }.boxed()
+                        async move { consume(Some(input.get_mut::<C::Item>()?)).await }.boxed()
                     }),
                     buffer: Vec::new(),
                     limit: 0,
@@ -3235,10 +3252,13 @@ impl Instance {
         ty: TransmitIndex,
         writer: u32,
     ) -> Result<()> {
-        let table = self.id().get_mut(store).table_for_transmit(ty);
+        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
+        let table = instance.table_for_transmit(ty);
         let (transmit_rep, is_done) = match ty {
-            TransmitIndex::Future(ty) => table.future_remove_writable(ty, writer)?,
-            TransmitIndex::Stream(ty) => (table.stream_remove_writable(ty, writer)?, false),
+            TransmitIndex::Future(ty) => table.future_remove_writable(counter, ty, writer)?,
+            TransmitIndex::Stream(ty) => {
+                (table.stream_remove_writable(counter, ty, writer)?, false)
+            }
         };
 
         let id = TableId::<TransmitHandle>::new(transmit_rep);
@@ -4227,10 +4247,11 @@ impl Instance {
         ty: TransmitIndex,
         reader: u32,
     ) -> Result<()> {
-        let table = self.id().get_mut(store).table_for_transmit(ty);
+        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
+        let table = instance.table_for_transmit(ty);
         let (rep, _is_done) = match ty {
-            TransmitIndex::Stream(ty) => table.stream_remove_readable(ty, reader)?,
-            TransmitIndex::Future(ty) => table.future_remove_readable(ty, reader)?,
+            TransmitIndex::Stream(ty) => table.stream_remove_readable(counter, ty, reader)?,
+            TransmitIndex::Future(ty) => table.future_remove_readable(counter, ty, reader)?,
         };
         let kind = match ty {
             TransmitIndex::Stream(_) => TransmitKind::Stream,
@@ -4275,11 +4296,10 @@ impl Instance {
         // Here we reflect the newly created global concurrent error context state into the
         // component instance's locally tracked count, along with the appropriate key into the global
         // ref tracking data structures to enable later lookup
-        let local_idx = self
-            .id()
-            .get_mut(store)
+        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
+        let local_idx = instance
             .table_for_error_context(ty)
-            .error_context_insert(table_id.rep())?;
+            .error_context_insert(counter, table_id.rep())?;
 
         Ok(local_idx)
     }
@@ -4406,15 +4426,16 @@ impl Instance {
             .concurrent_state_mut()?
             .new_transmit(TransmitOrigin::guest(self.id().instance(), ty))?;
 
-        let table = self.id().get_mut(store).table_for_transmit(ty);
+        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
+        let table = instance.table_for_transmit(ty);
         let (read_handle, write_handle) = match ty {
             TransmitIndex::Future(ty) => (
-                table.future_insert_read(ty, read.rep())?,
-                table.future_insert_write(ty, write.rep())?,
+                table.future_insert_read(counter, ty, read.rep())?,
+                table.future_insert_write(counter, ty, write.rep())?,
             ),
             TransmitIndex::Stream(ty) => (
-                table.stream_insert_read(ty, read.rep())?,
-                table.stream_insert_write(ty, write.rep())?,
+                table.stream_insert_read(counter, ty, read.rep())?,
+                table.stream_insert_write(counter, ty, write.rep())?,
             ),
         };
 
@@ -4435,11 +4456,11 @@ impl Instance {
         ty: TypeComponentLocalErrorContextTableIndex,
         error_context: u32,
     ) -> Result<()> {
-        let instance = self.id().get_mut(store);
+        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
 
         let local_handle_table = instance.table_for_error_context(ty);
 
-        let rep = local_handle_table.error_context_drop(error_context)?;
+        let rep = local_handle_table.error_context_drop(counter, error_context)?;
 
         let global_ref_count_idx = TypeComponentGlobalErrorContextTableIndex::from_u32(rep);
 
@@ -4488,8 +4509,8 @@ impl Instance {
         ty: TransmitIndex,
         src_idx: u32,
     ) -> Result<TableId<TransmitHandle>> {
-        let (state, _, _, instance) = store.lift_context_parts(self);
-        lift_index_to_transmit(instance, state.concurrent_state_mut(), ty, src_idx)
+        let (state, _, counter, _, instance) = store.lift_context_parts(self);
+        lift_index_to_transmit(instance, counter, state.concurrent_state_mut(), ty, src_idx)
     }
 
     fn lower_transmit_to_index(
@@ -4498,8 +4519,8 @@ impl Instance {
         ty: TransmitIndex,
         id: TableId<TransmitHandle>,
     ) -> Result<u32> {
-        let (state, _, _, instance) = store.lift_context_parts(self);
-        lower_transmit_to_index(instance, state.concurrent_state_mut(), ty, id)
+        let (state, _, counter, _, instance) = store.lift_context_parts(self);
+        lower_transmit_to_index(instance, counter, state.concurrent_state_mut(), ty, id)
     }
 
     /// Implements the `future.new` intrinsic.
@@ -4562,14 +4583,14 @@ impl Instance {
         src: TypeComponentLocalErrorContextTableIndex,
         dst: TypeComponentLocalErrorContextTableIndex,
     ) -> Result<u32> {
-        let mut instance = self.id().get_mut(store);
+        let (mut instance, counter) = self.id().get_mut_and_handle_counter(store);
         let rep = instance
             .as_mut()
             .table_for_error_context(src)
             .error_context_rep(src_idx)?;
         let dst_idx = instance
             .table_for_error_context(dst)
-            .error_context_insert(rep)?;
+            .error_context_insert(counter, rep)?;
 
         // Update the global (cross-subcomponent) count for error contexts
         // as the new component has essentially created a new reference that will
@@ -4596,14 +4617,15 @@ impl Instance {
 /// expected type of future/stream.
 fn lift_index_to_transmit(
     instance: Pin<&mut ComponentInstance>,
+    counter: &mut HandleCounter,
     concurrent_state: &mut ConcurrentState,
     ty: TransmitIndex,
     src_idx: u32,
 ) -> Result<TableId<TransmitHandle>> {
     let handle_table = instance.table_for_transmit(ty);
     let (rep, is_done) = match ty {
-        TransmitIndex::Future(idx) => handle_table.future_remove_readable(idx, src_idx)?,
-        TransmitIndex::Stream(idx) => handle_table.stream_remove_readable(idx, src_idx)?,
+        TransmitIndex::Future(idx) => handle_table.future_remove_readable(counter, idx, src_idx)?,
+        TransmitIndex::Stream(idx) => handle_table.stream_remove_readable(counter, idx, src_idx)?,
     };
     let desc = match ty {
         TransmitIndex::Future(_) => "future",
@@ -4631,6 +4653,7 @@ fn lift_index_to_transmit(
 /// an instance.
 fn lower_transmit_to_index(
     instance: Pin<&mut ComponentInstance>,
+    counter: &mut HandleCounter,
     concurrent_state: &mut ConcurrentState,
     ty: TransmitIndex,
     id: TableId<TransmitHandle>,
@@ -4639,8 +4662,8 @@ fn lower_transmit_to_index(
     debug_assert_eq!(concurrent_state.get_mut(state)?.read_handle, id);
     let handle_table = instance.table_for_transmit(ty);
     let handle = match ty {
-        TransmitIndex::Future(idx) => handle_table.future_insert_read(idx, id.rep()),
-        TransmitIndex::Stream(idx) => handle_table.stream_insert_read(idx, id.rep()),
+        TransmitIndex::Future(idx) => handle_table.future_insert_read(counter, idx, id.rep()),
+        TransmitIndex::Stream(idx) => handle_table.stream_insert_read(counter, idx, id.rep()),
     }?;
     concurrent_state.get_mut(id)?.common.handle = Some(handle);
     Ok(handle)

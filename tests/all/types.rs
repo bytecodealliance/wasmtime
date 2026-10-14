@@ -738,3 +738,59 @@ fn heap_type_matches_noexn() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+/// Check that dropping a long guest-defined type from the registry doesn't
+/// stack overflow.
+fn drop_long_chain_of_guest_func_types() -> Result<()> {
+    // A chain of 20,000 function types where each type's parameter is a
+    // reference to the previous type.
+    const N: usize = 20_000;
+
+    let mut wat = String::from("(module\n  (type $t0 (func))\n");
+    for i in 1..N {
+        wat.push_str(&format!(
+            "  (type $t{i} (func (param (ref null $t{}))))\n",
+            i - 1
+        ));
+    }
+    wat.push_str(&format!(
+        "  (func (export \"f\") (type $t{}) unreachable)\n)\n",
+        N - 1
+    ));
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, &wat)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let trap = instance
+        .get_func(&mut store, "f")
+        .unwrap()
+        .call(&mut store, &[Val::FuncRef(None)], &mut [])
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::UnreachableCodeReached);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+/// Check that dropping a long host-defined type from the registry doesn't stack
+/// overflow.
+fn drop_long_chain_of_host_func_types() -> Result<()> {
+    // Dropping the last type in a long chain of rec groups, each of which
+    // references the previous, should not overflow the stack.
+    let engine = Engine::default();
+    let mut ty = FuncType::new(&engine, [], []);
+    for _ in 0..100_000 {
+        let param = ValType::Ref(RefType::new(true, HeapType::ConcreteFunc(ty)));
+        ty = FuncType::new(&engine, [param], []);
+    }
+    drop(ty);
+    Ok(())
+}

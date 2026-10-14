@@ -176,6 +176,17 @@ async fn p3_readdir_blocking() -> wasmtime::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_path_rename_trailing_slashes() -> wasmtime::Result<()> {
+    let fixture = crate::store::SandboxFixture::new()?;
+    run_with_builder(P3_PATH_RENAME_TRAILING_SLASHES_COMPONENT, false, |b| {
+        fixture.configure_wasi(b)
+    })
+    .await?;
+    fixture.assert_secure();
+    Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_file_write() -> wasmtime::Result<()> {
     run(P3_FILE_WRITE_COMPONENT).await
 }

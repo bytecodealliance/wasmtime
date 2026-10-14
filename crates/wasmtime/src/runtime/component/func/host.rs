@@ -420,7 +420,7 @@ where
         };
         lower.validate_scope_exit()?;
         lower.store.0.host_task_delete(entered_host_task)?;
-        Self::lower_raw(&mut lower, ty, ret, dst)
+        Self::lower_result(&mut lower, ty, ret, dst)
     }
 
     /// Implementation of the "async" ABI of the component model.
@@ -474,7 +474,7 @@ where
                 let mut lower = LowerContext::new(store, options, instance);
                 lower.validate_scope_exit()?;
                 lower.store.0.host_task_delete(entered_host_task)?;
-                Self::lower_raw(&mut lower, ty, result, Destination::Memory(retptr))?;
+                Self::lower_result(&mut lower, ty, result, Destination::Memory(retptr))?;
                 Status::Returned.pack(None)
             }
             HostResult::Future(future) => instance.first_poll(
@@ -493,7 +493,7 @@ where
                     // non-immediate exit which is not correct. There's no real
                     // right answer here, hence the upstream issue.
                     if let Some(result) = ret {
-                        Self::lower_raw(&mut lower, ty, result, Destination::Memory(retptr))?;
+                        Self::lower_result(&mut lower, ty, result, Destination::Memory(retptr))?;
                     }
                     Ok(())
                 },
@@ -541,24 +541,6 @@ where
         };
         let params = Self::lift_params(lift, ty, src)?;
         Ok((params, &storage[param_flat_count.unwrap_or(1)..]))
-    }
-
-    fn lower_raw(
-        lower: &mut LowerContext<'_, T>,
-        ty: TypeFuncIndex,
-        ret: R,
-        dst: Destination<'_>,
-    ) -> Result<()> {
-        let caller_instance = lower.options().instance;
-        let mut flags = lower.instance_mut().instance_flags(caller_instance);
-        unsafe {
-            flags.set_may_leave(false);
-        }
-        Self::lower_result(lower, ty, ret, dst)?;
-        unsafe {
-            flags.set_may_leave(true);
-        }
-        Ok(())
     }
 }
 

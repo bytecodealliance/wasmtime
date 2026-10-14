@@ -162,6 +162,9 @@ impl ResourceAny {
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
+    ///
+    /// This will also return an error if called recursively from within e.g. a
+    /// `call_async` invocation.
     pub fn resource_drop(self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
         store.0.validate_sync_call()?;

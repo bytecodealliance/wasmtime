@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::runtime::component::{HostResourceData, Instance};
 use crate::runtime::vm;
 use crate::runtime::vm::component::{
-    CallContext, ComponentInstance, HandleTable, OwnedComponentInstance,
+    CallContext, ComponentInstance, HandleCounter, HandleTable, OwnedComponentInstance,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut};
@@ -26,6 +26,12 @@ use crate::{
 /// host doesn't mean that it's automatically susceptible to DoS for example.
 const DEFAULT_HOSTCALL_FUEL: usize = 128 << 20;
 
+/// Default per-store cap on simultaneously-live component-model handles.
+///
+/// A guest creates these directly (e.g. `resource.new`), so leaving them
+/// unbounded is a DoS vector.
+const DEFAULT_MAX_COMPONENT_HANDLES: usize = 100_000;
+
 /// Extensions to `Store` which are only relevant for component-related
 /// information.
 pub struct ComponentStoreData {
@@ -39,6 +45,11 @@ pub struct ComponentStoreData {
     /// Total number of component instances in this store, used to track
     /// resources in the instance allocator.
     num_component_instances: usize,
+
+    /// Live-handle counter for every `HandleTable` in this store (the
+    /// `component_host_table` below and each instance's tables). See
+    /// `HandleCounter`.
+    handle_counter: HandleCounter,
 
     /// Runtime state for components used in the handling of resources, borrow,
     /// and calls. These also interact with the `ResourceAny` type and its
@@ -87,6 +98,7 @@ impl ComponentStoreData {
             trapped: false,
             num_component_instances: 0,
             component_host_table: Default::default(),
+            handle_counter: HandleCounter::new(DEFAULT_MAX_COMPONENT_HANDLES),
             host_resource_data: Default::default(),
             task_state: if engine.tunables().concurrency_support {
                 #[cfg(feature = "component-model-async")]
@@ -232,6 +244,21 @@ impl StoreComponentInstanceId {
         self.from_data_get_mut(store.store_data_mut())
     }
 
+    /// Same as `get_mut`, but also returns the store's `HandleCounter`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` does not belong to `store`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn get_mut_and_handle_counter<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> (Pin<&'a mut ComponentInstance>, &'a mut HandleCounter) {
+        let store = store.store_data_mut();
+        self.assert_belongs_to(store.id());
+        store.component_instance_and_handle_counter_mut(self.instance)
+    }
+
     /// Return a mutable `ComponentInstance` and a `ModuleRegistry`
     /// from the store.
     ///
@@ -278,6 +305,18 @@ impl StoreData {
         id: ComponentInstanceId,
     ) -> Pin<&mut ComponentInstance> {
         self.components.instances[id].as_mut().unwrap().get_mut()
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn component_instance_and_handle_counter_mut(
+        &mut self,
+        id: ComponentInstanceId,
+    ) -> (Pin<&mut ComponentInstance>, &mut HandleCounter) {
+        let data = &mut self.components;
+        (
+            data.instances[id].as_mut().unwrap().get_mut(),
+            &mut data.handle_counter,
+        )
     }
 }
 
@@ -369,6 +408,7 @@ impl StoreOpaque {
     ) -> (
         &mut ComponentTaskState,
         &mut HandleTable,
+        &mut HandleCounter,
         &mut HostResourceData,
         Pin<&mut ComponentInstance>,
     ) {
@@ -378,6 +418,7 @@ impl StoreOpaque {
         (
             &mut data.task_state,
             &mut data.component_host_table,
+            &mut data.handle_counter,
             &mut data.host_resource_data,
             data.instances[instance.instance]
                 .as_mut()
@@ -419,6 +460,7 @@ impl StoreOpaque {
         Ok((
             vm::component::ResourceTables {
                 host_table: &mut data.component_host_table,
+                handle_counter: &mut data.handle_counter,
                 task_state: &mut data.task_state,
                 guest,
                 current_scope_id,
@@ -452,6 +494,14 @@ impl StoreOpaque {
 
     pub(crate) fn set_hostcall_fuel(&mut self, fuel: usize) {
         self.component_data_mut().hostcall_fuel = fuel;
+    }
+
+    pub(crate) fn max_component_handles(&self) -> usize {
+        self.component_data().handle_counter.limit()
+    }
+
+    pub(crate) fn set_max_component_handles(&mut self, limit: usize) {
+        self.component_data_mut().handle_counter.set_limit(limit);
     }
 
     #[cfg(feature = "component-model-async")]
@@ -517,6 +567,35 @@ impl<T> Store<T> {
         self.as_context_mut().set_hostcall_fuel(fuel)
     }
 
+    /// Returns the maximum number of simultaneously-live component-model handles
+    /// permitted in this store.
+    ///
+    /// This is either the default amount if it hasn't been configured or
+    /// returns the last value passed to [`Store::set_max_component_handles`].
+    ///
+    /// See [`Store::set_max_component_handles`] for more details.
+    pub fn max_component_handles(&self) -> usize {
+        self.as_context().0.max_component_handles()
+    }
+
+    /// Sets the maximum number of simultaneously-live component-model handles
+    /// permitted in this store.
+    ///
+    /// Operations such as `resource.new` let a guest allocate handles in
+    /// host-side tables without host code in the loop, across as many instances
+    /// as it likes. This store-wide limit caps that as a DoS mitigation;
+    /// allocating past it traps.
+    ///
+    /// The limit counts *live* handles, so dropping a handle (e.g. via
+    /// `resource.drop`) returns budget and steady-state churn is unaffected.
+    /// Lowering it below the current live count does not trap existing handles,
+    /// only blocks new allocations until the count falls back under it.
+    ///
+    /// The default value for this is 100,000 handles.
+    pub fn set_max_component_handles(&mut self, limit: usize) {
+        self.as_context_mut().set_max_component_handles(limit)
+    }
+
     /// Returns the underlying [`ResourceTable`] that the implementation of
     /// concurrency in the component model is using.
     ///
@@ -538,6 +617,16 @@ impl<T> StoreContextMut<'_, T> {
     /// See [`Store::set_hostcall_fuel`].
     pub fn set_hostcall_fuel(&mut self, fuel: usize) {
         self.0.set_hostcall_fuel(fuel)
+    }
+
+    /// See [`Store::max_component_handles`].
+    pub fn max_component_handles(&self) -> usize {
+        self.0.max_component_handles()
+    }
+
+    /// See [`Store::set_max_component_handles`].
+    pub fn set_max_component_handles(&mut self, limit: usize) {
+        self.0.set_max_component_handles(limit)
     }
 
     /// See [`Store::concurrent_resource_table`].

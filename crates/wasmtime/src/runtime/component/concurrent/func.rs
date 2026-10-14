@@ -171,7 +171,7 @@ impl Func {
         params: Vec<Val>,
     ) -> Result<PreparedCall<Vec<Val>>> {
         let store = store.as_context_mut();
-        let (options, flags, ty, raw_options) = self.abi_info(store.0);
+        let (options, _, ty, raw_options) = self.abi_info(store.0);
         let async_ = raw_options.async_;
         let instance = self.instance();
 
@@ -181,7 +181,7 @@ impl Func {
             MAX_FLAT_PARAMS,
             false,
             move |store, params_out| {
-                Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
+                Func::with_lower_context(instance, store, options, ty, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
                 })
             },
@@ -245,12 +245,12 @@ where
             // of rustc and the signature of `prepare_call`.
             //
             // Note the use of `SignalOnDrop` in the code that follows
-            // this closure, which ensures that the task will be removed
-            // from the concurrent state to which it belongs when the
-            // containing `Future` is dropped, so long as the parameters
-            // have not yet been lowered. Since this closure is removed from
-            // the task after the parameters are lowered, it will never be called
-            // after the containing `Future` is dropped.
+            // this closure, which removes this closure from its task when
+            // the containing `Future` is dropped, so long as the parameters
+            // have not yet been lowered (see `TaskId::host_future_dropped`).
+            // Since this closure is also removed from the task when the
+            // parameters are lowered, it will never be called after the
+            // containing `Future` is dropped.
             let params = unsafe { ptr.cast::<Params>().as_ref() };
             Self::lower_args(cx, ty, dst, params)
         })?;
@@ -434,7 +434,7 @@ where
         } else {
             1
         };
-        let (options, flags, ty, raw_options) = self.func().abi_info(store.0);
+        let (options, _, ty, raw_options) = self.func().abi_info(store.0);
         let instance = self.func().instance();
         let max_results = if raw_options.async_ {
             MAX_FLAT_PARAMS
@@ -448,7 +448,7 @@ where
             param_count,
             host_future_present,
             move |store, params_out| {
-                Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
+                Func::with_lower_context(instance, store, options, ty, |cx, ty| {
                     lower(cx, ty, params_out)
                 })
             },

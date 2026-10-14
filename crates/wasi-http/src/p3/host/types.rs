@@ -303,7 +303,7 @@ impl HostRequest for WasiHttpCtxView<'_> {
             req.path_with_query = None;
             return Ok(Ok(()));
         };
-        let Ok(path_with_query) = path_with_query.try_into() else {
+        let Some(path_with_query) = crate::parse_path_with_query(&path_with_query) else {
             return Ok(Err(()));
         };
         req.path_with_query = Some(path_with_query);

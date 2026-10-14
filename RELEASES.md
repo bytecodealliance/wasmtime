@@ -1,3 +1,57 @@
+## 49.0.3
+
+Released 2026-10-14.
+
+### Fixed
+
+* Out-of-bounds zero-length stream writes can panic.
+  [GHSA-93g3-36p8-x2gc](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-93g3-36p8-x2gc)
+
+* Host panic when component `call_async` is cancelled under some conditions.
+  [GHSA-3r89-v5mq-j5xf](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-3r89-v5mq-j5xf)
+
+* Panic on erroneous call-to-host from guest realloc call.
+  [GHSA-7v24-42x9-pxf7](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-7v24-42x9-pxf7)
+
+* Yielding in a component start function can lead to a host panic.
+  [GHSA-5hhx-4wrr-3j9g](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5hhx-4wrr-3j9g)
+
+* Panic when invoking an async-lifted function via `call`.
+  [GHSA-m6w2-jwq2-cv2c](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m6w2-jwq2-cv2c)
+
+* Panic when pending calls are run after a trap.
+  [GHSA-hmwq-g22x-qjw5](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hmwq-g22x-qjw5)
+
+* Stack overflow dropping a long chain of recursive types.
+  [GHSA-wjc8-633q-pwxr](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-wjc8-633q-pwxr)
+
+* Wasmtime may not properly enforce async-entrypoint requirement.
+  [GHSA-vcg5-q8m5-8379](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-vcg5-q8m5-8379)
+
+* Panic viewing component model stream or future as the wrong type.
+  [GHSA-63h4-6cx9-pjfj](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-63h4-6cx9-pjfj)
+
+* Component-model handle tables are capped only per instance and charged to no
+  limit.
+  [GHSA-q554-3cjc-rx7p](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-q554-3cjc-rx7p)
+
+* Exception tags can cause host data structures to be unaligned.
+  [GHSA-p79w-pv2r-29qp](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-p79w-pv2r-29qp)
+
+* Filesystem sandbox escape when renaming symlinks with trailing slashes.
+  [GHSA-m9f7-9w4p-gv38](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m9f7-9w4p-gv38)
+
+* Overlapping string transcode in a fused adapter can panic.
+  [GHSA-54p9-vhhq-8f7q](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-54p9-vhhq-8f7q)
+
+* Guests can send absolute-form HTTP requests to different hosts.
+  [GHSA-5qpp-g3j2-8frx](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5qpp-g3j2-8frx)
+
+* `wasi-http`: Request with long url before query parameter crashes host.
+  [GHSA-w36r-2hch-9xp9](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-w36r-2hch-9xp9)
+
+--------------------------------------------------------------------------------
+
 ## 49.0.2
 
 Released 2026-10-02.

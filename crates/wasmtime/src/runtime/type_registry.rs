@@ -688,6 +688,11 @@ struct TypeRegistryInner {
     // to avoid recursion when dropping a type that is holding the last
     // reference to another type, etc...
     drop_stack: TryVec<RecGroupEntry>,
+
+    #[cfg(debug_assertions)]
+    /// Is set if we are already within a call to `drain_drop_stack`. Used to
+    /// debug assert that `drain_drop_stock` does not recursively call itself.
+    draining_drop_stack: bool,
 }
 
 impl TypeRegistryInner {
@@ -1151,6 +1156,10 @@ impl TypeRegistryInner {
     }
 
     /// Remove the rec group's associated trampoline information.
+    ///
+    /// This function pushes onto the drop stack without calling
+    /// `drain_drop_stack`. So it should only be called from within a
+    /// `drain_drop_stack` loop.
     fn remove_entry_trampolines(&mut self, entry: &RecGroupEntry) {
         // We delay allocating space for this arena until we actually see a
         // function type that is not its own trampoline type, so early exit if
@@ -1168,8 +1177,6 @@ impl TypeRegistryInner {
                 }
             }
         }
-
-        self.drain_drop_stack();
     }
 
     /// Insert the GC layout information for this rec group's types.
@@ -1283,6 +1290,10 @@ impl TypeRegistryInner {
 
     /// For each cross-rec group type reference inside `entry`, decrement the
     /// referenced rec group's registration count.
+    ///
+    /// This function pushes to the drop stack without calling
+    /// `drain_drop_stack`. So it should only be called from within a
+    /// `drain_drop_stack` loop itself.
     fn decref_outgoing_edges(&mut self, entry: &RecGroupEntry) {
         let key = &entry.0.hash_consing_key;
         debug_assert!(key.is_canonicalized_for_hash_consing());
@@ -1296,7 +1307,6 @@ impl TypeRegistryInner {
             Ok(())
         })
         .unwrap();
-        self.drain_drop_stack();
     }
 
     /// Pre-allocate capacity for a rec group of size `num_types` in our various
@@ -1318,6 +1328,8 @@ impl TypeRegistryInner {
             type_to_supertypes: _,
             type_to_trampoline: _,
             type_to_gc_layout: _,
+            #[cfg(debug_assertions)]
+                draining_drop_stack: _,
         } = self;
 
         // This map contains rec groups, not types, so only reserve space for
@@ -1576,8 +1588,9 @@ impl TypeRegistryInner {
 
     /// Enqueue an entry for dropping.
     ///
-    /// Should always be followed by some call to `drain_drop_stack()`, although
-    /// it is fine to associate many `push_to_drop_stack()` calls with one final
+    /// Should always be called within the `drain_drop_stack` loop *xor*
+    /// followed by some call to `drain_drop_stack()`. Although it is fine to
+    /// associate many `push_to_drop_stack()` calls with one final
     /// `drain_drop_stack()` call.
     fn push_to_drop_stack(&mut self, entry: RecGroupEntry) {
         log::trace!("Pushing entry to drop stack: {entry:?}");
@@ -1593,16 +1606,33 @@ impl TypeRegistryInner {
     /// unregister that other type as well. However, we use an explicit drop
     /// stack to avoid recursion and the potential stack overflows that
     /// recursion implies.
+    ///
+    /// # Warning
+    ///
+    /// In order to avoid recursion and stack overflows, `drain_drop_stack` must
+    /// not recursively call itself. Ensure this invariant is maintained
+    /// whenever adding a call to `drain_drop_stack` or modifying its
+    /// implementation.
     fn drain_drop_stack(&mut self) {
-        if self.drop_stack.is_empty() {
-            return;
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(
+                !self.draining_drop_stack,
+                "`drain_drop_stack` must not recursively call itself"
+            );
+            self.draining_drop_stack = true;
         }
-        log::trace!("Draining drop stack");
+
         while let Some(entry) = self.drop_stack.pop() {
             log::trace!("Begin unregistering {entry:?}");
             self.debug_assert_all_registered(&entry);
             self.remove_entry_impl(&entry, true);
             log::trace!("End unregistering {entry:?}");
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            self.draining_drop_stack = false;
         }
     }
 }
@@ -1620,6 +1650,7 @@ impl Drop for TypeRegistryInner {
             type_to_trampoline,
             type_to_gc_layout,
             drop_stack,
+            draining_drop_stack: _,
         } = self;
         assert!(
             hash_consing_map.is_empty(),

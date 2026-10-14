@@ -126,6 +126,9 @@ where
     ///   instance is currently calling a host function.
     /// * If `store` requires using [`Self::call_async`] instead, see
     ///   [crate documentation](crate#async) for more info.
+    /// * If the function is async-lifted, in which case either
+    ///   [`Self::call_async`] or [`Self::call_concurrent`] must be used.
+    /// * The call is recursive from within e.g. a `call_async` invocation.
     ///
     /// In general there are many ways that things could go wrong when copying
     /// types in and out of a wasm module with the canonical ABI, and certain
@@ -208,7 +211,10 @@ where
         let mut store = store.as_context_mut();
 
         if self.func.abi_async(store.0) {
-            bail!("must enable the `component-model-async` feature to call async-lifted exports")
+            bail!(
+                "cannot synchronously call an async-lifted export; \
+                 use `call_async` or `call_concurrent` instead"
+            );
         }
 
         // Note that this is in theory simpler than it might read at this time.

@@ -113,6 +113,18 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
         )
     }
 
+    // Disallow same-instance adapters. This is, as of the time of this writing,
+    // technically not spec-conformant. This is something we'll want to
+    // reconcile with the upstream specification because without this check the
+    // precise order of lifts/lowers is visible to the guest which is generally
+    // not something that the spec desires.
+    if adapter.lift.instance == adapter.lower.instance {
+        let (mut compiler, _, _) = compiler(module, adapter);
+        compiler.trap(Trap::CannotEnterComponent);
+        compiler.finish();
+        return;
+    }
+
     // This closure compiles a function to be exported to the host which host to
     // lift the parameters from the caller and lower them to the callee.
     //
