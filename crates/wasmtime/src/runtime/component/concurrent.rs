@@ -1556,35 +1556,9 @@ impl<T> StoreContextMut<'_, T> {
                 // The future we were passed has not yet completed, so handle
                 // any work items and then loop again.
                 PollResult::ProcessWork {
-                    ready,
+                    mut ready,
                     low_priority,
                 } => {
-                    struct Dispose<'a, T: 'static> {
-                        store: StoreContextMut<'a, T>,
-                        ready: Option<WorkItem>,
-                    }
-
-                    impl<'a, T> Drop for Dispose<'a, T> {
-                        fn drop(&mut self) {
-                            if let Some(item) = self.ready.take() {
-                                match item {
-                                    WorkItem::ResumeFiber { mut fiber, .. } => {
-                                        fiber.dispose(self.store.0);
-                                    }
-                                    WorkItem::PushFuture(future) => {
-                                        tls::set(self.store.0, move || drop(future))
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-
-                    let mut dispose = Dispose {
-                        store: self.as_context_mut(),
-                        ready,
-                    };
-
                     // If we're about to run a low-priority task, first yield to
                     // the executor.  This ensures that it won't be starved of
                     // the ability to e.g. update the readiness of sockets,
@@ -1606,23 +1580,27 @@ impl<T> StoreContextMut<'_, T> {
                     // performance issues, this could be optimized such that we
                     // only yield periodically (e.g. for batches of low priority
                     // items) and not for each and every individual item.
+                    //
+                    // While we're yielded put the item back on the queue so it
+                    // stays live within the store, and then if/when we come
+                    // back take it back out.
                     if low_priority {
-                        dispose.store.0.yield_now().await;
+                        if let Some(item) = ready.take() {
+                            self.0.concurrent_state_mut()?.low_priority.push_back(item);
+                        }
+                        self.0.yield_now().await;
                         turns_without_yield = 0;
+                        ready = self.0.concurrent_state_mut()?.low_priority.pop_back();
                     }
 
-                    if let Some(item) = dispose.ready.take() {
-                        dispose
-                            .store
-                            .as_context_mut()
-                            .handle_work_item(item)
-                            .await?;
+                    if let Some(item) = ready {
+                        self.as_context_mut().handle_work_item(item).await?;
                     }
 
                     turns_without_yield += 1;
                     if turns_without_yield == MAX_TURNS_WITHOUT_YIELD {
                         turns_without_yield = 0;
-                        dispose.store.0.yield_now().await;
+                        self.0.yield_now().await;
                     }
                 }
             }
