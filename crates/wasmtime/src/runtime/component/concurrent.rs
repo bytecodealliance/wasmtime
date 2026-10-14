@@ -2492,7 +2492,9 @@ impl StoreOpaque {
         };
 
         let suspend_reason = &mut self.concurrent_state_mut()?.suspend_reason;
-        assert!(suspend_reason.is_none());
+        if suspend_reason.is_some() {
+            bail_bug!("suspend reason unexpectedly already set for store");
+        }
         *suspend_reason = Some(reason);
 
         // We'll panic if we call `Self::with_blocking` when the fiber is being
