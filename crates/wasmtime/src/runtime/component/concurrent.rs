@@ -2856,12 +2856,13 @@ impl Instance {
             .get(guest_task)?
             .call_post_return_automatically()
         {
-            let (calls, host_table, _, instance) = store
+            let (calls, host_table, handle_counter, _, instance) = store
                 .store_opaque_mut()
                 .component_resource_state_with_instance(self);
             ResourceTables {
                 calls,
                 host_table: Some(host_table),
+                handle_counter,
                 guest: Some(instance.guest_tables()),
             }
             .exit_call()?;

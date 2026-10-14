@@ -391,10 +391,12 @@ impl HostResourceIndex {
 
 impl<'a> HostResourceTables<'a> {
     pub fn new_host(store: &'a mut StoreOpaque) -> HostResourceTables<'a> {
-        let (calls, host_table, host_resource_data) = store.component_resource_state();
+        let (calls, host_table, handle_counter, host_resource_data) =
+            store.component_resource_state();
         HostResourceTables::from_parts(
             ResourceTables {
                 host_table: Some(host_table),
+                handle_counter,
                 calls,
                 guest: None,
             },

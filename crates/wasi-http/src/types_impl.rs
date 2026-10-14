@@ -475,7 +475,7 @@ where
         let req = self.table().get_mut(&request)?;
 
         if let Some(s) = path_with_query.as_ref() {
-            if let Err(_) = http::uri::PathAndQuery::from_str(s) {
+            if crate::parse_path_with_query(s).is_none() {
                 return Ok(Err(()));
             }
         }

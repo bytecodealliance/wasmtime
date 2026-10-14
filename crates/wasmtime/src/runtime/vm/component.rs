@@ -37,7 +37,7 @@ mod resources;
 #[cfg(feature = "component-model-async")]
 pub use self::resources::CallContext;
 pub use self::resources::{
-    CallContexts, ResourceTable, ResourceTables, TypedResource, TypedResourceIndex,
+    CallContexts, HandleCounter, ResourceTable, ResourceTables, TypedResource, TypedResourceIndex,
 };
 
 #[cfg(feature = "component-model-async")]

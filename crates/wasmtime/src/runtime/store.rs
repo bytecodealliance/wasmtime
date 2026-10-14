@@ -1970,11 +1970,13 @@ at https://bytecodealliance.org/security.
     ) -> (
         &mut vm::component::CallContexts,
         &mut vm::component::ResourceTable,
+        &mut vm::component::HandleCounter,
         &mut crate::component::HostResourceData,
     ) {
         (
             &mut self.component_calls,
             &mut self.component_host_table,
+            self.store_data.handle_counter_mut(),
             &mut self.host_resource_data,
         )
     }
@@ -1997,14 +1999,20 @@ at https://bytecodealliance.org/security.
     ) -> (
         &mut vm::component::CallContexts,
         &mut vm::component::ResourceTable,
+        &mut vm::component::HandleCounter,
         &mut crate::component::HostResourceData,
         Pin<&mut vm::component::ComponentInstance>,
     ) {
+        instance.id().assert_belongs_to(self.store_data.id());
+        let (instance, handle_counter) = self
+            .store_data
+            .component_instance_and_handle_counter_mut(instance.id().instance());
         (
             &mut self.component_calls,
             &mut self.component_host_table,
+            handle_counter,
             &mut self.host_resource_data,
-            instance.id().from_data_get_mut(&mut self.store_data),
+            instance,
         )
     }
 

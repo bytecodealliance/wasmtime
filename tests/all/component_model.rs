@@ -11,6 +11,7 @@ mod bindgen;
 mod call_hook;
 mod dynamic;
 mod func;
+mod handle_table_limit;
 mod import;
 mod instance;
 mod linker;

@@ -1,3 +1,20 @@
+## 36.0.18
+
+Released 2026-10-14.
+
+### Fixed
+
+* Component-model handle tables are capped only per instance and charged to no limit.
+  [GHSA-q554-3cjc-rx7p](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-q554-3cjc-rx7p)
+
+* Filesystem sandbox escape when renaming symlinks with trailing slashes.
+  [GHSA-m9f7-9w4p-gv38](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m9f7-9w4p-gv38)
+
+* Guests can send absolute-form HTTP requests to different hosts.
+  [GHSA-5qpp-g3j2-8frx](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5qpp-g3j2-8frx)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.17
 
 Released 2026-10-02.

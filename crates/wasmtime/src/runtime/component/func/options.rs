@@ -3,7 +3,7 @@ use crate::component::resources::{HostResourceData, HostResourceIndex, HostResou
 use crate::component::{Instance, ResourceType};
 use crate::prelude::*;
 use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
+    CallContexts, ComponentInstance, HandleCounter, InstanceFlags, ResourceTable, ResourceTables,
 };
 use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
@@ -428,13 +428,14 @@ impl<'a, T: 'static> LowerContext<'a, T> {
     }
 
     fn resource_tables(&mut self) -> HostResourceTables<'_> {
-        let (calls, host_table, host_resource_data, instance) = self
+        let (calls, host_table, handle_counter, host_resource_data, instance) = self
             .store
             .0
             .component_resource_state_with_instance(self.instance);
         HostResourceTables::from_parts(
             ResourceTables {
                 host_table: Some(host_table),
+                handle_counter,
                 calls,
                 guest: Some(instance.guest_tables()),
             },
@@ -474,6 +475,7 @@ pub struct LiftContext<'a> {
     instance_handle: Instance,
 
     host_table: &'a mut ResourceTable,
+    handle_counter: &'a mut HandleCounter,
     host_resource_data: &'a mut HostResourceData,
 
     calls: &'a mut CallContexts,
@@ -504,7 +506,7 @@ impl<'a> LiftContext<'a> {
         let memory = options
             .memory
             .map(|_| options.memory(unsafe { &*(store as *const StoreOpaque) }));
-        let (calls, host_table, host_resource_data, instance) =
+        let (calls, host_table, handle_counter, host_resource_data, instance) =
             store.component_resource_state_with_instance(instance_handle);
         let (component, instance) = instance.component_and_self();
 
@@ -516,6 +518,7 @@ impl<'a> LiftContext<'a> {
             instance_handle,
             calls,
             host_table,
+            handle_counter,
             host_resource_data,
             hostcall_fuel,
         }
@@ -604,6 +607,7 @@ impl<'a> LiftContext<'a> {
         HostResourceTables::from_parts(
             ResourceTables {
                 host_table: Some(self.host_table),
+                handle_counter: self.handle_counter,
                 calls: self.calls,
                 // Note that the unsafety here should be valid given the contract of
                 // `LiftContext::new`.

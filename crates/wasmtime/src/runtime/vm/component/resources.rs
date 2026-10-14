@@ -37,6 +37,38 @@ use wasmtime_environ::component::{
 /// currently and keeps the upper bit free for use in the component.
 const MAX_RESOURCE_HANDLE: u32 = 1 << 30;
 
+/// Live-handle count for all `ResourceTable`s in a store.
+///
+/// `MAX_RESOURCE_HANDLE` only caps each table; total handles would otherwise
+/// scale with the guest-controlled number of instances. This imposes one
+/// store-wide ceiling instead.
+///
+/// A single one of these lives in the store and is passed by `&mut` to every
+/// table operation that inserts or removes a handle. The count tracks live
+/// handles (incremented in `insert`, decremented in `remove`), since freed slots
+/// are reused.
+pub struct HandleCounter {
+    live: usize,
+    limit: usize,
+}
+
+impl HandleCounter {
+    /// Creates a counter with no live handles and the given `limit`.
+    pub fn new(limit: usize) -> HandleCounter {
+        HandleCounter { live: 0, limit }
+    }
+
+    /// Returns the configured limit on simultaneously-live handles.
+    pub fn limit(&self) -> usize {
+        self.limit
+    }
+
+    /// Updates the limit. Does not retroactively trap tables already over it.
+    pub fn set_limit(&mut self, limit: usize) {
+        self.limit = limit;
+    }
+}
+
 /// Contextual state necessary to perform resource-related operations.
 ///
 /// This state a bit odd since it has a few optional bits, but the idea is that
@@ -73,6 +105,10 @@ pub struct ResourceTables<'a> {
     /// that this is a heterogeneous table instead of only containing a single
     /// type.
     pub host_table: Option<&'a mut ResourceTable>,
+
+    /// The store-wide live-handle counter, charged by every insertion into and
+    /// removal from any of the tables above.
+    pub handle_counter: &'a mut HandleCounter,
 
     /// Scope information about calls actively in use to track information such
     /// as borrow counts.
@@ -233,41 +269,53 @@ pub struct CallContext {
 }
 
 impl ResourceTables<'_> {
-    fn table_for_resource(&mut self, resource: &TypedResource) -> &mut ResourceTable {
-        match resource {
+    fn table_for_resource(
+        &mut self,
+        resource: &TypedResource,
+    ) -> (&mut ResourceTable, &mut HandleCounter) {
+        let table = match resource {
             TypedResource::Host(_) => self.host_table.as_mut().unwrap(),
             TypedResource::Component { ty, .. } => {
                 let (tables, types) = self.guest.as_mut().unwrap();
                 &mut tables[types[*ty].instance]
             }
-        }
+        };
+        (table, &mut *self.handle_counter)
     }
 
-    fn table_for_index(&mut self, index: &TypedResourceIndex) -> &mut ResourceTable {
-        match index {
+    fn table_for_index(
+        &mut self,
+        index: &TypedResourceIndex,
+    ) -> (&mut ResourceTable, &mut HandleCounter) {
+        let table = match index {
             TypedResourceIndex::Host(_) => self.host_table.as_mut().unwrap(),
             TypedResourceIndex::Component { ty, .. } => {
                 let (tables, types) = self.guest.as_mut().unwrap();
                 &mut tables[types[*ty].instance]
             }
-        }
+        };
+        (table, &mut *self.handle_counter)
     }
 
     /// Implementation of the `resource.new` canonical intrinsic.
     ///
     /// Note that this is the same as `resource_lower_own`.
     pub fn resource_new(&mut self, resource: TypedResource) -> Result<u32> {
-        self.table_for_resource(&resource).insert(Slot::Own {
-            resource,
-            lend_count: 0,
-        })
+        let (table, counter) = self.table_for_resource(&resource);
+        table.insert(
+            counter,
+            Slot::Own {
+                resource,
+                lend_count: 0,
+            },
+        )
     }
 
     /// Implementation of the `resource.rep` canonical intrinsic.
     ///
     /// This one's one of the simpler ones: "just get the rep please"
     pub fn resource_rep(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        self.table_for_index(&index).rep(index)
+        self.table_for_index(&index).0.rep(index)
     }
 
     /// Implementation of the `resource.drop` canonical intrinsic minus the
@@ -284,7 +332,8 @@ impl ResourceTables<'_> {
     /// to run. If `None` is returned then that means a `borrow` handle was
     /// removed and no destructor is necessary.
     pub fn resource_drop(&mut self, index: TypedResourceIndex) -> Result<Option<u32>> {
-        match self.table_for_index(&index).remove(index)? {
+        let (table, counter) = self.table_for_index(&index);
+        match table.remove(counter, index)? {
             Slot::Own {
                 resource,
                 lend_count: 0,
@@ -313,10 +362,14 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lower_own` function.
     pub fn resource_lower_own(&mut self, resource: TypedResource) -> Result<u32> {
-        self.table_for_resource(&resource).insert(Slot::Own {
-            resource,
-            lend_count: 0,
-        })
+        let (table, counter) = self.table_for_resource(&resource);
+        table.insert(
+            counter,
+            Slot::Own {
+                resource,
+                lend_count: 0,
+            },
+        )
     }
 
     /// Attempts to remove an "own" handle from the specified table and its
@@ -328,7 +381,8 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lift_own` function.
     pub fn resource_lift_own(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        match self.table_for_index(&index).remove(index)? {
+        let (table, counter) = self.table_for_index(&index);
+        match table.remove(counter, index)? {
             Slot::Own {
                 resource,
                 lend_count: 0,
@@ -349,7 +403,7 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        match self.table_for_index(&index).get_mut(index)? {
+        match self.table_for_index(&index).0.get_mut(index)? {
             Slot::Own {
                 resource,
                 lend_count,
@@ -382,8 +436,8 @@ impl ResourceTables<'_> {
         let scope = self.calls.scopes.len() - 1;
         let borrow_count = &mut self.calls.scopes.last_mut().unwrap().borrow_count;
         *borrow_count = borrow_count.checked_add(1).unwrap();
-        self.table_for_resource(&resource)
-            .insert(Slot::Borrow { resource, scope })
+        let (table, counter) = self.table_for_resource(&resource);
+        table.insert(counter, Slot::Borrow { resource, scope })
     }
 
     /// Enters a new calling context, starting a fresh count of borrows and
@@ -408,7 +462,7 @@ impl ResourceTables<'_> {
             // Note the panics here which should never get triggered in theory
             // due to the dynamic tracking of borrows and such employed for
             // resources.
-            match self.table_for_index(lender).get_mut(*lender).unwrap() {
+            match self.table_for_index(lender).0.get_mut(*lender).unwrap() {
                 Slot::Own { lend_count, .. } => {
                     *lend_count -= 1;
                 }
@@ -420,7 +474,14 @@ impl ResourceTables<'_> {
 }
 
 impl ResourceTable {
-    fn insert(&mut self, new: Slot) -> Result<u32> {
+    fn insert(&mut self, counter: &mut HandleCounter, new: Slot) -> Result<u32> {
+        // Enforce the store-wide cap before mutating; `MAX_RESOURCE_HANDLE`
+        // alone scales with the guest-controlled instance count. See
+        // `HandleCounter`.
+        if counter.live >= counter.limit {
+            bail!("cannot allocate another handle: store handle limit exceeded");
+        }
+
         let next = self.next as usize;
         if next == self.slots.len() {
             self.slots.push(Slot::Free {
@@ -441,6 +502,10 @@ impl ResourceTable {
         if ret >= MAX_RESOURCE_HANDLE {
             bail!("cannot allocate another handle: index overflow");
         }
+
+        // Count the handle only once its slot is committed; pairs with the
+        // decrement in `remove`.
+        counter.live += 1;
         Ok(ret)
     }
 
@@ -471,10 +536,13 @@ impl ResourceTable {
         }
     }
 
-    fn remove(&mut self, idx: TypedResourceIndex) -> Result<Slot> {
+    fn remove(&mut self, counter: &mut HandleCounter, idx: TypedResourceIndex) -> Result<Slot> {
         let to_fill = Slot::Free { next: self.next };
+        // `get_mut` rejects a freed slot, so a successful lookup means a live
+        // handle is being removed; decrement only after this `?`.
         let ret = mem::replace(self.get_mut(idx)?, to_fill);
         self.next = idx.raw_index() - 1;
+        counter.live -= 1;
         Ok(ret)
     }
 }
