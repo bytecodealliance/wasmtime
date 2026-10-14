@@ -3396,3 +3396,63 @@ async fn yield_callback_after_dropped_event_loop() -> Result<()> {
     store.assert_concurrent_state_empty();
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn start_call_from_inline_stream_producer() -> Result<()> {
+    // `read`'s `stream.read` polls the host producer below inline, and the
+    // producer starts a concurrent call to `thunk`.
+    let component = r#"
+(component
+  (type $s (stream u8))
+  (core module $libc (memory (export "memory") 1))
+  (core instance $libc (instantiate $libc))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "memory"))))
+  (core module $m
+    (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+    (func (export "thunk"))
+    (func (export "read") (param $reader i32) (result i32)
+      (call $stream.read (local.get $reader) (i32.const 0) (i32.const 1)))
+  )
+  (core instance $i (instantiate $m (with "" (instance
+    (export "stream.read" (func $stream.read))
+  ))))
+  (func (export "thunk") (canon lift (core func $i "thunk")))
+  (func (export "read") (param "s" $s) (result u32) (canon lift (core func $i "read")))
+)
+"#;
+
+    struct Producer;
+
+    impl StreamProducer<Option<TypedFunc<(), ()>>> for Producer {
+        type Item = u8;
+        type Buffer = Option<u8>;
+
+        fn poll_produce<'a>(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            mut store: StoreContextMut<'a, Option<TypedFunc<(), ()>>>,
+            mut destination: Destination<'a, u8, Option<u8>>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            let thunk = store.data().unwrap();
+            // This at least shouldn't panic...
+            _ = thunk.start_call_concurrent(&mut store, ())?;
+            destination.set_buffer(Some(0));
+            Poll::Ready(Ok(StreamResult::Completed))
+        }
+    }
+
+    let engine = super::async_engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, None);
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    *store.data_mut() = Some(instance.get_typed_func(&mut store, "thunk")?);
+    let read = instance.get_typed_func::<(StreamReader<u8>,), (u32,)>(&mut store, "read")?;
+    let reader = StreamReader::new(&mut store, Producer)?;
+    let (code,) = read.call_async(&mut store, (reader,)).await?;
+    assert_eq!(code, 1 << 4 /* COMPLETED, 1 item */);
+    Ok(())
+}
