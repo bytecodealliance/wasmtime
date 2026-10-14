@@ -213,6 +213,12 @@ async fn p3_http_outbound_request_large_post() -> wasmtime::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_long_path() -> wasmtime::Result<()> {
+    let server = Server::http1(1)?;
+    run_cli(P3_HTTP_OUTBOUND_REQUEST_LONG_PATH_COMPONENT, &server).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_put() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_PUT_COMPONENT, &server).await

@@ -1,5 +1,6 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::rc::Rc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -1139,6 +1140,124 @@ async fn async_gc_with_func_new_and_func_wrap() -> Result<()> {
     let instance = linker.instantiate_async(&mut store, &module).await?;
     let b = instance.get_typed_func::<(), ()>(&mut store, "b")?;
     b.call_async(&mut store, ()).await?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn sync_call_from_fiber() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (type $s (struct (field i64)))
+            (import "host" "f" (func $f))
+            (func (export "outer") call $f)
+            (func (export "inner")
+              (local $i i32)
+              (loop $l
+                (drop (struct.new $s (i64.const 0)))
+                (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                (br_if $l (i32.lt_u (local.get $i) (i32.const 2000000))))))"#,
+    )?;
+    let mut linker = Linker::<()>::new(&engine);
+    linker.func_wrap("host", "f", |mut caller: Caller<'_, ()>| -> Result<()> {
+        let not_send = Rc::new(());
+        let before = std::thread::current().id();
+        let inner = caller.get_export("inner").unwrap().into_func().unwrap();
+        inner.typed::<(), ()>(&caller)?.call(&mut caller, ())?;
+        // As of this writing, the above call should return an error, but in
+        // case we ever _do_ support recursive `Func::call` on a fiber, the
+        // following assertion should hold:
+        let after = std::thread::current().id();
+        _ = Rc::strong_count(&not_send);
+        assert_eq!(before, after);
+        Ok(())
+    })?;
+    let mut store = Store::new(&engine, ());
+    let inst = linker.instantiate(&mut store, &module)?;
+    let outer = inst.get_typed_func::<(), ()>(&mut store, "outer")?;
+    let mut fut: Pin<Box<dyn Future<Output = Result<()>> + Send>> =
+        Box::pin(async move { outer.call_async(&mut store, ()).await });
+    if let Poll::Ready(r) = fut.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
+        let err = r.unwrap_err();
+        assert!(
+            format!("{err:?}").contains("cannot do blocking `call` from an async context"),
+            "{err:?}"
+        );
+        return Ok(());
+    }
+    // As of this writing, we'll never reach this point, but see the comment
+    // about supporting `Func::call` on a fiber above.
+    std::thread::spawn(move || {
+        loop {
+            if let Poll::Ready(r) = fut.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
+                return r;
+            }
+        }
+    })
+    .join()
+    .unwrap()?;
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn recurse_async() -> Result<()> {
+    const WAT: &str = r#"
+(module
+  (import "host" "reenter" (func $reenter (param i32)))
+  ;; burn roughly `n` frames of stack, then call into the host
+  (func $burn (param $n i32) (param $level i32)
+    (local i64 i64 i64 i64 i64 i64 i64 i64)
+    local.get $n
+    if
+      local.get $n
+      i32.const 1
+      i32.sub
+      local.get $level
+      call $burn
+    else
+      local.get $level
+      call $reenter
+    end)
+  (func (export "f") (param $level i32)
+    i32.const 2000
+    local.get $level
+    call $burn)
+)
+"#;
+
+    let engine = Engine::default();
+    let module = Module::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, None::<Func>);
+    let reenter = Func::wrap(
+        &mut store,
+        |mut caller: Caller<'_, Option<Func>>, level: i32| -> Result<()> {
+            let f = caller.data().unwrap();
+            f.call(&mut caller, &[Val::I32(level + 1)], &mut [])
+        },
+    );
+    let instance = Instance::new(&mut store, &module, &[reenter.into()])?;
+    let f = instance.get_func(&mut store, "f").unwrap();
+    *store.data_mut() = Some(f);
+
+    let r = f.call(&mut store, &[Val::I32(0)], &mut []);
+    let err = r.unwrap_err();
+    assert!(
+        format!("{err:?}").contains("call stack exhausted"),
+        "{err:?}"
+    );
+
+    let r = f.call_async(&mut store, &[Val::I32(0)], &mut []).await;
+    let err = r.unwrap_err();
+    assert!(
+        format!("{err:?}").contains("cannot do blocking `call` from an async context"),
+        "{err:?}"
+    );
 
     Ok(())
 }

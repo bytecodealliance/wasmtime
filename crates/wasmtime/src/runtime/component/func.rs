@@ -247,6 +247,9 @@ impl Func {
     /// * The function calls a host function which returns an error
     /// * The `store` used requires the use of [`Func::call_async`] instead. See
     ///   [store documentation](crate#async) for more information.
+    /// * If the function is async-lifted, in which case either
+    ///   [`Self::call_async`] or [`Self::call_concurrent`] must be used.
+    /// * The call is recursive from within e.g. a `call_async` invocation.
     ///
     /// See [`TypedFunc::call`] for more information in addition to
     /// [`wasmtime::Func::call`](crate::Func::call).
@@ -342,9 +345,9 @@ impl Func {
         self.check_params_results(store.as_context_mut(), params, results)?;
 
         if self.abi_async(store.0) {
-            unreachable!(
-                "async-lifted exports should have failed validation \
-                 when `component-model-async` feature disabled"
+            bail!(
+                "cannot synchronously call an async-lifted export; \
+                 use `call_async` or `call_concurrent` instead"
             );
         }
 
@@ -498,7 +501,6 @@ impl Func {
             self.instance,
             store.as_context_mut(),
             options_idx,
-            flags,
             ty,
             |cx, ty| lower(cx, ty, map_maybe_uninit!(space.params)),
         )?;
@@ -680,21 +682,12 @@ impl Func {
         instance: Instance,
         mut store: StoreContextMut<T>,
         options: OptionsIndex,
-        mut flags: InstanceFlags,
         ty: TypeFuncIndex,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
-        // Perform the actual lowering, where while this is running the
-        // component is forbidden from calling imports.
-        unsafe {
-            debug_assert!(flags.may_leave());
-            flags.set_may_leave(false);
-        }
         let mut cx = LowerContext::new(store.as_context_mut(), options, instance);
         let param_ty = InterfaceType::Tuple(cx.types[ty].params);
-        let result = lower(&mut cx, param_ty);
-        unsafe { flags.set_may_leave(true) };
-        result
+        lower(&mut cx, param_ty)
     }
 
     /// Creates a `LiftContext` using the provided configuration values and runs

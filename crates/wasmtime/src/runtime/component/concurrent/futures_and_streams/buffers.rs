@@ -10,6 +10,7 @@ pub use untyped::*;
 mod untyped {
     use super::WriteBuffer;
     use crate::vm::SendSyncPtr;
+    use crate::{Result, bail};
     use core::any::TypeId;
     use core::marker;
     use core::mem;
@@ -62,21 +63,23 @@ mod untyped {
 
         /// Acquires the underlying `WriteBuffer<T>` this was created with.
         ///
-        /// # Panics
-        ///
-        /// Panics if `T` does not match the type that this was created with.
-        pub fn get_mut<T: 'static>(&mut self) -> &mut dyn WriteBuffer<T> {
-            assert_eq!(self.element_type_id, TypeId::of::<T>());
+        /// Returns an error if `T` does not match the type that this was
+        /// created with.
+        pub fn get_mut<T: 'static>(&mut self) -> Result<&mut dyn WriteBuffer<T>> {
+            if self.element_type_id != TypeId::of::<T>() {
+                bail!("host stream item type mismatch")
+            }
+
             // SAFETY: the `T` has been checked with `TypeId` and this
             // structure also is proof of valid existence of the original
             // `&mut WriteBuffer<T>`, so taking the raw pointer back to a safe
             // reference is valid.
-            unsafe {
+            Ok(unsafe {
                 &mut *ReinterpretWriteBuffer {
                     untyped: self.buf.as_ptr(),
                 }
                 .typed
-            }
+            })
         }
     }
 }
