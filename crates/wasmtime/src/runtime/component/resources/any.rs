@@ -130,6 +130,26 @@ impl ResourceAny {
         resource.try_into_resource_any(store)
     }
 
+    /// Creates a new owned resource of type `ty` with the `rep` specified.
+    ///
+    /// Unlike `try_from_resource`, which derives the resource type from a Rust
+    /// type parameter, this takes the type dynamically. It is used to
+    /// synthesize a handle whose type is only known at runtime, such as a
+    /// default value for an `own` result; see
+    /// `Linker::define_unknown_imports_as_default_values`.
+    ///
+    /// No destructor is attached.
+    pub(crate) fn new_own_dynamic(
+        ty: ResourceType,
+        rep: u32,
+        mut store: impl AsContextMut,
+    ) -> Result<Self> {
+        let store = store.as_context_mut();
+        let idx =
+            HostResourceTables::new_host(store.0)?.host_resource_lower_own(rep, None, None)?;
+        Ok(ResourceAny::new(idx, ty, true))
+    }
+
     /// Attempts to convert this value into a statically typed, host-defined
     /// [`Resource`].
     ///

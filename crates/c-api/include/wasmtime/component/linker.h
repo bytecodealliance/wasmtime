@@ -93,7 +93,8 @@ wasmtime_component_linker_define_unknown_imports_as_traps(
  */
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_component_linker_define_unknown_imports_as_default_values(
-    wasmtime_component_linker_t *linker, const wasmtime_component_t *component);
+    wasmtime_component_linker_t *linker, wasmtime_context_t *store,
+    const wasmtime_component_t *component);
 
 /**
  * \brief Deletes a #wasmtime_component_linker_t created by

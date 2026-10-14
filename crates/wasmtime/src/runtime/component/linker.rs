@@ -5,8 +5,7 @@ use crate::component::instance::RuntimeImport;
 use crate::component::matching::{InstanceType, TypeChecker};
 use crate::component::types;
 use crate::component::{
-    Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, Resource, ResourceAny,
-    ResourceType, Val,
+    Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
 };
 use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
@@ -14,9 +13,7 @@ use alloc::sync::Arc;
 use core::marker;
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
-use wasmtime_environ::component::{
-    ComponentTypes, InterfaceType, NameMap, NameMapIntern, TypeFuncIndex,
-};
+use wasmtime_environ::component::{NameMap, NameMapIntern};
 use wasmtime_environ::{Atom, PrimaryMap, StringPool};
 
 /// A type used to instantiate [`Component`]s.
@@ -368,14 +365,14 @@ impl<T: 'static> Linker<T> {
     /// when instantiating a [`Component`]. This changes that behavior from an
     /// instant error to returning defaults when the import is called. See
     /// [`Type::default_value`](crate::component::types::Type::default_value)
-    /// for what each type defaults to. An imported resource is stubbed out
-    /// with a host-defined type, and a function returning one gets a dummy
-    /// handle of that type.
+    /// for what each type defaults to.
     ///
-    /// A `future`, `stream`, or `error-context` result has no default, as it
-    /// cannot be synthesized without a store-resident producer. Such an import
-    /// is still defined, but traps when called rather than preventing
-    /// instantiation.
+    /// Values are built when the import is called, not here, as a handle's
+    /// type depends on the instance it is flowing into.
+    ///
+    /// A `future`, `stream`, or `error-context` result has no default. Such an
+    /// import is still defined, but traps when called rather than preventing
+    /// instantiation, so a component which never calls it can still be run.
     ///
     /// # Errors
     ///
@@ -384,6 +381,7 @@ impl<T: 'static> Linker<T> {
     /// details on Wasmtime's out-of-memory handling.
     pub fn define_unknown_imports_as_default_values(
         &mut self,
+        _store: impl AsContextMut<Data = T>,
         component: &Component,
     ) -> Result<()> {
         self.define_unknown_imports(component, StubKind::DefaultValue)
@@ -438,16 +436,6 @@ impl<T: 'static> Linker<T> {
                         }
                     };
 
-                    // Fall back to trapping when a result has no default, so
-                    // that a component which never calls this import can still
-                    // be instantiated.
-                    let defaults = match kind {
-                        StubKind::Trap => None,
-                        StubKind::DefaultValue => {
-                            default_results(*_func_idx, types).ok().map(Arc::new)
-                        }
-                    };
-
                     // An `async func`-typed import can never be satisfied by
                     // `func_new` (only a sync-typed import can) — see
                     // `typecheck_async`'s doc comment. Stub it with
@@ -459,30 +447,38 @@ impl<T: 'static> Linker<T> {
                     // error.
                     #[cfg(feature = "component-model-async")]
                     if types[*_func_idx].async_ && linker.engine.tunables().concurrency_support {
-                        let defaults = defaults.clone();
-                        linker.func_new_concurrent(&item_name, move |accessor, _, _, results| {
+                        linker.func_new_concurrent(&item_name, move |accessor, ty, _, results| {
                             let fully_qualified_name = fully_qualified_name.try_clone();
-                            let defaults = defaults.clone();
                             Box::pin(async move {
-                                match defaults {
-                                    Some(defaults) => accessor
-                                        .with(|store| fill_defaults(store, &defaults, results)),
-                                    None => {
-                                        let fully_qualified_name = fully_qualified_name?;
-                                        bail!(
-                                            "unknown import: `{fully_qualified_name}` has not been defined"
-                                        )
-                                    }
+                                let fully_qualified_name = fully_qualified_name?;
+                                match kind {
+                                    StubKind::Trap => bail!(
+                                        "unknown import: `{fully_qualified_name}` has not been defined"
+                                    ),
+                                    StubKind::DefaultValue => accessor
+                                        .with(|store| fill_defaults(store, &ty, results))
+                                        .with_context(|| {
+                                            format_err!(
+                                                "unknown import: `{fully_qualified_name}` has no \
+                                                 default value"
+                                            )
+                                        }),
                                 }
                             })
                         })?;
                         return Ok(());
                     }
 
-                    linker.func_new(&item_name, move |store, _, _, results| match &defaults {
-                        Some(defaults) => fill_defaults(store, defaults, results),
-                        None => {
+                    linker.func_new(&item_name, move |store, ty, _, results| match kind {
+                        StubKind::Trap => {
                             bail!("unknown import: `{fully_qualified_name}` has not been defined")
+                        }
+                        StubKind::DefaultValue => {
+                            fill_defaults(store, &ty, results).with_context(|| {
+                                format_err!(
+                                    "unknown import: `{fully_qualified_name}` has no default value"
+                                )
+                            })
                         }
                     })?;
                 }
@@ -554,62 +550,18 @@ impl StubKind {
     }
 }
 
-/// What a default-value stub writes into one of its result slots.
-enum DefaultResult {
-    /// A value computed up front, cloned into the slot on each call.
-    Val(Val),
-    /// A dummy handle, minted afresh on each call: lowering an `own` handle
-    /// into the guest consumes the host's table entry for it, so one handle
-    /// cannot serve two calls.
-    Resource,
-}
-
-/// Compute what each result of `func` defaults to, failing if any has none.
-fn default_results(
-    func: TypeFuncIndex,
-    types: &Arc<ComponentTypes>,
-) -> Result<TryVec<DefaultResult>> {
-    let results = &types[types[func].results].types;
-    let mut defaults = TryVec::with_capacity(results.len())?;
-    for ty in results.iter() {
-        // `stub_item` defines imported resources as host types, so a host
-        // handle can stand in for an `own`/`borrow` result even though
-        // `Type::default_value` cannot produce one.
-        let default = match ty {
-            InterfaceType::Own(_) | InterfaceType::Borrow(_) => DefaultResult::Resource,
-            _ => {
-                let ty = types::Type::from(
-                    ty,
-                    &InstanceType {
-                        types,
-                        resources: None,
-                    },
-                );
-                DefaultResult::Val(ty.default_value()?)
-            }
-        };
-        defaults.push(default)?;
-    }
-    Ok(defaults)
-}
-
-/// Write `defaults` into a stub function's `results` slots.
+/// Write a default value for each of `ty`'s results into `results`.
+///
+/// `ty` comes from the call itself rather than from the linker, so its `own`
+/// and `borrow` types are those of the instance being called, which is what
+/// makes the handles this produces pass the guest's type check.
 fn fill_defaults<T>(
     mut store: impl AsContextMut<Data = T>,
-    defaults: &[DefaultResult],
+    ty: &types::ComponentFunc,
     results: &mut [Val],
 ) -> Result<()> {
-    for (slot, default) in results.iter_mut().zip(defaults) {
-        *slot = match default {
-            DefaultResult::Val(val) => val.clone(),
-            DefaultResult::Resource => {
-                // The `rep` is arbitrary and never dereferenced: the stub
-                // resource's destructor does nothing.
-                let resource =
-                    ResourceAny::try_from_resource(Resource::<()>::new_own(0), &mut store)?;
-                Val::Resource(resource)
-            }
-        };
+    for (slot, ty) in results.iter_mut().zip(ty.results()) {
+        *slot = ty.default_value(&mut store)?;
     }
     Ok(())
 }

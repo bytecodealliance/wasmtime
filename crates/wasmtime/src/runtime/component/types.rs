@@ -2,9 +2,9 @@
 
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentType;
-use crate::component::Val;
 use crate::component::matching::InstanceType;
-use crate::{Engine, ExternType, FuncType, prelude::*};
+use crate::component::{ResourceAny, Val};
+use crate::{AsContextMut, Engine, ExternType, FuncType, prelude::*};
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Deref;
@@ -958,16 +958,21 @@ impl Type {
     /// numerics, the empty `string`/`list`, `none` for `option`, `ok` for
     /// `result`, no flags set, and the first case of a `variant` or `enum`.
     ///
+    /// An `own` or `borrow` default is a fresh handle in `store`, with an
+    /// arbitrary representation and no destructor. Nothing can be done with
+    /// such a handle beyond passing it back to the component that defines the
+    /// resource.
+    ///
     /// # Errors
     ///
-    /// Returns an error for the handle types (`own`, `borrow`, `future`,
-    /// `stream`, `error-context`), and for any aggregate containing one, as a
-    /// handle is only meaningful relative to a particular store.
+    /// Returns an error for `future`, `stream`, and `error-context`, and for
+    /// any aggregate containing one, as there is currently no way to
+    /// synthesize these without statically knowing their payload type.
     ///
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error
     /// when memory allocation fails. See the `OutOfMemory` type's
     /// documentation for details on Wasmtime's out-of-memory handling.
-    pub fn default_value(&self) -> Result<Val> {
+    pub fn default_value(&self, mut store: impl AsContextMut) -> Result<Val> {
         // Types come from untrusted guests and may nest arbitrarily deeply,
         // so this uses an explicit stack rather than recursing.
         enum Work {
@@ -1061,11 +1066,12 @@ impl Type {
                         work.push(Work::Visit(list.ty()))?;
                     }
 
-                    Type::Own(_)
-                    | Type::Borrow(_)
-                    | Type::Future(_)
-                    | Type::Stream(_)
-                    | Type::ErrorContext => {
+                    Type::Own(ty) | Type::Borrow(ty) => {
+                        let resource = ResourceAny::new_own_dynamic(ty, 0, &mut store)?;
+                        finished.push(Val::Resource(resource))?;
+                    }
+
+                    Type::Future(_) | Type::Stream(_) | Type::ErrorContext => {
                         bail!("no default value exists for type `{}`", ty.desc())
                     }
                 },

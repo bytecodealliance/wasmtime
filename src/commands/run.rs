@@ -705,8 +705,10 @@ impl RunCommand {
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
-                    linker
-                        .define_unknown_imports_as_default_values(main_target.unwrap_component())?;
+                    linker.define_unknown_imports_as_default_values(
+                        &mut *store,
+                        main_target.unwrap_component(),
+                    )?;
                 }
             }
         }

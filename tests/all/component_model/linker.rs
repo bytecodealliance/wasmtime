@@ -280,9 +280,8 @@ fn linker_defines_unknown_imports_as_default_values() -> Result<()> {
     )?;
 
     let mut linker = Linker::<()>::new(&engine);
-    linker.define_unknown_imports_as_default_values(&component)?;
-
     let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
     linker.instantiate(&mut store, &component)?;
 
     // Check the values the stub returns by asking the import's type.
@@ -297,7 +296,7 @@ fn linker_defines_unknown_imports_as_default_values() -> Result<()> {
     let results = func.results().collect::<Vec<_>>();
     assert_eq!(results.len(), 1);
 
-    let Val::Tuple(fields) = results[0].default_value()? else {
+    let Val::Tuple(fields) = results[0].default_value(&mut store)? else {
         panic!("expected a tuple");
     };
     assert_eq!(
@@ -345,15 +344,57 @@ fn linker_default_value_imports_are_callable() -> Result<()> {
     )?;
 
     let mut linker = Linker::<()>::new(&engine);
-    linker.define_unknown_imports_as_default_values(&component)?;
-
     let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
     let instance = linker.instantiate(&mut store, &component)?;
     let run = instance.get_func(&mut store, "run").unwrap();
 
     let mut results = [Val::Bool(false)];
     run.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0], Val::U32(0));
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_default_value_resources_use_the_instances_type() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "r" (type $r (sub resource)))
+            (type $f (func (result (own $r))))
+            (import "f" (func $fn (type $f)))
+
+            (core func $lowered (canon lower (func $fn)))
+            (core module $m
+                (import "" "f" (func $f (result i32)))
+                (func (export "run") (result i32) call $f)
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance (export "f" (func $lowered))))))
+            (func (export "run") (result (own $r))
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker
+        .root()
+        .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
+
+    let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let mut results = [Val::Bool(false)];
+    run.call(&mut store, &[], &mut results)?;
+    let Val::Resource(resource) = results[0] else {
+        panic!("expected a resource");
+    };
+    assert_eq!(resource.ty(), ResourceType::host::<u32>());
 
     Ok(())
 }
@@ -385,9 +426,8 @@ fn linker_defines_unknown_resource_imports_as_default_values() -> Result<()> {
     )?;
 
     let mut linker = Linker::<()>::new(&engine);
-    linker.define_unknown_imports_as_default_values(&component)?;
-
     let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
     let instance = linker.instantiate(&mut store, &component)?;
     let run = instance.get_func(&mut store, "run").unwrap();
 
@@ -412,9 +452,8 @@ fn linker_defines_unknown_nested_imports_as_default_values() -> Result<()> {
             (import "qux" (type (sub resource)))
         )"#,
     )?;
-    linker.define_unknown_imports_as_default_values(&component)?;
-
     let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
     linker.instantiate(&mut store, &component)?;
 
     Ok(())
@@ -449,9 +488,8 @@ async fn linker_defines_undefaultable_imports_as_traps() -> Result<()> {
     let mut linker = Linker::<()>::new(&engine);
 
     // Defining succeeds even though `future<u32>` has no default...
-    linker.define_unknown_imports_as_default_values(&component)?;
-
     let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
     let instance = linker.instantiate_async(&mut store, &component).await?;
 
     // ...but calling the import traps.
@@ -461,9 +499,14 @@ async fn linker_defines_undefaultable_imports_as_traps() -> Result<()> {
         .call_async(&mut store, &[], &mut results)
         .await
         .unwrap_err();
+    let err = format!("{err:?}");
     assert!(
-        format!("{err:?}").contains("unknown import: `f` has not been defined"),
-        "unexpected error: {err:?}"
+        err.contains("unknown import: `f` has no default value"),
+        "unexpected error: {err}"
+    );
+    assert!(
+        err.contains("no default value exists for type `future`"),
+        "unexpected error: {err}"
     );
 
     Ok(())
@@ -484,9 +527,8 @@ async fn linker_defines_unknown_async_imports_as_default_values() -> Result<()> 
             (import "qux" (type (sub resource)))
         )"#,
     )?;
-    linker.define_unknown_imports_as_default_values(&component)?;
-
     let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
     let _ = linker.instantiate_async(&mut store, &component).await?;
 
     Ok(())
@@ -512,9 +554,8 @@ fn linker_defines_deeply_nested_imports_as_default_values() -> Result<()> {
     let component = Component::new(&engine, &wat)?;
 
     let mut linker = Linker::<()>::new(&engine);
-    linker.define_unknown_imports_as_default_values(&component)?;
-
     let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
     // Should not overflow the stack.
     linker.instantiate(&mut store, &component)?;
 

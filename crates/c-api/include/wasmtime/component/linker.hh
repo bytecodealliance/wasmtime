@@ -189,10 +189,11 @@ class Linker {
    * as a trapping function instead.
    */
   Result<std::monostate>
-  define_unknown_imports_as_default_values(const Component &component) {
+  define_unknown_imports_as_default_values(Store::Context cx,
+                                           const Component &component) {
     auto err =
         wasmtime_component_linker_define_unknown_imports_as_default_values(
-            ptr.get(), component.capi());
+            ptr.get(), cx.capi(), component.capi());
     if (err)
       return Error(err);
     return std::monostate();
