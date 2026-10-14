@@ -1114,20 +1114,31 @@ impl CallThreadState {
             }
             _ => pc,
         };
+        self.record_jit_trap(pc, faulting_addr, trap, Some((backtrace_pc, fp)));
+    }
+
+    /// Records a trap at `pc`, capturing a backtrace starting from
+    /// `backtrace_pc_and_fp` in the current activation.
+    ///
+    /// If `backtrace_pc_and_fp` is `None` then the current activation has no
+    /// Wasm frames, and only older activations are included in the backtrace.
+    pub(crate) fn record_jit_trap(
+        &self,
+        pc: usize,
+        faulting_addr: Option<usize>,
+        trap: wasmtime_environ::CompiledTrap,
+        backtrace_pc_and_fp: Option<(usize, usize)>,
+    ) {
         let mut unwind = UnwindReason::from(TrapReason::Jit {
             pc,
             faulting_addr,
             trap,
         });
         if let UnwindReason::Trap(Ok(trap)) = &mut unwind {
-            trap.backtrace = self.capture_backtrace(
-                self.vm_store_context.get().as_ptr(),
-                Some((backtrace_pc, fp)),
-            );
-            trap.coredumpstack = self.capture_coredump(
-                self.vm_store_context.get().as_ptr(),
-                Some((backtrace_pc, fp)),
-            );
+            trap.backtrace =
+                self.capture_backtrace(self.vm_store_context.get().as_ptr(), backtrace_pc_and_fp);
+            trap.coredumpstack =
+                self.capture_coredump(self.vm_store_context.get().as_ptr(), backtrace_pc_and_fp);
         }
         self.record_unwind(unwind);
     }
