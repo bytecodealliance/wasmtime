@@ -3280,3 +3280,48 @@ async fn call_async_from_host_function() -> Result<()> {
     );
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn yield_callback_after_dropped_event_loop() -> Result<()> {
+    let component = r#"
+(component
+  (core func $task.return (canon task.return))
+  (core module $m
+    (import "" "task.return" (func $task.return))
+    (global $n (mut i32) (i32.const 0))
+    (func (export "run") (result i32) (i32.const 1 (; YIELD ;)))
+    (func (export "run-cb") (param i32 i32 i32) (result i32)
+      (global.set $n (i32.add (global.get $n) (i32.const 1)))
+      (if (i32.ge_u (global.get $n) (i32.const 3))
+        (then
+          (call $task.return)
+          (return (i32.const 0 (; EXIT ;)))))
+      (i32.const 1 (; YIELD ;)))
+  )
+  (core instance $i (instantiate $m (with "" (instance
+    (export "task.return" (func $task.return))
+  ))))
+  (func (export "run") async
+    (canon lift (core func $i "run") async (callback (core func $i "run-cb"))))
+)
+"#;
+
+    let engine = super::async_engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+    // Drop the call when the event loop yields before calling the callback
+    // again, then check that the next event loop finishes the task.
+    let future = run.call_async(&mut store, ());
+    assert!(PollOnce::new(Box::pin(future)).await.is_err());
+    store
+        .run_concurrent(async |_| yield_times(10).await)
+        .await?;
+    store.assert_concurrent_state_empty();
+    Ok(())
+}
