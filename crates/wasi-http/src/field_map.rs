@@ -494,6 +494,7 @@ mod tests {
         let mut map = FieldMap::new_mutable(usize::MAX);
         let mut i = 0;
         let err = loop {
+            assert_eq!(map.size, FieldMap::content_size(&map.map));
             match map.set(default_hooks(), format!("k{i}"), vec![b"v".to_vec()]) {
                 Ok(()) => i += 1,
                 Err(e) => break e,
@@ -502,14 +503,14 @@ mod tests {
         assert_eq!(err, FieldMapError::TooManyFields);
         assert_eq!(map.size, FieldMap::content_size(&map.map));
 
-        let err = map
-            .set(
+        assert_eq!(
+            map.set(
                 default_hooks(),
                 "new".to_owned(),
                 vec![b"a".to_vec(), b"b".to_vec()],
-            )
-            .unwrap_err();
-        assert_eq!(err, FieldMapError::TooManyFields);
+            ),
+            Err(FieldMapError::TooManyFields)
+        );
         assert!(!map.contains_key("new"));
         assert_eq!(map.size, FieldMap::content_size(&map.map));
 
@@ -535,11 +536,18 @@ mod tests {
         assert!(!map.contains_key("k0"));
         assert_eq!(map.size, FieldMap::content_size(&map.map));
 
+        assert_eq!(
+            map.set(default_hooks(), "k0".to_owned(), vec![b"v".to_vec()]),
+            Ok(())
+        );
+        assert_eq!(map.get("k0"), Some(&HeaderValue::from_static("v")));
+        assert_eq!(map.size, FieldMap::content_size(&map.map));
+
         // Removing a field never needs new capacity.
         assert_eq!(
             map.remove_all(default_hooks(), "k0".to_owned())
                 .map(|v| v.len()),
-            Ok(0)
+            Ok(1)
         );
         assert_eq!(map.size, FieldMap::content_size(&map.map));
     }
