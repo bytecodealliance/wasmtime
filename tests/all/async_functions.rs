@@ -1180,9 +1180,8 @@ fn sync_call_from_fiber() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let inst = linker.instantiate(&mut store, &module)?;
     let outer = inst.get_typed_func::<(), ()>(&mut store, "outer")?;
-    let store: &'static mut Store<()> = Box::leak(Box::new(store));
     let mut fut: Pin<Box<dyn Future<Output = Result<()>> + Send>> =
-        Box::pin(async move { outer.call_async(&mut *store, ()).await });
+        Box::pin(async move { outer.call_async(&mut store, ()).await });
     if let Poll::Ready(r) = fut.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
         let err = r.unwrap_err();
         assert!(
