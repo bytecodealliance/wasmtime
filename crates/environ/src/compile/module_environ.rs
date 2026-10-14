@@ -825,11 +825,15 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 }
             }
 
-            Payload::CodeSectionStart { count, range, .. } => {
-                self.validator.code_section_start(&range)?;
+            Payload::CodeSectionStart {
+                count,
+                unchecked_range,
+                ..
+            } => {
+                self.validator.code_section_start(&unchecked_range)?;
                 let cnt = usize::try_from(count).unwrap();
                 self.result.function_body_inputs.reserve_exact(cnt);
-                self.result.debuginfo.wasm_file.code_section_offset = range.start;
+                self.result.debuginfo.wasm_file.code_section_offset = unchecked_range.start;
             }
 
             Payload::CodeSectionEntry(body) => {

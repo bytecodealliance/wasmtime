@@ -366,22 +366,22 @@ wasip1 = { version = "1.0.0", default-features = false }
 target-lexicon = "0.13.5"
 rustix = "1.1.4"
 # wit-bindgen:
-wit-bindgen = { version = "0.62.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.62.0", default-features = false }
+wit-bindgen = { version = "0.63.0", default-features = false }
+wit-bindgen-rust-macro = { version = "0.63.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.261.0", default-features = false, features = ['simd'] }
-wat = "1.261.0"
-wast = "261.0.0"
-wasmprinter = "0.261.0"
-wasm-encoder = "0.261.0"
-wasm-smith = "0.261.0"
-wasm-mutate = "0.261.0"
-wit-parser = "0.261.0"
-wit-component = "0.261.0"
-wasm-wave = "0.261.0"
-wasm-compose = { version = "0.261.0", default-features = false }
-json-from-wast = "0.261.0"
+wasmparser = { version = "0.262.0", default-features = false, features = ['simd'] }
+wat = "1.262.0"
+wast = "262.0.0"
+wasmprinter = "0.262.0"
+wasm-encoder = "0.262.0"
+wasm-smith = "0.262.0"
+wasm-mutate = "0.262.0"
+wit-parser = "0.262.0"
+wit-component = "0.262.0"
+wasm-wave = "0.262.0"
+wasm-compose = { version = "0.262.0", default-features = false }
+json-from-wast = "0.262.0"
 
 wstd = "0.6.5"
 wasip2 = "1.0"

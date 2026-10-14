@@ -2,7 +2,6 @@ mod bindings {
     wit_bindgen::generate!({
         path: "../misc/component-async-tests/wit",
         world: "closed-streams",
-        async: true,
     });
 
     use super::Component;

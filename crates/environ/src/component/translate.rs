@@ -1829,10 +1829,6 @@ impl<'a, 'data> Translator<'a, 'data> {
             instance_ty.defined_resources.is_empty(),
             "bad unsafe intrinsics import: import `{import}` cannot define any resources"
         );
-        ensure!(
-            instance_ty.explicit_resources.is_empty(),
-            "bad unsafe intrinsics import: import `{import}` cannot export any resources"
-        );
 
         for (name, ty) in &instance_ty.exports {
             let ComponentEntityType::Func(func_ty) = ty.ty else {
