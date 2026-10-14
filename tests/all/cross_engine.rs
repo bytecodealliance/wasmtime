@@ -320,7 +320,7 @@ fn table_new_rejects_foreign_type() -> Result<()> {
         )],
     )?;
     let foreign_heap_ty = HeapType::ConcreteStruct(foreign_struct);
-    let foreign_ty = TableType::new(RefType::new(true, foreign_heap_ty.clone()), 0, None);
+    let foreign_ty = TableType::new(RefType::new(true, foreign_heap_ty.clone()), 0, None)?;
 
     Table::new(&mut store, foreign_ty, Ref::null(&foreign_heap_ty))
         .unwrap_err()
@@ -346,7 +346,7 @@ async fn table_new_async_rejects_foreign_type() -> Result<()> {
         )],
     )?;
     let foreign_heap_ty = HeapType::ConcreteStruct(foreign_struct);
-    let foreign_ty = TableType::new(RefType::new(true, foreign_heap_ty.clone()), 0, None);
+    let foreign_ty = TableType::new(RefType::new(true, foreign_heap_ty.clone()), 0, None)?;
 
     Table::new_async(&mut store, foreign_ty, Ref::null(&foreign_heap_ty))
         .await

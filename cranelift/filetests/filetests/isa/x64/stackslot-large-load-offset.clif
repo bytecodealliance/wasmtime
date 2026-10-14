@@ -1,0 +1,40 @@
+; A load whose offset from a `stack_addr` is too large to fold into a
+; stack-slot address mode: the slot's address is computed in a register and
+; the offset applied to the load instead.
+test compile precise-output
+target x86_64
+
+function %f() -> i64 {
+    ss0 = explicit_slot 16
+    ss1 = explicit_slot 16
+block0:
+    v0 = stack_addr.i64 ss1
+    v1 = load.i64 notrap v0+0x7ffffffc
+    return v1
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x20, %rsp
+; block0:
+;   leaq <offset:1>+0x10(%rsp), %rcx
+;   movq 0x7ffffffc(%rcx), %rax
+;   addq $0x20, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x20, %rsp
+; block1: ; offset 0x8
+;   leaq 0x10(%rsp), %rcx
+;   movq 0x7ffffffc(%rcx), %rax
+;   addq $0x20, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

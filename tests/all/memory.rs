@@ -121,7 +121,7 @@ fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
 
         for (min, max) in [(1, Some(2)), (1, None)].iter() {
             let mut store = Store::new(&engine, ());
-            let mem = Memory::new(&mut store, MemoryType::new(*min, *max)).unwrap();
+            let mem = Memory::new(&mut store, MemoryType::new(*min, *max)?).unwrap();
             let instance = Instance::new(&mut store, &module, &[mem.into()]).unwrap();
             let funcs = find_funcs(&mut store, &instance);
 
@@ -153,8 +153,8 @@ fn guards_present() -> Result<()> {
     config.guard_before_linear_memory(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
-    let static_mem = Memory::new(&mut store, MemoryType::new(1, Some(2)))?;
-    let dynamic_mem = Memory::new(&mut store, MemoryType::new(1, None))?;
+    let static_mem = Memory::new(&mut store, MemoryType::new(1, Some(2))?)?;
+    let dynamic_mem = Memory::new(&mut store, MemoryType::new(1, None)?)?;
 
     let assert_guards = |store: &Store<()>| unsafe {
         // guards before
@@ -369,7 +369,7 @@ fn massive_64_bit_still_limited() -> Result<()> {
 
     let mut store = Store::new(&engine, MyLimiter { hit: false });
     store.limiter(|x| x);
-    let ty = MemoryType::new64(1 << 46, None);
+    let ty = MemoryType::new64(1 << 46, None)?;
     assert!(Memory::new(&mut store, ty).is_err());
     assert!(store.data().hit);
 
@@ -445,7 +445,7 @@ fn static_forced_max() -> Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
-    let mem = Memory::new(&mut store, MemoryType::new(0, None))?;
+    let mem = Memory::new(&mut store, MemoryType::new(0, None)?)?;
     mem.grow(&mut store, 5).unwrap();
     assert!(mem.grow(&mut store, 1).is_err());
     Ok(())
@@ -505,7 +505,7 @@ fn dynamic_extra_growth_unchanged_pointer(config: &mut Config) -> Result<()> {
         Ok(())
     }
 
-    let mem = Memory::new(&mut store, MemoryType::new(10, None))?;
+    let mem = Memory::new(&mut store, MemoryType::new(10, None)?)?;
     assert_behaves_well(&mut store, &mem)?;
 
     let module = Module::new(&engine, r#"(module (memory (export "mem") 10))"#)?;
@@ -595,10 +595,10 @@ fn shared_memory_basics() -> Result<()> {
     let mut config = Config::new();
     config.shared_memory(true);
     let engine = Engine::new(&config)?;
-    assert!(SharedMemory::new(&engine, MemoryType::new(1, None)).is_err());
-    assert!(SharedMemory::new(&engine, MemoryType::new(1, Some(1))).is_err());
-    assert!(SharedMemory::new(&engine, MemoryType::new64(1, None)).is_err());
-    assert!(SharedMemory::new(&engine, MemoryType::new64(1, Some(1))).is_err());
+    assert!(SharedMemory::new(&engine, MemoryType::new(1, None)?).is_err());
+    assert!(SharedMemory::new(&engine, MemoryType::new(1, Some(1))?).is_err());
+    assert!(SharedMemory::new(&engine, MemoryType::new64(1, None)?).is_err());
+    assert!(SharedMemory::new(&engine, MemoryType::new64(1, Some(1))?).is_err());
     assert!(
         MemoryTypeBuilder::default()
             .shared(true)
@@ -608,7 +608,7 @@ fn shared_memory_basics() -> Result<()> {
             .is_err()
     );
 
-    let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
+    let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1)?)?;
     assert!(memory.ty().is_shared());
     assert_eq!(memory.ty().minimum(), 1);
     assert_eq!(memory.ty().maximum(), Some(1));
@@ -670,7 +670,7 @@ fn shared_memory_wait_notify() -> Result<()> {
     let mut config = Config::new();
     config.shared_memory(true);
     let engine = Engine::new(&config)?;
-    let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
+    let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1)?)?;
     let data = unsafe { AtomicU32::from_ptr(memory.data().as_ptr().cast_mut().cast()) };
     let locked = unsafe { AtomicU32::from_ptr(memory.data().as_ptr().add(4).cast_mut().cast()) };
 
@@ -789,8 +789,61 @@ fn non_page_aligned_static_memory() -> Result<()> {
     config.memory_reservation(100_000);
     config.memory_may_move(false);
     let engine = Engine::new(&config)?;
-    let ty = MemoryType::new(1, None);
+    let ty = MemoryType::new(1, None)?;
     Memory::new(&mut Store::new(&engine, ()), ty)?;
+    Ok(())
+}
+
+// When a memory's minimum size exceeds `memory_reservation`, the runtime sizes
+// the allocation from the minimum, so compilers must not treat the reservation
+// as an upper bound on accessible memory.
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn minimum_larger_than_reservation_without_moving(cfg: &mut Config) -> Result<()> {
+    cfg.memory_reservation(0);
+    cfg.memory_may_move(false);
+    let engine = Engine::new(cfg)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 2)
+                (func (export "store") (param i32 i32)
+                    local.get 0
+                    local.get 1
+                    i32.store)
+                (func (export "load") (param i32) (result i32)
+                    local.get 0
+                    i32.load)
+                (func (export "load_offset") (param i32) (result i32)
+                    local.get 0
+                    i32.load offset=70000)
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let store_fn = instance.get_typed_func::<(u32, u32), ()>(&mut store, "store")?;
+    let load = instance.get_typed_func::<u32, u32>(&mut store, "load")?;
+    let load_offset = instance.get_typed_func::<u32, u32>(&mut store, "load_offset")?;
+
+    store_fn.call(&mut store, (0, 42))?;
+    assert_eq!(load.call(&mut store, 0)?, 42);
+    store_fn.call(&mut store, (70_000, 7))?;
+    assert_eq!(load_offset.call(&mut store, 0)?, 7);
+    assert_eq!(load.call(&mut store, 2 * 65536 - 4)?, 0);
+
+    // Accesses past the minimum size must still trap.
+    let trap = load
+        .call(&mut store, 2 * 65536 - 3)
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::MemoryOutOfBounds);
+    let trap = load_offset
+        .call(&mut store, 2 * 65536 - 70_000 - 3)
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::MemoryOutOfBounds);
     Ok(())
 }
 
@@ -857,7 +910,7 @@ fn configure_zero(config: &mut Config) -> Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
-    let ty = MemoryType::new(0, None);
+    let ty = MemoryType::new(0, None)?;
     let memory = Memory::new(&mut store, ty)?;
     assert_eq!(memory.data_size(&store), 0);
 
@@ -870,7 +923,7 @@ fn atomic_wait_massive_timeout() -> Result<()> {
     config.shared_memory(true);
     let engine = Engine::new(&config)?;
 
-    let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
+    let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1)?)?;
     let result = memory.atomic_wait32(0, 1, Some(Duration::MAX));
     assert_eq!(result, Ok(WaitResult::Mismatch));
     let result = memory.atomic_wait64(0, 1, Some(Duration::MAX));

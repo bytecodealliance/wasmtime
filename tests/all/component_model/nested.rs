@@ -124,3 +124,42 @@ fn thread_options_through_inner() -> Result<()> {
     assert_eq!(result.to_str(&store)?, "42");
     Ok(())
 }
+
+#[test]
+fn issue_14506_long_reexport_chain_compiles_quickly() -> Result<()> {
+    const FUNCS: usize = 500;
+    const CHAIN: usize = 500;
+
+    let mut wat = String::from(
+        "                       (component\n\
+                                  (core module $D\n",
+    );
+    for i in 0..FUNCS {
+        wat.push_str(&format!("     (func (export \"f{i}\"))\n"));
+    }
+    wat.push_str(
+        "                         )\n\
+                                  (core module $M\n",
+    );
+    for i in 0..FUNCS {
+        wat.push_str(&format!("     (import \"\" \"f{i}\" (func))\n"));
+    }
+    for i in 0..FUNCS {
+        wat.push_str(&format!("     (export \"f{i}\" (func {i}))\n"));
+    }
+    wat.push_str(
+        "                         )\n\
+                                  (core instance $i0 (instantiate $D))\n",
+    );
+    for i in 1..=CHAIN {
+        let prev = i - 1;
+        wat.push_str(&format!(
+            "                     (core instance $i{i} (instantiate $M (with \"\" (instance $i{prev}))))\n"
+        ));
+    }
+    wat.push_str("              )\n");
+
+    let engine = super::engine();
+    Component::new(&engine, wat)?;
+    Ok(())
+}

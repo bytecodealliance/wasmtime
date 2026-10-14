@@ -305,8 +305,7 @@ fn trampoline_callable(
         | ResourceTransferOwn
         | ResourceTransferBorrow
         | PrepareCall { .. }
-        | SyncStartCall { .. }
-        | AsyncStartCall { .. }
+        | StartCall { .. }
         | FutureTransfer
         | StreamTransfer
         | ErrorContextTransfer

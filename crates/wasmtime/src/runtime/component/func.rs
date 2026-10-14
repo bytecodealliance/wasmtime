@@ -248,6 +248,8 @@ impl Func {
     /// * The `store` used requires the use of [`Func::call_async`] instead. See
     ///   [store documentation](crate#async) for more information.
     /// * The call is recursive from within e.g. a `call_async` invocation.
+    /// * If the function is async-lifted, in which case either
+    ///   [`Self::call_async`] or [`Self::call_concurrent`] must be used.
     ///
     /// See [`TypedFunc::call`] for more information in addition to
     /// [`wasmtime::Func::call`](crate::Func::call).
@@ -343,9 +345,9 @@ impl Func {
         self.check_params_results(store.as_context_mut(), params, results)?;
 
         if self.abi_async(store.0) {
-            unreachable!(
-                "async-lifted exports should have failed validation \
-                 when `component-model-async` feature disabled"
+            bail!(
+                "cannot synchronously call an async-lifted export; \
+                 use `call_async` or `call_concurrent` instead"
             );
         }
 

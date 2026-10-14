@@ -240,10 +240,19 @@ struct FuzzInput<'a> {
 /// then the contents of the custom section are returned along with the
 /// contents of the original module.
 fn extract_fuzz_input(data: &[u8]) -> wasmtime::Result<FuzzInput<'_>> {
-    use wasmparser::{Parser, Payload};
+    use wasmparser::{Encoding, Parser, Payload};
     let mut prev_end = 8;
     for section in Parser::new(0).parse_all(data) {
         let section = section?;
+
+        // Only support core wasm modules here, reject components.
+        if let Payload::Version {
+            encoding: Encoding::Component,
+            ..
+        } = &section
+        {
+            wasmtime::bail!("components are not valid fuzz inputs");
+        }
 
         // If this is a custom section, the end of the section is the end of
         // the entire module, and it's got the expected name, then this section

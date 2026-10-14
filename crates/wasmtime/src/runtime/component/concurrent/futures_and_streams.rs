@@ -13,7 +13,7 @@ use crate::component::{
 use crate::prelude::*;
 use crate::store::{StoreOpaque, StoreToken};
 use crate::try_mutex::{TryMutex, TryMutexGuard};
-use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
+use crate::vm::component::{ComponentInstance, HandleCounter, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use crate::{
@@ -410,11 +410,8 @@ impl<'a, T, B> Destination<'a, T, B> {
     /// Readiness" in the component-model repo][docs].
     ///
     /// [docs]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md#stream-readiness
-    pub fn remaining(&self, mut store: impl AsContextMut) -> Option<usize> {
-        // Note that this unwrap should only trigger for bugs in Wasmtime, and
-        // this is modeled here to centralize the `.unwrap()` for this method in
-        // one location.
-        self.remaining_(store.as_context_mut().0).unwrap()
+    pub fn remaining(&self, mut store: impl AsContextMut) -> Result<Option<usize>> {
+        self.remaining_(store.as_context_mut().0)
     }
 
     fn remaining_(&self, store: &mut StoreOpaque) -> Result<Option<usize>> {
@@ -472,7 +469,7 @@ pub struct DirectDestination<'a, D: 'static> {
 #[cfg(feature = "std")]
 impl<D: 'static> std::io::Write for DirectDestination<'_, D> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let rem = self.remaining();
+        let rem = self.remaining().map_err(std::io::Error::other)?;
         let n = rem.len().min(buf.len());
         rem[..n].copy_from_slice(&buf[..n]);
         self.mark_written(n);
@@ -486,14 +483,7 @@ impl<D: 'static> std::io::Write for DirectDestination<'_, D> {
 
 impl<D: 'static> DirectDestination<'_, D> {
     /// Provide direct access to the writer's buffer.
-    pub fn remaining(&mut self) -> &mut [u8] {
-        // Note that this unwrap should only trigger for bugs in Wasmtime, and
-        // this is modeled here to centralize the `.unwrap()` for this method in
-        // one location.
-        self.remaining_().unwrap()
-    }
-
-    fn remaining_(&mut self) -> Result<&mut [u8]> {
+    pub fn remaining(&mut self) -> Result<&mut [u8]> {
         if let Some(buffer) = self.host_buffer.as_mut() {
             return Ok(buffer.dst);
         }
@@ -521,7 +511,13 @@ impl<D: 'static> DirectDestination<'_, D> {
 
         let memory = instance
             .options_memory_mut(self.store.0, options)
-            .get_mut((address + guest_offset.as_usize())..)
+            .get_mut(
+                if count == 0 {
+                    0
+                } else {
+                    address + guest_offset.as_usize()
+                }..,
+            )
             .and_then(|b| b.get_mut(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -713,7 +709,10 @@ pub trait StreamProducer<D>: Send + 'static {
     ///   items were read.
     ///
     /// * `Poll::Ok(StreamResult::Completed)` - items, if applicable, were
-    ///   written to the `destination`.
+    ///   written to the `destination`. Only zero-length reads (see above) may
+    ///   complete without writing anything; if nothing was written for a
+    ///   nonzero-length read, or for any read by the host, then a trap in the
+    ///   guest will be raised.
     ///
     /// * `Poll::Ok(StreamResult::Cancelled)` - used when `finish` is `true` and
     ///   the implementation was able to successfully cancel any async work that
@@ -934,14 +933,11 @@ impl<'a, T> Source<'a, T> {
 
     /// Return the number of items remaining to be read from the current write
     /// operation.
-    pub fn remaining(&self, mut store: impl AsContextMut) -> usize
+    pub fn remaining(&self, mut store: impl AsContextMut) -> Result<usize>
     where
         T: 'static,
     {
-        // Note that this unwrap should only trigger for bugs in Wasmtime, and
-        // this is modeled here to centralize the `.unwrap()` for this method in
-        // one location.
-        self.remaining_(store.as_context_mut().0).unwrap()
+        self.remaining_(store.as_context_mut().0)
     }
 
     fn remaining_(&self, store: &mut StoreOpaque) -> Result<usize>
@@ -986,7 +982,7 @@ pub struct DirectSource<'a, D: 'static> {
 #[cfg(feature = "std")]
 impl<D: 'static> std::io::Read for DirectSource<'_, D> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let rem = self.remaining();
+        let rem = self.remaining().map_err(std::io::Error::other)?;
         let n = rem.len().min(buf.len());
         buf[..n].copy_from_slice(&rem[..n]);
         self.mark_read(n);
@@ -996,14 +992,7 @@ impl<D: 'static> std::io::Read for DirectSource<'_, D> {
 
 impl<D: 'static> DirectSource<'_, D> {
     /// Provide direct access to the writer's buffer.
-    pub fn remaining(&mut self) -> &[u8] {
-        // Note that this unwrap should only trigger for bugs in Wasmtime, and
-        // this is modeled here to centralize the `.unwrap()` for this method in
-        // one location.
-        self.remaining_().unwrap()
-    }
-
-    fn remaining_(&mut self) -> Result<&[u8]> {
+    pub fn remaining(&mut self) -> Result<&[u8]> {
         if let Some(buffer) = self.host_buffer.as_deref_mut() {
             return Ok(buffer.remaining());
         }
@@ -1031,7 +1020,13 @@ impl<D: 'static> DirectSource<'_, D> {
 
         let memory = instance
             .options_memory(self.store.0, options)
-            .get((address + guest_offset.as_usize())..)
+            .get(
+                if count == 0 {
+                    0
+                } else {
+                    address + guest_offset.as_usize()
+                }..,
+            )
             .and_then(|b| b.get(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -1136,7 +1131,11 @@ pub trait StreamConsumer<D>: Send + 'static {
     /// when `finish` is false, the caller will trap.  Additionally, it should
     /// only return `Poll::Ready(Ok(StreamResult::Completed))` after taking at
     /// least one item from `source` if there is an item available; otherwise,
-    /// the caller will trap.  If `poll_consume` is called with no items in
+    /// the caller will trap.  Items taken during earlier calls for the same
+    /// write which returned `Poll::Pending` count towards this, so it's fine
+    /// to return `Completed` without taking more items once those have been
+    /// forwarded (see "Backpressure" below).  If `poll_consume` is called with
+    /// no items in
     /// `source`, it should only return `Poll::Ready(_)` once it is able to
     /// accept at least one item during the next call to `poll_consume`.
     ///
@@ -1378,7 +1377,7 @@ impl<T> FutureReader<T> {
                     finish
                 ))?;
 
-                Poll::Ready(Ok(if source.remaining(store) == 0 {
+                Poll::Ready(Ok(if source.remaining(store)? == 0 {
                     // Here we return `StreamResult::Completed` even though
                     // we've consumed the last item we'll ever consume.  That's
                     // because the ABI expects `ReturnCode::Completed(1)` rather
@@ -1483,8 +1482,8 @@ pub(super) fn lift_index_to_future(
     match ty {
         InterfaceType::Future(src) => {
             let id = {
-                let (state, instance) = cx.concurrent_state_and_instance_mut();
-                lift_index_to_transmit(instance, state, TransmitIndex::Future(src), index)?
+                let (state, instance, counter) = cx.concurrent_state_and_instance_mut();
+                lift_index_to_transmit(instance, counter, state, TransmitIndex::Future(src), index)?
             };
             cx.host_resource_lower_own(id.rep(), None, None)
         }
@@ -1839,8 +1838,8 @@ pub(super) fn lift_index_to_stream(
     match ty {
         InterfaceType::Stream(src) => {
             let id = {
-                let (state, instance) = cx.concurrent_state_and_instance_mut();
-                lift_index_to_transmit(instance, state, TransmitIndex::Stream(src), index)?
+                let (state, instance, counter) = cx.concurrent_state_and_instance_mut();
+                lift_index_to_transmit(instance, counter, state, TransmitIndex::Stream(src), index)?
             };
             cx.host_resource_lower_own(id.rep(), None, None)
         }
@@ -2044,8 +2043,13 @@ pub(crate) fn lower_error_context_to_index<U>(
 ) -> Result<u32> {
     match ty {
         InterfaceType::ErrorContext(dst) => {
-            let tbl = cx.instance_mut().table_for_error_context(dst);
-            tbl.error_context_insert(rep)
+            let (instance, counter) = cx
+                .instance_handle()
+                .id()
+                .get_mut_and_handle_counter(cx.store.0);
+            instance
+                .table_for_error_context(dst)
+                .error_context_insert(counter, rep)
         }
         _ => func::bad_type_info(),
     }
@@ -2425,6 +2429,7 @@ impl StoreOpaque {
         };
 
         let write_handle = transmit.write_handle;
+        let done = transmit.done;
 
         match mem::replace(&mut transmit.write, new_state) {
             // If a guest is waiting to write, notify it that the read end has
@@ -2445,6 +2450,9 @@ impl StoreOpaque {
                 )?;
             }
 
+            // Otherwise notify the idle write end that the read end has been
+            // dropped, unless it's already done.
+            WriteState::Open if done => {}
             WriteState::Open => {
                 state.update_event(
                     write_handle.rep(),
@@ -2521,6 +2529,7 @@ impl StoreOpaque {
         };
 
         let read_handle = transmit.read_handle;
+        let done = transmit.done;
 
         // Swap in the new read state
         match mem::replace(&mut transmit.read, new_state) {
@@ -2544,7 +2553,8 @@ impl StoreOpaque {
                 )?;
             }
 
-            // If the read state is open, then there are no registered readers of the stream/future
+            // Notify the read-end of the drop, unless we're already done.
+            ReadState::Open if done => {}
             ReadState::Open => {
                 self.concurrent_state_mut()?.update_event(
                     read_handle.rep(),
@@ -2725,13 +2735,15 @@ impl<T> StoreContextMut<'_, T> {
                         Ok((guest_offset, host_offset, count))
                     })?;
 
+                    let produced =
+                        !buffer.remaining().is_empty() || guest_offset > 0 || host_offset > 0;
+
                     match result {
                         StreamResult::Completed => {
-                            if count > 1
-                                && buffer.remaining().is_empty()
-                                && guest_offset == 0
-                                && host_offset == 0
-                            {
+                            // Only zero-length reads may complete without
+                            // producing anything. Note that host-to-host reads
+                            // always have a nonzero `count`.
+                            if count > 0 && !produced {
                                 bail!(
                                     "StreamProducer::poll_produce returned StreamResult::Completed \
                                      without producing any items"
@@ -2743,6 +2755,12 @@ impl<T> StoreContextMut<'_, T> {
                                 bail!(
                                     "StreamProducer::poll_produce returned StreamResult::Cancelled \
                                      without being given a `finish` parameter value of true"
+                                );
+                            }
+                            if produced {
+                                bail!(
+                                    "StreamProducer::poll_produce returned StreamResult::Cancelled \
+                                     after producing at least one item"
                                 );
                             }
                         }
@@ -2870,13 +2888,14 @@ impl<T> StoreContextMut<'_, T> {
 
                 match result {
                     StreamResult::Completed => {
-                        if count > 0
-                            && guest_offset == 0
-                            && host_buffer_remaining_before
-                                .zip(host_buffer.map(|v| v.remaining().len()))
-                                .map(|(before, after)| before == after)
-                                .unwrap_or(false)
-                        {
+                        // Progress for a host writer is tracked by its buffer
+                        // shrinking, whereas for a guest writer it's tracked
+                        // in `guest_offset`.
+                        let consumed = match (host_buffer_remaining_before, host_buffer) {
+                            (Some(before), Some(after)) => before != after.remaining().len(),
+                            _ => guest_offset > 0,
+                        };
+                        if count > 0 && !consumed {
                             bail!(
                                 "StreamConsumer::poll_consume returned StreamResult::Completed \
                                  without consuming any items"
@@ -3269,10 +3288,13 @@ impl Instance {
         ty: TransmitIndex,
         writer: u32,
     ) -> Result<()> {
-        let table = self.id().get_mut(store).table_for_transmit(ty);
+        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
+        let table = instance.table_for_transmit(ty);
         let (transmit_rep, is_done) = match ty {
-            TransmitIndex::Future(ty) => table.future_remove_writable(ty, writer)?,
-            TransmitIndex::Stream(ty) => (table.stream_remove_writable(ty, writer)?, false),
+            TransmitIndex::Future(ty) => table.future_remove_writable(counter, ty, writer)?,
+            TransmitIndex::Stream(ty) => {
+                (table.stream_remove_writable(counter, ty, writer)?, false)
+            }
         };
 
         let id = TableId::<TransmitHandle>::new(transmit_rep);
@@ -3321,6 +3343,9 @@ impl Instance {
 
         // Validate `write_ty` w.r.t. `write_address` to ensure it's properly
         // aligned and in-bounds.
+        //
+        // FIXME(#4311): this and the rest of this function use the 32-bit
+        // layout of payloads, which needs memory64 handling.
         let write_payload_ty = write_ty.payload(write_types);
         let write_abi = match write_payload_ty {
             Some(ty) => write_types.canonical_abi(ty),
@@ -3499,27 +3524,30 @@ impl Instance {
         count: usize,
     ) -> Result<()> {
         let types = self.id().get(store).component().types();
-        let size = usize::try_from(
-            match ty {
-                TransmitIndex::Future(ty) => types[types[ty].ty]
-                    .payload
-                    .map(|ty| types.canonical_abi(&ty).size32),
-                TransmitIndex::Stream(ty) => types[types[ty].ty]
-                    .payload
-                    .map(|ty| types.canonical_abi(&ty).size32),
-            }
-            .unwrap_or(0),
-        )?;
-
-        if count > 0 && size > 0 {
-            self.options_memory(store, options)
-                .get(address..)
-                .and_then(|b| b.get(..size.checked_mul(count)?))
-                .map(drop)
-                .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))
-        } else {
-            Ok(())
+        let payload = match ty {
+            TransmitIndex::Future(ty) => types[types[ty].ty].payload,
+            TransmitIndex::Stream(ty) => types[types[ty].ty].payload,
+        };
+        let Some(payload) = payload else {
+            return Ok(());
+        };
+        // As-written the spec currently exempts zero-length reads/writes from
+        // bounds/alignment checks.
+        if count == 0 {
+            return Ok(());
         }
+        let abi = types.canonical_abi(&payload);
+        // FIXME(#4311): needs memory64 handling
+        let size = usize::try_from(abi.size32)?;
+        let align = usize::try_from(abi.align32)?;
+        if address % align != 0 {
+            bail!("buffer pointer not aligned");
+        }
+        self.options_memory(store, options)
+            .get(address..)
+            .and_then(|b| b.get(..size.checked_mul(count)?))
+            .map(drop)
+            .ok_or_else(|| crate::format_err!("buffer pointer out of bounds of memory"))
     }
 
     /// Write to the specified stream or future from the guest.
@@ -3538,6 +3566,7 @@ impl Instance {
 
         let address = usize::try_from(address)?;
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
+        let async_ = self.options(store.0, options).async_;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Write { done } = *state else {
             bail!(Trap::ConcurrentFutureStreamOp);
@@ -3559,6 +3588,11 @@ impl Instance {
                 TransmitIndex::Stream(_) => Trap::WriteToDroppedStream,
             });
         }
+
+        if !async_ {
+            Waitable::Transmit(transmit_handle).trap_if_in_waitable_set(concurrent_state)?;
+        }
+        let transmit = concurrent_state.get_mut(transmit_id)?;
 
         let new_state = if let ReadState::Dropped = &transmit.read {
             ReadState::Dropped
@@ -3652,6 +3686,7 @@ impl Instance {
 
                 let instance = read_instance.id().get(store.0);
                 let types = instance.component().types();
+                // FIXME(#4311): needs memory64 handling
                 let item_size = match read_ty.payload(types) {
                     Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
@@ -3718,10 +3753,6 @@ impl Instance {
                     bail_bug!("expected guest_offset to be 0");
                 }
 
-                if let TransmitIndex::Future(_) = ty {
-                    transmit.done = true;
-                }
-
                 set_guest_ready(concurrent_state)?;
                 self.consume(
                     store.0,
@@ -3763,7 +3794,7 @@ impl Instance {
             }
         };
 
-        if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
+        if result == ReturnCode::Blocked && !async_ {
             result = self.wait_for_write(store.0, caller, transmit_handle)?;
         }
 
@@ -3797,6 +3828,7 @@ impl Instance {
 
         let address = usize::try_from(address)?;
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
+        let async_ = self.options(store.0, options).async_;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Read { done } = *state else {
             bail!(Trap::ConcurrentFutureStreamOp);
@@ -3821,6 +3853,11 @@ impl Instance {
                 TransmitIndex::Stream(_) => bail!(Trap::ReadFromDroppedStream),
             }
         }
+
+        if !async_ {
+            Waitable::Transmit(transmit_handle).trap_if_in_waitable_set(concurrent_state)?;
+        }
+        let transmit = concurrent_state.get_mut(transmit_id)?;
 
         let new_state = if let WriteState::Dropped = &transmit.write {
             WriteState::Dropped
@@ -3896,6 +3933,7 @@ impl Instance {
 
                 let instance = write_instance.id().get(store.0);
                 let types = instance.component().types();
+                // FIXME(#4311): needs memory64 handling
                 let item_size = match write_ty.payload(types) {
                     Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
@@ -4005,7 +4043,7 @@ impl Instance {
             }
         };
 
-        if result == ReturnCode::Blocked && !self.options(store.0, options).async_ {
+        if result == ReturnCode::Blocked && !async_ {
             result = self.wait_for_read(store.0, caller_instance, transmit_handle)?;
         }
 
@@ -4062,6 +4100,7 @@ impl Instance {
         );
         let waitable = Waitable::Transmit(transmit.write_handle);
 
+        waitable.trap_if_has_sync_waiter(state)?;
         if !async_ {
             waitable.trap_if_in_waitable_set(state)?;
         }
@@ -4156,6 +4195,7 @@ impl Instance {
 
         let waitable = Waitable::Transmit(transmit.read_handle);
 
+        waitable.trap_if_has_sync_waiter(state)?;
         if !async_ {
             waitable.trap_if_in_waitable_set(state)?;
         }
@@ -4235,17 +4275,21 @@ impl Instance {
             TransmitLocalState::Read { .. } => {
                 bail!("passed read end to `{{stream|future}}.cancel-write`")
             }
+            TransmitLocalState::Cancelling => {
+                bail!("stream or future write cancelled when a cancellation is already pending")
+            }
             TransmitLocalState::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
         let code = self.cancel_write(store, caller, transmit_id, async_)?;
-        if !matches!(code, ReturnCode::Blocked) {
-            let state =
-                get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?
-                    .1;
-            if let TransmitLocalState::Busy = state {
-                *state = TransmitLocalState::Write { done: false };
-            }
+        let state =
+            get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?.1;
+        if let TransmitLocalState::Busy = state {
+            *state = if matches!(code, ReturnCode::Blocked) {
+                TransmitLocalState::Cancelling
+            } else {
+                TransmitLocalState::Write { done: false }
+            };
         }
         Ok(code)
     }
@@ -4270,17 +4314,21 @@ impl Instance {
             TransmitLocalState::Write { .. } => {
                 bail!("passed write end to `{{stream|future}}.cancel-read`")
             }
+            TransmitLocalState::Cancelling => {
+                bail!("stream or future read cancelled when a cancellation is already pending")
+            }
             TransmitLocalState::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
         let code = self.cancel_read(store, caller, transmit_id, async_)?;
-        if !matches!(code, ReturnCode::Blocked) {
-            let state =
-                get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?
-                    .1;
-            if let TransmitLocalState::Busy = state {
-                *state = TransmitLocalState::Read { done: false };
-            }
+        let state =
+            get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?.1;
+        if let TransmitLocalState::Busy = state {
+            *state = if matches!(code, ReturnCode::Blocked) {
+                TransmitLocalState::Cancelling
+            } else {
+                TransmitLocalState::Read { done: false }
+            };
         }
         Ok(code)
     }
@@ -4292,10 +4340,11 @@ impl Instance {
         ty: TransmitIndex,
         reader: u32,
     ) -> Result<()> {
-        let table = self.id().get_mut(store).table_for_transmit(ty);
+        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
+        let table = instance.table_for_transmit(ty);
         let (rep, _is_done) = match ty {
-            TransmitIndex::Stream(ty) => table.stream_remove_readable(ty, reader)?,
-            TransmitIndex::Future(ty) => table.future_remove_readable(ty, reader)?,
+            TransmitIndex::Stream(ty) => table.stream_remove_readable(counter, ty, reader)?,
+            TransmitIndex::Future(ty) => table.future_remove_readable(counter, ty, reader)?,
         };
         let kind = match ty {
             TransmitIndex::Stream(_) => TransmitKind::Stream,
@@ -4340,11 +4389,10 @@ impl Instance {
         // Here we reflect the newly created global concurrent error context state into the
         // component instance's locally tracked count, along with the appropriate key into the global
         // ref tracking data structures to enable later lookup
-        let local_idx = self
-            .id()
-            .get_mut(store)
+        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
+        let local_idx = instance
             .table_for_error_context(ty)
-            .error_context_insert(table_id.rep())?;
+            .error_context_insert(counter, table_id.rep())?;
 
         Ok(local_idx)
     }
@@ -4373,6 +4421,9 @@ impl Instance {
 
         let lower_cx = &mut LowerContext::new(store, options, self);
         let debug_msg_address = usize::try_from(debug_msg_address)?;
+        if debug_msg_address % usize::try_from(<str as ComponentType>::ALIGN32)? != 0 {
+            bail!("invalid debug message pointer: not aligned");
+        }
         // Lower the string into the component's memory.
         //
         // Note that the "8" here is the size of a WIT `string` in linear
@@ -4471,15 +4522,16 @@ impl Instance {
             .concurrent_state_mut()?
             .new_transmit(TransmitOrigin::guest(self.id().instance(), ty))?;
 
-        let table = self.id().get_mut(store).table_for_transmit(ty);
+        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
+        let table = instance.table_for_transmit(ty);
         let (read_handle, write_handle) = match ty {
             TransmitIndex::Future(ty) => (
-                table.future_insert_read(ty, read.rep())?,
-                table.future_insert_write(ty, write.rep())?,
+                table.future_insert_read(counter, ty, read.rep())?,
+                table.future_insert_write(counter, ty, write.rep())?,
             ),
             TransmitIndex::Stream(ty) => (
-                table.stream_insert_read(ty, read.rep())?,
-                table.stream_insert_write(ty, write.rep())?,
+                table.stream_insert_read(counter, ty, read.rep())?,
+                table.stream_insert_write(counter, ty, write.rep())?,
             ),
         };
 
@@ -4500,11 +4552,11 @@ impl Instance {
         ty: TypeComponentLocalErrorContextTableIndex,
         error_context: u32,
     ) -> Result<()> {
-        let instance = self.id().get_mut(store);
+        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
 
         let local_handle_table = instance.table_for_error_context(ty);
 
-        let rep = local_handle_table.error_context_drop(error_context)?;
+        let rep = local_handle_table.error_context_drop(counter, error_context)?;
 
         let global_ref_count_idx = TypeComponentGlobalErrorContextTableIndex::from_u32(rep);
 
@@ -4553,8 +4605,8 @@ impl Instance {
         ty: TransmitIndex,
         src_idx: u32,
     ) -> Result<TableId<TransmitHandle>> {
-        let (state, _, _, instance) = store.lift_context_parts(self);
-        lift_index_to_transmit(instance, state.concurrent_state_mut(), ty, src_idx)
+        let (state, _, counter, _, instance) = store.lift_context_parts(self);
+        lift_index_to_transmit(instance, counter, state.concurrent_state_mut(), ty, src_idx)
     }
 
     fn lower_transmit_to_index(
@@ -4563,8 +4615,8 @@ impl Instance {
         ty: TransmitIndex,
         id: TableId<TransmitHandle>,
     ) -> Result<u32> {
-        let (state, _, _, instance) = store.lift_context_parts(self);
-        lower_transmit_to_index(instance, state.concurrent_state_mut(), ty, id)
+        let (state, _, counter, _, instance) = store.lift_context_parts(self);
+        lower_transmit_to_index(instance, counter, state.concurrent_state_mut(), ty, id)
     }
 
     /// Implements the `future.new` intrinsic.
@@ -4627,14 +4679,14 @@ impl Instance {
         src: TypeComponentLocalErrorContextTableIndex,
         dst: TypeComponentLocalErrorContextTableIndex,
     ) -> Result<u32> {
-        let mut instance = self.id().get_mut(store);
+        let (mut instance, counter) = self.id().get_mut_and_handle_counter(store);
         let rep = instance
             .as_mut()
             .table_for_error_context(src)
             .error_context_rep(src_idx)?;
         let dst_idx = instance
             .table_for_error_context(dst)
-            .error_context_insert(rep)?;
+            .error_context_insert(counter, rep)?;
 
         // Update the global (cross-subcomponent) count for error contexts
         // as the new component has essentially created a new reference that will
@@ -4661,14 +4713,15 @@ impl Instance {
 /// expected type of future/stream.
 fn lift_index_to_transmit(
     instance: Pin<&mut ComponentInstance>,
+    counter: &mut HandleCounter,
     concurrent_state: &mut ConcurrentState,
     ty: TransmitIndex,
     src_idx: u32,
 ) -> Result<TableId<TransmitHandle>> {
     let handle_table = instance.table_for_transmit(ty);
     let (rep, is_done) = match ty {
-        TransmitIndex::Future(idx) => handle_table.future_remove_readable(idx, src_idx)?,
-        TransmitIndex::Stream(idx) => handle_table.stream_remove_readable(idx, src_idx)?,
+        TransmitIndex::Future(idx) => handle_table.future_remove_readable(counter, idx, src_idx)?,
+        TransmitIndex::Stream(idx) => handle_table.stream_remove_readable(counter, idx, src_idx)?,
     };
     let desc = match ty {
         TransmitIndex::Future(_) => "future",
@@ -4699,6 +4752,7 @@ fn lift_index_to_transmit(
 /// an instance.
 fn lower_transmit_to_index(
     instance: Pin<&mut ComponentInstance>,
+    counter: &mut HandleCounter,
     concurrent_state: &mut ConcurrentState,
     ty: TransmitIndex,
     id: TableId<TransmitHandle>,
@@ -4707,8 +4761,8 @@ fn lower_transmit_to_index(
     debug_assert_eq!(concurrent_state.get_mut(state)?.read_handle, id);
     let handle_table = instance.table_for_transmit(ty);
     let handle = match ty {
-        TransmitIndex::Future(idx) => handle_table.future_insert_read(idx, id.rep()),
-        TransmitIndex::Stream(idx) => handle_table.stream_insert_read(idx, id.rep()),
+        TransmitIndex::Future(idx) => handle_table.future_insert_read(counter, idx, id.rep()),
+        TransmitIndex::Stream(idx) => handle_table.stream_insert_read(counter, idx, id.rep()),
     }?;
     concurrent_state.get_mut(id)?.common.handle = Some(handle);
     Ok(handle)
@@ -4965,8 +5019,11 @@ impl Waitable {
         if rep != self.rep() {
             bail_bug!("unexpected rep mismatch");
         }
-        if *state != TransmitLocalState::Busy {
-            bail_bug!("expected state to be busy");
+        if !matches!(
+            *state,
+            TransmitLocalState::Busy | TransmitLocalState::Cancelling
+        ) {
+            bail_bug!("expected state to be busy or cancelling");
         }
         let done = matches!(code, ReturnCode::Dropped(_));
         *state = match event {

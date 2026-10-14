@@ -22,6 +22,7 @@ const KNOWN_FAILURES: &[&str] = &[
     // No currently known failures, but if necessary they can be listed here
     // with the file stem, like so:
     // "multi-clock-wait",
+    "http-request",
 ];
 
 const KNOWN_ADAPTER_FAILURES: &[&str] = &[
@@ -77,8 +78,14 @@ fn find_tests(path: &Path, adapted_dir: &Arc<TempDir>, trials: &mut Vec<Trial>) 
             },
         ));
 
-        // Additionally test wasip1 modules through the wasip2 adapter.
-        if cfg!(feature = "component-model") && path.iter().any(|p| p == "wasm32-wasip1") {
+        // Additionally test wasip1 modules through the wasip2 adapter. This
+        // is skipped when running under emulation (e.g. QEMU) where compiling
+        // all these modules is quite slow and the adapter's behavior isn't
+        // architecture-specific.
+        if cfg!(feature = "component-model")
+            && path.iter().any(|p| p == "wasm32-wasip1")
+            && wasmtime_test_util::cargo_test_runner().is_none()
+        {
             let should_fail = KNOWN_FAILURES.contains(&test_name.as_str())
                 || KNOWN_ADAPTER_FAILURES.contains(&test_name.as_str());
             trials.push(Trial::test(
@@ -163,6 +170,10 @@ fn execute(spec_path: &Path, wasm: &Path) -> Result<()> {
                         cmd.arg("run");
                     }
                 }
+                // Try to optimize tests for one-shot performance: no need to
+                // cache since that's just extra hashing, no need to optimize
+                // since these'll run quickly anyway, etc.
+                cmd.arg("-Ccache=n").arg("-Oopt-level=0");
                 for dir in dirs {
                     cmd.arg("--dir");
                     let src = parent_dir.join(&dir);

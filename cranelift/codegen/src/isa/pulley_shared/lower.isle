@@ -1363,6 +1363,17 @@
 (rule (lower (stack_addr _ stack_slot offset))
       (lower_stack_addr stack_slot offset))
 
+;; An offset too large to fold into the stack slot's address computation is
+;; added separately.
+(rule 1 (lower (stack_addr $I32 stack_slot offset))
+      (if-let large_offset (abi_stackslot_large_offset stack_slot offset))
+      (pulley_xadd32 (lower_stack_addr stack_slot (i32_to_offset32 0))
+                     (imm large_offset)))
+(rule 1 (lower (stack_addr $I64 stack_slot offset))
+      (if-let large_offset (abi_stackslot_large_offset stack_slot offset))
+      (pulley_xadd64 (lower_stack_addr stack_slot (i32_to_offset32 0))
+                     (imm large_offset)))
+
 (decl lower_stack_addr (StackSlot Offset32) XReg)
 (rule (lower_stack_addr stack_slot offset)
       (let ((dst WritableXReg (temp_writable_xreg))

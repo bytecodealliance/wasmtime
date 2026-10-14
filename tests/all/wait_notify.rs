@@ -23,7 +23,7 @@ fn atomic_wait_timeout_length() -> Result<()> {
     };
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
-    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
+    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 1)?)?;
     let instance = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
     let now = Instant::now();
     let func_ret = instance
@@ -67,7 +67,7 @@ fn atomic_wait_notify_basic() -> Result<()> {
     };
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
-    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
+    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 1)?)?;
     let instance1 = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
 
     let thread = {

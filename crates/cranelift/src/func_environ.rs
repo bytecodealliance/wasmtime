@@ -629,7 +629,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             return;
         }
 
-        self.fuel_consumed += self.tunables.operator_cost.cost(op);
+        if !matches!(op, Operator::Else | Operator::End) {
+            self.fuel_consumed += self.tunables.operator_cost.cost(op);
+        }
 
         match op {
             // Exiting a function (via a return or unreachable) or otherwise
@@ -713,6 +715,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         match op {
             Operator::Call { .. } | Operator::CallIndirect { .. } | Operator::CallRef { .. } => {
                 self.fuel_load_into_var(builder);
+            }
+            Operator::Else => {
+                self.fuel_consumed += self.tunables.operator_cost.cost(op);
+            }
+            Operator::End => {
+                self.fuel_consumed += self.tunables.operator_cost.cost(op);
+                self.fuel_increment_var(builder);
             }
             _ => {}
         }
@@ -1308,26 +1317,29 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     /// Update the state slot layout with a new layout given a local.
+    ///
+    /// If there is a state slot, `init` is invoked to produce the local's
+    /// initial value, which is stored in its entry.
     pub(crate) fn add_state_slot_local(
         &mut self,
         builder: &mut FunctionBuilder,
         ty: WasmValType,
-        init: Option<ir::Value>,
-    ) {
+        init: impl FnOnce(&mut Self, &mut FunctionBuilder) -> WasmResult<ir::Value>,
+    ) -> WasmResult<()> {
         if let Some((slot, b)) = &mut self.state_slot {
             let offset = b.add_local(FrameValType::from(ty));
-            if let Some(init) = init {
-                let slot = *slot;
-                let region = self.alias_regions.stack_slot_region(builder.func, slot);
-                let address = builder
-                    .ins()
-                    .stack_addr(self.pointer_type(), slot, offset.offset());
-                let flags = self
-                    .memflags_for_debug_slot_value_wasm_ty(ty)
-                    .with_alias_region(Some(region));
-                builder.ins().store(flags, init, address, 0);
-            }
+            let slot = *slot;
+            let init = init(self, builder)?;
+            let region = self.alias_regions.stack_slot_region(builder.func, slot);
+            let address = builder
+                .ins()
+                .stack_addr(self.pointer_type(), slot, offset.offset());
+            let flags = self
+                .memflags_for_debug_slot_value_wasm_ty(ty)
+                .with_alias_region(Some(region));
+            builder.ins().store(flags, init, address, 0);
         }
+        Ok(())
     }
 
     fn update_state_slot_stack(
@@ -5301,15 +5313,28 @@ impl FuncEnvironment<'_> {
         _operand_types: Option<&[WasmValType]>,
         builder: &mut FunctionBuilder,
     ) -> WasmResult<()> {
-        if self.tunables.consume_fuel {
-            self.fuel_before_op(op, builder, self.is_reachable());
-        }
         if self.is_reachable() && self.state_slot.is_some() {
+            // The breakpoint may invoke the debug handler, which may observe
+            // or modify the store's fuel, so synchronize our locally cached
+            // fuel with the store around it. This happens before
+            // `fuel_before_op` so that the fuel visible at the breakpoint
+            // accounts for all operators prior to (but not including) this
+            // one.
+            if self.tunables.consume_fuel {
+                self.fuel_increment_var(builder);
+                self.fuel_save_from_var(builder);
+            }
             let builtin = self.builtin_functions.patchable_breakpoint(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
             let inst = builder.ins().call(builtin, &[vmctx]);
             let tags = self.debug_tags(builder.srcloc());
             builder.func.debug_tags.set(inst, tags);
+            if self.tunables.consume_fuel {
+                self.fuel_load_into_var(builder);
+            }
+        }
+        if self.tunables.consume_fuel {
+            self.fuel_before_op(op, builder, self.is_reachable());
         }
 
         Ok(())

@@ -426,11 +426,11 @@ libfuzzer-sys = "0.4.10"
 walkdir = "2.5.0"
 tempfile = "3.27.0"
 filecheck = "0.5.0"
-libc = { version = "0.2.185", default-features = true }
+libc = { version = "0.2.190", default-features = true }
 file-per-thread-logger = "0.2.0"
 tokio = { version = "1.51.1", features = [ "rt", "time" ] }
 hyper = "1.9.0"
-http = "1.3.1"
+http = "1.5.0"
 http-body = "1.0.1"
 http-body-util = "0.1.3"
 bytes = { version = "1.11.1", default-features = false }
@@ -722,6 +722,14 @@ opt-level = 's'
 # this time.
 [profile.dev.package.tokio]
 overflow-checks = false
+
+# Some CI jobs (e.g. QEMU) build everything in the `dev` profile with
+# optimizations via `CARGO_PROFILE_DEV_OPT_LEVEL`. That's not worth it for this
+# crate though: its `tests/all` binary is huge and expensive to optimize but is
+# mostly glue around the (still optimized) runtime. This is a no-op by default
+# since `dev` is already unoptimized.
+[profile.dev.package.wasmtime-cli]
+opt-level = 0
 
 [profile.profiling]
 inherits = "bench"

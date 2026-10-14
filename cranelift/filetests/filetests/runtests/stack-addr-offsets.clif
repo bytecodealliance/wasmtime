@@ -1,0 +1,62 @@
+test run
+; `stack_addr` is ordinary pointer arithmetic: its offset may point outside of
+; the stack slot, and the result may be offset back into the slot. (Not run
+; under the interpreter, which tracks addresses per-slot.)
+set enable_probestack=false
+target x86_64
+target s390x
+target aarch64
+target riscv64
+target riscv64 has_c has_zcb
+target pulley64
+target pulley64be
+
+function %negative_offset_into_prev_slot(i64) -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0(v0: i64):
+    v1 = stack_addr.i64 ss1-8
+    store notrap v0, v1
+    v2 = stack_addr.i64 ss0
+    v3 = load.i64 notrap v2
+    return v3
+}
+; run: %negative_offset_into_prev_slot(0x0123456789abcdef) == 0x0123456789abcdef
+
+function %offset_past_slot(i64) -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+block0(v0: i64):
+    v1 = stack_addr.i64 ss1
+    store notrap v0, v1
+    v2 = stack_addr.i64 ss0+8
+    v3 = load.i64 notrap v2
+    return v3
+}
+; run: %offset_past_slot(0x0123456789abcdef) == 0x0123456789abcdef
+
+function %large_offset_round_trip(i64) -> i64 {
+    ss0 = explicit_slot 8
+block0(v0: i64):
+    v1 = stack_addr.i64 ss0
+    store notrap v0, v1
+    v2 = stack_addr.i64 ss0+2147483647
+    v3 = iconst.i64 -2147483647
+    v4 = iadd v2, v3
+    v5 = load.i64 notrap v4
+    return v5
+}
+; run: %large_offset_round_trip(0x0123456789abcdef) == 0x0123456789abcdef
+
+function %large_negative_offset_round_trip(i64) -> i64 {
+    ss0 = explicit_slot 8
+block0(v0: i64):
+    v1 = stack_addr.i64 ss0
+    store notrap v0, v1
+    v2 = stack_addr.i64 ss0-2147483648
+    v3 = iconst.i64 2147483648
+    v4 = iadd v2, v3
+    v5 = load.i64 notrap v4
+    return v5
+}
+; run: %large_negative_offset_round_trip(0x0123456789abcdef) == 0x0123456789abcdef

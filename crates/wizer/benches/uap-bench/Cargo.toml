@@ -15,4 +15,4 @@ workspace = true
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 regex = { workspace = true }
-serde_yaml = "0.9.34"
+serde-saphyr = "1.3.0"

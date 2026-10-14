@@ -251,7 +251,7 @@ impl Memory {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
-    /// let memory_ty = MemoryType::new(1, None);
+    /// let memory_ty = MemoryType::new(1, None)?;
     /// let memory = Memory::new(&mut store, memory_ty)?;
     ///
     /// let module = Module::new(&engine, "(module (memory (import \"\" \"\") 1))")?;
@@ -738,6 +738,14 @@ impl Memory {
 /// guard page.  Additionally the safety concerns explained in ['Memory'], for
 /// accessing the memory apply here as well.
 ///
+/// The value returned by [`LinearMemory::byte_size`] must be at least the
+/// `minimum` size the memory was created with, must be at least `new_size`
+/// after a successful [`LinearMemory::grow_to`], and must never decrease.
+/// At least that many bytes starting at [`LinearMemory::as_ptr`] must be
+/// valid to read and write. Compiled WebAssembly code relies on these
+/// properties when performing bounds checks, so violating them can lead to
+/// out-of-bounds memory accesses.
+///
 /// Note that this is a relatively advanced feature and it is recommended to be
 /// familiar with wasmtime runtime code to use it.
 pub unsafe trait LinearMemory: Send + Sync + 'static {
@@ -848,7 +856,7 @@ pub unsafe trait MemoryCreator: Send + Sync {
 /// let engine = Engine::new(&config)?;
 /// let mut store = Store::new(&engine, ());
 ///
-/// let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 2))?;
+/// let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 2)?)?;
 /// let module = Module::new(&engine, r#"(module (memory (import "" "") 1 2 shared))"#)?;
 /// let instance = Instance::new(&mut store, &module, &[shared_memory.into()])?;
 /// // ...
@@ -1113,7 +1121,7 @@ mod tests {
         let mut cfg = Config::new();
         cfg.memory_reservation(0).memory_guard_size(0);
         let mut store = Store::new(&Engine::new(&cfg).unwrap(), ());
-        let ty = MemoryType::new(1, None);
+        let ty = MemoryType::new(1, None).unwrap();
         let mem = Memory::new(&mut store, ty).unwrap();
         let store = store.as_context();
         let tunables = store.engine().tunables();

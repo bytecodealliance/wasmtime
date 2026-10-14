@@ -1302,8 +1302,10 @@ impl Config {
     /// lifting and lowering functions, as well as `stream`, `future`, and
     /// `error-context` types.
     ///
-    /// Please note that Wasmtime's support for this feature is _very_
-    /// incomplete.
+    /// The default value for this option is whether the `component-model-async`
+    /// crate feature of Wasmtime is enabled or not. By default this crate
+    /// feature is enabled. This option is also disabled by default if
+    /// [`Config::concurrency_support`] is disabled.
     ///
     /// [proposal]:
     ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md

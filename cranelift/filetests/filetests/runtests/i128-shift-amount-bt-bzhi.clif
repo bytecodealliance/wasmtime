@@ -1,0 +1,46 @@
+; `band x, (ishl 1, amt)` (fused into `bt` on x86-64) and
+; `band x, (ishl 1, amt) - 1` (fused into `bzhi` with BMI2) with an `i128`
+; shift amount, including amounts of 2^64 and above, whose high half must be
+; ignored because the amount is taken modulo the type's width.
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+target x86_64
+target x86_64 has_bmi2
+target aarch64
+target s390x
+target riscv64
+target pulley64
+target pulley64be
+
+function %bt(i64, i128) -> i8 {
+block0(v0: i64, v1: i128):
+    v2 = iconst.i64 1
+    v3 = ishl v2, v1
+    v4 = band v0, v3
+    brif v4, block1, block2
+block1:
+    v5 = iconst.i8 1
+    return v5
+block2:
+    v6 = iconst.i8 0
+    return v6
+}
+; run: %bt(0x10, 4) == 1
+; run: %bt(0x10, 5) == 0
+; run: %bt(0x10, 0x44) == 1
+; run: %bt(0x10, 0x1_00000000_00000004) == 1
+; run: %bt(0x10, 0x1_00000000_00000005) == 0
+
+function %bzhi(i64, i128) -> i64 {
+block0(v0: i64, v1: i128):
+    v2 = iconst.i64 1
+    v3 = ishl v2, v1
+    v4 = isub v3, v2
+    v5 = band v0, v4
+    return v5
+}
+; run: %bzhi(-1, 4) == 0xf
+; run: %bzhi(-1, 0x44) == 0xf
+; run: %bzhi(-1, 0x1_00000000_00000004) == 0xf
+; run: %bzhi(-1, 0) == 0

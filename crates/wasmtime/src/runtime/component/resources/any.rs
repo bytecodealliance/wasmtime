@@ -72,6 +72,15 @@ enum ResourceAnyIndex {
 /// Borrows lifted from a component have host table state and must be dropped.
 /// Synthetic borrows converted from [`Resource::new_borrow`] have no host table
 /// state; calling `resource_drop` on one is harmless but unnecessary.
+///
+/// Note that special care should be taken when handling `ResourceAny` in async
+/// functions. In this scenario an async host function can be cancelled
+/// (dropped) at any time and if `ResourceAny` isn't destroyed then what it's
+/// referring to can leak within the store. If a `ResourceAny` is a borrow
+/// internally then failing to drop it, even on cancellation, will lead to a
+/// trap being raised and poisoning the store.
+///
+/// [`LinkerInstance::func_wrap_concurrent`]: crate::component::LinkerInstance::func_wrap_concurrent
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct ResourceAny {
     idx: ResourceAnyIndex,

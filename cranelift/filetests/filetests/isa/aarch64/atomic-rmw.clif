@@ -1,6 +1,55 @@
 test compile precise-output
 target aarch64
 
+function %atomic_rmw_add_i128(i64, i128) {
+block0(v0: i64, v1: i128):
+    v2 = atomic_rmw.i128 add v0, v1
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   atomic_rmw_128_loop_add addr=x25 operand_lo=x26 operand_hi=x22 oldval_lo=x27 oldval_hi=x23 scratch1=x24 scratch2=x28 scratch3=x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   ldaxp x27, x23, [x25] ; trap: heap_oob
+;   adds x28, x27, x26
+;   adc x21, x23, x22
+;   stlxp w24, x28, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x24
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
 function %atomic_rmw_add_i64(i64, i64) {
 block0(v0: i64, v1: i64):
     v2 = atomic_rmw.i64 add v0, v1
@@ -166,6 +215,55 @@ block0(v0: i64, v1: i8):
 ;   ldp x24, x25, [sp], #0x10
 ;   ldp x26, x27, [sp], #0x10
 ;   ldr x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %atomic_rmw_sub_i128(i64, i128) {
+block0(v0: i64, v1: i128):
+    v2 = atomic_rmw.i128 sub v0, v1
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   atomic_rmw_128_loop_sub addr=x25 operand_lo=x26 operand_hi=x22 oldval_lo=x27 oldval_hi=x23 scratch1=x24 scratch2=x28 scratch3=x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   ldaxp x27, x23, [x25] ; trap: heap_oob
+;   subs x28, x27, x26
+;   sbc x21, x23, x22
+;   stlxp w24, x28, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x24
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
@@ -337,6 +435,55 @@ block0(v0: i64, v1: i8):
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
+function %atomic_rmw_and_i128(i64, i128) {
+block0(v0: i64, v1: i128):
+    v2 = atomic_rmw.i128 and v0, v1
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   atomic_rmw_128_loop_and addr=x25 operand_lo=x26 operand_hi=x22 oldval_lo=x27 oldval_hi=x23 scratch1=x24 scratch2=x28 scratch3=x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   ldaxp x27, x23, [x25] ; trap: heap_oob
+;   and x28, x27, x26
+;   and x21, x23, x22
+;   stlxp w24, x28, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x24
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
 function %atomic_rmw_and_i64(i64, i64) {
 block0(v0: i64, v1: i64):
     v2 = atomic_rmw.i64 and v0, v1
@@ -502,6 +649,57 @@ block0(v0: i64, v1: i8):
 ;   ldp x24, x25, [sp], #0x10
 ;   ldp x26, x27, [sp], #0x10
 ;   ldr x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %atomic_rmw_nand_i128(i64, i128) {
+block0(v0: i64, v1: i128):
+    v2 = atomic_rmw.i128 nand v0, v1
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   atomic_rmw_128_loop_nand addr=x25 operand_lo=x26 operand_hi=x22 oldval_lo=x27 oldval_hi=x23 scratch1=x24 scratch2=x28 scratch3=x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   ldaxp x27, x23, [x25] ; trap: heap_oob
+;   and x28, x27, x26
+;   and x21, x23, x22
+;   mvn x28, x28
+;   mvn x21, x21
+;   stlxp w24, x28, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x24
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
@@ -677,6 +875,55 @@ block0(v0: i64, v1: i8):
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
+function %atomic_rmw_or_i128(i64, i128) {
+block0(v0: i64, v1: i128):
+    v2 = atomic_rmw.i128 or v0, v1
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   atomic_rmw_128_loop_orr addr=x25 operand_lo=x26 operand_hi=x22 oldval_lo=x27 oldval_hi=x23 scratch1=x24 scratch2=x28 scratch3=x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   ldaxp x27, x23, [x25] ; trap: heap_oob
+;   orr x28, x27, x26
+;   orr x21, x23, x22
+;   stlxp w24, x28, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x24
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
 function %atomic_rmw_or_i64(i64, i64) {
 block0(v0: i64, v1: i64):
     v2 = atomic_rmw.i64 or v0, v1
@@ -845,6 +1092,55 @@ block0(v0: i64, v1: i8):
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
+function %atomic_rmw_xor_i128(i64, i128) {
+block0(v0: i64, v1: i128):
+    v2 = atomic_rmw.i128 xor v0, v1
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   atomic_rmw_128_loop_eor addr=x25 operand_lo=x26 operand_hi=x22 oldval_lo=x27 oldval_hi=x23 scratch1=x24 scratch2=x28 scratch3=x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   ldaxp x27, x23, [x25] ; trap: heap_oob
+;   eor x28, x27, x26
+;   eor x21, x23, x22
+;   stlxp w24, x28, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x24
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
 function %atomic_rmw_xor_i64(i64, i64) {
 block0(v0: i64, v1: i64):
     v2 = atomic_rmw.i64 xor v0, v1
@@ -1010,6 +1306,57 @@ block0(v0: i64, v1: i8):
 ;   ldp x24, x25, [sp], #0x10
 ;   ldp x26, x27, [sp], #0x10
 ;   ldr x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %atomic_rmw_smax_i128(i64, i128) {
+block0(v0: i64, v1: i128):
+    v2 = atomic_rmw.i128 smax v0, v1
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   atomic_rmw_128_loop_smax addr=x25 operand_lo=x26 operand_hi=x22 oldval_lo=x27 oldval_hi=x23 scratch1=x24 scratch2=x28 scratch3=x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   ldaxp x27, x23, [x25] ; trap: heap_oob
+;   cmp x27, x26
+;   sbcs xzr, x23, x22
+;   csel x21, x22, x23, lt
+;   csel x28, x26, x27, lt
+;   stlxp w24, x28, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x24
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
@@ -1187,6 +1534,57 @@ block0(v0: i64, v1: i8):
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
+function %atomic_rmw_umax_i128(i64, i128) {
+block0(v0: i64, v1: i128):
+    v2 = atomic_rmw.i128 umax v0, v1
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   atomic_rmw_128_loop_umax addr=x25 operand_lo=x26 operand_hi=x22 oldval_lo=x27 oldval_hi=x23 scratch1=x24 scratch2=x28 scratch3=x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   ldaxp x27, x23, [x25] ; trap: heap_oob
+;   cmp x27, x26
+;   sbcs xzr, x23, x22
+;   csel x21, x22, x23, lo
+;   csel x28, x26, x27, lo
+;   stlxp w24, x28, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x24
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
 function %atomic_rmw_umax_i64(i64, i64) {
 block0(v0: i64, v1: i64):
     v2 = atomic_rmw.i64 umax v0, v1
@@ -1356,6 +1754,57 @@ block0(v0: i64, v1: i8):
 ;   ldp x24, x25, [sp], #0x10
 ;   ldp x26, x27, [sp], #0x10
 ;   ldr x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %atomic_rmw_smin_i128(i64, i128) {
+block0(v0: i64, v1: i128):
+    v2 = atomic_rmw.i128 smin v0, v1
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   atomic_rmw_128_loop_smin addr=x25 operand_lo=x26 operand_hi=x22 oldval_lo=x27 oldval_hi=x23 scratch1=x24 scratch2=x28 scratch3=x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   ldaxp x27, x23, [x25] ; trap: heap_oob
+;   cmp x27, x26
+;   sbcs xzr, x23, x22
+;   csel x21, x22, x23, ge
+;   csel x28, x26, x27, ge
+;   stlxp w24, x28, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x24
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
@@ -1530,6 +1979,57 @@ block0(v0: i64, v1: i8):
 ;   ldp x24, x25, [sp], #0x10
 ;   ldp x26, x27, [sp], #0x10
 ;   ldr x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %atomic_rmw_umin_i128(i64, i128) {
+block0(v0: i64, v1: i128):
+    v2 = atomic_rmw.i128 umin v0, v1
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+; block0:
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   atomic_rmw_128_loop_umin addr=x25 operand_lo=x26 operand_hi=x22 oldval_lo=x27 oldval_hi=x23 scratch1=x24 scratch2=x28 scratch3=x21
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+; block1: ; offset 0x18
+;   mov x22, x3
+;   mov x25, x0
+;   mov x26, x2
+;   ldaxp x27, x23, [x25] ; trap: heap_oob
+;   cmp x27, x26
+;   sbcs xzr, x23, x22
+;   csel x21, x22, x23, hs
+;   csel x28, x26, x27, hs
+;   stlxp w24, x28, x21, [x25] ; trap: heap_oob
+;   cbnz x24, #0x24
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 

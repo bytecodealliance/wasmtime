@@ -1195,9 +1195,16 @@ unsafe fn asan_start_switch_fiber(
     _store: &mut dyn VMStore,
     _instance: InstanceId,
     fake_stack_save: *mut u8,
+    source_csi: *mut u8,
     target_csi: *mut u8,
 ) {
-    unsafe { crate::vm::stack_switching::asan::start_switch_fiber(fake_stack_save, target_csi) }
+    unsafe {
+        crate::vm::stack_switching::asan::start_switch_fiber(
+            fake_stack_save,
+            source_csi,
+            target_csi,
+        )
+    }
 }
 
 #[cfg(feature = "stack-switching")]
@@ -1205,8 +1212,9 @@ unsafe fn asan_finish_switch_fiber(
     _store: &mut dyn VMStore,
     _instance: InstanceId,
     fake_stack: *mut u8,
+    current_csi: *mut u8,
 ) {
-    unsafe { crate::vm::stack_switching::asan::finish_switch_fiber(fake_stack) }
+    unsafe { crate::vm::stack_switching::asan::finish_switch_fiber(fake_stack, current_csi) }
 }
 
 #[cfg(feature = "gc")]

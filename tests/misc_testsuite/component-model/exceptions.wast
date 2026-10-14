@@ -247,3 +247,14 @@
   (func (export "run") (canon lift (core func $i "run"))))
 
 (assert_trap (invoke "run") "uncaught exception propagated out of component")
+
+;; An exception thrown by a core module's start function during component
+;; instantiation traps instead of propagating as an exception.
+(assert_trap
+  (component
+    (core module $m
+      (tag $t)
+      (func $start (throw $t))
+      (start $start))
+    (core instance $i (instantiate $m)))
+  "uncaught exception propagated out of component")

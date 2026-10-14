@@ -343,7 +343,7 @@ fn table_drops_externref() -> Result<()> {
         let externref = ExternRef::new(&mut store, SetFlagOnDrop(flag.clone()))?;
         Table::new(
             &mut store,
-            TableType::new(RefType::EXTERNREF, 1, None),
+            TableType::new(RefType::EXTERNREF, 1, None)?,
             externref.into(),
         )?;
         drop(store);
@@ -845,7 +845,7 @@ fn table_fill_doesnt_leak() -> Result<()> {
         let x = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?;
         let table = Table::new(
             &mut scope,
-            TableType::new(RefType::EXTERNREF, 10, Some(10)),
+            TableType::new(RefType::EXTERNREF, 10, Some(10))?,
             x.into(),
         )?;
         table.fill(&mut scope, 0, Ref::Extern(None), 10)?;
@@ -868,7 +868,7 @@ fn table_copy_doesnt_leak() -> Result<()> {
         let mut scope = RootScope::new(&mut store);
         let table = Table::new(
             &mut scope,
-            TableType::new(RefType::EXTERNREF, 10, Some(10)),
+            TableType::new(RefType::EXTERNREF, 10, Some(10))?,
             Ref::Extern(None),
         )?;
 
@@ -877,6 +877,34 @@ fn table_copy_doesnt_leak() -> Result<()> {
 
         Table::copy(&mut scope, &table, 0, &table, 5, 5)?;
     }
+
+    store.gc(None)?;
+    assert!(flag.load(SeqCst));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn table_copy_without_root_scope_doesnt_leak() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut store = Store::<()>::default();
+    let flag = Arc::new(AtomicBool::new(false));
+
+    let table = Table::new(
+        &mut store,
+        TableType::new(RefType::EXTERNREF, 10, Some(10))?,
+        Ref::Extern(None),
+    )?;
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        let x = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?;
+        table.fill(&mut scope, 2, x.into(), 3)?;
+    }
+
+    Table::copy(&mut store, &table, 5, &table, 2, 3)?;
+    table.fill(&mut store, 0, Ref::Extern(None), 10)?;
 
     store.gc(None)?;
     assert!(flag.load(SeqCst));
@@ -895,7 +923,7 @@ fn table_set_doesnt_leak() -> Result<()> {
         let mut scope = RootScope::new(&mut store);
         let table = Table::new(
             &mut scope,
-            TableType::new(RefType::EXTERNREF, 10, Some(10)),
+            TableType::new(RefType::EXTERNREF, 10, Some(10))?,
             Ref::Extern(None),
         )?;
 
@@ -922,7 +950,7 @@ fn table_grow_doesnt_leak() -> Result<()> {
         let mut scope = RootScope::new(&mut store);
         let table = Table::new(
             &mut scope,
-            TableType::new(RefType::EXTERNREF, 10, Some(10)),
+            TableType::new(RefType::EXTERNREF, 10, Some(10))?,
             Ref::Extern(None),
         )?;
 
@@ -3452,7 +3480,7 @@ fn miri_gc_smoke_test() -> Result<()> {
             &engine,
             [FieldType::new(Mutability::Const, StorageType::I8)],
         )?;
-        let table_ty = TableType::new(RefType::ANYREF, 1, None);
+        let table_ty = TableType::new(RefType::ANYREF, 1, None)?;
         let global_ty = GlobalType::new(RefType::ANYREF.into(), Mutability::Var);
         let exn_ty = ExnType::new(&engine, [ValType::I32])?;
         let func_ty = FuncType::new(&engine, Some(ValType::I32), None);

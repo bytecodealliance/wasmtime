@@ -762,6 +762,9 @@ impl wasmtime_environ::Compiler for Compiler {
                 range.clone(),
                 func.buffer.call_sites(),
             )?;
+            if self.tunables.debug_guest {
+                frame_tables.add_func_start(u32::try_from(range.start).unwrap());
+            }
             if self.tunables.debug_guest
                 && let Some(frame_layout) = func.buffer.frame_layout()
             {
@@ -1180,10 +1183,11 @@ impl Compiler {
         let values_vec_byte_size = u32::try_from(value_size * values_vec_len).unwrap();
         let values_vec_len = u32::try_from(values_vec_len).unwrap();
 
+        // `ValRaw` is 8-byte aligned: its `v128` field is a byte array.
         let slot = builder.func.create_sized_stack_slot(ir::StackSlotData::new(
             ir::StackSlotKind::ExplicitSlot,
             values_vec_byte_size,
-            4,
+            3,
         ));
         let values_vec_ptr = builder.ins().stack_addr(pointer_type, slot, 0);
 

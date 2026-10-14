@@ -390,6 +390,14 @@ pub trait WasiHttpHooks: Send {
         })
     }
 
+    /// Number of distinct write calls to the outgoing body's output-stream
+    /// that the implementation will buffer.
+    /// Default: 1.
+    #[cfg(feature = "p3")]
+    fn p3_outgoing_body_buffer_chunks(&mut self) -> usize {
+        crate::p3::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS
+    }
+
     /// Maximum number of bytes the implementation will copy out of the guest in
     /// a single write to an outgoing body's stream.
     #[cfg(feature = "p3")]

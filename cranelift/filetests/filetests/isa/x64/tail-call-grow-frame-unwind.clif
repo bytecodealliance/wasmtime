@@ -1,0 +1,58 @@
+; A `tail` function that grows its incoming argument area for a
+; `return_call` with more stack arguments than it received. The CFI for the
+; saved callee-saved registers must be relative to the moved frame record.
+test unwind
+set unwind_info=true
+set preserve_frame_pointers=true
+target x86_64-unknown-linux-gnu
+
+function %f(i64) -> i64 tail {
+    fn0 = %g(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+    fn1 = %h() -> i64 tail
+block0(v0: i64):
+    v1 = call fn1()
+    v2 = call fn1()
+    v3 = iadd v0, v1
+    v4 = call fn1()
+    v5 = iadd v3, v2
+    v6 = iadd v5, v4
+    return_call fn0(v6, v0, v1, v2, v3, v4, v5, v6, v0, v1)
+}
+
+; sameln: 0x00000000: CIE
+; nextln:         length: 0x00000014
+; nextln:        version: 0x01
+; nextln:     code_align: 1
+; nextln:     data_align: -8
+; nextln:    ra_register: 0x10
+; nextln:                 DW_CFA_def_cfa (r7, 8)
+; nextln:                 DW_CFA_offset (r16, 1)
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_nop
+; nextln:   Instructions: Init State:
+; check: 0x00000018: FDE
+; nextln:         length: 0x0000002c
+; nextln:    CIE_pointer: 0x00000000
+; nextln:     start_addr: 0x0000000000000000
+; nextln:     range_size: 0x00000000000000c5 (end_addr = 0x00000000000000c5)
+; nextln:   Instructions:
+; nextln:                 DW_CFA_advance_loc (1)
+; nextln:                 DW_CFA_def_cfa_offset (16)
+; nextln:                 DW_CFA_offset (r6, 2)
+; nextln:                 DW_CFA_advance_loc (3)
+; nextln:                 DW_CFA_def_cfa_register (r6)
+; nextln:                 DW_CFA_advance_loc (34)
+; nextln:                 DW_CFA_offset (r3, 8)
+; nextln:                 DW_CFA_advance_loc (5)
+; nextln:                 DW_CFA_offset (r12, 7)
+; nextln:                 DW_CFA_advance_loc (5)
+; nextln:                 DW_CFA_offset (r13, 6)
+; nextln:                 DW_CFA_advance_loc (5)
+; nextln:                 DW_CFA_offset (r14, 5)
+; nextln:                 DW_CFA_advance_loc (5)
+; nextln:                 DW_CFA_offset (r15, 4)
+; nextln:                 DW_CFA_nop
