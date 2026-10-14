@@ -1754,6 +1754,7 @@ impl FuncEnvironment<'_> {
             bound: VmctxLoadChain::new(smallvec![store_ctx, bound]),
             memory,
             kind: MemoryKind::GcHeap,
+            imported: false,
         });
         self.gc_heap = Some(heap);
         heap

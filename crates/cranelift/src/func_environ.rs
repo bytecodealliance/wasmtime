@@ -1677,6 +1677,7 @@ impl FuncEnvironment<'_> {
             bound,
             kind: MemoryKind::LinearMemory,
             memory,
+            imported: self.module.is_imported_memory(index),
         })
     }
 
