@@ -988,12 +988,10 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             // rather than consuming another arbitrary reg.
             collector.reg_fixed_def(dst, regs::xreg(9));
             // `next_load_ptr` is pinned so embedders know where to write to
-            // fill it. It shares x10 with `load_ptr`, above, so filling this
-            // output means also filling in the (potential) next input, for
-            // efficiency. This also means that leaving x10 alone (in the
-            // common, non-trapping case), makes info conceptually flow in the
-            // other direction, piping the old but unchanging `load_ptr` through
-            // to the output.
+            // fill it. It takes on the value of `load_ptr` unless a signal
+            // handler invoked at the load overwrites it. We constrain
+            // `next_load_ptr` and `load_ptr` to the same register so this
+            // dataflow happens without a move.
             collector.reg_fixed_def(next_load_ptr, regs::xreg(10));
         }
     }

@@ -378,7 +378,7 @@ fn define_control_flow(
         Load from a memory location to possibly trigger a resumeable
         interruption.
 
-        This sequence of operations captures the semantic:
+        This sequence of operations captures the semantics:
             - register A := context
             - Reserve register B as scratch space.
             - register C := load_ptr
