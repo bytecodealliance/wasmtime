@@ -1,6 +1,8 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{ConcurrentState, QualifiedThreadId, WorkItem, tls};
+use crate::component::concurrent::{
+    ConcurrentState, CurrentThread, QualifiedThreadId, WorkItem, tls,
+};
 use crate::component::func::{self, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
@@ -3202,8 +3204,28 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
     }
 }
 
+/// Polls a `StreamProducer` or `StreamConsumer` future once, inline, from
+/// within a guest's `{stream,future}.{read,write}` intrinsic.
+///
+/// The producer or consumer is embedder code which doesn't belong to the
+/// reading or writing guest's task, so it's polled as though from the
+/// top-level host, just as it is when it's later polled from the event loop.
+fn poll_inline(
+    store: &mut dyn VMStore,
+    future: &mut Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>>,
+) -> Result<Poll<Result<StreamResult>>> {
+    let old_thread = store.set_thread(CurrentThread::None)?;
+    let poll = tls::set(store, || {
+        future
+            .as_mut()
+            .poll(&mut Context::from_waker(&Waker::noop()))
+    });
+    store.set_thread(old_thread)?;
+    Ok(poll)
+}
+
 impl Instance {
-    /// Handle a host- or guest-initiated write by delivering the item(s) to the
+    /// Handle a guest-initiated write by delivering the item(s) to the
     /// `StreamConsumer` for the specified stream or future.
     fn consume(
         self,
@@ -3221,11 +3243,7 @@ impl Instance {
             cancel,
             cancel_waker: None,
         };
-        let poll = tls::set(store, || {
-            future
-                .as_mut()
-                .poll(&mut Context::from_waker(&Waker::noop()))
-        });
+        let poll = poll_inline(store, &mut future)?;
 
         Ok(match poll {
             Poll::Ready(state) => {
@@ -3241,8 +3259,8 @@ impl Instance {
         })
     }
 
-    /// Handle a host- or guest-initiated read by polling the `StreamProducer`
-    /// for the specified stream or future for items.
+    /// Handle a guest-initiated read by polling the `StreamProducer` for the
+    /// specified stream or future for items.
     fn produce(
         self,
         store: &mut dyn VMStore,
@@ -3261,11 +3279,7 @@ impl Instance {
             cancel,
             cancel_waker: None,
         };
-        let poll = tls::set(store, || {
-            future
-                .as_mut()
-                .poll(&mut Context::from_waker(&Waker::noop()))
-        });
+        let poll = poll_inline(store, &mut future)?;
 
         Ok(match poll {
             Poll::Ready(state) => {
