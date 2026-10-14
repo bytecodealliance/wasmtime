@@ -779,6 +779,7 @@ fn drop_long_chain_of_guest_func_types() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 /// Check that dropping a long host-defined type from the registry doesn't stack
 /// overflow.
 fn drop_long_chain_of_host_func_types() -> Result<()> {
