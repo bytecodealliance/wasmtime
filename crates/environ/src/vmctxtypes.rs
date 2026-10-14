@@ -229,6 +229,11 @@ macro_rules! for_each_vmctx_type {
                         tags[num_defined_tags; DefinedTagIndex]: VMTagDefinition
                     }
 
+                    // A tag definition has 4-byte alignment. With an odd
+                    // number of tags, align the following pointer-sized
+                    // function references before accessing them.
+                    align { ptr }
+
                     array {
                         #[aggregate]
                         func_refs[num_escaped_funcs; FuncRefIndex]: VMFuncRef
