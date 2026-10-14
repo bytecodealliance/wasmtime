@@ -173,6 +173,11 @@ struct ModuleInner {
 
     /// The checksum of the source binary from which this module was compiled.
     checksum: WasmChecksum,
+
+    /// The symbol table `GuestProfiler` uses for this module, built the first
+    /// time a profiler includes the module and shared by every later one.
+    #[cfg(feature = "profiling")]
+    profiling_symbols: OnceLock<Option<Arc<fxprof_processed_profile::SymbolTable>>>,
 }
 
 impl fmt::Debug for Module {
@@ -571,6 +576,8 @@ impl Module {
                 serializable,
                 offsets,
                 checksum,
+                #[cfg(feature = "profiling")]
+                profiling_symbols: OnceLock::new(),
             })?,
         })
     }
@@ -664,6 +671,13 @@ impl Module {
 
     pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
         self.compiled_module().module()
+    }
+
+    #[cfg(feature = "profiling")]
+    pub(crate) fn profiling_symbols(
+        &self,
+    ) -> &OnceLock<Option<Arc<fxprof_processed_profile::SymbolTable>>> {
+        &self.inner.profiling_symbols
     }
 
     pub(crate) fn types(&self) -> &ModuleTypes {

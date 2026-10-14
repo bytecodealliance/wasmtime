@@ -144,8 +144,12 @@ impl GuestProfiler {
                     start..end
                 };
 
-                module_symbols(name, &module).map(|lib| {
+                module_symbols(name, &module).map(|(lib, symbol_table)| {
+                    // The profile keys libraries by value, so the symbol table
+                    // is attached after the library is added rather than
+                    // carried in `lib`, which would hash every function name.
                     let libhandle = profile.add_lib(lib);
+                    profile.set_lib_symbol_table(libhandle, symbol_table);
                     ProfiledModule {
                         module,
                         fxprof_libhandle: libhandle,
@@ -261,7 +265,30 @@ impl GuestProfiler {
     }
 }
 
-fn module_symbols(name: String, module: &Module) -> Option<LibraryInfo> {
+fn module_symbols(name: String, module: &Module) -> Option<(LibraryInfo, Arc<SymbolTable>)> {
+    let symbol_table = module
+        .profiling_symbols()
+        .get_or_init(|| module_symbol_table(module))
+        .clone()?;
+    let lib = LibraryInfo {
+        name,
+        debug_name: String::new(),
+        path: String::new(),
+        debug_path: String::new(),
+        debug_id: DebugId::nil(),
+        code_id: None,
+        arch: None,
+        symbol_table: None,
+    };
+    Some((lib, symbol_table))
+}
+
+/// Builds the symbol table for `module`'s defined functions.
+///
+/// Demangling every function name makes this the most expensive part of
+/// `GuestProfiler::new` for modules with many functions, so the result is
+/// cached on the module by `module_symbols` and built only once per module.
+fn module_symbol_table(module: &Module) -> Option<Arc<SymbolTable>> {
     let compiled = module.compiled_module();
     let symbols = Vec::from_iter(
         module
@@ -289,17 +316,7 @@ fn module_symbols(name: String, module: &Module) -> Option<LibraryInfo> {
     if symbols.is_empty() {
         return None;
     }
-
-    Some(LibraryInfo {
-        name,
-        debug_name: String::new(),
-        path: String::new(),
-        debug_path: String::new(),
-        debug_id: DebugId::nil(),
-        code_id: None,
-        arch: None,
-        symbol_table: Some(Arc::new(SymbolTable::new(symbols))),
-    })
+    Some(Arc::new(SymbolTable::new(symbols)))
 }
 
 fn lookup_frames<'a>(
@@ -367,5 +384,76 @@ impl StaticSchemaMarker for CallMarker {
     }
     fn number_field_value(&self, _field_index: u32) -> f64 {
         unreachable!("no fields")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Caller, Func, Instance, Store};
+
+    /// Profiles `module` once, sampling from inside its `sample` import, and
+    /// returns the profile's JSON.
+    fn profile(engine: &Engine, module: &Module) -> String {
+        let profiler = GuestProfiler::new(
+            engine,
+            "test",
+            Duration::from_millis(1),
+            [("test.wasm".to_string(), module.clone())],
+        )
+        .unwrap();
+        let mut store = Store::new(engine, Some(profiler));
+        let sample = Func::wrap(
+            &mut store,
+            |mut caller: Caller<'_, Option<GuestProfiler>>| {
+                let mut profiler = caller.data_mut().take().unwrap();
+                profiler.sample(&caller, Duration::ZERO);
+                *caller.data_mut() = Some(profiler);
+            },
+        );
+        let instance = Instance::new(&mut store, module, &[sample.into()]).unwrap();
+        let run = instance
+            .get_typed_func::<(), ()>(&mut store, "run")
+            .unwrap();
+        run.call(&mut store, ()).unwrap();
+        let mut json = Vec::new();
+        store.data_mut().take().unwrap().finish(&mut json).unwrap();
+        String::from_utf8(json).unwrap()
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn profilers_share_a_modules_symbol_table() {
+        let engine = Engine::default();
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (import "" "sample" (func $sample))
+                    (func $_ZN4demo5inner17h0123456789abcdefE
+                        call $sample)
+                    (func (export "run")
+                        call $_ZN4demo5inner17h0123456789abcdefE))
+            "#,
+        )
+        .unwrap();
+        let cached = || {
+            module
+                .profiling_symbols()
+                .get_or_init(|| panic!("the first profiler should have built the table"))
+                .clone()
+                .unwrap()
+        };
+
+        let first = profile(&engine, &module);
+        let table = cached();
+        let second = profile(&engine, &module);
+        assert!(Arc::ptr_eq(&table, &cached()));
+
+        // Both profiles resolve the sampled frame through the shared table,
+        // with the name demangled.
+        for json in [&first, &second] {
+            assert!(json.contains("demo::inner"), "{json}");
+        }
     }
 }
