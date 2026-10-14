@@ -2234,6 +2234,55 @@ async fn zero_length_reads_and_writes() -> Result<()> {
         .await?
 }
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn sync_call_async_typed() -> Result<()> {
+    const WAT: &str = r#"
+(component
+  (core func $task.return (canon task.return (result u32)))
+  (core module $m
+    (import "" "task.return" (func $task.return (param i32)))
+    (func (export "run") (result i32)
+      (call $task.return (i32.const 42))
+      (i32.const 0 (; EXIT ;)))
+    (func (export "run-cb") (param i32 i32 i32) (result i32)
+      unreachable))
+  (core instance $i (instantiate $m
+    (with "" (instance (export "task.return" (func $task.return))))))
+  (func (export "run") async (result u32)
+    (canon lift (core func $i "run") async (callback (core func $i "run-cb"))))
+)
+"#;
+
+    let engine = Engine::default();
+    let component = Component::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let mut results = [Val::U32(0)];
+    let error = func.call(&mut store, &[], &mut results).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("cannot synchronously call an async-lifted export"),
+        "{error}"
+    );
+
+    let func = instance
+        .get_typed_func::<(), (u32,)>(&mut store, "run")
+        .unwrap();
+    let error = func.call(&mut store, ()).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("cannot synchronously call an async-lifted export"),
+        "{error}"
+    );
+
+    Ok(())
+}
+
 /// This is a regression test for
 /// https://github.com/bytecodealliance/wasmtime/issues/14504, in which the host
 /// panicked due to a too-early deletion of a task group.
