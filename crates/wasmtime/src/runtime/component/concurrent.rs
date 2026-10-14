@@ -2632,7 +2632,7 @@ impl StoreOpaque {
     /// actually run any wasm code yet. This requires cleaning up metadata such
     /// as thread information attached to the task.
     ///
-    /// This is used for task cancellation via `subtask.cancel`, the intrinsic.    
+    /// This is used for task cancellation via `subtask.cancel`, the intrinsic.
     fn cancel_guest_subtask_without_lowered_parameters(
         &mut self,
         caller_instance: RuntimeInstance,
@@ -3264,6 +3264,7 @@ impl Instance {
                 has_result: true,
                 params,
             } => ResultInfo::Heap {
+                // FIXME(#4311): needs to read an i64 for memory64
                 results: match params.last() {
                     Some(r) => r.get_u32(),
                     None => bail_bug!("retptr missing"),
@@ -3276,6 +3277,7 @@ impl Instance {
                 result_count,
                 params,
             } if *result_count > u32::try_from(MAX_FLAT_RESULTS)? => ResultInfo::Heap {
+                // FIXME(#4311): needs to read an i64 for memory64
                 results: match params.last() {
                     Some(r) => r.get_u32(),
                     None => bail_bug!("arg ptr missing"),
