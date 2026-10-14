@@ -174,6 +174,22 @@
     ((args (named Type) (bv 32)) (ret (bv 64)))
     ((args (named Type) (bv 64)) (ret (bv 64))))
 
+;; Same as `uextend_maybe` but with sign extension.
+(spec (sextend_maybe ty val)
+    (provide (= result (sign_ext (widthof result) val))
+             (= (:bits ty) (widthof result))))
+(instantiate sextend_maybe
+    ((args (named Type) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv  8)) (ret (bv 16)))
+    ((args (named Type) (bv  8)) (ret (bv 32)))
+    ((args (named Type) (bv  8)) (ret (bv 64)))
+    ((args (named Type) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 16)) (ret (bv 32)))
+    ((args (named Type) (bv 16)) (ret (bv 64)))
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 32)) (ret (bv 64)))
+    ((args (named Type) (bv 64)) (ret (bv 64))))
+
 (attr splat (tag vector))
 
 ;;;; Concrete `f32`/`f64` sign bit-ops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -475,7 +491,8 @@
 ;; Partial: bit width (8/16/32) -> that integer type.
 (spec (shift_amt_to_type v)
     (match (or (= v (int2bv 64 8)) (= v (int2bv 64 16)) (= v (int2bv 64 32))))
-    (provide (= (int2bv 64 (:bits result)) v)))
+    (provide (= (:bits result)
+                (if (= v (int2bv 64 8)) 8 (if (= v (int2bv 64 16)) 16 32)))))
 
 ;;;; `imm64_*` min/max/shift folding ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; 64-bit `Imm64`, masked to the low `ty` bits. Signed ops sign-extend those bits

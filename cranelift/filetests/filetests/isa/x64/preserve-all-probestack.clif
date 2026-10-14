@@ -1,0 +1,105 @@
+; Inline stack probes in a `preserve_all` function must not clobber any
+; registers, since they run before registers are saved. With five or more
+; probes, other ABIs use a probe loop with %r11 as a temporary;
+; `preserve_all` always uses the unrolled probes, which use no registers.
+test compile precise-output
+set enable_probestack=true
+set probestack_strategy=inline
+target x86_64
+
+function %preserve_all(i64) preserve_all {
+    ss0 = explicit_slot 20480
+block0(v0: i64):
+    v1 = stack_addr.i64 ss0
+    store v0, v1
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x1000, %rsp
+;   movl $0x0, (%rsp)
+;   subq $0x1000, %rsp
+;   movl $0x0, (%rsp)
+;   subq $0x1000, %rsp
+;   movl $0x0, (%rsp)
+;   subq $0x1000, %rsp
+;   movl $0x0, (%rsp)
+;   subq $0x1000, %rsp
+;   movl $0x0, (%rsp)
+;   addq $0x5000, %rsp
+;   subq $0x5010, %rsp
+;   movq %rdi, 0x5000(%rsp)
+; block0:
+;   movq %rdi, <offset:1>+(%rsp)
+;   movq 0x5000(%rsp), %rdi
+;   addq $0x5010, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x1000, %rsp
+;   movl $0, (%rsp)
+;   subq $0x1000, %rsp
+;   movl $0, (%rsp)
+;   subq $0x1000, %rsp
+;   movl $0, (%rsp)
+;   subq $0x1000, %rsp
+;   movl $0, (%rsp)
+;   subq $0x1000, %rsp
+;   movl $0, (%rsp)
+;   addq $0x5000, %rsp
+;   subq $0x5010, %rsp
+;   movq %rdi, 0x5000(%rsp)
+; block1: ; offset 0x60
+;   movq %rdi, (%rsp)
+;   movq 0x5000(%rsp), %rdi
+;   addq $0x5010, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %system_v(i64) system_v {
+    ss0 = explicit_slot 20480
+block0(v0: i64):
+    v1 = stack_addr.i64 ss0
+    store v0, v1
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   stack_probe_loop %r11, frame_size=20480, guard_size=4096
+;   subq $0x5000, %rsp
+; block0:
+;   movq %rdi, <offset:1>+(%rsp)
+;   addq $0x5000, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   movq %rsp, %r11
+;   subq $0x5000, %r11
+;   subq $0x1000, %rsp
+;   movl $0, (%rsp)
+;   cmpq %rsp, %r11
+;   jne 0xe
+;   addq $0x5000, %rsp
+;   subq $0x5000, %rsp
+; block1: ; offset 0x33
+;   movq %rdi, (%rsp)
+;   addq $0x5000, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

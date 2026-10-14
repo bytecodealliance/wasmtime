@@ -84,3 +84,9 @@
 (component instance $A $A)
 (assert_return (invoke "run" (u32.const 65528)))
 (assert_trap (invoke "run" (u32.const 65532)) "invalid debug message pointer")
+
+(component instance $A2 $A)
+(assert_trap (invoke "run" (u32.const 1)) "invalid debug message pointer: not aligned")
+
+(component instance $A3 $A)
+(assert_trap (invoke "run" (u32.const 65526)) "invalid debug message pointer: not aligned")

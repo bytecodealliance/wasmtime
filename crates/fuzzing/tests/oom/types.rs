@@ -22,7 +22,7 @@ fn func_type_params_results() -> Result<()> {
 #[test]
 fn table_type_accessors() -> Result<()> {
     OomTest::new().test(|| {
-        let ty = TableType::new(RefType::FUNCREF, 1, Some(10));
+        let ty = TableType::new(RefType::FUNCREF, 1, Some(10))?;
         assert_eq!(ty.minimum(), 1);
         assert_eq!(ty.maximum(), Some(10));
         Ok(())
@@ -32,7 +32,7 @@ fn table_type_accessors() -> Result<()> {
 #[test]
 fn memory_type_accessors() -> Result<()> {
     OomTest::new().test(|| {
-        let ty = MemoryType::new(1, Some(10));
+        let ty = MemoryType::new(1, Some(10))?;
         assert_eq!(ty.minimum(), 1);
         assert_eq!(ty.maximum(), Some(10));
         assert!(!ty.is_64());

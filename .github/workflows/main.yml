@@ -907,13 +907,13 @@ jobs:
         echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
       if: matrix.gcc != ''
 
-    - uses: actions/cache@v5
+    - uses: actions/cache@v6
       with:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
       if: matrix.qemu != ''
 
-    - uses: actions/cache@v5
+    - uses: actions/cache@v6
       with:
         path: ${{ runner.tool_cache }}/sde
         key: sde-${{ env.SDE_BUILD_VERSION }}
@@ -1199,7 +1199,7 @@ jobs:
       working-directory: ./examples/min-platform
       env:
         WASMTIME_SIGNALS_BASED_TRAPS: 1
-        MIN_PLATFORM_TEST_DISABLE_WASI: 1
+        MIN_PLATFORM_EXAMPLE_DISABLE_WASI: 1
 
     # Add the `wasmtime-platform.h` file as a release artifact
     - uses: actions/upload-artifact@v6
@@ -1353,7 +1353,7 @@ jobs:
     - name: Add solvers to PATH
       run: echo "$HOME/.cache/smt-solvers/bin" >> "${GITHUB_PATH}"
     - name: Restore and save verifier cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: cranelift/isle/veri/cache
         # Bump `v1` if the cache format changes. `hashFiles` covers the ISLE

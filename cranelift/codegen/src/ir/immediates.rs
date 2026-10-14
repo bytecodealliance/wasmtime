@@ -718,7 +718,7 @@ macro_rules! ieee_float {
                         // One of the floats is a NaN.
                         return None;
                     }
-                    if self.is_zero() || rhs.is_zero() {
+                    if self.is_zero() && rhs.is_zero() {
                         // Zeros are always equal regardless of sign.
                         return Some(Ordering::Equal);
                     }
@@ -1533,6 +1533,36 @@ mod tests {
     }
 
     #[test]
+    fn partial_cmp_zero_ieee16() {
+        let zero = Ieee16::with_bits(0);
+        let one = Ieee16::pow2(0);
+        let subnormal = Ieee16::with_bits(1);
+
+        for zero in [zero, -zero] {
+            assert_eq!(zero.partial_cmp(&zero), Some(Ordering::Equal));
+            assert_eq!(zero.partial_cmp(&-zero), Some(Ordering::Equal));
+
+            for (value, ordering) in [
+                (one, Ordering::Greater),
+                (-one, Ordering::Less),
+                (subnormal, Ordering::Greater),
+                (-subnormal, Ordering::Less),
+            ] {
+                assert_eq!(
+                    value.partial_cmp(&zero),
+                    Some(ordering),
+                    "{value} compared with {zero}"
+                );
+                assert_eq!(
+                    zero.partial_cmp(&value),
+                    Some(ordering.reverse()),
+                    "{zero} compared with {value}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn fcvt_to_sint_negative_overflow_ieee16() {
         // FIXME(#8312): Replace with commented out version once Rust f16 support is stabilised.
         // let n = 8;
@@ -2228,6 +2258,36 @@ mod tests {
             (-Ieee128::pow2(1)).to_string(),
             "-0x1.0000000000000000000000000000p1"
         );
+    }
+
+    #[test]
+    fn partial_cmp_zero_ieee128() {
+        let zero = Ieee128::with_bits(0);
+        let one = Ieee128::pow2(0);
+        let subnormal = Ieee128::with_bits(1);
+
+        for zero in [zero, -zero] {
+            assert_eq!(zero.partial_cmp(&zero), Some(Ordering::Equal));
+            assert_eq!(zero.partial_cmp(&-zero), Some(Ordering::Equal));
+
+            for (value, ordering) in [
+                (one, Ordering::Greater),
+                (-one, Ordering::Less),
+                (subnormal, Ordering::Greater),
+                (-subnormal, Ordering::Less),
+            ] {
+                assert_eq!(
+                    value.partial_cmp(&zero),
+                    Some(ordering),
+                    "{value} compared with {zero}"
+                );
+                assert_eq!(
+                    zero.partial_cmp(&value),
+                    Some(ordering.reverse()),
+                    "{zero} compared with {value}"
+                );
+            }
+        }
     }
 
     #[test]

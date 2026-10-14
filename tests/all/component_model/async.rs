@@ -2233,3 +2233,311 @@ async fn zero_length_reads_and_writes() -> Result<()> {
         })
         .await?
 }
+
+/// This is a regression test for
+/// https://github.com/bytecodealliance/wasmtime/issues/14504, in which the host
+/// panicked due to a too-early deletion of a task group.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn task_group_deletion() -> Result<()> {
+    struct Hook;
+
+    impl TaskGroupHook for Hook {
+        fn handle_start(&mut self, _id: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_enter(&mut self, _id: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_exit(&mut self, _id: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_finish(&mut self, _id: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    const WAT: &str = r#"
+(component
+  (core module $m
+    (import "" "task.return" (func $task.return))
+    (import "" "backpressure.inc" (func $backpressure.inc))
+    ;; `bg`: turn on backpressure, return a result, then keep running in the
+    ;; background by yielding; the next callback invocation traps.
+    (func (export "bg") (result i32)
+      (call $backpressure.inc)
+      (call $task.return)
+      (i32.const 1 (; YIELD ;)))
+    (func (export "bg-cb") (param i32 i32 i32) (result i32)
+      (i32.const 0 (; EXIT ;)))
+    ;; `foo`: never gets to run because of the backpressure.
+    (func (export "foo") (result i32)
+      (call $task.return)
+      (i32.const 0 (; EXIT ;)))
+    (func (export "foo-cb") (param i32 i32 i32) (result i32)
+      unreachable)
+  )
+  (core func $task.return (canon task.return))
+  (core func $backpressure.inc (canon backpressure.inc))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "task.return" (func $task.return))
+    (export "backpressure.inc" (func $backpressure.inc))))))
+  (func (export "bg") async
+    (canon lift (core func $i "bg") async (callback (core func $i "bg-cb"))))
+  (func (export "foo") async
+    (canon lift (core func $i "foo") async (callback (core func $i "foo-cb"))))
+)
+"#;
+
+    _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, WAT)?;
+    let mut store = Store::new(&engine, ());
+    store.task_group_hook(Hook);
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let bg = instance.get_typed_func::<(), ()>(&mut store, "bg")?;
+    let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
+
+    bg.call_async(&mut store, ()).await?;
+    let result = foo.call_async(&mut store, ()).await.unwrap_err();
+
+    assert!(
+        matches!(result.downcast_ref::<Trap>(), Some(Trap::AsyncDeadlock)),
+        "{result:?}"
+    );
+
+    Ok(())
+}
+
+/// A guest's `future.write` to a host consumer which never takes the value
+/// blocks, and once cancelled the write may be retried.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn retry_cancelled_future_write_to_host() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc (memory (export "memory") 1))
+  (core instance $libc (instantiate $libc))
+  (type $f (future u32))
+  (core func $future.new (canon future.new $f))
+  (core func $future.write (canon future.write $f async (memory (core memory $libc "memory"))))
+  (core func $future.cancel-write (canon future.cancel-write $f))
+  (core func $task.return (canon task.return))
+  (core module $m
+    (import "" "future.new" (func $future.new (result i64)))
+    (import "" "future.write" (func $future.write (param i32 i32) (result i32)))
+    (import "" "future.cancel-write" (func $future.cancel-write (param i32) (result i32)))
+    (import "" "task.return" (func $task.return))
+    (global $w (mut i32) (i32.const 0))
+    (func (export "new") (result i32)
+      (local $pair i64)
+      (local.set $pair (call $future.new))
+      (global.set $w (i32.wrap_i64 (i64.shr_u (local.get $pair) (i64.const 32))))
+      (i32.wrap_i64 (local.get $pair)))
+    (func $write-then-cancel
+      (if (i32.ne (call $future.write (global.get $w) (i32.const 0)) (i32.const -1 (; BLOCKED ;)))
+        (then unreachable))
+      (if (i32.ne (call $future.cancel-write (global.get $w)) (i32.const 2 (; CANCELLED ;)))
+        (then unreachable)))
+    (func (export "run") (result i32)
+      (call $write-then-cancel)
+      (call $write-then-cancel)
+      (call $task.return)
+      (i32.const 0 (; EXIT ;)))
+    (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+  )
+  (core instance $i (instantiate $m (with "" (instance
+    (export "future.new" (func $future.new))
+    (export "future.write" (func $future.write))
+    (export "future.cancel-write" (func $future.cancel-write))
+    (export "task.return" (func $task.return))))))
+  (func (export "new") (result $f) (canon lift (core func $i "new")))
+  (func (export "run") async
+    (canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let new = instance.get_typed_func::<(), (FutureReader<u32>,)>(&mut store, "new")?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    let (reader,) = new.call_async(&mut store, ()).await?;
+    reader.pipe(&mut store, NeverConsume)?;
+    run.call_async(&mut store, ()).await?;
+    return Ok(());
+
+    /// Never takes the value; acknowledges cancellation when asked to finish.
+    struct NeverConsume;
+
+    impl FutureConsumer<()> for NeverConsume {
+        type Item = u32;
+
+        fn poll_consume(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<()>,
+            _source: Source<'_, u32>,
+            finish: bool,
+        ) -> Poll<Result<()>> {
+            if finish {
+                Poll::Ready(Ok(()))
+            } else {
+                Poll::Pending
+            }
+        }
+    }
+}
+
+const THUNK_COMPONENT: &str = r#"
+    (component
+        (core module $m
+            (func (export "thunk"))
+        )
+        (core instance $i (instantiate $m))
+        (func (export "thunk") async
+            (canon lift (core func $i "thunk"))
+        )
+    )
+"#;
+
+/// Dropping the result of `start_call_concurrent` outside of the store's event
+/// loop should not panic.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn drop_start_call_concurrent_outside_event_loop() -> Result<()> {
+    let engine = super::async_engine();
+    let component = Component::new(&engine, THUNK_COMPONENT)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+
+    let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
+
+    let call = thunk.start_call_concurrent(&mut store, ())?;
+    drop(call);
+
+    Ok(())
+}
+
+/// An error returned from `TaskGroupHook::handle_finish` for a
+/// `call_concurrent` should not panic.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn task_group_hook_finish_error_call_concurrent() -> Result<()> {
+    _ = env_logger::try_init();
+    struct FailFinish;
+
+    impl TaskGroupHook for FailFinish {
+        fn handle_start(&mut self, _: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_enter(&mut self, _: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_exit(&mut self, _: TaskGroupId) -> Result<()> {
+            Ok(())
+        }
+        fn handle_finish(&mut self, _: TaskGroupId) -> Result<()> {
+            wasmtime::bail!("handle_finish failed")
+        }
+    }
+
+    let engine = super::async_engine();
+    let component = Component::new(&engine, THUNK_COMPONENT)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
+    store.task_group_hook(FailFinish);
+
+    let result = store
+        .run_concurrent(async |store| thunk.call_concurrent(store, ()).await)
+        .await;
+    assert!(result.is_err() || result.unwrap().is_err());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn cancel_read_while_cancelling() -> Result<()> {
+    let component = r#"
+        (component
+            (core module $libc (memory (export "memory") 1))
+            (core instance $libc (instantiate $libc))
+            (type $s (stream u8))
+            (core func $stream.read (canon stream.read $s async (memory (core memory $libc "memory"))))
+            (core func $stream.cancel-read (canon stream.cancel-read $s async))
+            (core module $m
+                (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+                (import "" "stream.cancel-read" (func $stream.cancel-read (param i32) (result i32)))
+                (func (export "run") (param $s i32)
+                    ;; Both the read and its cancellation block on the host.
+                    (if (i32.ne (call $stream.read (local.get $s) (i32.const 0) (i32.const 1))
+                                (i32.const -1))
+                        (then unreachable))
+                    (if (i32.ne (call $stream.cancel-read (local.get $s)) (i32.const -1))
+                        (then unreachable))
+                    ;; This must trap since a cancellation is already pending.
+                    (drop (call $stream.cancel-read (local.get $s)))
+                    unreachable)
+            )
+            (core instance $i (instantiate $m (with "" (instance
+                (export "stream.read" (func $stream.read))
+                (export "stream.cancel-read" (func $stream.cancel-read))
+            ))))
+            (func (export "run") (param "s" $s)
+                (canon lift (core func $i "run")))
+        )
+    "#;
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.wasm_component_model_more_async_builtins(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let run = instance.get_typed_func::<(StreamReader<u8>,), ()>(&mut store, "run")?;
+    let reader = StreamReader::new(&mut store, Pending)?;
+    let err = run.call_async(&mut store, (reader,)).await.unwrap_err();
+    assert!(
+        format!("{err:?}").contains("when a cancellation is already pending"),
+        "{err:?}"
+    );
+    return Ok(());
+
+    /// A producer which never produces anything.
+    struct Pending;
+
+    impl StreamProducer<()> for Pending {
+        type Item = u8;
+        type Buffer = Option<u8>;
+
+        fn poll_produce<'a>(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<'a, ()>,
+            _destination: Destination<'a, Self::Item, Self::Buffer>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            Poll::Pending
+        }
+    }
+}

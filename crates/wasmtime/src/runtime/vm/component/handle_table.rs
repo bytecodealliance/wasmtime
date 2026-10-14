@@ -29,6 +29,9 @@ pub enum TransmitLocalState {
     },
     /// A read or write is in progress.
     Busy,
+    /// A read or write is in progress and an asynchronous cancellation of it
+    /// has been requested but has not yet completed.
+    Cancelling,
 }
 
 /// Return value from [`HandleTable::remove_resource`].
@@ -66,9 +69,13 @@ enum Slot {
     ///
     /// The `rep` is listed and dropping this borrow will decrement the borrow
     /// count of the `scope`.
+    ///
+    /// Like `ResourceOwn` the `lend_count` tracks how many times this borrow
+    /// has been lent out to other calls, and if nonzero this can't be removed.
     ResourceBorrow {
         resource: TypedResource,
         scope: Scope,
+        lend_count: u32,
     },
 
     /// Represents a host task handle.
@@ -199,7 +206,11 @@ impl HandleTable {
     /// specified by `resource`. The `scope` specified is used by
     /// `CallContexts` to manage lending information.
     pub fn resource_borrow_insert(&mut self, resource: TypedResource, scope: Scope) -> Result<u32> {
-        self.insert(Slot::ResourceBorrow { resource, scope })
+        self.insert(Slot::ResourceBorrow {
+            resource,
+            scope,
+            lend_count: 0,
+        })
     }
 
     /// Returns the internal "rep" of the resource specified by `idx`.
@@ -218,42 +229,46 @@ impl HandleTable {
     /// Accesses the "rep" of the resource pointed to by `idx` as part of a
     /// lending operation.
     ///
-    /// This will increase `lend_count` for owned resources and must be paired
-    /// with a `resource_undo_lend` below later on (managed by `CallContexts`).
+    /// This will increase `lend_count` for both `own` and `borrow` handles and
+    /// must be paired with a `resource_undo_lend` below later on (managed by
+    /// `CallContexts`).
     ///
-    /// Upon success returns the "rep" plus whether the borrow came from an
-    /// `own` handle.
-    pub fn resource_lend(&mut self, idx: TypedResourceIndex) -> Result<(u32, bool)> {
+    /// Upon success returns the "rep" of the resource.
+    pub fn resource_lend(&mut self, idx: TypedResourceIndex) -> Result<u32> {
         match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn {
                 resource,
                 lend_count,
+            }
+            | Slot::ResourceBorrow {
+                resource,
+                lend_count,
+                ..
             } => {
                 let rep = resource.rep(&idx)?;
                 *lend_count = lend_count.checked_add(1).unwrap();
-                Ok((rep, true))
+                Ok(rep)
             }
-            Slot::ResourceBorrow { resource, .. } => Ok((resource.rep(&idx)?, false)),
             _ => bail!("index {} is not a resource", idx.raw_index()),
         }
     }
 
-    /// For `own` resources that were borrowed in `resource_lend`, undoes the
-    /// lending operation.
+    /// Undoes a lending operation previously performed by `resource_lend`.
     pub fn resource_undo_lend(&mut self, idx: TypedResourceIndex) -> Result<()> {
         match self.get_mut(idx.raw_index())? {
-            Slot::ResourceOwn { lend_count, .. } => {
+            Slot::ResourceOwn { lend_count, .. } | Slot::ResourceBorrow { lend_count, .. } => {
                 *lend_count -= 1;
                 Ok(())
             }
-            _ => bail!("index {} is not an own resource", idx.raw_index()),
+            _ => bail!("index {} is not a resource", idx.raw_index()),
         }
     }
 
     /// Removes the resource specified by `idx` from the table.
     ///
     /// This can fail if `idx` doesn't point to a resource, points to a
-    /// borrowed resource, or points to a resource of the wrong type.
+    /// resource (own or borrow) which is currently lent out, or points to a
+    /// resource of the wrong type.
     pub fn remove_resource(&mut self, idx: TypedResourceIndex) -> Result<RemovedResource> {
         let ret = match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn {
@@ -267,9 +282,16 @@ impl HandleTable {
                     rep: resource.rep(&idx)?,
                 }
             }
-            Slot::ResourceBorrow { resource, scope } => {
+            Slot::ResourceBorrow {
+                resource,
+                scope,
+                lend_count,
+            } => {
                 // Ensure the drop is done with the right type
                 resource.rep(&idx)?;
+                if *lend_count != 0 {
+                    bail!("cannot remove borrowed resource while it is lent out")
+                }
                 RemovedResource::Borrow { scope: *scope }
             }
             _ => bail!("index {} is not a resource", idx.raw_index()),
@@ -345,7 +367,9 @@ impl HandleTable {
                     TransmitLocalState::Write { .. } => {
                         bail!("handle is not a readable end of a stream")
                     }
-                    TransmitLocalState::Busy => bail!("cannot remove busy stream"),
+                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                        bail!("cannot remove busy stream")
+                    }
                 };
                 (*rep, is_done)
             }
@@ -371,7 +395,9 @@ impl HandleTable {
                     TransmitLocalState::Read { .. } => {
                         bail!("passed read end to `stream.drop-writable`")
                     }
-                    TransmitLocalState::Busy => bail!("cannot drop busy stream"),
+                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                        bail!("cannot drop busy stream")
+                    }
                 }
                 *rep
             }
@@ -448,7 +474,9 @@ impl HandleTable {
                     TransmitLocalState::Write { .. } => {
                         bail!("handle is not a readable end of a future")
                     }
-                    TransmitLocalState::Busy => bail!("cannot remove busy future"),
+                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                        bail!("cannot remove busy future")
+                    }
                 };
                 (*rep, is_done)
             }
@@ -476,7 +504,9 @@ impl HandleTable {
                     TransmitLocalState::Read { .. } => {
                         bail!("passed read end to `future.drop-writable`")
                     }
-                    TransmitLocalState::Busy => bail!("cannot drop busy future"),
+                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                        bail!("cannot drop busy future")
+                    }
                 };
                 (*rep, is_done)
             }

@@ -48,8 +48,8 @@ pub fn list() -> Vec<Inst> {
         // Floating-point comparisons.
         inst("cmpss", fmt("A", [rw(xmm1), r(xmm_m32), r(imm8)]), rex([0xF3, 0x0F, 0xC2]).r().ib(), (_64b | compat) & sse).custom(Display),
         inst("cmpsd", fmt("A", [rw(xmm1), r(xmm_m64), r(imm8)]), rex([0xF2, 0x0F, 0xC2]).r().ib(), (_64b | compat) & sse2).custom(Display),
-        inst("cmpps", fmt("A", [rw(xmm1), r(xmm_m128), r(imm8)]), rex([0x0F, 0xC2]).r().ib(), (_64b | compat) & sse).custom(Display),
-        inst("cmppd", fmt("A", [rw(xmm1), r(xmm_m128), r(imm8)]), rex([0x66, 0x0F, 0xC2]).r().ib(), (_64b | compat) & sse2).custom(Display),
+        inst("cmpps", fmt("A", [rw(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0x0F, 0xC2]).r().ib(), (_64b | compat) & sse).custom(Display),
+        inst("cmppd", fmt("A", [rw(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0x66, 0x0F, 0xC2]).r().ib(), (_64b | compat) & sse2).custom(Display),
         inst("vcmpss", fmt("B", [w(xmm1), r(xmm2), r(xmm_m32), r(imm8)]), vex(LIG)._f3()._0f().op(0xC2).r().ib(), (_64b | compat) & avx).custom(Display),
         inst("vcmpsd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m64), r(imm8)]), vex(LIG)._f2()._0f().op(0xC2).r().ib(), (_64b | compat) & avx).custom(Display),
         inst("vcmpps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128), r(imm8)]), vex(L128)._0f().op(0xC2).r().ib(), (_64b | compat) & avx).custom(Display),

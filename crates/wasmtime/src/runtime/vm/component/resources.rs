@@ -246,7 +246,7 @@ impl ResourceTables<'_> {
     /// the specified table. This operation can fail if:
     ///
     /// * The index is invalid.
-    /// * The index points to an `own` resource which has active borrows.
+    /// * The index points to a resource which has been lent out.
     /// * The index's type is mismatched with the entry in the table's type.
     ///
     /// Otherwise this will return `Some(rep)` if the destructor for `rep` needs
@@ -335,17 +335,20 @@ impl ResourceTables<'_> {
     /// Extracts the underlying resource representation by lifting a "borrow"
     /// from the tables.
     ///
-    /// This primarily employs dynamic tracking when a borrow is created from an
-    /// "own" handle to ensure that the "own" handle isn't dropped while the
-    /// borrow is active and additionally that when the current call scope
-    /// returns the lend operation is undone.
+    /// This primarily employs dynamic tracking when a borrow is created from
+    /// either an "own" or a "borrow" handle to ensure that the lending handle
+    /// isn't dropped while the borrow is active and additionally that when the
+    /// current call scope returns the lend operation is undone.
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        let (rep, is_own) = self.table_for_index(&index).resource_lend(index)?;
-        if is_own {
-            self.current_scope()?.lenders.push(index);
-        }
+        // FIXME: the logic here applies to all resources, both own and borrow,
+        // although tracking `borrow` here isn't always necessary for sync
+        // tasks. Ideally the `lenders.push` would be skipped for sync tasks but
+        // that requires a bit more plumbing and also appropriately tracking the
+        // `lend_count` and such. For now this treats own/borrow the same way.
+        let rep = self.table_for_index(&index).resource_lend(index)?;
+        self.current_scope()?.lenders.push(index);
         Ok(rep)
     }
 

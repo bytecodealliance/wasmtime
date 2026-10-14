@@ -82,7 +82,7 @@ impl FuncTranslator {
         // `environ`. The callback functions may need to insert things in the entry block.
         builder.ensure_inserted_block();
 
-        let num_params = declare_wasm_parameters(&mut builder, entry_block, environ);
+        let num_params = declare_wasm_parameters(&mut builder, entry_block, environ)?;
 
         // Set up the translation state with a single pushed control block representing the whole
         // function and its return values.
@@ -158,7 +158,7 @@ fn declare_wasm_parameters(
     builder: &mut FunctionBuilder,
     entry_block: Block,
     environ: &mut FuncEnvironment<'_>,
-) -> usize {
+) -> WasmResult<usize> {
     let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
     for i in 0..sig_len {
@@ -178,7 +178,7 @@ fn declare_wasm_parameters(
             let param_value = builder.block_params(entry_block)[i];
             builder.def_var(local, param_value);
 
-            environ.add_state_slot_local(builder, wasm_type, Some(param_value));
+            environ.add_state_slot_local(builder, wasm_type, |_, _| Ok(param_value))?;
         }
         if param_type.purpose == ir::ArgumentPurpose::VMContext {
             let param_value = builder.block_params(entry_block)[i];
@@ -186,7 +186,7 @@ fn declare_wasm_parameters(
         }
     }
 
-    next_local
+    Ok(next_local)
 }
 
 /// Parse the local variable declarations that precede the function body.
@@ -277,7 +277,25 @@ fn declare_locals(
             builder.def_var(local, init);
             builder.set_val_label(init, ValueLabel::new(*next_local));
         }
-        environ.add_state_slot_local(builder, environ.convert_valtype(wasm_type)?, init);
+        environ.add_state_slot_local(
+            builder,
+            environ.convert_valtype(wasm_type)?,
+            |environ, builder| match init {
+                Some(init) => Ok(init),
+                // A non-nullable reference local has no initial value
+                // (validation ensures it's set before it's read), but its
+                // state-slot entry still needs one: the debug API can read
+                // any local's entry, and the GC traces every
+                // GC-reference-typed entry. Use null.
+                None => {
+                    let Ref(rt) = wasm_type else {
+                        unreachable!("only non-nullable references have no initial value")
+                    };
+                    let hty = environ.convert_heap_type(rt.heap_type())?;
+                    environ.translate_ref_null(builder.cursor(), hty)
+                }
+            },
+        )?;
         *next_local += 1;
     }
     Ok(())

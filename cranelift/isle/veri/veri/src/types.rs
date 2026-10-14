@@ -292,7 +292,9 @@ impl Compound {
             ModelType::Int => Self::Primitive(Type::Int),
             ModelType::Bool => Self::Primitive(Type::Bool),
             ModelType::Unit => Self::Primitive(Type::Unit),
-            ModelType::BitVec(None) => Self::Primitive(Type::BitVector(Width::Unknown)),
+            ModelType::BitVec(None) | ModelType::BitVecOneOf(_) => {
+                Self::Primitive(Type::BitVector(Width::Unknown))
+            }
             ModelType::BitVec(Some(bits)) => Self::Primitive(Type::BitVector(Width::Bits(*bits))),
             ModelType::Struct(fields) => Self::Struct(
                 fields

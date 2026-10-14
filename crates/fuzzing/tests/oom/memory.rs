@@ -16,7 +16,7 @@ fn memory_new() -> Result<()> {
         .allow_alloc_after_oom(true)
         .test(|| {
             let mut store = Store::try_new(&engine, ())?;
-            let _memory = Memory::new(&mut store, MemoryType::new(1, None))?;
+            let _memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
             Ok(())
         })
 }
@@ -32,7 +32,7 @@ async fn memory_new_async() -> Result<()> {
         .allow_alloc_after_oom(true)
         .test_async(|| async {
             let mut store = Store::try_new(&engine, ())?;
-            let _memory = Memory::new_async(&mut store, MemoryType::new(1, None)).await?;
+            let _memory = Memory::new_async(&mut store, MemoryType::new(1, None)?).await?;
             Ok(())
         })
         .await
@@ -47,7 +47,7 @@ fn memory_grow() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let memory = Memory::new(&mut store, MemoryType::new(1, None))?;
+        let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
         let _old_size = memory.grow(&mut store, 1)?;
         Ok(())
     })
@@ -64,7 +64,7 @@ async fn memory_grow_async() -> Result<()> {
         .allow_alloc_after_oom(true)
         .test_async(|| async {
             let mut store = Store::try_new(&engine, ())?;
-            let memory = Memory::new_async(&mut store, MemoryType::new(1, None)).await?;
+            let memory = Memory::new_async(&mut store, MemoryType::new(1, None)?).await?;
             let _old_size = memory.grow_async(&mut store, 1).await?;
             Ok(())
         })
@@ -80,7 +80,7 @@ fn memory_ty() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let memory = Memory::new(&mut store, MemoryType::new(1, None))?;
+        let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
         let _ty = memory.ty(&store);
         Ok(())
     })
@@ -95,7 +95,7 @@ fn memory_size() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let memory = Memory::new(&mut store, MemoryType::new(1, None))?;
+        let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
         assert_eq!(memory.size(&store), 1);
         Ok(())
     })
@@ -110,7 +110,7 @@ fn memory_data_size() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let memory = Memory::new(&mut store, MemoryType::new(1, None))?;
+        let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
         assert_eq!(memory.data_size(&store), 65536);
         Ok(())
     })
@@ -125,7 +125,7 @@ fn memory_read_write() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let memory = Memory::new(&mut store, MemoryType::new(1, None))?;
+        let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
         memory.write(&mut store, 0, &[1, 2, 3, 4])?;
         let mut buf = [0u8; 4];
         memory.read(&store, 0, &mut buf)?;
@@ -143,7 +143,7 @@ fn memory_data() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let memory = Memory::new(&mut store, MemoryType::new(1, None))?;
+        let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
         let data = memory.data(&store);
         assert_eq!(data.len(), 65536);
         Ok(())
@@ -159,7 +159,7 @@ fn memory_data_mut() -> Result<()> {
 
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let memory = Memory::new(&mut store, MemoryType::new(1, None))?;
+        let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
         let data = memory.data_mut(&mut store);
         data[0] = 42;
         assert_eq!(data[0], 42);

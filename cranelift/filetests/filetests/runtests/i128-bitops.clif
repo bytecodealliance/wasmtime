@@ -8,6 +8,16 @@ set enable_multi_ret_implicit_sret
 target s390x
 
 
+set opt_level=speed
+set enable_multi_ret_implicit_sret=false
+set enable_llvm_abi_extensions=true
+target aarch64
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+set enable_multi_ret_implicit_sret
+target s390x
+
 function %bnot_i128(i128) -> i128 {
 block0(v0: i128):
     v1 = bnot v0
@@ -57,3 +67,31 @@ block0(v0: i128, v1: i128):
 ; run: %bxor_i128(-1, 0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 0x00000000_00000000_FFFFFFFF_FFFFFFFF
 ; run: %bxor_i128(0xFEDCBA98_76543210_01234567_89ABCDEF, 0x01234567_89ABCDEF_FEDCBA98_76543210) == -1
 ; run: %bxor_i128(0x9440A07D_9440A07D_8FA50A64_8FA50A64, 0x4A8A5F82_4A8A5F82_4F5AE48A_4F5AE48A) == 0xDECAFFFF_DECAFFFF_C0FFEEEE_C0FFEEEE
+
+function %bor_bnot_band_absorb_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = band v0, v1
+    v3 = bnot v2
+    v4 = bor v3, v0
+    return v4
+}
+
+; run: %bor_bnot_band_absorb_i128(0, 0) == -1
+; run: %bor_bnot_band_absorb_i128(-1, 0) == -1
+; run: %bor_bnot_band_absorb_i128(0, -1) == -1
+; run: %bor_bnot_band_absorb_i128(-1, -1) == -1
+; run: %bor_bnot_band_absorb_i128(0x80000000000000000000000000000000, 0x7fffffffffffffffffffffffffffffff) == -1
+
+function %bnot_xor_constant_i128_guard(i128) -> i128 {
+block0(v0: i128):
+    v1 = bnot v0
+    v2 = iconst.i64 85
+    v3 = uextend.i128 v2
+    v4 = bxor v1, v3
+    return v4
+}
+
+; run: %bnot_xor_constant_i128_guard(0) == -86
+; run: %bnot_xor_constant_i128_guard(-1) == 85
+; run: %bnot_xor_constant_i128_guard(0x80000000000000000000000000000000) == 0x7fffffffffffffffffffffffffffffaa
+; run: %bnot_xor_constant_i128_guard(0x7fffffffffffffffffffffffffffffff) == -170141183460469231731687303715884105643

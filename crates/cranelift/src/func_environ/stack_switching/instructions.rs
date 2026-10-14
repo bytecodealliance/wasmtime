@@ -30,10 +30,10 @@ fn emit_stack_switch<'a>(
     store_context_ptr: ir::Value,
     load_context_ptr: ir::Value,
     payload: ir::Value,
-    asan_target_csi: impl FnOnce(
+    asan_stack_information: impl FnOnce(
         &mut crate::func_environ::FuncEnvironment<'a>,
         &mut FunctionBuilder,
-    ) -> ir::Value,
+    ) -> (ir::Value, ir::Value),
 ) -> ir::Value {
     if !env.compiler.tunables().asan_stack_switching {
         return builder
@@ -44,7 +44,7 @@ fn emit_stack_switch<'a>(
     // ASan-aware stack switching.
     // The `asan_target_csi` is provided as a function to lazily load
     // the necessary ASan bookkeeping.
-    let target_csi = asan_target_csi(env, builder);
+    let (source_csi, target_csi) = asan_stack_information(env, builder);
     let pointer_type = env.pointer_type();
     let slot = env.get_or_create_asan_fake_stack_slot(builder);
     let fake_stack_save = builder.ins().stack_addr(pointer_type, slot, 0);
@@ -60,7 +60,7 @@ fn emit_stack_switch<'a>(
     );
     builder.ins().call(
         asan_start_switch_fiber,
-        &[vmctx, fake_stack_save, target_csi],
+        &[vmctx, fake_stack_save, source_csi, target_csi],
     );
 
     let result = builder
@@ -74,7 +74,7 @@ fn emit_stack_switch<'a>(
     );
     builder
         .ins()
-        .call(asan_finish_switch_fiber, &[vmctx, fake_stack]);
+        .call(asan_finish_switch_fiber, &[vmctx, fake_stack, source_csi]);
 
     result
 }
@@ -96,19 +96,23 @@ pub(crate) mod stack_switching_helpers {
     /// Provides information about the layout of a type when it is used as an
     /// element in a host array. This is used for `VMHostArrayRef`.
     pub(crate) trait VMHostArrayEntry {
-        /// Returns `(align, size)` in bytes.
+        /// Returns `(align_shift, size)`: the log2 of the alignment, as used by
+        /// `StackSlotData`, and the size in bytes.
         fn vmhostarray_entry_layout<P: wasmtime_environ::PtrSize>(p: &P) -> (u8, u32);
     }
 
     impl VMHostArrayEntry for u128 {
         fn vmhostarray_entry_layout<P: wasmtime_environ::PtrSize>(_p: &P) -> (u8, u32) {
-            (16, 16)
+            (4, 16)
         }
     }
 
     impl<T> VMHostArrayEntry for *mut T {
         fn vmhostarray_entry_layout<P: wasmtime_environ::PtrSize>(p: &P) -> (u8, u32) {
-            (p.size(), p.size().into())
+            (
+                u8::try_from(p.size().trailing_zeros()).unwrap(),
+                p.size().into(),
+            )
         }
     }
 
@@ -1914,7 +1918,12 @@ fn translate_resume_impl<'a>(
             control_context_ptr,
             control_context_ptr,
             resume_payload,
-            |env, builder| last_ancestor.common_stack_information(env, builder).address,
+            |env, builder| {
+                (
+                    parent_csi.address,
+                    last_ancestor.common_stack_information(env, builder).address,
+                )
+            },
         );
 
         // At this point we know nothing about the continuation that just
@@ -2234,9 +2243,14 @@ pub(crate) fn translate_suspend<'a>(
         control_context_ptr,
         suspend_payload,
         |env, builder| {
-            handler_stack_chain
-                .get_common_stack_information(env, builder)
-                .address
+            (
+                end_of_chain_contref
+                    .common_stack_information(env, builder)
+                    .address,
+                handler_stack_chain
+                    .get_common_stack_information(env, builder)
+                    .address,
+            )
         },
     );
 
@@ -2460,7 +2474,7 @@ pub(crate) fn translate_switch<'a>(
         let slot_size = ir::StackSlotData::new(
             ir::StackSlotKind::ExplicitSlot,
             u32::from(cctx_size),
-            u8::try_from(env.pointer_type().bytes()).unwrap(),
+            u8::try_from(env.pointer_type().bytes().trailing_zeros()).unwrap(),
         );
         let slot = builder.create_sized_stack_slot(slot_size);
         let tmp_control_context = builder.ins().stack_addr(env.pointer_type(), slot, 0);
@@ -2511,9 +2525,14 @@ pub(crate) fn translate_switch<'a>(
             tmp_control_context,
             switch_payload,
             |env, builder| {
-                switchee_contref_last_ancestor
-                    .common_stack_information(env, builder)
-                    .address
+                (
+                    switcher_contref_last_ancestor
+                        .common_stack_information(env, builder)
+                        .address,
+                    switchee_contref_last_ancestor
+                        .common_stack_information(env, builder)
+                        .address,
+                )
             },
         )
     };

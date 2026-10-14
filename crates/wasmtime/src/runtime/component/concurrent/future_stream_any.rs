@@ -33,6 +33,11 @@ use wasmtime_environ::component::{
 /// called then memory will not be leaked once the owning [`Store`] is dropped,
 /// but the resource handle will be leaked until the [`Store`] is dropped.
 ///
+/// Note that special care should be taken when handling `FutureAny` in async
+/// functions. In this scenario an async host function can be cancelled
+/// (dropped) at any time and if a `FutureAny` it holds isn't closed then the
+/// future will be leaked within the store until the store is dropped.
+///
 /// # Cloning
 ///
 /// Cloning a [`FutureAny`] does not duplicate the underlying future: all clones
@@ -214,6 +219,11 @@ unsafe impl Lift for FutureAny {
 /// ensure that this handle does not leak. If [`StreamAny::close`] is not
 /// called then memory will not be leaked once the owning [`Store`] is dropped,
 /// but the resource handle will be leaked until the [`Store`] is dropped.
+///
+/// Note that special care should be taken when handling `StreamAny` in async
+/// functions. In this scenario an async host function can be cancelled
+/// (dropped) at any time and if a `StreamAny` it holds isn't closed then the
+/// stream will be leaked within the store until the store is dropped.
 ///
 /// # Cloning
 ///

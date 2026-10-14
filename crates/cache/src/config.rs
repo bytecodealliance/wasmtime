@@ -1,6 +1,6 @@
 //! Module for configuring the cache system.
 
-use directories_next::ProjectDirs;
+use directories::ProjectDirs;
 use log::{trace, warn};
 use serde::{
     Deserialize,

@@ -53,3 +53,46 @@ block0(v0: i32):
 ;     return v3
 ; }
 
+;; Symbol global values that reference user external names must have those
+;; names translated into the caller's user external name table.
+
+function %symbol_callee() -> i64 {
+    gv0 = symbol colocated u7:7
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; (no functions inlined into %symbol_callee)
+
+function %symbol_caller() -> i64 {
+    gv0 = symbol colocated u1:1
+    sig0 = () -> i64
+    fn0 = %symbol_callee sig0
+block0:
+    v0 = symbol_value.i64 gv0
+    v1 = call fn0()
+    v2 = iadd v0, v1
+    return v2
+}
+
+; function %symbol_caller() -> i64 fast {
+;     gv0 = symbol colocated userextname0
+;     gv1 = symbol colocated userextname1
+;     sig0 = () -> i64 fast
+;     fn0 = %symbol_callee sig0
+;
+; block0:
+;     v0 = symbol_value.i64 gv0
+;     jump block1
+;
+; block1:
+;     v4 = symbol_value.i64 gv1
+;     jump block2(v4)
+;
+; block2(v3: i64):
+;     v1 -> v3
+;     v2 = iadd.i64 v0, v1
+;     return v2
+; }
+

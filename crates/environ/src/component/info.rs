@@ -1044,21 +1044,17 @@ pub enum Trampoline {
         memory: Option<RuntimeMemoryIndex>,
     },
 
-    /// An intrinsic used by FACT-generated modules to start a call involving a
-    /// sync-lowered import and async-lifted export.
-    SyncStartCall {
-        /// The callee's callback function, if any.
-        callback: Option<RuntimeCallbackIndex>,
-    },
-
-    /// An intrinsic used by FACT-generated modules to start a call involving
-    /// an async-lowered import function.
+    /// An intrinsic used by FACT-generated modules to start a call previously
+    /// set up with `PrepareCall`.
     ///
-    /// Note that `AsyncPrepareCall` and `AsyncStartCall` could theoretically be
-    /// combined into a single `AsyncCall` intrinsic, but we separate them to
-    /// allow the FACT-generated module to optionally call the callee directly
-    /// without an intermediate host stack frame.
-    AsyncStartCall {
+    /// This is used for calls where something async is involved, for example an
+    /// async function type, an async lift, or an async lower.
+    ///
+    /// Note that `PrepareCall` and `StartCall` could theoretically be combined
+    /// into a single intrinsic, but we separate them to allow the
+    /// FACT-generated module to optionally call the callee directly without an
+    /// intermediate host stack frame.
+    StartCall {
         /// The callee's callback, if any.
         callback: Option<RuntimeCallbackIndex>,
         /// The callee's post-return function, if any.
@@ -1110,8 +1106,9 @@ pub enum Trampoline {
     ThreadNewIndirect {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
-        /// The type index for the start function of the thread.
-        start_func_ty_idx: ComponentTypeIndex,
+        /// The core function type that the thread's start function must have,
+        /// as declared by the `thread.new-indirect` built-in.
+        start_func_ty_idx: ModuleInternedTypeIndex,
         /// The index of the table that stores the start function.
         start_func_table_idx: RuntimeTableIndex,
     },
@@ -1216,8 +1213,7 @@ impl Trampoline {
             ResourceTransferOwn => format!("component-resource-transfer-own"),
             ResourceTransferBorrow => format!("component-resource-transfer-borrow"),
             PrepareCall { .. } => format!("component-prepare-call"),
-            SyncStartCall { .. } => format!("component-sync-start-call"),
-            AsyncStartCall { .. } => format!("component-async-start-call"),
+            StartCall { .. } => format!("component-start-call"),
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),

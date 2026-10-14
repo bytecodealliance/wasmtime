@@ -1,0 +1,239 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; A loop between a store and its overwriter might never terminate, in which
+;; case the overwriter never runs. A trapping store before such a loop must
+;; still trap, so dead-store elimination must keep it.
+
+;; The `block2` path is an infinite loop that never reaches the overwriter.
+function %infinite_loop(i64, i32, i32, i32) {
+    region0 = 0 "heap"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store user1 aligned region0 v1, v0
+    brif v3, block2, block1
+
+block1:
+    store user1 aligned region0 v2, v0
+    return
+
+block2:
+    jump block2
+}
+
+; function %infinite_loop(i64, i32, i32, i32) fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     store user1 aligned region0 v1, v0
+;     brif v3, block2, block1
+;
+; block1:
+;     store.i32 user1 aligned region0 v2, v0
+;     return
+;
+; block2:
+;     jump block2
+; }
+
+;; The overwriter post-dominates the first store, but the loop in `block1` need
+;; not terminate at run time.
+function %loop_with_exit(i64, i32, i32, i32) {
+    region0 = 0 "heap"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store user1 aligned region0 v1, v0
+    jump block1
+
+block1:
+    brif v3, block1, block2
+
+block2:
+    store user1 aligned region0 v2, v0
+    return
+}
+
+; function %loop_with_exit(i64, i32, i32, i32) fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     store user1 aligned region0 v1, v0
+;     jump block1
+;
+; block1:
+;     brif.i32 v3, block1, block2
+;
+; block2:
+;     store.i32 user1 aligned region0 v2, v0
+;     return
+; }
+
+;; Both stores are in blocks that cannot reach the function's exit.
+function %both_divergent(i64, i32, i32, i32) {
+    region0 = 0 "heap"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    brif v2, block1, block4
+
+block1:
+    store user1 aligned region0 v1, v0
+    brif v3, block2, block3
+
+block2:
+    jump block2
+
+block3:
+    store user1 aligned region0 v2, v0
+    jump block5
+
+block5:
+    jump block5
+
+block4:
+    return
+}
+
+; function %both_divergent(i64, i32, i32, i32) fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     brif v2, block1, block4
+;
+; block1:
+;     store.i32 user1 aligned region0 v1, v0
+;     brif.i32 v3, block2, block3
+;
+; block2:
+;     jump block2
+;
+; block3:
+;     store.i32 user1 aligned region0 v2, v0
+;     jump block5
+;
+; block5:
+;     jump block5
+;
+; block4:
+;     return
+; }
+
+;; Non-trapping stores must also be kept: if this memory is shared, then other
+;; threads can observe the first store while this one spins in the loop.
+function %notrap_loop_with_exit(i64, i32, i32, i32) {
+    region0 = 0 "heap"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store notrap aligned region0 v1, v0
+    jump block1
+
+block1:
+    brif v3, block1, block2
+
+block2:
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %notrap_loop_with_exit(i64, i32, i32, i32) fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     store notrap aligned region0 v1, v0
+;     jump block1
+;
+; block1:
+;     brif.i32 v3, block1, block2
+;
+; block2:
+;     store.i32 notrap aligned region0 v2, v0
+;     return
+; }
+
+;; An irreducible cycle between `block1` and `block2`, neither of which
+;; dominates the other.
+function %irreducible_loop(i64, i32, i32, i32) {
+    region0 = 0 "heap"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    store user1 aligned region0 v1, v0
+    brif v3, block1, block2
+
+block1:
+    brif v3, block2, block3
+
+block2:
+    jump block1
+
+block3:
+    store user1 aligned region0 v2, v0
+    return
+}
+
+; function %irreducible_loop(i64, i32, i32, i32) fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     store user1 aligned region0 v1, v0
+;     brif v3, block1, block2
+;
+; block1:
+;     brif.i32 v3, block2, block3
+;
+; block2:
+;     jump block1
+;
+; block3:
+;     store.i32 user1 aligned region0 v2, v0
+;     return
+; }
+
+;; A loop before both stores, or a diamond between them, does not stop the first
+;; store from being eliminated.
+function %loop_before_both_stores(i64, i32, i32, i32) {
+    region0 = 0 "heap"
+
+block0(v0: i64, v1: i32, v2: i32, v3: i32):
+    jump block1
+
+block1:
+    brif v3, block1, block2
+
+block2:
+    store user1 aligned region0 v1, v0
+    brif v2, block3, block4
+
+block3:
+    jump block5
+
+block4:
+    jump block5
+
+block5:
+    store user1 aligned region0 v2, v0
+    return
+}
+
+; function %loop_before_both_stores(i64, i32, i32, i32) fast {
+;     region0 = 0 "heap"
+;
+; block0(v0: i64, v1: i32, v2: i32, v3: i32):
+;     jump block1
+;
+; block1:
+;     brif.i32 v3, block1, block2
+;
+; block2:
+;     brif.i32 v2, block3, block4
+;
+; block3:
+;     jump block5
+;
+; block4:
+;     jump block5
+;
+; block5:
+;     store.i32 user1 aligned region0 v2, v0
+;     return
+; }
+

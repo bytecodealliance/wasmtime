@@ -325,15 +325,10 @@ fn fact_import_to_core_def(
         fact::Import::PrepareCall { memory } => simple_intrinsic(dfg::Trampoline::PrepareCall {
             memory: memory.as_ref().map(|v| dfg.memories.push(unwrap_memory(v))),
         }),
-        fact::Import::SyncStartCall { callback } => {
-            simple_intrinsic(dfg::Trampoline::SyncStartCall {
-                callback: callback.clone().map(|v| dfg.callbacks.push(v)),
-            })
-        }
-        fact::Import::AsyncStartCall {
+        fact::Import::StartCall {
             callback,
             post_return,
-        } => simple_intrinsic(dfg::Trampoline::AsyncStartCall {
+        } => simple_intrinsic(dfg::Trampoline::StartCall {
             callback: callback.clone().map(|v| dfg.callbacks.push(v)),
             post_return: post_return.clone().map(|v| dfg.post_returns.push(v)),
         }),

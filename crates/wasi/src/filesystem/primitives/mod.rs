@@ -293,9 +293,29 @@ pub(crate) fn remove_file(start: &fs::File, path: &Path) -> io::Result<()> {
 }
 
 pub(crate) fn remove_dir(start: &fs::File, path: &Path) -> io::Result<()> {
+    // FreeBSD's kernel removes a symlink's target for `link/`, so leave
+    // trailing slashes to the checks below.
     #[cfg(target_os = "freebsd")]
-    if sys::remove_dir_fast(start, path)? {
+    if !path_has_trailing_slash(path) && sys::remove_dir_fast(start, path)? {
         return Ok(());
+    }
+
+    // As with `create_dir`, a trailing slash after a directory names the
+    // directory itself rather than acting like a trailing slash-dot, so remove
+    // it by its plain name. Other paths with a trailing slash still resolve
+    // through `open_parent` below.
+    if path_has_trailing_slash(path) {
+        let stripped = strip_dir_suffix(path);
+        if let Ok((dir, basename)) = open_parent(MaybeOwnedFile::borrowed(start), &stripped) {
+            let basename = Path::new(basename);
+            match stat_unchecked(&dir, basename, FollowSymlinks::No) {
+                Ok(m) if m.is_dir() => return remove_dir_unchecked(&dir, basename),
+                // Like Linux, fail on a symlink without following it, so its
+                // target is never touched.
+                Ok(m) if m.file_type().is_symlink() => return Err(errors::is_not_directory()),
+                _ => {}
+            }
+        }
     }
 
     let start = MaybeOwnedFile::borrowed(start);

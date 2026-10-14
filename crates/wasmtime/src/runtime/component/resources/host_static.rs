@@ -199,7 +199,9 @@ where
     ///
     /// This function will return an error if `resource` does not have type
     /// `ResourceType::host::<T>()`. This function may also return an error if
-    /// `resource` is no longer valid, for example it was previously converted.
+    /// `resource` is no longer valid, for example it was previously converted,
+    /// or if `resource` is a borrow which is currently lent out to an
+    /// in-progress call.
     ///
     /// # Panics
     ///

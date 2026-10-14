@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 static UA_REGEX_SET: LazyLock<RegexSet> = LazyLock::new(|| {
     let uap_yaml = include_str!(concat!(env!("OUT_DIR"), "/regexes.yaml"));
-    let parsers: UserAgentParsers = serde_yaml::from_str(uap_yaml).unwrap();
+    let parsers: UserAgentParsers = serde_saphyr::from_str(uap_yaml).unwrap();
     RegexSet::new(
         parsers
             .user_agent_parsers

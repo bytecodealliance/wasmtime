@@ -1302,8 +1302,10 @@ impl Config {
     /// lifting and lowering functions, as well as `stream`, `future`, and
     /// `error-context` types.
     ///
-    /// Please note that Wasmtime's support for this feature is _very_
-    /// incomplete.
+    /// The default value for this option is whether the `component-model-async`
+    /// crate feature of Wasmtime is enabled or not. By default this crate
+    /// feature is enabled. This option is also disabled by default if
+    /// [`Config::concurrency_support`] is disabled.
     ///
     /// [proposal]:
     ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md
@@ -2799,6 +2801,38 @@ impl Config {
             tunables.gc_heap_guard_size = tunables.memory_guard_size;
             tunables.gc_heap_reservation_for_growth = tunables.memory_reservation_for_growth;
             tunables.gc_heap_may_move = tunables.memory_may_move;
+        }
+
+        // Validate that the configuration of reservation/guards is sensible
+        // enough to ever possibly actually get allocated. If this overflows a
+        // u64 then there's no hope.
+        let guard_regions = if tunables.guard_before_linear_memory {
+            2
+        } else {
+            1
+        };
+        for (what, reservation, guard_size) in [
+            (
+                "memory",
+                tunables.memory_reservation,
+                tunables.memory_guard_size,
+            ),
+            (
+                "gc_heap",
+                tunables.gc_heap_reservation,
+                tunables.gc_heap_guard_size,
+            ),
+        ] {
+            if guard_size
+                .checked_mul(guard_regions)
+                .and_then(|g| g.checked_add(reservation))
+                .is_none()
+            {
+                bail!(
+                    "`{what}_reservation` ({reservation}) plus `{what}_guard_size` \
+                     ({guard_size}) overflows"
+                );
+            }
         }
 
         // If we're going to compile with winch, we must use the winch calling convention.

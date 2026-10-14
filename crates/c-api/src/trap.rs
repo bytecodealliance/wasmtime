@@ -60,6 +60,7 @@ const _: () = {
     assert!(Trap::WriteToDroppedStream as u8 == 51);
     assert!(Trap::WriteToDroppedFuture as u8 == 52);
     assert!(Trap::LiftDroppedStream as u8 == 53);
+    assert!(Trap::TaskReturnOrCancelSyncLifted as u8 == 54);
 };
 
 #[repr(C)]

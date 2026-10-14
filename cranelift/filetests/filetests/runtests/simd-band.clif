@@ -69,3 +69,26 @@ block0(v0:f64x2, v1:f64x2):
 
 ; run: %band_f64x2(0xFEDCBA98_76543210_01234567_89ABCDEF, 0x01234567_89ABCDEF_FEDCBA98_76543210) == 0x00000000_00000000_00000000_00000000
 ; run: %band_f64x2(0xFEEEFFFF_FEEEFFFF_F1FFFEFE_F1FFFEFE, 0xDFDBFFFF_DFDBFFFF_CEFFEFEF_CEFFEFEF) == 0xDECAFFFF_DECAFFFF_C0FFEEEE_C0FFEEEE
+
+function %band_bnot_band_bor_to_xor_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = band v0, v1
+    v3 = bnot v2
+    v4 = bor v0, v1
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_bnot_band_bor_to_xor_i32x4([0 -1 -2147483648 1431655765], [0 -1 2147483647 0xaaaaaaaa]) == [0 0 -1 -1]
+; run: %band_bnot_band_bor_to_xor_i32x4([0 1 240 -1], [-1 0 204 0]) == [-1 1 60 -1]
+
+function %bor_bnot_band_absorb_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = band v0, v1
+    v3 = bnot v2
+    v4 = bor v3, v0
+    return v4
+}
+
+; run: %bor_bnot_band_absorb_i32x4([0 -1 -2147483648 1431655765], [0 -1 2147483647 0xaaaaaaaa]) == [-1 -1 -1 -1]
+; run: %bor_bnot_band_absorb_i32x4([0 1 240 -1], [-1 0 204 0]) == [-1 -1 -1 -1]

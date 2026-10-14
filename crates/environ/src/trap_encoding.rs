@@ -246,7 +246,7 @@ generate_trap_type! {
         SubtaskDropNotResolved = "cannot drop a subtask which has not yet resolved",
 
         /// Start function does not match the expected type.
-        ThreadNewIndirectInvalidType = "start function does not match expected type (currently only `(i32) -> ()` is supported)",
+        ThreadNewIndirectInvalidType = "start function does not match expected type",
 
         /// The start function index points to an uninitialized function.
         ThreadNewIndirectUninitialized = "the start function index points to an uninitialized function",
@@ -294,6 +294,10 @@ generate_trap_type! {
         /// Guest attempted to lift a stream after being notified that the
         /// writable end was dropped.
         LiftDroppedStream = "cannot lift stream after being notified that the writable end dropped",
+
+        /// `task.return` or `task.cancel` was called by a task which was not
+        /// created by an `async`-lifted export.
+        TaskReturnOrCancelSyncLifted = "`task.return` or `task.cancel` called by a task which was not lifted with `async`",
 
         // if adding a variant here be sure to update `trap.rs` and `trap.h` as
         // mentioned above

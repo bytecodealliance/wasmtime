@@ -249,8 +249,8 @@ block0:
 ;   mv fp,sp
 ;   addi sp,sp,-144
 ;   sd ra,8(sp)
-;   ld fp,144(sp)
-;   sd fp,0(sp)
+;   ld t6,144(sp)
+;   sd t6,0(sp)
 ;   mv fp,sp
 ;   addi sp,sp,-128
 ;   sd s1,120(sp)
@@ -327,8 +327,8 @@ block0:
 ;   mv s0, sp
 ;   addi sp, sp, -0x90
 ;   sd ra, 8(sp)
-;   ld s0, 0x90(sp)
-;   sd s0, 0(sp)
+;   ld t6, 0x90(sp)
+;   sd t6, 0(sp)
 ;   mv s0, sp
 ;   addi sp, sp, -0x80
 ;   sd s1, 0x78(sp)

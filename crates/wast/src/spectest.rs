@@ -66,20 +66,20 @@ pub fn link_spectest<T>(
     let g = Global::new(&mut *store, ty, Val::F64(0x4084_d4cc_cccc_cccd))?;
     linker.define(&mut *store, "spectest", "global_f64", g)?;
 
-    let ty = TableType::new(RefType::FUNCREF, 10, Some(20));
+    let ty = TableType::new(RefType::FUNCREF, 10, Some(20))?;
     let table = Table::new(&mut *store, ty, Ref::Func(None))?;
     linker.define(&mut *store, "spectest", "table", table)?;
 
-    let ty = TableType::new64(RefType::FUNCREF, 10, Some(20));
+    let ty = TableType::new64(RefType::FUNCREF, 10, Some(20))?;
     let table = Table::new(&mut *store, ty, Ref::Func(None))?;
     linker.define(&mut *store, "spectest", "table64", table)?;
 
-    let ty = MemoryType::new(1, Some(2));
+    let ty = MemoryType::new(1, Some(2))?;
     let memory = Memory::new(&mut *store, ty)?;
     linker.define(&mut *store, "spectest", "memory", memory)?;
 
     if config.use_shared_memory {
-        let ty = MemoryType::shared(1, 1);
+        let ty = MemoryType::shared(1, 1)?;
         let memory = SharedMemory::new(store.engine(), ty)?;
         linker.define(&mut *store, "spectest", "shared_memory", memory)?;
     }

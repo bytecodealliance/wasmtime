@@ -62,6 +62,16 @@ use wasmtime_environ::component::{
 /// `Val` are type-checked against what's required by the component itself.
 ///
 /// [`Func::call`]: crate::component::Func::call
+///
+/// # Ownership and handles
+///
+/// This type can contain handles to resources owned within a store, such as the
+/// `Resource`, `Future`, and `Stream` variants. For all of these variants it's
+/// required that when this `Val` is dropped that the corresponding resource in
+/// the store is additionally dropped, lest the handle is leaked within the
+/// store. This means that if you're receiving `Val`s you will need to be quite
+/// careful when dropping them or letting them go out of scope to handle this
+/// issue if it's applicable to your use case.
 #[derive(Debug, Clone)]
 #[expect(missing_docs, reason = "self-describing variants")]
 pub enum Val {
