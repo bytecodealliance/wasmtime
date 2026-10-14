@@ -10,6 +10,9 @@ Released 2026-10-14.
 * Filesystem sandbox escape when renaming symlinks with trailing slashes.
   [GHSA-m9f7-9w4p-gv38](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m9f7-9w4p-gv38)
 
+* Guests can send absolute-form HTTP requests to different hosts.
+  [GHSA-5qpp-g3j2-8frx](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5qpp-g3j2-8frx)
+
 --------------------------------------------------------------------------------
 
 ## 36.0.17
