@@ -52,10 +52,15 @@ fn component_linker_instantiate() -> Result<()> {
             &engine,
             r#"
                 (component
+                    (import "f" (func $f))
+                    (core func $f (canon lower (func $f)))
                     (core module $m
+                        (import "" "f" (func))
                         (func (export "id") (param i32) (result i32) (local.get 0))
                     )
-                    (core instance $i (instantiate $m))
+                    (core instance $i (instantiate $m
+                        (with "" (instance (export "f" (func $f))))
+                    ))
                     (func (export "id") (param "x" s32) (result s32)
                         (canon lift (core func $i "id"))
                     )
@@ -69,7 +74,8 @@ fn component_linker_instantiate() -> Result<()> {
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
     let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
-    let linker = Linker::<()>::new(&engine);
+    let mut linker = Linker::<()>::new(&engine);
+    linker.root().func_wrap("f", |_, (): ()| Ok(()))?;
 
     OomTest::new().test(|| {
         let mut store = Store::try_new(&engine, ())?;
