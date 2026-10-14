@@ -44,6 +44,12 @@ Released 2026-10-14.
 * Overlapping string transcode in a fused adapter can panic.
   [GHSA-54p9-vhhq-8f7q](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-54p9-vhhq-8f7q)
 
+* Guests can send absolute-form HTTP requests to different hosts.
+  [GHSA-5qpp-g3j2-8frx](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5qpp-g3j2-8frx)
+
+* `wasi-http`: Request with long url before query parameter crashes host.
+  [GHSA-w36r-2hch-9xp9](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-w36r-2hch-9xp9)
+
 --------------------------------------------------------------------------------
 
 ## 49.0.2
