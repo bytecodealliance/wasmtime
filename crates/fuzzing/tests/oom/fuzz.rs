@@ -3,27 +3,19 @@
 use wasmtime::{Config, Engine, Func, Instance, Module, Result, Store};
 use wasmtime_fuzzing::oom::OomTest;
 
-fn make_module_bytes() -> Vec<u8> {
-    let mut config = Config::new();
-    config.concurrency_support(false);
-    let engine = Engine::new(&config).unwrap();
+fn make_module(engine: &Engine) -> Result<Module> {
     Module::new(
-        &engine,
+        engine,
         "(module (import \"\" \"f\" (func)) (func (export \"g\") (call 0)))",
     )
-    .unwrap()
-    .serialize()
-    .unwrap()
 }
 
 #[test]
 fn test_fuzz() -> Result<()> {
-    let module_bytes = make_module_bytes();
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = make_module(&engine)?;
 
     OomTest::new().max_iters(100).fuzz(|| {
         let mut store = Store::try_new(&engine, ())?;
@@ -35,12 +27,10 @@ fn test_fuzz() -> Result<()> {
 
 #[tokio::test]
 async fn test_fuzz_async() -> Result<()> {
-    let module_bytes = make_module_bytes();
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = make_module(&engine)?;
 
     OomTest::new()
         .max_iters(100)

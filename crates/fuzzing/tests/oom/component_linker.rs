@@ -6,31 +6,23 @@ use wasmtime_fuzzing::oom::OomTest;
 
 #[tokio::test]
 async fn component_linker_instantiate_async() -> Result<()> {
-    let component_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Component::new(
-            &engine,
-            r#"
-                (component
-                    (core module $m
-                        (func (export "id") (param i32) (result i32) (local.get 0))
-                    )
-                    (core instance $i (instantiate $m))
-                    (func (export "id") (param "x" s32) (result s32)
-                        (canon lift (core func $i "id"))
-                    )
-                )
-            "#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (core module $m
+                    (func (export "id") (param i32) (result i32) (local.get 0))
+                )
+                (core instance $i (instantiate $m))
+                (func (export "id") (param "x" s32) (result s32)
+                    (canon lift (core func $i "id"))
+                )
+            )
+        "#,
+    )?;
     let linker = Linker::<()>::new(&engine);
 
     OomTest::new()
@@ -44,36 +36,28 @@ async fn component_linker_instantiate_async() -> Result<()> {
 
 #[test]
 fn component_linker_instantiate() -> Result<()> {
-    let component_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Component::new(
-            &engine,
-            r#"
-                (component
-                    (import "f" (func $f))
-                    (core func $f (canon lower (func $f)))
-                    (core module $m
-                        (import "" "f" (func))
-                        (func (export "id") (param i32) (result i32) (local.get 0))
-                    )
-                    (core instance $i (instantiate $m
-                        (with "" (instance (export "f" (func $f))))
-                    ))
-                    (func (export "id") (param "x" s32) (result s32)
-                        (canon lift (core func $i "id"))
-                    )
-                )
-            "#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "f" (func $f))
+                (core func $f (canon lower (func $f)))
+                (core module $m
+                    (import "" "f" (func))
+                    (func (export "id") (param i32) (result i32) (local.get 0))
+                )
+                (core instance $i (instantiate $m
+                    (with "" (instance (export "f" (func $f))))
+                ))
+                (func (export "id") (param "x" s32) (result s32)
+                    (canon lift (core func $i "id"))
+                )
+            )
+        "#,
+    )?;
     let mut linker = Linker::<()>::new(&engine);
     linker.root().func_wrap("f", |_, (): ()| Ok(()))?;
 
@@ -86,31 +70,23 @@ fn component_linker_instantiate() -> Result<()> {
 
 #[test]
 fn component_linker_instantiate_pre() -> Result<()> {
-    let component_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Component::new(
-            &engine,
-            r#"
-                (component
-                    (core module $m
-                        (func (export "id") (param i32) (result i32) (local.get 0))
-                    )
-                    (core instance $i (instantiate $m))
-                    (func (export "id") (param "x" s32) (result s32)
-                        (canon lift (core func $i "id"))
-                    )
-                )
-            "#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (core module $m
+                    (func (export "id") (param i32) (result i32) (local.get 0))
+                )
+                (core instance $i (instantiate $m))
+                (func (export "id") (param "x" s32) (result s32)
+                    (canon lift (core func $i "id"))
+                )
+            )
+        "#,
+    )?;
     let linker = Linker::<()>::new(&engine);
 
     OomTest::new().test(|| {
@@ -121,31 +97,23 @@ fn component_linker_instantiate_pre() -> Result<()> {
 
 #[test]
 fn component_linker_substituted_component_type() -> Result<()> {
-    let component_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Component::new(
-            &engine,
-            r#"
-                (component
-                    (core module $m
-                        (func (export "id") (param i32) (result i32) (local.get 0))
-                    )
-                    (core instance $i (instantiate $m))
-                    (func (export "id") (param "x" s32) (result s32)
-                        (canon lift (core func $i "id"))
-                    )
-                )
-            "#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (core module $m
+                    (func (export "id") (param i32) (result i32) (local.get 0))
+                )
+                (core instance $i (instantiate $m))
+                (func (export "id") (param "x" s32) (result s32)
+                    (canon lift (core func $i "id"))
+                )
+            )
+        "#,
+    )?;
     let linker = Linker::<()>::new(&engine);
 
     OomTest::new().test(|| {
@@ -156,25 +124,17 @@ fn component_linker_substituted_component_type() -> Result<()> {
 
 #[test]
 fn component_linker_define_unknown_imports_as_traps() -> Result<()> {
-    let component_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Component::new(
-            &engine,
-            r#"
-                (component
-                    (import "f" (func))
-                )
-            "#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "f" (func))
+            )
+        "#,
+    )?;
 
     // Error propagation via anyhow allocates after OOM.
     OomTest::new().allow_alloc_after_oom(true).test(|| {
@@ -218,17 +178,10 @@ fn component_linker_instance_func_new() -> Result<()> {
 
 #[test]
 fn component_linker_instance_module() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(&engine, "(module)")?.serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(&engine, "(module)")?;
 
     // Error propagation via anyhow allocates after OOM.
     OomTest::new().allow_alloc_after_oom(true).test(|| {
