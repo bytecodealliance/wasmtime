@@ -3798,6 +3798,10 @@
 (rule (lower (atomic_load $I64 (mem_flags_data flags @ (littleendian)) addr))
       (loadrev64 (lower_address flags addr (zero_offset))))
 
+;; 128-bit big-endian atomic load.
+;; Since we store $I128 in VRs, we can use a vector load which is atomic.
+(rule (lower (atomic_load $I128 (mem_flags_data flags @ (bigendian)) addr))
+      (vec_load $I128 (lower_address flags addr (zero_offset))))
 
 ;;;; Rules for `atomic_store` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3823,6 +3827,9 @@
 (rule (lower (atomic_store (mem_flags_data flags) val @ (value_type $I64) addr))
       (atomic_store_impl (istore64_impl flags val addr (zero_offset))))
 
+;; 128-bit atomic store.
+(rule (lower (atomic_store (mem_flags_data flags @ (bigendian)) val @ (value_type $I128) addr))
+      (atomic_store_impl (vec_store val (lower_address flags addr (zero_offset)))))
 
 ;;;; Rules for `fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
