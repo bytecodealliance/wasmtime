@@ -1,5 +1,5 @@
 use crate::p3::bindings::http::types::ErrorCode;
-use crate::p3::body::{Body, GuestBody};
+use crate::p3::body::{Body, BodyExt as _, GuestBody};
 use crate::{Error, FieldMap, WasiHttpCtxView, WasiHttpHooks, WasiHttpView, get_content_length};
 use bytes::Bytes;
 use http::StatusCode;
@@ -53,7 +53,7 @@ impl Response {
     /// to a [`WasiHttpCtxView`].
     pub fn into_http_with_getter<T: 'static>(
         self,
-        store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), Error>> + Send + 'static,
         getter: impl FnMut(&mut T) -> WasiHttpCtxView<'_> + Clone + Unpin + Send + 'static,
     ) -> wasmtime::Result<http::Response<UnsyncBoxBody<Bytes, Error>>> {
@@ -69,7 +69,7 @@ impl Response {
                 let content_length =
                     get_content_length(&res.headers).context("failed to parse `content-length`")?;
                 GuestBody::new(
-                    store,
+                    &mut store,
                     contents_rx,
                     trailers_rx,
                     result_tx,
@@ -81,8 +81,12 @@ impl Response {
                 .boxed_unsync()
             }
             Body::Host { body, result_tx } => {
+                let mut getter = getter;
+                let is_forbidden = getter(store.as_context_mut().data_mut())
+                    .hooks
+                    .forbidden_header_filter();
                 _ = result_tx.send(Box::new(fut));
-                body
+                body.with_filtered_trailers(is_forbidden).boxed_unsync()
             }
         };
         Ok(http::Response::from_parts(res, body))
