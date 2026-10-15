@@ -4626,6 +4626,11 @@ protocol/etc updates which I'm not personally an expert within but the rustls
 maintainers are relatively well trusted as well.
 """
 
+[[audits.rustls]]
+who = "Pat Hickey <p.hickey@f5.com>"
+criteria = "safe-to-deploy"
+delta = "0.23.45 -> 0.23.46"
+
 [[audits.rustls-pki-types]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
