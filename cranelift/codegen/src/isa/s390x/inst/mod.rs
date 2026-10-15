@@ -1054,9 +1054,17 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_use(ridx);
             collector.reg_fixed_nonallocatable(gpr_preg(1));
         }
-        Inst::LoadSymbolReloc { rd, .. } => {
+        Inst::LoadSymbolReloc { rd, symbol_reloc } => {
             collector.reg_def(rd);
-            collector.reg_fixed_nonallocatable(gpr_preg(1));
+            if matches!(
+                &**symbol_reloc,
+                SymbolReloc::Absolute { .. } | SymbolReloc::TlsGd { .. }
+            ) {
+                // BRAS %r1, 12 ; .8byte literal ; LG rd, 0(%r1)
+                // The spilltmp register (%r1, gpr 1) is written by BRAS and read
+                // by the subsequent LG, so it must be declared as clobbered.
+                collector.reg_fixed_nonallocatable(gpr_preg(1));
+            }
         }
         Inst::LoadAddr { rd, mem } => {
             collector.reg_def(rd);
@@ -3586,14 +3594,25 @@ impl Inst {
                 ref symbol_reloc,
             } => {
                 let rd = pretty_print_reg(rd.to_reg());
-                let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
-                let symbol = match &**symbol_reloc {
-                    SymbolReloc::Absolute { name, offset } => {
-                        format!("{} + {}", name.display(None), offset)
+                match &**symbol_reloc {
+                    SymbolReloc::Got { name } => {
+                        format!("lgrl {rd}, {}@GOTENT", name.display(None))
                     }
-                    SymbolReloc::TlsGd { name } => format!("{}@tlsgd", name.display(None)),
-                };
-                format!("bras {tmp}, 12 ; data {symbol} ; lg {rd}, 0({tmp})")
+                    SymbolReloc::Absolute { name, offset } => {
+                        let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
+                        format!(
+                            "bras {tmp}, 12 ; data {} + {offset} ; lg {rd}, 0({tmp})",
+                            name.display(None)
+                        )
+                    }
+                    SymbolReloc::TlsGd { name } => {
+                        let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
+                        format!(
+                            "bras {tmp}, 12 ; data {}@tlsgd ; lg {rd}, 0({tmp})",
+                            name.display(None)
+                        )
+                    }
+                }
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = pretty_print_reg(rd.to_reg());

@@ -741,6 +741,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
+    fn is_pic(&mut self) -> bool {
+        self.backend.flags.is_pic()
+    }
+
+    #[inline]
     fn memarg_const(&mut self, constant: VCodeConstant) -> MemArg {
         MemArg::Constant { constant }
     }
