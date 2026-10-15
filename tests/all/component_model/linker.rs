@@ -253,116 +253,52 @@ fn linker_fails_to_define_unknown_core_module_imports_as_traps() -> Result<()> {
     Ok(())
 }
 
+/// A default `own` handle takes the resource type of the instance it flows
+/// into, which is only possible for a host-defined type: a guest owns the
+/// representation of its own resources, so one cannot be synthesized.
 #[test]
 #[cfg_attr(miri, ignore)]
-fn linker_defines_unknown_imports_as_default_values() -> Result<()> {
+fn linker_default_value_resource_types() -> Result<()> {
+    const COMPONENT: &str = r#"(component
+        (import "types" (instance $t (export "r" (type (sub resource)))))
+        (alias export $t "r" (type $r))
+        (import "f" (func $fn (result (own $r))))
+
+        (core func $lowered (canon lower (func $fn)))
+        (core module $m
+            (import "" "f" (func $f (result i32)))
+            (func (export "run") (result i32) call $f)
+        )
+        (core instance $i (instantiate $m
+            (with "" (instance (export "f" (func $lowered))))))
+        (func (export "run") (result (own $r))
+            (canon lift (core func $i "run")))
+    )"#;
+
     let engine = Engine::default();
-
-    // Cover every aggregate, so the traversal is exercised in full.
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (type (;0;) (record (field "a" u32) (field "b" string)))
-            (import "rec" (type $rec (eq 0)))
-            (type (;2;) (variant (case "x" s64) (case "y")))
-            (import "var" (type $var (eq 2)))
-            (type (;4;) (flags "p" "q"))
-            (import "fl" (type $fl (eq 4)))
-            (type (;6;) (enum "e1" "e2"))
-            (import "en" (type $en (eq 6)))
-
-            (type $ret (tuple u32 float64 string bool char (list u8)
-                              (option u64) (result u32 (error string))
-                              $rec $var $fl $en))
-            (type $f (func (result $ret)))
-            (import "f" (func $fn (type $f)))
-        )"#,
-    )?;
-
-    let mut linker = Linker::<()>::new(&engine);
+    let component = Component::new(&engine, COMPONENT)?;
     let mut store = Store::new(&engine, ());
-    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
-    linker.instantiate(&mut store, &component)?;
 
-    // Check the values the stub returns by asking the import's type.
-    let ty = component.component_type();
-    let func = ty
-        .imports(&engine)
-        .find_map(|(name, item)| match item.ty {
-            ComponentItem::ComponentFunc(f) if name == "f" => Some(f),
-            _ => None,
-        })
-        .expect("component imports a function named `f`");
-    let results = func.results().collect::<Vec<_>>();
-    assert_eq!(results.len(), 1);
-
-    let Val::Tuple(fields) = results[0].default_value(&mut store)? else {
-        panic!("expected a tuple");
-    };
-    assert_eq!(
-        fields,
-        [
-            Val::U32(0),
-            Val::Float64(0.0),
-            Val::String(String::new()),
-            Val::Bool(false),
-            Val::Char('\0'),
-            Val::List(Vec::new()),
-            Val::Option(None),
-            Val::Result(Ok(Some(Box::new(Val::U32(0))))),
-            Val::Record(vec![
-                ("a".to_string(), Val::U32(0)),
-                ("b".to_string(), Val::String(String::new())),
-            ]),
-            Val::Variant("x".to_string(), Some(Box::new(Val::S64(0)))),
-            Val::Flags(Vec::new()),
-            Val::Enum("e1".to_string()),
-        ]
-    );
-
-    Ok(())
-}
-
-/// A defaulted import is callable from wasm, not merely present.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn linker_default_value_imports_are_callable() -> Result<()> {
-    let engine = Engine::default();
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (import "f" (func $f (result u32)))
-            (core func $lowered (canon lower (func $f)))
-            (core module $m
-                (import "" "f" (func $f (result i32)))
-                (func (export "run") (result i32) call $f)
-            )
-            (core instance $i (instantiate $m
-                (with "" (instance (export "f" (func $lowered))))))
-            (func (export "run") (result u32) (canon lift (core func $i "run")))
-        )"#,
-    )?;
-
+    // A host-defined resource: the handle comes back with the linker's type,
+    // not one of the stub's choosing.
+    let host_ty = ResourceType::host::<u32>();
     let mut linker = Linker::<()>::new(&engine);
-    let mut store = Store::new(&engine, ());
+    linker
+        .instance("types")?
+        .resource("r", host_ty, |_, _| Ok(()))?;
     linker.define_unknown_imports_as_default_values(&mut store, &component)?;
+
     let instance = linker.instantiate(&mut store, &component)?;
     let run = instance.get_func(&mut store, "run").unwrap();
-
     let mut results = [Val::Bool(false)];
     run.call(&mut store, &[], &mut results)?;
-    assert_eq!(results[0], Val::U32(0));
+    let Val::Resource(resource) = results[0] else {
+        panic!("expected a resource");
+    };
+    assert_eq!(resource.ty(), host_ty);
 
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
-fn linker_cannot_default_guest_defined_resources() -> Result<()> {
-    let engine = Engine::default();
-
-    // Instantiate a component which defines a resource, to get a live
-    // guest-defined `ResourceType`.
+    // A guest-defined resource, taken from a live instance of a component
+    // which defines one. Instantiating still works; only the call fails.
     let producer = Component::new(
         &engine,
         r#"(component
@@ -372,28 +308,8 @@ fn linker_cannot_default_guest_defined_resources() -> Result<()> {
             (export "r" (type $r))
         )"#,
     )?;
-    let mut store = Store::new(&engine, ());
     let producer = Linker::<()>::new(&engine).instantiate(&mut store, &producer)?;
     let guest_ty = producer.get_resource(&mut store, "r").unwrap();
-
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (import "types" (instance $t (export "r" (type (sub resource)))))
-            (alias export $t "r" (type $r))
-            (import "f" (func $fn (result (own $r))))
-
-            (core func $lowered (canon lower (func $fn)))
-            (core module $m
-                (import "" "f" (func $f (result i32)))
-                (func (export "run") (result i32) call $f)
-            )
-            (core instance $i (instantiate $m
-                (with "" (instance (export "f" (func $lowered))))))
-            (func (export "run") (result (own $r))
-                (canon lift (core func $i "run")))
-        )"#,
-    )?;
 
     let mut linker = Linker::<()>::new(&engine);
     linker
@@ -401,10 +317,8 @@ fn linker_cannot_default_guest_defined_resources() -> Result<()> {
         .resource("r", guest_ty, |_, _| Ok(()))?;
     linker.define_unknown_imports_as_default_values(&mut store, &component)?;
 
-    // Instantiating still works; only calling the import fails.
     let instance = linker.instantiate(&mut store, &component)?;
     let run = instance.get_func(&mut store, "run").unwrap();
-    let mut results = [Val::Bool(false)];
     let err = run.call(&mut store, &[], &mut results).unwrap_err();
     let err = format!("{err:?}");
     assert!(
@@ -415,392 +329,6 @@ fn linker_cannot_default_guest_defined_resources() -> Result<()> {
     Ok(())
 }
 
-#[test]
-#[cfg_attr(miri, ignore)]
-fn linker_default_value_resources_use_the_instances_type() -> Result<()> {
-    let engine = Engine::default();
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (import "r" (type $r (sub resource)))
-            (type $f (func (result (own $r))))
-            (import "f" (func $fn (type $f)))
-
-            (core func $lowered (canon lower (func $fn)))
-            (core module $m
-                (import "" "f" (func $f (result i32)))
-                (func (export "run") (result i32) call $f)
-            )
-            (core instance $i (instantiate $m
-                (with "" (instance (export "f" (func $lowered))))))
-            (func (export "run") (result (own $r))
-                (canon lift (core func $i "run")))
-        )"#,
-    )?;
-
-    let mut linker = Linker::<()>::new(&engine);
-    linker
-        .root()
-        .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
-
-    let mut store = Store::new(&engine, ());
-    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
-    let instance = linker.instantiate(&mut store, &component)?;
-    let run = instance.get_func(&mut store, "run").unwrap();
-
-    let mut results = [Val::Bool(false)];
-    run.call(&mut store, &[], &mut results)?;
-    let Val::Resource(resource) = results[0] else {
-        panic!("expected a resource");
-    };
-    assert_eq!(resource.ty(), ResourceType::host::<u32>());
-
-    Ok(())
-}
-
-/// A function returning an imported resource gets a dummy handle.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn linker_defines_unknown_resource_imports_as_default_values() -> Result<()> {
-    let engine = Engine::default();
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (import "r" (type $r (sub resource)))
-            (type $f (func (result (own $r))))
-            (import "f" (func $fn (type $f)))
-
-            (core func $lowered (canon lower (func $fn)))
-            (core module $m
-                (import "" "f" (func $f (result i32)))
-                (func (export "run") (result i32)
-                    (drop (call $f))
-                    (call $f))
-            )
-            (core instance $i (instantiate $m
-                (with "" (instance (export "f" (func $lowered))))))
-            (func (export "run") (result (own $r))
-                (canon lift (core func $i "run")))
-        )"#,
-    )?;
-
-    let mut linker = Linker::<()>::new(&engine);
-    let mut store = Store::new(&engine, ());
-    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
-    let instance = linker.instantiate(&mut store, &component)?;
-    let run = instance.get_func(&mut store, "run").unwrap();
-
-    let mut results = [Val::Bool(false)];
-    run.call(&mut store, &[], &mut results)?;
-    assert!(matches!(results[0], Val::Resource(_)));
-
-    Ok(())
-}
-
-/// Polyfill a resource-method-shaped interface, where the guest makes a
-/// resource and then passes it back as a `borrow`.
-///
-/// A host function owns the handles it is passed, so the stub has to drop the
-/// borrow before returning; otherwise the guest traps with "borrow handles
-/// still remain at the end of the call".
-#[test]
-#[cfg_attr(miri, ignore)]
-fn linker_default_value_imports_taking_borrows() -> Result<()> {
-    let engine = Engine::default();
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (import "r" (type $r (sub resource)))
-            (type $make (func (result (own $r))))
-            (import "make" (func $make (type $make)))
-            (type $get (func (param "self" (borrow $r)) (result u32)))
-            (import "get" (func $get (type $get)))
-
-            (core func $make-l (canon lower (func $make)))
-            (core func $get-l (canon lower (func $get)))
-            (core func $drop-r (canon resource.drop $r))
-
-            (core module $m
-                (import "" "make" (func $make (result i32)))
-                (import "" "get" (func $get (param i32) (result i32)))
-                (import "" "drop" (func $drop (param i32)))
-
-                ;; Make a resource, borrow it to `get`, then drop it.
-                (func (export "run") (result i32)
-                    (local $handle i32)
-                    (local $value i32)
-                    (local.set $handle (call $make))
-                    (local.set $value (call $get (local.get $handle)))
-                    (call $drop (local.get $handle))
-                    (local.get $value))
-            )
-            (core instance $i (instantiate $m (with "" (instance
-                (export "make" (func $make-l))
-                (export "get" (func $get-l))
-                (export "drop" (func $drop-r))))))
-            (func (export "run") (result u32)
-                (canon lift (core func $i "run")))
-        )"#,
-    )?;
-
-    let mut linker = Linker::<()>::new(&engine);
-    linker
-        .root()
-        .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
-
-    let mut store = Store::new(&engine, ());
-    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
-    let instance = linker.instantiate(&mut store, &component)?;
-    let run = instance.get_func(&mut store, "run").unwrap();
-
-    let mut results = [Val::Bool(false)];
-    run.call(&mut store, &[], &mut results)?;
-    assert_eq!(results[0], Val::U32(0));
-
-    Ok(())
-}
-
-/// An `own` argument is dropped by the stub, which takes ownership of it.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn linker_default_value_imports_taking_owned_resources() -> Result<()> {
-    let engine = Engine::default();
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (import "r" (type $r (sub resource)))
-            (type $make (func (result (own $r))))
-            (import "make" (func $make (type $make)))
-            (type $consume (func (param "a" (own $r)) (result u32)))
-            (import "consume" (func $consume (type $consume)))
-
-            (core func $make-l (canon lower (func $make)))
-            (core func $consume-l (canon lower (func $consume)))
-
-            (core module $m
-                (import "" "make" (func $make (result i32)))
-                (import "" "consume" (func $consume (param i32) (result i32)))
-
-                ;; Twice over, to catch a handle that was not really released.
-                (func (export "run") (result i32)
-                    (drop (call $consume (call $make)))
-                    (call $consume (call $make)))
-            )
-            (core instance $i (instantiate $m (with "" (instance
-                (export "make" (func $make-l))
-                (export "consume" (func $consume-l))))))
-            (func (export "run") (result u32)
-                (canon lift (core func $i "run")))
-        )"#,
-    )?;
-
-    let mut linker = Linker::<()>::new(&engine);
-    linker
-        .root()
-        .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
-
-    let mut store = Store::new(&engine, ());
-    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
-    let instance = linker.instantiate(&mut store, &component)?;
-    let run = instance.get_func(&mut store, "run").unwrap();
-
-    let mut results = [Val::Bool(false)];
-    run.call(&mut store, &[], &mut results)?;
-    assert_eq!(results[0], Val::U32(0));
-
-    Ok(())
-}
-
-/// Resource handles nested inside an aggregate argument are dropped too.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn linker_default_value_imports_taking_nested_borrows() -> Result<()> {
-    let engine = Engine::default();
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (import "r" (type $r (sub resource)))
-            (type $make (func (result (own $r))))
-            (import "make" (func $make (type $make)))
-            (type $take (func (param "a" (tuple (borrow $r) (option (borrow $r))))))
-            (import "take" (func $take (type $take)))
-
-            (core module $libc
-                (memory (export "mem") 1)
-                (func (export "realloc") (param i32 i32 i32 i32) (result i32)
-                    i32.const 8)
-            )
-            (core instance $libc (instantiate $libc))
-            (alias core export $libc "mem" (core memory $mem))
-            (alias core export $libc "realloc" (core func $realloc))
-
-            (core func $make-l (canon lower (func $make)))
-            (core func $take-l (canon lower (func $take)
-                (memory $mem) (realloc (core func $realloc))))
-            (core func $drop-r (canon resource.drop $r))
-
-            (core module $m
-                (import "" "make" (func $make (result i32)))
-                (import "" "take" (func $take (param i32 i32 i32)))
-                (import "" "drop" (func $drop (param i32)))
-
-                ;; Pass the same resource both bare and inside an `option`.
-                (func (export "run") (result i32)
-                    (local $handle i32)
-                    (local.set $handle (call $make))
-                    (call $take (local.get $handle) (i32.const 1) (local.get $handle))
-                    (call $drop (local.get $handle))
-                    i32.const 0)
-            )
-            (core instance $i (instantiate $m (with "" (instance
-                (export "make" (func $make-l))
-                (export "take" (func $take-l))
-                (export "drop" (func $drop-r))))))
-            (func (export "run") (result u32)
-                (canon lift (core func $i "run")))
-        )"#,
-    )?;
-
-    let mut linker = Linker::<()>::new(&engine);
-    linker
-        .root()
-        .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
-
-    let mut store = Store::new(&engine, ());
-    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
-    let instance = linker.instantiate(&mut store, &component)?;
-    let run = instance.get_func(&mut store, "run").unwrap();
-
-    let mut results = [Val::Bool(false)];
-    run.call(&mut store, &[], &mut results)?;
-    assert_eq!(results[0], Val::U32(0));
-
-    Ok(())
-}
-
-/// Nested instances and resource imports are stubbed out.
-#[test]
-fn linker_defines_unknown_nested_imports_as_default_values() -> Result<()> {
-    let engine = Engine::default();
-    let mut linker = Linker::<()>::new(&engine);
-
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (import "foo" (func))
-            (import "bar" (instance (export "baz" (func))))
-            (import "qux" (type (sub resource)))
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
-    linker.instantiate(&mut store, &component)?;
-
-    Ok(())
-}
-
-/// A type with no default does not prevent instantiation, but instead gets a
-/// trapping stub.
-#[tokio::test]
-async fn linker_defines_undefaultable_imports_as_traps() -> Result<()> {
-    let mut config = Config::new();
-    config.wasm_component_model_async(true);
-    let engine = Engine::new(&config)?;
-
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (type $f (func (result (future u32))))
-            (import "f" (func $fn (type $f)))
-
-            (core func $lowered (canon lower (func $fn)))
-            (core module $m
-                (import "" "f" (func $f (result i32)))
-                (func (export "run") (result i32) call $f)
-            )
-            (core instance $i (instantiate $m
-                (with "" (instance (export "f" (func $lowered))))))
-            (func (export "run") (result (future u32))
-                (canon lift (core func $i "run")))
-        )"#,
-    )?;
-
-    let mut linker = Linker::<()>::new(&engine);
-
-    // Defining succeeds even though `future<u32>` has no default...
-    let mut store = Store::new(&engine, ());
-    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
-    let instance = linker.instantiate_async(&mut store, &component).await?;
-
-    // ...but calling the import traps.
-    let run = instance.get_func(&mut store, "run").unwrap();
-    let mut results = [Val::Bool(false)];
-    let err = run
-        .call_async(&mut store, &[], &mut results)
-        .await
-        .unwrap_err();
-    let err = format!("{err:?}");
-    assert!(
-        err.contains("unknown import: `f` has no default value"),
-        "unexpected error: {err}"
-    );
-    assert!(
-        err.contains("no default value exists for type `future`"),
-        "unexpected error: {err}"
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn linker_defines_unknown_async_imports_as_default_values() -> Result<()> {
-    let mut config = Config::new();
-    config.wasm_component_model_async(true);
-    let engine = Engine::new(&config)?;
-    let mut linker = Linker::<()>::new(&engine);
-
-    let component = Component::new(
-        &engine,
-        r#"(component
-            (import "foo" (func async (result u32)))
-            (import "bar" (instance (export "baz" (func async))))
-            (import "qux" (type (sub resource)))
-        )"#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
-    let _ = linker.instantiate_async(&mut store, &component).await?;
-
-    Ok(())
-}
-
-/// Build default values for a deeply nested type.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn linker_defines_deeply_nested_imports_as_default_values() -> Result<()> {
-    // Stay within the max component type depth of 100.
-    const DEPTH: usize = 97;
-
-    let engine = Engine::default();
-
-    // A chain of `DEPTH` tuple types, each wrapping the previous.
-    let mut wat = String::from("(component\n  (type $t0 u32)\n");
-    for i in 1..=DEPTH {
-        wat.push_str(&format!("  (type $t{i} (tuple $t{}))\n", i - 1));
-    }
-    wat.push_str(&format!("  (type $f (func (result $t{DEPTH})))\n"));
-    wat.push_str("  (import \"f\" (func $fn (type $f)))\n)");
-
-    let component = Component::new(&engine, &wat)?;
-
-    let mut linker = Linker::<()>::new(&engine);
-    let mut store = Store::new(&engine, ());
-    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
-    // Should not overflow the stack.
-    linker.instantiate(&mut store, &component)?;
-
-    Ok(())
-}
 #[test]
 fn open_instance_twice() -> Result<()> {
     let engine = Engine::default();

@@ -550,64 +550,73 @@ impl StubKind {
     }
 }
 
-/// Drop every resource handle within `params`.
-fn drop_params<T>(mut store: impl AsContextMut<Data = T>, params: &[Val]) -> Result<()> {
-    // Explicit stack to avoid stack overflow on deeply-nested types.
-    let mut stack = TryVec::new();
-
+/// Drop every handle within `params`.
+fn drop_params(mut store: impl AsContextMut, params: &[Val]) -> Result<()> {
+    let mut store = store.as_context_mut();
     for param in params {
-        stack.push(param)?;
+        drop_val(store.as_context_mut(), param)?;
     }
+    Ok(())
+}
 
-    while let Some(val) = stack.pop() {
-        match val {
-            Val::Resource(resource) => resource.resource_drop(&mut store)?,
+/// Drop every handle within `val`.
+fn drop_val<T>(mut store: StoreContextMut<'_, T>, val: &Val) -> Result<()> {
+    match val {
+        Val::Resource(resource) => resource.resource_drop(&mut store)?,
 
-            Val::List(vals) | Val::Tuple(vals) | Val::FixedLengthList(vals) => {
-                for val in vals {
-                    stack.push(val)?;
-                }
+        // Without `component-model-async` these are uninhabited, so there is
+        // nothing to close.
+        #[cfg(feature = "component-model-async")]
+        Val::Future(future) => future.clone().close(&mut store)?,
+        #[cfg(feature = "component-model-async")]
+        Val::Stream(stream) => stream.clone().close(&mut store)?,
+        #[cfg(not(feature = "component-model-async"))]
+        Val::Future(_) | Val::Stream(_) => {}
+
+        Val::List(vals) | Val::Tuple(vals) | Val::FixedLengthList(vals) => {
+            for val in vals {
+                drop_val(store.as_context_mut(), val)?;
             }
-            Val::Record(fields) => {
-                for (_, val) in fields {
-                    stack.push(val)?;
-                }
-            }
-            Val::Map(entries) => {
-                for (key, val) in entries {
-                    stack.push(key)?;
-                    stack.push(val)?;
-                }
-            }
-            Val::Variant(_, Some(val)) | Val::Option(Some(val)) => stack.push(val)?,
-            Val::Result(Ok(Some(val)) | Err(Some(val))) => stack.push(val)?,
-
-            // Futures and streams are not dropped here: unlike a borrow they
-            // do not have to be gone by the end of the call, and a stub has no
-            // way to know whether the guest expects to keep using them.
-            Val::Future(_) | Val::Stream(_) | Val::ErrorContext(_) => {}
-
-            Val::Bool(_)
-            | Val::S8(_)
-            | Val::U8(_)
-            | Val::S16(_)
-            | Val::U16(_)
-            | Val::S32(_)
-            | Val::U32(_)
-            | Val::S64(_)
-            | Val::U64(_)
-            | Val::Float32(_)
-            | Val::Float64(_)
-            | Val::Char(_)
-            | Val::String(_)
-            | Val::Enum(_)
-            | Val::Flags(_)
-            | Val::Variant(_, None)
-            | Val::Option(None)
-            | Val::Result(Ok(None) | Err(None)) => {}
         }
-    }
+        Val::Record(fields) => {
+            for (_, val) in fields {
+                drop_val(store.as_context_mut(), val)?;
+            }
+        }
+        Val::Map(entries) => {
+            for (key, val) in entries {
+                drop_val(store.as_context_mut(), key)?;
+                drop_val(store.as_context_mut(), val)?;
+            }
+        }
+        Val::Variant(_, Some(val)) | Val::Option(Some(val)) => {
+            drop_val(store.as_context_mut(), val)?
+        }
+        Val::Result(Ok(Some(val)) | Err(Some(val))) => drop_val(store.as_context_mut(), val)?,
 
+        // Lifting an `error-context` reads its representation without taking
+        // ownership of a handle, so there is nothing to drop.
+        Val::ErrorContext(_) => {}
+
+        Val::Bool(_)
+        | Val::S8(_)
+        | Val::U8(_)
+        | Val::S16(_)
+        | Val::U16(_)
+        | Val::S32(_)
+        | Val::U32(_)
+        | Val::S64(_)
+        | Val::U64(_)
+        | Val::Float32(_)
+        | Val::Float64(_)
+        | Val::Char(_)
+        | Val::String(_)
+        | Val::Enum(_)
+        | Val::Flags(_)
+        | Val::Variant(_, None)
+        | Val::Option(None)
+        | Val::Result(Ok(None) | Err(None)) => {}
+    }
     Ok(())
 }
 
@@ -617,8 +626,8 @@ fn drop_params<T>(mut store: impl AsContextMut<Data = T>, params: &[Val]) -> Res
 /// `ty` comes from the call itself rather than from the linker, so its `own`
 /// and `borrow` types are those of the instance being called, which is what
 /// makes the handles this produces pass the guest's type check.
-fn fill_defaults<T>(
-    mut store: impl AsContextMut<Data = T>,
+fn fill_defaults(
+    mut store: impl AsContextMut,
     ty: &types::ComponentFunc,
     params: &[Val],
     results: &mut [Val],

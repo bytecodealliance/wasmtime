@@ -4,7 +4,7 @@
 use crate::component::ComponentType;
 use crate::component::matching::InstanceType;
 use crate::component::{ResourceAny, Val};
-use crate::{AsContextMut, Engine, ExternType, FuncType, prelude::*};
+use crate::{AsContextMut, Engine, ExternType, FuncType, StoreContextMut, prelude::*};
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Deref;
@@ -980,149 +980,94 @@ impl Type {
     /// when memory allocation fails. See the `OutOfMemory` type's
     /// documentation for details on Wasmtime's out-of-memory handling.
     pub fn default_value(&self, mut store: impl AsContextMut) -> Result<Val> {
-        // Types come from untrusted guests and may nest arbitrarily deeply,
-        // so this uses an explicit stack rather than recursing.
-        enum Work {
-            Visit(Type),
-            Build(Build),
-        }
+        self.default_value_impl(store.as_context_mut())
+    }
 
-        enum Build {
-            Record(Record),
-            Tuple(usize),
-            Variant(String),
-            ResultOk,
-            /// Every element has the same type, so one value is cloned.
-            FixedLengthList(usize),
-        }
+    /// Recursive implementation of `default_value`.
+    fn default_value_impl<T>(&self, mut store: StoreContextMut<'_, T>) -> Result<Val> {
+        Ok(match self {
+            Type::Bool => Val::Bool(false),
+            Type::S8 => Val::S8(0),
+            Type::U8 => Val::U8(0),
+            Type::S16 => Val::S16(0),
+            Type::U16 => Val::U16(0),
+            Type::S32 => Val::S32(0),
+            Type::U32 => Val::U32(0),
+            Type::S64 => Val::S64(0),
+            Type::U64 => Val::U64(0),
+            Type::Float32 => Val::Float32(0.0),
+            Type::Float64 => Val::Float64(0.0),
+            Type::Char => Val::Char('\0'),
+            Type::String => Val::String(String::new()),
 
-        let mut work = TryVec::new();
-        let mut finished = TryVec::<Val>::new();
-        work.push(Work::Visit(self.clone()))?;
+            // These never visit their payload types.
+            Type::List(_) => Val::List(Vec::new()),
+            Type::Map(_) => Val::Map(Vec::new()),
+            Type::Option(_) => Val::Option(None),
+            Type::Flags(_) => Val::Flags(Vec::new()),
 
-        while let Some(step) = work.pop() {
-            match step {
-                Work::Visit(ty) => match ty {
-                    Type::Bool => finished.push(Val::Bool(false))?,
-                    Type::S8 => finished.push(Val::S8(0))?,
-                    Type::U8 => finished.push(Val::U8(0))?,
-                    Type::S16 => finished.push(Val::S16(0))?,
-                    Type::U16 => finished.push(Val::U16(0))?,
-                    Type::S32 => finished.push(Val::S32(0))?,
-                    Type::U32 => finished.push(Val::U32(0))?,
-                    Type::S64 => finished.push(Val::S64(0))?,
-                    Type::U64 => finished.push(Val::U64(0))?,
-                    Type::Float32 => finished.push(Val::Float32(0.0))?,
-                    Type::Float64 => finished.push(Val::Float64(0.0))?,
-                    Type::Char => finished.push(Val::Char('\0'))?,
-                    Type::String => finished.push(Val::String(String::new()))?,
-
-                    // These never visit their payload types.
-                    Type::List(_) => finished.push(Val::List(Vec::new()))?,
-                    Type::Map(_) => finished.push(Val::Map(Vec::new()))?,
-                    Type::Option(_) => finished.push(Val::Option(None))?,
-                    Type::Flags(_) => finished.push(Val::Flags(Vec::new()))?,
-
-                    Type::Enum(e) => {
-                        let name = e.names().next().ok_or_else(|| {
-                            format_err!("no default value exists for an `enum` with no cases")
-                        })?;
-                        finished.push(Val::Enum(name.to_string()))?;
-                    }
-
-                    Type::Record(record) => {
-                        work.push(Work::Build(Build::Record(record.clone())))?;
-                        for field in record.fields() {
-                            work.push(Work::Visit(field.ty))?;
-                        }
-                    }
-
-                    Type::Tuple(tuple) => {
-                        work.push(Work::Build(Build::Tuple(tuple.types().len())))?;
-                        for ty in tuple.types() {
-                            work.push(Work::Visit(ty))?;
-                        }
-                    }
-
-                    Type::Variant(variant) => {
-                        let case = variant.cases().next().ok_or_else(|| {
-                            format_err!("no default value exists for a `variant` with no cases")
-                        })?;
-                        match case.ty {
-                            Some(payload) => {
-                                work.push(Work::Build(Build::Variant(case.name.to_string())))?;
-                                work.push(Work::Visit(payload))?;
-                            }
-                            None => {
-                                finished.push(Val::Variant(case.name.to_string(), None))?;
-                            }
-                        }
-                    }
-
-                    Type::Result(result) => match result.ok() {
-                        Some(payload) => {
-                            work.push(Work::Build(Build::ResultOk))?;
-                            work.push(Work::Visit(payload))?;
-                        }
-                        None => finished.push(Val::Result(Ok(None)))?,
-                    },
-
-                    Type::FixedLengthList(list) => {
-                        let len = usize::try_from(list.len())?;
-                        work.push(Work::Build(Build::FixedLengthList(len)))?;
-                        work.push(Work::Visit(list.ty()))?;
-                    }
-
-                    Type::Own(ty) | Type::Borrow(ty) => {
-                        let resource = ResourceAny::new_own_dynamic(ty, 0, &mut store)?;
-                        finished.push(Val::Resource(resource))?;
-                    }
-
-                    Type::Future(_) | Type::Stream(_) | Type::ErrorContext => {
-                        bail!("no default value exists for type `{}`", ty.desc())
-                    }
-                },
-
-                Work::Build(build) => {
-                    let val = match build {
-                        Build::Record(record) => {
-                            let mut fields = TryVec::with_capacity(record.fields().len())?;
-                            for field in record.fields() {
-                                let val = finished.pop().expect("field value was pushed");
-                                fields.push((field.name.to_string(), val))?;
-                            }
-                            Val::Record(fields.into())
-                        }
-                        Build::Tuple(len) => {
-                            let mut vals = TryVec::with_capacity(len)?;
-                            for _ in 0..len {
-                                vals.push(finished.pop().expect("element value was pushed"))?;
-                            }
-                            Val::Tuple(vals.into())
-                        }
-                        Build::Variant(name) => {
-                            let payload = finished.pop().expect("payload value was pushed");
-                            Val::Variant(name, Some(Box::new(payload)))
-                        }
-                        Build::ResultOk => {
-                            let payload = finished.pop().expect("payload value was pushed");
-                            Val::Result(Ok(Some(Box::new(payload))))
-                        }
-                        Build::FixedLengthList(len) => {
-                            let element = finished.pop().expect("element value was pushed");
-                            let mut vals = TryVec::with_capacity(len)?;
-                            for _ in 0..len {
-                                vals.push(element.clone())?;
-                            }
-                            Val::FixedLengthList(vals.into())
-                        }
-                    };
-                    finished.push(val)?;
-                }
+            Type::Enum(e) => {
+                let name = e.names().next().ok_or_else(|| {
+                    format_err!("no default value exists for an `enum` with no cases")
+                })?;
+                Val::Enum(name.to_string())
             }
-        }
 
-        Ok(finished.pop().expect("the root value was pushed"))
+            Type::Record(record) => {
+                let mut fields = TryVec::with_capacity(record.fields().len())?;
+                for field in record.fields() {
+                    let val = field.ty.default_value_impl(store.as_context_mut())?;
+                    fields.push((field.name.to_string(), val))?;
+                }
+                Val::Record(fields.into())
+            }
+
+            Type::Tuple(tuple) => {
+                let mut vals = TryVec::with_capacity(tuple.types().len())?;
+                for ty in tuple.types() {
+                    vals.push(ty.default_value_impl(store.as_context_mut())?)?;
+                }
+                Val::Tuple(vals.into())
+            }
+
+            Type::Variant(variant) => {
+                let case = variant.cases().next().ok_or_else(|| {
+                    format_err!("no default value exists for a `variant` with no cases")
+                })?;
+                let payload = match &case.ty {
+                    Some(ty) => Some(Box::new(ty.default_value_impl(store.as_context_mut())?)),
+                    None => None,
+                };
+                Val::Variant(case.name.to_string(), payload)
+            }
+
+            Type::Result(result) => Val::Result(Ok(match result.ok() {
+                Some(ty) => Some(Box::new(ty.default_value_impl(store.as_context_mut())?)),
+                None => None,
+            })),
+
+            Type::FixedLengthList(list) => {
+                // Every element has the same type, so one value is cloned.
+                let element = list.ty().default_value_impl(store.as_context_mut())?;
+                let len = usize::try_from(list.len())?;
+                let mut vals = TryVec::with_capacity(len)?;
+                for _ in 0..len {
+                    vals.push(element.clone())?;
+                }
+                Val::FixedLengthList(vals.into())
+            }
+
+            // The `rep` is arbitrary and never dereferenced: there is no
+            // destructor, and the handle is opaque to everything but the
+            // component that defines the resource.
+            Type::Own(ty) | Type::Borrow(ty) => {
+                Val::Resource(ResourceAny::new_own_dynamic(*ty, 0, &mut store)?)
+            }
+
+            Type::Future(_) | Type::Stream(_) | Type::ErrorContext => {
+                bail!("no default value exists for type `{}`", self.desc())
+            }
+        })
     }
 
     fn desc(&self) -> &'static str {

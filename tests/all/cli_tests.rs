@@ -691,7 +691,21 @@ fn component_invoke_multiple_run_exports() -> Result<()> {
 fn component_unknown_imports_default() -> Result<()> {
     let path = "tests/all/cli_tests/component-unknown-imports.wat";
 
-    // The component traps unless its undefined import returns the default.
+    // Every type that has a default comes back with it.
+    let stdout = run_wasmtime(&[
+        "run",
+        "-Wunknown-imports-default",
+        "--invoke",
+        "defaults()",
+        path,
+    ])?;
+    assert_eq!(
+        stdout,
+        "(0, 0, \"\", false, '\\u{0}', [], none, ok(0), {a: 0, b: \"\"}, x(0), {}, e1)\n"
+    );
+
+    // Resources need handling that a return value does not show: a `borrow`
+    // argument must be dropped by the stub, and an `own` argument consumed.
     run_wasmtime(&["run", "-Wunknown-imports-default", path])?;
 
     // Without the flag the component cannot even be instantiated.
@@ -712,7 +726,33 @@ fn component_unknown_imports_default() -> Result<()> {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("unknown import: `unknown:pkg/iface#f` has not been defined"),
+        stderr.contains("unknown import: `unknown:pkg/iface#make` has not been defined"),
+        "bad stderr: {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model-async"), ignore)]
+fn component_unknown_imports_default_async() -> Result<()> {
+    let path = "tests/all/cli_tests/component-unknown-imports-async.wat";
+
+    // Async imports are stubbed out, so the component instantiates, but `f`
+    // returns a `future`, which has no default value.
+    let output = get_wasmtime_command()?
+        .args([
+            "run",
+            "-Wcomponent-model-async",
+            "-Wunknown-imports-default",
+        ])
+        .arg(path)
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("unknown import: `f` has no default value")
+            && stderr.contains("no default value exists for type `future`"),
         "bad stderr: {stderr}"
     );
 
