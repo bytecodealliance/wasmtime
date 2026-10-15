@@ -448,7 +448,7 @@ impl<T: 'static> Linker<T> {
                     // error.
                     #[cfg(feature = "component-model-async")]
                     if types[*_func_idx].async_ && linker.engine.tunables().concurrency_support {
-                        linker.func_new_concurrent(&item_name, move |accessor, ty, _, results| {
+                        linker.func_new_concurrent(&item_name, move |accessor, ty, params, results| {
                             let fully_qualified_name = fully_qualified_name.try_clone();
                             Box::pin(async move {
                                 let fully_qualified_name = fully_qualified_name?;
@@ -457,7 +457,7 @@ impl<T: 'static> Linker<T> {
                                         "unknown import: `{fully_qualified_name}` has not been defined"
                                     ),
                                     StubKind::DefaultValue => accessor
-                                        .with(|store| fill_defaults(store, &ty, results))
+                                        .with(|store| fill_defaults(store, &ty, params, results))
                                         .with_context(|| {
                                             format_err!(
                                                 "unknown import: `{fully_qualified_name}` has no \
@@ -470,17 +470,16 @@ impl<T: 'static> Linker<T> {
                         return Ok(());
                     }
 
-                    linker.func_new(&item_name, move |store, ty, _, results| match kind {
+                    linker.func_new(&item_name, move |store, ty, params, results| match kind {
                         StubKind::Trap => {
                             bail!("unknown import: `{fully_qualified_name}` has not been defined")
                         }
-                        StubKind::DefaultValue => {
-                            fill_defaults(store, &ty, results).with_context(|| {
+                        StubKind::DefaultValue => fill_defaults(store, &ty, params, results)
+                            .with_context(|| {
                                 format_err!(
                                     "unknown import: `{fully_qualified_name}` has no default value"
                                 )
-                            })
-                        }
+                            }),
                     })?;
                 }
                 TypeDef::ComponentInstance(i) => {
@@ -551,7 +550,69 @@ impl StubKind {
     }
 }
 
-/// Write a default value for each of `ty`'s results into `results`.
+/// Drop every resource handle within `params`.
+fn drop_params<T>(mut store: impl AsContextMut<Data = T>, params: &[Val]) -> Result<()> {
+    // Explicit stack to avoid stack overflow on deeply-nested types.
+    let mut stack = TryVec::new();
+
+    for param in params {
+        stack.push(param)?;
+    }
+
+    while let Some(val) = stack.pop() {
+        match val {
+            Val::Resource(resource) => resource.resource_drop(&mut store)?,
+
+            Val::List(vals) | Val::Tuple(vals) | Val::FixedLengthList(vals) => {
+                for val in vals {
+                    stack.push(val)?;
+                }
+            }
+            Val::Record(fields) => {
+                for (_, val) in fields {
+                    stack.push(val)?;
+                }
+            }
+            Val::Map(entries) => {
+                for (key, val) in entries {
+                    stack.push(key)?;
+                    stack.push(val)?;
+                }
+            }
+            Val::Variant(_, Some(val)) | Val::Option(Some(val)) => stack.push(val)?,
+            Val::Result(Ok(Some(val)) | Err(Some(val))) => stack.push(val)?,
+
+            // Futures and streams are not dropped here: unlike a borrow they
+            // do not have to be gone by the end of the call, and a stub has no
+            // way to know whether the guest expects to keep using them.
+            Val::Future(_) | Val::Stream(_) | Val::ErrorContext(_) => {}
+
+            Val::Bool(_)
+            | Val::S8(_)
+            | Val::U8(_)
+            | Val::S16(_)
+            | Val::U16(_)
+            | Val::S32(_)
+            | Val::U32(_)
+            | Val::S64(_)
+            | Val::U64(_)
+            | Val::Float32(_)
+            | Val::Float64(_)
+            | Val::Char(_)
+            | Val::String(_)
+            | Val::Enum(_)
+            | Val::Flags(_)
+            | Val::Variant(_, None)
+            | Val::Option(None)
+            | Val::Result(Ok(None) | Err(None)) => {}
+        }
+    }
+
+    Ok(())
+}
+
+/// Write a default value for each of `ty`'s results into `results`, after
+/// disposing of `params`.
 ///
 /// `ty` comes from the call itself rather than from the linker, so its `own`
 /// and `borrow` types are those of the instance being called, which is what
@@ -559,8 +620,10 @@ impl StubKind {
 fn fill_defaults<T>(
     mut store: impl AsContextMut<Data = T>,
     ty: &types::ComponentFunc,
+    params: &[Val],
     results: &mut [Val],
 ) -> Result<()> {
+    drop_params(&mut store, params)?;
     for (slot, ty) in results.iter_mut().zip(ty.results()) {
         *slot = ty.default_value(&mut store)?;
     }

@@ -497,6 +497,187 @@ fn linker_defines_unknown_resource_imports_as_default_values() -> Result<()> {
     Ok(())
 }
 
+/// Polyfill a resource-method-shaped interface, where the guest makes a
+/// resource and then passes it back as a `borrow`.
+///
+/// A host function owns the handles it is passed, so the stub has to drop the
+/// borrow before returning; otherwise the guest traps with "borrow handles
+/// still remain at the end of the call".
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_default_value_imports_taking_borrows() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "r" (type $r (sub resource)))
+            (type $make (func (result (own $r))))
+            (import "make" (func $make (type $make)))
+            (type $get (func (param "self" (borrow $r)) (result u32)))
+            (import "get" (func $get (type $get)))
+
+            (core func $make-l (canon lower (func $make)))
+            (core func $get-l (canon lower (func $get)))
+            (core func $drop-r (canon resource.drop $r))
+
+            (core module $m
+                (import "" "make" (func $make (result i32)))
+                (import "" "get" (func $get (param i32) (result i32)))
+                (import "" "drop" (func $drop (param i32)))
+
+                ;; Make a resource, borrow it to `get`, then drop it.
+                (func (export "run") (result i32)
+                    (local $handle i32)
+                    (local $value i32)
+                    (local.set $handle (call $make))
+                    (local.set $value (call $get (local.get $handle)))
+                    (call $drop (local.get $handle))
+                    (local.get $value))
+            )
+            (core instance $i (instantiate $m (with "" (instance
+                (export "make" (func $make-l))
+                (export "get" (func $get-l))
+                (export "drop" (func $drop-r))))))
+            (func (export "run") (result u32)
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker
+        .root()
+        .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
+
+    let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let mut results = [Val::Bool(false)];
+    run.call(&mut store, &[], &mut results)?;
+    assert_eq!(results[0], Val::U32(0));
+
+    Ok(())
+}
+
+/// An `own` argument is dropped by the stub, which takes ownership of it.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_default_value_imports_taking_owned_resources() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "r" (type $r (sub resource)))
+            (type $make (func (result (own $r))))
+            (import "make" (func $make (type $make)))
+            (type $consume (func (param "a" (own $r)) (result u32)))
+            (import "consume" (func $consume (type $consume)))
+
+            (core func $make-l (canon lower (func $make)))
+            (core func $consume-l (canon lower (func $consume)))
+
+            (core module $m
+                (import "" "make" (func $make (result i32)))
+                (import "" "consume" (func $consume (param i32) (result i32)))
+
+                ;; Twice over, to catch a handle that was not really released.
+                (func (export "run") (result i32)
+                    (drop (call $consume (call $make)))
+                    (call $consume (call $make)))
+            )
+            (core instance $i (instantiate $m (with "" (instance
+                (export "make" (func $make-l))
+                (export "consume" (func $consume-l))))))
+            (func (export "run") (result u32)
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker
+        .root()
+        .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
+
+    let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let mut results = [Val::Bool(false)];
+    run.call(&mut store, &[], &mut results)?;
+    assert_eq!(results[0], Val::U32(0));
+
+    Ok(())
+}
+
+/// Resource handles nested inside an aggregate argument are dropped too.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_default_value_imports_taking_nested_borrows() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "r" (type $r (sub resource)))
+            (type $make (func (result (own $r))))
+            (import "make" (func $make (type $make)))
+            (type $take (func (param "a" (tuple (borrow $r) (option (borrow $r))))))
+            (import "take" (func $take (type $take)))
+
+            (core module $libc
+                (memory (export "mem") 1)
+                (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+                    i32.const 8)
+            )
+            (core instance $libc (instantiate $libc))
+            (alias core export $libc "mem" (core memory $mem))
+            (alias core export $libc "realloc" (core func $realloc))
+
+            (core func $make-l (canon lower (func $make)))
+            (core func $take-l (canon lower (func $take)
+                (memory $mem) (realloc (core func $realloc))))
+            (core func $drop-r (canon resource.drop $r))
+
+            (core module $m
+                (import "" "make" (func $make (result i32)))
+                (import "" "take" (func $take (param i32 i32 i32)))
+                (import "" "drop" (func $drop (param i32)))
+
+                ;; Pass the same resource both bare and inside an `option`.
+                (func (export "run") (result i32)
+                    (local $handle i32)
+                    (local.set $handle (call $make))
+                    (call $take (local.get $handle) (i32.const 1) (local.get $handle))
+                    (call $drop (local.get $handle))
+                    i32.const 0)
+            )
+            (core instance $i (instantiate $m (with "" (instance
+                (export "make" (func $make-l))
+                (export "take" (func $take-l))
+                (export "drop" (func $drop-r))))))
+            (func (export "run") (result u32)
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker
+        .root()
+        .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
+
+    let mut store = Store::new(&engine, ());
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let mut results = [Val::Bool(false)];
+    run.call(&mut store, &[], &mut results)?;
+    assert_eq!(results[0], Val::U32(0));
+
+    Ok(())
+}
+
 /// Nested instances and resource imports are stubbed out.
 #[test]
 fn linker_defines_unknown_nested_imports_as_default_values() -> Result<()> {
