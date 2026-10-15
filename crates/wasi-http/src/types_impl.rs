@@ -37,10 +37,19 @@ where
 /// present. This function will return `Err` if it's not possible to parse the `Content-Length`
 /// header.
 fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
-    let header_val = match fields.as_ref().get(hyper::header::CONTENT_LENGTH) {
+    let mut values = fields
+        .as_ref()
+        .get_all(hyper::header::CONTENT_LENGTH)
+        .iter();
+    let header_val = match values.next() {
         Some(val) => val,
         None => return Ok(None),
     };
+    // Fields reject multiple `Content-Length` values, but double-check here
+    // since the framing of the body depends on there being exactly one.
+    if values.next().is_some() {
+        return Err(());
+    }
 
     let header_str = match header_val.to_str() {
         Ok(val) => val,
@@ -135,6 +144,13 @@ where
                 Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
             };
 
+            // Multiple `Content-Length` values make message framing
+            // ambiguous, as different parties may disagree on which one to
+            // use, so only a single value is permitted.
+            if header == hyper::header::CONTENT_LENGTH && fields.contains_key(&header) {
+                return Ok(Err(types::HeaderError::InvalidSyntax));
+            }
+
             fields.append(header, value);
         }
 
@@ -210,6 +226,11 @@ where
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
+        // `Content-Length` may only have a single value, see `append`.
+        if header == hyper::header::CONTENT_LENGTH && byte_values.len() > 1 {
+            return Ok(Err(types::HeaderError::InvalidSyntax));
+        }
+
         let mut values = Vec::with_capacity(byte_values.len());
         for value in byte_values {
             match hyper::header::HeaderValue::from_bytes(&value) {
@@ -275,6 +296,13 @@ where
             .context("[fields_append] getting mutable fields")?
         {
             Ok(fields) => {
+                // Multiple `Content-Length` values make message framing
+                // ambiguous, as different parties may disagree on which one
+                // to use, so only a single value is permitted.
+                if header == hyper::header::CONTENT_LENGTH && fields.as_ref().contains_key(&header)
+                {
+                    return Ok(Err(types::HeaderError::InvalidSyntax));
+                }
                 fields.append(&header, value)?;
                 Ok(Ok(()))
             }
