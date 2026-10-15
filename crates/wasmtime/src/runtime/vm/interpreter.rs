@@ -229,8 +229,20 @@ impl InterpreterRef<'_> {
                     // this function's contract, and Wasm is currently
                     // executing so no other borrows of its store are
                     // active.
-                    bytecode = unsafe { self.trap(pc, kind, caller) };
-                    vm = self.vm();
+                    match unsafe { self.trap(pc, kind, caller) } {
+                        Some(resume) => {
+                            bytecode = resume;
+                            vm = self.vm();
+                        }
+                        // There's no handler to resume at, so return to the
+                        // host directly indicating that the call failed due to
+                        // a trap (recorded in TLS).
+                        None => {
+                            vm = self.vm();
+                            let _ = unsafe { vm.call_end(old_lr, []) };
+                            break false;
+                        }
+                    }
                 }
             }
         };
@@ -460,6 +472,11 @@ impl InterpreterRef<'_> {
     /// in TLS by reading the pc/fp of the interpreter and seeing if that's a
     /// valid opcode to trap at.
     ///
+    /// Returns the pc to resume at, which is the entry trampoline's trap
+    /// handler, or `None` if the entry trampoline itself trapped before it set
+    /// up that handler, in which case the interpreter should return directly
+    /// to the host.
+    ///
     /// Trap codes are looked up in the module registry of the store that
     /// `caller` belongs to, rather than in any process-global state.
     ///
@@ -474,7 +491,7 @@ impl InterpreterRef<'_> {
         pc: NonNull<u8>,
         kind: Option<TrapKind>,
         caller: NonNull<VMContext>,
-    ) -> NonNull<u8> {
+    ) -> Option<NonNull<u8>> {
         // Pulley checks for stack overflow whenever the stack pointer is
         // decremented, including in the `push_frame` and `push_frame_save`
         // instructions at the start of a function. A stack overflow there
@@ -531,6 +548,17 @@ impl InterpreterRef<'_> {
                 }
             }
         };
+
+        // If the trapping function was called directly by the host then it's
+        // the entry trampoline, and the only way it can trap is a stack
+        // overflow before it has pushed its frame. It hasn't set up its trap
+        // handler, and this activation has no Wasm frames for the backtrace, so
+        // record the trap and return to the host directly.
+        if lr.is_some() && self.vm().lr_is_host_return() {
+            tls::with(|s| s.unwrap().record_jit_trap(regs.pc, None, trap, None));
+            return None;
+        }
+
         let handler = tls::with(|s| {
             let s = s.unwrap();
             s.set_jit_trap(regs, None, trap);
@@ -539,7 +567,7 @@ impl InterpreterRef<'_> {
         unsafe {
             self.resume_to_exception_handler(&handler, 0, 0);
         }
-        self.take_resume_at_pc()
+        Some(self.take_resume_at_pc())
     }
 
     fn take_resume_at_pc(&mut self) -> NonNull<u8> {

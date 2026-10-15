@@ -204,6 +204,12 @@ impl Vm {
         self.state.lr
     }
 
+    /// Returns whether the current `lr` register value is the return address
+    /// to the host that [`Vm::call_start`] installs.
+    pub fn lr_is_host_return(&self) -> bool {
+        self.state.lr == HOST_RETURN_ADDR
+    }
+
     /// Sets the current `fp` register value.
     pub unsafe fn set_fp(&mut self, fp: *mut u8) {
         self.state.fp = fp;
