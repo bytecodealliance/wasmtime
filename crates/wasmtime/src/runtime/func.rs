@@ -2771,10 +2771,6 @@ impl HostFunc {
     unsafe fn into_func(self, store: &mut StoreOpaque) -> Result<Func, OutOfMemory> {
         self.validate_store(store);
 
-        // This function could be called by a guest at any time, and it requires
-        // fibers, so the store now required async entrypoints.
-        store.set_async_required(self.asyncness);
-
         let (funcrefs, modules) = store.func_refs_and_modules();
         let funcref = funcrefs.push_box_host(try_new::<Box<_>>(self)?, modules)?;
         // SAFETY: this funcref was just pushed within `store`, so it's safe to
@@ -2791,6 +2787,10 @@ impl HostFunc {
             Engine::same(&self.engine, store.engine()),
             "cannot use a store with a different engine than a linker was created with",
         );
+
+        // This function could be called by a guest at any time, and it requires
+        // fibers, so the store now required async entrypoints.
+        store.set_async_required(self.asyncness);
     }
 
     pub(crate) fn engine(&self) -> &Engine {
