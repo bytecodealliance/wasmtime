@@ -33,6 +33,12 @@ use wasmtime_environ::{FuncKey, demangle_function_name_or_index};
 /// way to do that is to call it from a callback registered with
 /// [`Store::epoch_deadline_callback()`](crate::Store::epoch_deadline_callback).
 ///
+/// Starting a profile with [`GuestProfiler::new`] prepares the profiled
+/// modules each time, which for modules with many functions can take
+/// milliseconds. To profile the same modules many times, for example once per
+/// instance, prepare them once with [`GuestProfilerModules`] and start each
+/// profile with [`GuestProfiler::new_with_modules`].
+///
 /// # Accuracy
 ///
 /// The data collection granularity is limited by the mechanism you use to
@@ -75,21 +81,153 @@ use wasmtime_environ::{FuncKey, demangle_function_name_or_index};
 #[derive(Debug)]
 pub struct GuestProfiler {
     profile: Profile,
-    modules: Modules,
+    modules: GuestProfilerModules,
+    /// Library handle in `profile` for each entry of `modules`, by index.
+    libs: Vec<fxprof_processed_profile::LibraryHandle>,
     process: fxprof_processed_profile::ProcessHandle,
     thread: fxprof_processed_profile::ThreadHandle,
     start: Instant,
     marker: CallMarker,
 }
 
-#[derive(Debug)]
-struct ProfiledModule {
-    module: Module,
-    fxprof_libhandle: fxprof_processed_profile::LibraryHandle,
-    text_range: Range<usize>,
+/// The set of modules a [`GuestProfiler`] attributes samples to, prepared
+/// once and shared by any number of profilers.
+///
+/// Preparing a module builds its symbol table, which demangles the name of
+/// every function it defines; for modules with many functions this is the
+/// bulk of the cost of starting a profile. [`GuestProfiler::new`] does this
+/// work every time it is called. Embedders that profile the same modules
+/// repeatedly, for example once per request or once per instance, can instead
+/// build a `GuestProfilerModules` once and pass it to
+/// [`GuestProfiler::new_with_modules`] for each profile, which then does no
+/// per-module work beyond registering the prepared symbol tables.
+///
+/// Cloning is cheap, since the prepared modules are reference-counted, and a
+/// `GuestProfilerModules` can be shared between threads. Profiles started
+/// from the same set are independent of one another.
+///
+/// # Example
+///
+/// ```
+/// # use std::time::Duration;
+/// # use wasmtime::*;
+/// # fn main() -> Result<()> {
+/// let engine = Engine::default();
+/// let module = Module::new(&engine, r#"(module (func (export "run")))"#)?;
+///
+/// // Prepare the modules once...
+/// let modules = GuestProfilerModules::new(&engine, [("main.wasm".to_string(), module.clone())])?;
+///
+/// // ...then start a profile for each guest that runs them.
+/// for _ in 0..3 {
+///     let profiler = GuestProfiler::new_with_modules("main", Duration::from_millis(10), &modules);
+///     let mut store = Store::new(&engine, profiler);
+///     // Arrange to call `GuestProfiler::sample` while the guest runs, for
+///     // example from `Store::epoch_deadline_callback`.
+///     let instance = Instance::new(&mut store, &module, &[])?;
+///     instance
+///         .get_typed_func::<(), ()>(&mut store, "run")?
+///         .call(&mut store, ())?;
+///     let mut profile = Vec::new();
+///     store.into_data().finish(&mut profile)?;
+/// }
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Clone, Debug)]
+pub struct GuestProfilerModules {
+    /// Sorted by `text_range.start`, for lookup by program counter.
+    modules: Arc<[PreparedModule]>,
 }
 
-type Modules = Vec<ProfiledModule>;
+#[derive(Debug)]
+struct PreparedModule {
+    name: String,
+    module: Module,
+    text_range: Range<usize>,
+    symbol_table: Arc<SymbolTable>,
+}
+
+impl GuestProfilerModules {
+    /// Prepares `modules` for profiling.
+    ///
+    /// Each entry pairs a module with the name it is given in profiles. Only
+    /// modules in `modules` appear in stack traces of profiles that use this
+    /// set; stack frames executing host code or functions from other modules
+    /// are omitted. See the "Security" section of the [`GuestProfiler`]
+    /// documentation for guidance on which modules to include. Modules that
+    /// define no functions are skipped, since no sample can land in them.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `engine` has guest debugging enabled, which
+    /// profiling does not support.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any module in `modules` was not created with `engine`.
+    pub fn new(
+        engine: &Engine,
+        modules: impl IntoIterator<Item = (String, Module)>,
+    ) -> Result<Self> {
+        // Check that guest debugging is not enabled. The
+        // instrumentation would make profiling results unreliable,
+        // but more fundamentally, it means that code is cloned per
+        // instantiation (for breakpoint patching) so the logic below
+        // is incorrect.
+        if engine.tunables().debug_guest {
+            crate::bail!("Profiling cannot be performed when guest-debugging is enabled.");
+        }
+
+        let mut modules: Vec<_> = modules
+            .into_iter()
+            .filter_map(|(name, module)| {
+                assert!(Engine::same(module.engine(), engine));
+                let compiled = module.compiled_module();
+                let text_range = {
+                    // Assumption: within text, the code for a given module is packed linearly and
+                    // is non-overlapping; if this is violated, it should be safe but might result
+                    // in incorrect profiling results.
+                    let start = compiled.finished_function_ranges().next()?.1.start;
+                    let end = compiled.finished_function_ranges().last()?.1.end;
+
+                    let start = (module.engine_code().text_range().start + start).raw();
+                    let end = (module.engine_code().text_range().start + end).raw();
+                    start..end
+                };
+                let symbol_table = module_symbol_table(&module)?;
+                Some(PreparedModule {
+                    name,
+                    module,
+                    text_range,
+                    symbol_table,
+                })
+            })
+            .collect();
+
+        modules.sort_unstable_by_key(|m| m.text_range.start);
+        Ok(Self {
+            modules: modules.into(),
+        })
+    }
+
+    /// Prepares the static modules of `component`, plus `extra_modules`, for
+    /// profiling.
+    ///
+    /// See [`GuestProfilerModules::new`] for additional information.
+    #[cfg(feature = "component-model")]
+    pub fn new_component(
+        engine: &Engine,
+        component: &Component,
+        extra_modules: impl IntoIterator<Item = (String, Module)>,
+    ) -> Result<Self> {
+        let modules = component
+            .static_modules()
+            .map(|m| (m.name().unwrap_or("<unknown>").to_string(), m.clone()))
+            .chain(extra_modules);
+        Self::new(engine, modules)
+    }
+}
 
 impl GuestProfiler {
     /// Begin profiling a new guest. When this function is called, the current
@@ -107,73 +245,86 @@ impl GuestProfiler {
     /// host code or functions from other modules will be omitted. See the
     /// "Security" section of the [`GuestProfiler`] documentation for guidance
     /// on what modules should not be included in this list.
+    ///
+    /// This prepares `modules` afresh for every profile, which for modules
+    /// with many functions is most of this function's cost. To profile the
+    /// same modules repeatedly, prepare them once with
+    /// [`GuestProfilerModules::new`] and use
+    /// [`GuestProfiler::new_with_modules`] instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `engine` has guest debugging enabled, which
+    /// profiling does not support.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any module in `modules` was not created with `engine`.
     pub fn new(
         engine: &Engine,
         module_name: &str,
         interval: Duration,
         modules: impl IntoIterator<Item = (String, Module)>,
     ) -> Result<Self> {
-        // Check that guest debugging is not enabled. The
-        // instrumentation would make profiling results unreliable,
-        // but more fundamentally, it means that code is cloned per
-        // instantiation (for breakpoint patching) so the logic below
-        // is incorrect.
-        if engine.tunables().debug_guest {
-            crate::bail!("Profiling cannot be performed when guest-debugging is enabled.");
-        }
+        let modules = GuestProfilerModules::new(engine, modules)?;
+        Ok(Self::new_with_modules(module_name, interval, &modules))
+    }
 
+    /// Begin profiling a new guest using a set of modules prepared with
+    /// [`GuestProfilerModules`]. When this function is called, the current
+    /// wall-clock time is recorded as the start time for the guest.
+    ///
+    /// This behaves like [`GuestProfiler::new`], except that the per-module
+    /// preparation has already been done, so starting a profile costs the
+    /// same however many functions the modules define. Only modules in
+    /// `modules` will appear in stack traces in this profile.
+    ///
+    /// See [`GuestProfiler::new`] for the meaning of `module_name` and
+    /// `interval`.
+    pub fn new_with_modules(
+        module_name: &str,
+        interval: Duration,
+        modules: &GuestProfilerModules,
+    ) -> Self {
         let zero = ReferenceTimestamp::from_millis_since_unix_epoch(0.0);
         let mut profile = Profile::new(module_name, zero, interval.into());
 
-        // Past this point, we just need to think about modules as we pull out
-        // the disparate module information from components.
-        let mut modules: Vec<_> = modules
-            .into_iter()
-            .filter_map(|(name, module)| {
-                assert!(Engine::same(module.engine(), engine));
-                let compiled = module.compiled_module();
-                let text_range = {
-                    // Assumption: within text, the code for a given module is packed linearly and
-                    // is non-overlapping; if this is violated, it should be safe but might result
-                    // in incorrect profiling results.
-                    let start = compiled.finished_function_ranges().next()?.1.start;
-                    let end = compiled.finished_function_ranges().last()?.1.end;
-
-                    let start = (module.engine_code().text_range().start + start).raw();
-                    let end = (module.engine_code().text_range().start + end).raw();
-                    start..end
-                };
-
-                module_symbols(name, &module).map(|(lib, symbol_table)| {
-                    // The profile keys libraries by value, so the symbol table
-                    // is attached after the library is added rather than
-                    // carried in `lib`, which would hash every function name.
-                    let libhandle = profile.add_lib(lib);
-                    profile.set_lib_symbol_table(libhandle, symbol_table);
-                    ProfiledModule {
-                        module,
-                        fxprof_libhandle: libhandle,
-                        text_range,
-                    }
-                })
+        let libs = modules
+            .modules
+            .iter()
+            .map(|m| {
+                // The profile keys libraries by value, so the symbol table is
+                // attached after the library is added rather than carried in
+                // the `LibraryInfo`, which would hash every function name.
+                let lib = profile.add_lib(LibraryInfo {
+                    name: m.name.clone(),
+                    debug_name: String::new(),
+                    path: String::new(),
+                    debug_path: String::new(),
+                    debug_id: DebugId::nil(),
+                    code_id: None,
+                    arch: None,
+                    symbol_table: None,
+                });
+                profile.set_lib_symbol_table(lib, m.symbol_table.clone());
+                lib
             })
             .collect();
-
-        modules.sort_unstable_by_key(|m| m.text_range.start);
 
         profile.set_reference_timestamp(std::time::SystemTime::now().into());
         let process = profile.add_process(module_name, 0, Timestamp::from_nanos_since_reference(0));
         let thread = profile.add_thread(process, 0, Timestamp::from_nanos_since_reference(0), true);
         let start = Instant::now();
         let marker = CallMarker::new(&mut profile);
-        Ok(Self {
+        Self {
             profile,
-            modules,
+            modules: modules.clone(),
+            libs,
             process,
             thread,
             start,
             marker,
-        })
+        }
     }
 
     /// Create a new profiler for the provided component
@@ -189,11 +340,8 @@ impl GuestProfiler {
         component: Component,
         extra_modules: impl IntoIterator<Item = (String, Module)>,
     ) -> Result<Self> {
-        let modules = component
-            .static_modules()
-            .map(|m| (m.name().unwrap_or("<unknown>").to_string(), m.clone()))
-            .chain(extra_modules);
-        Self::new(engine, component_name, interval, modules)
+        let modules = GuestProfilerModules::new_component(engine, &component, extra_modules)?;
+        Ok(Self::new_with_modules(component_name, interval, &modules))
     }
 
     /// Add a sample to the profile. This function collects a backtrace from
@@ -209,7 +357,7 @@ impl GuestProfiler {
             self.start.elapsed().as_nanos().try_into().unwrap(),
         );
         let backtrace = Backtrace::new(store.as_context().0);
-        let frames = lookup_frames(&self.modules, &backtrace);
+        let frames = lookup_frames(&self.modules.modules, &self.libs, &backtrace);
         let stack = self
             .profile
             .intern_stack_frames(self.thread, frames.into_iter());
@@ -229,7 +377,7 @@ impl GuestProfiler {
             CallHook::CallingWasm | CallHook::ReturningFromWasm => {}
             CallHook::CallingHost => {
                 let backtrace = Backtrace::new(store.as_context().0);
-                let frames = lookup_frames(&self.modules, &backtrace);
+                let frames = lookup_frames(&self.modules.modules, &self.libs, &backtrace);
                 let marker = self.profile.add_marker(
                     self.thread,
                     MarkerTiming::IntervalStart(now),
@@ -265,29 +413,6 @@ impl GuestProfiler {
     }
 }
 
-fn module_symbols(name: String, module: &Module) -> Option<(LibraryInfo, Arc<SymbolTable>)> {
-    let symbol_table = module
-        .profiling_symbols()
-        .get_or_init(|| module_symbol_table(module))
-        .clone()?;
-    let lib = LibraryInfo {
-        name,
-        debug_name: String::new(),
-        path: String::new(),
-        debug_path: String::new(),
-        debug_id: DebugId::nil(),
-        code_id: None,
-        arch: None,
-        symbol_table: None,
-    };
-    Some((lib, symbol_table))
-}
-
-/// Builds the symbol table for `module`'s defined functions.
-///
-/// Demangling every function name makes this the most expensive part of
-/// `GuestProfiler::new` for modules with many functions, so the result is
-/// cached on the module by `module_symbols` and built only once per module.
 fn module_symbol_table(module: &Module) -> Option<Arc<SymbolTable>> {
     let compiled = module.compiled_module();
     let symbols = Vec::from_iter(
@@ -316,11 +441,13 @@ fn module_symbol_table(module: &Module) -> Option<Arc<SymbolTable>> {
     if symbols.is_empty() {
         return None;
     }
+
     Some(Arc::new(SymbolTable::new(symbols)))
 }
 
 fn lookup_frames<'a>(
-    modules: &'a Modules,
+    modules: &'a [PreparedModule],
+    libs: &'a [fxprof_processed_profile::LibraryHandle],
     backtrace: &'a Backtrace,
 ) -> impl Iterator<Item = FrameInfo> + 'a {
     backtrace
@@ -346,7 +473,7 @@ fn lookup_frames<'a>(
             let module_text_start = module.module.text().as_ptr_range().start as usize;
             return Some(FrameInfo {
                 frame: Frame::RelativeAddressFromReturnAddress(
-                    module.fxprof_libhandle,
+                    libs[idx],
                     u32::try_from(frame.pc() - module_text_start).unwrap(),
                 ),
                 category_pair: CategoryHandle::OTHER.into(),

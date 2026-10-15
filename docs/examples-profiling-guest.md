@@ -12,3 +12,12 @@ To use this profiler with the Wasmtime CLI, pass the
 
 When used with `-W timeout=N`, the timeout will be rounded up to the nearest
 multiple of the profiling interval.
+
+To use this profiler when embedding Wasmtime, see [`GuestProfiler`]. An
+embedder that profiles the same modules many times, for example once per
+instance, can prepare them once with [`GuestProfilerModules`] and start each
+profile with [`GuestProfiler::new_with_modules`]; `wasmtime serve` does this.
+
+[`GuestProfiler`]: https://docs.wasmtime.dev/api/wasmtime/struct.GuestProfiler.html
+[`GuestProfilerModules`]: https://docs.wasmtime.dev/api/wasmtime/struct.GuestProfilerModules.html
+[`GuestProfiler::new_with_modules`]: https://docs.wasmtime.dev/api/wasmtime/struct.GuestProfiler.html#method.new_with_modules

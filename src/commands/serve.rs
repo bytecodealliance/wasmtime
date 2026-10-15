@@ -736,10 +736,24 @@ impl ServeCommand {
 
         let sem_connections = Arc::new(Semaphore::new(max_concurrent_connections));
 
+        // `--profile=guest` starts a new profiler for every instance, so the
+        // component's modules are prepared for profiling once, up front.
+        #[cfg(feature = "profiling")]
+        let guest_profiler_modules = match &self.run.profile {
+            Some(Profile::Guest { .. }) => Some(wasmtime::GuestProfilerModules::new_component(
+                engine,
+                &component,
+                std::iter::empty(),
+            )?),
+            _ => None,
+        };
+
         let handler = ProxyHandler::new(HostHandlerState {
             sem_requests: Semaphore::new(max_concurrent_requests),
             cmd: self,
             component,
+            #[cfg(feature = "profiling")]
+            guest_profiler_modules,
             request_headers,
             max_instance_reuse_count,
             max_instance_concurrent_reuse_count,
@@ -946,6 +960,10 @@ impl WorkerState for HostWorkerState {
 struct HostHandlerState {
     cmd: ServeCommand,
     component: Component,
+    /// The component's modules prepared for `--profile=guest`, shared by every
+    /// instance's profiler; `None` when guest profiling is disabled.
+    #[cfg(feature = "profiling")]
+    guest_profiler_modules: Option<wasmtime::GuestProfilerModules>,
     request_headers: RequestHeaders,
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
@@ -958,7 +976,7 @@ struct HostHandlerState {
 
 impl HostHandlerState {
     async fn instantiate_into(&self, store: &mut Store<Host>) -> Result<Proxy> {
-        let write_profile = setup_epoch_handler(&self.cmd, &mut *store, self.component.clone())?;
+        let write_profile = setup_epoch_handler(self, &mut *store)?;
         store.data_mut().write_profile = Some(write_profile);
         self.instance.instantiate_async(&mut *store).await
     }
@@ -1169,15 +1187,18 @@ impl Drop for EpochThread {
 
 type WriteProfile = Box<dyn FnOnce(StoreContextMut<Host>) + Send>;
 
-fn setup_epoch_handler(
-    cmd: &ServeCommand,
-    store: &mut Store<Host>,
-    component: Component,
-) -> Result<WriteProfile> {
+fn setup_epoch_handler(state: &HostHandlerState, store: &mut Store<Host>) -> Result<WriteProfile> {
+    let cmd = &state.cmd;
     // Profiling Enabled
     if let Some(Profile::Guest { interval, path }) = &cmd.run.profile {
         #[cfg(feature = "profiling")]
-        return setup_guest_profiler(store, path.clone(), *interval, component.clone());
+        {
+            let modules = state
+                .guest_profiler_modules
+                .as_ref()
+                .expect("modules are prepared when guest profiling is enabled");
+            return setup_guest_profiler(store, path.clone(), *interval, modules);
+        }
         #[cfg(not(feature = "profiling"))]
         {
             let _ = (path, interval);
@@ -1199,19 +1220,17 @@ fn setup_guest_profiler(
     store: &mut Store<Host>,
     path: String,
     interval: Duration,
-    component: Component,
+    modules: &wasmtime::GuestProfilerModules,
 ) -> Result<WriteProfile> {
     use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut};
 
     let module_name = "<main>";
 
-    store.data_mut().guest_profiler = Some(Arc::new(GuestProfiler::new_component(
-        store.engine(),
+    store.data_mut().guest_profiler = Some(Arc::new(GuestProfiler::new_with_modules(
         module_name,
         interval,
-        component,
-        std::iter::empty(),
-    )?));
+        modules,
+    )));
 
     fn sample(
         mut store: wasmtime::StoreHookState<Host>,
