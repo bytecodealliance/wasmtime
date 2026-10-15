@@ -5,6 +5,7 @@ use bytes::Bytes;
 use http::StatusCode;
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::UnsyncBoxBody;
+use tokio::sync::oneshot;
 use wasmtime::AsContextMut;
 use wasmtime::error::Context as _;
 
@@ -59,34 +60,45 @@ impl Response {
     ) -> wasmtime::Result<http::Response<UnsyncBoxBody<Bytes, Error>>> {
         let res = http::Response::try_from(self)?;
         let (res, body) = res.into_parts();
+        // `Content-Length` header value is validated in `fields` implementation
+        let content_length =
+            get_content_length(&res.headers).context("failed to parse `content-length`")?;
         let body = match body {
             Body::Guest {
                 contents_rx,
                 trailers_rx,
                 result_tx,
-            } => {
-                // `Content-Length` header value is validated in `fields` implementation
-                let content_length =
-                    get_content_length(&res.headers).context("failed to parse `content-length`")?;
-                GuestBody::new(
-                    &mut store,
-                    contents_rx,
-                    trailers_rx,
-                    result_tx,
-                    fut,
-                    content_length,
-                    ErrorCode::HttpResponseBodySize,
-                    getter,
-                )?
-                .boxed_unsync()
-            }
+            } => GuestBody::new(
+                &mut store,
+                contents_rx,
+                trailers_rx,
+                result_tx,
+                fut,
+                content_length,
+                ErrorCode::HttpResponseBodySize,
+                getter,
+            )?
+            .boxed_unsync(),
             Body::Host { body, result_tx } => {
                 let mut getter = getter;
                 let is_forbidden = getter(store.as_context_mut().data_mut())
                     .hooks
                     .forbidden_header_filter();
-                _ = result_tx.send(Box::new(fut));
-                body.with_filtered_trailers(is_forbidden).boxed_unsync()
+                let body = body.with_filtered_trailers(is_forbidden);
+                if let Some(limit) = content_length {
+                    let (http_result_tx, http_result_rx) = oneshot::channel();
+                    _ = result_tx.send(Box::new(async move {
+                        if let Ok(err) = http_result_rx.await {
+                            return Err(err);
+                        };
+                        fut.await
+                    }));
+                    body.with_content_length(limit, http_result_tx, Error::HttpResponseBodySize)
+                        .boxed_unsync()
+                } else {
+                    _ = result_tx.send(Box::new(fut));
+                    body.boxed_unsync()
+                }
             }
         };
         Ok(http::Response::from_parts(res, body))
