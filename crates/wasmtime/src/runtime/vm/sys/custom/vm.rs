@@ -42,7 +42,7 @@ pub struct iovec {
 }
 
 #[cfg(feature = "pooling-allocator")]
-pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub unsafe fn decommit_pages(iov: &[iovec]) -> Result<()> {
     for iov in iov {
         if iov.iov_len == 0 {
             continue;
