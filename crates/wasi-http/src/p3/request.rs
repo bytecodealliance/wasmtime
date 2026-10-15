@@ -187,6 +187,10 @@ impl Request {
             .map_err(HttpError::trap)?
             .boxed_unsync(),
             Body::Host { body, result_tx } => {
+                let is_forbidden = getter(store.as_context_mut().data_mut())
+                    .hooks
+                    .forbidden_header_filter();
+                let body = body.with_filtered_trailers(is_forbidden).boxed_unsync();
                 if let Some(limit) = content_length {
                     let (http_result_tx, http_result_rx) = oneshot::channel();
                     _ = result_tx.send(Box::new(async move {
