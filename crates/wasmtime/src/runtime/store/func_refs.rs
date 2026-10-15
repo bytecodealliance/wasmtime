@@ -195,6 +195,8 @@ impl FuncRefs {
     ) -> Result<NonNull<VMFuncRef>, OutOfMemory> {
         debug_assert!(func_ref.wasm_call.is_none());
         // Reserve space for `storage` to avoid the need to handle a successful
+        // `self.push` followed by a failed `self.storage.push` -- this way we
+        // should be guaranteed that `self.storage.push` succeeds below.
         self.storage.reserve(1)?;
         // SAFETY: the unsafe contract of `push` is the same as ours.
         let ret = unsafe { self.push(func_ref, modules)? };
