@@ -1026,9 +1026,13 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_use(ridx);
             collector.reg_fixed_nonallocatable(gpr_preg(1));
         }
-        Inst::LoadSymbolReloc { rd, .. } => {
+        Inst::LoadSymbolReloc { rd, symbol_reloc } => {
             collector.reg_def(rd);
-            collector.reg_fixed_nonallocatable(gpr_preg(1));
+            // GOT-indirect loads (PIC) use only rd; non-PIC variants also
+            // use GPR 1 as a scratch (via the BRAS/LG literal-pool sequence).
+            if matches!(&**symbol_reloc, SymbolReloc::Got { .. }) {
+                collector.reg_fixed_nonallocatable(gpr_preg(1));
+            }
         }
         Inst::LoadAddr { rd, mem } => {
             collector.reg_def(rd);
@@ -3491,14 +3495,40 @@ impl Inst {
                 ref symbol_reloc,
             } => {
                 let rd = pretty_print_reg(rd.to_reg());
-                let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
-                let symbol = match &**symbol_reloc {
-                    SymbolReloc::Absolute { name, offset } => {
-                        format!("{} + {}", name.display(None), offset)
+                match &**symbol_reloc {
+                    SymbolReloc::Got { name, offset: 0 } => {
+                        format!(
+                            "larl {rd}, {}@GOTENT ; lg {rd}, 0({rd})",
+                            name.display(None)
+                        )
                     }
-                    SymbolReloc::TlsGd { name } => format!("{}@tlsgd", name.display(None)),
-                };
-                format!("bras {tmp}, 12 ; data {symbol} ; lg {rd}, 0({tmp})")
+                    SymbolReloc::Got { name, offset } if i16::try_from(*offset).is_ok() => {
+                        format!(
+                            "larl {rd}, {}@GOTENT ; lg {rd}, 0({rd}) ; aghi {rd}, {offset}",
+                            name.display(None)
+                        )
+                    }
+                    SymbolReloc::Got { name, offset } => {
+                        format!(
+                            "larl {rd}, {}@GOTENT ; lg {rd}, 0({rd}) ; agfi {rd}, {offset}",
+                            name.display(None)
+                        )
+                    }
+                    SymbolReloc::Absolute { name, offset } => {
+                        let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
+                        format!(
+                            "bras {tmp}, 12 ; data {} + {offset} ; lg {rd}, 0({tmp})",
+                            name.display(None)
+                        )
+                    }
+                    SymbolReloc::TlsGd { name } => {
+                        let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
+                        format!(
+                            "bras {tmp}, 12 ; data {}@tlsgd ; lg {rd}, 0({tmp})",
+                            name.display(None)
+                        )
+                    }
+                }
             }
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = pretty_print_reg(rd.to_reg());

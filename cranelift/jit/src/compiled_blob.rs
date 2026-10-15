@@ -250,6 +250,9 @@ impl CompiledBlob {
                         }
                     }
                 }
+                Reloc::S390xGOTRel32Dbl => {
+                    panic!("GOT relocation shouldn't be generated when !is_pic");
+                }
                 Reloc::S390xPCRel32Dbl | Reloc::S390xPLTRel32Dbl => {
                     let what = relocation_target_addr(name, addend);
                     let pcrel = i32::try_from(((what as isize) - (at as isize)) >> 1).unwrap();

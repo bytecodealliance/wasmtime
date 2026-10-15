@@ -2809,6 +2809,11 @@
 
 ;;;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; PIC: load the address of a function through the GOT.
+(rule 2 (lower (func_addr _ (func_ref_data _ name _ _)))
+      (if-let true (is_pic))
+      (load_symbol_reloc (SymbolReloc.Got name 0)))
+
 ;; Load the address of a function, target reachable via PC-relative instruction.
 (rule 1 (lower (func_addr _ (func_ref_data _ name (RelocDistance.Near) _)))
       (load_addr (memarg_symbol name 0 (memflags_trusted))))
@@ -2819,6 +2824,11 @@
 
 
 ;;;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; PIC: load the address of a symbol through the GOT (offset carried in Got).
+(rule 2 (lower (symbol_value _ (symbol_value_data name _ offset)))
+      (if-let true (is_pic))
+      (load_symbol_reloc (SymbolReloc.Got name offset)))
 
 ;; Load the address of a symbol, target reachable via PC-relative instruction.
 (rule 1 (lower (symbol_value _ (symbol_value_data name (RelocDistance.Near)
@@ -4585,6 +4595,19 @@
             (_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
         output))
 
+;; PIC: direct call to an out-of-range function via GOT.
+(rule 2 (lower (call (func_ref_data sig_ref name _ false) args))
+      (if-let true (is_pic))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (_ Unit (abi_emit_call_adjust_stack abi))
+            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
+            (defs CallRetList (gen_call_rets abi output))
+            (target Reg (load_symbol_reloc (SymbolReloc.Got name 0)))
+            (info BoxCallInfo (gen_call_info abi target uses defs (try_call_none) false))
+            (_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
+        output))
+
 ;; Direct call to an out-of-range function (implicitly via pointer).
 (rule (lower (call (func_ref_data sig_ref name _ false) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
@@ -4619,6 +4642,16 @@
             (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
         (side_effect (return_call_impl info))))
 
+;; PIC: direct tail call to an out-of-range function via GOT.
+(rule 2 (lower (return_call (func_ref_data sig_ref name _ false) args))
+      (if-let true (is_pic))
+      (let ((abi Sig (abi_sig sig_ref))
+            (_ Unit (abi_emit_return_call_adjust_stack abi))
+            (uses CallArgList (gen_return_call_args abi (abi_prepare_args abi args)))
+            (target Reg (load_symbol_reloc (SymbolReloc.Got name 0)))
+            (info BoxReturnCallInfo (gen_return_call_info abi target uses)))
+        (side_effect (return_call_impl info))))
+
 ;; Direct tail call to an out-of-range function (implicitly via pointer).
 (rule (lower (return_call (func_ref_data sig_ref name _ false) args))
       (let ((abi Sig (abi_sig sig_ref))
@@ -4648,6 +4681,18 @@
             (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
             (defs CallRetList (gen_try_call_rets abi))
             (info BoxCallInfo (gen_call_info abi name uses defs trycall patchable)))
+        (emit_side_effect (call_impl (writable_link_reg) info))))
+
+;; PIC: direct try_call to an out-of-range function via GOT.
+(rule 2 (lower_branch (try_call (func_ref_data sig_ref name _ false) args et) targets)
+      (if-let true (is_pic))
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (_ Unit (abi_emit_call_adjust_stack abi))
+            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
+            (defs CallRetList (gen_try_call_rets abi))
+            (target Reg (load_symbol_reloc (SymbolReloc.Got name 0)))
+            (info BoxCallInfo (gen_call_info abi target uses defs trycall false)))
         (emit_side_effect (call_impl (writable_link_reg) info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
