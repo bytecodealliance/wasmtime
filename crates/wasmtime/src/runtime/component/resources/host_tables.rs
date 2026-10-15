@@ -152,7 +152,7 @@ impl<'a> HostResourceTables<'a> {
         instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
         let idx = self.tables.resource_lower_own(TypedResource::Host(rep))?;
-        Ok(self.new_host_index(idx, dtor, instance)?)
+        self.new_host_index(idx, dtor, instance)
     }
 
     /// See [`HostResourceTables::host_resource_lower_own`].
@@ -160,7 +160,7 @@ impl<'a> HostResourceTables<'a> {
         let idx = self
             .tables
             .resource_lower_borrow(TypedResource::Host(rep))?;
-        Ok(self.new_host_index(idx, None, None)?)
+        self.new_host_index(idx, None, None)
     }
 
     /// Validates that `idx` is still valid for the host tables, notably
@@ -202,38 +202,45 @@ impl<'a> HostResourceTables<'a> {
     /// slot provided by `idx`.
     ///
     /// This will register metadata necessary to track the current generation
-    /// in the returned `HostResourceIndex` as well.
+    /// in the returned `HostResourceIndex` as well. If that fails then the
+    /// handle at `idx`, which was just inserted, is removed again.
     fn new_host_index(
         &mut self,
         idx: u32,
         dtor: Option<NonNull<VMFuncRef>>,
         instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
-        let list = &mut self.host_resource_data.table_slot_metadata;
-        let info = TableSlot {
-            generation: self.host_resource_data.cur_generation,
-            instance,
-            dtor: dtor.map(SendSyncPtr::new),
-        };
-        match list.get_mut(idx as usize) {
-            Some(slot) => *slot = info,
-            None => {
-                // Resource handles start at 1, not zero, so push two elements
-                // for the first resource handle.
-                if list.is_empty() {
-                    assert_eq!(idx, 1);
-                    list.push(TableSlot {
-                        generation: 0,
-                        instance: None,
-                        dtor: None,
-                    })?;
+        let result = (|| {
+            let list = &mut self.host_resource_data.table_slot_metadata;
+            let info = TableSlot {
+                generation: self.host_resource_data.cur_generation,
+                instance,
+                dtor: dtor.map(SendSyncPtr::new),
+            };
+            match list.get_mut(idx as usize) {
+                Some(slot) => *slot = info,
+                None => {
+                    // Resource handles start at 1, not zero, so push two elements
+                    // for the first resource handle.
+                    if list.is_empty() {
+                        assert_eq!(idx, 1);
+                        list.push(TableSlot {
+                            generation: 0,
+                            instance: None,
+                            dtor: None,
+                        })?;
+                    }
+                    assert_eq!(idx as usize, list.len());
+                    list.push(info)?;
                 }
-                assert_eq!(idx as usize, list.len());
-                list.push(info)?;
             }
-        }
 
-        Ok(HostResourceIndex::new(idx, info.generation))
+            Ok(HostResourceIndex::new(idx, info.generation))
+        })();
+        if result.is_err() {
+            self.tables.resource_drop(TypedResourceIndex::Host(idx))?;
+        }
+        result
     }
 
     /// Drops a host-owned resource from host tables.
