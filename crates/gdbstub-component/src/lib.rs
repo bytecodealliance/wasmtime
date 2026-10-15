@@ -18,6 +18,7 @@ use gdbstub::{
         MultiThreadStopReason,
         state_machine::{GdbStubStateMachine, GdbStubStateMachineInner, state::Running},
     },
+    target::ext::breakpoints::WatchKind,
 };
 use gdbstub_arch::wasm::addr::WasmAddr;
 use log::trace;
@@ -58,6 +59,8 @@ impl api::exports::bytecodealliance::wasmtime::debugger::Guest for Component {
             single_stepping: false,
             frame_cache: vec![],
             addr_space: AddrSpace::new(),
+            watchpoints: vec![],
+            pending_watch: None,
         };
         wstd::runtime::block_on(async {
             if let Err(e) = debugger.run().await {
@@ -77,6 +80,32 @@ struct Debugger<'a> {
     single_stepping: bool,
     current_pc: WasmAddr,
     frame_cache: Vec<api::Frame>,
+    /// Active write watchpoints, as requested by the client, without
+    /// duplicates. They may overlap; see `target.rs` for how these are
+    /// kept in sync with the debuggee's per-byte watches.
+    watchpoints: Vec<Watchpoint>,
+    /// A watchpoint was hit and we are stepping over the write before
+    /// reporting it, holding the address to report.
+    pending_watch: Option<WasmAddr>,
+}
+
+/// One write watchpoint requested by the client.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+struct Watchpoint {
+    /// Start of the watched range; always a memory address.
+    addr: WasmAddr,
+    /// Length of the watched range, in bytes.
+    len: u32,
+}
+
+impl Watchpoint {
+    /// Whether this watchpoint covers any byte in `[start, end)` of
+    /// the memory with the given address-space index.
+    fn overlaps(&self, memory_index: u32, start: u64, end: u64) -> bool {
+        let w_start = u64::from(self.addr.offset());
+        let w_end = w_start + u64::from(self.len);
+        self.addr.module_index() == memory_index && w_start < end && start < w_end
+    }
 }
 
 impl<'a> Debugger<'a> {
@@ -212,14 +241,76 @@ impl<'a> Debugger<'a> {
         }
     }
 
+    /// The address to report to the client for a watchpoint hit: the
+    /// first byte of the write that a client watchpoint covers, so
+    /// that the client can match it to one of its watchpoints even if
+    /// the write starts below the watched range.
+    fn watch_hit_addr(&mut self, hit: &api::WatchpointHit) -> WasmAddr {
+        let start = hit.address;
+        let end = hit.address.saturating_add(hit.len);
+        let base = self.addr_space.memory_addr(&hit.memory, 0);
+        let memory_index = base.module_index();
+        let first_watched = self
+            .watchpoints
+            .iter()
+            .filter(|w| w.overlaps(memory_index, start, end))
+            .map(|w| start.max(u64::from(w.addr.offset())))
+            .min()
+            .unwrap_or(start);
+        let offset = u32::try_from(first_watched).unwrap_or(u32::MAX);
+        self.addr_space.memory_addr(&hit.memory, offset)
+    }
+
     async fn handle_event<'b>(
         &mut self,
         event: api::Event,
         inner: GdbStubStateMachineInner<'b, Running, Self, Conn>,
     ) -> Result<GdbStubStateMachine<'b, Self, Conn>> {
         match event {
+            api::Event::Watchpoint(hit) => {
+                // The debuggee pauses *before* the write, but gdb and
+                // LLDB expect watchpoints on this target to trigger
+                // after the write (they then compare the old and new
+                // values). So first single-step over the write, then
+                // report the watchpoint when that step completes.
+                let addr = self.watch_hit_addr(&hit);
+                trace!(
+                    "Event::Watchpoint: address {:#x} len {} -> reporting {:#x}",
+                    hit.address,
+                    hit.len,
+                    addr.as_raw()
+                );
+                let single_stepping = self.single_stepping;
+                self.pending_watch = Some(addr);
+                self.start_single_step(api::ResumptionValue::Normal);
+                // Keep the client's resume mode so that any event
+                // other than the step's completion is handled as it
+                // would have been.
+                self.single_stepping = single_stepping;
+                Ok(GdbStubStateMachine::Running(inner))
+            }
+            api::Event::Breakpoint if self.pending_watch.is_some() => {
+                let addr = self.pending_watch.take().unwrap();
+                trace!("stepped over watched write; reporting watchpoint");
+                self.update_on_stop();
+                let pc_bytes = self.current_pc.as_raw().to_le_bytes();
+                let mut regs = core::iter::once((
+                    gdbstub_arch::wasm::reg::id::WasmRegId::Pc,
+                    pc_bytes.as_slice(),
+                ));
+                Ok(inner.report_stop_with_regs(
+                    self,
+                    MultiThreadStopReason::Watch {
+                        tid: self.tid,
+                        kind: WatchKind::Write,
+                        addr: addr.as_raw(),
+                    },
+                    &mut regs,
+                )?)
+            }
             api::Event::Complete => {
                 trace!("Event::Complete");
+                self.pending_watch = None;
                 let pc_bytes = self.current_pc.as_raw().to_le_bytes();
                 let mut regs = core::iter::once((
                     gdbstub_arch::wasm::reg::id::WasmRegId::Pc,
@@ -254,6 +345,7 @@ impl<'a> Debugger<'a> {
             }
             api::Event::Trap => {
                 trace!("Event::Trap");
+                self.pending_watch = None;
                 self.update_on_stop();
                 let pc_bytes = self.current_pc.as_raw().to_le_bytes();
                 let mut regs = core::iter::once((
@@ -274,6 +366,7 @@ impl<'a> Debugger<'a> {
                 trace!("other event: {event:?}");
                 if self.interrupt {
                     self.interrupt = false;
+                    self.pending_watch = None;
                     self.update_on_stop();
                     let pc_bytes = self.current_pc.as_raw().to_le_bytes();
                     let mut regs = core::iter::once((
@@ -286,7 +379,12 @@ impl<'a> Debugger<'a> {
                         &mut regs,
                     )?)
                 } else {
-                    if self.single_stepping {
+                    if self.pending_watch.is_some() {
+                        // Still stepping over a watched write.
+                        let single_stepping = self.single_stepping;
+                        self.start_single_step(api::ResumptionValue::Normal);
+                        self.single_stepping = single_stepping;
+                    } else if self.single_stepping {
                         self.start_single_step(api::ResumptionValue::Normal);
                     } else {
                         self.start_continue(api::ResumptionValue::Normal);
