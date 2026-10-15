@@ -119,7 +119,7 @@ pub use vm::{PoolConcurrencyLimitError, PoolingAllocatorMetrics};
 #[cfg(feature = "profiling")]
 mod profiling;
 #[cfg(feature = "profiling")]
-pub use profiling::GuestProfiler;
+pub use profiling::{GuestProfiler, GuestProfilerModules};
 
 #[cfg(feature = "async")]
 pub(crate) mod stack;
