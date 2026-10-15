@@ -52,10 +52,11 @@ pub struct ReturnCallInfo<T> {
 }
 
 #[test]
+#[cfg(target_pointer_width = "64")]
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(32, core::mem::size_of::<Inst>());
+    assert_eq!(40, core::mem::size_of::<Inst>());
 }
 
 /// A register pair. Enum so it can be destructured in ISLE.
@@ -133,6 +134,7 @@ impl Inst {
             | Inst::AtomicRmw { .. }
             | Inst::AtomicCas32 { .. }
             | Inst::AtomicCas64 { .. }
+            | Inst::AtomicCas128 { .. }
             | Inst::Fence
             | Inst::Load32 { .. }
             | Inst::Load32ZExt8 { .. }
@@ -593,6 +595,15 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_reuse_def(rd, 1);
             collector.reg_use(ri);
             collector.reg_use(rn);
+            memarg_operands(mem, collector);
+        }
+        Inst::AtomicCas128 { rd, ri, rn, mem } => {
+            collector.reg_fixed_def(&mut rd.hi, gpr(2)); // `rd.hi` == `ri.hi`
+            collector.reg_fixed_def(&mut rd.lo, gpr(3)); // `rd.lo` == `ri.lo`
+            collector.reg_fixed_use(&mut ri.hi, gpr(2));
+            collector.reg_fixed_use(&mut ri.lo, gpr(3));
+            collector.reg_fixed_use(&mut rn.hi, gpr(4));
+            collector.reg_fixed_use(&mut rn.lo, gpr(5));
             memarg_operands(mem, collector);
         }
         Inst::Fence => {}
@@ -1888,6 +1899,30 @@ impl Inst {
                 let mem = mem.pretty_print_default();
 
                 format!("{}{} {}, {}, {}", mem_str, op.unwrap(), rd, rn, mem)
+            }
+            &Inst::AtomicCas128 {
+                rd,
+                ri,
+                rn,
+                ref mem,
+            } => {
+                let rd = pretty_print_regpair_mod(rd, ri);
+                let rn = pretty_print_regpair(rn);
+                let mem = mem.clone();
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: false,
+                        have_d20: true,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: false,
+                    },
+                );
+                let mem = mem.pretty_print_default();
+
+                format!("{mem_str}cdsg {rd}, {rn}, {mem}")
             }
             &Inst::Fence => "bcr 14, 0".to_string(),
             &Inst::Load32 { rd, ref mem }
