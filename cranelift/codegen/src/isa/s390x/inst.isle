@@ -239,6 +239,13 @@
       (rn Reg)
       (mem MemArg))
 
+    ;; A 128-bit atomic compare-and-swap operation.
+    (AtomicCas128
+      (rd WritableRegPair)
+      (ri RegPair)
+      (rn RegPair)
+      (mem MemArg))
+
     ;; A memory fence operation.
     (Fence)
 
@@ -2351,6 +2358,13 @@
 (rule (atomic_cas64 src1 src2 mem)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AtomicCas64 dst src1 src2 mem))))
+        dst))
+
+;; Helper for emitting `MInst.AtomicCas128` instructions.
+(decl atomic_cas128 (RegPair RegPair MemArg) RegPair)
+(rule (atomic_cas128 src1 src2 mem)
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
+            (_ Unit (emit (MInst.AtomicCas128 dst src1 src2 mem))))
         dst))
 
 ;; Helper for emitting `MInst.Fence` instructions.

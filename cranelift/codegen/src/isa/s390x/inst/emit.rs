@@ -2186,6 +2186,39 @@ impl Inst {
                     rd, rn, &mem, opcode_rs, opcode_rsy, true, sink, emit_info, state,
                 );
             }
+            &Inst::AtomicCas128 {
+                rd,
+                ri,
+                rn,
+                ref mem,
+            } => {
+                let rd1 = rd.hi;
+                let rd2 = rd.lo;
+                debug_assert_valid_regpair!(rd1.to_reg(), rd2.to_reg());
+                let ri1 = ri.hi;
+                let ri2 = ri.lo;
+                debug_assert_valid_regpair!(ri1, ri2);
+                let rn1 = rn.hi;
+                let rn2 = rn.lo;
+                debug_assert_valid_regpair!(rn1, rn2);
+
+                debug_assert_eq!(rd1.to_reg(), ri1);
+                debug_assert_eq!(rd2.to_reg(), ri2);
+                let mem = mem.clone();
+
+                // CDSG
+                mem_rs_emit(
+                    rd1.to_reg(),
+                    rn1,
+                    &mem,
+                    None,
+                    Some(0xeb3e),
+                    true,
+                    sink,
+                    emit_info,
+                    state,
+                );
+            }
             &Inst::Fence => {
                 put(sink, &enc_e(0x07e0));
             }

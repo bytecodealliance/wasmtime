@@ -3520,6 +3520,66 @@ fn test_s390x_binemit() {
         "EB456FFF7F30",
         "csg %r4, %r5, 524287(%r6)",
     ));
+    insns.push((
+        Inst::AtomicCas128 {
+            rd: w_regpair,
+            ri: regpair,
+            rn: regpair,
+            mem: MemArg::BXD20 {
+                base: zero_reg(),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524287).unwrap(),
+                flags: MachMemFlags::trusted(),
+            },
+        },
+        "EB220001803E",
+        "cdsg %r2, %r2, -524287",
+    ));
+    insns.push((
+        Inst::AtomicCas128 {
+            rd: w_regpair,
+            ri: regpair,
+            rn: regpair,
+            mem: MemArg::BXD20 {
+                base: zero_reg(),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MachMemFlags::trusted(),
+            },
+        },
+        "EB220FFF7F3E",
+        "cdsg %r2, %r2, 524287",
+    ));
+    insns.push((
+        Inst::AtomicCas128 {
+            rd: w_regpair,
+            ri: regpair,
+            rn: regpair,
+            mem: MemArg::BXD20 {
+                base: gpr(6),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524287).unwrap(),
+                flags: MachMemFlags::trusted(),
+            },
+        },
+        "EB226001803E",
+        "cdsg %r2, %r2, -524287(%r6)",
+    ));
+    insns.push((
+        Inst::AtomicCas128 {
+            rd: w_regpair,
+            ri: regpair,
+            rn: regpair,
+            mem: MemArg::BXD20 {
+                base: gpr(6),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MachMemFlags::trusted(),
+            },
+        },
+        "EB226FFF7F3E",
+        "cdsg %r2, %r2, 524287(%r6)",
+    ));
     insns.push((Inst::Fence, "07E0", "bcr 14, 0"));
 
     insns.push((

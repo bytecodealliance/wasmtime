@@ -3709,6 +3709,29 @@
 
 ;;;; Rules for `atomic_cas` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Helper to move a 128-bit value from a VR to a RegPair of GPRs
+(decl vr_to_regpair (Reg) RegPair)
+(rule (vr_to_regpair src)
+      (let ((src_hi Reg (vec_extract_lane $I64X2 src 0 (zero_reg)))
+            (src_lo Reg (vec_extract_lane $I64X2 src 1 (zero_reg))))
+       (regpair src_hi src_lo)))
+
+;; Helper to move a 128-bit Value into a RegPair
+(decl i128_to_regpair (Value) RegPair)
+(rule (i128_to_regpair val)
+      (let ((src Reg val))
+        (vr_to_regpair src)))
+
+;; Helper to move a RegPair into a single vector register
+(decl regpair_to_vr (RegPair) Reg)
+(rule (regpair_to_vr pair)
+      (mov_to_vec128 $I64X2 (regpair_hi pair) (regpair_lo pair)))
+
+;; 128-bit big-endian atomic compare-and-swap instruction.
+(rule 3 (lower (atomic_cas $I128 (mem_flags_data flags @ (bigendian)) addr src1 src2))
+      (regpair_to_vr (atomic_cas128 (i128_to_regpair src1) (i128_to_regpair src2)
+                                    (lower_address flags addr (zero_offset)))))
+
 ;; 32/64-bit big-endian atomic compare-and-swap instruction.
 (rule 2 (lower (atomic_cas (ty_32_or_64 ty) (mem_flags_data flags @ (bigendian)) addr src1 src2))
       (atomic_cas_impl ty (put_in_reg src1) (put_in_reg src2)
