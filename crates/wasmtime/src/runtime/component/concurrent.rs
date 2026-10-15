@@ -1155,13 +1155,7 @@ impl<T> StoreContextMut<'_, T> {
     /// Only intended for use in Wasmtime's own testing.
     #[doc(hidden)]
     pub fn concurrent_state_table_size(&mut self) -> usize {
-        self.0
-            .concurrent_state_mut()
-            .unwrap()
-            .table
-            .get_mut()
-            .iter_mut()
-            .count()
+        self.0.concurrent_state_mut().unwrap().table.get_mut().len()
     }
 
     /// Spawn a background task to run as part of this instance's event loop.

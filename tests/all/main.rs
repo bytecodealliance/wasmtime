@@ -4,6 +4,7 @@ use wasmtime::Result;
 
 mod arrays;
 mod async_functions;
+mod async_table_capacity;
 mod call_hook;
 mod cli_tests;
 mod compile_time_builtins;

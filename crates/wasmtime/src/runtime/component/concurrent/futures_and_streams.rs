@@ -4929,6 +4929,9 @@ impl ConcurrentState {
         &mut self,
         origin: TransmitOrigin,
     ) -> Result<(TableId<TransmitHandle>, TableId<TransmitHandle>)> {
+        // All three entries must fit before inserting any of them so a full
+        // table does not leave an inaccessible state or handle behind.
+        self.table().ensure_capacity(3)?;
         let state_id = self.push(TransmitState::new(origin))?;
 
         let write = self.push(TransmitHandle::new(state_id))?;
