@@ -847,6 +847,59 @@ fn minimum_larger_than_reservation_without_moving(cfg: &mut Config) -> Result<()
     Ok(())
 }
 
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn imported_memory_larger_than_reservation_without_moving(cfg: &mut Config) -> Result<()> {
+    cfg.wasm_memory64(true);
+    cfg.wasm_multi_memory(true);
+    cfg.memory_reservation(65536);
+    cfg.memory_may_move(false);
+    let engine = Engine::new(cfg)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "m32" (memory 1))
+                (import "" "m64" (memory i64 1))
+                (func (export "load32") (param i32) (result i32)
+                    local.get 0
+                    i32.load8_u 0)
+                (func (export "load64") (param i64) (result i32)
+                    local.get 0
+                    i32.load8_u 1 offset=1)
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let m32 = Memory::new(&mut store, MemoryType::new(4, None)?)?;
+    let m64 = Memory::new(&mut store, MemoryType::new64(4, None)?)?;
+    m32.data_mut(&mut store)[4 * 65536 - 1] = 1;
+    m64.data_mut(&mut store)[4 * 65536 - 1] = 2;
+    let instance = Instance::new(&mut store, &module, &[m32.into(), m64.into()])?;
+    let load32 = instance.get_typed_func::<u32, u32>(&mut store, "load32")?;
+    let load64 = instance.get_typed_func::<u64, u32>(&mut store, "load64")?;
+
+    // Accesses beyond the importer's minimum size and the memory reservation,
+    // but within the actual memory's size, must succeed.
+    assert_eq!(load32.call(&mut store, 0x20000)?, 0);
+    assert_eq!(load32.call(&mut store, 4 * 65536 - 1)?, 1);
+    assert_eq!(load64.call(&mut store, 0x20000)?, 0);
+    assert_eq!(load64.call(&mut store, 4 * 65536 - 2)?, 2);
+
+    // Accesses past the actual memory's size must still trap.
+    let trap = load32
+        .call(&mut store, 4 * 65536)
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::MemoryOutOfBounds);
+    let trap = load64
+        .call(&mut store, 4 * 65536 - 1)
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::MemoryOutOfBounds);
+    Ok(())
+}
+
 #[test]
 fn new_memory_with_custom_page_size() -> Result<()> {
     let engine = Engine::default();
