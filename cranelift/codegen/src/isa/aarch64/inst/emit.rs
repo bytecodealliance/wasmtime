@@ -1949,7 +1949,7 @@ impl MachInstEmit for Inst {
                 /* Emit this:
                     again:
                      ldaxr{,b,h} x/w27, [x25]
-                     cmp         x27, x/w26 uxt{b,h}
+                     cmp         x/w27, x/w26 uxt{b,h}
                      b.ne        out
                      stlxr{,b,h} w24, x/w28, [x25]
                      cbnz        x24, again
@@ -1980,14 +1980,20 @@ impl MachInstEmit for Inst {
                 // ldaxr x27, [x25]
                 sink.put4(enc_ldaxr(ty, x27wr, x25));
 
-                // The top 32-bits are zero-extended by the ldaxr so we don't
-                // have to use UXTW, just the x-form of the register.
-                let (bit21, extend_op) = match ty {
-                    I8 => (0b1, 0b000000),
-                    I16 => (0b1, 0b001000),
-                    _ => (0b0, 0b000000),
+                // The top 32-bits are zero-extended by the ldaxr so for I64
+                // we don't have to use UXTW, just the x-form of the
+                // register. I8/I16 use UXTB/UXTH to only compare their
+                // respective widths, and I32 uses the w-form of the
+                // register (`sf` cleared) to only compare the low 32 bits,
+                // since the expected value may have garbage in its upper
+                // 32 bits (e.g. left behind by an `ireduce`).
+                let (sf, bit21, extend_op) = match ty {
+                    I8 => (0b1, 0b1, 0b000000),
+                    I16 => (0b1, 0b1, 0b001000),
+                    I32 => (0b0, 0b0, 0b000000),
+                    _ => (0b1, 0b0, 0b000000),
                 };
-                let bits_31_21 = 0b111_01011_000 | bit21;
+                let bits_31_21 = (sf << 10) | 0b011_01011_000 | bit21;
                 // cmp x27, x26 (== subs xzr, x27, x26)
                 sink.put4(enc_arith_rrr(bits_31_21, extend_op, xzrwr, x27, x26));
 
