@@ -27,8 +27,9 @@ use std::collections::HashMap;
 use std::hash::{Hash as _, Hasher};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, GetPtrSize,
-    ModuleInternedTypeIndex, ModuleTypesBuilder, NUM_COMPONENT_CONTEXT_SLOTS, PtrSize as _,
-    RuntimeDataIndex, StaticModuleIndex, VMOffsets, VmctxArrayIndex as _, WasmCompositeInnerType,
+    MemoryIndex, ModuleInternedTypeIndex, ModuleTypesBuilder, NUM_COMPONENT_CONTEXT_SLOTS,
+    PtrSize as _, RuntimeDataIndex, StaticModuleIndex, VMOffsets, VmctxArrayIndex as _,
+    WasmCompositeInnerType,
     component::{
         ComponentBuiltinFunctionIndex, LoweredIndex, ResourceIndex, RuntimeCallbackIndex,
         RuntimeComponentInstanceIndex, RuntimeMemoryIndex, RuntimePostReturnIndex,
@@ -90,6 +91,7 @@ enum VmType {
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
     )]
     VMAsanStackSupport,
+    VMDefinedShadowMemory,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -194,6 +196,9 @@ enum AliasRegionKey {
 
     /// An access of an exception object's tag-defined word.
     GcExnTagDefined,
+
+    /// An access of the shadow bytes of a linear memory (`VMDefinedShadowMemory`).
+    ShadowMemory,
 }
 
 impl AliasRegionKey {
@@ -1465,6 +1470,12 @@ where
     /// `memory.init` and `array.{new,init}_data`).
     pub fn data_segment_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
         self.region(func, AliasRegionKey::DataSegment)
+    }
+
+    /// Get the alias region for the shadow bytes of linear memories, which
+    /// watchpoint checks read before stores.
+    pub fn shadow_memory_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        self.region(func, AliasRegionKey::ShadowMemory)
     }
 }
 

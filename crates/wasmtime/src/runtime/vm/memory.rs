@@ -96,6 +96,11 @@ pub use self::mmap::MmapMemory;
 mod malloc;
 pub use self::malloc::MallocMemory;
 
+mod shadow;
+pub use self::shadow::ShadowMemory;
+#[cfg(feature = "debug")]
+pub use self::shadow::WATCH_DEBUG;
+
 #[cfg(feature = "pooling-allocator")]
 mod static_;
 #[cfg(feature = "pooling-allocator")]
@@ -385,6 +390,22 @@ impl Memory {
         }
     }
 
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    pub fn shadow(&self) -> Option<&ShadowMemory> {
+        match self {
+            Memory::Local(mem) => mem.shadow(),
+            Memory::Shared(_) => None,
+        }
+    }
+
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    pub fn shadow_mut(&mut self) -> Option<&mut ShadowMemory> {
+        match self {
+            Memory::Local(mem) => mem.shadow_mut(),
+            Memory::Shared(_) => None,
+        }
+    }
+
     /// Returns whether or not this memory needs initialization. It
     /// may not if it already has initial content thanks to a CoW
     /// mechanism.
@@ -543,6 +564,9 @@ pub struct LocalMemory {
     /// An optional CoW mapping that provides the initial content of this
     /// memory.
     memory_image: Option<MemoryImageSlot>,
+
+    /// The watchpoint shadow of this memory, when compiled code checks it.
+    shadow: Option<ShadowMemory>,
 }
 
 impl LocalMemory {
@@ -584,11 +608,17 @@ impl LocalMemory {
             Some(_) => unreachable!(),
             None => None,
         };
+        let shadow = if memory_tunables.watchpoints() {
+            Some(ShadowMemory::new(alloc.byte_size())?)
+        } else {
+            None
+        };
         Ok(LocalMemory {
             ty: *ty,
             alloc,
             memory_may_move: ty.memory_may_move(memory_tunables),
             memory_image,
+            shadow,
             memory_guard_size: memory_tunables.guard_size().try_into().unwrap(),
             memory_reservation: memory_tunables.reservation().try_into().unwrap(),
         })
@@ -711,6 +741,9 @@ impl LocalMemory {
                 if required_to_not_move_memory {
                     assert_eq!(base_ptr_before, self.alloc.base().as_mut_ptr());
                 }
+                if let Some(shadow) = &mut self.shadow {
+                    shadow.resize(new_byte_size)?;
+                }
 
                 Ok(Some((old_byte_size, new_byte_size)))
             }
@@ -729,6 +762,16 @@ impl LocalMemory {
 
     pub fn vmmemory(&self) -> VMMemoryDefinition {
         self.alloc.vmmemory()
+    }
+
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    pub fn shadow(&self) -> Option<&ShadowMemory> {
+        self.shadow.as_ref()
+    }
+
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    pub fn shadow_mut(&mut self) -> Option<&mut ShadowMemory> {
+        self.shadow.as_mut()
     }
 
     pub fn byte_size(&self) -> usize {

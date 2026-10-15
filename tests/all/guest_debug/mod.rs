@@ -512,3 +512,175 @@ check: handle
 
     Ok(())
 }
+
+/// Test write watchpoints on a stack variable: LLDB reports each write
+/// that changes `a` as a watchpoint stop, after the write.
+#[test]
+#[ignore]
+fn guest_debug_cli_fib_watchpoint() -> Result<()> {
+    let port = free_port();
+    let mut wt = WasmtimeWithGdbstub::spawn(
+        "run",
+        port,
+        &["-Ccache=n", GUEST_DEBUG_FIB],
+        Duration::from_secs(30),
+    )?;
+
+    let output = lldb_with_gdbstub_script(
+        port,
+        r#"
+b fib
+c
+br disable 1
+watchpoint set variable a
+c
+fr v
+c
+fr v
+watchpoint delete 1
+c
+"#,
+    )?;
+    wt.child.kill().ok();
+    wt.child.wait()?;
+
+    check_output(
+        &output,
+        r#"
+check: Watchpoint created: Watchpoint 1
+check: old value: 0
+check: new value: 1
+check: stop reason = watchpoint 1
+check: a = 1
+check: old value: 1
+check: new value: 2
+check: stop reason = watchpoint 1
+check: a = 2
+check: exited with status = 0
+"#,
+    )?;
+    Ok(())
+}
+
+/// A minimal GDB remote serial protocol client, for tests that need
+/// precise control over the packets sent.
+struct RspClient {
+    tcp: TcpStream,
+}
+
+impl RspClient {
+    fn connect(port: u16) -> Result<Self> {
+        let tcp = TcpStream::connect(("127.0.0.1", port))?;
+        tcp.set_read_timeout(Some(Duration::from_secs(30)))?;
+        Ok(Self { tcp })
+    }
+
+    /// Send a packet without waiting for a reply.
+    fn send(&mut self, payload: &str) -> Result<()> {
+        let checksum = payload.bytes().fold(0u8, |a, b| a.wrapping_add(b));
+        write!(self.tcp, "${payload}#{checksum:02x}")?;
+        Ok(())
+    }
+
+    /// Send a packet and return the reply packet's payload.
+    fn request(&mut self, payload: &str) -> Result<String> {
+        self.send(payload)?;
+        self.reply(payload)
+    }
+
+    /// Read the reply packet to `payload`, returning its payload.
+    fn reply(&mut self, payload: &str) -> Result<String> {
+        // Skip acks until the reply packet starts.
+        let mut byte = [0u8];
+        loop {
+            std::io::Read::read_exact(&mut self.tcp, &mut byte)?;
+            match byte[0] {
+                b'+' => continue,
+                b'$' => break,
+                other => bail!("unexpected byte {other:#x} before reply to {payload}"),
+            }
+        }
+        let mut reply = vec![];
+        loop {
+            std::io::Read::read_exact(&mut self.tcp, &mut byte)?;
+            if byte[0] == b'#' {
+                break;
+            }
+            reply.push(byte[0]);
+        }
+        let mut checksum = [0u8; 2];
+        std::io::Read::read_exact(&mut self.tcp, &mut checksum)?;
+        self.tcp.write_all(b"+")?;
+        let reply = String::from_utf8(reply)?;
+        eprintln!("RSP: {payload} -> {reply}");
+        Ok(reply)
+    }
+}
+
+/// Test write watchpoints at the protocol level: read watchpoints are
+/// rejected, overlapping watchpoints remain after each other's removal,
+/// and stops are reported after the write with the first watched address.
+#[test]
+#[ignore]
+fn guest_debug_rsp_watchpoints() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let wat = dir.path().join("watch.wat");
+    std::fs::write(
+        &wat,
+        r#"
+(module
+  (memory (export "memory") 1)
+  (func (export "_start")
+    (i32.store (i32.const 16) (i32.const 0x11223344))
+    (i32.store8 (i32.const 32) (i32.const 1))))
+"#,
+    )?;
+    let port = free_port();
+    let mut wt = WasmtimeWithGdbstub::spawn(
+        "run",
+        port,
+        &["-Ccache=n", wat.to_str().unwrap()],
+        Duration::from_secs(30),
+    )?;
+
+    let result = (|| -> Result<()> {
+        let mut rsp = RspClient::connect(port)?;
+        rsp.request("?")?;
+        // Step to the first instruction, so that the memory exists.
+        let reply = rsp.request("s")?;
+        assert!(reply.starts_with("T05"), "unexpected step reply: {reply}");
+
+        // Only write watchpoints are supported.
+        assert!(rsp.request("Z3,10,4")?.starts_with('E'));
+        assert!(rsp.request("Z4,10,4")?.starts_with('E'));
+        // Watchpoints must be within the memory.
+        assert!(rsp.request("Z2,fffe,4")?.starts_with('E'));
+
+        // Watch [16, 20) and the overlapping [18, 20), then remove the
+        // former: [18, 20) must still be watched.
+        assert_eq!(rsp.request("Z2,10,4")?, "OK");
+        assert_eq!(rsp.request("Z2,12,2")?, "OK");
+        assert_eq!(rsp.request("z2,10,4")?, "OK");
+        // Removing something never added fails.
+        assert!(rsp.request("z2,10,4")?.starts_with('E'));
+
+        // The store to [16, 20) stops, reporting the first watched byte,
+        // once the write has happened.
+        let reply = rsp.request("c")?;
+        assert!(
+            reply.starts_with("T05") && reply.contains("watch:12;"),
+            "unexpected stop reply: {reply}"
+        );
+        assert_eq!(rsp.request("m10,4")?, "44332211");
+
+        // With nothing watched, execution runs to completion.
+        assert_eq!(rsp.request("z2,12,2")?, "OK");
+        let reply = rsp.request("c")?;
+        assert!(reply.starts_with('W'), "unexpected exit reply: {reply}");
+        Ok(())
+    })();
+
+    wt.child.kill().ok();
+    wt.child.wait()?;
+    result
+}

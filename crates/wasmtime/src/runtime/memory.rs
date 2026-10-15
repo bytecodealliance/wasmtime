@@ -705,6 +705,32 @@ impl Memory {
         store.id() == self.instance.store_id()
     }
 
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    pub(crate) fn vm_shadow<'a>(
+        &self,
+        store: &'a StoreOpaque,
+    ) -> Option<&'a crate::runtime::vm::ShadowMemory> {
+        store[self.instance].get_defined_memory(self.index).shadow()
+    }
+
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    #[cfg(feature = "debug")]
+    pub(crate) fn vm_shadow_mut<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> Option<&'a mut crate::runtime::vm::ShadowMemory> {
+        self.instance
+            .get_mut(store)
+            .get_defined_memory_mut(self.index)
+            .shadow_mut()
+    }
+
+    /// Whether this is the same memory as `other`.
+    #[cfg(feature = "debug")]
+    pub(crate) fn same(&self, other: &Memory) -> bool {
+        self.instance == other.instance && self.index == other.index
+    }
+
     /// Returns a stable identifier for this memory within its store.
     ///
     /// This allows distinguishing memories when introspecting them

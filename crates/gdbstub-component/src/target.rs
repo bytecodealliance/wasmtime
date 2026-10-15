@@ -1,8 +1,8 @@
 //! gdbstub `Target` implementation.
 
-use crate::Debugger;
 use crate::addr::AddrSpaceLookup;
 use crate::api;
+use crate::{Debugger, Watchpoint};
 use gdbstub::arch::lldb::{Encoding, Format, Generic, Register};
 use gdbstub::common::{Endianness, Pid, Signal, Tid};
 use gdbstub::target::Target;
@@ -17,7 +17,8 @@ use gdbstub::target::ext::base::single_register_access::{
     SingleRegisterAccess, SingleRegisterAccessOps,
 };
 use gdbstub::target::ext::breakpoints::{
-    Breakpoints, BreakpointsOps, SwBreakpoint, SwBreakpointOps,
+    Breakpoints, BreakpointsOps, HwWatchpoint, HwWatchpointOps, SwBreakpoint, SwBreakpointOps,
+    WatchKind,
 };
 use gdbstub::target::ext::host_info::{HostInfo, HostInfoOps, HostInfoResponse};
 use gdbstub::target::ext::libraries::{Libraries, LibrariesOps};
@@ -235,6 +236,119 @@ impl<'a> Breakpoints for Debugger<'a> {
     #[inline(always)]
     fn support_sw_breakpoint(&mut self) -> Option<SwBreakpointOps<'_, Self>> {
         Some(self)
+    }
+
+    #[inline(always)]
+    fn support_hw_watchpoint(&mut self) -> Option<HwWatchpointOps<'_, Self>> {
+        Some(self)
+    }
+}
+
+impl<'a> Debugger<'a> {
+    /// Resolve a client watchpoint request to a `Watchpoint` covering
+    /// bytes that currently exist in one linear memory.
+    fn resolve_watchpoint(&self, addr: u64, len: u64) -> Option<Watchpoint> {
+        let addr = WasmAddr::from_raw(addr)?;
+        let len = u32::try_from(len).ok().filter(|&len| len > 0)?;
+        match self.addr_space.lookup(addr, self.debuggee) {
+            AddrSpaceLookup::Memory { memory, offset } => {
+                let end = u64::from(offset) + u64::from(len);
+                (end <= memory.size_bytes(self.debuggee)).then_some(Watchpoint { addr, len })
+            }
+            _ => None,
+        }
+    }
+
+    /// Set (`watch = true`) or clear the debuggee's watch on all bytes
+    /// of `w`.
+    fn set_watch(&self, w: Watchpoint, watch: bool) -> bool {
+        let AddrSpaceLookup::Memory { memory, offset } =
+            self.addr_space.lookup(w.addr, self.debuggee)
+        else {
+            return false;
+        };
+        let offset = u64::from(offset);
+        let len = u64::from(w.len);
+        let result = if watch {
+            memory.add_watchpoint(self.debuggee, offset, len)
+        } else {
+            memory.remove_watchpoint(self.debuggee, offset, len)
+        };
+        result.is_ok()
+    }
+}
+
+/// Write watchpoints.
+///
+/// The debuggee tracks watches per byte, so overlapping client
+/// watchpoints share bytes: removing one would also unwatch bytes
+/// that another still covers. We therefore keep the set of client
+/// watchpoints, and after clearing a removed watchpoint's bytes we
+/// re-watch every remaining watchpoint that overlaps it.
+///
+/// As in gdbserver, inserting a watchpoint identical (in address and
+/// length) to an existing one is a no-op, and a single removal
+/// removes it: the client reference-counts identical requests.
+impl<'a> HwWatchpoint for Debugger<'a> {
+    fn add_hw_watchpoint(
+        &mut self,
+        addr: u64,
+        len: u64,
+        kind: WatchKind,
+    ) -> TargetResult<bool, Self> {
+        // Wasmtime can only detect writes.
+        if kind != WatchKind::Write {
+            return Ok(false);
+        }
+        let Some(w) = self.resolve_watchpoint(addr, len) else {
+            return Ok(false);
+        };
+        if self.watchpoints.contains(&w) {
+            return Ok(true);
+        }
+        if !self.set_watch(w, true) {
+            return Ok(false);
+        }
+        self.watchpoints.push(w);
+        Ok(true)
+    }
+
+    fn remove_hw_watchpoint(
+        &mut self,
+        addr: u64,
+        len: u64,
+        kind: WatchKind,
+    ) -> TargetResult<bool, Self> {
+        if kind != WatchKind::Write {
+            return Ok(false);
+        }
+        let Some(w) = WasmAddr::from_raw(addr)
+            .zip(u32::try_from(len).ok())
+            .map(|(addr, len)| Watchpoint { addr, len })
+        else {
+            return Ok(false);
+        };
+        let Some(i) = self.watchpoints.iter().position(|x| *x == w) else {
+            return Ok(false);
+        };
+        self.watchpoints.swap_remove(i);
+        if !self.set_watch(w, false) {
+            return Err(TargetError::NonFatal);
+        }
+        let start = u64::from(w.addr.offset());
+        let end = start + u64::from(w.len);
+        let remaining = self
+            .watchpoints
+            .iter()
+            .filter(|x| x.overlaps(w.addr.module_index(), start, end))
+            .copied()
+            .collect::<Vec<_>>();
+        for x in remaining {
+            if !self.set_watch(x, true) {
+                return Err(TargetError::NonFatal);
+            }
+        }
+        Ok(true)
     }
 }
 
