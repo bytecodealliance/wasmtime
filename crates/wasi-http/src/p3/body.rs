@@ -1,6 +1,7 @@
+use crate::field_map::remove_forbidden;
 use crate::p3::bindings::http::types::{ErrorCode, Trailers};
 use crate::p3::helpers::FutureReaderExt;
-use crate::{Error, FieldMap, WasiHttpCtxView};
+use crate::{Error, FieldMap, ForbiddenHeaderFilter, WasiHttpCtxView};
 use bytes::Bytes;
 use core::iter;
 use core::num::NonZeroUsize;
@@ -714,7 +715,63 @@ where
     }
 }
 
+/// A wrapper around [http_body::Body], which removes forbidden fields from
+/// trailers
+pub(crate) struct BodyWithFilteredTrailers<T> {
+    body: T,
+    is_forbidden: ForbiddenHeaderFilter,
+}
+
+impl<T> http_body::Body for BodyWithFilteredTrailers<T>
+where
+    T: http_body::Body<Data = Bytes> + Unpin,
+{
+    type Data = T::Data;
+    type Error = T::Error;
+
+    #[inline]
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        let frame = match ready!(Pin::new(&mut self.as_mut().body).poll_frame(cx)) {
+            Some(Ok(frame)) => frame,
+            other => return Poll::Ready(other),
+        };
+        match frame.into_trailers() {
+            Ok(mut trailers) => {
+                remove_forbidden(&mut trailers, &self.is_forbidden);
+                Poll::Ready(Some(Ok(http_body::Frame::trailers(trailers))))
+            }
+            Err(frame) => Poll::Ready(Some(Ok(frame))),
+        }
+    }
+
+    #[inline]
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.body.size_hint()
+    }
+}
+
 pub(crate) trait BodyExt {
+    fn with_filtered_trailers(
+        self,
+        is_forbidden: ForbiddenHeaderFilter,
+    ) -> BodyWithFilteredTrailers<Self>
+    where
+        Self: Sized,
+    {
+        BodyWithFilteredTrailers {
+            body: self,
+            is_forbidden,
+        }
+    }
+
     fn with_state<T>(self, state: T) -> BodyWithState<Self, T>
     where
         Self: Sized,

@@ -54,9 +54,9 @@ impl Response {
     /// to a [`WasiHttpCtxView`].
     pub fn into_http_with_getter<T: 'static>(
         self,
-        store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), Error>> + Send + 'static,
-        getter: impl FnMut(&mut T) -> WasiHttpCtxView<'_> + Clone + Unpin + Send + 'static,
+        mut getter: impl FnMut(&mut T) -> WasiHttpCtxView<'_> + Clone + Unpin + Send + 'static,
     ) -> wasmtime::Result<http::Response<UnsyncBoxBody<Bytes, Error>>> {
         let res = http::Response::try_from(self)?;
         let (res, body) = res.into_parts();
@@ -69,7 +69,7 @@ impl Response {
                 trailers_rx,
                 result_tx,
             } => GuestBody::new(
-                store,
+                &mut store,
                 contents_rx,
                 trailers_rx,
                 result_tx,
@@ -80,6 +80,10 @@ impl Response {
             )?
             .boxed_unsync(),
             Body::Host { body, result_tx } => {
+                let is_forbidden = getter(store.as_context_mut().data_mut())
+                    .hooks
+                    .forbidden_header_filter();
+                let body = body.with_filtered_trailers(is_forbidden);
                 if let Some(limit) = content_length {
                     let (http_result_tx, http_result_rx) = oneshot::channel();
                     _ = result_tx.send(Box::new(async move {
@@ -92,7 +96,7 @@ impl Response {
                         .boxed_unsync()
                 } else {
                     _ = result_tx.send(Box::new(fut));
-                    body
+                    body.boxed_unsync()
                 }
             }
         };

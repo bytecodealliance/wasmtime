@@ -49,8 +49,9 @@ impl WasiHttpNamedView for NamedImportsData {
 }
 
 impl WasiHttpHooks for NamedImportsHooks {
-    fn is_forbidden_header(&mut self, name: &http::HeaderName) -> bool {
-        name == self.0
+    fn forbidden_header_filter(&mut self) -> wasmtime_wasi_http::ForbiddenHeaderFilter {
+        let forbidden = self.0;
+        std::sync::Arc::new(move |name| name == forbidden)
     }
 }
 
