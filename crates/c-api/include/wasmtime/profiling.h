@@ -119,8 +119,8 @@ typedef struct wasmtime_guestprofiler_module_set
  */
 WASM_API_EXTERN /* own */ wasmtime_error_t *
 wasmtime_guestprofiler_module_set_new(
-    const wasm_engine_t *engine, const wasmtime_guestprofiler_modules_t *modules,
-    size_t modules_len,
+    const wasm_engine_t *engine,
+    const wasmtime_guestprofiler_modules_t *modules, size_t modules_len,
     /* own */ wasmtime_guestprofiler_module_set_t **out);
 
 /**
