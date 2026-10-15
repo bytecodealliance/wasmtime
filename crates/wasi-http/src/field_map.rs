@@ -53,16 +53,7 @@ impl FieldMap {
     pub fn new_immutable(hooks: &mut dyn WasiHttpHooks, mut map: HeaderMap) -> Self {
         // Strip out all forbidden headers from `map` to ensure they're never
         // able to enter into a WASI guest.
-        let forbidden_keys = Vec::from_iter(map.keys().filter_map(|name| {
-            if hooks.is_forbidden_header(name) {
-                Some(name.clone())
-            } else {
-                None
-            }
-        }));
-        for name in forbidden_keys {
-            map.remove(&name);
-        }
+        remove_forbidden(&mut map, |name| hooks.is_forbidden_header(name));
 
         let size = Self::content_size(&map);
         Self {
@@ -509,5 +500,16 @@ mod tests {
         assert_eq!(map[CONTENT_LENGTH], "6");
         assert_eq!(map.get_all(CONTENT_LENGTH).iter().count(), 1);
         assert_eq!(map.size, FieldMap::content_size(&map.map));
+    }
+}
+
+/// Removes all fields from `map` whose name `is_forbidden`.
+pub(crate) fn remove_forbidden(
+    map: &mut HeaderMap,
+    mut is_forbidden: impl FnMut(&HeaderName) -> bool,
+) {
+    let forbidden_keys = Vec::from_iter(map.keys().filter(|name| is_forbidden(name)).cloned());
+    for name in forbidden_keys {
+        map.remove(&name);
     }
 }
