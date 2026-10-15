@@ -97,19 +97,48 @@ where
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
     #[inline]
-    pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results> {
+    pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Results> {
+        self.call_with_uncaught_exception(store, params, UncaughtException::Propagate)
+    }
+
+    /// Same as `call`, but with control over how an exception that escapes the
+    /// callee is reported.
+    ///
+    /// Calls crossing a component boundary pass `UncaughtException::Trap`,
+    /// since such an exception must become a trap rather than unwind.
+    pub(crate) fn call_with_uncaught_exception(
+        &self,
+        mut store: impl AsContextMut,
+        params: Params,
+        uncaught_exception: UncaughtException,
+    ) -> Result<Results> {
         let mut store = store.as_context_mut();
         store.0.validate_sync_call()?;
         let func = self.func.vm_func_ref(store.0);
-        unsafe {
-            Self::call_raw(
-                &mut store,
-                &self.ty,
-                func,
-                params,
-                UncaughtException::Propagate,
-            )
-        }
+        // SAFETY: `self.ty` is this function's type, checked when the
+        // `TypedFunc` was created, and `vm_func_ref` asserts that `func`
+        // belongs to `store`.
+        unsafe { Self::call_raw(&mut store, &self.ty, func, params, uncaught_exception) }
+    }
+
+    /// Calls this function without the `validate_sync_call` check that `call`
+    /// performs, and with control over how an escaping exception is reported.
+    ///
+    /// For calling into a component while servicing a guest call, such as the
+    /// destructor `Linker::preload_instance`'s trampolines run. Those run on a
+    /// fiber, which `validate_sync_call` rejects.
+    #[cfg(feature = "component-model")]
+    pub(crate) fn call_in_guest_call<T>(
+        &self,
+        store: &mut StoreContextMut<'_, T>,
+        params: Params,
+        uncaught_exception: UncaughtException,
+    ) -> Result<Results> {
+        let func = self.func.vm_func_ref(store.0);
+        // SAFETY: `self.ty` is this function's type, checked when the
+        // `TypedFunc` was created, and `vm_func_ref` asserts that `func`
+        // belongs to `store`.
+        unsafe { Self::call_raw(store, &self.ty, func, params, uncaught_exception) }
     }
 
     /// Invokes this WebAssembly function with the specified parameters.

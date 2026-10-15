@@ -271,6 +271,42 @@ impl Instance {
         }
     }
 
+    /// Looks up the destructor for the resource exported as `name`, which takes
+    /// the resource's `rep` and returns nothing, along with the instance that
+    /// defines the resource, if this component defines it at all.
+    ///
+    /// Returns `None` when `name` is not an exported resource, and
+    /// `Some(None)` when it is one with no destructor.
+    pub(crate) fn get_resource_destructor(
+        &self,
+        mut store: impl AsContextMut,
+        name: impl ExportLookup,
+    ) -> Result<Option<Option<(crate::TypedFunc<(u32,), ()>, Option<RuntimeInstance>)>>> {
+        let mut store = store.as_context_mut();
+        let Some((instance, export)) = self.lookup_export(store.0, name) else {
+            return Ok(None);
+        };
+        let Export::Type(TypeDef::Resource(id)) = export else {
+            return Ok(None);
+        };
+        // An abstract table belongs to a component or instance type, which is
+        // never instantiated and so has no destructor to run. Checking here
+        // avoids a panic in `dtor_and_instance`.
+        if !matches!(
+            instance.component().types()[*id],
+            TypeResourceTable::Concrete { .. }
+        ) {
+            return Ok(Some(None));
+        }
+        let (func_ref, defining_instance) = instance.dtor_and_instance(*id);
+        let Some(func_ref) = func_ref else {
+            return Ok(Some(None));
+        };
+        // SAFETY: the destructor is a valid funcref owned by this store.
+        let func = unsafe { crate::Func::from_vm_func_ref(store.0.id(), func_ref) };
+        Ok(Some(Some((func.typed(&mut store)?, defining_instance))))
+    }
+
     /// A methods similar to [`Component::get_export`] except for this
     /// instance.
     ///

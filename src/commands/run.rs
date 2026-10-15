@@ -205,6 +205,18 @@ impl RunCommand {
 #[derive(Parser, Default, Clone)]
 pub struct Preloads {
     /// Load the given WebAssembly module before the main module
+    ///
+    /// The preload must be the same flavor of wasm as the main module: a core
+    /// module for a core module, or a component for a component.
+    ///
+    /// For core modules, `NAME` is the import module name the preload's
+    /// exports are made available under. For components, `NAME` is the
+    /// instance import of the main component that the preload satisfies.
+    ///
+    /// In both cases the preload is instantiated once and shared, so any state
+    /// it holds persists across all calls into it. A component preload is
+    /// instantiated with the same linker as the main component, so it may use
+    /// WASI and may depend on preloads listed earlier on the command line.
     #[arg(
         long = "preload",
         number_of_values = 1,
@@ -431,19 +443,14 @@ impl RunCommand {
             for (name, path) in self.preloads.modules.iter() {
                 // Read the wasm module binary either as `*.wat` or a raw binary
                 let preload_target = self.run.load_module(&engine, path, None)?;
-                let preload_module = match preload_target {
-                    RunTarget::Core(m) => m,
-                    #[cfg(feature = "component-model")]
-                    RunTarget::Component(_) => {
-                        bail!("components cannot be loaded with `--preload`")
-                    }
-                };
-                profiled_modules.push((name.to_string(), preload_module.clone()));
 
-                // Add the module's functions to the linker.
-                match linker {
+                // A core module's imports are `(module, name)` pairs while a
+                // component's are named instances, so neither flavor of wasm
+                // can satisfy the other.
+                match (&mut *linker, preload_target) {
                     #[cfg(feature = "cranelift")]
-                    CliLinker::Core(linker) => {
+                    (CliLinker::Core(linker), RunTarget::Core(preload_module)) => {
+                        profiled_modules.push((name.to_string(), preload_module.clone()));
                         linker
                             .module_async(&mut *store, name, &preload_module)
                             .await
@@ -456,13 +463,34 @@ impl RunCommand {
                             })?;
                     }
                     #[cfg(not(feature = "cranelift"))]
-                    CliLinker::Core(_) => {
+                    (CliLinker::Core(_), RunTarget::Core(_)) => {
+                        let _ = name;
                         bail!("support for --preload disabled at compile time");
                     }
                     #[cfg(feature = "component-model")]
-                    CliLinker::Component(_) => {
-                        bail!("--preload cannot be used with components");
+                    (CliLinker::Component(linker), RunTarget::Component(preload_component)) => {
+                        self.preload_component(&mut *store, linker, name, &preload_component)
+                            .await
+                            .with_context(|| {
+                                format!(
+                                    "failed to process preload `{}` at `{}`",
+                                    name,
+                                    path.display()
+                                )
+                            })?;
                     }
+                    #[cfg(feature = "component-model")]
+                    (CliLinker::Core(_), RunTarget::Component(_)) => bail!(
+                        "cannot use the component `{}` as a `--preload` for a core wasm module; \
+                         preloads must be the same flavor of wasm as the main module",
+                        path.display(),
+                    ),
+                    #[cfg(feature = "component-model")]
+                    (CliLinker::Component(_), RunTarget::Core(_)) => bail!(
+                        "cannot use the core wasm module `{}` as a `--preload` for a component; \
+                         preloads must be the same flavor of wasm as the main module",
+                        path.display(),
+                    ),
                 }
             }
 
@@ -770,6 +798,24 @@ impl RunCommand {
         finish_epoch_handler(store);
 
         result
+    }
+
+    /// Instantiate a preloaded component and define its exports in `linker`
+    /// under `name`.
+    ///
+    /// Instantiating with the same `linker` that will later instantiate the
+    /// main component lets a preload use WASI and depend on preloads earlier
+    /// on the command line.
+    #[cfg(feature = "component-model")]
+    async fn preload_component(
+        &self,
+        store: &mut Store<Host>,
+        linker: &mut wasmtime::component::Linker<Host>,
+        name: &str,
+        component: &wasmtime::component::Component,
+    ) -> Result<()> {
+        let instance = linker.instantiate_async(&mut *store, component).await?;
+        linker.preload_instance(store, name, instance)
     }
 
     #[cfg(feature = "component-model")]

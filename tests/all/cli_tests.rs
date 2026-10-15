@@ -361,6 +361,97 @@ fn greeter_preload_callable_command() -> Result<()> {
     Ok(())
 }
 
+// Drives every kind of export and value across the trampoline: resources with
+// `own` and `borrow` handles (bare, nested in a `tuple`, and nested in a
+// `list`), a destructor, shared mutable state, an interface-named instance, and
+// a `future`, `stream` and `error-context`. See the two `.wat` files for what
+// each call checks and why.
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn preload_component_exports() -> Result<()> {
+    let stdout = run_wasmtime(&[
+        "run",
+        "-W",
+        "component-model-async-stackful,component-model-error-context",
+        "--preload",
+        "dep=tests/all/cli_tests/preload-exports-dep.wat",
+        "--invoke",
+        "run()",
+        "tests/all/cli_tests/preload-exports-main.wat",
+    ])?;
+    assert_eq!(stdout.trim(), "100120");
+    Ok(())
+}
+
+// An `async func`-typed import can only be satisfied by a concurrent host
+// function, so the trampoline picks its constructor from the import's
+// asyncness.
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn preload_component_async_func() -> Result<()> {
+    let stdout = run_wasmtime(&[
+        "run",
+        "--preload",
+        "dep=tests/all/cli_tests/preload-async-dep.wat",
+        "--invoke",
+        "run()",
+        "tests/all/cli_tests/preload-async-main.wat",
+    ])?;
+    assert_eq!(stdout.trim(), "()");
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn preload_component_errors() -> Result<()> {
+    let cases: &[(&[&str], &str)] = &[
+        (
+            &[
+                "run",
+                "--preload",
+                "dep=tests/all/cli_tests/preload-async-dep.wat",
+                "tests/all/cli_tests/hello_wasi_snapshot1.wat",
+            ],
+            "as a `--preload` for a core wasm module",
+        ),
+        (
+            &[
+                "run",
+                "--preload",
+                "dep=tests/all/cli_tests/greeter_reactor.wat",
+                "--invoke",
+                "run()",
+                "tests/all/cli_tests/preload-async-main.wat",
+            ],
+            "as a `--preload` for a component",
+        ),
+        (
+            &[
+                "run",
+                "-W",
+                "exceptions",
+                "--preload",
+                "dep=tests/all/cli_tests/preload-dtor-throw-dep.wat",
+                "--invoke",
+                "run()",
+                "tests/all/cli_tests/preload-dtor-throw-main.wat",
+            ],
+            "uncaught exception propagated out of component",
+        ),
+    ];
+
+    for (args, expected) in cases {
+        let output = get_wasmtime_command()?.args(*args).output()?;
+        assert!(!output.status.success(), "expected failure from {args:?}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(expected),
+            "expected {expected:?} from {args:?}, got stderr: {stderr}"
+        );
+    }
+    Ok(())
+}
+
 // Ensure successful WASI exit call with FPR saving frames on stack for Windows x64
 // See https://github.com/bytecodealliance/wasmtime/issues/1967
 #[test]

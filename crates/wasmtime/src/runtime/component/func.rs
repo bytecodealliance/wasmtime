@@ -273,6 +273,23 @@ impl Func {
         Ok(())
     }
 
+    /// Calls this function without the `validate_sync_call` check that `call`
+    /// performs.
+    ///
+    /// For calling into a component while servicing a guest call, as
+    /// `Linker::preload_instance`'s trampolines do. Those run on a fiber,
+    /// which `validate_sync_call` rejects, but the call itself is the same
+    /// work the runtime does whenever one component calls another.
+    pub(crate) fn call_in_guest_call<T>(
+        &self,
+        mut store: StoreContextMut<'_, T>,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
+        self.call_impl(store.as_context_mut(), params, results)?;
+        Ok(())
+    }
+
     /// Exactly like [`Self::call`] except for use on async stores.
     ///
     /// # Errors
