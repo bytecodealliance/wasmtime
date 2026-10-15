@@ -289,3 +289,21 @@ where
         self.iter_mut()
     }
 }
+
+impl<K, V> From<cranelift_entity::PrimaryMap<K, V>> for TryPrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn from(inner: cranelift_entity::PrimaryMap<K, V>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<K, V> From<TryPrimaryMap<K, V>> for cranelift_entity::PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn from(try_map: TryPrimaryMap<K, V>) -> Self {
+        try_map.inner
+    }
+}

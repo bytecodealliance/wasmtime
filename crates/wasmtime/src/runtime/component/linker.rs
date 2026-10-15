@@ -250,7 +250,7 @@ impl<T: 'static> Linker<T> {
         // using the import map within the component created at
         // component-compile-time.
         let env_component = component.env_component();
-        let mut imports = PrimaryMap::with_capacity(env_component.imports.len());
+        let mut imports = TryPrimaryMap::with_capacity(env_component.imports.len())?;
         for (idx, (import, names)) in env_component.imports.iter() {
             let (root, _) = &env_component.import_types[*import];
 
@@ -277,13 +277,13 @@ impl<T: 'static> Linker<T> {
                 // runtime imports are never instances.
                 Definition::Instance(_) => unreachable!(),
             };
-            let i = imports.push(import);
+            let i = imports.push(import)?;
             assert_eq!(i, idx);
         }
         Ok(unsafe {
             InstancePre::new_unchecked(
                 component.clone(),
-                try_new::<Arc<_>>(imports)?,
+                try_new::<Arc<_>>(PrimaryMap::from(imports))?,
                 imported_resources,
             )
         })
