@@ -365,6 +365,72 @@ async fn p3_http_echo_host_to_host() -> Result<()> {
     test_http_echo(P3_HTTP_ECHO_COMPONENT, false, true).await
 }
 
+/// A guest forwarding a host body as its response body must not be able to
+/// declare a `content-length` which does not match the body.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_echo_host_to_host_content_length() -> Result<()> {
+    async fn echo(declared: &str, body: &'static [u8]) -> Result<Result<Bytes, Error>> {
+        let engine = test_programs_artifacts::engine(|config| {
+            config.wasm_component_model_async(true);
+        });
+        let component = Component::from_file(&engine, P3_HTTP_ECHO_COMPONENT)?;
+        let mut store = Store::new(&engine, Ctx::new(oneshot::channel().0));
+        let mut linker = Linker::new(&engine);
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+        wasmtime_wasi::p3::add_to_linker(&mut linker)?;
+        wasmtime_wasi_http::p3::add_to_linker(&mut linker)?;
+        let service = Service::instantiate_async(&mut store, &component, &linker).await?;
+
+        // The echo service echoes the request headers, so the request's
+        // `content-length` becomes the response's. The request body is
+        // deliberately not checked against it here, to model a guest which
+        // sets a mismatched `content-length` on a forwarded host body.
+        let req = http::Request::builder()
+            .uri("http://localhost/")
+            .header("x-host-to-host", "true")
+            .header("content-length", declared)
+            .body(http_body_util::Full::new(Bytes::from_static(body)))?;
+        let (req, _io) = Request::from_http(&mut store.data_mut().hooks, req);
+        store
+            .run_concurrent(async |store| {
+                let res = service.handle(store, req).await?.unwrap();
+                let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
+                assert_eq!(res.headers()["content-length"], declared);
+                let body = res.into_body();
+                // `hyper` frames the response by the size hint and stops
+                // polling once the body reports end of stream, so these must
+                // match the declared length.
+                let declared = declared.parse::<u64>()?;
+                assert_eq!(body.size_hint().exact(), Some(declared));
+                let res = body.collect().await.map(|body| body.to_bytes());
+                Ok(res)
+            })
+            .await?
+    }
+
+    let body = echo("10", b"HELLOWORLD").await?.unwrap();
+    assert_eq!(body, "HELLOWORLD");
+
+    let err = echo("3", b"HELLOWORLD").await?.unwrap_err();
+    assert!(
+        matches!(err, Error::HttpResponseBodySize(Some(10))),
+        "{err:?}"
+    );
+
+    let err = echo("20", b"HELLOWORLD").await?.unwrap_err();
+    assert!(
+        matches!(err, Error::HttpResponseBodySize(Some(10))),
+        "{err:?}"
+    );
+
+    let err = echo("0", b"HTTP/1.1 302 Found\r\n\r\n").await?.unwrap_err();
+    assert!(
+        matches!(err, Error::HttpResponseBodySize(Some(_))),
+        "{err:?}"
+    );
+    Ok(())
+}
+
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_middleware() -> Result<()> {
     test_http_middleware(false).await
