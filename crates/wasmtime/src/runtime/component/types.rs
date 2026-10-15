@@ -958,16 +958,23 @@ impl Type {
     /// numerics, the empty `string`/`list`, `none` for `option`, `ok` for
     /// `result`, no flags set, and the first case of a `variant` or `enum`.
     ///
-    /// An `own` or `borrow` default is a fresh handle in `store`, with an
-    /// arbitrary representation and no destructor. Nothing can be done with
-    /// such a handle beyond passing it back to the component that defines the
-    /// resource.
+    /// An `own` or `borrow` of a host-defined resource defaults to a fresh
+    /// handle in `store`, with an arbitrary representation and no destructor.
+    /// Nothing can be done with such a handle beyond passing it back to the
+    /// component that the resource was defined for.
     ///
     /// # Errors
     ///
-    /// Returns an error for `future`, `stream`, and `error-context`, and for
-    /// any aggregate containing one, as there is currently no way to
-    /// synthesize these without statically knowing their payload type.
+    /// Returns an error for an `own` or `borrow` of a guest-defined resource,
+    /// whose representation belongs to the guest and so cannot be conjured by
+    /// the host.
+    ///
+    /// Returns an error for `future`, `stream`, and `error-context`, as there
+    /// is currently no way to synthesize these without statically knowing
+    /// their payload type.
+    ///
+    /// An aggregate containing any of the above is an error for the same
+    /// reason.
     ///
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error
     /// when memory allocation fails. See the `OutOfMemory` type's

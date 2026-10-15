@@ -104,6 +104,17 @@ impl ResourceType {
         }
     }
 
+    /// Returns whether this type was defined by the host, as opposed to by a
+    /// guest or by an uninstantiated or abstract component type.
+    pub(crate) fn is_host_defined(&self) -> bool {
+        match self.kind {
+            ResourceTypeKind::Host(_) | ResourceTypeKind::HostDynamic(_) => true,
+            ResourceTypeKind::Guest { .. }
+            | ResourceTypeKind::Uninstantiated { .. }
+            | ResourceTypeKind::Abstract { .. } => false,
+        }
+    }
+
     pub(crate) fn as_host_dynamic(&self) -> Option<u32> {
         match self.kind {
             ResourceTypeKind::HostDynamic(payload) => Some(payload),

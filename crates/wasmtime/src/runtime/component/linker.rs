@@ -370,8 +370,9 @@ impl<T: 'static> Linker<T> {
     /// Values are built when the import is called, not here, as a handle's
     /// type depends on the instance it is flowing into.
     ///
-    /// A `future`, `stream`, or `error-context` result has no default. Such an
-    /// import is still defined, but traps when called rather than preventing
+    /// Not every result has a default: a `future`, `stream`, or
+    /// `error-context`, or a guest-defined resource, has none. Such an import
+    /// is still defined, but traps when called rather than preventing
     /// instantiation, so a component which never calls it can still be run.
     ///
     /// # Errors

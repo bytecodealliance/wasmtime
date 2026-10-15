@@ -139,11 +139,20 @@ impl ResourceAny {
     /// `Linker::define_unknown_imports_as_default_values`.
     ///
     /// No destructor is attached.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `ty` is not host-defined. A guest resource's
+    /// representation belongs to the guest that defines it, so the host
+    /// cannot conjure an instance of one.
     pub(crate) fn new_own_dynamic(
         ty: ResourceType,
         rep: u32,
         mut store: impl AsContextMut,
     ) -> Result<Self> {
+        if !ty.is_host_defined() {
+            bail!("cannot synthesize a resource of a non-host-defined type");
+        }
         let store = store.as_context_mut();
         let idx =
             HostResourceTables::new_host(store.0)?.host_resource_lower_own(rep, None, None)?;

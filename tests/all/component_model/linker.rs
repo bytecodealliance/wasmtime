@@ -358,6 +358,65 @@ fn linker_default_value_imports_are_callable() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn linker_cannot_default_guest_defined_resources() -> Result<()> {
+    let engine = Engine::default();
+
+    // Instantiate a component which defines a resource, to get a live
+    // guest-defined `ResourceType`.
+    let producer = Component::new(
+        &engine,
+        r#"(component
+            (core module $m (func (export "dtor") (param i32)))
+            (core instance $mi (instantiate $m))
+            (type $r (resource (rep i32) (dtor (core func $mi "dtor"))))
+            (export "r" (type $r))
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let producer = Linker::<()>::new(&engine).instantiate(&mut store, &producer)?;
+    let guest_ty = producer.get_resource(&mut store, "r").unwrap();
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "types" (instance $t (export "r" (type (sub resource)))))
+            (alias export $t "r" (type $r))
+            (import "f" (func $fn (result (own $r))))
+
+            (core func $lowered (canon lower (func $fn)))
+            (core module $m
+                (import "" "f" (func $f (result i32)))
+                (func (export "run") (result i32) call $f)
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance (export "f" (func $lowered))))))
+            (func (export "run") (result (own $r))
+                (canon lift (core func $i "run")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker
+        .instance("types")?
+        .resource("r", guest_ty, |_, _| Ok(()))?;
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
+
+    // Instantiating still works; only calling the import fails.
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+    let mut results = [Val::Bool(false)];
+    let err = run.call(&mut store, &[], &mut results).unwrap_err();
+    let err = format!("{err:?}");
+    assert!(
+        err.contains("cannot synthesize a resource of a non-host-defined type"),
+        "unexpected error: {err}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn linker_default_value_resources_use_the_instances_type() -> Result<()> {
     let engine = Engine::default();
     let component = Component::new(
