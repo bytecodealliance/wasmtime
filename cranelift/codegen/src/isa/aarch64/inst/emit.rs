@@ -1949,7 +1949,7 @@ impl MachInstEmit for Inst {
                 /* Emit this:
                     again:
                      ldaxr{,b,h} x/w27, [x25]
-                     cmp         x27, x/w26 uxt{b,h}
+                     cmp         x27, x/w26 uxt{b,h,w}
                      b.ne        out
                      stlxr{,b,h} w24, x/w28, [x25]
                      cbnz        x24, again
@@ -1980,15 +1980,17 @@ impl MachInstEmit for Inst {
                 // ldaxr x27, [x25]
                 sink.put4(enc_ldaxr(ty, x27wr, x25));
 
-                // The top 32-bits are zero-extended by the ldaxr so we don't
-                // have to use UXTW, just the x-form of the register.
+                // The loaded value in x27 is zero-extended by the ldaxr, but the
+                // upper bits of the expected value in x26 are unspecified for
+                // narrow types, so compare against its zero-extension.
                 let (bit21, extend_op) = match ty {
                     I8 => (0b1, 0b000000),
                     I16 => (0b1, 0b001000),
+                    I32 => (0b1, 0b010000),
                     _ => (0b0, 0b000000),
                 };
                 let bits_31_21 = 0b111_01011_000 | bit21;
-                // cmp x27, x26 (== subs xzr, x27, x26)
+                // cmp x27, x/w26 uxt{b,h,w} (== subs xzr, x27, x/w26 uxt{b,h,w})
                 sink.put4(enc_arith_rrr(bits_31_21, extend_op, xzrwr, x27, x26));
 
                 // b.ne out
