@@ -3892,8 +3892,10 @@
 (rule 2 (is_nonzero (band _ a @ (value_type (ty_int (fits_in_64 ty))) b))
       (is_nonzero_band ty a b))
 
-;; Using the flags output of `uadd_overflow` can produce a `CC` and give an
-;; opportunistic def of the other output.
+;; Using the flags output of `uadd_overflow`, `usub_overflow`, `sadd_overflow`
+;; or `ssub_overflow` can produce a `CC` and give an opportunistic def of the
+;; other output. The `add`/`sub` itself sets the flags: CF is the carry or
+;; borrow (unsigned overflow, `CC.B`) and OF is signed overflow (`CC.O`).
 (rule 3
       (is_nonzero
        (is_second_result uadd @ (uadd_overflow (fits_in_64 ty) x y)))
@@ -3902,6 +3904,33 @@
         (CondResult.CC
          (produces_flags_opportunistic_def producer sum_value)
          (CC.B))))
+
+(rule 3
+      (is_nonzero
+       (is_second_result usub @ (usub_overflow (fits_in_64 ty) x y)))
+      (if-let (first_result diff_value) usub)
+      (let ((producer ProducesFlags (x64_sub_with_flags_paired ty x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer diff_value)
+         (CC.B))))
+
+(rule 3
+      (is_nonzero
+       (is_second_result sadd @ (sadd_overflow (fits_in_64 ty) x y)))
+      (if-let (first_result sum_value) sadd)
+      (let ((producer ProducesFlags (x64_add_with_flags_paired ty x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer sum_value)
+         (CC.O))))
+
+(rule 3
+      (is_nonzero
+       (is_second_result ssub @ (ssub_overflow (fits_in_64 ty) x y)))
+      (if-let (first_result diff_value) ssub)
+      (let ((producer ProducesFlags (x64_sub_with_flags_paired ty x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer diff_value)
+         (CC.O))))
 
 ;; Using the flags output of `umul_overflow`/`smul_overflow` can produce a
 ;; `CC` and give an opportunistic def of the other output. The multiply
