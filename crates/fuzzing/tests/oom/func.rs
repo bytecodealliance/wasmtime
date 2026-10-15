@@ -1,6 +1,8 @@
 #![cfg(arc_try_new)]
 
-use wasmtime::{Config, Engine, Func, FuncType, Linker, Module, Result, Store, Val, ValType};
+use wasmtime::{
+    Config, Engine, Func, FuncType, Instance, Linker, Module, Result, Store, Val, ValType,
+};
 use wasmtime_fuzzing::oom::OomTest;
 
 #[test]
@@ -33,6 +35,31 @@ fn func_new_with_type() -> Result<()> {
         })?;
         Ok(())
     })
+}
+
+#[test]
+fn func_new_with_type_then_instantiate() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, "(module)")?;
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .alloc_succeeds_after_oom(true)
+        .test(|| {
+            let mut store = Store::try_new(&engine, ())?;
+            let ty = FuncType::try_new(&engine, [ValType::I32], [ValType::I32])?;
+            let func = Func::try_new(&mut store, ty, |_caller, params, results| {
+                results[0] = params[0].clone();
+                Ok(())
+            });
+            // Whether or not creating the function hit OOM, the store must
+            // still be usable afterwards.
+            Instance::new(&mut store, &module, &[])?;
+            func?;
+            Ok(())
+        })
 }
 
 #[test]

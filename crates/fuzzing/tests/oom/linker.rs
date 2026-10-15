@@ -1,6 +1,6 @@
 #![cfg(arc_try_new)]
 
-use wasmtime::{Config, Engine, Func, FuncType, Linker, Module, Result, Store};
+use wasmtime::{Config, Engine, Func, FuncType, Instance, Linker, Module, Result, Store};
 use wasmtime_fuzzing::oom::OomTest;
 
 #[test]
@@ -170,6 +170,31 @@ fn linker_get() -> Result<()> {
         let _item = linker.get(&mut store, "mod", "func")?;
         Ok(())
     })
+}
+
+#[test]
+fn linker_get_then_instantiate() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, "(module)")?;
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .alloc_succeeds_after_oom(true)
+        .test(|| {
+            let mut store = Store::try_new(&engine, ())?;
+            let mut linker = Linker::<()>::new(&engine);
+            linker.func_wrap("mod", "func", || {})?;
+            let item = linker.get(&mut store, "mod", "func");
+            // Drop the linker so the store holds the only remaining reference
+            // to the host function, if any. Whether or not `get` hit OOM, the
+            // store must still be usable afterwards.
+            drop(linker);
+            Instance::new(&mut store, &module, &[])?;
+            item?;
+            Ok(())
+        })
 }
 
 #[test]

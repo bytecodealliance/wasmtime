@@ -8,7 +8,7 @@
 #![no_std]
 #![deny(missing_docs)]
 #![cfg_attr(arc_try_new, allow(unstable_features))]
-#![cfg_attr(arc_try_new, feature(allocator_api))]
+#![cfg_attr(arc_try_new, feature(allocator_ext))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
