@@ -682,21 +682,15 @@ where
 
     #[inline]
     fn is_end_stream(&self) -> bool {
-        self.body.is_end_stream()
+        // Do not report end of stream before `limit` bytes were sent, otherwise
+        // the consumer might stop polling before a short write is detected in
+        // `poll_frame`.
+        self.sent == self.limit && self.body.is_end_stream()
     }
 
     #[inline]
     fn size_hint(&self) -> http_body::SizeHint {
-        let n = self.limit.saturating_sub(self.sent);
-        let mut hint = self.body.size_hint();
-        if hint.lower() >= n {
-            hint.set_exact(n)
-        } else if let Some(max) = hint.upper() {
-            hint.set_upper(n.min(max))
-        } else {
-            hint.set_upper(n)
-        }
-        hint
+        http_body::SizeHint::with_exact(self.limit.saturating_sub(self.sent))
     }
 }
 
@@ -787,3 +781,95 @@ pub(crate) trait BodyExt {
 }
 
 impl<T> BodyExt for T {}
+
+#[cfg(test)]
+mod tests {
+    use super::BodyExt as _;
+    use crate::Error;
+    use bytes::Bytes;
+    use core::pin::pin;
+    use core::task::{Context, Poll, Waker};
+    use http_body::Body as _;
+    use http_body_util::{BodyExt as _, Full};
+    use tokio::sync::oneshot;
+
+    /// A body shorter than its `Content-Length` must not report end of stream
+    /// or a size hint based on its actual length, otherwise a consumer like
+    /// `hyper` frames the message by the wrong length without ever observing
+    /// the short write.
+    #[test]
+    fn content_length_short_body() {
+        let (error_tx, mut error_rx) = oneshot::channel();
+        let body = Full::new(Bytes::from_static(b"hello"))
+            .map_err(|never| match never {})
+            .with_content_length(10, error_tx, Error::HttpResponseBodySize);
+        let mut body = pin!(body);
+        assert!(!body.is_end_stream());
+        assert_eq!(body.size_hint().exact(), Some(10));
+
+        let mut cx = Context::from_waker(Waker::noop());
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Ok(frame))) => assert_eq!(frame.into_data().unwrap(), "hello"),
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(!body.is_end_stream());
+        assert_eq!(body.size_hint().exact(), Some(5));
+
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Err(Error::HttpResponseBodySize(Some(5))))) => {}
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(matches!(
+            error_rx.try_recv(),
+            Ok(Error::HttpResponseBodySize(Some(5)))
+        ));
+    }
+
+    /// A body longer than its `Content-Length` must fail before any data
+    /// exceeding the limit is produced.
+    #[test]
+    fn content_length_long_body() {
+        let (error_tx, mut error_rx) = oneshot::channel();
+        let body = Full::new(Bytes::from_static(b"helloworld"))
+            .map_err(|never| match never {})
+            .with_content_length(3, error_tx, Error::HttpResponseBodySize);
+        let mut body = pin!(body);
+        assert!(!body.is_end_stream());
+        assert_eq!(body.size_hint().exact(), Some(3));
+
+        let mut cx = Context::from_waker(Waker::noop());
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Err(Error::HttpResponseBodySize(Some(10))))) => {}
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(matches!(
+            error_rx.try_recv(),
+            Ok(Error::HttpResponseBodySize(Some(10)))
+        ));
+    }
+
+    /// A body matching its `Content-Length` is passed through unchanged.
+    #[test]
+    fn content_length_exact_body() {
+        let (error_tx, mut error_rx) = oneshot::channel();
+        let body = Full::new(Bytes::from_static(b"hello"))
+            .map_err(|never| match never {})
+            .with_content_length(5, error_tx, Error::HttpResponseBodySize);
+        let mut body = pin!(body);
+        assert!(!body.is_end_stream());
+        assert_eq!(body.size_hint().exact(), Some(5));
+
+        let mut cx = Context::from_waker(Waker::noop());
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Ok(frame))) => assert_eq!(frame.into_data().unwrap(), "hello"),
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(body.is_end_stream());
+        assert_eq!(body.size_hint().exact(), Some(0));
+        assert!(matches!(
+            body.as_mut().poll_frame(&mut cx),
+            Poll::Ready(None)
+        ));
+        assert!(error_rx.try_recv().is_err());
+    }
+}
