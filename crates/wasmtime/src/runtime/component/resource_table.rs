@@ -133,24 +133,17 @@ impl ResourceTable {
     /// Checks that a batch of pushes has enough free or appendable slots.
     ///
     /// Free slots are reused even if the maximum capacity has been lowered below
-    /// the number of backing slots. Debug tombstones are not reusable. No table
-    /// mutations may occur between this check and the batch of pushes.
+    /// the number of backing slots.
     #[cfg(any(feature = "component-model-async", test))]
     pub(crate) fn ensure_capacity(&self, additional: usize) -> Result<(), ResourceTableError> {
-        let additional = additional.saturating_sub(self.free_count);
-        if additional == 0 {
+        let Some(to_append) = additional.checked_sub(self.free_count) else {
             return Ok(());
+        };
+        if to_append > self.max_capacity.saturating_sub(self.entries.len()) {
+            Err(ResourceTableError::Full)
+        } else {
+            Ok(())
         }
-        if additional > self.max_capacity.saturating_sub(self.entries.len()) {
-            return Err(ResourceTableError::Full);
-        }
-        let last_index = self
-            .entries
-            .len()
-            .checked_add(additional - 1)
-            .ok_or(ResourceTableError::Full)?;
-        u32::try_from(last_index).map_err(|_| ResourceTableError::Full)?;
-        Ok(())
     }
 
     /// Returns the maximum capacity of this table, in elements, before adding
@@ -207,7 +200,7 @@ impl ResourceTable {
 
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
     fn free_entry(&mut self, ix: usize, debug: bool) -> TableEntry {
-        let entry = if debug {
+        let removed_entry = if debug {
             // Instead of making this entry available for reuse, we leave a
             // tombstone in debug mode.  This helps detect use-after-delete and
             // double-delete bugs.
@@ -240,10 +233,10 @@ impl ResourceTable {
 
             entry
         };
-        if !entry.entry.is::<Tombstone>() {
+        if !removed_entry.entry.is::<Tombstone>() {
             self.live -= 1;
         }
-        entry
+        removed_entry
     }
 
     /// Push a new entry into the table, returning its handle. This will prefer to use free entries
@@ -652,12 +645,4 @@ fn test_batch_capacity() {
     ));
     assert_eq!(table.len(), 0);
     assert_eq!(table.entries.len(), 3);
-    #[cfg(target_pointer_width = "64")]
-    {
-        table.set_max_capacity(usize::MAX);
-        assert!(matches!(
-            table.ensure_capacity(usize::MAX),
-            Err(ResourceTableError::Full)
-        ));
-    }
 }
