@@ -1,2342 +1,6 @@
 
 # cargo-vet imports lock
 
-[[unpublished.cranelift]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-assembler-x64]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-assembler-x64-meta]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-bforest]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-bforest]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-bforest]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-bitset]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-bitset]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-bitset]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-codegen]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-codegen]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-codegen]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-codegen-meta]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-codegen-shared]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-control]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-control]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-control]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-control]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-control]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-control]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-control]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-control]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-control]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-control]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-control]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-control]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-control]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-control]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-control]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-control]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-control]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-control]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-control]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-control]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-control]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-entity]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-entity]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-entity]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-frontend]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-frontend]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-frontend]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-interpreter]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-isle]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-isle]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-isle]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-jit]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-jit]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-jit]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-module]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-module]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-module]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-module]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-module]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-module]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-module]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-module]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-module]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-module]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-module]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-module]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-module]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-module]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-module]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-module]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-module]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-module]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-module]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-module]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-module]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-native]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-native]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-native]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-native]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-native]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-native]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-native]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-native]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-native]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-native]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-native]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-native]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-native]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-native]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-native]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-native]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-native]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-native]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-native]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-native]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-native]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-object]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-object]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-object]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-object]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-object]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-object]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-object]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-object]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-object]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-object]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-object]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-object]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-object]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-object]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-object]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-object]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-object]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-object]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-object]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-object]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-object]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-reader]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-reader]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-reader]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-serde]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-serde]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-serde]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.121.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.122.0"
-audited_as = "0.120.0"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.0"
-audited_as = "0.121.1"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.1"
-audited_as = "0.123.0"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.2"
-audited_as = "0.123.1"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.3"
-audited_as = "0.123.2"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.4"
-audited_as = "0.123.3"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.5"
-audited_as = "0.123.4"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.6"
-audited_as = "0.123.5"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.7"
-audited_as = "0.123.6"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.8"
-audited_as = "0.123.7"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.9"
-audited_as = "0.123.8"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.10"
-audited_as = "0.123.9"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.11"
-audited_as = "0.123.10"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.12"
-audited_as = "0.123.11"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.13"
-audited_as = "0.123.12"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.14"
-audited_as = "0.123.13"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.15"
-audited_as = "0.123.14"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.16"
-audited_as = "0.123.15"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.17"
-audited_as = "0.123.16"
-
-[[unpublished.cranelift-srcgen]]
-version = "0.123.18"
-audited_as = "0.123.17"
-
-[[unpublished.pulley-interpreter]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.pulley-interpreter]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.pulley-interpreter]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.pulley-macros]]
-version = "35.0.0"
-audited_as = "34.0.0"
-
-[[unpublished.pulley-macros]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.pulley-macros]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.pulley-macros]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.pulley-macros]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.pulley-macros]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.pulley-macros]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.pulley-macros]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.pulley-macros]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.pulley-macros]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.pulley-macros]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.pulley-macros]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.pulley-macros]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.pulley-macros]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.pulley-macros]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.pulley-macros]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.pulley-macros]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.pulley-macros]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.pulley-macros]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.pulley-macros]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasi-common]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasi-common]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasi-common]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasi-common]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasi-common]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasi-common]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasi-common]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasi-common]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasi-common]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasi-common]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasi-common]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasi-common]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasi-common]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasi-common]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasi-common]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasi-common]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasi-common]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasi-common]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasi-common]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasi-common]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasi-common]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-asm-macros]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-asm-macros]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-cache]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-cache]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-cli]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-cli]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-cli]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-cli-flags]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-component-macro]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-component-macro]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-component-util]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-component-util]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-cranelift]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-cranelift]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-environ]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-environ]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-environ]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-explorer]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-explorer]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-fiber]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-fiber]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-internal-asm-macros]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-asm-macros]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-asm-macros]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-asm-macros]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
 [[unpublished.wasmtime-internal-asm-macros]]
 version = "36.0.4"
 audited_as = "36.0.3"
@@ -2394,2452 +58,12 @@ version = "36.0.17"
 audited_as = "36.0.16"
 
 [[unpublished.wasmtime-internal-asm-macros]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-c-api-macros]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-cache]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-component-macro]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-component-util]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-cranelift]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-explorer]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-fiber]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-jit-debug]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-math]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-slab]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-unwinder]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-versioned-export-macros]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-winch]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-wit-bindgen]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-internal-wmemcheck]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-jit-debug]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-jit-debug]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-jit-icache-coherence]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-jit-icache-coherence]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-math]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-math]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-slab]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-slab]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-wasi]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-wasi-config]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-wasi-http]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-wasi-io]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-wasi-keyvalue]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-wasi-nn]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-wasi-threads]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-wasi-tls]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.0"
-audited_as = "35.0.0"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-wasi-tls-nativetls]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-wast]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wast]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wasmtime-wast]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wasmtime-winch]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-winch]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wit-bindgen]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wit-bindgen]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wmemcheck]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wasmtime-wmemcheck]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wiggle]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wiggle]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wiggle]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wiggle]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wiggle]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wiggle]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wiggle]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wiggle]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wiggle]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wiggle]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wiggle]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wiggle]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wiggle]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wiggle]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wiggle]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wiggle]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wiggle]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wiggle]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wiggle]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wiggle]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wiggle]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wiggle-generate]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wiggle-generate]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wiggle-generate]]
-version = "36.0.18"
-audited_as = "36.0.17"
-
-[[unpublished.wiggle-macro]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wiggle-macro]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.wiggle-macro]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.wiggle-macro]]
 version = "36.0.18"
 audited_as = "36.0.17"
 
 [[unpublished.wiggle-test]]
 version = "0.0.0"
 audited_as = "0.1.0"
-
-[[unpublished.winch-codegen]]
-version = "34.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.winch-codegen]]
-version = "35.0.0"
-audited_as = "33.0.0"
-
-[[unpublished.winch-codegen]]
-version = "36.0.0"
-audited_as = "34.0.1"
-
-[[unpublished.winch-codegen]]
-version = "36.0.1"
-audited_as = "36.0.0"
-
-[[unpublished.winch-codegen]]
-version = "36.0.2"
-audited_as = "36.0.1"
-
-[[unpublished.winch-codegen]]
-version = "36.0.3"
-audited_as = "36.0.2"
-
-[[unpublished.winch-codegen]]
-version = "36.0.4"
-audited_as = "36.0.3"
-
-[[unpublished.winch-codegen]]
-version = "36.0.5"
-audited_as = "36.0.4"
-
-[[unpublished.winch-codegen]]
-version = "36.0.6"
-audited_as = "36.0.5"
-
-[[unpublished.winch-codegen]]
-version = "36.0.7"
-audited_as = "36.0.6"
-
-[[unpublished.winch-codegen]]
-version = "36.0.8"
-audited_as = "36.0.7"
-
-[[unpublished.winch-codegen]]
-version = "36.0.9"
-audited_as = "36.0.8"
-
-[[unpublished.winch-codegen]]
-version = "36.0.10"
-audited_as = "36.0.9"
-
-[[unpublished.winch-codegen]]
-version = "36.0.11"
-audited_as = "36.0.10"
-
-[[unpublished.winch-codegen]]
-version = "36.0.12"
-audited_as = "36.0.11"
-
-[[unpublished.winch-codegen]]
-version = "36.0.13"
-audited_as = "36.0.12"
-
-[[unpublished.winch-codegen]]
-version = "36.0.14"
-audited_as = "36.0.13"
-
-[[unpublished.winch-codegen]]
-version = "36.0.15"
-audited_as = "36.0.14"
-
-[[unpublished.winch-codegen]]
-version = "36.0.16"
-audited_as = "36.0.15"
-
-[[unpublished.winch-codegen]]
-version = "36.0.17"
-audited_as = "36.0.16"
-
-[[unpublished.winch-codegen]]
-version = "36.0.18"
-audited_as = "36.0.17"
 
 [[publisher.aho-corasick]]
 version = "1.0.2"
@@ -5044,124 +268,104 @@ user-login = "jrmuizel"
 user-name = "Jeff Muizelaar"
 
 [[publisher.cranelift]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-assembler-x64]]
-version = "0.123.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-assembler-x64-meta]]
-version = "0.123.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-bforest]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-bitset]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-codegen]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-codegen-meta]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-codegen-shared]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-control]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-entity]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-frontend]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-interpreter]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-isle]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-jit]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-module]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-native]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-object]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-reader]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-serde]]
-version = "0.121.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.cranelift-srcgen]]
-version = "0.123.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "0.123.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.derive_arbitrary]]
 version = "1.4.0"
@@ -5380,16 +584,14 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.pulley-interpreter]]
-version = "36.0.2"
-when = "2025-08-26"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.pulley-macros]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.quote]]
 version = "1.0.36"
@@ -5658,10 +860,9 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.wasi-common]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasm-bindgen]]
 version = "0.2.97"
@@ -5753,28 +954,24 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-cli]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-cli-flags]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-environ]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-asm-macros]]
 version = "36.0.3"
@@ -5783,160 +980,134 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-internal-c-api-macros]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-cache]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-component-macro]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-component-util]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-cranelift]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-explorer]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-fiber]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-jit-debug]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-jit-icache-coherence]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-math]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-slab]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-unwinder]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-versioned-export-macros]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-winch]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-wit-bindgen]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-wmemcheck]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-config]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-http]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-io]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-keyvalue]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-nn]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-threads]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-tls]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-tls-nativetls]]
-version = "36.0.3"
-when = "2025-11-11"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wast]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wast]]
 version = "236.0.0"
@@ -5958,22 +1129,19 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wiggle]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wiggle-generate]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wiggle-macro]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wiggle-test]]
 version = "0.1.0"
@@ -5990,10 +1158,9 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.winch-codegen]]
-version = "34.0.1"
-when = "2025-06-24"
-user-id = 73222
-user-login = "wasmtime-publish"
+version = "36.0.18"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.windows]]
 version = "0.52.0"
@@ -6250,6 +1417,476 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[audits.bytecode-alliance.wildcard-audits.cranelift]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-assembler-x64]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-assembler-x64-meta]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-bforest]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-bitset]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-codegen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-codegen-meta]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-codegen-shared]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-control]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-entity]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-frontend]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-interpreter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-isle]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-jit]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-module]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-native]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-object]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-reader]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-serde]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.cranelift-srcgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.pulley-interpreter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.pulley-macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasi-common]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-cli]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-cli-flags]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-environ]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-c-api-macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-cache]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-component-macro]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-component-util]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-cranelift]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-explorer]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-fiber]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-jit-debug]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-jit-icache-coherence]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-math]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-slab]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-unwinder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-versioned-export-macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-winch]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-wit-bindgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-internal-wmemcheck]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi-config]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi-http]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi-io]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi-keyvalue]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi-nn]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi-threads]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi-tls]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wasi-tls-nativetls]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wasmtime-wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wiggle]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wiggle-generate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.wiggle-macro]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.wildcard-audits.winch-codegen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-01-07"
+end = "2027-01-08"
+notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.bytecode-alliance.audits.bitmaps]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+version = "2.1.0"
+notes = """
+No ambient I/O. Minimal unsafe, purely related to simd ISA extensions and
+obviously correct with only local reasoning.
+"""
+
+[[audits.bytecode-alliance.audits.pkg-config]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.29 -> 0.3.32"
+
 [[audits.embark-studios.audits.cargo_metadata]]
 who = "Johan Andersson <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"
@@ -6302,6 +1939,22 @@ notes = "No unsafe usage or ambient capabilities, sane build script"
 who = "Radu Matei <radu.matei@fermyon.com>"
 criteria = "safe-to-run"
 version = "11.1.3"
+
+[[audits.google.audits.bitflags]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "safe-to-deploy"
+version = "1.3.2"
+notes = """
+Security review of earlier versions of the crate can be found at
+(Google-internal, sorry): go/image-crate-chromium-security-review
+
+The crate exposes a function marked as `unsafe`, but doesn't use any
+`unsafe` blocks (except for tests of the single `unsafe` function).  I
+think this justifies marking this crate as `ub-risk-1`.
+
+Additional review comments can be found at https://crrev.com/c/4723145/31
+"""
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
 
 [[audits.google.audits.cast]]
 who = "George Burgess IV <gbiv@google.com>"
@@ -6364,6 +2017,15 @@ delta = "0.2.9 -> 0.2.13"
 notes = "Audited at https://fxrev.dev/946396"
 aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT"
 
+[[audits.google.audits.rand]]
+who = "Lukasz Anforowicz <lukasza@chromium.org>"
+criteria = "safe-to-deploy"
+version = "0.8.5"
+notes = """
+For more detailed unsafe review notes please see https://crrev.com/c/6362797
+"""
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
+
 [[audits.google.audits.rand_chacha]]
 who = "Android Legacy"
 criteria = "safe-to-run"
@@ -6383,12 +2045,36 @@ version = "0.10.5"
 notes = "Reviewed on https://fxrev.dev/712371."
 aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT"
 
+[[audits.google.audits.smallvec]]
+who = "Manish Goregaokar <manishearth@google.com>"
+criteria = "safe-to-deploy"
+version = "1.13.2"
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
+
 [[audits.google.audits.socket2]]
 who = "David Koloski <dkoloski@google.com>"
 criteria = "safe-to-deploy"
 delta = "0.4.4 -> 0.5.5"
 notes = "Reviewed at https://fxrev.dev/946307"
 aggregated-from = "https://fuchsia.googlesource.com/fuchsia/+/refs/heads/main/third_party/rust_crates/supply-chain/audits.toml?format=TEXT"
+
+[[audits.google.audits.stable_deref_trait]]
+who = "Manish Goregaokar <manishearth@google.com>"
+criteria = "safe-to-deploy"
+version = "1.2.0"
+notes = "Purely a trait, crates using this should be carefully vetted since self-referential stuff can be super tricky around various unsafe rust edges."
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
+
+[[audits.google.audits.strsim]]
+who = "danakj@chromium.org"
+criteria = "safe-to-deploy"
+version = "0.10.0"
+notes = """
+Reviewed in https://crrev.com/c/5171063
+
+Previously reviewed during security review and the audit is grandparented in.
+"""
+aggregated-from = "https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/chromium_crates_io/supply-chain/audits.toml?format=TEXT"
 
 [[audits.google.audits.tinytemplate]]
 who = "Ying Hsu <yinghsu@chromium.org>"
@@ -6799,6 +2485,12 @@ criteria = "safe-to-deploy"
 version = "0.8.31"
 notes = "I, Henri Sivonen, wrote encoding_rs for Gecko and have reviewed contributions by others. There are two caveats to the certification: 1) The crate does things that are documented to be UB but that do not appear to actually be UB due to integer types differing from the general rule; https://github.com/hsivonen/encoding_rs/issues/79 . 2) It would be prudent to re-review the code that reinterprets buffers of integers as SIMD vectors; see https://github.com/hsivonen/encoding_rs/issues/87 ."
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.fallible-iterator]]
+who = "Jan-Erik Rediger <jrediger@mozilla.com>"
+criteria = "safe-to-deploy"
+version = "0.2.0"
+aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.fastrand]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
@@ -7240,6 +2932,12 @@ criteria = "safe-to-deploy"
 delta = "0.3.25 -> 0.3.26"
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.pkg-config]]
+who = "Max Inden <mail@max-inden.de>"
+criteria = "safe-to-deploy"
+delta = "0.3.32 -> 0.3.34"
+aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.powerfmt]]
 who = "Alex Franchuk <afranchuk@mozilla.com>"
 criteria = "safe-to-deploy"
@@ -7313,6 +3011,15 @@ aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-c
 who = "Max Inden <mail@max-inden.de>"
 criteria = "safe-to-deploy"
 delta = "1.1.0 -> 1.3.0"
+aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.shlex]]
+who = "Emilio Cobos Álvarez <emilio@crisal.io>"
+criteria = "safe-to-deploy"
+delta = "1.3.0 -> 2.0.1"
+notes = """
+Mostly removes some deprecated and unsound APIs.
+"""
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.similar]]
