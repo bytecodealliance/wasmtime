@@ -159,11 +159,10 @@ impl FuncRefs {
         func: Arc<HostFunc>,
         modules: &ModuleRegistry,
     ) -> Result<NonNull<VMFuncRef>, OutOfMemory> {
-        debug_assert!(func.func_ref().wasm_call.is_none());
-        // SAFETY: the vmctx field in the funcref of `HostFunc` is safe to read.
-        let ret = unsafe { self.push(func.func_ref().clone(), modules)? };
-        self.storage.push(Storage::ArcHost { func })?;
-        Ok(ret)
+        // SAFETY: the `VMFuncRef` here is rooted in `func` and will live as
+        // long as the store. Additionally the `vmctx` field is independent of
+        // all stores for this function.
+        unsafe { self.push_host(func.func_ref().clone(), modules, Storage::ArcHost { func }) }
     }
 
     /// Same as `push_arc_host`, but for owned host functions.
@@ -172,10 +171,36 @@ impl FuncRefs {
         func: Box<HostFunc>,
         modules: &ModuleRegistry,
     ) -> Result<NonNull<VMFuncRef>, OutOfMemory> {
-        debug_assert!(func.func_ref().wasm_call.is_none());
-        // SAFETY: the vmctx field in the funcref of `HostFunc` is safe to read.
-        let ret = unsafe { self.push(func.func_ref().clone(), modules)? };
-        self.storage.push(Storage::BoxHost { func })?;
+        // SAFETY: the `VMFuncRef` here is rooted in `func` and will live as
+        // long as the store. Additionally the `vmctx` field is independent of
+        // all stores for this function.
+        unsafe { self.push_host(func.func_ref().clone(), modules, Storage::BoxHost { func }) }
+    }
+
+    /// Pushes a single host function held in `storage` into this store.
+    ///
+    /// The returned pointer is only valid on the same thread that the store
+    /// exists on.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that `func_ref` has a valid `vmctx` for the
+    /// store. The unsafe contract here is the same as [`FuncRefs::push`] in
+    /// general.
+    unsafe fn push_host(
+        &mut self,
+        func_ref: VMFuncRef,
+        modules: &ModuleRegistry,
+        storage: Storage,
+    ) -> Result<NonNull<VMFuncRef>, OutOfMemory> {
+        debug_assert!(func_ref.wasm_call.is_none());
+        // Reserve space for `storage` to avoid the need to handle a successful
+        // `self.push` followed by a failed `self.storage.push` -- this way we
+        // should be guaranteed that `self.storage.push` succeeds below.
+        self.storage.reserve(1)?;
+        // SAFETY: the unsafe contract of `push` is the same as ours.
+        let ret = unsafe { self.push(func_ref, modules)? };
+        self.storage.push(storage)?;
         Ok(ret)
     }
 }

@@ -6,31 +6,23 @@ use wasmtime_fuzzing::oom::OomTest;
 
 #[tokio::test]
 async fn component_resource_any_resource_drop_async() -> Result<()> {
-    let component_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Component::new(
-            &engine,
-            r#"
-                (component
-                    (type $t' (resource (rep i32)))
-                    (export $t "t" (type $t'))
-
-                    (core func $new (canon resource.new $t))
-                    (func (export "mk") (param "r" u32) (result (own $t))
-                        (canon lift (core func $new))
-                    )
-                )
-            "#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (type $t' (resource (rep i32)))
+                (export $t "t" (type $t'))
+
+                (core func $new (canon resource.new $t))
+                (func (export "mk") (param "r" u32) (result (own $t))
+                    (canon lift (core func $new))
+                )
+            )
+        "#,
+    )?;
     let linker = Linker::<()>::new(&engine);
     let instance_pre = linker.instantiate_pre(&component)?;
 
@@ -49,31 +41,23 @@ async fn component_resource_any_resource_drop_async() -> Result<()> {
 
 #[test]
 fn component_resource_any_resource_drop() -> Result<()> {
-    let component_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Component::new(
-            &engine,
-            r#"
-                (component
-                    (type $t' (resource (rep i32)))
-                    (export $t "t" (type $t'))
-
-                    (core func $new (canon resource.new $t))
-                    (func (export "mk") (param "r" u32) (result (own $t))
-                        (canon lift (core func $new))
-                    )
-                )
-            "#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (type $t' (resource (rep i32)))
+                (export $t "t" (type $t'))
+
+                (core func $new (canon resource.new $t))
+                (func (export "mk") (param "r" u32) (result (own $t))
+                    (canon lift (core func $new))
+                )
+            )
+        "#,
+    )?;
     let linker = Linker::<()>::new(&engine);
     let instance_pre = linker.instantiate_pre(&component)?;
 
@@ -92,25 +76,17 @@ struct MyResource;
 
 #[test]
 fn component_resource_any_try_from_resource() -> Result<()> {
-    let component_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Component::new(
-            &engine,
-            r#"
-                (component
-                    (import "t" (type $t (sub resource)))
-                )
-            "#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+            )
+        "#,
+    )?;
     let mut linker = Linker::<()>::new(&engine);
     linker
         .root()
@@ -130,25 +106,17 @@ fn component_resource_any_try_from_resource() -> Result<()> {
 
 #[test]
 fn component_resource_any_try_into_resource() -> Result<()> {
-    let component_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Component::new(
-            &engine,
-            r#"
-                (component
-                    (import "t" (type $t (sub resource)))
-                )
-            "#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+            )
+        "#,
+    )?;
     let mut linker = Linker::<()>::new(&engine);
     linker
         .root()
