@@ -1228,6 +1228,85 @@ fn throw_ref(store: &mut dyn VMStore, _instance: InstanceId, exnref: u32) -> Res
     Err(store.set_pending_exception(&exnref))
 }
 
+/// Handles a guest store of `len` bytes (with bits `hi:lo`) to watched bytes
+/// of a linear memory, before it happens.
+fn memory_watch_store(
+    store: &mut dyn VMStore,
+    instance: InstanceId,
+    memory: u32,
+    addr: u64,
+    len: u32,
+    lo: u64,
+    hi: u64,
+) -> Result<()> {
+    let bits = (u128::from(hi) << 64) | u128::from(lo);
+    let mask = u128::MAX >> (128 - 8 * len.min(16));
+    watched_write(
+        store,
+        instance,
+        memory,
+        addr,
+        u64::from(len),
+        Some(bits & mask),
+    )
+}
+
+/// Handles a guest bulk write of `len` bytes to a linear memory, before it
+/// happens, if any of the bytes are watched.
+fn memory_watch_range(
+    store: &mut dyn VMStore,
+    instance: InstanceId,
+    memory: u32,
+    addr: u64,
+    len: u64,
+) -> Result<()> {
+    watched_write(store, instance, memory, addr, len, None)
+}
+
+fn watched_write(
+    store: &mut dyn VMStore,
+    instance: InstanceId,
+    memory: u32,
+    addr: u64,
+    len: u64,
+    value: Option<u128>,
+) -> Result<()> {
+    let opaque = store.store_opaque_mut();
+    let store_id = opaque.id();
+    let memory = match opaque
+        .instance_mut(instance)
+        .get_exported_memory(store_id, wasmtime_environ::MemoryIndex::from_u32(memory))
+    {
+        crate::runtime::vm::ExportMemory::Unshared(memory) => memory,
+        crate::runtime::vm::ExportMemory::Shared(..) => return Ok(()),
+    };
+    // An out-of-bounds bulk write traps after this returns.
+    let Some(shadow) = memory.vm_shadow(opaque) else {
+        return Ok(());
+    };
+    let start = usize::try_from(addr)
+        .unwrap_or(usize::MAX)
+        .min(shadow.bytes().len());
+    let end = usize::try_from(addr.saturating_add(len))
+        .unwrap_or(usize::MAX)
+        .min(shadow.bytes().len());
+    let bits = shadow.bytes()[start..end]
+        .iter()
+        .fold(0, |bits, byte| bits | *byte);
+    #[cfg(feature = "debug")]
+    if bits & crate::runtime::vm::WATCH_DEBUG != 0 {
+        let hit = crate::WatchpointHit {
+            memory,
+            address: addr,
+            len,
+            value,
+        };
+        store.block_on_debug_handler(crate::DebugEvent::Watchpoint(hit))?;
+    }
+    let _ = (bits, value);
+    Ok(())
+}
+
 fn breakpoint(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
     #[cfg(feature = "debug")]
     {

@@ -278,6 +278,22 @@ fn result_to_event(table: &mut ResourceTable, value: DebugRunResult) -> Result<w
         DebugRunResult::HostcallError => wit::Event::Trap,
         DebugRunResult::Trap(_t) => wit::Event::Trap,
         DebugRunResult::Breakpoint => wit::Event::Breakpoint,
+        DebugRunResult::Watchpoint(hit) => {
+            let memory = table.push(Memory::Unshared(hit.memory))?;
+            // Scalar and vector stores are at most 16 bytes, so the
+            // value's low `len` little-endian bytes are the bytes
+            // being written, in memory order.
+            let value = hit.value.map(|value| {
+                let len = usize::try_from(hit.len).unwrap().min(16);
+                value.to_le_bytes()[..len].to_vec()
+            });
+            wit::Event::Watchpoint(wit::WatchpointHit {
+                memory,
+                address: hit.address,
+                len: hit.len,
+                value,
+            })
+        }
         DebugRunResult::EpochYield => wit::Event::Interrupted,
         DebugRunResult::Exception(e) => {
             let e = table.push(WasmException(e))?;
@@ -633,6 +649,30 @@ impl wit::HostMemory for ResourceTable {
             .await?
             .ok_or(wit::Error::OutOfBounds)?;
         Ok(())
+    }
+
+    async fn add_watchpoint(
+        &mut self,
+        self_: Resource<Memory>,
+        d: Resource<Debuggee>,
+        addr: u64,
+        len: u64,
+    ) -> Result<()> {
+        let memory = self.get(&self_)?.clone();
+        let d = debugger(self, &d)?;
+        d.memory_watch(memory, addr, len, true).await
+    }
+
+    async fn remove_watchpoint(
+        &mut self,
+        self_: Resource<Memory>,
+        d: Resource<Debuggee>,
+        addr: u64,
+        len: u64,
+    ) -> Result<()> {
+        let memory = self.get(&self_)?.clone();
+        let d = debugger(self, &d)?;
+        d.memory_watch(memory, addr, len, false).await
     }
 
     async fn clone(&mut self, self_: Resource<Memory>) -> Result<Resource<Memory>> {

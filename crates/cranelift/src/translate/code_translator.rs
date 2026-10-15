@@ -3855,6 +3855,8 @@ fn translate_store(
     );
 
     environ.before_store(builder, mem_op_size, wasm_index, memarg.offset);
+    let memory = MemoryIndex::from_u32(memarg.memory);
+    environ.watch_store(builder, memory, flags, base, mem_op_size, val);
 
     let flags = builder.func.dfg.mem_flags.insert(flags).unwrap();
     builder
@@ -3922,6 +3924,9 @@ fn translate_atomic_rmw(
         )?
     );
 
+    let memory = MemoryIndex::from_u32(memarg.memory);
+    let size = u8::try_from(access_ty.bytes()).unwrap();
+    environ.watch_store(builder, memory, flags, addr, size, arg2);
     let mut res = builder.ins().atomic_rmw(access_ty, flags, op, addr, arg2);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
@@ -3976,6 +3981,9 @@ fn translate_atomic_cas(
             environ,
         )?
     );
+    let memory = MemoryIndex::from_u32(memarg.memory);
+    let size = u8::try_from(access_ty.bytes()).unwrap();
+    environ.watch_store(builder, memory, flags, addr, size, replacement);
     let mut res = builder.ins().atomic_cas(flags, addr, expected, replacement);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
@@ -4064,6 +4072,9 @@ fn translate_atomic_store(
             environ,
         )?
     );
+    let memory = MemoryIndex::from_u32(memarg.memory);
+    let size = u8::try_from(access_ty.bytes()).unwrap();
+    environ.watch_store(builder, memory, flags, addr, size, data);
     builder.ins().atomic_store(flags, data, addr);
     Ok(())
 }

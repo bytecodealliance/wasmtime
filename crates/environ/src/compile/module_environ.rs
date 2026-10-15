@@ -451,6 +451,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
         data: &'data [u8],
     ) -> Result<ModuleTranslation<'data>> {
         self.result.wasm = data;
+        self.result.module.has_shadow_memories = self.tunables.memory_watchpoints;
 
         for payload in parser.parse_all(data) {
             self.translate_payload(payload?)?;

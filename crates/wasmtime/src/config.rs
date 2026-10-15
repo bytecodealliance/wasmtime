@@ -2793,6 +2793,9 @@ impl Config {
 
         self.tunables.configure(&mut tunables);
 
+        // Debuggers set watchpoints through linear memories' shadows.
+        tunables.memory_watchpoints = tunables.debug_guest;
+
         // If no GC heap tunables are explicitly configured, copy the memory
         // tunables' configured values so that GC heaps default to the same
         // configuration as linear memories.

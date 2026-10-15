@@ -109,8 +109,10 @@ pub use crate::runtime::vm::instance::{
     PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
 };
 pub use crate::runtime::vm::interpreter::*;
+#[cfg(feature = "debug")]
+pub use crate::runtime::vm::memory::WATCH_DEBUG;
 pub use crate::runtime::vm::memory::{
-    Memory, MemoryBase, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
+    Memory, MemoryBase, RuntimeLinearMemory, RuntimeMemoryCreator, ShadowMemory, SharedMemory,
 };
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::provenance::*;
