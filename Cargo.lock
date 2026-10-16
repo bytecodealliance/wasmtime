@@ -5213,6 +5213,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
+ "criterion",
  "env_logger 0.11.5",
  "flate2",
  "futures",
