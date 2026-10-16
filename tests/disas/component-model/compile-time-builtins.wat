@@ -176,10 +176,10 @@
 ;; function u1:0(i64 vmctx, i64) tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 25 ""
-;;     region3 = 44 ""
-;;     region4 = 78 ""
-;;     region5 = 227 ""
+;;     region2 = 42 ""
+;;     region3 = 57 ""
+;;     region4 = 209 ""
+;;     region5 = 132 ""
 ;;     region6 = 175 ""
 ;;     region7 = 113 ""
 ;;     gv0 = vmctx

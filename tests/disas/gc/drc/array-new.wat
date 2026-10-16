@@ -13,7 +13,7 @@
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
 ;;     region2 = 130 ""
-;;     region3 = 6 ""
+;;     region3 = 134 ""
 ;;     region4 = 196 ""
 ;;     region5 = 108 ""
 ;;     region6 = 206 ""

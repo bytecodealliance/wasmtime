@@ -12,10 +12,10 @@
 ;;     region1 = 160 ""
 ;;     region2 = 196 ""
 ;;     region3 = 206 ""
-;;     region4 = 239 ""
+;;     region4 = 77 ""
 ;;     region5 = 130 ""
-;;     region6 = 6 ""
-;;     region7 = 134 ""
+;;     region6 = 134 ""
+;;     region7 = 87 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

@@ -133,8 +133,8 @@
 ;;     region1 = 160 ""
 ;;     region2 = 93 ""
 ;;     region3 = 117 ""
-;;     region4 = 116 ""
-;;     region5 = 60 ""
+;;     region4 = 120 ""
+;;     region5 = 100 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -191,8 +191,8 @@
 ;;     region1 = 160 ""
 ;;     region2 = 93 ""
 ;;     region3 = 117 ""
-;;     region4 = 116 ""
-;;     region5 = 60 ""
+;;     region4 = 120 ""
+;;     region5 = 100 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -248,8 +248,8 @@
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
 ;;     region2 = 250 ""
-;;     region3 = 116 ""
-;;     region4 = 60 ""
+;;     region3 = 120 ""
+;;     region4 = 100 ""
 ;;     region5 = 135 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8

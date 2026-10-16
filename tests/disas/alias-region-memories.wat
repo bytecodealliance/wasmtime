@@ -17,7 +17,7 @@
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i32 tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 13 ""
+;;     region2 = 75 ""
 ;;     region3 = 215 ""
 ;;     region4 = 105 ""
 ;;     region5 = 61 ""

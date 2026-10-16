@@ -18,16 +18,15 @@
 ;; function u0:0(i64 vmctx, i64, i32, i64) -> i32 tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 21 ""
+;;     region2 = 13 ""
 ;;     region3 = 93 ""
 ;;     region4 = 211 ""
 ;;     region5 = 99 ""
 ;;     region6 = 117 ""
 ;;     region7 = 130 ""
-;;     region8 = 6 ""
-;;     region9 = 106 ""
-;;     region10 = 116 ""
-;;     region11 = 60 ""
+;;     region8 = 134 ""
+;;     region9 = 120 ""
+;;     region10 = 100 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -68,13 +67,13 @@
 ;; @004d                               jump block3(v48)
 ;;
 ;;                                 block3(v45: i64):
-;; @004d                               v51 = load.i32 user7 aligned readonly region9 v45+16
+;; @004d                               v51 = load.i32 user7 aligned readonly region1 v45+16
 ;; @004d                               v49 = load.i64 notrap aligned readonly can_move region7 v0+40
 ;; @004d                               v50 = load.i32 notrap aligned readonly can_move region8 v49
 ;; @004d                               v52 = icmp eq v51, v50
 ;; @004d                               trapz v52, user8
-;; @004d                               v54 = load.i64 notrap aligned readonly region10 v45+8
-;; @004d                               v55 = load.i64 notrap aligned readonly region11 v45+24
+;; @004d                               v54 = load.i64 notrap aligned readonly region9 v45+8
+;; @004d                               v55 = load.i64 notrap aligned readonly region10 v45+24
 ;; @004d                               v56 = call_indirect sig0, v54(v55, v0)
 ;; @0050                               jump block1
 ;;
