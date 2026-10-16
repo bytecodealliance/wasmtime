@@ -32,6 +32,12 @@ pub(crate) enum CodeGenError {
     /// Unsupported eager initialization of tables.
     #[error("Unsupported eager initialization of tables")]
     UnsupportedTableEagerInit,
+    /// A `br_table` has more targets than the implementation limit.
+    #[error(
+        "`br_table` has {0} targets, which exceeds the implementation limit of {limit}",
+        limit = wasmtime_cranelift::MAX_BR_TABLE_TARGETS
+    )]
+    BrTableTooLarge(u32),
     /// An allocation is too large to represent.
     #[error("Allocation size is too large")]
     AllocationTooLarge,
@@ -114,6 +120,10 @@ impl CodeGenError {
 
     pub(crate) const fn unsupported_32_bit_platform() -> Self {
         Self::Unsupported32BitPlatform
+    }
+
+    pub(crate) const fn br_table_too_large(len: u32) -> Self {
+        Self::BrTableTooLarge(len)
     }
 
     pub(crate) const fn allocation_too_large() -> Self {
