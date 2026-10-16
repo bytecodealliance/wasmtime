@@ -914,6 +914,10 @@ struct HostWorkerState {
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
     request_timeout: Duration,
+    #[cfg(feature = "coredump")]
+    coredump: Option<String>,
+    #[cfg(feature = "coredump")]
+    coredump_name: String,
 }
 
 impl WorkerState for HostWorkerState {
@@ -947,6 +951,8 @@ impl WorkerState for HostWorkerState {
     fn drop(&self, mut store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>) {
         if let Err(error) = result {
             eprintln!("worker failed: {error:?}");
+            #[cfg(feature = "coredump")]
+            write_serve_coredump(self, &mut store, &error);
         }
 
         if let Some(write_profile) = store.data_mut().write_profile.take() {
@@ -955,6 +961,42 @@ impl WorkerState for HostWorkerState {
 
         drop(store);
     }
+}
+
+#[cfg(feature = "coredump")]
+fn write_serve_coredump(state: &HostWorkerState, store: &mut Store<Host>, error: &wasmtime::Error) {
+    let Some(path) = &state.coredump else {
+        return;
+    };
+    if error.downcast_ref::<wasmtime::WasmCoreDump>().is_none() {
+        return;
+    }
+    match write_coredump_file(store, error, &state.coredump_name, path) {
+        Ok(()) => eprintln!("core dumped at {path}"),
+        Err(coredump_err) => eprintln!("warning: coredump failed to generate: {coredump_err}"),
+    }
+}
+
+#[cfg(feature = "coredump")]
+fn write_coredump_file(
+    store: &mut Store<Host>,
+    err: &wasmtime::Error,
+    name: &str,
+    path: &str,
+) -> Result<()> {
+    use std::fs::File;
+    use std::io::Write;
+
+    let core_dump = err
+        .downcast_ref::<wasmtime::WasmCoreDump>()
+        .expect("should have been configured to capture core dumps");
+    let core_dump = core_dump.serialize(store, name);
+    let mut core_dump_file =
+        File::create(path).with_context(|| format!("failed to create file at `{path}`"))?;
+    core_dump_file
+        .write_all(&core_dump)
+        .with_context(|| format!("failed to write core dump file at `{path}`"))?;
+    Ok(())
 }
 
 struct HostHandlerState {
@@ -1010,6 +1052,10 @@ impl HandlerState for HostHandlerState {
                 max_instance_concurrent_reuse_count: self.max_instance_concurrent_reuse_count,
                 instance_id,
                 request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
+                #[cfg(feature = "coredump")]
+                coredump: self.cmd.run.common.debug.coredump.clone(),
+                #[cfg(feature = "coredump")]
+                coredump_name: self.cmd.component.to_str().unwrap_or("unknown").to_string(),
             },
         })
     }

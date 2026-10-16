@@ -2369,6 +2369,41 @@ start a print 1234
         p2_cli_serve_guest_never_invoked_set(P2_CLI_SERVE_TRAP_BEFORE_SET_COMPONENT).await
     }
 
+    #[tokio::test]
+    async fn serve_coredump_smoketest() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let core = dir.path().join("core");
+        let server = WasmtimeServe::new(P2_CLI_SERVE_TRAP_BEFORE_SET_COMPONENT, |cmd| {
+            cmd.arg("-Scli")
+                .arg(format!("-Dcoredump={}", core.display()));
+        })?;
+        let res = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert_eq!(res.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+        let (_stdout, stderr) = server.finish()?;
+        let dumped = std::fs::read(&core)?;
+        let head = dumped.get(..16).unwrap_or(&dumped);
+        println!(
+            "observed guest={} path={} len={} magic={:02x?} head16={:02x?}",
+            P2_CLI_SERVE_TRAP_BEFORE_SET_COMPONENT,
+            core.display(),
+            dumped.len(),
+            dumped.get(..4).unwrap_or(&[]),
+            head,
+        );
+        assert!(core.exists(), "coredump file was not written: {stderr}");
+        assert!(stderr.contains(&format!("core dumped at {}", core.display())));
+        assert_eq!(dumped.get(..4), Some(&[0x00, 0x61, 0x73, 0x6d][..]));
+        assert_eq!(dumped.get(12..16), Some(&b"core"[..]));
+        Ok(())
+    }
+
     #[test]
     fn p3_cli_hello_stdout() -> Result<()> {
         let output = run_wasmtime(&[
