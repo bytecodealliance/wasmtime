@@ -3889,6 +3889,62 @@
 (rule (lower (fcvt_to_sint_sat (fits_in_64 out_ty) val @ (value_type (ty_scalar_float _))))
       (cvt_float_to_sint_seq out_ty val true))
 
+;; `i8` and `i16` results reuse the `i32` conversion and then clamp
+;; (saturating) or range check (trapping) its result.
+(rule 2 (lower (fcvt_to_uint (ty_8_or_16 out_ty) val @ (value_type (ty_scalar_float _))))
+      (trap_if_outside_i32 (cvt_float_to_sint_seq $I32 val false)
+                           (narrow_int_min out_ty false)
+                           (narrow_int_max out_ty false)))
+
+(rule 2 (lower (fcvt_to_uint_sat (ty_8_or_16 out_ty) val @ (value_type (ty_scalar_float _))))
+      (clamp_i32 (cvt_float_to_sint_seq $I32 val true)
+                 (narrow_int_min out_ty false)
+                 (narrow_int_max out_ty false)))
+
+(rule 2 (lower (fcvt_to_sint (ty_8_or_16 out_ty) val @ (value_type (ty_scalar_float _))))
+      (trap_if_outside_i32 (cvt_float_to_sint_seq $I32 val false)
+                           (narrow_int_min out_ty true)
+                           (narrow_int_max out_ty true)))
+
+(rule 2 (lower (fcvt_to_sint_sat (ty_8_or_16 out_ty) val @ (value_type (ty_scalar_float _))))
+      (clamp_i32 (cvt_float_to_sint_seq $I32 val true)
+                 (narrow_int_min out_ty true)
+                 (narrow_int_max out_ty true)))
+
+;; Range of an `i8` or `i16` result as `i32` immediates. The `bool` is whether
+;; the result is signed.
+(decl narrow_int_min (Type bool) u32)
+(rule (narrow_int_min $I8 true) 0xffffff80)
+(rule (narrow_int_min $I16 true) 0xffff8000)
+(rule (narrow_int_min _ false) 0)
+
+(decl narrow_int_max (Type bool) u32)
+(rule (narrow_int_max $I8 true) 0x7f)
+(rule (narrow_int_max $I16 true) 0x7fff)
+(rule (narrow_int_max $I8 false) 0xff)
+(rule (narrow_int_max $I16 false) 0xffff)
+
+;; Clamps the signed `i32` in `x` to `[min, max]`.
+(decl clamp_i32 (Gpr u32 u32) Gpr)
+(rule (clamp_i32 x min max)
+      (let ((max_reg Gpr (imm $I32 (u32_into_u64 max)))
+            (x Gpr (with_flags_reg (x64_cmp $I32 x (RegMemImm.Imm max))
+                                   (cmove $I32 (CC.NLE) max_reg x)))
+            (min_reg Gpr (imm $I32 (u32_into_u64 min))))
+        (with_flags_reg (x64_cmp $I32 x (RegMemImm.Imm min))
+                        (cmove $I32 (CC.L) min_reg x))))
+
+;; Traps with `int_ovf` unless the signed `i32` in `x` is in `[min, max]`.
+(decl trap_if_outside_i32 (Gpr u32 u32) Gpr)
+(rule (trap_if_outside_i32 x min max)
+      (let ((_ InstOutput (side_effect (with_flags_side_effect
+              (x64_cmp $I32 x (RegMemImm.Imm max))
+              (trap_if (CC.NLE) (TrapCode.INTEGER_OVERFLOW)))))
+            (_ InstOutput (side_effect (with_flags_side_effect
+              (x64_cmp $I32 x (RegMemImm.Imm min))
+              (trap_if (CC.L) (TrapCode.INTEGER_OVERFLOW))))))
+        x))
+
 ;; The x64 backend currently only supports these two type combinations.
 (rule 1 (lower (fcvt_to_sint_sat $I32X4 val @ (value_type $F32X4)))
       (let ((src Xmm val)
