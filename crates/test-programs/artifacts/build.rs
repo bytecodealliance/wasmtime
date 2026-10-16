@@ -173,12 +173,16 @@ impl Artifacts {
 
     fn build_rust_tests(&mut self, tests: &mut Vec<Test>) {
         println!("cargo:rerun-if-env-changed=MIRI_TEST_CWASM_DIR");
-        let release_mode = env::var_os("MIRI_TEST_CWASM_DIR").is_some();
+        let release_mode = env::var_os("CARGO_FEATURE_RELEASE_ARTIFACTS").is_some()
+            || env::var_os("MIRI_TEST_CWASM_DIR").is_some();
 
         let mut cmd = cargo();
         cmd.arg("build");
         if release_mode {
-            cmd.arg("--release");
+            // Keep line tables so profilers can map guest code to source
+            // lines.
+            cmd.arg("--release")
+                .env("CARGO_PROFILE_RELEASE_DEBUG", "line-tables-only");
         }
         cmd.arg("--target=wasm32-wasip1")
             .arg("--package=test-programs")
