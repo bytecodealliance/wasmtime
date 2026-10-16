@@ -30,10 +30,9 @@ fn br_table_module(n: usize) -> String {
     wat
 }
 
-fn run_br_table_test(config: &mut Config, n: usize) -> Result<()> {
-    let engine = Engine::new(config)?;
-    let module = Module::new(&engine, br_table_module(n))?;
-    let mut store = Store::new(&engine, ());
+fn run_br_table_test(engine: &Engine, n: usize) -> Result<()> {
+    let module = Module::new(engine, br_table_module(n))?;
+    let mut store = Store::new(engine, ());
     let instance = Instance::new(&mut store, &module, &[])?;
     let f = instance.get_typed_func::<u32, u32>(&mut store, "f")?;
 
@@ -58,48 +57,24 @@ fn run_br_table_test(config: &mut Config, n: usize) -> Result<()> {
     Ok(())
 }
 
+/// Check `br_table`s of various sizes up to and just beyond our
+/// implementation limit of 65520 targets: those within the limit must compile
+/// and behave correctly, and those beyond it must be rejected with an error.
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn br_table_small(config: &mut Config) -> Result<()> {
-    run_br_table_test(config, 16)
-}
-
-/// The largest `br_table` permitted by our implementation limit.
-#[wasmtime_test]
-#[cfg_attr(miri, ignore)]
-fn br_table_at_limit(config: &mut Config) -> Result<()> {
-    run_br_table_test(config, 65_520)
-}
-
-/// One target beyond the implementation limit is rejected with an error.
-#[wasmtime_test]
-#[cfg_attr(miri, ignore)]
-fn br_table_over_limit(config: &mut Config) -> Result<()> {
+fn br_table_sizes(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
-    let err = Module::new(&engine, br_table_module(65_521)).unwrap_err();
-    let err = format!("{err:?}");
-    assert!(
-        err.contains("exceeds the implementation limit of 65520"),
-        "unexpected error: {err}"
-    );
-    Ok(())
-}
-
-/// The implementation limit also applies to `br_table`s in unreachable code.
-#[wasmtime_test]
-#[cfg_attr(miri, ignore)]
-fn br_table_over_limit_unreachable(config: &mut Config) -> Result<()> {
-    let engine = Engine::new(config)?;
-    let mut wat = String::from("(module (func (param i32) unreachable local.get 0 br_table ");
-    for _ in 0..65_521 {
-        wat.push_str("0 ");
+    for (size, should_succeed) in [(16, true), (65_520, true), (65_521, false)] {
+        if should_succeed {
+            run_br_table_test(&engine, size)?;
+        } else {
+            let err = Module::new(&engine, br_table_module(size)).unwrap_err();
+            let err = format!("{err:?}");
+            assert!(
+                err.contains("exceeds the implementation limit of 65520"),
+                "unexpected error for br_table with {size} targets: {err}"
+            );
+        }
     }
-    wat.push_str("0))");
-    let err = Module::new(&engine, wat).unwrap_err();
-    let err = format!("{err:?}");
-    assert!(
-        err.contains("exceeds the implementation limit of 65520"),
-        "unexpected error: {err}"
-    );
     Ok(())
 }
