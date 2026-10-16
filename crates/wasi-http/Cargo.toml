@@ -59,3 +59,9 @@ flate2 = { workspace = true }
 wasm-compose = { workspace = true }
 tempfile = { workspace = true }
 env_logger = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "p3_http_proxy"
+harness = false
+required-features = ["test-programs-artifacts/release-artifacts"]
