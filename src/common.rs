@@ -101,9 +101,11 @@ pub struct RunCommon {
     /// Attach the built-in gdbstub debugger component, listening on
     /// the given TCP address. Accepts a port number (e.g. `1234`) or
     /// a full `address:port`. A bare port number will bind on
-    /// localhost only (`127.0.0.1`). A debugger (e.g. LLDB) can then
-    /// connect via `process connect --plugin=wasm
-    /// connect://<ADDR>:<PORT>`.
+    /// localhost only (`127.0.0.1`). A port number of `0` indicates
+    /// that any free port should be chosen; the port is printed on startup.
+    ///
+    /// A debugger (e.g. LLDB) can then connect via `process connect
+    /// --plugin=wasm connect://<ADDR>:<PORT>`.
     #[cfg(feature = "gdbstub")]
     #[arg(short = 'g', long = "gdbstub", value_name = "[ADDR:]PORT")]
     pub gdbstub: Option<String>,
