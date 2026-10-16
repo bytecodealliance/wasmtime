@@ -214,6 +214,7 @@ fn truncated_component_binaries_dont_panic() -> Result<()> {
 fn implements_shows_up() -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_implements(true);
+    config.wasm_component_model_canonical_names(true);
     let engine = Engine::new(&config)?;
     let component = Component::new(
         &engine,
@@ -222,7 +223,8 @@ fn implements_shows_up() -> Result<()> {
                 (import "a" (implements "a1:b1/c1") (instance $a))
                 (export "b" (implements "a2:b2/c2") (instance $a))
 
-                (import "v" (implements "a:b/c@1.2.0") (instance))
+                (import "v" (implements "a:b/c@1") (versionsuffix ".2.0") (instance))
+                (import "w" (implements "a:b/c@0.2.1") (instance))
             )
         "#,
     )?;
@@ -244,6 +246,17 @@ fn implements_shows_up() -> Result<()> {
     assert!(a.is_implements("a:b/c@1.2.0"));
     assert!(a.is_implements("a:b/c@1.3.0"));
     assert!(a.is_implements("a:b/c@1.0.0"));
+    assert!(a.is_implements("a:b/c@1"));
+    assert!(!a.is_implements("a:b/c@2.0.0"));
+
+    let (_, a) = imports.next().unwrap();
+    assert_eq!(a.implements.as_deref(), Some("a:b/c@0.2.1"));
+    assert!(a.is_implements("a:b/c@0.2"));
+    assert!(a.is_implements("a:b/c@0.2.1"));
+    assert!(a.is_implements("a:b/c@0.2.1+abc"));
+    assert!(!a.is_implements("a:b/c@0.2.1-abc"));
+    assert!(a.is_implements("a:b/c@0.2.3"));
+    assert!(!a.is_implements("a:b/c@0.3"));
 
     Ok(())
 }
