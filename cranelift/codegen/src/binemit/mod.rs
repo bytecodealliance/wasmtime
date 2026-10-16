@@ -146,6 +146,51 @@ pub enum Reloc {
     PulleyCallIndirectHost,
 }
 
+impl Reloc {
+    /// The number of bytes from the relocation's offset that applying it may
+    /// read or write.
+    ///
+    /// For relocations applied to an instruction, this is the size of the
+    /// instruction or instruction pair. Markers that patch nothing return 0.
+    pub fn patched_len(self) -> u32 {
+        match self {
+            // The opcode and its 8-bit immediate.
+            Self::PulleyCallIndirectHost => 2,
+            Self::S390xTlsGdCall => 0,
+            Self::Abs4
+            | Self::X86PCRel4
+            | Self::X86CallPCRel4
+            | Self::X86CallPLTRel4
+            | Self::X86GOTPCRel4
+            | Self::X86SecRel
+            | Self::Arm32Call
+            | Self::Arm64Call
+            | Self::S390xPCRel32Dbl
+            | Self::S390xPLTRel32Dbl
+            | Self::ElfX86_64TlsGd
+            | Self::MachOX86_64Tlv
+            | Self::MachOAarch64TlsAdrPage21
+            | Self::MachOAarch64TlsAdrPageOff12
+            | Self::Aarch64TlsDescAdrPage21
+            | Self::Aarch64TlsDescLd64Lo12
+            | Self::Aarch64TlsDescAddLo12
+            | Self::Aarch64TlsDescCall
+            | Self::Aarch64AdrGotPage21
+            | Self::Aarch64AdrPrelPgHi21
+            | Self::Aarch64AddAbsLo12Nc
+            | Self::Aarch64Ld64GotLo12Nc
+            | Self::RiscvTlsGdHi20
+            | Self::RiscvPCRelLo12I
+            | Self::RiscvGotHi20
+            | Self::RiscvPCRelHi20
+            | Self::PulleyPcRel => 4,
+            // The `auipc` and `jalr` pair of a RISC-V call.
+            Self::RiscvCallPlt => 8,
+            Self::Abs8 | Self::S390xTlsGd64 => 8,
+        }
+    }
+}
+
 impl fmt::Display for Reloc {
     /// Display trait implementation drops the arch, since its used in contexts where the arch is
     /// already unambiguous, e.g. clif syntax with isa specified. In other contexts, use Debug.
