@@ -233,6 +233,12 @@ async fn p3_http_outbound_request_get() -> wasmtime::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_get_with_body() -> wasmtime::Result<()> {
+    let server = Server::http1(2)?;
+    run_cli(P3_HTTP_OUTBOUND_REQUEST_GET_WITH_BODY_COMPONENT, &server).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_first_byte_timeout() -> wasmtime::Result<()> {
     let server = Server::http1_delayed(1, std::time::Duration::from_secs(5))?;
     run_cli(

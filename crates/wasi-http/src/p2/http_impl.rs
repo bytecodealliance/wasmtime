@@ -33,7 +33,7 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
         let req = self.table.delete(request_id)?;
         let mut builder = hyper::Request::builder();
 
-        builder = builder.method(match req.method {
+        let method = match req.method {
             types::Method::Get => Method::GET,
             types::Method::Head => Method::HEAD,
             types::Method::Post => Method::POST,
@@ -47,7 +47,8 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
                 Ok(method) => method,
                 Err(_) => return Err(types::ErrorCode::HttpRequestMethodInvalid.into()),
             },
-        });
+        };
+        builder = builder.method(method.clone());
 
         let scheme = match req.scheme {
             Some(scheme) => {
@@ -88,6 +89,10 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
 
         for (k, v) in req.headers.iter() {
             builder = builder.header(k, v);
+        }
+
+        if crate::needs_chunked_framing(&method, &req.headers, req.body.is_some()) {
+            builder = builder.header(http::header::TRANSFER_ENCODING, "chunked");
         }
 
         let body = req.body.unwrap_or_else(|| {
