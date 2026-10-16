@@ -150,13 +150,11 @@ impl Reloc {
     /// The number of bytes from the relocation's offset that applying it may
     /// read or write.
     ///
-    /// For relocations applied to an instruction, this is the size of the
-    /// instruction or instruction pair. Markers that patch nothing return 0.
+    /// For relocations applied to an instruction, including markers such as
+    /// the TLS call relocations, this covers the whole instruction or
+    /// instruction pair.
     pub fn patched_len(self) -> u32 {
         match self {
-            // The opcode and its 8-bit immediate.
-            Self::PulleyCallIndirectHost => 2,
-            Self::S390xTlsGdCall => 0,
             Self::Abs4
             | Self::X86PCRel4
             | Self::X86CallPCRel4
@@ -183,10 +181,12 @@ impl Reloc {
             | Self::RiscvPCRelLo12I
             | Self::RiscvGotHi20
             | Self::RiscvPCRelHi20
-            | Self::PulleyPcRel => 4,
-            // The `auipc` and `jalr` pair of a RISC-V call.
-            Self::RiscvCallPlt => 8,
-            Self::Abs8 | Self::S390xTlsGd64 => 8,
+            | Self::PulleyPcRel
+            | Self::PulleyCallIndirectHost => 4,
+            // The `brasl` that the marker is attached to.
+            Self::S390xTlsGdCall => 6,
+            // `RiscvCallPlt` patches the `auipc` and `jalr` pair of a call.
+            Self::Abs8 | Self::S390xTlsGd64 | Self::RiscvCallPlt => 8,
         }
     }
 }
