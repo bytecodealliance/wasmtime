@@ -10,7 +10,7 @@ target pulley32be
 target pulley64
 target pulley64be
 
-function %iconcat_isplit(i64, i64) -> i64, i64 {
+function %iconcat_isplit(i64, i64) -> i64, i64 system_v {
 block0(v0: i64, v1: i64):
     v2 = iconcat v0, v1
     v3, v4 = isplit v2
