@@ -562,7 +562,11 @@ fn drop_params(mut store: impl AsContextMut, params: &[Val]) -> Result<()> {
 /// Drop every handle within `val`.
 fn drop_val<T>(mut store: StoreContextMut<'_, T>, val: &Val) -> Result<()> {
     match val {
-        Val::Resource(resource) => resource.resource_drop(&mut store)?,
+        // Drop through the internal entry point rather than the public
+        // `resource_drop`: this runs while servicing a guest call on a fiber,
+        // where `resource_drop`'s `validate_sync_call` check would reject the
+        // drop with "cannot do blocking `call` from an async context".
+        Val::Resource(resource) => resource.resource_drop_in_guest_call(&mut store)?,
 
         // Without `component-model-async` these are uninhabited, so there is
         // nothing to close.
