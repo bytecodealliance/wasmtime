@@ -64,11 +64,42 @@ fn br_table_small(config: &mut Config) -> Result<()> {
     run_br_table_test(config, 16)
 }
 
-/// A jump table large enough that the default target is more than 1 MiB away
-/// from the start of the jump-table sequence (each entry is 4 bytes on
-/// AArch64, so this is beyond the range of a 19-bit conditional branch).
+/// The largest `br_table` permitted by our implementation limit.
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn br_table_huge(config: &mut Config) -> Result<()> {
-    run_br_table_test(config, 262_400)
+fn br_table_at_limit(config: &mut Config) -> Result<()> {
+    run_br_table_test(config, 65_520)
+}
+
+/// One target beyond the implementation limit is rejected with an error.
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn br_table_over_limit(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let err = Module::new(&engine, br_table_module(65_521)).unwrap_err();
+    let err = format!("{err:?}");
+    assert!(
+        err.contains("exceeds the implementation limit of 65520"),
+        "unexpected error: {err}"
+    );
+    Ok(())
+}
+
+/// The implementation limit also applies to `br_table`s in unreachable code.
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn br_table_over_limit_unreachable(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut wat = String::from("(module (func (param i32) unreachable local.get 0 br_table ");
+    for _ in 0..65_521 {
+        wat.push_str("0 ");
+    }
+    wat.push_str("0))");
+    let err = Module::new(&engine, wat).unwrap_err();
+    let err = format!("{err:?}");
+    assert!(
+        err.contains("exceeds the implementation limit of 65520"),
+        "unexpected error: {err}"
+    );
+    Ok(())
 }
