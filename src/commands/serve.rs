@@ -971,32 +971,10 @@ fn write_serve_coredump(state: &HostWorkerState, store: &mut Store<Host>, error:
     if error.downcast_ref::<wasmtime::WasmCoreDump>().is_none() {
         return;
     }
-    match write_coredump_file(store, error, &state.coredump_name, path) {
+    match super::write_core_dump(store, error, &state.coredump_name, path) {
         Ok(()) => eprintln!("core dumped at {path}"),
         Err(coredump_err) => eprintln!("warning: coredump failed to generate: {coredump_err}"),
     }
-}
-
-#[cfg(feature = "coredump")]
-fn write_coredump_file(
-    store: &mut Store<Host>,
-    err: &wasmtime::Error,
-    name: &str,
-    path: &str,
-) -> Result<()> {
-    use std::fs::File;
-    use std::io::Write;
-
-    let core_dump = err
-        .downcast_ref::<wasmtime::WasmCoreDump>()
-        .expect("should have been configured to capture core dumps");
-    let core_dump = core_dump.serialize(store, name);
-    let mut core_dump_file =
-        File::create(path).with_context(|| format!("failed to create file at `{path}`"))?;
-    core_dump_file
-        .write_all(&core_dump)
-        .with_context(|| format!("failed to write core dump file at `{path}`"))?;
-    Ok(())
 }
 
 struct HostHandlerState {
