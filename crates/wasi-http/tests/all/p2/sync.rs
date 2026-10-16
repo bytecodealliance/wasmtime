@@ -25,6 +25,12 @@ fn p2_http_outbound_request_get() -> Result<()> {
 }
 
 #[test_log::test]
+fn p2_http_outbound_request_get_with_body() -> Result<()> {
+    let server = Server::http1(2)?;
+    run(P2_HTTP_OUTBOUND_REQUEST_GET_WITH_BODY_COMPONENT, &server)
+}
+
+#[test_log::test]
 fn p2_http_outbound_request_between_bytes_timeout() -> Result<()> {
     let server = Server::http1_stalled_body(1, std::time::Duration::from_secs(5))?;
     run(
