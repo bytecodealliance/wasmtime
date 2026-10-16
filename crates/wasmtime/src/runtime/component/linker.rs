@@ -5,10 +5,11 @@ use crate::component::instance::RuntimeImport;
 use crate::component::matching::{InstanceType, TypeChecker};
 use crate::component::types;
 use crate::component::{
-    Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
+    Component, ComponentNamedList, Func, Instance, InstancePre, Lift, Lower, ResourceType,
+    RuntimeInstance, Val,
 };
-use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
+use crate::{bail_bug, prelude::*};
 use alloc::sync::Arc;
 use core::marker;
 #[cfg(feature = "component-model-async")]
@@ -139,6 +140,52 @@ impl<T: 'static> Linker<T> {
     pub fn allow_shadowing(&mut self, allow: bool) -> &mut Self {
         self.allow_shadowing = allow;
         self
+    }
+
+    /// Defines a previously-instantiated component's exports in this linker
+    /// under `name`, so that another component's `name` instance import
+    /// resolves to that live instance.
+    ///
+    /// Strongly prefer [component composition] instead. Every export here
+    /// becomes a host trampoline and each cross-component call pays a round
+    /// trip out to the host and back. Composition links the two directly,
+    /// allowing direct calls and inlining. Use this only when composition is
+    /// not an option, as when the components are chosen at
+    /// runtime.
+    ///
+    /// [component composition]: https://component-model.bytecodealliance.org/composing-and-distributing/composing.html
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `instance` exports a component, which a linker
+    /// cannot hold, or if an export's name is already defined and shadowing is
+    /// not enabled. An exported `async func` additionally requires
+    /// [`Config::concurrency_support`](crate::Config::concurrency_support).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own `instance`.
+    pub fn preload_instance(
+        &mut self,
+        mut store: impl AsContextMut<Data = T>,
+        name: &str,
+        instance: Instance,
+    ) -> Result<()>
+    where
+        T: Send,
+    {
+        let exports = {
+            let mut store = store.as_context_mut();
+            let component = instance.instance_pre(&store).component().clone();
+            let names = component
+                .component_type()
+                .exports(store.engine())
+                .map(|(name, _item)| name.to_string())
+                .collect::<Vec<_>>();
+            collect_wrapped_exports(&mut store, &component, &instance, None, names)?
+        };
+        let concurrency = self.engine.tunables().concurrency_support;
+        define_wrapped_exports(&mut self.instance(name)?, exports, concurrency)
     }
 
     /// Returns the "root instance" of this linker, used to define names into
@@ -1138,5 +1185,275 @@ impl<T: 'static> LinkerInstance<'_, T> {
 
     fn get(&self, name: &str) -> Option<&Definition> {
         self.map.get(name, self.strings)
+    }
+}
+
+/// An export of an instance, paired with the runtime item it resolves to.
+///
+/// See `Linker::preload_instance`.
+enum InstanceExport {
+    Func {
+        name: String,
+        func: Func,
+        /// Whether the export is declared `async func`, which decides which
+        /// linker constructor may define it.
+        async_: bool,
+    },
+    Instance {
+        name: String,
+        exports: Vec<InstanceExport>,
+    },
+    Module {
+        name: String,
+        module: Module,
+    },
+    Resource {
+        name: String,
+        ty: ResourceType,
+        /// The defining instance's destructor, which the importer's
+        /// `resource.drop` must run, and the instance that defines the
+        /// resource. The latter is `None` when the preload re-exports a
+        /// resource it does not define, so running the destructor enters no
+        /// guest.
+        dtor: Option<(crate::TypedFunc<(u32,), ()>, Option<RuntimeInstance>)>,
+    },
+}
+
+/// Gather `component`'s exports, pairing each with the item it resolves to in
+/// `instance`.
+fn collect_wrapped_exports<T: 'static>(
+    store: &mut StoreContextMut<'_, T>,
+    component: &Component,
+    instance: &Instance,
+    parent: Option<&crate::component::ComponentExportIndex>,
+    names: Vec<String>,
+) -> Result<Vec<InstanceExport>> {
+    use crate::component::types::ComponentItem;
+
+    let mut exports = Vec::new();
+    for name in names {
+        let Some((ty, index)) = component.get_export(parent, name.as_str()) else {
+            // A type-level export with no runtime definition cannot be
+            // forwarded.
+            continue;
+        };
+        match ty {
+            ComponentItem::ComponentFunc(func_ty) => {
+                let Some(func) = instance.get_func(&mut *store, &index) else {
+                    bail_bug!("failed to look up exported function `{name}`");
+                };
+                exports.push(InstanceExport::Func {
+                    name,
+                    func,
+                    async_: func_ty.async_(),
+                });
+            }
+            ComponentItem::ComponentInstance(inst_ty) => {
+                let nested_names = inst_ty
+                    .exports(store.engine())
+                    .map(|(name, _item)| name.to_string())
+                    .collect::<Vec<_>>();
+                let exports_ = collect_wrapped_exports(
+                    store,
+                    component,
+                    instance,
+                    Some(&index),
+                    nested_names,
+                )?;
+                exports.push(InstanceExport::Instance {
+                    name,
+                    exports: exports_,
+                });
+            }
+            ComponentItem::Module(_) => {
+                let Some(module) = instance.get_module(&mut *store, &index) else {
+                    bail_bug!("failed to look up exported core module `{name}`");
+                };
+                exports.push(InstanceExport::Module { name, module });
+            }
+            ComponentItem::Resource(_) => {
+                let Some(ty) = instance.get_resource(&mut *store, &index) else {
+                    bail_bug!("failed to look up exported resource `{name}`");
+                };
+                let dtor = instance
+                    .get_resource_destructor(&mut *store, &index)?
+                    .flatten();
+                exports.push(InstanceExport::Resource { name, ty, dtor });
+            }
+            // Exported types have no runtime definition, and the linker's type
+            // checker ignores them when matching imports.
+            ComponentItem::Type(_) => {}
+            ComponentItem::Component(_) | ComponentItem::CoreFunc(_) => bail!(
+                "cannot define the exported {} `{name}` in a linker",
+                match ty {
+                    ComponentItem::Component(_) => "component",
+                    _ => "core function",
+                },
+            ),
+        }
+    }
+    Ok(exports)
+}
+
+/// Define each collected export in `linker`.
+fn define_wrapped_exports<T: Send + 'static>(
+    linker: &mut LinkerInstance<'_, T>,
+    exports: Vec<InstanceExport>,
+    concurrency: bool,
+) -> Result<()> {
+    for export in exports {
+        match export {
+            InstanceExport::Func { name, func, async_ } => {
+                if async_ {
+                    #[cfg(feature = "component-model-async")]
+                    if concurrency {
+                        linker.func_new_concurrent(
+                            &name,
+                            move |accessor, _ty, params, results| {
+                                Box::pin(async move {
+                                    let result =
+                                        func.call_concurrent(accessor, params, results).await;
+                                    for borrow in lifted_borrows(params) {
+                                        borrow.resource_drop_concurrent(accessor).await?;
+                                    }
+                                    result
+                                })
+                            },
+                        )?;
+                        continue;
+                    }
+                    bail!(
+                        "cannot define the `async func` export `{name}` without \
+                         `Config::concurrency_support`"
+                    );
+                }
+                // Running on a fiber, so the public entry points would reject
+                // this with "cannot do blocking `call` from an async context".
+                linker.func_new(&name, move |mut store, _ty, params, results| {
+                    let result = func.call_in_guest_call(store.as_context_mut(), params, results);
+                    for borrow in lifted_borrows(params) {
+                        borrow.resource_drop_in_guest_call(&mut store)?;
+                    }
+                    result
+                })?;
+            }
+            InstanceExport::Instance { name, exports } => {
+                define_wrapped_exports(&mut linker.instance(&name)?, exports, concurrency)?;
+            }
+            InstanceExport::Module { name, module } => {
+                linker.module(&name, &module)?;
+            }
+            InstanceExport::Resource { name, ty, dtor } => {
+                linker.resource(&name, ty, move |mut store, rep| {
+                    let Some((dtor, instance)) = &dtor else {
+                        return Ok(());
+                    };
+
+                    // Running the destructor enters its component, so it needs
+                    // the same setup as `ResourceAny::resource_drop_impl` does.
+                    // Otherwise it runs on the caller's task and sees, for
+                    // example, the caller's `context.{get,set}` slots.
+                    let Some(instance) = *instance else {
+                        return dtor
+                            .call_in_guest_call(
+                                &mut store,
+                                (rep,),
+                                crate::runtime::vm::UncaughtException::Propagate,
+                            )
+                            .map(drop);
+                    };
+                    if !store.0.may_enter() {
+                        bail!(crate::Trap::CannotEnterComponent);
+                    }
+                    store.0.enter_guest_sync_call(false, instance)?;
+
+                    // This trampoline is the boundary between two components,
+                    // so an exception the destructor does not catch becomes a
+                    // trap rather than unwinding into the caller.
+                    dtor.call_in_guest_call(
+                        &mut store,
+                        (rep,),
+                        crate::runtime::vm::UncaughtException::Trap,
+                    )?;
+
+                    store.0.exit_guest_sync_call()
+                })?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The borrowed resource handles among `params`, which the host must drop after
+/// a forwarded call.
+///
+/// Lifting adds a host table entry wherever a `borrow` appears, including
+/// nested inside an aggregate, so this walks the whole value.
+fn lifted_borrows(params: &[Val]) -> Vec<crate::component::ResourceAny> {
+    let mut borrows = Vec::new();
+    for param in params {
+        collect_lifted_borrows(param, &mut borrows);
+    }
+    borrows
+}
+
+/// Push every non-owned resource handle reachable from `val` onto `borrows`.
+///
+/// NB: the match below has no catch-all arm so that a new `Val` variant forces
+/// a decision about whether it can carry a `borrow`.
+fn collect_lifted_borrows(val: &Val, borrows: &mut Vec<crate::component::ResourceAny>) {
+    match val {
+        Val::Resource(r) => {
+            if !r.owned() {
+                borrows.push(*r);
+            }
+        }
+
+        Val::List(vals) | Val::Tuple(vals) | Val::FixedLengthList(vals) => {
+            for val in vals {
+                collect_lifted_borrows(val, borrows);
+            }
+        }
+        Val::Record(fields) => {
+            for (_name, val) in fields {
+                collect_lifted_borrows(val, borrows);
+            }
+        }
+        Val::Map(entries) => {
+            for (key, val) in entries {
+                collect_lifted_borrows(key, borrows);
+                collect_lifted_borrows(val, borrows);
+            }
+        }
+        Val::Variant(_, payload) | Val::Option(payload) => {
+            if let Some(val) = payload {
+                collect_lifted_borrows(val, borrows);
+            }
+        }
+        Val::Result(result) => {
+            if let Some(val) = result.as_ref().unwrap_or_else(|e| e) {
+                collect_lifted_borrows(val, borrows);
+            }
+        }
+
+        // Leaves, which hold no handle.
+        Val::Bool(_)
+        | Val::S8(_)
+        | Val::U8(_)
+        | Val::S16(_)
+        | Val::U16(_)
+        | Val::S32(_)
+        | Val::U32(_)
+        | Val::S64(_)
+        | Val::U64(_)
+        | Val::Float32(_)
+        | Val::Float64(_)
+        | Val::Char(_)
+        | Val::String(_)
+        | Val::Enum(_)
+        | Val::Flags(_)
+        | Val::Future(_)
+        | Val::Stream(_)
+        | Val::ErrorContext(_) => {}
     }
 }
