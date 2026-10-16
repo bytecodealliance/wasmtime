@@ -225,6 +225,24 @@ impl RuntimeLinearMemory for MmapMemory {
         self.len = len;
     }
 
+    fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
+        // The Wasm page size is a multiple of the host page size, so a range
+        // aligned to the former is aligned to the latter.
+        let offset = HostAlignedByteCount::new(offset)?;
+        let len = HostAlignedByteCount::new(len)?;
+        let start = self.pre_guard_size.checked_add(offset)?;
+        assert!(start.checked_add(len)? <= self.pre_guard_size.checked_add(self.accessible())?);
+        // SAFETY: the range is within the accessible part of this mmap, and
+        // `&mut self` means nothing else is accessing it.
+        unsafe {
+            crate::runtime::vm::sys::vm::discard_pages(
+                self.mmap.as_mut_ptr().add(start.byte_count()),
+                len.byte_count(),
+            )?;
+        }
+        Ok(())
+    }
+
     fn base(&self) -> MemoryBase {
         MemoryBase::Mmap(
             self.mmap

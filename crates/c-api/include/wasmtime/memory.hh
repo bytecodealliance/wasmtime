@@ -76,6 +76,19 @@ public:
     return prev;
   }
 
+  /// Zeroes `count` WebAssembly pages starting at page `start`, and returns the
+  /// physical memory behind them to the operating system where possible.
+  ///
+  /// The size of this memory does not change.
+  Result<std::monostate> discard(Store::Context cx, uint64_t start,
+                                 uint64_t count) const {
+    auto *error = wasmtime_memory_discard(cx.ptr, &memory, start, count);
+    if (error != nullptr) {
+      return Error(error);
+    }
+    return std::monostate();
+  }
+
   /// Returns the size of a page, in bytes, for this memory.
   ///
   /// WebAssembly memories are made up of a whole number of pages, so the byte

@@ -796,6 +796,20 @@ impl Instance {
         result
     }
 
+    /// Discards `len` bytes at `offset` of the defined memory `idx`, see
+    /// `wasmtime::Memory::discard`.
+    ///
+    /// The memory's base pointer and length are unchanged, so the
+    /// `VMMemoryDefinition` in this instance needs no update.
+    pub(crate) fn memory_discard(
+        self: Pin<&mut Self>,
+        idx: DefinedMemoryIndex,
+        start: u64,
+        count: u64,
+    ) -> Result<()> {
+        self.get_defined_memory_mut(idx).discard(start, count)
+    }
+
     /// Performs a grow operation on the `table_index` specified using `grow`.
     ///
     /// This will handle updating the VMTableDefinition internally as necessary.

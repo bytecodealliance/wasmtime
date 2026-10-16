@@ -1005,3 +1005,225 @@ fn atomic_wait_massive_timeout() -> Result<()> {
 
     Ok(())
 }
+
+const WASM_PAGE: usize = 0x10000;
+
+/// A memory of four Wasm pages whose initialization image covers pages 1 and
+/// 2, with `load` to read it from compiled code.
+const DISCARD_IMAGE_WAT: &str = r#"
+    (module
+        (memory (export "m") 4 8)
+        (func (export "load") (param i32) (result i32)
+            (i32.load8_u (local.get 0)))
+        (data (i32.const 0x10000) "first")
+        (data (i32.const 0x2fffb) "last!")
+    )
+"#;
+
+/// Compiles `DISCARD_IMAGE_WAT`, loading it from a file when `from_file` so
+/// that copy-on-write images are used on every platform, not only where an
+/// anonymous image can be created in memory.
+fn discard_image_module(engine: &Engine, from_file: bool) -> Result<Module> {
+    let module = Module::new(engine, DISCARD_IMAGE_WAT)?;
+    if !from_file {
+        return Ok(module);
+    }
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("module.cwasm");
+    std::fs::write(&path, module.serialize()?)?;
+    unsafe { Module::deserialize_file(engine, &path) }
+}
+
+/// Discards ranges of an instance of `DISCARD_IMAGE_WAT` that lie before,
+/// inside, across and after its image, checking that each reads back as zero
+/// from both the host and compiled code while the rest is untouched.
+fn check_discard_with_image(store: &mut Store<()>, module: &Module) -> Result<()> {
+    let instance = Instance::new(&mut *store, module, &[])?;
+    let memory = instance.get_memory(&mut *store, "m").unwrap();
+    let load = instance.get_typed_func::<u32, u32>(&mut *store, "load")?;
+
+    assert_eq!(&memory.data(&store)[0x10000..0x10005], b"first");
+    assert_eq!(&memory.data(&store)[0x2fffb..0x30000], b"last!");
+
+    // Dirty the first half of each page so discarding has resident pages to
+    // release, including copy-on-write copies of the image.
+    for page in 0..4 {
+        memory.data_mut(&mut *store)[page * WASM_PAGE + 0x100..][..0x7f00].fill(0xa5);
+    }
+
+    // Entirely inside the image.
+    memory.discard(&mut *store, 2, 1)?;
+    assert!(
+        memory.data(&store)[0x20000..0x30000]
+            .iter()
+            .all(|b| *b == 0)
+    );
+    assert_eq!(load.call(&mut *store, 0x2fffb)?, 0);
+    assert_eq!(&memory.data(&store)[0x10000..0x10005], b"first");
+    assert_eq!(memory.data(&store)[0x10100], 0xa5);
+
+    // Across the start of the image.
+    memory.discard(&mut *store, 0, 2)?;
+    assert!(memory.data(&store)[..0x30000].iter().all(|b| *b == 0));
+    assert_eq!(load.call(&mut *store, 0x10000)?, 0);
+
+    // After the image.
+    assert_eq!(memory.data(&store)[0x30100], 0xa5);
+    memory.discard(&mut *store, 3, 1)?;
+    assert!(memory.data(&store).iter().all(|b| *b == 0));
+    assert_eq!(load.call(&mut *store, 0x30100)?, 0);
+
+    // Discarded pages are ordinary memory again once written.
+    memory.write(&mut *store, 0x10000, b"again")?;
+    assert_eq!(load.call(&mut *store, 0x10000)?, u32::from(b'a'));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_errors() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let memory = Memory::new(&mut store, MemoryType::new(2, None)?)?;
+
+    // Out of bounds, including overflow.
+    assert!(memory.discard(&mut store, 2, 1).is_err());
+    assert!(memory.discard(&mut store, 1, 2).is_err());
+    assert!(memory.discard(&mut store, 0, 3).is_err());
+    assert!(memory.discard(&mut store, u64::MAX, u64::MAX).is_err());
+    assert!(memory.discard(&mut store, 1, u64::MAX).is_err());
+
+    // Empty ranges are fine anywhere within bounds, including at the end.
+    memory.discard(&mut store, 0, 0)?;
+    memory.discard(&mut store, 2, 0)?;
+    memory.discard(&mut store, 0, 2)?;
+
+    // A failed discard leaves memory unchanged.
+    memory.data_mut(&mut store).fill(1);
+    assert!(memory.discard(&mut store, 1, 2).is_err());
+    assert!(memory.data(&store).iter().all(|b| *b == 1));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_custom_page_size() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_custom_page_sizes(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let ty = MemoryTypeBuilder::new()
+        .page_size_log2(0)
+        .min(2 * WASM_PAGE as u64)
+        .build()?;
+    let memory = Memory::new(&mut store, ty)?;
+    let err = memory.discard(&mut store, 0, 1).unwrap_err();
+    assert!(format!("{err:?}").contains("custom page size"), "{err:?}");
+
+    // Also through a module declaring its page size.
+    let module = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 0x20000 (pagesize 1)))"#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+    assert!(memory.discard(&mut store, 0, 1).is_err());
+    Ok(())
+}
+
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn discard_zeroes(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+    let memory = Memory::new(&mut store, MemoryType::new(4, None)?)?;
+    memory.data_mut(&mut store).fill(0xa5);
+
+    memory.discard(&mut store, 1, 2)?;
+    let data = memory.data(&store);
+    assert!(data[..WASM_PAGE].iter().all(|b| *b == 0xa5));
+    assert!(data[WASM_PAGE..3 * WASM_PAGE].iter().all(|b| *b == 0));
+    assert!(data[3 * WASM_PAGE..].iter().all(|b| *b == 0xa5));
+    assert_eq!(memory.size(&store), 4);
+
+    // Discarded pages can be written again, and discarding them again works.
+    memory.data_mut(&mut store)[WASM_PAGE..2 * WASM_PAGE].fill(0x5a);
+    assert!(
+        memory.data(&store)[WASM_PAGE..2 * WASM_PAGE]
+            .iter()
+            .all(|b| *b == 0x5a)
+    );
+    memory.discard(&mut store, 0, 4)?;
+    assert!(memory.data(&store).iter().all(|b| *b == 0));
+    Ok(())
+}
+
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn discard_then_grow(config: &mut Config) -> Result<()> {
+    // Small reservations so that growth also has to move the memory.
+    for reservation in [0, 1 << 20, 4 << 30] {
+        if reservation > (1 << 20) && cfg!(target_pointer_width = "32") {
+            continue;
+        }
+        config.memory_reservation(reservation);
+        config.memory_reservation_for_growth(0);
+        let engine = Engine::new(config)?;
+        let mut store = Store::new(&engine, ());
+        let memory = Memory::new(&mut store, MemoryType::new(2, None)?)?;
+        memory.data_mut(&mut store).fill(0xa5);
+
+        memory.discard(&mut store, 1, 1)?;
+        memory.grow(&mut store, 30)?;
+        let data = memory.data(&store);
+        assert_eq!(data.len(), 32 * WASM_PAGE);
+        assert!(data[..WASM_PAGE].iter().all(|b| *b == 0xa5));
+        assert!(data[WASM_PAGE..].iter().all(|b| *b == 0));
+
+        memory.data_mut(&mut store)[16 * WASM_PAGE..].fill(0x5a);
+        memory.discard(&mut store, 16, 16)?;
+        assert!(memory.data(&store)[WASM_PAGE..].iter().all(|b| *b == 0));
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_with_image() -> Result<()> {
+    for cow in [true, false] {
+        for from_file in [true, false] {
+            let mut config = Config::new();
+            config.memory_init_cow(cow);
+            let engine = Engine::new(&config)?;
+            let module = discard_image_module(&engine, from_file)?;
+            let mut store = Store::new(&engine, ());
+            check_discard_with_image(&mut store, &module)?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_with_image_then_grow() -> Result<()> {
+    for from_file in [true, false] {
+        // A reservation smaller than the grown memory so that growth moves
+        // the memory out of its image's mapping.
+        let mut config = Config::new();
+        config.memory_reservation(4 * WASM_PAGE as u64);
+        config.memory_reservation_for_growth(0);
+        let engine = Engine::new(&config)?;
+        let module = discard_image_module(&engine, from_file)?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let memory = instance.get_memory(&mut store, "m").unwrap();
+
+        memory.discard(&mut store, 2, 1)?;
+        memory.grow(&mut store, 4)?;
+        let data = memory.data(&store);
+        assert_eq!(&data[0x10000..0x10005], b"first");
+        assert!(data[0x20000..].iter().all(|b| *b == 0));
+    }
+    Ok(())
+}
