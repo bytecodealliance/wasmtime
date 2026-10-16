@@ -383,6 +383,11 @@ macro_rules! vmctx_field_size {
     (($p:expr) VMLowering) => {
         2u32 * u32::from($p)
     };
+    // `VMGlobalDefinition` is a union of the representations of every type a
+    // global can have, the largest being `v128`.
+    (($p:expr) VMGlobalDefinition) => {
+        16u32
+    };
     // Anything else names one of the `VM*` types, and so has an
     // `offsets::VMFoo` generated for it by `for_each_vm_type!`. Deferring to
     // that keeps this macro from having to mirror the list of `VM*` types, and

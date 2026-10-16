@@ -94,4 +94,9 @@
   (func $me (export "ref-func-myself")
     (drop (ref.func $me))
   )
+
+  (global $funcref-global (export "funcref-global") (mut funcref) (ref.func $empty))
+  (func (export "set-funcref-global")
+    (global.set $funcref-global (ref.func $me))
+  )
 )

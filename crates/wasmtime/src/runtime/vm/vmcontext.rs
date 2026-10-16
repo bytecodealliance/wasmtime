@@ -12,7 +12,7 @@ use core::cell::UnsafeCell;
 use core::ffi::c_void;
 use core::fmt;
 use core::marker::{self, PhantomPinned};
-use core::mem::{self, MaybeUninit};
+use core::mem::{self, ManuallyDrop, MaybeUninit};
 #[cfg(feature = "gc-null")]
 use core::num::NonZeroU32;
 use core::ops::Range;
@@ -331,18 +331,30 @@ impl VMMemoryDefinition {
 // `VmSafe` fields.
 unsafe impl VmSafe for VMTableDefinition {}
 
-// SAFETY: `VMGlobalDefinition` is generated with `#[repr(C)]` and only contains
-// `VmSafe` fields.
+// SAFETY: `VMGlobalDefinition` is `#[repr(C)]` and only contains `VmSafe`
+// fields.
 unsafe impl VmSafe for VMGlobalDefinition {}
 
 #[cfg(test)]
 mod test_vmglobal_definition {
     use super::VMGlobalDefinition;
     use std::mem::{align_of, size_of};
-    use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
+    use wasmtime_environ::{HostPtr, Module, PtrSize, StaticModuleIndex, VMOffsets};
+
+    #[test]
+    fn check_vmglobal_definition_size() {
+        // The compiler lays out globals using this size; see
+        // `vmctx_field_size!` in `wasmtime-environ`.
+        assert_eq!(size_of::<VMGlobalDefinition>(), 16);
+        assert_eq!(
+            size_of::<VMGlobalDefinition>(),
+            usize::from(HostPtr.maximum_value_size())
+        );
+    }
 
     #[test]
     fn check_vmglobal_definition_alignment() {
+        assert_eq!(align_of::<VMGlobalDefinition>(), 16);
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<i32>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<i64>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f32>());
@@ -366,171 +378,192 @@ mod test_vmglobal_definition {
     }
 }
 
+/// The storage for a WebAssembly global defined within the instance.
+///
+/// Compiled code reads and writes this storage directly, as the field that
+/// matches the global's type. Scalars are stored in native-endian order, except
+/// `v128`, which is little-endian.
+///
+/// TODO: Pack the globals more densely, rather than using the same size for
+/// every type.
+#[repr(C, align(16))]
+pub union VMGlobalDefinition {
+    // These values are all stored in native-endian
+    i32: i32,
+    i64: i64,
+    f32: u32,
+    f64: u64,
+    gc_ref: ManuallyDrop<Option<VMGcRef>>,
+    func_ref: Option<VmPtr<VMFuncRef>>,
+    // This is stored in little-endian
+    v128: [u8; 16],
+}
+
 impl VMGlobalDefinition {
     /// Construct a `VMGlobalDefinition`.
     pub fn new() -> Self {
-        Self { storage: [0; 16] }
+        Self { v128: [0; 16] }
     }
 
-    /// Return a reference to the value as an i32.
-    pub unsafe fn as_i32(&self) -> &i32 {
-        unsafe { &*(self.storage.as_ref().as_ptr().cast::<i32>()) }
+    /// Returns the value of this `i32` global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is `i32`.
+    pub unsafe fn get_i32(&self) -> i32 {
+        unsafe { self.i32 }
     }
 
-    /// Return a mutable reference to the value as an i32.
-    pub unsafe fn as_i32_mut(&mut self) -> &mut i32 {
-        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<i32>()) }
+    /// Sets the value of this `i32` global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is `i32`.
+    pub unsafe fn set_i32(&mut self, val: i32) {
+        self.i32 = val;
     }
 
-    /// Return a reference to the value as a u32.
-    pub unsafe fn as_u32(&self) -> &u32 {
-        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u32>()) }
+    /// Returns the value of this `i64` global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is `i64`.
+    pub unsafe fn get_i64(&self) -> i64 {
+        unsafe { self.i64 }
     }
 
-    /// Return a mutable reference to the value as an u32.
-    pub unsafe fn as_u32_mut(&mut self) -> &mut u32 {
-        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>()) }
+    /// Sets the value of this `i64` global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is `i64`.
+    pub unsafe fn set_i64(&mut self, val: i64) {
+        self.i64 = val;
     }
 
-    /// Return a reference to the value as an i64.
-    pub unsafe fn as_i64(&self) -> &i64 {
-        unsafe { &*(self.storage.as_ref().as_ptr().cast::<i64>()) }
+    /// Returns the bits of this `f32` global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is `f32`.
+    pub unsafe fn get_f32_bits(&self) -> u32 {
+        unsafe { self.f32 }
     }
 
-    /// Return a mutable reference to the value as an i64.
-    pub unsafe fn as_i64_mut(&mut self) -> &mut i64 {
-        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<i64>()) }
+    /// Sets the bits of this `f32` global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is `f32`.
+    pub unsafe fn set_f32_bits(&mut self, bits: u32) {
+        self.f32 = bits;
     }
 
-    /// Return a reference to the value as an u64.
-    pub unsafe fn as_u64(&self) -> &u64 {
-        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u64>()) }
+    /// Returns the bits of this `f64` global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is `f64`.
+    pub unsafe fn get_f64_bits(&self) -> u64 {
+        unsafe { self.f64 }
     }
 
-    /// Return a mutable reference to the value as an u64.
-    pub unsafe fn as_u64_mut(&mut self) -> &mut u64 {
-        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>()) }
+    /// Sets the bits of this `f64` global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is `f64`.
+    pub unsafe fn set_f64_bits(&mut self, bits: u64) {
+        self.f64 = bits;
     }
 
-    /// Return a reference to the value as an f32.
-    pub unsafe fn as_f32(&self) -> &f32 {
-        unsafe { &*(self.storage.as_ref().as_ptr().cast::<f32>()) }
-    }
-
-    /// Return a mutable reference to the value as an f32.
-    pub unsafe fn as_f32_mut(&mut self) -> &mut f32 {
-        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<f32>()) }
-    }
-
-    /// Return a reference to the value as f32 bits.
-    pub unsafe fn as_f32_bits(&self) -> &u32 {
-        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u32>()) }
-    }
-
-    /// Return a mutable reference to the value as f32 bits.
-    pub unsafe fn as_f32_bits_mut(&mut self) -> &mut u32 {
-        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u32>()) }
-    }
-
-    /// Return a reference to the value as an f64.
-    pub unsafe fn as_f64(&self) -> &f64 {
-        unsafe { &*(self.storage.as_ref().as_ptr().cast::<f64>()) }
-    }
-
-    /// Return a mutable reference to the value as an f64.
-    pub unsafe fn as_f64_mut(&mut self) -> &mut f64 {
-        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<f64>()) }
-    }
-
-    /// Return a reference to the value as f64 bits.
-    pub unsafe fn as_f64_bits(&self) -> &u64 {
-        unsafe { &*(self.storage.as_ref().as_ptr().cast::<u64>()) }
-    }
-
-    /// Return a mutable reference to the value as f64 bits.
-    pub unsafe fn as_f64_bits_mut(&mut self) -> &mut u64 {
-        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>()) }
-    }
-
-    /// Gets the underlying 128-bit vector value.
-    //
-    // Note that vectors are stored in little-endian format while other types
-    // are stored in native-endian format.
+    /// Returns the value of this `v128` global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is `v128`.
     pub unsafe fn get_u128(&self) -> u128 {
-        unsafe { u128::from_le(*(self.storage.as_ref().as_ptr().cast::<u128>())) }
+        u128::from_le_bytes(unsafe { self.v128 })
     }
 
-    /// Sets the 128-bit vector values.
-    //
-    // Note that vectors are stored in little-endian format while other types
-    // are stored in native-endian format.
+    /// Sets the value of this `v128` global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is `v128`.
     pub unsafe fn set_u128(&mut self, val: u128) {
-        unsafe {
-            *self.storage.as_mut().as_mut_ptr().cast::<u128>() = val.to_le();
-        }
+        self.v128 = val.to_le_bytes();
     }
 
-    /// Return a reference to the value as u128 bits.
-    pub unsafe fn as_u128_bits(&self) -> &[u8; 16] {
-        unsafe { &*(self.storage.as_ref().as_ptr().cast::<[u8; 16]>()) }
-    }
-
-    /// Return a mutable reference to the value as u128 bits.
-    pub unsafe fn as_u128_bits_mut(&mut self) -> &mut [u8; 16] {
-        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<[u8; 16]>()) }
-    }
-
-    /// Return a reference to the global value as a borrowed GC reference.
+    /// Returns the value of this GC reference global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is a GC reference,
+    /// for example `extrenref`, `anyref`, `exnref`, etc.
     pub unsafe fn as_gc_ref(&self) -> Option<&VMGcRef> {
-        let raw_ptr = self.storage.as_ref().as_ptr().cast::<Option<VMGcRef>>();
-        let ret = unsafe { (*raw_ptr).as_ref() };
+        let ret = unsafe { (*self.gc_ref).as_ref() };
         assert!(cfg!(feature = "gc") || ret.is_none());
         ret
     }
 
-    /// Return a reference to the global value as a borrowed GC reference.
+    /// Returns the value of this GC reference global, mutably.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is a GC reference,
+    /// for example `extrenref`, `anyref`, `exnref`, etc.
     pub unsafe fn as_gc_ref_mut(&mut self) -> Option<&mut VMGcRef> {
-        let raw_ptr = self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>();
-        let ret = unsafe { (*raw_ptr).as_mut() };
+        let ret = unsafe { (*self.gc_ref).as_mut() };
         assert!(cfg!(feature = "gc") || ret.is_none());
         ret
     }
 
-    /// Initialize a global to the given GC reference.
+    /// Initialize this GC reference global to the given GC reference.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is a GC reference,
+    /// for example `extrenref`, `anyref`, `exnref`, etc.
     pub unsafe fn init_gc_ref(
         &mut self,
         store: &mut StoreOpaque,
         gc_ref: Option<&VMGcRef>,
     ) -> Result<()> {
-        let dest = unsafe {
-            &mut *(self
-                .storage
-                .as_mut()
-                .as_mut_ptr()
-                .cast::<MaybeUninit<Option<VMGcRef>>>())
-        };
-
+        // SAFETY: `MaybeUninit<T>` has the same layout as `T`, and this global
+        // is uninitialized, so it must not be read as a `VMGcRef`.
+        let dest = unsafe { &mut *(&raw mut self.gc_ref).cast::<MaybeUninit<Option<VMGcRef>>>() };
         store.init_gc_ref(dest, gc_ref)
     }
 
-    /// Write a GC reference into this global value.
+    /// Write a GC reference into this GC reference global.
     pub unsafe fn write_gc_ref(
         &mut self,
         store: &mut StoreOpaque,
         gc_ref: Option<&VMGcRef>,
     ) -> Result<()> {
-        let dest = unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>()) };
+        let dest = unsafe { &mut *self.gc_ref };
         store.write_gc_ref(dest, gc_ref)
     }
 
-    /// Return a reference to the value as a `VMFuncRef`.
-    pub unsafe fn as_func_ref(&self) -> *mut VMFuncRef {
-        unsafe { *(self.storage.as_ref().as_ptr().cast::<*mut VMFuncRef>()) }
+    /// Returns the value of this funcref global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is a `funcref` or
+    /// a concrete function type.
+    pub unsafe fn get_func_ref(&self) -> Option<NonNull<VMFuncRef>> {
+        unsafe { self.func_ref.map(|p| p.as_non_null()) }
     }
 
-    /// Return a mutable reference to the value as a `VMFuncRef`.
-    pub unsafe fn as_func_ref_mut(&mut self) -> &mut *mut VMFuncRef {
-        unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<*mut VMFuncRef>()) }
+    /// Sets the value of this funcref global.
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the type of this global is a `funcref` or
+    /// a concrete function type.
+    pub unsafe fn set_func_ref(&mut self, func_ref: Option<NonNull<VMFuncRef>>) {
+        self.func_ref = func_ref.map(VmPtr::from);
     }
 }
 

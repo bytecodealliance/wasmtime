@@ -89,18 +89,6 @@ macro_rules! for_each_vm_type {
                 pub current_elements: usize,
             }
 
-            /// The storage for a WebAssembly global defined within the instance.
-            ///
-            /// TODO: Pack the globals more densely, rather than using the same size
-            /// for every type.
-            #[derive(Debug)]
-            #[repr(C, align(16))]
-            #[snake_name = vm_global_definition]
-            pub struct VMGlobalDefinition {
-                /// The raw storage for a global's value.
-                storage: [u8; 16],
-            }
-
             /// A WebAssembly tag defined within the instance.
             #[derive(Debug)]
             #[repr(C)]

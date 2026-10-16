@@ -708,7 +708,7 @@ impl ComponentInstance {
             // SAFETY: this is a valid initialization of all globals which are
             // 32-bit values. The `may_leave` flag starts out `true`.
             unsafe {
-                *def.as_i32_mut() = 1;
+                def.set_i32(1);
                 self.instance_flags(i).as_raw().write(def);
             }
         }
@@ -1050,13 +1050,13 @@ impl InstanceFlags {
 
     #[inline]
     pub unsafe fn may_leave(&self) -> bool {
-        unsafe { *self.as_raw().as_ref().as_i32() != 0 }
+        unsafe { self.as_raw().as_ref().get_i32() != 0 }
     }
 
     #[inline]
     pub unsafe fn set_may_leave(&mut self, val: bool) {
         unsafe {
-            *self.as_raw().as_mut().as_i32_mut() = val as i32;
+            self.as_raw().as_mut().set_i32(val as i32);
         }
     }
 
