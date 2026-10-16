@@ -1,0 +1,288 @@
+test compile precise-output
+set opt_level=none
+target x86_64 has_apx
+
+;; APX NDD forms with an immediate source. The point of these is that the
+;; constant stays inside the instruction: without the `VMI` encodings the
+;; `Value`-to-`GprMem` conversion would park it in a constant pool and load it
+;; back at run time.
+
+function %add_imm8_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 5
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq $0x5, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x83, 0xc7, 0x05, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+function %add_imm32_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0x1234
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq $0x1234, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x81, 0xc7, 0x34, 0x12
+;   .byte 0x00, 0x00, 0x48, 0x89, 0xec, 0x5d, 0xc3
+
+function %add_imm8_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addl $0x5, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x83, 0xc7, 0x05, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+function %add_imm32_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x1234
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addl $0x1234, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x81, 0xc7, 0x34, 0x12
+;   .byte 0x00, 0x00, 0x48, 0x89, 0xec, 0x5d, 0xc3
+
+;; `sub` does not commute, so only the subtrahend can use the immediate slot.
+
+function %sub_imm8_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 7
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   subq $0x7, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x83, 0xef, 0x07, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+;; A constant *minuend* has to be materialised into a register instead.
+
+function %sub_const_lhs_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 7
+    v2 = isub v1, v0
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movl $0x7, %esi
+;   subq %rdi, %rsi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $7, %esi
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x29, 0xfe, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+
+function %and_imm32_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 255
+    v2 = band v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   andq $0xff, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x81, 0xe7, 0xff, 0x00
+;   .byte 0x00, 0x00, 0x48, 0x89, 0xec, 0x5d, 0xc3
+
+function %or_imm8_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = bor v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   orl $0x1, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x83, 0xcf, 0x01, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+;; These commutative operations put the constant on the left; it should be
+;; swapped into the immediate slot rather than loaded into a register.
+
+function %xor_const_lhs_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 70000
+    v2 = bxor v1, v0
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   xorl $0x11170, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x81, 0xf7, 0x70, 0x11
+;   .byte 0x01, 0x00, 0x48, 0x89, 0xec, 0x5d, 0xc3
+
+function %and_const_lhs_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 7
+    v2 = band v1, v0
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   andq $0x7, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x83, 0xe7, 0x07, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+;; An `i64` constant too wide for a sign-extended `imm32` has no immediate form
+;; at all, so it is materialised with `movabs` -- but still not via a constant
+;; pool.
+
+function %add_wide_imm_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0x123456789abc
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movabsq $0x123456789abc, %rsi
+;   addq %rdi, %rsi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0x123456789abc, %rsi
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x01, 0xfe, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+

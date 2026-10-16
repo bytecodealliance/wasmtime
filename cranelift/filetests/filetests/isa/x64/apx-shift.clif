@@ -1,0 +1,89 @@
+test compile precise-output
+target x86_64 has_bmi2 has_apx
+
+; APX NDD shifts and rotates. The win is the destination register: the legacy
+; forms shift in place, so preserving the input costs a move first.
+;
+; BMI2 keeps the cases it already does better. `shlx`/`shrx`/`sarx` take the
+; amount in any register rather than `cl`, and `rorx` rotates by an immediate
+; without writing flags, so those are deliberately left alone below.
+
+; want: one instruction, rax = rdi << 7
+function %shl_imm_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 7
+    v2 = ishl v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   shlq $0x7, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0xc1, 0xe7, 0x07, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+function %funnel_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 7
+    v3 = iconst.i64 57
+    v4 = ishl v0, v2
+    v5 = ushr v1, v3
+    v6 = bor v4, v5
+    return v6
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   shldq $0x7, %rsi, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x24, 0xf7, 0x07, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+function %funnel_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 5
+    v3 = iconst.i32 27
+    v4 = ishl v0, v2
+    v5 = ushr v1, v3
+    v6 = bor v4, v5
+    return v6
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   shldl $0x5, %esi, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x24, 0xf7, 0x05, 0x48
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+

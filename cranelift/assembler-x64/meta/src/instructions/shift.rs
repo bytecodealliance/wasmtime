@@ -68,12 +68,44 @@ pub fn list() -> Vec<Inst> {
         inst("rorq", fmt("MI", [rw(rm64), r(imm8)]), rex([0xC1]).digit(1).ib().w(), _64b),
         inst("rorq", fmt("M1", [rw(rm64)]), rex([0xD1]).digit(1).ib().w(), _64b).custom(Display),
 
+        // APX: "new data destination" shifts and rotates, which write the result
+        // to the `vvvv`-encoded register instead of overwriting the operand
+        // being shifted. The opcodes and `/digit` extensions are the legacy ones
+        // promoted into map 4.
+        //
+        // Only the forms that beat what is already available are defined here.
+        // BMI2 covers the others, and covers them better: `shlx`/`shrx`/`sarx`
+        // take the shift amount in any register rather than `cl`, and `rorx`
+        // rotates by an immediate without writing flags. What BMI2 has no answer
+        // for is shifting by an immediate and rotating by a variable amount.
+        inst("shll", fmt("VMI", [w(r32a), r(rm32), r(imm8)]), evex(L128, Full).map4().w0().nd().op(0xC1).digit(4).ib(), _64b & apx),
+        inst("shlq", fmt("VMI", [w(r64a), r(rm64), r(imm8)]), evex(L128, Full).map4().w1().nd().op(0xC1).digit(4).ib(), _64b & apx),
+        inst("shrl", fmt("VMI", [w(r32a), r(rm32), r(imm8)]), evex(L128, Full).map4().w0().nd().op(0xC1).digit(5).ib(), _64b & apx),
+        inst("shrq", fmt("VMI", [w(r64a), r(rm64), r(imm8)]), evex(L128, Full).map4().w1().nd().op(0xC1).digit(5).ib(), _64b & apx),
+        inst("sarl", fmt("VMI", [w(r32a), r(rm32), r(imm8)]), evex(L128, Full).map4().w0().nd().op(0xC1).digit(7).ib(), _64b & apx),
+        inst("sarq", fmt("VMI", [w(r64a), r(rm64), r(imm8)]), evex(L128, Full).map4().w1().nd().op(0xC1).digit(7).ib(), _64b & apx),
+        inst("roll", fmt("VMC", [w(r32a), r(rm32), r(cl)]), evex(L128, Full).map4().w0().nd().op(0xD3).digit(0), _64b & apx),
+        inst("rolq", fmt("VMC", [w(r64a), r(rm64), r(cl)]), evex(L128, Full).map4().w1().nd().op(0xD3).digit(0), _64b & apx),
+        inst("rorl", fmt("VMC", [w(r32a), r(rm32), r(cl)]), evex(L128, Full).map4().w0().nd().op(0xD3).digit(1), _64b & apx),
+        inst("rorq", fmt("VMC", [w(r64a), r(rm64), r(cl)]), evex(L128, Full).map4().w1().nd().op(0xD3).digit(1), _64b & apx),
+
         inst("shldw", fmt("MRI", [rw(rm16), r(r16), r(imm8)]), rex([0x66, 0x0F, 0xA4]).ib(), _64b | compat),
         inst("shldw", fmt("MRC", [rw(rm16), r(r16), r(cl)]), rex([0x66, 0x0F, 0xA5]).ib(), _64b | compat),
         inst("shldl", fmt("MRI", [rw(rm32), r(r32), r(imm8)]), rex([0x0F, 0xA4]).ib(), _64b | compat),
         inst("shldq", fmt("MRI", [rw(rm64), r(r64), r(imm8)]), rex([0x0F, 0xA4]).ib().w(), _64b),
         inst("shldl", fmt("MRC", [rw(rm32), r(r32), r(cl)]), rex([0x0F, 0xA5]).ib(), _64b | compat),
         inst("shldq", fmt("MRC", [rw(rm64), r(r64), r(cl)]), rex([0x0F, 0xA5]).ib().w(), _64b),
+        // APX: "new data destination" form of the double-precision left shift.
+        // Only the immediate form is defined, because the lowering only ever
+        // produces a constant shift amount.
+        //
+        // Note the opcode. Most promotions keep their legacy value, but map 4
+        // reassigns this one: `0F A4` becomes `0x24`. (The `cl` form, `0F A5`,
+        // does keep its opcode.) The destination is `vvvv`, so the DSL lists
+        // ModRM.reg first and the written operand second, which is what the
+        // `RVM`-shaped slot assignment expects.
+        inst("shldl", fmt("RVMI", [r(r32b), w(r32a), r(rm32), r(imm8)]), evex(L128, Full).map4().w0().nd().op(0x24).r().ib(), _64b & apx),
+        inst("shldq", fmt("RVMI", [r(r64b), w(r64a), r(rm64), r(imm8)]), evex(L128, Full).map4().w1().nd().op(0x24).r().ib(), _64b & apx),
 
         // BMI2 shifts
         inst("sarxl", fmt("RMV", [w(r32a), r(rm32), r(r32b)]), vex(LZ)._f3()._0f38().w0().op(0xF7), (_64b | compat) & bmi2),

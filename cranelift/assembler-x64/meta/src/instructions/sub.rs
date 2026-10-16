@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
+use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{align, evex, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -22,6 +22,38 @@ pub fn list() -> Vec<Inst> {
         inst("subw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x2B]).r(), _64b | compat),
         inst("subl", fmt("RM", [rw(r32), r(rm32)]), rex(0x2B).r(), _64b | compat),
         inst("subq", fmt("RM", [rw(r64), r(rm64)]), rex(0x2B).w().r(), _64b),
+        // APX: NDD (new data destination) form of `SUB`, promoted into EVEX
+        // "map 4" via the extended-EVEX prefix. With `ND = 1` the architectural
+        // destination is the `vvvv`-encoded register, so the written operand is
+        // placed in the `V` slot (the middle operand of the `RVM` format) while
+        // the two sources occupy ModRM.reg and ModRM.rm. `subq` is 64-bit so
+        // the `W` bit is set (`.w1()`); use `.w0()` for the 32-bit `subl` form.
+        inst("subq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x29).r(), _64b & apx),
+        inst("subl", fmt("RVM", [r(r32b), w(r32a), r(rm32)]), evex(L128, Full).map4().w0().nd().op(0x29).r(), _64b & apx),
+        // APX: the other direction of the same subtract. `0x29` computes
+        // `ndd := rm - reg`, so its ModRM.rm operand is the *minuend*; `0x2B`
+        // computes `ndd := reg - rm` and so puts the *subtrahend* there. Both
+        // are needed because only ModRM.rm can be a memory operand: without
+        // this form a subtract whose subtrahend is a load cannot fold it, and
+        // APX would emit a separate load that the legacy encoding avoids.
+        inst("subq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]), evex(L128, Full).map4().w1().nd().op(0x2B).r(), _64b & apx),
+        inst("subl", fmt("MRV", [r(rm32), r(r32b), w(r32a)]), evex(L128, Full).map4().w0().nd().op(0x2B).r(), _64b & apx),
+        // APX: NDD forms taking an immediate source; see `add.rs` for why
+        // these are needed. `SUB` uses the `/5` group-1 extension.
+        inst("subq", fmt("VMI_SXL", [w(r64a), r(rm64), sxq(imm32)]), evex(L128, Full).map4().w1().nd().op(0x81).digit(5), _64b & apx),
+        inst("subl", fmt("VMI", [w(r32a), r(rm32), r(imm32)]), evex(L128, Full).map4().w0().nd().op(0x81).digit(5), _64b & apx),
+        inst("subq", fmt("VMI_SXB", [w(r64a), r(rm64), sxq(imm8)]), evex(L128, Full).map4().w1().nd().op(0x83).digit(5).ib(), _64b & apx),
+        inst("subl", fmt("VMI_SXB", [w(r32a), r(rm32), sxl(imm8)]), evex(L128, Full).map4().w0().nd().op(0x83).digit(5).ib(), _64b & apx),
+        // APX: the same treatment for `SBB`, which carries the high half of an
+        // `i128` subtraction. Like `sub` it does not commute, and the lowering
+        // wants `ndd = reg - rm` so that the subtrahend stays in ModRM.rm; that
+        // is the `MRV` form built on the `RM` opcode `0x1B`.
+        inst("sbbq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]), evex(L128, Full).map4().w1().nd().op(0x1B).r(), _64b & apx),
+        inst("sbbl", fmt("MRV", [r(rm32), r(r32b), w(r32a)]), evex(L128, Full).map4().w0().nd().op(0x1B).r(), _64b & apx),
+        inst("sbbq", fmt("VMI_SXL", [w(r64a), r(rm64), sxq(imm32)]), evex(L128, Full).map4().w1().nd().op(0x81).digit(3), _64b & apx),
+        inst("sbbl", fmt("VMI", [w(r32a), r(rm32), r(imm32)]), evex(L128, Full).map4().w0().nd().op(0x81).digit(3), _64b & apx),
+        inst("sbbq", fmt("VMI_SXB", [w(r64a), r(rm64), sxq(imm8)]), evex(L128, Full).map4().w1().nd().op(0x83).digit(3).ib(), _64b & apx),
+        inst("sbbl", fmt("VMI_SXB", [w(r32a), r(rm32), sxl(imm8)]), evex(L128, Full).map4().w0().nd().op(0x83).digit(3).ib(), _64b & apx),
         // Subtract with borrow.
         inst("sbbb", fmt("I", [rw(al), r(imm8)]), rex(0x1C).ib(), _64b | compat),
         inst("sbbw", fmt("I", [rw(ax), r(imm16)]), rex([0x66, 0x1D]).iw(), _64b | compat),

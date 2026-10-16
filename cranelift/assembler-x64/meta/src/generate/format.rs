@@ -70,12 +70,18 @@ impl dsl::Format {
     /// Normally this is just the reverse of the DSL's Intel-style order. APX
     /// "new data destination" (NDD) forms are the exception: their
     /// architectural destination is the `vvvv`-encoded register, which the DSL
-    /// must list in the middle so that the positional slot assignment in
-    /// `generate_vex_or_evex_prefix` maps operands to `reg`/`vvvv`/`rm`
-    /// correctly. Blindly reversing would therefore print the destination in
-    /// the middle. Instead, for `ND = 1` the sources keep their DSL order and
-    /// the destination is printed last, which matches both AT&T convention and
-    /// the XED disassembly used as a fuzzing oracle.
+    /// must list wherever the positional slot assignment in
+    /// `generate_vex_or_evex_prefix` demands so that operands map to
+    /// `reg`/`vvvv`/`rm` correctly. Blindly reversing would therefore print the
+    /// destination in the wrong place. Instead, for `ND = 1` the destination is
+    /// printed last and the sources are printed in their DSL order, except that
+    /// an immediate or fixed register always comes first.
+    ///
+    /// That exception is the operand Intel syntax puts last, and which AT&T (and
+    /// XED) therefore puts first: the immediate of a group-1 `VMI` form, or the
+    /// `cl` shift count of a `VMC` form. The DSL has to list it last instead,
+    /// because the encoder appends it after the ModRM/SIB/displacement bytes
+    /// (for an immediate) or does not encode it at all (for `cl`).
     #[must_use]
     fn ordered_operands(&self, nd: bool, xed_style: bool) -> String {
         let ops = self
@@ -83,9 +89,16 @@ impl dsl::Format {
             .iter()
             .filter(|o| !o.implicit && !(xed_style && o.location == dsl::Location::xmm0));
         let ordered: Vec<&dsl::Operand> = if nd {
-            let (dst, srcs): (Vec<_>, Vec<_>) =
+            let (dst, srcs): (Vec<&dsl::Operand>, Vec<&dsl::Operand>) =
                 ops.partition(|o| matches!(o.mutability, dsl::Mutability::Write));
-            srcs.into_iter().chain(dst).collect()
+            let (last, rest): (Vec<&dsl::Operand>, Vec<&dsl::Operand>) =
+                srcs.into_iter().partition(|o| {
+                    matches!(
+                        o.location.kind(),
+                        dsl::OperandKind::Imm(_) | dsl::OperandKind::FixedReg(_)
+                    )
+                });
+            last.into_iter().chain(rest).chain(dst).collect()
         } else {
             ops.rev().collect()
         };
@@ -406,7 +419,8 @@ impl dsl::Format {
             [Reg(reg), Reg(vvvv), RegMem(rm)]
             | [Reg(reg), Reg(vvvv), Mem(rm)]
             | [Reg(reg), Reg(vvvv), RegMem(rm), Imm(_) | FixedReg(_)]
-            | [Reg(reg), RegMem(rm), Reg(vvvv)] => {
+            | [Reg(reg), RegMem(rm), Reg(vvvv)]
+            | [RegMem(rm), Reg(reg), Reg(vvvv)] => {
                 assert!(!is4);
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let vvvv = self.{vvvv}.enc();");
@@ -439,7 +453,8 @@ impl dsl::Format {
             }
             [Reg(reg_or_vvvv), RegMem(rm)]
             | [RegMem(rm), Reg(reg_or_vvvv)]
-            | [Reg(reg_or_vvvv), RegMem(rm), Imm(_)] => match unwrap_digit() {
+            | [Reg(reg_or_vvvv), RegMem(rm), Imm(_)]
+            | [Reg(reg_or_vvvv), RegMem(rm), FixedReg(_)] => match unwrap_digit() {
                 Some(digit) => {
                     assert!(!is4);
                     let vvvv = reg_or_vvvv;

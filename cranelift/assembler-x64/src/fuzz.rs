@@ -597,6 +597,60 @@ mod test {
         .budget_ms(1_000);
     }
 
+    /// Check every APX form we define against the XED oracle, deterministically.
+    ///
+    /// [`roundtrip`] bails out on APX entirely, because the bundled Capstone
+    /// cannot decode "map 4" encodings at all. That leaves XED as the only
+    /// oracle that ever sees these instructions, and [`smoke_xed`] only reaches
+    /// them by random sampling inside a time budget — so whether a given APX
+    /// form gets checked varies from run to run.
+    ///
+    /// This test instead walks a fixed pseudo-random sequence, so the set of
+    /// instructions it exercises is identical on every run, and it fails if APX
+    /// coverage silently collapses (e.g. if the generated `Arbitrary` impl stops
+    /// producing these variants).
+    #[cfg(all(feature = "fuzz-xed", target_arch = "x86_64", target_os = "linux"))]
+    #[test]
+    fn apx_xed_oracle() {
+        use std::collections::BTreeSet;
+
+        // A fixed LCG rather than `Unstructured::arbitrary` over random input:
+        // reproducibility is the whole point of this test.
+        let mut state: u64 = 0x2545_f491_4f6c_dd1d;
+        let mut buf = [0u8; 64];
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+
+        for _ in 0..50_000 {
+            for b in buf.iter_mut() {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                *b = (state >> 33) as u8;
+            }
+            let mut u = Unstructured::new(&buf);
+            let Ok(inst) = Inst::<FuzzRegs>::arbitrary(&mut u) else {
+                continue;
+            };
+            if !features_mention(inst.features(), Feature::apx) {
+                continue;
+            }
+            roundtrip_xed(&inst);
+            // The debug rendering is `<form>(<form> { .. })`; keep the name so
+            // we can report which forms were actually covered.
+            let rendered = format!("{inst:x?}");
+            seen.insert(rendered.split('(').next().unwrap_or("?").to_string());
+        }
+
+        println!("APX forms exercised against XED ({}):", seen.len());
+        for form in &seen {
+            println!("  {form}");
+        }
+        assert!(
+            seen.len() >= 30,
+            "APX coverage of the XED oracle collapsed; only saw {seen:?}"
+        );
+    }
+
     /// Byte-level encoding check for the APX NDD (new-data-destination) form of
     /// `ADD`, promoted into EVEX "map 4" via the extended-EVEX prefix.
     ///
@@ -653,5 +707,392 @@ mod test {
         let inst = addq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
         let assembled = assemble(&inst.into());
         assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418017F50");
+    }
+
+    /// Byte-level encoding check for the APX NDD (new-data-destination) form of
+    /// `SUB`, promoted into EVEX "map 4" via the extended-EVEX prefix.
+    ///
+    /// Operand placement is the same as [`apx_addq_rvm_ndd_encoding`]: in `RVM`
+    /// format the constructor arguments are `[ModRM.reg source,
+    /// vvvv destination, ModRM.rm source]`. For `subq %rax, %rcx, %rdx`
+    /// (destination `%rax` = 0 in `vvvv`, source `%rcx` = 1 in ModRM.reg,
+    /// source `%rdx` = 2 in ModRM.rm), `W = 1`, `ND = 1`, `NF = 0`, and the
+    /// legacy `SUB r/m, reg` opcode byte is `0x29`.
+    #[test]
+    fn apx_subq_rvm_ndd_encoding() {
+        use crate::inst::subq_rvm;
+
+        let inst = subq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1829CA");
+    }
+
+    /// Companion to [`apx_subq_rvm_ndd_encoding`] covering a memory operand.
+    #[test]
+    fn apx_subq_rvm_ndd_disp8_is_unscaled() {
+        use crate::inst::subq_rvm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = subq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418297F50");
+    }
+
+    #[test]
+    fn apx_andq_rvm_ndd_encoding() {
+        use crate::inst::andq_rvm;
+
+        let inst = andq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1821CA");
+    }
+
+    #[test]
+    fn apx_andq_rvm_ndd_disp8_is_unscaled() {
+        use crate::inst::andq_rvm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = andq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418217F50");
+    }
+
+    #[test]
+    fn apx_orq_rvm_ndd_encoding() {
+        use crate::inst::orq_rvm;
+
+        let inst = orq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1809CA");
+    }
+
+    #[test]
+    fn apx_orq_rvm_ndd_disp8_is_unscaled() {
+        use crate::inst::orq_rvm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = orq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418097F50");
+    }
+
+    #[test]
+    fn apx_xorq_rvm_ndd_encoding() {
+        use crate::inst::xorq_rvm;
+
+        let inst = xorq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1831CA");
+    }
+
+    #[test]
+    fn apx_xorq_rvm_ndd_disp8_is_unscaled() {
+        use crate::inst::xorq_rvm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = xorq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418317F50");
+    }
+
+    /// Byte-level encoding check for the APX NDD form of `NEG`.
+    ///
+    /// `NEG` is a one-source instruction encoded with a `/3` opcode extension,
+    /// so ModRM.reg holds the digit rather than a register. In `VM` format the
+    /// constructor arguments are `[vvvv destination, ModRM.rm source]`. For a
+    /// destination of `%rax` (0, in `vvvv`) and a source of `%rdx` (2, in
+    /// ModRM.rm) with `W = 1` and `ND = 1`, the expected sequence is:
+    ///
+    /// ```text
+    ///   62 F4 FC 18 F7 DA
+    ///   ^^ ^^ ^^ ^^ ^^ ^^
+    ///   |  |  |  |  |  `- ModRM: mod=11, reg=/3, r/m=rdx
+    ///   |  |  |  |  `- opcode 0xF7 (group 3)
+    ///   |  |  |  `- P2: ND=1, V4=1 (inverted), NF=0
+    ///   |  |  `- P1: W=1, vvvv=~rax=1111, pp=00
+    ///   |  `- P0: inverted R/X/B bits, map=100 (map 4)
+    ///   `- EVEX identifier
+    /// ```
+    #[test]
+    fn apx_negq_vm_ndd_encoding() {
+        use crate::inst::negq_vm;
+
+        let inst = negq_vm::<FuzzRegs>::new(FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC18F7DA");
+    }
+
+    /// Companion to [`apx_negq_vm_ndd_encoding`] covering a memory operand,
+    /// confirming that map-4 `disp8` stays unscaled (`0x50` is not compressed).
+    #[test]
+    fn apx_negq_vm_ndd_disp8_is_unscaled() {
+        use crate::inst::negq_vm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = negq_vm::<FuzzRegs>::new(FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418F75F50");
+    }
+
+    /// Byte-level encoding check for the APX NDD form of `NOT`, which shares the
+    /// group-3 opcode with `NEG` but uses the `/2` extension.
+    #[test]
+    fn apx_notq_vm_ndd_encoding() {
+        use crate::inst::notq_vm;
+
+        let inst = notq_vm::<FuzzRegs>::new(FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC18F7D2");
+    }
+
+    /// Companion to [`apx_notq_vm_ndd_encoding`] covering a memory operand.
+    #[test]
+    fn apx_notq_vm_ndd_disp8_is_unscaled() {
+        use crate::inst::notq_vm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = notq_vm::<FuzzRegs>::new(FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418F75750");
+    }
+
+    /// Byte-level encoding checks for the 32-bit APX NDD forms.
+    ///
+    /// These differ from their 64-bit counterparts only in the `W` bit, which
+    /// lives in the second payload byte (`P1 = W vvvv U pp`). With `vvvv`
+    /// holding the inverted destination `%rax` (`1111`), `U = 1` and `pp = 00`,
+    /// `W = 1` gives `0xFC` for the `*q` forms and `W = 0` gives `0x7C` here.
+    #[test]
+    fn apx_32bit_rvm_ndd_encodings() {
+        use crate::inst::{addl_rvm, andl_rvm, orl_rvm, subl_rvm, xorl_rvm};
+
+        // `<op>l %ecx, %eax, %edx`: ModRM.reg = %ecx, vvvv = %eax, ModRM.rm = %edx.
+        let (reg, vvvv, rm) = (FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+
+        let inst = addl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1801CA"
+        );
+
+        let inst = subl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1829CA"
+        );
+
+        let inst = andl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1821CA"
+        );
+
+        let inst = orl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1809CA"
+        );
+
+        let inst = xorl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1831CA"
+        );
+    }
+
+    /// Byte-level encoding checks for the 32-bit APX NDD unary forms, which
+    /// keep the `/3` and `/2` opcode extensions in ModRM.reg.
+    #[test]
+    fn apx_32bit_vm_ndd_encodings() {
+        use crate::inst::{negl_vm, notl_vm};
+
+        // `<op>l %edx, %eax`: vvvv = %eax, ModRM.rm = %edx.
+        let (vvvv, rm) = (FuzzReg::new(0), FuzzReg::new(2));
+
+        let inst = negl_vm::<FuzzRegs>::new(vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C18F7DA"
+        );
+
+        let inst = notl_vm::<FuzzRegs>::new(vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C18F7D2"
+        );
+    }
+
+    /// Byte-level encoding checks for the APX NDD forms that take an immediate
+    /// source.
+    ///
+    /// These reuse the legacy group-1 opcodes (`0x81` with a full-width
+    /// immediate, `0x83` with a sign-extended byte) and keep the `/0` extension
+    /// for `ADD` in ModRM.reg. Because `ND = 1` moves the destination into
+    /// `vvvv`, ModRM.rm is a read-only source here, unlike the legacy `MI`
+    /// encodings where it is read-modify-write.
+    #[test]
+    fn apx_vmi_ndd_encodings() {
+        use crate::inst::{addl_vmi, addl_vmi_sxb, addq_vmi_sxb, addq_vmi_sxl};
+
+        // `addq $imm, %rdx, %rax`: vvvv = %rax, ModRM.rm = %rdx, so ModRM is
+        // mod=11 reg=/0 rm=%rdx = 0xC2.
+        let (vvvv, rm) = (FuzzReg::new(0), FuzzReg::new(2));
+
+        let inst = addq_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1883C205"
+        );
+
+        let inst = addq_vmi_sxl::<FuzzRegs>::new(vvvv, rm, 0x1234);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1881C234120000"
+        );
+
+        let inst = addl_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1883C205"
+        );
+
+        let inst = addl_vmi::<FuzzRegs>::new(vvvv, rm, 0x1234);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1881C234120000"
+        );
+    }
+
+    /// Check that the remaining group-1 operations select the right `/N` opcode
+    /// extension in their NDD immediate forms.
+    ///
+    /// Only the ModRM byte varies between these: `mod = 11`, `rm = %rdx`, and
+    /// `reg` carries the extension (`SUB` is `/5`, `AND` `/4`, `OR` `/1`, and
+    /// `XOR` `/6`).
+    #[test]
+    fn apx_vmi_ndd_opcode_extensions() {
+        use crate::inst::{andq_vmi_sxb, orq_vmi_sxb, subq_vmi_sxb, xorl_vmi, xorq_vmi_sxb};
+
+        let (vvvv, rm) = (FuzzReg::new(0), FuzzReg::new(2));
+
+        let inst = subq_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1883EA05"
+        );
+
+        let inst = andq_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1883E205"
+        );
+
+        let inst = orq_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1883CA05"
+        );
+
+        let inst = xorq_vmi_sxb::<FuzzRegs>::new(vvvv, rm, 5);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1883F205"
+        );
+
+        let inst = xorl_vmi::<FuzzRegs>::new(vvvv, rm, 0x1234);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1881F234120000"
+        );
+    }
+
+    /// Check that the two NDD directions of `SUB` really are distinct, and that
+    /// each puts the operand it is supposed to into ModRM.rm.
+    ///
+    /// `0x29` computes `ndd := rm - reg` and `0x2B` computes `ndd := reg - rm`,
+    /// so assembling both with the same registers must produce different bytes
+    /// in the opcode position while the ModRM byte stays the same.
+    #[test]
+    fn apx_sub_ndd_both_directions() {
+        use crate::inst::{subl_mrv, subl_rvm, subq_mrv, subq_rvm};
+
+        // vvvv (the destination) = %rax, ModRM.reg = %rcx, ModRM.rm = %rdx, so
+        // ModRM is mod=11 reg=%rcx rm=%rdx = 0xCA in both cases.
+        let (vvvv, reg, rm) = (FuzzReg::new(0), FuzzReg::new(1), FuzzReg::new(2));
+
+        // `%rax := %rdx - %rcx`
+        let inst = subq_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC1829CA"
+        );
+
+        // `%rax := %rcx - %rdx`
+        let inst = subq_mrv::<FuzzRegs>::new(rm, reg, vvvv);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F4FC182BCA"
+        );
+
+        // The 32-bit forms differ only in the `W` bit of the EVEX payload.
+        let inst = subl_rvm::<FuzzRegs>::new(reg, vvvv, rm);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C1829CA"
+        );
+
+        let inst = subl_mrv::<FuzzRegs>::new(rm, reg, vvvv);
+        assert_eq!(
+            pretty_print_hexadecimal(&assemble(&inst.into())),
+            "62F47C182BCA"
+        );
     }
 }
