@@ -146,7 +146,7 @@ fn pulley_provenance_test() -> Result<()> {
                 .unwrap()
                 .unwrap();
             assert_eq!(caller_func.as_u32(), 3);
-            assert_eq!(pc.raw(), 418);
+            assert_eq!(pc.raw(), 465);
             let parent_frame = caller_frame.parent(&mut caller).unwrap();
             assert!(parent_frame.is_none());
 
@@ -216,6 +216,17 @@ fn pulley_provenance_test() -> Result<()> {
     instance
         .get_typed_func::<(), ()>(&mut store, "ref-func-myself")?
         .call(&mut store, ())?;
+
+    // Read a funcref global that was written by wasm, both by its initializer
+    // and by `global.set`.
+    let global = instance.get_global(&mut store, "funcref-global").unwrap();
+    for _ in 0..2 {
+        let func = global.get(&mut store).unwrap_funcref().copied().unwrap();
+        func.typed::<(), ()>(&store)?.call(&mut store, ())?;
+        instance
+            .get_typed_func::<(), ()>(&mut store, "set-funcref-global")?
+            .call(&mut store, ())?;
+    }
 
     Ok(())
 }

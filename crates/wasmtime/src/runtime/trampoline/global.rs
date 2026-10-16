@@ -2,7 +2,6 @@ use crate::runtime::vm::{StoreBox, VMGlobalDefinition};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::type_registry::RegisteredType;
 use crate::{GlobalType, Mutability, Result, Val};
-use core::ptr;
 use wasmtime_environ::Global;
 
 #[repr(C)]
@@ -37,14 +36,13 @@ pub fn generate_global_export(
     unsafe {
         let global = &mut ctx.get().as_mut().global;
         match val {
-            Val::I32(x) => *global.as_i32_mut() = x,
-            Val::I64(x) => *global.as_i64_mut() = x,
-            Val::F32(x) => *global.as_f32_bits_mut() = x,
-            Val::F64(x) => *global.as_f64_bits_mut() = x,
+            Val::I32(x) => global.set_i32(x),
+            Val::I64(x) => global.set_i64(x),
+            Val::F32(x) => global.set_f32_bits(x),
+            Val::F64(x) => global.set_f64_bits(x),
             Val::V128(x) => global.set_u128(x.into()),
             Val::FuncRef(f) => {
-                *global.as_func_ref_mut() =
-                    f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&store).as_ptr());
+                global.set_func_ref(f.map(|f| f.vm_func_ref(&store)));
             }
             Val::ExternRef(x) => {
                 let new = match x {
