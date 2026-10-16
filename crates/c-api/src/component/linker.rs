@@ -309,6 +309,18 @@ pub unsafe extern "C" fn wasmtime_component_linker_define_unknown_imports_as_tra
     crate::handle_result(result, |_| ())
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_linker_define_unknown_imports_as_default_values(
+    linker: &mut wasmtime_component_linker_t,
+    store: WasmtimeStoreContextMut<'_>,
+    component: &wasmtime_component_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let result = linker
+        .linker
+        .define_unknown_imports_as_default_values(store, &component.component);
+    crate::handle_result(result, |_| ())
+}
+
 pub type wasmtime_component_resource_destructor_t =
     extern "C" fn(*mut c_void, WasmtimeStoreContextMut<'_>, u32) -> Option<Box<wasmtime_error_t>>;
 

@@ -88,3 +88,21 @@ TEST(Linker, unknown_imports_trap) {
   EXPECT_TRUE(linker.define_unknown_imports_as_traps(c));
   EXPECT_TRUE(linker.instantiate(store, c));
 }
+
+TEST(Linker, unknown_imports_default_values) {
+  wasmtime::Engine engine;
+  Linker linker(engine);
+  wasmtime::Store store(engine);
+
+  auto c = Component::compile(engine, R"(
+    (component
+      (import "a" (func (result u32)))
+    )
+  )")
+               .unwrap();
+
+  EXPECT_FALSE(linker.instantiate(store, c));
+  EXPECT_TRUE(
+      linker.define_unknown_imports_as_default_values(store.context(), c));
+  EXPECT_TRUE(linker.instantiate(store, c));
+}

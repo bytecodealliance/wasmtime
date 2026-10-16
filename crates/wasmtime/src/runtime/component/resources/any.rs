@@ -130,6 +130,35 @@ impl ResourceAny {
         resource.try_into_resource_any(store)
     }
 
+    /// Creates a new owned resource of type `ty` with the `rep` specified.
+    ///
+    /// Unlike `try_from_resource`, which derives the resource type from a Rust
+    /// type parameter, this takes the type dynamically. It is used to
+    /// synthesize a handle whose type is only known at runtime, such as a
+    /// default value for an `own` result; see
+    /// `Linker::define_unknown_imports_as_default_values`.
+    ///
+    /// No destructor is attached.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `ty` is not host-defined. A guest resource's
+    /// representation belongs to the guest that defines it, so the host
+    /// cannot conjure an instance of one.
+    pub(crate) fn new_own_dynamic(
+        ty: ResourceType,
+        rep: u32,
+        mut store: impl AsContextMut,
+    ) -> Result<Self> {
+        if !ty.is_host_defined() {
+            bail!("cannot synthesize a resource of a non-host-defined type");
+        }
+        let store = store.as_context_mut();
+        let idx =
+            HostResourceTables::new_host(store.0)?.host_resource_lower_own(rep, None, None)?;
+        Ok(ResourceAny::new(idx, ty, true))
+    }
+
     /// Attempts to convert this value into a statically typed, host-defined
     /// [`Resource`].
     ///
@@ -245,6 +274,23 @@ impl ResourceAny {
         let mut store = store.as_context_mut();
         store.0.validate_sync_call()?;
         self.resource_drop_impl(&mut store)
+    }
+
+    /// Drops this resource without the `validate_sync_call` check that the
+    /// public [`ResourceAny::resource_drop`] performs.
+    ///
+    /// This is for dropping handles that are already owned by the host while it
+    /// is servicing a guest call, such as the parameters handed to an unknown
+    /// import stubbed by
+    /// [`Linker::define_unknown_imports_as_default_values`](crate::component::Linker::define_unknown_imports_as_default_values).
+    /// Such a stub always runs on a fiber, where `validate_sync_call` would
+    /// reject the public entry point even though the drop itself is the same
+    /// bookkeeping the runtime does whenever a guest drops a handle mid-call.
+    pub(crate) fn resource_drop_in_guest_call<T: 'static>(
+        self,
+        store: &mut StoreContextMut<'_, T>,
+    ) -> Result<()> {
+        self.resource_drop_impl(store)
     }
 
     /// Same as [`ResourceAny::resource_drop`] except for use with async stores

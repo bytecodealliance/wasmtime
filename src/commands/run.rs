@@ -703,7 +703,13 @@ impl RunCommand {
                         main_target.unwrap_core(),
                     )?;
                 }
-                _ => bail!("cannot use `--default-values-unknown-imports` with components"),
+                #[cfg(feature = "component-model")]
+                CliLinker::Component(linker) => {
+                    linker.define_unknown_imports_as_default_values(
+                        &mut *store,
+                        main_target.unwrap_component(),
+                    )?;
+                }
             }
         }
 
