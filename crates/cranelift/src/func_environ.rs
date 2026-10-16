@@ -3382,12 +3382,80 @@ impl FuncEnvironment<'_> {
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         func_index: FuncIndex,
     ) -> WasmResult<ir::Value> {
-        let func_index = pos.ins().iconst(I32, func_index.as_u32() as i64);
-        let ref_func = self.builtin_functions.ref_func(&mut pos.func);
-        let vmctx = self.vmctx_val(&mut pos);
+        match self.module.defined_func_index(func_index) {
+            Some(def_index) => Ok(self.translate_ref_defined_func(&mut pos, def_index)),
+            // `VMFunctionImport` has the same layout as `VMFuncRef` and is
+            // fully initialized before any wasm runs, so a reference to an
+            // imported function is just a pointer into the `vmctx`.
+            None => {
+                let offset = self.offsets.imported_functions().at(func_index);
+                let vmctx = self.vmctx_val(&mut pos);
+                Ok(pos.ins().iadd_imm_s(vmctx, i64::from(offset)))
+            }
+        }
+    }
 
-        let call_inst = pos.ins().call(ref_func, &[vmctx, func_index]);
-        Ok(pos.func.dfg.first_result(call_inst))
+    fn translate_ref_defined_func(
+        &mut self,
+        pos: &mut FuncCursor<'_>,
+        def_index: DefinedFuncIndex,
+    ) -> ir::Value {
+        // NB: this mirrors `vm::Instance::initialize_and_return_funcref` and
+        // needs to be kept in-sync with that method.
+        let func_index = self.module.func_index(def_index);
+        let pointer_type = self.pointer_type();
+        let func = &self.module.functions[func_index];
+        assert!(func.is_escaping());
+        let func_ref_offset = self.offsets.func_refs().at(func.func_ref);
+        let sig = func.signature.unwrap_module_type_index();
+
+        let wasm_func = self.get_or_create_defined_func_ref(pos.func, def_index);
+        let wasm_call = pos.ins().func_addr(pointer_type, wasm_func);
+
+        let key = FuncKey::ArrayToWasmTrampoline(self.translation.module_index(), def_index);
+        let (namespace, index) = key.into_raw_parts();
+        let name = ir::ExternalName::User(
+            pos.func
+                .declare_imported_user_function(ir::UserExternalName { namespace, index }),
+        );
+        let signature = pos
+            .func
+            .import_signature(crate::array_call_signature(self.isa));
+        let array_func = pos.func.import_function(ir::ExtFuncData {
+            name,
+            signature,
+            colocated: true,
+            patchable: false,
+        });
+        let array_call = pos.ins().func_addr(pointer_type, array_func);
+
+        let type_index = self.module_interned_to_shared_ty(pos, sig);
+        let vmctx = self.vmctx_val(pos);
+
+        // Note that these stores must not use the `readonly` flags of these
+        // fields, see above.
+        let regions = &mut self.alias_regions;
+        regions
+            .vm_func_ref()
+            .array_call()
+            .relative_to(func_ref_offset)
+            .store_init(pos, vmctx, array_call);
+        regions
+            .vm_func_ref()
+            .wasm_call()
+            .relative_to(func_ref_offset)
+            .store_init(pos, vmctx, wasm_call);
+        regions
+            .vm_func_ref()
+            .vmctx()
+            .relative_to(func_ref_offset)
+            .store_init(pos, vmctx, vmctx);
+        regions
+            .vm_func_ref()
+            .type_index()
+            .relative_to(func_ref_offset)
+            .store_init(pos, vmctx, type_index);
+        pos.ins().iadd_imm_s(vmctx, i64::from(func_ref_offset))
     }
 
     pub(crate) fn translate_global_get(

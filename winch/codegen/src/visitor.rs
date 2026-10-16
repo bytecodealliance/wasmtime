@@ -2310,14 +2310,7 @@ where
     }
 
     fn visit_ref_func(&mut self, function_index: u32) -> Self::Output {
-        let ref_func = self.env.builtins.ref_func::<M::ABI>()?;
-        self.context.stack.extend([function_index.try_into()?]);
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(ref_func),
-        )
+        self.emit_ref_func(FuncIndex::from_u32(function_index))
     }
 
     fn visit_i32_load(&mut self, memarg: MemArg) -> Self::Output {
