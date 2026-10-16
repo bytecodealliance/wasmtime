@@ -1,0 +1,22 @@
+; Lane-wise addition does not carry between lanes, so it differs from a flat
+; 16-bit addition at the `(bv 8 x 2)` shape.
+
+(type Value (primitive Value))
+(model Value (type (bv 16)))
+
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+(instantiate test ((args (bv 8 x 2)) (ret (bv 8 x 2))))
+
+; Lane-wise addition.
+(decl add (Value Value) Value)
+(extern extractor add add)
+(spec (add x y) (provide (= result (lanemap ((x x) (y y)) (bvadd x y)))))
+(instantiate add ((args (bv 8 x 2) (bv 8 x 2)) (ret (bv 8 x 2))))
+
+; Flat addition over the whole bit-vector.
+(decl flat_add (Value Value) Value)
+(extern constructor flat_add flat_add)
+(spec (flat_add x y) (provide (= result (bvadd x y))))
+
+(rule test (test (add x y)) (flat_add x y))

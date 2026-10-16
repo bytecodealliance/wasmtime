@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::{Result, bail, format_err};
-use cranelift_isle::{files::Files, sema::TermId};
+use cranelift_isle::{ast::Lanes, files::Files, sema::TermId};
 
 use crate::{
     spec::Signature,
@@ -95,6 +95,15 @@ pub enum Constraint {
     Identical { x: ExprId, y: ExprId },
     /// Expression x is a bitvector with width given by the integer expression w.
     WidthOf { x: ExprId, w: ExprId },
+    /// Bitvector x has n lanes.
+    Lanes { x: ExprId, n: usize },
+    /// Bitvectors have the same number of lanes.
+    SameLanes { x: ExprId, y: ExprId },
+    /// Integer expression l is the lane count of bitvector x.
+    LanesOf { x: ExprId, l: ExprId },
+    /// Bitvector x is one lane of bitvector v: v's width is its lane count
+    /// times x's width.
+    LaneOf { x: ExprId, v: ExprId },
     /// Bitvector x is the concatenation bitvectors l and r.
     Concat { x: ExprId, l: ExprId, r: ExprId },
     /// Expression x has known constant value v.
@@ -114,6 +123,12 @@ impl std::fmt::Display for Constraint {
             }
             Constraint::Identical { x, y } => write!(f, "{} == {}", x.index(), y.index()),
             Constraint::WidthOf { x, w } => write!(f, "{} = width_of({})", w.index(), x.index()),
+            Constraint::Lanes { x, n } => write!(f, "lanes({}) = {n}", x.index()),
+            Constraint::SameLanes { x, y } => {
+                write!(f, "lanes({}) == lanes({})", x.index(), y.index())
+            }
+            Constraint::LanesOf { x, l } => write!(f, "{} = lanes_of({})", l.index(), x.index()),
+            Constraint::LaneOf { x, v } => write!(f, "{} = lane_of({})", x.index(), v.index()),
             Constraint::Concat { x, l, r } => {
                 write!(f, "{} = {}:{}", x.index(), l.index(), r.index())
             }
@@ -277,6 +292,11 @@ impl<'a> SystemBuilder<'a> {
         // Qualifiers.
         for qualifier in &self.conditions.qualifiers {
             self.qualifier(qualifier);
+        }
+
+        // Lanes.
+        for (x, n) in &self.conditions.lane_counts {
+            self.constraint(Constraint::Lanes { x: *x, n: *n });
         }
 
         self.system.width_domains = self.conditions.width_domains.clone();
@@ -499,6 +519,49 @@ impl<'a> SystemBuilder<'a> {
                 self.bit_vector(*y);
                 self.width_of(*y, x);
             }
+            Expr::LanesOf(y) => {
+                self.integer(x);
+                self.bit_vector(*y);
+                self.constraint(Constraint::LanesOf { x: *y, l: x });
+            }
+            Expr::LaneMap {
+                binders,
+                body,
+                lanes,
+                ..
+            } => {
+                match lanes {
+                    Lanes::Map => {
+                        self.bit_vector(x);
+                        self.bit_vector(*body);
+                        self.constraint(Constraint::Lanes { x: *body, n: 1 });
+                        self.constraint(Constraint::LaneOf { x: *body, v: x });
+                        // The result has the lane count of the vectors.
+                        for (_, vector) in binders {
+                            self.constraint(Constraint::SameLanes { x, y: *vector });
+                        }
+                    }
+                    Lanes::All | Lanes::Any => {
+                        self.boolean(x);
+                        self.boolean(*body);
+                    }
+                }
+                for (lane, vector) in binders {
+                    self.bit_vector(*lane);
+                    self.bit_vector(*vector);
+                    self.constraint(Constraint::Lanes { x: *lane, n: 1 });
+                    self.constraint(Constraint::LaneOf {
+                        x: *lane,
+                        v: *vector,
+                    });
+                }
+                for pair in binders.windows(2) {
+                    self.constraint(Constraint::SameLanes {
+                        x: pair[0].1,
+                        y: pair[1].1,
+                    });
+                }
+            }
             Expr::FPPositiveInfinity(w)
             | Expr::FPNegativeInfinity(w)
             | Expr::FPPositiveZero(w)
@@ -529,14 +592,25 @@ impl<'a> SystemBuilder<'a> {
             // Arguments.
             assert_eq!(call.args.len(), sig.args.len());
             for (a, ty) in zip(&call.args, &sig.args) {
-                self.symbolic(a, ty.clone());
+                self.signature_type(a, ty.clone());
             }
 
             // Return.
-            self.symbolic(&call.ret, sig.ret.clone());
+            self.signature_type(&call.ret, sig.ret.clone());
 
             // Pop branch arm.
             self.pop();
+        }
+    }
+
+    /// Type from a term signature
+    fn signature_type(&mut self, v: &Symbolic, ty: Compound) {
+        match (v, ty) {
+            (Symbolic::Scalar(x), Compound::Primitive(Type::BitVector(Width::Bits(bits)))) => {
+                self.bit_vector_of_width(*x, bits);
+                self.constraint(Constraint::Lanes { x: *x, n: 1 });
+            }
+            (v, ty) => self.symbolic(v, ty),
         }
     }
 
@@ -547,6 +621,11 @@ impl<'a> SystemBuilder<'a> {
     fn symbolic(&mut self, v: &Symbolic, ty: Compound) {
         match (v, ty) {
             (Symbolic::Scalar(x), Compound::Primitive(ty)) => self.ty(*x, ty),
+            (Symbolic::Scalar(x), ty @ Compound::Vector { .. }) => {
+                let (width, lanes) = ty.as_vector().expect("vector");
+                self.bit_vector_of_width(*x, width);
+                self.constraint(Constraint::Lanes { x: *x, n: lanes });
+            }
             (Symbolic::Struct(fields), Compound::Struct(field_tys)) => {
                 assert_eq!(fields.len(), field_tys.len());
                 for (field, field_ty) in zip(fields, field_tys) {
@@ -649,13 +728,25 @@ impl<'a> SystemBuilder<'a> {
 #[derive(Default, Clone)]
 pub struct Assignment {
     pub expr_type_value: HashMap<ExprId, TypeValue>,
+    pub expr_lanes: HashMap<ExprId, usize>,
 }
 
 impl Assignment {
     pub fn new() -> Self {
         Self {
             expr_type_value: HashMap::new(),
+            expr_lanes: HashMap::new(),
         }
+    }
+
+    /// Lane count, if determined.
+    pub fn lanes(&self, x: ExprId) -> Option<usize> {
+        self.expr_lanes.get(&x).copied()
+    }
+
+    /// Lane count, where an undetermined count is a scalar.
+    pub fn lanes_or_scalar(&self, x: ExprId) -> usize {
+        self.lanes(x).unwrap_or(1)
     }
 
     pub fn is_concrete(&self) -> bool {
@@ -690,6 +781,12 @@ impl Assignment {
             Constraint::SameType { x, y } => self.expect_same_type(x, y),
             Constraint::Identical { x, y } => self.expect_identical(x, y),
             Constraint::WidthOf { x, w } => self.expect_width_of(x, w),
+            Constraint::Lanes { x, n } => self.expect_lanes(x, n),
+            Constraint::SameLanes { x, y } => self.expect_lanes(y, self.lanes_or_scalar(x)),
+            Constraint::LanesOf { x, l } => {
+                self.expect_value(l, &Const::Int(self.lanes_or_scalar(x).try_into().unwrap()))
+            }
+            Constraint::LaneOf { x, v } => self.expect_lane_of(x, v),
             Constraint::Concat { x, l, r } => self.expect_concat(x, l, r),
             Constraint::Value { x, ref c } => self.expect_value(x, c),
             Constraint::Implies { c, ref then } => self.expect_implies(c, then),
@@ -793,6 +890,31 @@ impl Assignment {
         // Expression w should be an integer equal to the width.
         self.expect_value(w, &Const::Int(width.try_into().unwrap()))?;
 
+        Ok(())
+    }
+
+    fn expect_lanes(&self, x: ExprId, n: usize) -> Result<()> {
+        let lanes = self.lanes_or_scalar(x);
+        if lanes != n {
+            bail!(
+                "expression {x} should have {n} lanes: got {lanes}",
+                x = x.index()
+            );
+        }
+        Ok(())
+    }
+
+    fn expect_lane_of(&self, x: ExprId, v: ExprId) -> Result<()> {
+        let x_width = self.try_bit_vector_width(x)?;
+        let v_width = self.try_bit_vector_width(v)?;
+        let n = self.lanes_or_scalar(v);
+        if v_width != n * x_width {
+            bail!(
+                "expression {x} should be one of {n} lanes of {v}",
+                x = x.index(),
+                v = v.index()
+            );
+        }
         Ok(())
     }
 
@@ -965,6 +1087,31 @@ impl Solver {
                 return solutions;
             }
 
+            // Bit-vectors whose lane count is still undetermined are scalars.
+            let undetermined: Vec<_> = system
+                .constraints
+                .iter()
+                .filter_map(|c| match c {
+                    Constraint::LanesOf { x, .. } | Constraint::LaneOf { v: x, .. }
+                        if self.assignment.lanes(*x).is_none() =>
+                    {
+                        Some(Constraint::Lanes { x: *x, n: 1 })
+                    }
+                    _ => None,
+                })
+                .collect();
+            if !undetermined.is_empty() {
+                let mut constraints = system.constraints.clone();
+                constraints.extend(undetermined);
+                let child = System {
+                    choices: system.choices.clone(),
+                    constraints,
+                    branches: Vec::new(),
+                    width_domains: system.width_domains.clone(),
+                };
+                return self.solve(&child);
+            }
+
             let status = if self.assignment.is_concrete() {
                 Status::Solved
             } else {
@@ -1009,6 +1156,10 @@ impl Solver {
             Constraint::SameType { x, y } => self.same_type(*x, *y),
             Constraint::Identical { x, y } => self.identical(*x, *y),
             Constraint::WidthOf { x, w } => self.width_of(*x, *w),
+            Constraint::Lanes { x, n } => self.set_lanes(*x, *n),
+            Constraint::SameLanes { x, y } => self.same_lanes(*x, *y),
+            Constraint::LanesOf { x, l } => self.lanes_of(*x, *l),
+            Constraint::LaneOf { x, v } => self.lane_of(*x, *v),
             Constraint::Concat { x, l, r } => self.concat(*x, *l, *r),
             Constraint::Value { x, c } => self.set_value(*x, c.clone()),
             Constraint::Implies { c, then } => self.implies(*c, then),
@@ -1069,6 +1220,62 @@ impl Solver {
             (None, Some(tvy)) => self.set_type(x, tvy.ty()),
             (Some(tvx), Some(tvy)) => Ok(self.set_type(x, tvy.ty())? | self.set_type(y, tvx.ty())?),
         }
+        .and_then(|change| Ok(change | self.same_lanes(x, y)?))
+    }
+
+    fn set_lanes(&mut self, x: ExprId, n: usize) -> Result<bool, Status> {
+        match self.assignment.expr_lanes.entry(x) {
+            Entry::Vacant(e) => {
+                e.insert(n);
+                Ok(true)
+            }
+            Entry::Occupied(e) if *e.get() == n => Ok(false),
+            Entry::Occupied(e) => Err(Status::Inapplicable(Conflict::new(
+                x,
+                format!("inapplicable lanes: {existing} != {n}", existing = e.get()),
+            ))),
+        }
+    }
+
+    fn same_lanes(&mut self, x: ExprId, y: ExprId) -> Result<bool, Status> {
+        match (self.assignment.lanes(x), self.assignment.lanes(y)) {
+            (None, None) => Ok(false),
+            (Some(n), _) => self.set_lanes(y, n),
+            (None, Some(n)) => self.set_lanes(x, n),
+        }
+    }
+
+    fn lanes_of(&mut self, x: ExprId, l: ExprId) -> Result<bool, Status> {
+        match (self.assignment.lanes(x), self.assignment.int_value(l)) {
+            (Some(n), _) => self.set_int_value(l, n.try_into().unwrap()),
+            (None, Some(v)) => {
+                let n = usize::try_from(v).map_err(|_| {
+                    Status::Inapplicable(Conflict::new(l, format!("invalid lane count {v}")))
+                })?;
+                self.set_lanes(x, n)
+            }
+            (None, None) => Ok(false),
+        }
+    }
+
+    fn lane_of(&mut self, x: ExprId, v: ExprId) -> Result<bool, Status> {
+        match (
+            self.assignment.lanes(v),
+            self.assignment.bit_vector_width(x),
+            self.assignment.bit_vector_width(v),
+        ) {
+            (Some(n), _, Some(vw)) => {
+                if vw % n != 0 {
+                    return Err(Status::Inapplicable(Conflict::new(
+                        v,
+                        format!("width {vw} is not {n} equal lanes"),
+                    )));
+                }
+                self.set_bit_vector_width(x, vw / n)
+            }
+            (Some(n), Some(xw), None) => self.set_bit_vector_width(v, n * xw),
+            (None, _, _) | (Some(_), None, None) => Ok(false),
+        }
     }
 
     fn identical(&mut self, x: ExprId, y: ExprId) -> Result<bool, Status> {
@@ -1083,6 +1290,7 @@ impl Solver {
                 Ok(self.set_type_value(x, tvy)? | self.set_type_value(y, tvx)?)
             }
         }
+        .and_then(|change| Ok(change | self.same_lanes(x, y)?))
     }
 
     fn width_of(&mut self, x: ExprId, w: ExprId) -> Result<bool, Status> {

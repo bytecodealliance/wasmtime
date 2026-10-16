@@ -16,7 +16,9 @@ _Primitives_:
 
 * Integer: `Int`
 * Boolean: `Bool`
-* Bit-vector: unknown width `(bv)`, fixed width `(bv <n>)`
+* Bit-vector: unknown width `(bv)`, fixed width `(bv <n>)`, one of a set of
+  widths `(bv (<n1> <n2> ...))`, or a vector of `<k>` lanes of `<n>` bits
+  each `(bv <n> x <k>)`
 * Unit: `Unit`
 * Unspecified: `!`
 * Auto: `_`, a primitive type to be deduced by type inference
@@ -268,6 +270,7 @@ Spec expression operators:
     Int2BV,
     BV2Nat,
     WidthOf,
+    LanesOf,
 
     // Control operations
     If,
@@ -315,6 +318,44 @@ and then referenced as short-hand in an `instantiate` declaration:
 In verification, the cartesian product of all type instantantiations for all
 present terms is considered. Many of the combinations will be ruled out by type
 inference before proceeding to verification.
+
+### Vectors and lane maps
+
+In the verifier, `(bv 32 x 2)` is a 64-bit bit-vector with two 32-bit lanes used to model the
+CLIF type `i32x2`. The lower lane occupies the lower bits. Lane counts are static,
+like widths. A fixed-width bit-vector in a signature has one lane. Operands required to
+have the same type also must have the same lane count. `(widthof x)` gets the total
+(product) width and `(lanesof x)` gets the number of lanes.
+
+Specs can apply to lanes explicitly:
+
+```
+(lanemap ((<lane> <vector>) ...) <body>)
+(all_lanes ((<lane> <vector>) ...) <body>)
+(any_lanes ((<lane> <vector>) ...) <body>)
+```
+
+Each binder names one lane of its bit-vector, shadowing any outer variable of
+that name, so `(lanemap ((x x) (y y)) (bvadd x y))` maps a scalar spec over
+the individual lanes of `x` and `y`. The bound bit-vectors must have the same
+lane count. `lanemap` evaluates the body once per lane and concatenates the
+results. `all_lanes` and `any_lanes` conjoin or disjoin a
+boolean body over the lanes. Lane maps do not nest.
+
+For example, with
+
+```
+(spec (iadd ty x y)
+    (provide (= result (lanemap ((x x) (y y)) (bvadd x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
+(instantiate iadd
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2))))
+```
+
+`iadd` applied to two `(bv 32 x 2)` arguments adds each 32-bit lane separately, with no carry between
+lanes. Scalars are treated with a lane count of 1 and apply just the body expression `(bvadd x y)`.
 
 ## State
 

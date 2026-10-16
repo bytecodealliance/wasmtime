@@ -525,6 +525,29 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse the rest of `(lanemap ((<lane> <vector>) ...) <body>)`, or the
+    /// `all_lanes`/`any_lanes` forms.
+    fn parse_lane_map(&mut self, pos: Pos, reduce: Lanes) -> Result<SpecExpr> {
+        let mut binders = Vec::new();
+        self.expect_lparen()?;
+        while !(self.is_rparen()) {
+            self.expect_lparen()?;
+            let ident = self.parse_ident()?;
+            let x = self.parse_spec_expr()?;
+            self.expect_rparen()?;
+            binders.push((ident, x));
+        }
+        self.expect_rparen()?;
+        let body = Box::new(self.parse_spec_expr()?);
+        self.expect_rparen()?;
+        Ok(SpecExpr::LaneMap {
+            binders,
+            body,
+            reduce,
+            pos,
+        })
+    }
+
     fn parse_spec_expr(&mut self) -> Result<SpecExpr> {
         let pos = self.pos();
         if self.is_spec_bit_vector() {
@@ -574,6 +597,12 @@ impl<'a> Parser<'a> {
                 let body = Box::new(self.parse_spec_expr()?);
                 self.expect_rparen()?;
                 Ok(SpecExpr::Let { defs, body, pos })
+            } else if self.eat_sym_str("lanemap")? {
+                self.parse_lane_map(pos, Lanes::Map)
+            } else if self.eat_sym_str("all_lanes")? {
+                self.parse_lane_map(pos, Lanes::All)
+            } else if self.eat_sym_str("any_lanes")? {
+                self.parse_lane_map(pos, Lanes::Any)
             } else if self.eat_sym_str("with")? {
                 let mut decls = Vec::new();
                 self.expect_lparen()?;
@@ -720,6 +749,7 @@ impl<'a> Parser<'a> {
             "int2bv" => Ok(SpecOp::Int2BV),
             "bv2nat" => Ok(SpecOp::BV2Nat),
             "widthof" => Ok(SpecOp::WidthOf),
+            "lanesof" => Ok(SpecOp::LanesOf),
             "if" => Ok(SpecOp::If),
             "switch" => Ok(SpecOp::Switch),
             "popcnt" => Ok(SpecOp::Popcnt),
@@ -882,6 +912,19 @@ impl<'a> Parser<'a> {
                 } else {
                     return Err(self.error(pos, "Badly formed BitVector (bv ...)".to_string()));
                 };
+                // (bv w x n): n lanes of w bits.
+                if let Some(lane_bits) = width
+                    && self.eat_sym_str("x")?
+                {
+                    let lanes = usize::try_from(self.expect_int()?).map_err(|err| {
+                        self.error(pos, format!("Invalid BitVector lane count: {err}"))
+                    })?;
+                    if lanes == 0 {
+                        return Err(self.error(pos, "Zero BitVector lane count".to_string()));
+                    }
+                    self.expect_rparen()?;
+                    return Ok(ModelType::BitVecLanes { lane_bits, lanes });
+                }
                 self.expect_rparen()?;
                 Ok(ModelType::BitVec(width))
             } else if self.eat_sym_str("struct")? {
