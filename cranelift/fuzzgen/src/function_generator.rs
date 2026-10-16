@@ -469,6 +469,9 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
         // all in fuzzgen just yet.
         Opcode::StackSwitch => return false,
 
+        // Not supported at this time.
+        Opcode::InterruptPoll => return false,
+
         _ => {}
     }
 
