@@ -113,7 +113,7 @@
 (extern constructor output_vec output_vec)
 
 ;; Get a temporary register for writing.
-(spec (temp_writable_reg ty) (provide (= (:bits ty) (widthof result))))
+(spec (temp_writable_reg ty) (provide (= (:bits ty) (widthof result)) (= (:lanes ty) (lanesof result))))
 (decl temp_writable_reg (Type) WritableReg)
 (extern constructor temp_writable_reg temp_writable_reg)
 
@@ -340,7 +340,7 @@
 (spec (has_type ty arg)
       (provide
             (= result arg)
-            (= (:bits ty) (widthof arg))))
+            (= (:bits ty) (widthof arg)) (= (:lanes ty) (lanesof arg))))
 (decl has_type (Type Inst) Inst)
 (extractor (has_type ty inst)
            (and (result_type ty)
