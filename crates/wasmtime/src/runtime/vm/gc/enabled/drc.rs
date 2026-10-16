@@ -1074,7 +1074,7 @@ unsafe impl GcHeap for DrcHeap {
         let alloc_size = FreeList::aligned_size(object_size).ok_or(Trap::AllocationTooLarge)?;
 
         let gc_ref = match self.free_list.as_mut().unwrap().alloc_fast(alloc_size) {
-            None => return Ok(Err(u64::try_from(layout.size())?)),
+            None => return Ok(Err(FreeList::bytes_needed_for(alloc_size))),
             Some(index) => match VMGcRef::from_heap_index(index) {
                 Some(r) => r,
                 None => {

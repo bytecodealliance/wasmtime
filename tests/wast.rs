@@ -53,7 +53,7 @@ fn main() {
         // doesn't look like a GC-related test.
         if let Some(ks) = &gc_keywords {
             if !ks.iter().any(|kw| name.contains(kw)) {
-                return;
+                continue;
             }
         }
 
@@ -157,6 +157,13 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
 
         let small_guard = 64 * 1024;
         cfg.memory_guard_size(small_guard);
+    }
+
+    if std::env::var("WASMTIME_TEST_GC_HEAP_BYTE_PAGES").is_ok() {
+        cfg.gc_heap_page_size_log2(0)?;
+        cfg.gc_heap_reservation(0);
+        cfg.gc_heap_reservation_for_growth(0);
+        cfg.gc_heap_guard_size(0);
     }
 
     let _pooling_lock = if config.pooling {

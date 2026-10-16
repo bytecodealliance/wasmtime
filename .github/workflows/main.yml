@@ -787,6 +787,7 @@ jobs:
 
         # The wast test runner will read `WASMTIME_TEST_GC_KEYWORDS` on its own.
         cargo test --test wast
+        WASMTIME_TEST_GC_HEAP_BYTE_PAGES=1 cargo test --test wast
 
   # Perform all tests of the c-api
   test_capi:
