@@ -227,13 +227,14 @@ fn empty_data_object() {
 }
 
 /// Defines a data object of `size` bytes holding the address of another data
-/// object at `offset`, then finalizes the module and returns the object.
+/// object at `offset`, then finalizes the module and returns the object and
+/// its target.
 fn finalize_data_with_reloc(
     isa: OwnedTargetIsa,
     zeroed: bool,
     size: usize,
     offset: u32,
-) -> (JITModule, DataId) {
+) -> (JITModule, DataId, DataId) {
     let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     let target = module.declare_anonymous_data(false, false).unwrap();
@@ -248,11 +249,11 @@ fn finalize_data_with_reloc(
     } else {
         data.define(vec![0; size].into_boxed_slice());
     }
-    let target = module.declare_data_in_data(target, &mut data);
-    data.write_data_addr(offset, target, 0);
+    let target_ref = module.declare_data_in_data(target, &mut data);
+    data.write_data_addr(offset, target_ref, 0);
     module.define_data(id, &data).unwrap();
     module.finalize_definitions().unwrap();
-    (module, id)
+    (module, id, target)
 }
 
 /// Asserts that `f` panics because a relocation is out of bounds.
@@ -275,11 +276,12 @@ fn data_reloc_out_of_bounds_panics_when_finalized() {
 
     // A pointer that ends exactly at the end of the object is fine.
     let offset = u32::try_from(ptr_bytes).unwrap();
-    let (module, id) = finalize_data_with_reloc(host_isa, false, 2 * ptr_bytes, offset);
+    let (module, id, target) = finalize_data_with_reloc(host_isa, false, 2 * ptr_bytes, offset);
+    let (target_ptr, _) = module.get_finalized_data(target);
     let (ptr, size) = module.get_finalized_data(id);
     assert_eq!(size, 2 * ptr_bytes);
     let written = unsafe { ptr.add(ptr_bytes).cast::<usize>().read_unaligned() };
-    assert_ne!(written, 0);
+    assert_eq!(written, target_ptr.addr());
 
     for zeroed in [false, true] {
         // The pointer starts inside the object but ends past it.
