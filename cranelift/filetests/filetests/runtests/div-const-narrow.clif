@@ -1,0 +1,62 @@
+test interpret
+test run
+set opt_level=speed
+target x86_64
+target aarch64
+target s390x
+target riscv64
+
+function %sdiv8_7(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 7
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv8_7(100) == 14
+; run: %sdiv8_7(-100) == -14
+; run: %sdiv8_7(-128) == -18
+; run: %sdiv8_7(127) == 18
+
+function %sdiv16_m7(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 -7
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv16_m7(30000) == -4285
+; run: %sdiv16_m7(-32768) == 4681
+
+function %udiv8_7(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 7
+    v2 = udiv v0, v1
+    return v2
+}
+; run: %udiv8_7(255) == 36
+; run: %udiv8_7(6) == 0
+
+function %udiv16_7(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 7
+    v2 = udiv v0, v1
+    return v2
+}
+; run: %udiv16_7(65535) == 9362
+
+function %udiv8_200(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 200
+    v2 = udiv v0, v1
+    return v2
+}
+; run: %udiv8_200(255) == 1
+; run: %udiv8_200(199) == 0
+
+function %sdiv8_m3(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 -3
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv8_m3(100) == -33
+; run: %sdiv8_m3(-128) == 42
