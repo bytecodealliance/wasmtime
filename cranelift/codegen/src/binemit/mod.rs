@@ -146,6 +146,53 @@ pub enum Reloc {
     PulleyCallIndirectHost,
 }
 
+impl Reloc {
+    /// The number of bytes from the relocation's offset that applying it may
+    /// read or write.
+    ///
+    /// For relocations applied to an instruction, including markers such as
+    /// the TLS call relocations, this covers the whole instruction or
+    /// instruction pair.
+    pub fn patched_len(self) -> u32 {
+        match self {
+            Self::Abs4
+            | Self::X86PCRel4
+            | Self::X86CallPCRel4
+            | Self::X86CallPLTRel4
+            | Self::X86GOTPCRel4
+            | Self::X86SecRel
+            | Self::Arm32Call
+            | Self::Arm64Call
+            | Self::S390xPCRel32Dbl
+            | Self::S390xPLTRel32Dbl
+            | Self::MachOX86_64Tlv
+            | Self::MachOAarch64TlsAdrPage21
+            | Self::MachOAarch64TlsAdrPageOff12
+            | Self::Aarch64TlsDescAdrPage21
+            | Self::Aarch64TlsDescLd64Lo12
+            | Self::Aarch64TlsDescAddLo12
+            | Self::Aarch64TlsDescCall
+            | Self::Aarch64AdrGotPage21
+            | Self::Aarch64AdrPrelPgHi21
+            | Self::Aarch64AddAbsLo12Nc
+            | Self::Aarch64Ld64GotLo12Nc
+            | Self::RiscvTlsGdHi20
+            | Self::RiscvPCRelLo12I
+            | Self::RiscvGotHi20
+            | Self::RiscvPCRelHi20
+            | Self::PulleyPcRel
+            | Self::PulleyCallIndirectHost => 4,
+            // The `lea` displacement and the `call` after it. The linker rewrites
+            // the whole general-dynamic sequence when it relaxes it.
+            Self::ElfX86_64TlsGd => 12,
+            // The `brasl` that the marker is attached to.
+            Self::S390xTlsGdCall => 6,
+            // `RiscvCallPlt` patches the `auipc` and `jalr` pair of a call.
+            Self::Abs8 | Self::S390xTlsGd64 | Self::RiscvCallPlt => 8,
+        }
+    }
+}
+
 impl fmt::Display for Reloc {
     /// Display trait implementation drops the arch, since its used in contexts where the arch is
     /// already unambiguous, e.g. clif syntax with isa specified. In other contexts, use Debug.

@@ -226,6 +226,104 @@ fn empty_data_object() {
     module.define_data(data_id, &data).unwrap();
 }
 
+/// Defines a data object of `size` bytes holding the address of another data
+/// object at `offset`, then finalizes the module and returns the object and
+/// its target.
+fn finalize_data_with_reloc(
+    isa: OwnedTargetIsa,
+    zeroed: bool,
+    size: usize,
+    offset: u32,
+) -> (JITModule, DataId, DataId) {
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
+
+    let target = module.declare_anonymous_data(false, false).unwrap();
+    let mut data = DataDescription::new();
+    data.define(Box::new([1]));
+    module.define_data(target, &data).unwrap();
+
+    let id = module.declare_anonymous_data(true, false).unwrap();
+    let mut data = DataDescription::new();
+    if zeroed {
+        data.define_zeroinit(size);
+    } else {
+        data.define(vec![0; size].into_boxed_slice());
+    }
+    let target_ref = module.declare_data_in_data(target, &mut data);
+    data.write_data_addr(offset, target_ref, 0);
+    module.define_data(id, &data).unwrap();
+    module.finalize_definitions().unwrap();
+    (module, id, target)
+}
+
+/// Asserts that `f` panics because a relocation is out of bounds.
+fn assert_reloc_out_of_bounds_panic(f: impl FnOnce()) {
+    let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
+        .expect_err("finalizing should panic");
+    let msg = payload.downcast_ref::<String>().expect("string panic");
+    assert!(
+        msg.contains("relocation at offset"),
+        "unexpected panic: {msg}"
+    );
+}
+
+#[test]
+fn data_reloc_out_of_bounds_panics_when_finalized() {
+    let Some(host_isa) = isa() else {
+        return;
+    };
+    let ptr_bytes = usize::from(host_isa.pointer_bytes());
+
+    // A pointer that ends exactly at the end of the object is fine.
+    let offset = u32::try_from(ptr_bytes).unwrap();
+    let (module, id, target) = finalize_data_with_reloc(host_isa, false, 2 * ptr_bytes, offset);
+    let (target_ptr, _) = module.get_finalized_data(target);
+    let (ptr, size) = module.get_finalized_data(id);
+    assert_eq!(size, 2 * ptr_bytes);
+    let written = unsafe { ptr.add(ptr_bytes).cast::<usize>().read_unaligned() };
+    assert_eq!(written, target_ptr.addr());
+
+    for zeroed in [false, true] {
+        // The pointer starts inside the object but ends past it.
+        assert_reloc_out_of_bounds_panic(|| {
+            finalize_data_with_reloc(isa().unwrap(), zeroed, ptr_bytes, 1);
+        });
+        // The pointer starts past the object.
+        assert_reloc_out_of_bounds_panic(|| {
+            finalize_data_with_reloc(isa().unwrap(), zeroed, ptr_bytes, u32::MAX);
+        });
+    }
+}
+
+#[test]
+fn function_bytes_reloc_out_of_bounds_panics_when_finalized() {
+    use cranelift_codegen::binemit::Reloc;
+
+    for (kind, offset) in [
+        (Reloc::Abs4, 1),
+        (Reloc::Abs8, 0),
+        (Reloc::Abs4, 64),
+        (Reloc::ElfX86_64TlsGd, 0),
+    ] {
+        let Some(isa) = isa() else {
+            return;
+        };
+        let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
+        let sig = module.make_signature();
+        let func_id = module.declare_anonymous_function(&sig).unwrap();
+        let reloc = ModuleReloc {
+            offset,
+            kind,
+            name: ModuleRelocTarget::FunctionOffset(func_id, 0),
+            addend: 0,
+        };
+        module
+            .define_function_bytes(func_id, 1, &[0; 4], &[reloc])
+            .unwrap();
+        assert_reloc_out_of_bounds_panic(|| module.finalize_definitions().unwrap());
+    }
+}
+
 #[cfg(all(target_arch = "x86_64", target_os = "linux"))]
 mod far_x86_memory {
     use std::collections::VecDeque;
