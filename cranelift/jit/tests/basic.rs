@@ -299,7 +299,12 @@ fn data_reloc_out_of_bounds_panics_when_finalized() {
 fn function_bytes_reloc_out_of_bounds_panics_when_finalized() {
     use cranelift_codegen::binemit::Reloc;
 
-    for (kind, offset) in [(Reloc::Abs4, 1), (Reloc::Abs8, 0), (Reloc::Abs4, 64)] {
+    for (kind, offset) in [
+        (Reloc::Abs4, 1),
+        (Reloc::Abs8, 0),
+        (Reloc::Abs4, 64),
+        (Reloc::ElfX86_64TlsGd, 0),
+    ] {
         let Some(isa) = isa() else {
             return;
         };

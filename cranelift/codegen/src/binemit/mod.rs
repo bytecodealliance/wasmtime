@@ -165,7 +165,6 @@ impl Reloc {
             | Self::Arm64Call
             | Self::S390xPCRel32Dbl
             | Self::S390xPLTRel32Dbl
-            | Self::ElfX86_64TlsGd
             | Self::MachOX86_64Tlv
             | Self::MachOAarch64TlsAdrPage21
             | Self::MachOAarch64TlsAdrPageOff12
@@ -183,6 +182,9 @@ impl Reloc {
             | Self::RiscvPCRelHi20
             | Self::PulleyPcRel
             | Self::PulleyCallIndirectHost => 4,
+            // The `lea` displacement and the `call` after it. The linker rewrites
+            // the whole general-dynamic sequence when it relaxes it.
+            Self::ElfX86_64TlsGd => 12,
             // The `brasl` that the marker is attached to.
             Self::S390xTlsGdCall => 6,
             // `RiscvCallPlt` patches the `auipc` and `jalr` pair of a call.
