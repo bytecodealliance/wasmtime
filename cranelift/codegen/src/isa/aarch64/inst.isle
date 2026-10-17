@@ -1298,8 +1298,6 @@
 
 ;; Leaves currently without specs: excluded from verification via todo.
 (attr MInst.Udf (tag TODO))
-(attr MInst.BitfieldMove (tag TODO))
-(attr MInst.Mov (tag TODO))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -3096,13 +3094,17 @@
 ;; Helper for `extend` to select the operand size
 (attr extend_bfm_size (veri chain))
 (decl extend_bfm_size (bool u8) OperandSize)
-(rule 1 (extend_bfm_size true 64) (OperandSize.Size64))
+(attr rule extend_bfm_size_64 (veri priority))
+(rule extend_bfm_size_64 1 (extend_bfm_size true 64) (OperandSize.Size64))
 (rule 0 (extend_bfm_size _ _) (OperandSize.Size32))
 
 ;; Helper for emitting `MInst.BitfieldMove` instructions.
 (attr bitfield_move (veri chain))
 (decl bitfield_move (Type BfmOp Reg UImm6 UImm6) Reg)
-(rule (bitfield_move ty bfm_op rn immr imms)
+;; TODO: `MInst.BitfieldMove`'s generated spec only covers the extend
+;; immediates, so the general `sbfm`/`ubfm` rules can't verify yet.
+(attr rule bitfield_move_inst (tag TODO))
+(rule bitfield_move_inst (bitfield_move ty bfm_op rn immr imms)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.BitfieldMove (operand_size ty) bfm_op dst rn immr imms))))
         dst))
