@@ -12,6 +12,7 @@ use futures::{
     channel::oneshot,
     future::{Either, FutureExt},
     stream::{FuturesUnordered, Stream},
+    task::AtomicWaker,
 };
 #[cfg(feature = "p3")]
 use p3::bindings::http::types as p3_types;
@@ -319,10 +320,17 @@ impl StartTimes {
     }
 }
 
+struct Abandon {
+    flag: AtomicBool,
+    waker: AtomicWaker,
+}
+
+/// Per-request drop signal. p2 observes it outside `run_concurrent`.
 type WorkerRequest<S> = (
     <<S as HandlerState>::WorkerState as WorkerState>::RequestData,
     Request,
     oneshot::Sender<Result<Response, wasmtime::Error>>,
+    Arc<Abandon>,
 );
 
 struct Worker<S>
@@ -377,7 +385,7 @@ where
 
             Err(error) => {
                 let error = Arc::new(error);
-                if let Some((request_data, request, tx)) = request {
+                if let Some((request_data, request, tx, _)) = request {
                     _ = tx.send(Err(InstantiationError {
                         request_data,
                         request: Mutex::new(request),
@@ -388,7 +396,7 @@ where
                     // In this case, the worker was spawned to handle any queued
                     // requests.  Since we can't handle those requests, we send
                     // them all an instantiation error.
-                    for (request_data, request, tx) in mem::take(
+                    for (request_data, request, tx, _) in mem::take(
                         self.handler
                             .0
                             .request_queue
@@ -471,6 +479,8 @@ where
 
         let accept_concurrent = AtomicBool::new(true);
         let status = Mutex::new((WorkerStatus::Idle, Instant::now()));
+        // p2 slots only. p3 cancellation stays inside `Prepared::run`.
+        let accepted: Arc<Mutex<Vec<Arc<Abandon>>>> = Arc::new(Mutex::new(Vec::new()));
         let mut expiration = pin!(expiration);
 
         let function = async |accessor: &Accessor<_>| {
@@ -479,10 +489,16 @@ where
             let mut futures = FuturesUnordered::new();
             let mut start_times = StartTimes::default();
 
-            let accept_request = |(request_data, request, tx): WorkerRequest<S>,
+            #[cfg(feature = "p2")]
+            let accepted = accepted.clone();
+            let accept_request = |(request_data, request, tx, abandoned): WorkerRequest<S>,
                                   futures: &mut FuturesUnordered<_>,
                                   start_times: &mut StartTimes,
                                   reuse_count: &mut usize| {
+                // Caller dropped while this request was still queued.
+                if abandoned.flag.load(Relaxed) {
+                    return;
+                }
                 // Set `accept_concurrent` to false, conservatively assuming
                 // that the new task will be CPU-bound, at least to begin with.
                 // Only once the `StoreContextMut::run_concurrent` event loop
@@ -494,6 +510,13 @@ where
                 // additional requests for other workers to handle.
                 accept_concurrent.store(false, Relaxed);
                 *reuse_count += 1;
+                // A p3 worker may have other requests in flight; don't record them here.
+                #[cfg(feature = "p2")]
+                if matches!(proxy, Proxy::P2(_)) {
+                    accepted.lock().unwrap().push(abandoned);
+                }
+                #[cfg(not(feature = "p2"))]
+                drop(abandoned);
 
                 let prepared = accessor.with(|mut store| {
                     let prepared = Prepared::new(store.as_context_mut(), proxy, request, view, tx);
@@ -717,6 +740,22 @@ where
 
                     let (status, start) = *status.try_lock().unwrap();
 
+                    // p2 only. Register first, then load, so a drop during this
+                    // poll still wakes the task.
+                    let mut abandoned_p2 = false;
+                    {
+                        let accepted = accepted.lock().unwrap();
+                        for slot in accepted.iter() {
+                            slot.waker.register(cx.waker());
+                            if slot.flag.load(Relaxed) {
+                                abandoned_p2 = true;
+                            }
+                        }
+                    }
+                    if abandoned_p2 {
+                        return Poll::Ready(Err(ExpirationError.into()));
+                    }
+
                     if let Poll::Ready(()) = expiration.as_mut().poll(cx, status, start) {
                         return Poll::Ready(match status {
                             WorkerStatus::Requests | WorkerStatus::PostReturn => {
@@ -892,8 +931,42 @@ where
         data: <S::WorkerState as WorkerState>::RequestData,
         request: Request,
     ) -> Result<Response, wasmtime::Error> {
+        let abandoned = Arc::new(Abandon {
+            flag: AtomicBool::new(false),
+            waker: AtomicWaker::new(),
+        });
+        /// Armed until `handle` observes the response. A drop that finds the
+        /// response already queued does not mark the worker abandoned.
+        struct AbandonGuard {
+            slot: Arc<Abandon>,
+            armed: bool,
+            rx: oneshot::Receiver<Result<Response, wasmtime::Error>>,
+        }
+        impl AbandonGuard {
+            fn disarm(&mut self) {
+                self.armed = false;
+            }
+        }
+        impl Drop for AbandonGuard {
+            fn drop(&mut self) {
+                if !self.armed {
+                    return;
+                }
+                // Guest already responded; the caller just never observed it.
+                if let Ok(Some(_)) = self.rx.try_recv() {
+                    return;
+                }
+                self.slot.flag.store(true, Relaxed);
+                self.slot.waker.wake();
+            }
+        }
         let (tx, rx) = oneshot::channel();
-        let req = (data, request, tx);
+        let mut abandon = AbandonGuard {
+            slot: abandoned.clone(),
+            armed: true,
+            rx,
+        };
+        let req = (data, request, tx, abandoned);
         if self.0.worker_count.load(Relaxed) == 0 {
             // There are no available workers; skip the queue and pass
             // the request directly to the worker, which improves
@@ -932,7 +1005,9 @@ where
             }
         }
 
-        rx.await.map_err(|_| TrapOrPanicError)?
+        let result = (&mut abandon.rx).await.map_err(|_| TrapOrPanicError)?;
+        abandon.disarm();
+        result
     }
 
     /// Return a reference to the application state.
@@ -1083,7 +1158,7 @@ impl<'a, T: Send> Prepared<'a, T> {
             Prepared::P3 {
                 guest,
                 call,
-                tx,
+                mut tx,
                 request_io_result,
                 view,
             } => {
@@ -1101,19 +1176,29 @@ impl<'a, T: Send> Prepared<'a, T> {
                     })
                 });
 
-                // TODO: We should also use `oneshot::Sender::poll_close` to be
-                // notified when the receiver is dropped, in which case we should
-                // expire the request since the response is no longer of interest to
-                // the original `ProxyHandler::handle` caller.
-                let (result, sent) = match futures::future::select(handle, expiration).await {
-                    Either::Left((result, _)) => (result, true),
-                    // TODO: We should also send a cancel request to the expired
-                    // task to give it a chance to shut down gracefully, but as of
-                    // this writing Wasmtime does not yet provide an API for doing
-                    // that.  See issue #11833.  Instead, we let it continue running
-                    // as a background task until it either returns a response
-                    // (which we'll ignore) or the instance itself has expired.
-                    Either::Right(((), _)) => (Err(ExpirationError.into()), false),
+                // Stop when the caller drops the receiver (`poll_canceled`).
+                let closed = pin!(future::poll_fn(|cx| tx.poll_canceled(cx)));
+
+                let (result, sent) = match futures::future::select(
+                    handle,
+                    futures::future::select(closed, expiration),
+                )
+                .await
+                {
+                    Either::Left((result, ..)) => (result, true),
+                    Either::Right((Either::Left(((), _)), _)) => {
+                        // Caller dropped this request. The worker keeps accepting.
+                        (Err(ExpirationError.into()), true)
+                    }
+                    Either::Right((Either::Right(((), _)), _)) => {
+                        // TODO: We should also send a cancel request to the expired
+                        // task to give it a chance to shut down gracefully, but as of
+                        // this writing Wasmtime does not yet provide an API for doing
+                        // that.  See issue #11833.  Instead, we let it continue running
+                        // as a background task until it either returns a response
+                        // (which we'll ignore) or the instance itself has expired.
+                        (Err(ExpirationError.into()), false)
+                    }
                 };
 
                 _ = tx.send(result);
@@ -1145,7 +1230,7 @@ impl<'a, T: Send> Prepared<'a, T> {
 
                 let tx = Dropper(tx);
 
-                // See corresponding TODO comment for the p3 case above.
+                // A sync guest blocks `run_concurrent`, so p2 watches the flag outside it.
                 let (result, sent) = match futures::future::select(handle, expiration).await {
                     Either::Left((result, _)) => (result.context(MESSAGE), true),
                     // See corresponding TODO comment for the p3 case above.
