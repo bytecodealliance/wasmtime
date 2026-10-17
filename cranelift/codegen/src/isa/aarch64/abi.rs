@@ -474,14 +474,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         from_bits: u8,
         to_bits: u8,
     ) -> Inst {
-        assert!(from_bits < to_bits);
-        Inst::Extend {
-            rd: to_reg,
-            rn: from_reg,
-            signed,
-            from_bits,
-            to_bits,
-        }
+        Inst::gen_extend(to_reg, from_reg, signed, from_bits, to_bits)
     }
 
     fn gen_args(args: Vec<ArgPair>) -> Inst {
