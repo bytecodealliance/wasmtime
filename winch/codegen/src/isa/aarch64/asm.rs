@@ -1273,13 +1273,13 @@ impl Assembler {
     }
 
     pub fn extend(&mut self, rn: Reg, rd: WritableReg, kind: ExtendKind) {
-        self.emit(Inst::Extend {
-            rd: rd.map(Into::into),
-            rn: rn.into(),
-            signed: kind.signed(),
-            from_bits: kind.from_bits(),
-            to_bits: kind.to_bits(),
-        })
+        self.emit(Inst::gen_extend(
+            rd.map(Into::into),
+            rn.into(),
+            kind.signed(),
+            kind.from_bits(),
+            kind.to_bits(),
+        ))
     }
 
     /// Bitwise AND (shifted register), setting flags.

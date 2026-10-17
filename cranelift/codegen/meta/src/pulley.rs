@@ -105,8 +105,8 @@ impl Inst<'_> {
 
 /// Generates a pretty-printing method for debugging.
 pub fn generate_raw_inst_display(rust: &mut String) -> Result<(), Error> {
-    rust.push_str("impl<'a> std::fmt::Display for RawInstDisplay<'a> {\n");
-    rust.push_str("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n");
+    rust.push_str("impl<'a> core::fmt::Display for RawInstDisplay<'a> {\n");
+    rust.push_str("fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {\n");
     rust.push_str("let inst = self.0;\n");
     rust.push_str("match inst {\n");
     for inst @ Inst { name, .. } in OPS.iter().chain(EXTENDED_OPS) {

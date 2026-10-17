@@ -27,7 +27,6 @@ use cranelift_codegen::{
     },
 };
 use cranelift_isle::ast::{SpecExpr, SpecOp};
-use itertools::Itertools;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::vec;
@@ -76,10 +75,6 @@ pub fn define() -> Result<Vec<FileConfig>> {
         FileConfig {
             name: "mov_wide.isle".into(),
             specs: vec![define_mov_wide()?],
-        },
-        FileConfig {
-            name: "extend.isle".into(),
-            specs: vec![define_extend()],
         },
         FileConfig {
             name: "conds.isle".into(),
@@ -774,62 +769,6 @@ fn mov_wide_template(
     })?;
 
     Ok(template)
-}
-
-fn define_extend() -> SpecConfig {
-    // Extend
-    let signed = [false, true];
-    let bits = [8u8, 16u8, 32u8, 64u8];
-
-    let mut mappings = Mappings::default();
-    mappings.writes.insert(
-        aarch64::gpreg(4),
-        Mapping::require(spec_var("rd".to_string())),
-    );
-    mappings.reads.insert(
-        aarch64::gpreg(5),
-        Mapping::require(spec_as_bit_vector_width(spec_var("rn".to_string()), 64)),
-    );
-
-    SpecConfig {
-        // Spec signature.
-        term: "MInst.Extend".to_string(),
-        args: ["rd", "rn", "signed", "from_bits", "to_bits"]
-            .map(String::from)
-            .to_vec(),
-        cases: Cases::Cases(
-            bits.iter()
-                .cartesian_product(&bits)
-                .filter(|(from_bits, to_bits)| from_bits <= to_bits && **from_bits < 64)
-                .cartesian_product(&signed)
-                .map(|((from_bits, to_bits), signed)| Case {
-                    conds: vec![
-                        spec_eq_bool(spec_var("signed".to_string()), *signed),
-                        spec_eq(
-                            spec_var("from_bits".to_string()),
-                            spec_const_bit_vector((*from_bits).into(), 8),
-                        ),
-                        spec_eq(
-                            spec_var("to_bits".to_string()),
-                            spec_const_bit_vector((*to_bits).into(), 8),
-                        ),
-                    ],
-                    cases: Cases::Instruction(InstConfig {
-                        // Instruction to generate specification from.
-                        opcodes: Opcodes::Instruction(Inst::Extend {
-                            rd: writable_xreg(4),
-                            rn: xreg(5),
-                            signed: *signed,
-                            from_bits: *from_bits,
-                            to_bits: *to_bits,
-                        }),
-                        scope: aarch64::state(),
-                        mappings: mappings.clone(),
-                    }),
-                })
-                .collect(),
-        ),
-    }
 }
 
 fn define_loads() -> Result<Vec<SpecConfig>> {

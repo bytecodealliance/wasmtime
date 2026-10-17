@@ -5738,158 +5738,160 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::Extend {
-            rd: writable_xreg(3),
-            rn: xreg(5),
-            signed: false,
-            from_bits: 1,
-            to_bits: 32,
-        },
-        "A3000012",
-        "and w3, w5, #1",
-    ));
-    insns.push((
-        Inst::Extend {
-            rd: writable_xreg(3),
-            rn: xreg(5),
-            signed: false,
-            from_bits: 1,
-            to_bits: 64,
-        },
-        "A3000012",
-        "and w3, w5, #1",
-    ));
-    insns.push((
-        Inst::Extend {
+        Inst::BitfieldMove {
+            size: OperandSize::Size32,
+            bfm_op: BfmOp::SBfm,
             rd: writable_xreg(10),
             rn: xreg(21),
-            signed: true,
-            from_bits: 1,
-            to_bits: 32,
+            immr: UImm6 { imm: 0 },
+            imms: UImm6 { imm: 0 },
         },
         "AA020013",
         "sbfx w10, w21, #0, #1",
     ));
     insns.push((
-        Inst::Extend {
+        Inst::BitfieldMove {
+            size: OperandSize::Size64,
+            bfm_op: BfmOp::SBfm,
             rd: writable_xreg(1),
             rn: xreg(2),
-            signed: true,
-            from_bits: 1,
-            to_bits: 64,
+            immr: UImm6 { imm: 0 },
+            imms: UImm6 { imm: 0 },
         },
         "41004093",
         "sbfx x1, x2, #0, #1",
     ));
     insns.push((
-        Inst::Extend {
+        Inst::BitfieldMove {
+            size: OperandSize::Size32,
+            bfm_op: BfmOp::UBfm,
             rd: writable_xreg(1),
             rn: xreg(2),
-            signed: false,
-            from_bits: 8,
-            to_bits: 32,
+            immr: UImm6 { imm: 0 },
+            imms: UImm6 { imm: 7 },
         },
         "411C0053",
         "uxtb w1, w2",
     ));
     insns.push((
-        Inst::Extend {
+        Inst::BitfieldMove {
+            size: OperandSize::Size32,
+            bfm_op: BfmOp::SBfm,
             rd: writable_xreg(1),
             rn: xreg(2),
-            signed: true,
-            from_bits: 8,
-            to_bits: 32,
+            immr: UImm6 { imm: 0 },
+            imms: UImm6 { imm: 7 },
         },
         "411C0013",
         "sxtb w1, w2",
     ));
     insns.push((
-        Inst::Extend {
+        Inst::BitfieldMove {
+            size: OperandSize::Size32,
+            bfm_op: BfmOp::UBfm,
             rd: writable_xreg(1),
             rn: xreg(2),
-            signed: false,
-            from_bits: 16,
-            to_bits: 32,
+            immr: UImm6 { imm: 0 },
+            imms: UImm6 { imm: 15 },
         },
         "413C0053",
         "uxth w1, w2",
     ));
     insns.push((
-        Inst::Extend {
+        Inst::BitfieldMove {
+            size: OperandSize::Size32,
+            bfm_op: BfmOp::SBfm,
             rd: writable_xreg(1),
             rn: xreg(2),
-            signed: true,
-            from_bits: 16,
-            to_bits: 32,
+            immr: UImm6 { imm: 0 },
+            imms: UImm6 { imm: 15 },
         },
         "413C0013",
         "sxth w1, w2",
     ));
     insns.push((
-        Inst::Extend {
+        Inst::BitfieldMove {
+            size: OperandSize::Size64,
+            bfm_op: BfmOp::SBfm,
             rd: writable_xreg(1),
             rn: xreg(2),
-            signed: false,
-            from_bits: 8,
-            to_bits: 64,
-        },
-        "411C0053",
-        "uxtb w1, w2",
-    ));
-    insns.push((
-        Inst::Extend {
-            rd: writable_xreg(1),
-            rn: xreg(2),
-            signed: true,
-            from_bits: 8,
-            to_bits: 64,
+            immr: UImm6 { imm: 0 },
+            imms: UImm6 { imm: 7 },
         },
         "411C4093",
         "sxtb x1, w2",
     ));
     insns.push((
-        Inst::Extend {
+        Inst::BitfieldMove {
+            size: OperandSize::Size64,
+            bfm_op: BfmOp::SBfm,
             rd: writable_xreg(1),
             rn: xreg(2),
-            signed: false,
-            from_bits: 16,
-            to_bits: 64,
-        },
-        "413C0053",
-        "uxth w1, w2",
-    ));
-    insns.push((
-        Inst::Extend {
-            rd: writable_xreg(1),
-            rn: xreg(2),
-            signed: true,
-            from_bits: 16,
-            to_bits: 64,
+            immr: UImm6 { imm: 0 },
+            imms: UImm6 { imm: 15 },
         },
         "413C4093",
         "sxth x1, w2",
     ));
     insns.push((
-        Inst::Extend {
+        Inst::BitfieldMove {
+            size: OperandSize::Size64,
+            bfm_op: BfmOp::SBfm,
             rd: writable_xreg(1),
             rn: xreg(2),
-            signed: false,
-            from_bits: 32,
-            to_bits: 64,
-        },
-        "E103022A",
-        "mov w1, w2",
-    ));
-    insns.push((
-        Inst::Extend {
-            rd: writable_xreg(1),
-            rn: xreg(2),
-            signed: true,
-            from_bits: 32,
-            to_bits: 64,
+            immr: UImm6 { imm: 0 },
+            imms: UImm6 { imm: 31 },
         },
         "417C4093",
         "sxtw x1, w2",
+    ));
+    insns.push((
+        Inst::BitfieldMove {
+            size: OperandSize::Size32,
+            bfm_op: BfmOp::UBfm,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            immr: UImm6 { imm: 20 },
+            imms: UImm6 { imm: 15 },
+        },
+        "413C1453",
+        "ubfm w1, w2, #20, #15",
+    ));
+    insns.push((
+        Inst::BitfieldMove {
+            size: OperandSize::Size32,
+            bfm_op: BfmOp::SBfm,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            immr: UImm6 { imm: 20 },
+            imms: UImm6 { imm: 15 },
+        },
+        "413C1413",
+        "sbfm w1, w2, #20, #15",
+    ));
+    insns.push((
+        Inst::BitfieldMove {
+            size: OperandSize::Size64,
+            bfm_op: BfmOp::UBfm,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            immr: UImm6 { imm: 20 },
+            imms: UImm6 { imm: 31 },
+        },
+        "417C54D3",
+        "ubfm x1, x2, #20, #31",
+    ));
+    insns.push((
+        Inst::BitfieldMove {
+            size: OperandSize::Size64,
+            bfm_op: BfmOp::SBfm,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            immr: UImm6 { imm: 20 },
+            imms: UImm6 { imm: 31 },
+        },
+        "417C5493",
+        "sbfm x1, x2, #20, #31",
     ));
 
     insns.push((
