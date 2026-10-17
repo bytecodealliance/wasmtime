@@ -118,6 +118,13 @@
       (if-let false (u64_is_power_of_two d))
       (apply_div_const_magic_u64 (Opcode.Udiv) x d))
 
+;; Narrow `udiv`s with constant divisors are performed in 32 bits so that they
+;; can use the same magic-number sequence and, importantly, so that the
+;; potentially-trapping skeleton instruction is removed.
+(rule (simplify_skeleton (udiv x (iconst_u (ty_int (fits_in_16 ty)) (u64_extract_non_zero (u32_from_u64 d)))))
+      (if-let false (u32_is_power_of_two d))
+      (ireduce ty (apply_div_const_magic_u32 (Opcode.Udiv) (uextend $I32 x) d)))
+
 ;; General cases for `sdiv` with constant divisors
 (rule (simplify_skeleton (sdiv x (iconst_s $I32 (i64_extract_non_zero (i32_from_i64 d)))))
       (if-let false (i64_is_any_sign_power_of_two d))
@@ -125,6 +132,11 @@
 (rule (simplify_skeleton (sdiv x (iconst_s $I64 (i64_extract_non_zero d))))
       (if-let false (i64_is_any_sign_power_of_two d))
       (apply_div_const_magic_s64 (Opcode.Sdiv) x d))
+
+;; Same as above for narrow `sdiv`s.
+(rule (simplify_skeleton (sdiv x (iconst_s (ty_int (fits_in_16 ty)) (i64_extract_non_zero (i32_from_i64 d)))))
+      (if-let false (i64_is_any_sign_power_of_two (i32_into_i64 d)))
+      (ireduce ty (apply_div_const_magic_s32 (Opcode.Sdiv) (sextend $I32 x) d)))
 
 ;; x % 1 == 0
 (rule (simplify_skeleton (urem x (iconst_u ty 1))) (all_zero ty))
