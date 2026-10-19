@@ -1204,8 +1204,8 @@ impl Assembler {
             },
             // number of bytes needed for the jumptable sequence:
             // 4 bytes per instruction, with 8 instructions base + the size of
-            // the jumptable more.
-            (4 * (8 + targets.len())).try_into().unwrap(),
+            // the jumptable more (including the default entry).
+            (4 * (8 + targets.len() + 1)).try_into().unwrap(),
         );
     }
 

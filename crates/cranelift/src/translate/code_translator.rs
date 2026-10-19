@@ -71,7 +71,6 @@
 //!   <https://github.com/bytecodealliance/cranelift/pull/1236>
 //!     ("Relax verification to allow I8X16 to act as a default vector type")
 
-use crate::Reachability;
 use crate::bounds_checks::{BoundsCheck, bounds_check_and_compute_addr};
 use crate::func_environ::{Extension, FuncEnvironment};
 use crate::translate::TargetEnvironment;
@@ -81,6 +80,7 @@ use crate::translate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation, set_block_params,
 };
 use crate::trap::TranslateTrap;
+use crate::{MAX_BR_TABLE_TARGETS, Reachability};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{
@@ -126,6 +126,18 @@ pub fn translate_operator(
     environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<()> {
     log::trace!("Translating Wasm opcode: {op:?}");
+
+    // Check implementation limits before anything else so that they are
+    // enforced regardless of whether this operator is reachable.
+    if let Operator::BrTable { targets } = op {
+        if targets.len() > MAX_BR_TABLE_TARGETS {
+            return Err(wasm_unsupported!(
+                "`br_table` has {} targets, which exceeds the implementation limit of {}",
+                targets.len(),
+                MAX_BR_TABLE_TARGETS
+            ));
+        }
+    }
 
     if !environ.is_reachable() {
         translate_unreachable_operator(&op, builder, environ)?;

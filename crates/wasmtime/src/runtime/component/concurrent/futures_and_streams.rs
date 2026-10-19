@@ -1511,6 +1511,39 @@ pub(super) fn lift_index_to_future(
     }
 }
 
+/// Checks that the host-owned read end `id` may be lowered into a guest as a
+/// future or stream with the payload type `payload`.
+///
+/// Note that this is technically redundant for `StreamReader<T>` where its
+/// static typecheck already verified this, but this is otherwise required in
+/// the face of the `{Stream,Future}Any` abstraction to handle various use cases
+/// of types dynamically being labeled or possibly switched.
+fn typecheck_lowered_transmit<U>(
+    id: TableId<TransmitHandle>,
+    cx: &mut LowerContext<'_, U>,
+    payload: Option<&InterfaceType>,
+) -> Result<()> {
+    let origin = cx.store.0.transmit_origin(id)?;
+    let dst = cx.instance_type();
+    let equivalent = match origin {
+        TransmitOrigin::Host { typecheck } => {
+            return typecheck(payload, &dst).context("future or stream payload types differ");
+        }
+        TransmitOrigin::GuestFuture(id, ty) => {
+            let src = InstanceType::new(cx.store.0.component_instance(id));
+            types::FutureType::from(src.types[ty].ty, &src).equivalent_payload_guest(&dst, payload)
+        }
+        TransmitOrigin::GuestStream(id, ty) => {
+            let src = InstanceType::new(cx.store.0.component_instance(id));
+            types::StreamType::from(src.types[ty].ty, &src).equivalent_payload_guest(&dst, payload)
+        }
+    };
+    if !equivalent {
+        bail!("future or stream payload types differ");
+    }
+    Ok(())
+}
+
 /// Transfer ownership of the read end of a future from the host to a guest.
 pub(super) fn lower_future_to_index<U>(
     id: TableId<TransmitHandle>,
@@ -1519,6 +1552,8 @@ pub(super) fn lower_future_to_index<U>(
 ) -> Result<u32> {
     match ty {
         InterfaceType::Future(dst) => {
+            let types = cx.types;
+            typecheck_lowered_transmit(id, cx, types[types[dst].ty].payload.as_ref())?;
             cx.instance_handle()
                 .lower_transmit_to_index(cx.store.0, TransmitIndex::Future(dst), id)
         }
@@ -1878,6 +1913,8 @@ pub(super) fn lower_stream_to_index<U>(
 ) -> Result<u32> {
     match ty {
         InterfaceType::Stream(dst) => {
+            let types = cx.types;
+            typecheck_lowered_transmit(id, cx, types[types[dst].ty].payload.as_ref())?;
             cx.instance_handle()
                 .lower_transmit_to_index(cx.store.0, TransmitIndex::Stream(dst), id)
         }
@@ -2176,14 +2213,18 @@ struct TransmitState {
     read: ReadState,
     /// Whether further values may be transmitted via this stream or future.
     done: bool,
-    /// The original creator of this stream, used for type-checking with
-    /// `{Future,Stream}Any`.
+    /// The original creator of this stream or future, whose payload type is
+    /// checked against a guest's whenever the host lowers the read end into
+    /// that guest, and which `{Future,Stream}Any` use as their initial type.
     pub(super) origin: TransmitOrigin,
 }
 
 #[derive(Copy, Clone)]
 pub(super) enum TransmitOrigin {
-    Host,
+    Host {
+        /// Type-checks the producer's items against the guest-supplied payload.
+        typecheck: fn(Option<&InterfaceType>, &InstanceType<'_>) -> Result<()>,
+    },
     GuestFuture(ComponentInstanceId, TypeFutureTableIndex),
     GuestStream(ComponentInstanceId, TypeStreamTableIndex),
 }
@@ -2623,7 +2664,9 @@ impl<T> StoreContextMut<'_, T> {
     {
         let token = StoreToken::new(self.as_context_mut());
         let state = self.0.concurrent_state_mut()?;
-        let (_, read) = state.new_transmit(TransmitOrigin::Host)?;
+        let (_, read) = state.new_transmit(TransmitOrigin::Host {
+            typecheck: types::typecheck_payload::<P::Item>,
+        })?;
         let producer = Arc::new(LockedState::new((Box::pin(producer), P::Buffer::default())));
         let id = state.get_mut(read)?.state;
         let mut dropped = false;
