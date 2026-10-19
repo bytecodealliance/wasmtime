@@ -1685,17 +1685,19 @@ impl Wasmtime {
                 ""
             };
 
-            let import_stability = resolve.worlds[world]
-                .imports
-                .iter()
-                .filter_map(|(_, i)| match i {
-                    WorldItem::Interface { id, stability, .. } if *id == interface_id => {
-                        Some(stability.clone())
-                    }
-                    _ => None,
-                })
-                .next()
-                .unwrap_or(Stability::Unknown);
+            let imports = &resolve.worlds[world].imports;
+            let import = match &name_override {
+                // Labelled imports of the same interface share an
+                // `interface_id`, so find these by their label instead.
+                Some(name) => imports.get(&WorldKey::Name(name.clone())),
+                None => imports
+                    .values()
+                    .find(|i| matches!(i, WorldItem::Interface { id, .. } if *id == interface_id)),
+            };
+            let import_stability = match import {
+                Some(WorldItem::Interface { stability, .. }) => stability.clone(),
+                _ => Stability::Unknown,
+            };
 
             let gate = FeatureGate::open(&mut self.src, &import_stability);
             match &name_override {

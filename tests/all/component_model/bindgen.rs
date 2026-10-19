@@ -909,6 +909,90 @@ mod unstable_import {
     }
 }
 
+mod implements_unstable {
+    use super::*;
+    use wasmtime::component::HasSelf;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package demo:pkg;
+
+            interface store {
+                get: func() -> u32;
+            }
+
+            interface cache {
+                get: func() -> u32;
+            }
+
+            world w {
+                import a: store;
+                @unstable(feature = experimental)
+                import b: store;
+
+                @unstable(feature = experimental)
+                import c: cache;
+                import d: cache;
+            }
+        ",
+    });
+
+    struct MyHost;
+
+    impl demo::pkg::store::Host for MyHost {
+        fn get(&mut self) -> u32 {
+            0
+        }
+    }
+
+    impl demo::pkg::cache::Host for MyHost {
+        fn get(&mut self) -> u32 {
+            0
+        }
+    }
+
+    /// Returns whether a component importing just `name`, implementing
+    /// `interface`, can be instantiated with `options`.
+    fn links(options: &LinkOptions, name: &str, interface: &str) -> Result<bool> {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_implements(true);
+        let engine = Engine::new(&config)?;
+        let component = Component::new(
+            &engine,
+            format!(
+                r#"
+                    (component
+                        (import "{name}" (implements "{interface}") (instance
+                            (export "get" (func (result u32)))
+                        ))
+                    )
+                "#
+            ),
+        )?;
+        let mut linker = Linker::<MyHost>::new(&engine);
+        W::add_to_linker::<_, HasSelf<_>>(&mut linker, options, |h| h)?;
+        Ok(linker.instantiate_pre(&component).is_ok())
+    }
+
+    #[test]
+    fn labels_have_their_own_feature_gates() -> Result<()> {
+        let default = LinkOptions::default();
+        assert!(links(&default, "a", "demo:pkg/store")?);
+        assert!(!links(&default, "b", "demo:pkg/store")?);
+        assert!(!links(&default, "c", "demo:pkg/cache")?);
+        assert!(links(&default, "d", "demo:pkg/cache")?);
+
+        let mut experimental = LinkOptions::default();
+        experimental.experimental(true);
+        assert!(links(&experimental, "a", "demo:pkg/store")?);
+        assert!(links(&experimental, "b", "demo:pkg/store")?);
+        assert!(links(&experimental, "c", "demo:pkg/cache")?);
+        assert!(links(&experimental, "d", "demo:pkg/cache")?);
+        Ok(())
+    }
+}
+
 mod anyhow_errors {
     use super::*;
     use crate::ErrorExt;
