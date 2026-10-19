@@ -1382,8 +1382,11 @@ impl Config {
 
     /// Configures whether the component model map type is enabled or not.
     ///
-    /// This is part of the component model specification and enables the
-    /// `map<k, v>` type in WIT and the component binary format.
+    /// This corresponds to the 🗺️ emoji in the component model specification
+    /// and enables the `map<k, v>` type in WIT and the component binary
+    /// format.
+    ///
+    /// This is `false` by default.
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_map(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_MAP, enable);
