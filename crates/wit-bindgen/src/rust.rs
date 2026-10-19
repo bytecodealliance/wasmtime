@@ -17,6 +17,9 @@ pub trait RustGenerator<'a> {
     fn is_imported_interface(&self, interface: InterfaceId) -> bool;
     fn wasmtime_path(&self) -> String;
 
+    /// Path to the Rust type used for WIT `map<K, V>` types.
+    fn map_type_path(&self) -> String;
+
     /// This determines whether we generate owning types or (where appropriate)
     /// borrowing types.
     ///
@@ -241,7 +244,7 @@ pub trait RustGenerator<'a> {
         };
         let key = self.ty(key, next_mode);
         let value = self.ty(value, next_mode);
-        let map = format!("std::collections::HashMap<{key}, {value}>");
+        let map = format!("{}<{key}, {value}>", self.map_type_path());
         match mode {
             TypeMode::AllBorrowed(lt) => {
                 if lt != "'_" {

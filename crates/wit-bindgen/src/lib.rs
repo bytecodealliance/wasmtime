@@ -158,6 +158,10 @@ pub struct Opts {
     /// These derive attributes will be added to any generated structs or enums
     pub additional_derive_attributes: Vec<String>,
 
+    /// Path to the Rust type used for WIT `map<K, V>` types, `BTreeMap` by
+    /// default.
+    pub map_type: Option<String>,
+
     /// Evaluate to a string literal containing the generated code rather than the generated tokens
     /// themselves. Mostly useful for Wasmtime internal debugging and development.
     pub stringify: bool,
@@ -1348,6 +1352,13 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
             .clone()
             .unwrap_or("wasmtime".to_string())
     }
+
+    fn map_type_path(&self) -> String {
+        match &self.opts.map_type {
+            Some(path) => path.clone(),
+            None => format!("{}::component::__internal::BTreeMap", self.wasmtime_path()),
+        }
+    }
 }
 
 enum LookupItem<'a> {
@@ -2518,9 +2529,10 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(&format!("pub type {name}"));
             self.print_generics(lt);
             self.push_str(" = ");
+            let map = self.map_type_path();
             let key_ty = self.ty(key, mode);
             let value_ty = self.ty(value, mode);
-            self.push_str(&format!("std::collections::HashMap<{key_ty}, {value_ty}>"));
+            self.push_str(&format!("{map}<{key_ty}, {value_ty}>"));
             self.push_str(";\n");
             self.assert_type(id, &name);
         }
@@ -3759,6 +3771,10 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
 
     fn wasmtime_path(&self) -> String {
         self.generator.wasmtime_path()
+    }
+
+    fn map_type_path(&self) -> String {
+        self.generator.map_type_path()
     }
 }
 
