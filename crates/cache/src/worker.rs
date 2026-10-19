@@ -476,17 +476,15 @@ impl WorkerThread {
 
         let total_size_limit = self.cache_config.files_total_size_soft_limit();
         let file_count_limit = self.cache_config.file_count_soft_limit();
-        let tsl_if_deleting = total_size_limit
-            .checked_mul(
-                self.cache_config
-                    .files_total_size_limit_percent_if_deleting() as u64,
-            )
-            .unwrap()
-            / 100;
-        let fcl_if_deleting = file_count_limit
-            .checked_mul(self.cache_config.file_count_limit_percent_if_deleting() as u64)
-            .unwrap()
-            / 100;
+        let tsl_if_deleting = percent_of(
+            total_size_limit,
+            self.cache_config
+                .files_total_size_limit_percent_if_deleting(),
+        );
+        let fcl_if_deleting = percent_of(
+            file_count_limit,
+            self.cache_config.file_count_limit_percent_if_deleting(),
+        );
 
         for (idx, item) in cache_index.iter().enumerate() {
             let size = if let CacheEntry::Recognized { size, .. } = item {
@@ -731,6 +729,19 @@ impl WorkerThread {
         enter_dir(&mut vec, self.directory(), 0, &self.cache_config);
         vec
     }
+}
+
+/// Returns `value * percent / 100`, rounded down, without overflowing.
+///
+/// Soft limits are arbitrary `u64` values (nothing bounds them in the config
+/// validation), so computing `value * percent` directly can overflow, e.g. for
+/// `u64::MAX` and `70%`. Splitting the value keeps every intermediate result
+/// within `u64`: with `value = 100 * q + r` the result is
+/// `q * percent + r * percent / 100`, and both terms are at most `value`
+/// because `percent` is at most 100 (see `CacheConfig::validate`).
+fn percent_of(value: u64, percent: u8) -> u64 {
+    let percent = u64::from(percent);
+    value / 100 * percent + (value % 100) * percent / 100
 }
 
 fn read_stats_file(path: &Path) -> Option<ModuleCacheStatistics> {
