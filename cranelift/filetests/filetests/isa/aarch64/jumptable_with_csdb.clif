@@ -29,9 +29,9 @@ block5(v5: i32):
 
 ; VCode:
 ; block0:
-;   emit_island 44
+;   emit_island 48
 ;   subs wzr, w0, #3
-;   b.hs label4 ; csel x11, xzr, x0, hs ; csdb ; adr x10, pc+16 ; ldrsw x11, [x10, x11, uxtw #2] ; add x10, x10, x11 ; br x10 ; jt_entries [MachLabel(3), MachLabel(2), MachLabel(1)]
+;   mov x11, #3 ; csel x11, x0, x11, lo ; csdb ; adr x10, pc+16 ; ldrsw x11, [x10, x11, uxtw #2] ; add x10, x10, x11 ; br x10 ; jt_entries [MachLabel(3), MachLabel(2), MachLabel(1)] ; default label4
 ; block1:
 ;   movz w5, #3
 ;   b label5
@@ -51,28 +51,29 @@ block5(v5: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #3
-;   b.hs #0x44
-;   csel x11, xzr, x0, hs
+;   mov x11, #3
+;   csel x11, x0, x11, lo
 ;   csdb
 ;   adr x10, #0x20
 ;   ldrsw x11, [x10, w11, uxtw #2]
 ;   add x10, x10, x11
 ;   br x10
-;   udf #0x1c
-;   udf #0x14
-;   udf #0xc
-; block1: ; offset 0x2c
+;   udf #0x20
+;   udf #0x18
+;   udf #0x10
+;   udf #0x28
+; block1: ; offset 0x30
 ;   mov w5, #3
-;   b #0x48
-; block2: ; offset 0x34
+;   b #0x4c
+; block2: ; offset 0x38
 ;   mov w5, #2
-;   b #0x48
-; block3: ; offset 0x3c
+;   b #0x4c
+; block3: ; offset 0x40
 ;   mov w5, #1
-;   b #0x48
-; block4: ; offset 0x44
+;   b #0x4c
+; block4: ; offset 0x48
 ;   mov w5, #4
-; block5: ; offset 0x48
+; block5: ; offset 0x4c
 ;   add w0, w0, w5
 ;   ret
 
