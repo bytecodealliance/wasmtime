@@ -41,13 +41,13 @@ impl WasmType for component::Type {
             Self::Result(_) => WasmTypeKind::Result,
             Self::Flags(_) => WasmTypeKind::Flags,
             Self::FixedLengthList(_) => WasmTypeKind::FixedLengthList,
+            Self::Map(_) => WasmTypeKind::Map,
 
             Self::Own(_)
             | Self::Borrow(_)
             | Self::Stream(_)
             | Self::Future(_)
-            | Self::ErrorContext
-            | Self::Map(_) => WasmTypeKind::Unsupported,
+            | Self::ErrorContext => WasmTypeKind::Unsupported,
         }
     }
 
@@ -98,6 +98,11 @@ impl WasmType for component::Type {
         };
         Box::new(flags.names().map(Into::into))
     }
+
+    fn map_key_value_types(&self) -> Option<(Self, Self)> {
+        let map = maybe_unwrap_type!(self, Self::Map)?;
+        Some((map.key(), map.value()))
+    }
 }
 
 macro_rules! impl_primitives {
@@ -140,11 +145,10 @@ impl WasmValue for component::Val {
             Self::Option(_) => WasmTypeKind::Option,
             Self::Result(_) => WasmTypeKind::Result,
             Self::Flags(_) => WasmTypeKind::Flags,
-            Self::Resource(_)
-            | Self::Stream(_)
-            | Self::Future(_)
-            | Self::ErrorContext(_)
-            | Self::Map(_) => WasmTypeKind::Unsupported,
+            Self::Map(_) => WasmTypeKind::Map,
+            Self::Resource(_) | Self::Stream(_) | Self::Future(_) | Self::ErrorContext(_) => {
+                WasmTypeKind::Unsupported
+            }
             Self::FixedLengthList(_) => WasmTypeKind::FixedLengthList,
         }
     }
@@ -248,6 +252,15 @@ impl WasmValue for component::Val {
         ensure_type_val(ty, &val)?;
         Ok(val)
     }
+    fn make_map(
+        ty: &Self::Type,
+        entries: impl IntoIterator<Item = (Self, Self)>,
+    ) -> Result<Self, WasmValueError> {
+        ensure_type_kind(ty, WasmTypeKind::Map)?;
+        let val = Self::Map(entries.into_iter().collect());
+        ensure_type_val(ty, &val)?;
+        Ok(val)
+    }
 
     fn unwrap_f32(&self) -> f32 {
         let val = *unwrap_val!(self, Self::Float32, "f32");
@@ -297,6 +310,10 @@ impl WasmValue for component::Val {
         let flags = unwrap_val!(self, Self::Flags, "flags");
         Box::new(flags.iter().map(Into::into))
     }
+    fn unwrap_map(&self) -> Box<dyn Iterator<Item = (Cow<'_, Self>, Cow<'_, Self>)> + '_> {
+        let map = unwrap_val!(self, Self::Map, "map");
+        Box::new(map.iter().map(|(key, value)| (cow(key), cow(value))))
+    }
 }
 
 // Returns an error if the given component::Val is not of the given component::Type.
@@ -319,6 +336,16 @@ fn ensure_type_val(ty: &component::Type, val: &component::Val) -> Result<(), Was
             let list_type = ty.unwrap_list().ty();
             for val in vals {
                 ensure_type_val(&list_type, val)?;
+            }
+        }
+        component::Val::Map(entries) => {
+            let component::Type::Map(map_type) = ty else {
+                return wrong_value_type();
+            };
+            let (key_type, value_type) = (map_type.key(), map_type.value());
+            for (key, value) in entries {
+                ensure_type_val(&key_type, key)?;
+                ensure_type_val(&value_type, value)?;
             }
         }
         component::Val::Record(vals) => {

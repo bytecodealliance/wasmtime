@@ -711,6 +711,22 @@ fn component_invoke_wave_unsupported_result() -> Result<()> {
 
 #[test]
 #[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_invoke_map() -> Result<()> {
+    let path = "tests/all/cli_tests/component-map.wat";
+    let invoke =
+        |call: &str| run_wasmtime(&["run", "-Wcomponent-model-map", "--invoke", call, path]);
+
+    // Map arguments are parsed and map results are printed in WAVE, which
+    // merges duplicate keys.
+    assert_eq!(invoke("echo({})")?, "{}\n");
+    assert_eq!(invoke("echo({3: 4, 1: 2, 3: 5,})")?, "{3: 5, 1: 2}\n");
+    assert_eq!(invoke("duplicates()")?, "{1: 30, 2: 20}\n");
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
 fn component_unknown_imports_default() -> Result<()> {
     let path = "tests/all/cli_tests/component-unknown-imports.wat";
 
