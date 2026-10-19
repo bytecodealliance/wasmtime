@@ -810,7 +810,10 @@ impl RunCommand {
             .to_wasm_params(&param_types)
             .with_context(|| format!("while interpreting parameters in invoke \"{invoke}\""))?;
 
-        let instance = linker.instantiate_async(&mut *store, component).await?;
+        let instance = linker
+            .instantiate_async(&mut *store, component)
+            .await
+            .map_err(|e| crate::common::labelled_wasi_import_context(component, e))?;
 
         let func = instance
             .get_func(&mut *store, export)
@@ -853,7 +856,10 @@ impl RunCommand {
         component: &wasmtime::component::Component,
         linker: &wasmtime::component::Linker<Host>,
     ) -> Result<wasmtime::component::Instance> {
-        let instance = linker.instantiate_async(&mut *store, component).await?;
+        let instance = linker
+            .instantiate_async(&mut *store, component)
+            .await
+            .map_err(|e| crate::common::labelled_wasi_import_context(component, e))?;
 
         let mut result = None;
         let _ = &mut result;
@@ -876,7 +882,10 @@ impl RunCommand {
             // If WASIp3 wasn't found then fall back to requiring WASIp2 and
             // this'll report an error if the right export doesn't exist.
             None => {
-                wasmtime_wasi::p2::bindings::Command::new(&mut *store, &instance)?
+                wasmtime_wasi::p2::bindings::Command::new(&mut *store, &instance)
+                    .map_err(|e| {
+                        crate::common::labelled_wasi_export_context(component, &["wasi:cli/run"], e)
+                    })?
                     .wasi_cli_run()
                     .call_run(&mut *store)
                     .await

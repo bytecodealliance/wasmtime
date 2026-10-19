@@ -583,6 +583,67 @@ impl Profile {
     }
 }
 
+/// Explains `err`, a failure to instantiate `component`, if it's due to a
+/// labelled WASI import such as `import env2: wasi:cli/environment@0.3.0;`.
+///
+/// The CLI only provides WASI under each interface's own name, so otherwise the
+/// linker just reports that `env2` is missing.
+#[cfg(feature = "component-model")]
+pub fn labelled_wasi_import_context(
+    component: &Component,
+    err: wasmtime::Error,
+) -> wasmtime::Error {
+    // The linker names the import it failed on, so only blame that one.
+    let msg = err.to_string();
+    for (name, import) in component.component_type().imports(component.engine()) {
+        if let Some(interface) = import.implements
+            && interface.starts_with("wasi:")
+            && msg.contains(&format!("`{name}`"))
+        {
+            return err.context(format!(
+                "component imports `{interface}` under the name `{name}`, but the \
+                 wasmtime CLI only provides WASI interfaces under their own names; \
+                 labelled WASI imports aren't supported"
+            ));
+        }
+    }
+    err
+}
+
+/// Explains `err`, a failure to find any of `interfaces` (e.g. `wasi:cli/run`)
+/// exported from `component`, if one is exported under a label instead, such
+/// as `export r: wasi:cli/run@0.2.0;`.
+#[cfg(feature = "component-model")]
+pub fn labelled_wasi_export_context(
+    component: &Component,
+    interfaces: &[&str],
+    err: wasmtime::Error,
+) -> wasmtime::Error {
+    let is_wanted = |name: &str| {
+        let unversioned = name.split_once('@').map_or(name, |(name, _)| name);
+        interfaces.contains(&unversioned)
+    };
+    let ty = component.component_type();
+    let engine = component.engine();
+    // If the interface is exported under its own name then the lookup failed
+    // for some other reason, such as an unsupported version.
+    if ty.exports(engine).any(|(name, _)| is_wanted(name)) {
+        return err;
+    }
+    for (name, export) in ty.exports(engine) {
+        if let Some(interface) = export.implements
+            && is_wanted(interface)
+        {
+            return err.context(format!(
+                "component exports `{interface}` under the name `{name}`, but the \
+                 wasmtime CLI only uses exports named after the interface itself; \
+                 labelled WASI exports aren't supported"
+            ));
+        }
+    }
+    err
+}
+
 #[derive(Copy, Clone, Debug)]
 #[cfg(feature = "wasi-http")]
 pub struct HttpHooks {

@@ -1,4 +1,7 @@
-use crate::common::{HttpHooks, Profile, RunCommon, RunTarget};
+use crate::common::{
+    HttpHooks, Profile, RunCommon, RunTarget, labelled_wasi_export_context,
+    labelled_wasi_import_context,
+};
 use clap::Parser;
 use http::{HeaderMap, HeaderName, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt as _, Full};
@@ -610,14 +613,25 @@ impl ServeCommand {
     ) -> Result<()> {
         let engine = linker.engine();
         let request_headers = RequestHeaders::parse(&self.headers)?;
-        let instance = linker.instantiate_pre(&component)?;
+        let instance = linker
+            .instantiate_pre(&component)
+            .map_err(|e| labelled_wasi_import_context(&component, e))?;
+        let p2_pre = |instance| {
+            wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance).map_err(|e| {
+                labelled_wasi_export_context(
+                    &component,
+                    &["wasi:http/handler", "wasi:http/incoming-handler"],
+                    e,
+                )
+            })
+        };
         #[cfg(feature = "component-model-async")]
         let instance = match wasmtime_wasi_http::p3::bindings::ServicePre::new(instance.clone()) {
             Ok(pre) => ProxyPre::P3(pre),
-            Err(_) => ProxyPre::P2(wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance)?),
+            Err(_) => ProxyPre::P2(p2_pre(instance)?),
         };
         #[cfg(not(feature = "component-model-async"))]
-        let instance = ProxyPre::P2(wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance)?);
+        let instance = ProxyPre::P2(p2_pre(instance)?);
 
         // Spawn background task(s) waiting for graceful shutdown signals. This
         // always listens for ctrl-c but additionally can listen for a TCP

@@ -30,6 +30,15 @@ The `wasmtime` CLI will automatically hook up any WASI-related imported
 functionality, but at this time, if your module imports anything else, it will
 fail instantiation.
 
+WASI interfaces are only provided under their own names, such as
+`wasi:cli/environment@0.2.x`. Labelled imports of WASI interfaces, such as
+`import env2: wasi:cli/environment@0.3.0;` in WIT (`(implements ...)` in the
+component binary), aren't supported by the CLI. Similarly the CLI only runs
+`wasi:cli/run` (or `wasi:http` handlers for `wasmtime serve`) when exported
+under the interface's own name rather than under a label. Embedders can provide
+labelled WASI imports with APIs such as
+`wasmtime_wasi::p2::add_named_to_linker_async`.
+
 The `run` command takes one positional argument, which is the name of the module to run:
 
 ```console

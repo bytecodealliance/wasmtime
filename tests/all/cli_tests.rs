@@ -759,6 +759,91 @@ fn component_unknown_imports_default_async() -> Result<()> {
     Ok(())
 }
 
+// The CLI doesn't provide WASI under labels, so labelled WASI imports should be
+// reported as such rather than as just a missing import.
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_labelled_wasi_import() -> Result<()> {
+    let path = "tests/all/cli_tests/component-labelled-wasi-import.wat";
+    let expected = "labelled WASI imports aren't supported";
+
+    for invoke in [None, Some("wasi:cli/run.run@0.2.0()")] {
+        let mut cmd = get_wasmtime_command()?;
+        cmd.args(["run", "-Wcomponent-model-implements"]);
+        if let Some(invoke) = invoke {
+            cmd.args(["--invoke", invoke]);
+        }
+        let output = cmd.arg(path).output()?;
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(expected) && stderr.contains("`env2`"),
+            "bad stderr: {stderr}"
+        );
+    }
+
+    // Stubbing out unknown imports satisfies the labelled import.
+    run_wasmtime(&[
+        "run",
+        "-Wcomponent-model-implements",
+        "-Wunknown-imports-trap",
+        path,
+    ])?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_labelled_wasi_run_export() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(["run", "-Wcomponent-model-implements"])
+        .arg("tests/all/cli_tests/component-labelled-wasi-run-export.wat")
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("labelled WASI exports aren't supported") && stderr.contains("`r`"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "serve"), ignore)]
+fn serve_labelled_wasi() -> Result<()> {
+    for (path, expected, name) in [
+        (
+            "tests/all/cli_tests/component-labelled-wasi-http-export.wat",
+            "labelled WASI exports aren't supported",
+            "`h`",
+        ),
+        (
+            "tests/all/cli_tests/component-labelled-wasi-import.wat",
+            "labelled WASI imports aren't supported",
+            "`env2`",
+        ),
+    ] {
+        // This fails before binding any address, so the server never starts.
+        let output = get_wasmtime_command()?
+            .args([
+                "serve",
+                "--addr=127.0.0.1:0",
+                "-Wcomponent-model-implements",
+            ])
+            .arg(path)
+            .stdin(Stdio::null())
+            .output()?;
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(expected) && stderr.contains(name),
+            "bad stderr: {stderr}"
+        );
+    }
+    Ok(())
+}
+
 // If the text format is invalid then the filename should be mentioned in the
 // error message.
 #[test]
