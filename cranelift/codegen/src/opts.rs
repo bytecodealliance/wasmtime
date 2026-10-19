@@ -448,4 +448,68 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
             shift_by: shift_by.try_into().unwrap(),
         }
     }
+
+    fn remainder_zero_tests(&mut self, inst: crate::ir::Inst) -> bool {
+        self.ctx
+            .zero_tested_remainders
+            .contains(&self.ctx.func.dfg.first_result(inst))
+    }
+
+    fn div_const_test_u32(&mut self, d: u32) -> generated_code::DivConstTestMagic {
+        let div_const::MU32Test {
+            mul_by,
+            threshold,
+            shift_by,
+        } = div_const::magic_test_u32(d);
+        generated_code::DivConstTestMagic::Test {
+            mul_by: mul_by.into(),
+            bias: 0,
+            threshold: threshold.into(),
+            shift_by,
+        }
+    }
+
+    fn div_const_test_u64(&mut self, d: u64) -> generated_code::DivConstTestMagic {
+        let div_const::MU64Test {
+            mul_by,
+            threshold,
+            shift_by,
+        } = div_const::magic_test_u64(d);
+        generated_code::DivConstTestMagic::Test {
+            mul_by,
+            bias: 0,
+            threshold,
+            shift_by,
+        }
+    }
+
+    fn div_const_test_s32(&mut self, d: i32) -> generated_code::DivConstTestMagic {
+        let div_const::MS32Test {
+            mul_by,
+            bias,
+            threshold,
+            shift_by,
+        } = div_const::magic_test_s32(d);
+        generated_code::DivConstTestMagic::Test {
+            mul_by: mul_by.into(),
+            bias: bias.into(),
+            threshold: threshold.into(),
+            shift_by,
+        }
+    }
+
+    fn div_const_test_s64(&mut self, d: i64) -> generated_code::DivConstTestMagic {
+        let div_const::MS64Test {
+            mul_by,
+            bias,
+            threshold,
+            shift_by,
+        } = div_const::magic_test_s64(d);
+        generated_code::DivConstTestMagic::Test {
+            mul_by,
+            bias,
+            threshold,
+            shift_by,
+        }
+    }
 }
