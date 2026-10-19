@@ -393,6 +393,7 @@ jobs:
               -p wasmtime --no-default-features --features debug
               -p wasmtime --no-default-features --features debug,gc
               -p wasmtime --no-default-features --features runtime,cache
+              -p wasmtime --no-default-features --features runtime,pooling-allocator,custom-virtual-memory --target wasm32-wasip1
               -p wasmtime --features incremental-cache
               -p wasmtime --features profile-pulley
               -p wasmtime --all-features

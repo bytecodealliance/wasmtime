@@ -50,13 +50,13 @@ pub unsafe fn decommit_pages(iov: &[iovec]) -> Result<()> {
 
         unsafe {
             cvt(capi::wasmtime_mmap_remap(
-                iov.iov_addr,
+                iov.iov_base,
                 iov.iov_len,
                 capi::PROT_READ | capi::PROT_WRITE,
             ))?;
         }
-        Ok(())
     }
+    Ok(())
 }
 
 pub fn get_page_size() -> usize {

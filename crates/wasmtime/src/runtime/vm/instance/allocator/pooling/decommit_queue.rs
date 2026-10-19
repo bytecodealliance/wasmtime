@@ -12,7 +12,6 @@ use super::PoolingInstanceAllocator;
 use crate::vm::sys::vm::{decommit_pages, iovec};
 use crate::vm::{MemoryAllocationIndex, MemoryImageSlot, Table, TableAllocationIndex};
 use smallvec::SmallVec;
-use std::io;
 
 #[cfg(feature = "async")]
 use wasmtime_fiber::FiberStack;
@@ -147,7 +146,7 @@ impl DecommitQueue {
     }
 
     /// Returns if any decommit call failed.
-    fn decommit_all_raw(&mut self) -> io::Result<()> {
+    fn decommit_all_raw(&mut self) -> crate::Result<()> {
         let iov: &[IoVec] = self.raw.as_slice();
         // SAFETY: `IoVec` is `repr(transparent)` over `iovec` so it should be
         // safe to reinterpret the slice as the same type.
