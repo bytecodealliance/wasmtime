@@ -1143,7 +1143,11 @@ mod named {
     where
         T: WasiFilesystemNamedView,
     {
-        fn convert_error_code(&mut self, error: FilesystemError) -> wasmtime::Result<ErrorCode> {
+        fn convert_error_code(
+            &mut self,
+            _id: NamedId,
+            error: FilesystemError,
+        ) -> wasmtime::Result<ErrorCode> {
             error.downcast()
         }
     }

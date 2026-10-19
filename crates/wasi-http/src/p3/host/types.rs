@@ -606,12 +606,17 @@ mod named {
     where
         T: WasiHttpNamedView,
     {
-        fn convert_error_code(&mut self, error: HttpError) -> wasmtime::Result<ErrorCode> {
+        fn convert_error_code(
+            &mut self,
+            _id: NamedId,
+            error: HttpError,
+        ) -> wasmtime::Result<ErrorCode> {
             error.downcast()
         }
 
         fn convert_header_error(
             &mut self,
+            _id: NamedId,
             error: crate::p3::HeaderError,
         ) -> wasmtime::Result<HeaderError> {
             error.downcast()
@@ -619,6 +624,7 @@ mod named {
 
         fn convert_request_options_error(
             &mut self,
+            _id: NamedId,
             error: crate::p3::RequestOptionsError,
         ) -> wasmtime::Result<RequestOptionsError> {
             error.downcast()

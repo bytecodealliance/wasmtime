@@ -801,12 +801,17 @@ mod named {
     where
         T: WasiHttpNamedView,
     {
-        fn convert_error_code(&mut self, err: HttpError) -> wasmtime::Result<types::ErrorCode> {
+        fn convert_error_code(
+            &mut self,
+            _id: NamedId,
+            err: HttpError,
+        ) -> wasmtime::Result<types::ErrorCode> {
             err.downcast()
         }
 
         fn convert_header_error(
             &mut self,
+            _id: NamedId,
             err: HeaderError,
         ) -> wasmtime::Result<types::HeaderError> {
             err.downcast()

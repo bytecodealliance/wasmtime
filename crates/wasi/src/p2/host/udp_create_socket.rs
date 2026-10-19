@@ -50,7 +50,11 @@ mod named {
     where
         T: WasiSocketsNamedView,
     {
-        fn convert_error_code(&mut self, err: SocketError) -> wasmtime::Result<ErrorCode> {
+        fn convert_error_code(
+            &mut self,
+            _id: NamedId,
+            err: SocketError,
+        ) -> wasmtime::Result<ErrorCode> {
             err.downcast()
         }
 

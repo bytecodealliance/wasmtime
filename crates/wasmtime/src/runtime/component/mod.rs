@@ -473,7 +473,8 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // `lookup` with the import's name to obtain an id. Matching uses
 ///     // `ComponentExtern::is_implements`, so semver-compatible versions also
 ///     // match. The id is then cloned for each call and passed as the first
-///     // argument to every method, letting a single `Host` implementation
+///     // argument to every method, including the `convert_*` methods for
+///     // `trappable_error_type`, letting a single `Host` implementation
 ///     // distinguish between multiple imports of the same interface. To bind a
 ///     // single import instead, the generated `add_to_linker_instance` takes a
 ///     // `LinkerInstance`, such as `linker.instance("my-handler")?`, and the

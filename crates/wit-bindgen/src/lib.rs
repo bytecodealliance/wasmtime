@@ -3057,8 +3057,19 @@ pub fn add_to_linker<T, D>(
             uwrite!(self.src, "let r = {host_trait}::{func_name}(host, ");
         }
 
+        let trappable_error = if flags.contains(FunctionFlags::TRAPPABLE) {
+            self.special_case_trappable_error(func)
+        } else {
+            None
+        };
         if self.named_import_id.is_some() {
-            self.src.push_str("id, ");
+            // The error conversion below also needs the `id`, so keep it
+            // around in that case.
+            if trappable_error.is_some() {
+                self.src.push_str("id.clone(), ");
+            } else {
+                self.src.push_str("id, ");
+            }
         }
 
         for (i, _) in func.params.iter().enumerate() {
@@ -3085,7 +3096,7 @@ pub fn add_to_linker<T, D>(
             } else {
                 uwrite!(self.src, "Ok(r)\n");
             }
-        } else if let Some((_, err, _)) = self.special_case_trappable_error(func) {
+        } else if let Some((_, err, _)) = trappable_error {
             let (convert_path, err) = self.error_convert_path_to_host_and_id(err);
             let err = &self.resolve.types[err];
             let err_name = err.name.as_ref().unwrap();
@@ -3094,12 +3105,22 @@ pub fn add_to_linker<T, D>(
                 None => format!("Host"),
             };
             let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
-            let convert = if func.kind.is_async() {
-                format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e))")
-            } else if flags.contains(FunctionFlags::STORE) {
-                format!("{convert}(&mut host_getter(caller.data_mut()), e)")
+            // Named imports pass their `id` to conversions as well since a
+            // conversion may need to, for example, push a resource into the
+            // context for that `id`.
+            let id_arg = if self.named_import_id.is_some() {
+                "id, "
             } else {
-                format!("{convert}(host, e)")
+                ""
+            };
+            let convert = if func.kind.is_async() {
+                format!(
+                    "caller.with(|mut host| {convert}(&mut host_getter(host.get()), {id_arg}e))"
+                )
+            } else if flags.contains(FunctionFlags::STORE) {
+                format!("{convert}(&mut host_getter(caller.data_mut()), {id_arg}e)")
+            } else {
+                format!("{convert}(host, {id_arg}e)")
             };
             uwrite!(
                 self.src,
@@ -3572,7 +3593,7 @@ fn drop(accessor: {wt}::component::Access<T, Self>, {id_param}rep: {wt}::compone
                     uwrite!(
                         self.src,
                         "
-fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
+fn convert_{snake}(&mut self, {id_param}err: {root}{custom_name}) ->
                         "
                     );
                     self.push_wasmtime_or_anyhow_result();
@@ -3657,13 +3678,13 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                     let camel = name.to_upper_camel_case();
                     uwrite!(
                         self.src,
-                        "fn convert_{snake}(&mut self, err: {root}{custom_name}) -> ",
+                        "fn convert_{snake}(&mut self, {id_param}err: {root}{custom_name}) -> ",
                     );
                     self.push_wasmtime_or_anyhow_result();
                     uwriteln!(
                         self.src,
                         "<{ty_path_prefix}{camel}> {{
-    {trait_name}::convert_{snake}(*self, err)
+    {trait_name}::convert_{snake}(*self, {id_arg}err)
 }}
                         ",
                     );

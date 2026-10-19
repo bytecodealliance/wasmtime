@@ -1169,7 +1169,11 @@ mod named_imports {
             }
         }
         impl named_imports::foo::foo::store::Host for MyHost {
-            fn convert_error(&mut self, _err: MyError) -> wasmtime::Result<foo::foo::store::Error> {
+            fn convert_error(
+                &mut self,
+                _id: String,
+                _err: MyError,
+            ) -> wasmtime::Result<foo::foo::store::Error> {
                 Ok(foo::foo::store::Error::NotFound)
             }
         }

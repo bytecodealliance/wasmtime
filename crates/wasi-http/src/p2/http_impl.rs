@@ -146,7 +146,11 @@ mod named {
             super::outgoing_handler::Host::handle(&mut self.0.http(id), request_id, options)
         }
 
-        fn convert_error_code(&mut self, err: HttpError) -> wasmtime::Result<types::ErrorCode> {
+        fn convert_error_code(
+            &mut self,
+            _id: NamedId,
+            err: HttpError,
+        ) -> wasmtime::Result<types::ErrorCode> {
             err.downcast()
         }
     }

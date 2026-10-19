@@ -199,7 +199,11 @@ mod named {
     where
         T: WasiHttpNamedView,
     {
-        fn convert_error_code(&mut self, error: HttpError) -> wasmtime::Result<ErrorCode> {
+        fn convert_error_code(
+            &mut self,
+            _id: NamedId,
+            error: HttpError,
+        ) -> wasmtime::Result<ErrorCode> {
             error.downcast()
         }
     }
