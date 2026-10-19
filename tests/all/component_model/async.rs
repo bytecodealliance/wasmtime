@@ -1334,6 +1334,144 @@ async fn drop_call_async_with_queued_start() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn lower_stream_payload_type_mismatch() -> wasmtime::Result<()> {
+    // A component that echoes streams and futures of streams and futures of
+    // strings back to the caller, creates a stream of streams of strings, and
+    // accepts the same with `u32` instead of `string`.
+    const WAT: &str = r#"
+(component
+  (type $s (stream string))
+  (type $ss (stream $s))
+  (type $f (future string))
+  (type $ff (future $f))
+  (type $u (stream u32))
+  (type $su (stream $u))
+  (type $fu32 (future u32))
+  (type $fu (future $fu32))
+  (core func $stream.new (canon stream.new $ss))
+  (core module $m
+    (import "" "stream.new" (func $stream.new (result i64)))
+    (func (export "echo") (param i32) (result i32) local.get 0)
+    (func (export "new-stream") (result i32)
+      (i32.wrap_i64 (call $stream.new)))
+    (func (export "take") (param i32)))
+  (core instance $i (instantiate $m
+    (with "" (instance (export "stream.new" (func $stream.new))))))
+  (func (export "echo-stream") (param "s" $ss) (result $ss)
+    (canon lift (core func $i "echo")))
+  (func (export "echo-future") (param "f" $ff) (result $ff)
+    (canon lift (core func $i "echo")))
+  (func (export "new-stream") (result $ss)
+    (canon lift (core func $i "new-stream")))
+  (func (export "take-stream-string") (param "s" $ss)
+    (canon lift (core func $i "take")))
+  (func (export "take-stream-u32") (param "s" $su)
+    (canon lift (core func $i "take")))
+  (func (export "take-future-u32") (param "f" $fu)
+    (canon lift (core func $i "take")))
+)
+"#;
+
+    let engine = Engine::default();
+    let component = Component::new(&engine, WAT)?;
+
+    // An error while lowering parameters leaves the instance unusable, so each
+    // case below uses a new store and instance.
+    let instantiate = async || -> Result<(Store<()>, Instance)> {
+        let mut store = Store::new(&engine, ());
+        let instance = Linker::new(&engine)
+            .instantiate_async(&mut store, &component)
+            .await?;
+        Ok((store, instance))
+    };
+
+    // Created with `StreamReader<String>` items, which can't be lowered as
+    // `stream<u32>` items, even though `StreamAny` statically matches it. The
+    // host still owns the stream afterwards, so it can close it.
+    let (mut store, instance) = instantiate().await?;
+    let echo = instance
+        .get_typed_func::<(StreamReader<StreamReader<String>>,), (StreamReader<StreamAny>,)>(
+            &mut store,
+            "echo-stream",
+        )?;
+    let take = instance
+        .get_typed_func::<(&StreamReader<StreamAny>,), ()>(&mut store, "take-stream-u32")?;
+    let inner = StreamReader::new(&mut store, vec!["hello".to_string()])?;
+    let outer = StreamReader::new(&mut store, vec![inner])?;
+    let (mut outer,) = echo.call_async(&mut store, (outer,)).await?;
+    assert!(take.call_async(&mut store, (&outer,)).await.is_err());
+    outer.close(&mut store)?;
+
+    // The same through `Val`.
+    let (mut store, instance) = instantiate().await?;
+    let echo = instance
+        .get_typed_func::<(StreamReader<StreamReader<String>>,), (StreamReader<StreamAny>,)>(
+            &mut store,
+            "echo-stream",
+        )?;
+    let take = instance.get_func(&mut store, "take-stream-u32").unwrap();
+    let inner = StreamReader::new(&mut store, vec!["hello".to_string()])?;
+    let outer = StreamReader::new(&mut store, vec![inner])?;
+    let (outer,) = echo.call_async(&mut store, (outer,)).await?;
+    let outer = outer.try_into_stream_any(&mut store)?;
+    assert!(
+        take.call_async(&mut store, &[Val::Stream(outer)], &mut [])
+            .await
+            .is_err()
+    );
+
+    // The same for futures.
+    let (mut store, instance) = instantiate().await?;
+    let echo = instance
+        .get_typed_func::<(FutureReader<FutureReader<String>>,), (FutureReader<FutureAny>,)>(
+            &mut store,
+            "echo-future",
+        )?;
+    let take =
+        instance.get_typed_func::<(FutureReader<FutureAny>,), ()>(&mut store, "take-future-u32")?;
+    let inner = FutureReader::new(&mut store, async {
+        wasmtime::error::Ok("hello".to_string())
+    })?;
+    let outer = FutureReader::new(&mut store, async move { wasmtime::error::Ok(inner) })?;
+    let (outer,) = echo.call_async(&mut store, (outer,)).await?;
+    assert!(take.call_async(&mut store, (outer,)).await.is_err());
+
+    // The same for a stream created by a guest.
+    let (mut store, instance) = instantiate().await?;
+    let new =
+        instance.get_typed_func::<(), (StreamReader<StreamAny>,)>(&mut store, "new-stream")?;
+    let take =
+        instance.get_typed_func::<(StreamReader<StreamAny>,), ()>(&mut store, "take-stream-u32")?;
+    let (stream,) = new.call_async(&mut store, ()).await?;
+    assert!(take.call_async(&mut store, (stream,)).await.is_err());
+
+    // A matching payload type is still accepted.
+    let (mut store, instance) = instantiate().await?;
+    let echo = instance
+        .get_typed_func::<(StreamReader<StreamReader<String>>,), (StreamReader<StreamAny>,)>(
+            &mut store,
+            "echo-stream",
+        )?;
+    let take = instance
+        .get_typed_func::<(StreamReader<StreamAny>,), ()>(&mut store, "take-stream-string")?;
+    let inner = StreamReader::new(&mut store, vec!["hello".to_string()])?;
+    let outer = StreamReader::new(&mut store, vec![inner])?;
+    let (outer,) = echo.call_async(&mut store, (outer,)).await?;
+    take.call_async(&mut store, (outer,)).await?;
+
+    let (mut store, instance) = instantiate().await?;
+    let new =
+        instance.get_typed_func::<(), (StreamReader<StreamAny>,)>(&mut store, "new-stream")?;
+    let take = instance
+        .get_typed_func::<(StreamReader<StreamAny>,), ()>(&mut store, "take-stream-string")?;
+    let (stream,) = new.call_async(&mut store, ()).await?;
+    take.call_async(&mut store, (stream,)).await?;
+
+    Ok(())
+}
+
 /// Regression test for case which previously panicked when finishing a call
 /// which was started before an intervening, failing call.
 #[tokio::test]

@@ -10,6 +10,7 @@ use http_body_util::{BodyExt as _, Collected, Empty};
 use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use test_programs_artifacts::*;
 use tokio::{fs, try_join};
@@ -23,8 +24,8 @@ use wasmtime_wasi_http::p3::Request;
 use wasmtime_wasi_http::p3::bindings::Service;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
 use wasmtime_wasi_http::{
-    DEFAULT_FORBIDDEN_HEADERS, Error, RequestOptions, WasiBody, WasiHttpCtx, WasiHttpCtxView,
-    WasiHttpHooks, WasiHttpView, default_send_request,
+    DEFAULT_FORBIDDEN_HEADERS, Error, ForbiddenHeaderFilter, RequestOptions, WasiBody, WasiHttpCtx,
+    WasiHttpCtxView, WasiHttpHooks, WasiHttpView, default_send_request,
 };
 
 foreach_p3_http!(assert_test_exists);
@@ -36,6 +37,12 @@ struct TestHooks {
 impl WasiHttpHooks for TestHooks {
     fn is_forbidden_header(&mut self, name: &http::header::HeaderName) -> bool {
         name.as_str() == "custom-forbidden-header" || DEFAULT_FORBIDDEN_HEADERS.contains(name)
+    }
+
+    fn forbidden_header_filter(&mut self) -> ForbiddenHeaderFilter {
+        Arc::new(|name| {
+            name.as_str() == "custom-forbidden-header" || DEFAULT_FORBIDDEN_HEADERS.contains(name)
+        })
     }
 
     fn send_request(
@@ -60,6 +67,18 @@ impl WasiHttpHooks for TestHooks {
             Box::new(async {
                 Ok((
                     http::Response::new(Default::default()),
+                    Box::new(async { Ok(()) }) as Box<dyn Future<Output = _> + Send>,
+                ))
+            })
+        } else if let Some("p3-test-trailers") = request.uri().authority().map(|v| v.as_str()) {
+            _ = self.request_tx.take().unwrap().send(request);
+            let body = http_body_util::StreamBody::new(futures::stream::iter([
+                Ok(http_body::Frame::data(Bytes::from_static(b"response"))),
+                Ok(http_body::Frame::trailers(forbidden_trailers())),
+            ]));
+            Box::new(async {
+                Ok((
+                    http::Response::new(body.boxed_unsync()),
                     Box::new(async { Ok(()) }) as Box<dyn Future<Output = _> + Send>,
                 ))
             })
@@ -315,6 +334,72 @@ async fn p3_http_echo() -> Result<()> {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_echo_host_to_host() -> Result<()> {
     test_http_echo(P3_HTTP_ECHO_COMPONENT, false, true).await
+}
+
+/// A guest forwarding a host body as its response body must not be able to
+/// declare a `content-length` which does not match the body.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_echo_host_to_host_content_length() -> Result<()> {
+    async fn echo(declared: &str, body: &'static [u8]) -> Result<Result<Bytes, Error>> {
+        let engine = test_programs_artifacts::engine(|config| {
+            config.wasm_component_model_async(true);
+        });
+        let component = Component::from_file(&engine, P3_HTTP_ECHO_COMPONENT)?;
+        let mut store = Store::new(&engine, Ctx::new(oneshot::channel().0));
+        let mut linker = Linker::new(&engine);
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+        wasmtime_wasi::p3::add_to_linker(&mut linker)?;
+        wasmtime_wasi_http::p3::add_to_linker(&mut linker)?;
+        let service = Service::instantiate_async(&mut store, &component, &linker).await?;
+
+        // The echo service echoes the request headers, so the request's
+        // `content-length` becomes the response's. The request body is
+        // deliberately not checked against it here, to model a guest which
+        // sets a mismatched `content-length` on a forwarded host body.
+        let req = http::Request::builder()
+            .uri("http://localhost/")
+            .header("x-host-to-host", "true")
+            .header("content-length", declared)
+            .body(http_body_util::Full::new(Bytes::from_static(body)))?;
+        let (req, _io) = Request::from_http(&mut store.data_mut().hooks, req);
+        store
+            .run_concurrent(async |store| {
+                let res = service.handle(store, req).await?.unwrap();
+                let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
+                assert_eq!(res.headers()["content-length"], declared);
+                let body = res.into_body();
+                // `hyper` frames the response by the size hint and stops
+                // polling once the body reports end of stream, so these must
+                // match the declared length.
+                let declared = declared.parse::<u64>()?;
+                assert_eq!(body.size_hint().exact(), Some(declared));
+                let res = body.collect().await.map(|body| body.to_bytes());
+                Ok(res)
+            })
+            .await?
+    }
+
+    let body = echo("10", b"HELLOWORLD").await?.unwrap();
+    assert_eq!(body, "HELLOWORLD");
+
+    let err = echo("3", b"HELLOWORLD").await?.unwrap_err();
+    assert!(
+        matches!(err, Error::HttpResponseBodySize(Some(10))),
+        "{err:?}"
+    );
+
+    let err = echo("20", b"HELLOWORLD").await?.unwrap_err();
+    assert!(
+        matches!(err, Error::HttpResponseBodySize(Some(10))),
+        "{err:?}"
+    );
+
+    let err = echo("0", b"HTTP/1.1 302 Found\r\n\r\n").await?.unwrap_err();
+    assert!(
+        matches!(err, Error::HttpResponseBodySize(Some(_))),
+        "{err:?}"
+    );
+    Ok(())
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -656,6 +741,69 @@ async fn p3_http_proxy() -> Result<()> {
     );
 
     assert_eq!(request_body, body.as_slice());
+    Ok(())
+}
+
+/// Trailers containing both forbidden and allowed fields.
+fn forbidden_trailers() -> http::HeaderMap {
+    let mut trailers = http::HeaderMap::new();
+    trailers.insert("connection", HeaderValue::from_static("x-hop"));
+    trailers.insert(
+        "proxy-authorization",
+        HeaderValue::from_static("Basic c2VjcmV0OnNlY3JldA=="),
+    );
+    trailers.insert("upgrade", HeaderValue::from_static("h2c"));
+    trailers.insert("custom-forbidden-header", HeaderValue::from_static("yes"));
+    trailers.insert("x-ok", HeaderValue::from_static("1"));
+    trailers
+}
+
+#[track_caller]
+fn assert_trailers_filtered(trailers: Option<&http::HeaderMap>, what: &str) {
+    let trailers = trailers.unwrap_or_else(|| panic!("{what}: trailers missing"));
+    for name in [
+        "connection",
+        "proxy-authorization",
+        "upgrade",
+        "custom-forbidden-header",
+    ] {
+        assert!(
+            trailers.get(name).is_none(),
+            "{what}: forbidden trailer `{name}` leaked: {trailers:?}",
+        );
+    }
+    assert_eq!(
+        trailers.get("x-ok").map(|v| v.as_bytes()),
+        Some(b"1".as_slice()),
+        "{what}: allowed trailer missing: {trailers:?}",
+    );
+}
+
+// A guest which forwards a host body as-is must not let forbidden trailers
+// through, in either direction.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_forwarded_trailers_filtered() -> Result<()> {
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::POST)
+        .header("url", "http://p3-test-trailers/");
+    let body = http_body_util::StreamBody::new(futures::stream::iter([
+        Ok::<_, ErrorCode>(http_body::Frame::data(Bytes::from_static(b"request"))),
+        Ok(http_body::Frame::trailers(forbidden_trailers())),
+    ]));
+
+    let (request_tx, request_rx) = oneshot::channel();
+    let response = run_http(P3_HTTP_PROXY_COMPONENT, request.body(body)?, request_tx)
+        .await?
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 200);
+    let response = response.into_body();
+    assert_trailers_filtered(response.trailers(), "response to client");
+    assert_eq!(response.to_bytes(), b"response".as_slice());
+
+    let upstream = request_rx.await.unwrap().into_body().collect().await?;
+    assert_trailers_filtered(upstream.trailers(), "request to upstream");
+    assert_eq!(upstream.to_bytes(), b"request".as_slice());
     Ok(())
 }
 

@@ -42,9 +42,15 @@ pub use request_options::*;
 /// header.
 #[cfg(any(feature = "p2", feature = "p3"))]
 fn get_content_length(headers: &http::HeaderMap) -> wasmtime::Result<Option<u64>> {
-    let Some(v) = headers.get(header::CONTENT_LENGTH) else {
+    let mut values = headers.get_all(header::CONTENT_LENGTH).iter();
+    let Some(v) = values.next() else {
         return Ok(None);
     };
+    // `FieldMap` rejects multiple `Content-Length` values, but double-check
+    // here since the framing of the body depends on there being exactly one.
+    if values.next().is_some() {
+        wasmtime::bail!("multiple `content-length` header values");
+    }
     let v = v.to_str()?;
     // RFC 9110 defines `Content-Length` as `1*DIGIT`. `u64`'s `FromStr` is more
     // lenient and also accepts a leading `+`, so reject anything that isn't a
@@ -107,6 +113,11 @@ mod content_length_tests {
         assert!(get_content_length(&headers("-5")).is_err());
         assert!(get_content_length(&headers(" 5")).is_err());
         assert!(get_content_length(&headers("")).is_err());
+
+        // Duplicate content-length definition is forbidden
+        let mut map = headers("5");
+        map.append(header::CONTENT_LENGTH, HeaderValue::from_static("5"));
+        assert!(get_content_length(&map).is_err());
     }
 }
 

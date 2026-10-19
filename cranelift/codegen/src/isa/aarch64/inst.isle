@@ -5374,14 +5374,18 @@
 ;; Helper for emitting `MInst.JTSequence` instructions.
 ;; Emit the compound instruction that does:
 ;;
-;; b.hs default
-;; csel rB, xzr, rIndex, hs
+;; mov rB, #N            ; N = number of non-default targets
+;; csel rB, rIndex, rB, lo ; clamp out-of-bounds indices to N
 ;; csdb
 ;; adr rA, jt
 ;; ldrsw rB, [rA, rB, uxtw #2]
 ;; add rA, rA, rB
 ;; br rA
-;; [jt entries]
+;; jt: [N target entries] [default entry]
+;;
+;; The flags must be set by a comparison of `rIndex` against `N`.
+;; There is deliberately no conditional branch to the default target:
+;; its range would be limited, and the inline jump table may be large.
 ;;
 ;; This must be *one* instruction in the vcode because
 ;; we cannot allow regalloc to insert any spills/fills
