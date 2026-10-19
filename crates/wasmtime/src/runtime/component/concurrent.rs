@@ -2428,6 +2428,12 @@ impl StoreOpaque {
     fn suspend(&mut self, reason: SuspendReason) -> Result<()> {
         log::trace!("suspend fiber: {reason:?}");
 
+        // We'll panic if we call `Self::with_blocking` when the fiber is being
+        // disposed, so check for that and exit ASAP if appropriate.
+        if !self.fiber_async_state_mut().can_block() {
+            return Err(format_err!("future dropped"));
+        }
+
         let state = self.concurrent_state_mut()?;
 
         // If we're yielding or waiting on behalf of a guest thread, we'll be
@@ -2474,12 +2480,6 @@ impl StoreOpaque {
             bail_bug!("suspend reason unexpectedly already set for store");
         }
         *suspend_reason = Some(reason);
-
-        // We'll panic if we call `Self::with_blocking` when the fiber is being
-        // disposed, so check for that and exit ASAP if appropriate.
-        if !self.fiber_async_state_mut().can_block() {
-            return Err(format_err!("future dropped"));
-        }
 
         // Count this thread as waiting on `waiting_set`, if any, for as long as
         // it's suspended.

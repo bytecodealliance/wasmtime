@@ -3579,3 +3579,112 @@ async fn start_call_from_inline_stream_producer() -> Result<()> {
     assert_eq!(code, 1 << 4 /* COMPLETED, 1 item */);
     Ok(())
 }
+
+/// A nested sync `Func::call` from a `StreamConsumer` that fails because the
+/// callee needs to block doesn't hit `bail_bug!` or anything like that.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn stream_consumer_failed_nested_call_then_yield() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (component $inner
+    (core func $task.return (canon task.return (result u32)))
+    (core module $m
+      (import "" "task.return" (func $task.return (param i32)))
+      (func (export "f") (result i32)
+        (call $task.return (i32.const 0))
+        (i32.const 0 (; EXIT ;)))
+      (func (export "cb") (param i32 i32 i32) (result i32) unreachable))
+    (core instance $i (instantiate $m
+      (with "" (instance (export "task.return" (func $task.return))))))
+    (func (export "f") async (result u32)
+      (canon lift (core func $i "f") async (callback (core func $i "cb")))))
+  (instance $inner (instantiate $inner))
+
+  (core module $libc (memory (export "memory") 1))
+  (core instance $libc (instantiate $libc))
+  (type $s (stream u8))
+  (core func $stream.new (canon stream.new $s))
+  (core func $stream.write (canon stream.write $s async (memory (core memory $libc "memory"))))
+  (core func $task.return (canon task.return (result $s)))
+  (alias export $inner "f" (func $inner.f))
+  (core func $f (canon lower (func $inner.f)))
+  (core func $thread.yield (canon thread.yield))
+  (core module $m
+    (import "" "stream.new" (func $stream.new (result i64)))
+    (import "" "stream.write" (func $stream.write (param i32 i32 i32) (result i32)))
+    (import "" "task.return" (func $task.return (param i32)))
+    (import "" "f" (func $f (result i32)))
+    (import "" "thread.yield" (func $thread.yield (result i32)))
+    (func (export "write") (result i32)
+      (local $s i64)
+      (local.set $s (call $stream.new))
+      (call $task.return (i32.wrap_i64 (local.get $s)))
+      (drop (call $stream.write
+        (i32.wrap_i64 (i64.shr_u (local.get $s) (i64.const 32)))
+        (i32.const 0)
+        (i32.const 1)))
+      (i32.const 0 (; EXIT ;)))
+    (func (export "write-cb") (param i32 i32 i32) (result i32) unreachable)
+    (func (export "call-f") (result i32) (call $f))
+    (func (export "yield") (drop (call $thread.yield))))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "stream.new" (func $stream.new))
+    (export "stream.write" (func $stream.write))
+    (export "task.return" (func $task.return))
+    (export "f" (func $f))
+    (export "thread.yield" (func $thread.yield))))))
+  (func (export "write") async (result $s)
+    (canon lift (core func $i "write") async (callback (core func $i "write-cb"))))
+  (func (export "call-f") (result u32) (canon lift (core func $i "call-f")))
+  (func (export "yield") (canon lift (core func $i "yield")))
+)
+"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let write = instance.get_typed_func::<(), (StreamReader<u8>,)>(&mut store, "write")?;
+    let call_f = instance.get_typed_func::<(), (u32,)>(&mut store, "call-f")?;
+    let yield_ = instance.get_typed_func::<(), ()>(&mut store, "yield")?;
+
+    struct Consumer(TypedFunc<(), (u32,)>);
+
+    impl StreamConsumer<()> for Consumer {
+        type Item = u8;
+
+        fn poll_consume(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            mut store: StoreContextMut<()>,
+            mut source: Source<'_, u8>,
+            _: bool,
+        ) -> Poll<Result<StreamResult>> {
+            // `f` is async-lifted, so calling it requires blocking, which
+            // can't be done here.
+            assert!(self.0.call(&mut store, ()).is_err());
+            source.read(store, &mut Vec::with_capacity(1))?;
+            Poll::Ready(Ok(StreamResult::Dropped))
+        }
+    }
+
+    let err = store
+        .run_concurrent(async |store| {
+            let (reader,) = write.call_concurrent(store, ()).await?;
+            store.with(|store| reader.pipe(store, Consumer(call_f)))?;
+            yield_.call_concurrent(store, ()).await
+        })
+        .await
+        .and_then(|r| r)
+        .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent),
+        "{err:?}"
+    );
+    Ok(())
+}
