@@ -1122,7 +1122,8 @@ impl RunCommand {
             .to_str()
             .unwrap_or_else(|| "unknown");
 
-        if let Err(coredump_err) = write_core_dump(store, &err, &source_name, coredump_path) {
+        if let Err(coredump_err) = super::write_core_dump(store, &err, &source_name, coredump_path)
+        {
             eprintln!("warning: coredump failed to generate: {coredump_err}");
             err
         } else {
@@ -1432,28 +1433,4 @@ impl wasmtime_wasi_tls::WasiTlsView for Host {
             ctx: self.wasi_tls.as_mut().unwrap(),
         }
     }
-}
-
-#[cfg(feature = "coredump")]
-fn write_core_dump(
-    store: &mut Store<Host>,
-    err: &wasmtime::Error,
-    name: &str,
-    path: &str,
-) -> Result<()> {
-    use std::fs::File;
-    use std::io::Write;
-
-    let core_dump = err
-        .downcast_ref::<wasmtime::WasmCoreDump>()
-        .expect("should have been configured to capture core dumps");
-
-    let core_dump = core_dump.serialize(store, name);
-
-    let mut core_dump_file =
-        File::create(path).with_context(|| format!("failed to create file at `{path}`"))?;
-    core_dump_file
-        .write_all(&core_dump)
-        .with_context(|| format!("failed to write core dump file at `{path}`"))?;
-    Ok(())
 }
