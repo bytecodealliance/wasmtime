@@ -111,6 +111,8 @@ fn check_test_program(name: &str) -> (fn() -> Result<()>, IgnoreCheck) {
             nn_wit_image_classification_pytorch,
             IgnoreCheck::for_pytorch(),
         ),
+        // Doesn't need a backend:
+        "nn_wit_named_imports" => (nn_wit_named_imports, IgnoreCheck::Run),
         _ => panic!("unknown test program: {name} (add to this `match`)"),
     }
 }
@@ -221,6 +223,10 @@ fn nn_wit_image_classification_winml_named() -> Result<()> {
 #[cfg(not(all(feature = "winml", target_os = "windows")))]
 fn nn_wit_image_classification_winml_named() -> Result<()> {
     wasmtime::bail!("this test requires the `winml` feature and only runs on windows")
+}
+
+fn nn_wit_named_imports() -> Result<()> {
+    exec::wit::run_named_imports(NN_WIT_NAMED_IMPORTS_COMPONENT)
 }
 
 /// Helper for keeping track of what tests should do when pre-test checks fail.

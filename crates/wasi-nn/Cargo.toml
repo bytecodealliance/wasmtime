@@ -25,6 +25,9 @@ wasmtime = { workspace = true, features = [
     "std",
 ] }
 
+# Used for named imports of the WIT-based API.
+wasmtime-wasi = { workspace = true }
+
 # These dependencies are necessary for the wasi-nn implementation:
 tracing = { workspace = true }
 thiserror = { workspace = true }

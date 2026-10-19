@@ -18,9 +18,11 @@
 use crate::{Backend, Registry};
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::marker;
 use std::{fmt, str::FromStr};
-use wasmtime::component::{HasData, Resource, ResourceTable};
+use wasmtime::component::{Component, HasData, Linker, Resource, ResourceTable};
 use wasmtime::format_err;
+use wasmtime_wasi::{NamedId, WasiCtxNamedView};
 
 /// Capture the state necessary for calling into the backend ML libraries.
 pub struct WasiNnCtx {
@@ -130,6 +132,12 @@ pub(crate) mod generated_ {
         trappable_error_type: {
             "wasi:nn/errors.error" => super::Error,
         },
+        named_imports: {
+            "wasi:nn/tensor": wasmtime_wasi::NamedId,
+            "wasi:nn/graph": wasmtime_wasi::NamedId,
+            "wasi:nn/inference": wasmtime_wasi::NamedId,
+            "wasi:nn/errors": wasmtime_wasi::NamedId,
+        },
     });
 }
 use generated_::wasi::nn::{self as generated}; // Shortcut to the module containing the types we need.
@@ -164,6 +172,86 @@ struct HasWasiNnView;
 
 impl HasData for HasWasiNnView {
     type Data<'a> = WasiNnView<'a>;
+}
+
+/// A trait used to look up a specific `wasi-nn` context for a named import.
+///
+/// This is used by [`add_named_to_linker`] to resolve a [`NamedId`], allocated
+/// by the embedder, to the [`WasiNnView`] that a particular named import
+/// operates on.
+///
+/// Resources such as graphs and tensors can flow between named and unnamed
+/// imports, so the [`ResourceTable`] referenced by the returned [`WasiNnView`]
+/// should be the same table that's used for all other imports.
+pub trait WasiNnNamedView: 'static {
+    /// Returns the [`WasiNnView`] to use for the named import identified by
+    /// `id`.
+    fn nn(&mut self, id: NamedId) -> WasiNnView<'_>;
+}
+
+struct WasiNnNamed<T>(marker::PhantomData<fn() -> T>);
+
+impl<T: WasiNnNamedView> HasData for WasiNnNamed<T> {
+    type Data<'a> = WasiCtxNamedView<'a, T>;
+}
+
+/// Interfaces that are added via [`add_named_to_linker`].
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Interface {
+    /// `wasi:nn/tensor`
+    NnTensor,
+    /// `wasi:nn/graph`
+    NnGraph,
+    /// `wasi:nn/inference`
+    NnInference,
+    /// `wasi:nn/errors`
+    NnErrors,
+}
+
+/// Add the WIT-based version of the `wasi-nn` API to `linker` for any named
+/// imports of it that `component` has.
+///
+/// This is the named-import counterpart of [`add_to_linker`]: `component`'s
+/// imports are inspected and, for each import that implements a `wasi:nn`
+/// interface under a different name, `lookup` is invoked with the
+/// [`Interface`] being bound and the name of the import. The [`NamedId`]
+/// returned is later passed to [`WasiNnNamedView::nn`] when that import is
+/// used. If `lookup` returns an error then this function returns that error.
+pub fn add_named_to_linker<T>(
+    linker: &mut Linker<T>,
+    component: &Component,
+    mut lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiNnNamedView,
+{
+    use generated_::named_imports::wasi::nn::{errors, graph, inference, tensor};
+
+    tensor::add_to_linker::<_, WasiNnNamed<T>>(
+        linker,
+        component,
+        |name| lookup(Interface::NnTensor, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    graph::add_to_linker::<_, WasiNnNamed<T>>(
+        linker,
+        component,
+        |name| lookup(Interface::NnGraph, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    inference::add_to_linker::<_, WasiNnNamed<T>>(
+        linker,
+        component,
+        |name| lookup(Interface::NnInference, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    errors::add_to_linker::<_, WasiNnNamed<T>>(
+        linker,
+        component,
+        |name| lookup(Interface::NnErrors, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    Ok(())
 }
 
 impl generated::graph::Host for WasiNnView<'_> {
@@ -361,6 +449,133 @@ impl generated::errors::Host for WasiNnView<'_> {
 
 impl generated::tensor::Host for WasiNnView<'_> {}
 impl generated::inference::Host for WasiNnView<'_> {}
+
+mod named {
+    use super::generated_::named_imports::wasi::nn::{errors, graph, inference, tensor};
+    use super::{
+        Error, ExecutionTarget, Graph, GraphBuilder, GraphEncoding, GraphExecutionContext,
+        NamedTensor, Tensor, TensorData, TensorDimensions, TensorType, WasiNnNamedView, generated,
+    };
+    use wasmtime::component::Resource;
+    use wasmtime_wasi::{NamedId, WasiCtxNamedView};
+
+    impl<T: WasiNnNamedView> graph::Host for WasiCtxNamedView<'_, T> {
+        fn load(
+            &mut self,
+            id: NamedId,
+            builders: Vec<GraphBuilder>,
+            encoding: GraphEncoding,
+            target: ExecutionTarget,
+        ) -> wasmtime::Result<Result<Resource<Graph>, Resource<Error>>> {
+            generated::graph::Host::load(&mut self.0.nn(id), builders, encoding, target)
+        }
+
+        fn load_by_name(
+            &mut self,
+            id: NamedId,
+            name: String,
+        ) -> wasmtime::Result<Result<Resource<Graph>, Resource<Error>>> {
+            generated::graph::Host::load_by_name(&mut self.0.nn(id), name)
+        }
+    }
+
+    impl<T: WasiNnNamedView> graph::HostGraph for WasiCtxNamedView<'_, T> {
+        fn init_execution_context(
+            &mut self,
+            id: NamedId,
+            graph: Resource<Graph>,
+        ) -> wasmtime::Result<Result<Resource<GraphExecutionContext>, Resource<Error>>> {
+            generated::graph::HostGraph::init_execution_context(&mut self.0.nn(id), graph)
+        }
+
+        fn drop(&mut self, id: NamedId, graph: Resource<Graph>) -> wasmtime::Result<()> {
+            generated::graph::HostGraph::drop(&mut self.0.nn(id), graph)
+        }
+    }
+
+    impl<T: WasiNnNamedView> inference::Host for WasiCtxNamedView<'_, T> {}
+
+    impl<T: WasiNnNamedView> inference::HostGraphExecutionContext for WasiCtxNamedView<'_, T> {
+        fn compute(
+            &mut self,
+            id: NamedId,
+            exec_context: Resource<GraphExecutionContext>,
+            inputs: Vec<NamedTensor>,
+        ) -> wasmtime::Result<Result<Vec<NamedTensor>, Resource<Error>>> {
+            generated::inference::HostGraphExecutionContext::compute(
+                &mut self.0.nn(id),
+                exec_context,
+                inputs,
+            )
+        }
+
+        fn drop(
+            &mut self,
+            id: NamedId,
+            exec_context: Resource<GraphExecutionContext>,
+        ) -> wasmtime::Result<()> {
+            generated::inference::HostGraphExecutionContext::drop(&mut self.0.nn(id), exec_context)
+        }
+    }
+
+    impl<T: WasiNnNamedView> tensor::Host for WasiCtxNamedView<'_, T> {}
+
+    impl<T: WasiNnNamedView> tensor::HostTensor for WasiCtxNamedView<'_, T> {
+        fn new(
+            &mut self,
+            id: NamedId,
+            dimensions: TensorDimensions,
+            ty: TensorType,
+            data: TensorData,
+        ) -> wasmtime::Result<Resource<Tensor>> {
+            generated::tensor::HostTensor::new(&mut self.0.nn(id), dimensions, ty, data)
+        }
+
+        fn dimensions(
+            &mut self,
+            id: NamedId,
+            tensor: Resource<Tensor>,
+        ) -> wasmtime::Result<TensorDimensions> {
+            generated::tensor::HostTensor::dimensions(&mut self.0.nn(id), tensor)
+        }
+
+        fn ty(&mut self, id: NamedId, tensor: Resource<Tensor>) -> wasmtime::Result<TensorType> {
+            generated::tensor::HostTensor::ty(&mut self.0.nn(id), tensor)
+        }
+
+        fn data(&mut self, id: NamedId, tensor: Resource<Tensor>) -> wasmtime::Result<TensorData> {
+            generated::tensor::HostTensor::data(&mut self.0.nn(id), tensor)
+        }
+
+        fn drop(&mut self, id: NamedId, tensor: Resource<Tensor>) -> wasmtime::Result<()> {
+            generated::tensor::HostTensor::drop(&mut self.0.nn(id), tensor)
+        }
+    }
+
+    impl<T: WasiNnNamedView> errors::Host for WasiCtxNamedView<'_, T> {
+        fn convert_error(&mut self, id: NamedId, err: Error) -> wasmtime::Result<Error> {
+            generated::errors::Host::convert_error(&mut self.0.nn(id), err)
+        }
+    }
+
+    impl<T: WasiNnNamedView> errors::HostError for WasiCtxNamedView<'_, T> {
+        fn code(
+            &mut self,
+            id: NamedId,
+            error: Resource<Error>,
+        ) -> wasmtime::Result<generated::errors::ErrorCode> {
+            generated::errors::HostError::code(&mut self.0.nn(id), error)
+        }
+
+        fn data(&mut self, id: NamedId, error: Resource<Error>) -> wasmtime::Result<String> {
+            generated::errors::HostError::data(&mut self.0.nn(id), error)
+        }
+
+        fn drop(&mut self, id: NamedId, error: Resource<Error>) -> wasmtime::Result<()> {
+            generated::errors::HostError::drop(&mut self.0.nn(id), error)
+        }
+    }
+}
 
 impl Hash for generated::graph::GraphEncoding {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
