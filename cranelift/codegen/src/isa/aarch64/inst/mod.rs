@@ -2850,29 +2850,17 @@ impl Inst {
                 let rtmp1 = pretty_print_reg(rtmp1.to_reg());
                 let rtmp2 = pretty_print_reg(rtmp2.to_reg());
                 let default_target = BranchTarget::Label(default).pretty_print(0);
+                let num_targets = targets.len();
                 format!(
-                    concat!(
-                        "b.hs {} ; ",
-                        "csel {}, xzr, {}, hs ; ",
-                        "csdb ; ",
-                        "adr {}, pc+16 ; ",
-                        "ldrsw {}, [{}, {}, uxtw #2] ; ",
-                        "add {}, {}, {} ; ",
-                        "br {} ; ",
-                        "jt_entries {:?}"
-                    ),
-                    default_target,
-                    rtmp2,
-                    ridx,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    targets
+                    "mov {rtmp2}, #{num_targets} ; \
+                     csel {rtmp2}, {ridx}, {rtmp2}, lo ; \
+                     csdb ; \
+                     adr {rtmp1}, pc+16 ; \
+                     ldrsw {rtmp2}, [{rtmp1}, {rtmp2}, uxtw #2] ; \
+                     add {rtmp1}, {rtmp1}, {rtmp2} ; \
+                     br {rtmp1} ; \
+                     jt_entries {targets:?} ; \
+                     default {default_target}"
                 )
             }
             &Inst::LoadExtNameGot { rd, ref name } => {
@@ -3081,8 +3069,8 @@ impl MachInstLabelUse for LabelUse {
     /// Perform the patch.
     fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
         let pc_rel = (label_offset as i64) - (use_offset as i64);
-        debug_assert!(pc_rel <= self.max_pos_range() as i64);
-        debug_assert!(pc_rel >= -(self.max_neg_range() as i64));
+        assert!(pc_rel <= self.max_pos_range() as i64);
+        assert!(pc_rel >= -(self.max_neg_range() as i64));
         let pc_rel = pc_rel as u32;
         let insn_word = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
         let mask = match self {

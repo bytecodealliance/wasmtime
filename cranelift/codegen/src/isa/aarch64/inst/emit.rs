@@ -3249,25 +3249,28 @@ impl MachInstEmit for Inst {
                 // emission time, because we cannot allow the regalloc to insert spills/reloads in
                 // the middle; we depend on hardcoded PC-rel addressing below.
 
-                // Branch to default when condition code from prior comparison indicates.
-                let br =
-                    enc_conditional_br(BranchTarget::Label(default), CondBrKind::Cond(Cond::Hs));
-
-                // No need to inform the sink's branch folding logic about this branch, because it
-                // will not be merged with any other branch, flipped, or elided (it is not preceded
-                // or succeeded by any other branch). Just emit it with the label use.
-                let default_br_offset = sink.cur_offset();
-                sink.use_label_at_offset(default_br_offset, default, LabelUse::Branch19);
-                sink.put4(br);
-
-                // Overwrite the index with a zero when the above
-                // branch misspeculates (Spectre mitigation). Save the
-                // resulting index in rtmp2.
+                // The default target is stored as the last entry in the
+                // jump table (at index `targets.len()`), and we clamp the
+                // index to that entry when it is out of bounds. This avoids
+                // any conditional branch to the default target: such a
+                // branch would have limited range, and the inline jump
+                // table that follows it can be arbitrarily large.
+                //
+                // The flags are set by a prior comparison of `ridx` against
+                // `targets.len()`; "lo" (unsigned less-than) means in-bounds.
+                let default_index = u64::try_from(targets.len()).unwrap();
+                for inst in Inst::load_constant(rtmp2, default_index) {
+                    inst.emit(sink, emit_info, state);
+                }
+                // Clamp the index: in-bounds indices are kept, and
+                // out-of-bounds indices select the default entry. This is
+                // also the Spectre mitigation, since there is no
+                // conditional branch to mispredict.
                 let inst = Inst::CSel {
                     rd: rtmp2,
-                    cond: Cond::Hs,
-                    rn: zero_reg(),
-                    rm: ridx,
+                    cond: Cond::Lo,
+                    rn: ridx,
+                    rm: rtmp2.to_reg(),
                 };
                 inst.emit(sink, emit_info, state);
                 // Prevent any data value speculation if spectre mitigations are
@@ -3308,9 +3311,10 @@ impl MachInstEmit for Inst {
                     targets: vec![],
                 };
                 inst.emit(sink, emit_info, state);
-                // Emit jump table (table of 32-bit offsets).
+                // Emit jump table (table of 32-bit offsets), with the
+                // default target as the final entry.
                 let jt_off = sink.cur_offset();
-                for &target in targets.iter() {
+                for &target in targets.iter().chain(core::iter::once(&default)) {
                     let word_off = sink.cur_offset();
                     // off_into_table is an addend here embedded in the label to be later patched
                     // at the end of codegen. The offset is initially relative to this jump table

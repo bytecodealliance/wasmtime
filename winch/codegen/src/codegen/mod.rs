@@ -438,6 +438,7 @@ where
                     fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                         self.0.$visit($($($arg.clone()),*)?)?;
                         let op = Operator::$op $({ $($arg: $arg.clone()),* })?;
+                        check_impl_limits(&op)?;
                         if self.1.visit(&op) {
                             self.1.before_visit_op(&op, self.2)?;
                             let res = self.1.$visit($($($arg),*)?)?;
@@ -449,6 +450,17 @@ where
                     }
                 )*
             };
+        }
+
+        /// Check implementation limits that are not (yet) enforced by
+        /// validation. This is done regardless of reachability.
+        fn check_impl_limits(op: &Operator) -> Result<()> {
+            if let Operator::BrTable { targets } = op {
+                if targets.len() > wasmtime_cranelift::MAX_BR_TABLE_TARGETS {
+                    bail!(CodeGenError::br_table_too_large(targets.len()));
+                }
+            }
+            Ok(())
         }
 
         fn visit_op_when_unreachable(op: &Operator) -> bool {

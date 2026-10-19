@@ -1,4 +1,4 @@
-use crate::WasiHttpHooks;
+use crate::{ForbiddenHeaderFilter, WasiHttpHooks};
 use http::header::Entry;
 use http::{HeaderMap, HeaderName, HeaderValue};
 use std::fmt;
@@ -53,16 +53,7 @@ impl FieldMap {
     pub fn new_immutable(hooks: &mut dyn WasiHttpHooks, mut map: HeaderMap) -> Self {
         // Strip out all forbidden headers from `map` to ensure they're never
         // able to enter into a WASI guest.
-        let forbidden_keys = Vec::from_iter(map.keys().filter_map(|name| {
-            if hooks.is_forbidden_header(name) {
-                Some(name.clone())
-            } else {
-                None
-            }
-        }));
-        for name in forbidden_keys {
-            map.remove(&name);
-        }
+        remove_forbidden(&mut map, &hooks.forbidden_header_filter());
 
         let size = Self::content_size(&map);
         Self {
@@ -111,11 +102,15 @@ impl FieldMap {
         values: Vec<Vec<u8>>,
     ) -> Result<(), FieldMapError> {
         let key = key.parse()?;
-        if hooks.is_forbidden_header(&key) {
+        if (hooks.forbidden_header_filter())(&key) {
             return Err(FieldMapError::Forbidden);
         }
         let (map, limit, size) = self.mutable()?;
         let key_size = header_name_size(&key);
+        // `Content-Length` may only have a single value, see `append`.
+        if key == http::header::CONTENT_LENGTH && values.len() > 1 {
+            return Err(FieldMapError::InvalidHeaderValue);
+        }
         let values = values
             .into_iter()
             .map(|v| parse_header_value(&key, v))
@@ -161,7 +156,7 @@ impl FieldMap {
         key: String,
     ) -> Result<Vec<HeaderValue>, FieldMapError> {
         let key = key.parse()?;
-        if hooks.is_forbidden_header(&key) {
+        if (hooks.forbidden_header_filter())(&key) {
             return Err(FieldMapError::Forbidden);
         }
         let (map, _limit, size) = self.mutable()?;
@@ -198,10 +193,16 @@ impl FieldMap {
         value: Vec<u8>,
     ) -> Result<bool, FieldMapError> {
         let key = key.parse()?;
-        if hooks.is_forbidden_header(&key) {
+        if (hooks.forbidden_header_filter())(&key) {
             return Err(FieldMapError::Forbidden);
         }
         let value = parse_header_value(&key, value)?;
+        // Multiple `Content-Length` values make message framing ambiguous, as
+        // different parties may disagree on which one to use, so only a single
+        // value is permitted.
+        if key == http::header::CONTENT_LENGTH && self.contains_key(&key) {
+            return Err(FieldMapError::InvalidHeaderValue);
+        }
         self.append_raw(key, value)
     }
 
@@ -460,5 +461,52 @@ mod tests {
 
         // other header names are unaffected
         assert!(parse_header_value(&CONTENT_TYPE, b"text/plain".to_vec()).is_ok());
+    }
+
+    #[test]
+    fn content_length_rejects_multiple_values() {
+        let hooks = default_hooks();
+        let cl = || CONTENT_LENGTH.as_str().to_owned();
+
+        let mut map = FieldMap::new_mutable(2000);
+        map.append(hooks, cl(), b"5".to_vec()).unwrap();
+        assert_eq!(
+            map.append(hooks, cl(), b"6".to_vec()),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(
+            map.append(hooks, cl(), b"5".to_vec()),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(
+            map.append(hooks, "Content-Length".to_owned(), b"6".to_vec()),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(map.get_all(CONTENT_LENGTH).iter().count(), 1);
+        assert_eq!(map.size, FieldMap::content_size(&map.map));
+
+        assert_eq!(
+            map.set(hooks, cl(), vec![b"5".to_vec(), b"6".to_vec()]),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(
+            map.set(hooks, cl(), vec![b"5".to_vec(), b"5".to_vec()]),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(map[CONTENT_LENGTH], "5");
+
+        // Replacing the single value is still fine.
+        map.set(hooks, cl(), vec![b"6".to_vec()]).unwrap();
+        assert_eq!(map[CONTENT_LENGTH], "6");
+        assert_eq!(map.get_all(CONTENT_LENGTH).iter().count(), 1);
+        assert_eq!(map.size, FieldMap::content_size(&map.map));
+    }
+}
+
+/// Removes all fields from `map` whose name `is_forbidden`.
+pub(crate) fn remove_forbidden(map: &mut HeaderMap, is_forbidden: &ForbiddenHeaderFilter) {
+    let forbidden_keys = Vec::from_iter(map.keys().filter(|name| is_forbidden(name)).cloned());
+    for name in forbidden_keys {
+        map.remove(&name);
     }
 }
