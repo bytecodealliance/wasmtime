@@ -1088,9 +1088,9 @@
 )
 
 (component instance $C1 $C)
-(assert_trap (invoke "drop-r1-as-r2") "handle index 1 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")
+(assert_trap (invoke "drop-r1-as-r2") "handle index 1 used with the wrong type, found a handle to a different resource type")
 (component instance $C1 $C)
-(assert_trap (invoke "return-r1-as-r2") "handle index 1 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")
+(assert_trap (invoke "return-r1-as-r2") "handle index 1 used with the wrong type, found a handle to a different resource type")
 
 ;; Test that `resource.rep` is exempt from may-leave checks
 (component

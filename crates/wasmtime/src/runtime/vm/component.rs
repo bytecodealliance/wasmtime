@@ -868,11 +868,30 @@ impl ComponentInstance {
         &mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &ComponentTypes,
     ) {
+        let (states, types, _) = self.instance_states_and_resource_types();
+        (states, types)
+    }
+
+    /// Same as [`Self::instance_states`], but additionally returns the runtime
+    /// type of each resource in this component, as needed by
+    /// [`ResourceTables`].
+    #[inline]
+    pub fn instance_states_and_resource_types(
+        self: Pin<&mut Self>,
+    ) -> (
+        &mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
+        &ComponentTypes,
+        &TryPrimaryMap<ResourceIndex, ResourceType>,
+    ) {
         // safety: we've chosen the `pin` guarantee of `self` to not apply to
         // the map returned.
         unsafe {
             let me = self.get_unchecked_mut();
-            (&mut me.instance_states, me.component.types())
+            (
+                &mut me.instance_states,
+                me.component.types(),
+                &me.resource_types,
+            )
         }
     }
 

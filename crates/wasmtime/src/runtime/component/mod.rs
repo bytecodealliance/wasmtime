@@ -479,7 +479,12 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // `LinkerInstance`, such as `linker.instance("my-handler")?`, and the
 ///     // id to use for it.
 ///     //
-///     // The id type must be `Clone + Send + Sync + 'static`.
+///     // The id type must be `Clone + Send + Sync + 'static`. Resources
+///     // defined by the interface use the same Rust type, and so are the same
+///     // resource type, for every import: a guest can pass a handle obtained
+///     // through one import to the functions of another. The id passed to a
+///     // method, including a resource's `drop`, therefore identifies the
+///     // import being called rather than the one that created the resource.
 ///     //
 ///     // As with `with`, a key without a version applies to every version of
 ///     // the interface imported by the world, and a key with a version takes

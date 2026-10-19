@@ -22,13 +22,14 @@
 
 use super::{HandleCounter, HandleTable, InstanceState, RemovedResource};
 use crate::bail_bug;
+use crate::component::ResourceType;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
 use core::error::Error;
 use core::fmt;
 use core::mem;
 use wasmtime_environ::component::{
-    ComponentTypes, RuntimeComponentInstanceIndex, TypeResourceTableIndex,
+    ComponentTypes, ResourceIndex, RuntimeComponentInstanceIndex, TypeResourceTableIndex,
 };
 use wasmtime_environ::prelude::TryPrimaryMap;
 
@@ -51,13 +52,16 @@ pub struct ResourceTables<'a> {
     /// Runtime state for all resources defined in a component.
     ///
     /// This is required whenever a `TypeResourceTableIndex`, for example, is
-    /// provided as it's the lookup where that happens. Not present during
-    /// embedder-originating operations though such as
+    /// provided as it's the lookup where that happens. Along with the tables
+    /// this holds the runtime type of each resource in the component, which is
+    /// used to check that handles are used with the right type. Not present
+    /// during embedder-originating operations though such as
     /// `ResourceAny::resource_drop` which won't consult this table as it's
     /// only operating over the host table.
     pub guest: Option<(
         &'a mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &'a ComponentTypes,
+        &'a TryPrimaryMap<ResourceIndex, ResourceType>,
     )>,
 
     /// Runtime state for resources currently owned by the host.
@@ -131,26 +135,29 @@ pub enum TypedResource {
 }
 
 impl TypedResource {
-    pub(super) fn rep(&self, access_ty: &TypedResourceIndex) -> Result<u32> {
+    /// Returns the representation of this resource if it can be accessed as
+    /// `access_ty`.
+    ///
+    /// Handles in a component's table record the static type they were
+    /// created with, but as with the canonical ABI's runtime type check a
+    /// handle can be accessed with any static type that `same_type` reports to
+    /// be the same resource type at runtime. For example a component may
+    /// import a resource twice and the host may provide the same resource type
+    /// for both imports.
+    pub(super) fn rep(
+        &self,
+        access_ty: &TypedResourceIndex,
+        same_type: impl Fn(TypeResourceTableIndex, TypeResourceTableIndex) -> bool,
+    ) -> Result<u32> {
         match (self, access_ty) {
             (Self::Host(rep), TypedResourceIndex::Host(_)) => Ok(*rep),
-            (Self::Host(_), expected) => bail!(ResourceTypeMismatch {
-                expected: *expected,
-                found: "host resource",
-            }),
-            (Self::Component { rep, ty }, TypedResourceIndex::Component { ty: expected, .. }) => {
-                if ty == expected {
-                    Ok(*rep)
-                } else {
-                    bail!(ResourceTypeMismatch {
-                        expected: *access_ty,
-                        found: "a different guest-defined resource",
-                    })
-                }
+            (Self::Component { rep, ty }, TypedResourceIndex::Component { ty: expected, .. })
+                if ty == expected || same_type(*ty, *expected) =>
+            {
+                Ok(*rep)
             }
-            (Self::Component { .. }, expected) => bail!(ResourceTypeMismatch {
-                expected: *expected,
-                found: "guest-defined resource",
+            _ => bail!(ResourceTypeMismatch {
+                index: access_ty.raw_index(),
             }),
         }
     }
@@ -184,13 +191,6 @@ impl TypedResourceIndex {
             Self::Host(index) | Self::Component { index, .. } => *index,
         }
     }
-
-    fn desc(&self) -> &'static str {
-        match self {
-            Self::Host(_) => "host resource",
-            Self::Component { .. } => "guest-defined resource",
-        }
-    }
 }
 
 /// State related to borrows for a specific call.
@@ -207,7 +207,7 @@ impl CallContext {
     }
 }
 
-impl ResourceTables<'_> {
+impl<'a> ResourceTables<'a> {
     fn table_for_resource(
         &mut self,
         resource: &TypedResource,
@@ -215,7 +215,7 @@ impl ResourceTables<'_> {
         let table = match resource {
             TypedResource::Host(_) => &mut *self.host_table,
             TypedResource::Component { ty, .. } => {
-                let (states, types) = self.guest.as_mut().unwrap();
+                let (states, types, _) = self.guest.as_mut().unwrap();
                 states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
         };
@@ -229,11 +229,34 @@ impl ResourceTables<'_> {
         let table = match index {
             TypedResourceIndex::Host(_) => &mut *self.host_table,
             TypedResourceIndex::Component { ty, .. } => {
-                let (states, types) = self.guest.as_mut().unwrap();
+                let (states, types, _) = self.guest.as_mut().unwrap();
                 states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
         };
         (table, &mut *self.handle_counter)
+    }
+
+    /// Returns a function which determines whether two static resource types
+    /// of the component are the same resource type at runtime, which is what
+    /// the canonical ABI checks when a handle is used.
+    fn same_type(
+        &self,
+    ) -> impl Fn(TypeResourceTableIndex, TypeResourceTableIndex) -> bool + use<'a> {
+        let guest = self
+            .guest
+            .as_ref()
+            .map(|(_, types, resource_types)| (*types, *resource_types));
+        move |a, b| {
+            let Some((types, resource_types)) = guest else {
+                return false;
+            };
+            let ty = |t: TypeResourceTableIndex| resource_types.get(types[t].unwrap_concrete_ty());
+            // Resources defined by the component get their runtime type during
+            // instantiation, and one that doesn't have it yet is distinct from
+            // all other resources.
+            let a = ty(a);
+            a.is_some() && a == ty(b)
+        }
     }
 
     /// Implementation of the `resource.new` canonical intrinsic.
@@ -248,7 +271,10 @@ impl ResourceTables<'_> {
     ///
     /// This one's one of the simpler ones: "just get the rep please"
     pub fn resource_rep(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        self.table_for_index(&index).0.resource_rep(index)
+        let same_type = self.same_type();
+        self.table_for_index(&index)
+            .0
+            .resource_rep(index, same_type)
     }
 
     /// Implementation of the `resource.drop` canonical intrinsic minus the
@@ -265,8 +291,9 @@ impl ResourceTables<'_> {
     /// to run. If `None` is returned then that means a `borrow` handle was
     /// removed and no destructor is necessary.
     pub fn resource_drop(&mut self, index: TypedResourceIndex) -> Result<Option<u32>> {
+        let same_type = self.same_type();
         let (table, counter) = self.table_for_index(&index);
-        match table.remove_resource(counter, index)? {
+        match table.remove_resource(counter, index, same_type)? {
             RemovedResource::Own { rep } => Ok(Some(rep)),
             RemovedResource::Borrow { scope } => {
                 self.task_state.call_context(scope)?.borrow_count -= 1;
@@ -298,8 +325,9 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lift_own` function.
     pub fn resource_lift_own(&mut self, index: TypedResourceIndex) -> Result<u32> {
+        let same_type = self.same_type();
         let (table, counter) = self.table_for_index(&index);
-        match table.remove_resource(counter, index)? {
+        match table.remove_resource(counter, index, same_type)? {
             RemovedResource::Own { rep } => Ok(rep),
             RemovedResource::Borrow { .. } => bail!("cannot lift own resource from a borrow"),
         }
@@ -365,7 +393,11 @@ impl ResourceTables<'_> {
         // Space for the lender is reserved first so that recording it can't
         // fail after the lend.
         self.current_scope()?.lenders.reserve(1)?;
-        let rep = self.table_for_index(&index).0.resource_lend(index)?;
+        let same_type = self.same_type();
+        let rep = self
+            .table_for_index(&index)
+            .0
+            .resource_lend(index, same_type)?;
         self.current_scope()?.lenders.push(index)?;
         Ok(rep)
     }
@@ -416,8 +448,7 @@ impl ResourceTables<'_> {
 
 #[derive(Debug)]
 struct ResourceTypeMismatch {
-    expected: TypedResourceIndex,
-    found: &'static str,
+    index: u32,
 }
 
 impl fmt::Display for ResourceTypeMismatch {
@@ -425,10 +456,8 @@ impl fmt::Display for ResourceTypeMismatch {
         write!(
             f,
             "handle index {} used with the wrong type, \
-             expected {} but found {}",
-            self.expected.raw_index(),
-            self.expected.desc(),
-            self.found,
+             found a handle to a different resource type",
+            self.index,
         )
     }
 }

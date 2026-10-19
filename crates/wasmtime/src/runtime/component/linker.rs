@@ -1012,6 +1012,13 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// The `dtor` closure is provided the store state as the first argument
     /// along with the representation of the resource that was just destroyed.
     ///
+    /// Imports of a component which are defined with the same `ty` are the
+    /// same resource type, so handles can be passed between them. For example
+    /// if a component imports the same interface under two names, a handle
+    /// obtained through one import can be passed to the functions of the
+    /// other. Each import still has its own `dtor`, and the one invoked is that
+    /// of the import through which the guest drops the handle.
+    ///
     /// [`Resource<U>`]: crate::component::Resource
     ///
     /// # Errors

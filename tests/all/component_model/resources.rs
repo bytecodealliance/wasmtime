@@ -242,8 +242,8 @@ fn mismatch_intrinsics() -> Result<()> {
     let ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "ctor")?;
     assert_eq!(
         ctor.call(&mut store, (100,)).unwrap_err().to_string(),
-        "handle index 1 used with the wrong type, expected guest-defined \
-         resource but found a different guest-defined resource",
+        "handle index 1 used with the wrong type, \
+         found a handle to a different resource type",
     );
 
     Ok(())
@@ -1534,6 +1534,96 @@ fn guest_different_host_same() -> Result<()> {
 
     let resource = Resource::new_own(100);
     f.call(&mut store, (&resource, &resource))?;
+
+    Ok(())
+}
+
+#[test]
+fn handle_between_imports_of_same_host_type() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "primary" (instance $primary
+                    (export "r" (type $r (sub resource)))
+                    (export "make" (func (result (own $r))))
+                ))
+                (import "secondary" (instance $secondary
+                    (export "r" (type $r (sub resource)))
+                    (export "use" (func (param "r" (borrow $r))))
+                ))
+                (alias export $secondary "r" (type $r))
+
+                (core func $make (canon lower (func $primary "make")))
+                (core func $use (canon lower (func $secondary "use")))
+                (core func $drop (canon resource.drop $r))
+
+                (core module $m
+                    (import "" "make" (func $make (result i32)))
+                    (import "" "use" (func $use (param i32)))
+                    (import "" "drop" (func $drop (param i32)))
+
+                    (func (export "run")
+                        (local $r i32)
+                        (local.set $r (call $make))
+                        (call $use (local.get $r))
+                        (call $drop (local.get $r))
+                    )
+                )
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "make" (func $make))
+                        (export "use" (func $use))
+                        (export "drop" (func $drop))
+                    ))
+                ))
+
+                (func (export "run") (canon lift (core func $i "run")))
+            )
+        "#,
+    )?;
+
+    struct T;
+    struct U;
+
+    // Runs the component with `primary.r` defined as `T` and `secondary.r`
+    // defined as `S`, returning how many times `secondary.r`'s destructor ran.
+    fn run<S: 'static>(engine: &Engine, c: &Component) -> Result<u32> {
+        let mut store = Store::new(engine, 0);
+        let mut linker = Linker::new(engine);
+        let mut primary = linker.instance("primary")?;
+        primary.resource("r", ResourceType::host::<T>(), |_, _| Ok(()))?;
+        primary.func_wrap("make", |_, ()| Ok((Resource::<T>::new_own(42),)))?;
+        let mut secondary = linker.instance("secondary")?;
+        secondary.resource("r", ResourceType::host::<S>(), |mut cx, rep| {
+            assert_eq!(rep, 42);
+            *cx.data_mut() += 1;
+            Ok(())
+        })?;
+        secondary.func_wrap("use", |_, (r,): (Resource<S>,)| {
+            assert_eq!(r.rep(), 42);
+            Ok(())
+        })?;
+        let i = linker.instantiate(&mut store, c)?;
+        let run = i.get_typed_func::<(), ()>(&mut store, "run")?;
+        run.call(&mut store, ())?;
+        Ok(*store.data())
+    }
+
+    // Both imports are the same resource type at runtime, so a handle obtained
+    // through `primary` can be passed to `secondary` and dropped through it.
+    assert_eq!(run::<T>(&engine, &c)?, 1);
+
+    // Different resource types are still distinct.
+    let err = run::<U>(&engine, &c).unwrap_err();
+    assert!(
+        format!("{err:?}").contains(
+            "handle index 1 used with the wrong type, \
+             found a handle to a different resource type"
+        ),
+        "bad error: {err:?}"
+    );
 
     Ok(())
 }

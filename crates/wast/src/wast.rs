@@ -548,6 +548,13 @@ impl WastContext {
             || (expected.contains("null function") && (actual.contains("uninitialized element") || actual.contains("null reference")))
             // GC tests say "null $kind reference" but we just say "null reference".
             || (expected.contains("null") && expected.contains("reference") && actual.contains("null reference"))
+            // The component-model tests expect this error to say that both
+            // resources are guest-defined.
+            || expected
+                .strip_suffix(", expected guest-defined resource but found a different guest-defined resource")
+                .is_some_and(|prefix| {
+                    actual.contains(&format!("{prefix}, found a handle to a different resource type"))
+                })
         {
             return Ok(());
         }

@@ -2,7 +2,9 @@ use super::{Scope, TypedResource, TypedResourceIndex};
 use crate::prelude::TryVec;
 use crate::{Result, bail};
 use core::mem;
-use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
+use wasmtime_environ::component::{
+    TypeFutureTableIndex, TypeResourceTableIndex, TypeStreamTableIndex,
+};
 
 /// The maximum handle value is specified in
 /// <https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md>
@@ -270,11 +272,16 @@ impl HandleTable {
     /// Returns the internal "rep" of the resource specified by `idx`.
     ///
     /// Returns an error if `idx` is out-of-bounds or doesn't point to a
-    /// resource of the appropriate type.
-    pub fn resource_rep(&mut self, idx: TypedResourceIndex) -> Result<u32> {
+    /// resource of the appropriate type, as determined by `same_type` (see
+    /// `TypedResource::rep`).
+    pub fn resource_rep(
+        &mut self,
+        idx: TypedResourceIndex,
+        same_type: impl Fn(TypeResourceTableIndex, TypeResourceTableIndex) -> bool,
+    ) -> Result<u32> {
         match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn { resource, .. } | Slot::ResourceBorrow { resource, .. } => {
-                resource.rep(&idx)
+                resource.rep(&idx, same_type)
             }
             _ => bail!("index is not a resource"),
         }
@@ -288,7 +295,11 @@ impl HandleTable {
     /// `CallContexts`).
     ///
     /// Upon success returns the "rep" of the resource.
-    pub fn resource_lend(&mut self, idx: TypedResourceIndex) -> Result<u32> {
+    pub fn resource_lend(
+        &mut self,
+        idx: TypedResourceIndex,
+        same_type: impl Fn(TypeResourceTableIndex, TypeResourceTableIndex) -> bool,
+    ) -> Result<u32> {
         match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn {
                 resource,
@@ -299,7 +310,7 @@ impl HandleTable {
                 lend_count,
                 ..
             } => {
-                let rep = resource.rep(&idx)?;
+                let rep = resource.rep(&idx, same_type)?;
                 *lend_count = lend_count.checked_add(1).unwrap();
                 Ok(rep)
             }
@@ -327,6 +338,7 @@ impl HandleTable {
         &mut self,
         counter: &mut HandleCounter,
         idx: TypedResourceIndex,
+        same_type: impl Fn(TypeResourceTableIndex, TypeResourceTableIndex) -> bool,
     ) -> Result<RemovedResource> {
         let ret = match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn {
@@ -337,7 +349,7 @@ impl HandleTable {
                     bail!("cannot remove owned resource while borrowed")
                 }
                 RemovedResource::Own {
-                    rep: resource.rep(&idx)?,
+                    rep: resource.rep(&idx, same_type)?,
                 }
             }
             Slot::ResourceBorrow {
@@ -346,7 +358,7 @@ impl HandleTable {
                 lend_count,
             } => {
                 // Ensure the drop is done with the right type
-                resource.rep(&idx)?;
+                resource.rep(&idx, same_type)?;
                 if *lend_count != 0 {
                     bail!("cannot remove borrowed resource while it is lent out")
                 }

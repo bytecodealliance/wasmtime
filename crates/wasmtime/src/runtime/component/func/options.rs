@@ -516,7 +516,7 @@ impl<'a> LiftContext<'a> {
                 host_table: self.host_table,
                 handle_counter: self.handle_counter,
                 task_state: self.task_state,
-                guest: Some(self.instance.as_mut().instance_states()),
+                guest: Some(self.instance.as_mut().instance_states_and_resource_types()),
                 current_scope: self.current_scope,
             },
             self.host_resource_data,

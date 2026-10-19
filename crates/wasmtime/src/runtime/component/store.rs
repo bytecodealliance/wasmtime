@@ -455,7 +455,7 @@ impl StoreOpaque {
                 .as_mut()
                 .unwrap()
                 .get_mut()
-                .instance_states()
+                .instance_states_and_resource_types()
         });
 
         Ok((
