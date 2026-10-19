@@ -196,7 +196,7 @@ impl TypedResourceIndex {
 /// State related to borrows for a specific call.
 #[derive(Default)]
 pub struct CallContext {
-    lenders: Vec<TypedResourceIndex>,
+    lenders: TryVec<TypedResourceIndex>,
     borrow_count: u32,
 }
 
@@ -361,8 +361,12 @@ impl ResourceTables<'_> {
         // tasks. Ideally the `lenders.push` would be skipped for sync tasks but
         // that requires a bit more plumbing and also appropriately tracking the
         // `lend_count` and such. For now this treats own/borrow the same way.
+        //
+        // Space for the lender is reserved first so that recording it can't
+        // fail after the lend.
+        self.current_scope()?.lenders.reserve(1)?;
         let rep = self.table_for_index(&index).0.resource_lend(index)?;
-        self.current_scope()?.lenders.push(index);
+        self.current_scope()?.lenders.push(index)?;
         Ok(rep)
     }
 
