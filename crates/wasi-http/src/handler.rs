@@ -230,6 +230,12 @@ pub trait WorkerState: 'static + Send + Sync {
     /// If the store is being dropped due to an error (e.g. a guest trap or a
     /// host panic) `result` will be `Err(_)`; otherwise it will be `Ok(())`.
     fn drop(&self, store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>);
+
+    /// Poll the specified future representing the event loop for the store to
+    /// which the worker belongs.
+    fn poll<T>(&self, future: Pin<&mut impl Future<Output = T>>, cx: &mut Context) -> Poll<T> {
+        future.poll(cx)
+    }
 }
 
 /// Represents the combination of a store and instance with which to handle
@@ -696,7 +702,7 @@ where
             );
 
             future::poll_fn(|cx| {
-                let poll = future.as_mut().poll(cx);
+                let poll = dropper.state.poll(future.as_mut(), cx);
                 if poll.is_pending() {
                     // If the future returns `Pending`, that's either because it's
                     // idle (in which case it can definitely accept a new request) or
@@ -731,7 +737,7 @@ where
                     // before, poll the future one more time so it can ask for
                     // another request if appropriate.
                     if !accept_concurrent.swap(true, Relaxed) {
-                        return future.as_mut().poll(cx);
+                        return dropper.state.poll(future.as_mut(), cx);
                     }
                 }
 
