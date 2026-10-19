@@ -14,6 +14,8 @@ Unreleased
   [GHSA-mghf-wjfp-p5xm](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-mghf-wjfp-p5xm)
 * Update rustls to 0.23.46
   [#14767](https://github.com/bytecodealliance/wasmtime/pull/14767)
+*  Panic lowering a host-created component model stream into a guest that expects a different payload type.
+  [GHSA-9pvw-hwfg-92h5](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-9pvw-hwfg-92h5)
 
 
 ## 49.0.3
