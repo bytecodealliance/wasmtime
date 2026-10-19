@@ -4496,3 +4496,21 @@ fn p3_partial_write_then_stdout() -> Result<()> {
     assert_eq!(output, "456789\n");
     Ok(())
 }
+
+// Components built against an older WASI 0.3.x release should continue to run
+// now that the host implements a newer 0.3.x release.
+#[test]
+fn p3_older_wasi_0_3_release() -> Result<()> {
+    let wat = std::fs::read_to_string("tests/all/cli_tests/p3-partial-write-then-stdout.wat")?
+        .replace("@0.3.2", "@0.3.0");
+    let mut wasm = NamedTempFile::new()?;
+    wasm.write_all(&wat::parse_str(&wat)?)?;
+    let output = run_wasmtime(&[
+        "run",
+        "-Wcomponent-model-async",
+        "-Sp3",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    assert_eq!(output, "456789\n");
+    Ok(())
+}
