@@ -1,17 +1,21 @@
-use test_programs_artifacts::{CONFIG_GET_COMPONENT, foreach_config};
+use test_programs_artifacts::{
+    CONFIG_GET_COMPONENT, CONFIG_NAMED_IMPORTS_COMPONENT, foreach_config,
+};
 use wasmtime::{
     Result, Store,
     component::{Component, Linker, ResourceTable},
     format_err,
 };
 use wasmtime_wasi::p2::{add_to_linker_async, bindings::Command};
-use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
+use wasmtime_wasi::{NamedId, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi_config::{Interface, WasiConfig, WasiConfigNamedView, WasiConfigVariables};
 
 struct Ctx {
     table: ResourceTable,
     wasi_ctx: WasiCtx,
     wasi_config_vars: WasiConfigVariables,
+    /// Variables for imports labelled `a` and `b`, in that order.
+    named_config_vars: Vec<WasiConfigVariables>,
 }
 
 impl WasiView for Ctx {
@@ -23,8 +27,16 @@ impl WasiView for Ctx {
     }
 }
 
+impl WasiConfigNamedView for Ctx {
+    fn config(&mut self, id: NamedId) -> WasiConfig<'_> {
+        WasiConfig::from(&self.named_config_vars[id.0])
+    }
+}
+
 async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
-    let engine = test_programs_artifacts::engine(|_config| {});
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_component_model_implements(true);
+    });
     let mut store = Store::new(&engine, ctx);
     let component = Component::from_file(&engine, path)?;
 
@@ -32,6 +44,14 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
     add_to_linker_async(&mut linker)?;
     wasmtime_wasi_config::add_to_linker(&mut linker, |h: &mut Ctx| {
         WasiConfig::from(&h.wasi_config_vars)
+    })?;
+    wasmtime_wasi_config::add_named_to_linker(&mut linker, &component, |i, name| {
+        assert_eq!(i, Interface::ConfigStore);
+        Ok(match name {
+            "a" => NamedId(0),
+            "b" => NamedId(1),
+            _ => panic!("unexpected name: {name}"),
+        })
     })?;
 
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
@@ -59,6 +79,22 @@ async fn config_get() -> Result<()> {
             table: ResourceTable::new(),
             wasi_ctx: WasiCtxBuilder::new().build(),
             wasi_config_vars: WasiConfigVariables::from_iter(vec![("hello", "world")]),
+            named_config_vars: Vec::new(),
+        },
+    )
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn config_named_imports() -> Result<()> {
+    let vars = |name| WasiConfigVariables::from_iter([("name", name)]);
+    run_wasi(
+        CONFIG_NAMED_IMPORTS_COMPONENT,
+        Ctx {
+            table: ResourceTable::new(),
+            wasi_ctx: WasiCtxBuilder::new().inherit_stderr().build(),
+            wasi_config_vars: vars("default"),
+            named_config_vars: vec![vars("a"), vars("b")],
         },
     )
     .await
