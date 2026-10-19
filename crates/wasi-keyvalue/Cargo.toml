@@ -13,8 +13,8 @@ workspace = true
 
 [dependencies]
 wasmtime = { workspace = true, features = ["runtime", "component-model", "std"] }
+wasmtime-wasi = { workspace = true }
 
 [dev-dependencies]
 test-programs-artifacts = { workspace = true }
-wasmtime-wasi = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

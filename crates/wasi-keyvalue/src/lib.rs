@@ -75,13 +75,22 @@ mod generated {
         trappable_error_type: {
             "wasi:keyvalue/store.error" => crate::Error,
         },
+        named_imports: {
+            "wasi:keyvalue/store": wasmtime_wasi::NamedId,
+            "wasi:keyvalue/atomics": wasmtime_wasi::NamedId,
+            "wasi:keyvalue/batch": wasmtime_wasi::NamedId,
+        },
     });
 }
 
 use self::generated::wasi::keyvalue;
 use std::collections::HashMap;
+use std::marker;
 use wasmtime::Result;
-use wasmtime::component::{HasData, Resource, ResourceTable, ResourceTableError};
+use wasmtime::component::{
+    Component, HasData, Linker, Resource, ResourceTable, ResourceTableError,
+};
+use wasmtime_wasi::{NamedId, WasiCtxNamedView};
 
 #[doc(hidden)]
 pub enum Error {
@@ -306,6 +315,237 @@ struct HasWasiKeyValue;
 
 impl HasData for HasWasiKeyValue {
     type Data<'a> = WasiKeyValue<'a>;
+}
+
+/// A trait used to look up a specific `wasi-keyvalue` context for a named
+/// import.
+///
+/// This is used by [`add_named_to_linker`] to resolve a [`NamedId`], allocated
+/// by the embedder, to the [`WasiKeyValue`] that a particular named import
+/// operates on.
+///
+/// Resources such as buckets can flow between named and unnamed imports, so
+/// the [`ResourceTable`] referenced by the returned [`WasiKeyValue`] should be
+/// the same table that's used for all other imports.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::collections::HashMap;
+/// use wasmtime::component::{Component, Linker, ResourceTable};
+/// use wasmtime::{Engine, Result};
+/// use wasmtime_wasi::NamedId;
+/// use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueNamedView};
+///
+/// struct MyState {
+///     table: ResourceTable,
+///     stores: Vec<WasiKeyValueCtx>,
+/// }
+///
+/// impl WasiKeyValueNamedView for MyState {
+///     fn keyvalue(&mut self, id: NamedId) -> WasiKeyValue<'_> {
+///         WasiKeyValue::new(&self.stores[id.0], &mut self.table)
+///     }
+/// }
+///
+/// fn main() -> Result<()> {
+///     let engine = Engine::default();
+///     let component = Component::from_file(&engine, "my-component.wasm")?;
+///     let mut linker = Linker::<MyState>::new(&engine);
+///
+///     let mut names = HashMap::new();
+///     wasmtime_wasi_keyvalue::add_named_to_linker(&mut linker, &component, |_, name| {
+///         let len = names.len();
+///         Ok(NamedId(*names.entry(name.to_string()).or_insert(len)))
+///     })?;
+///
+///     // ... create a `WasiKeyValueCtx` per entry in `names` and instantiate ...
+///
+///     Ok(())
+/// }
+/// ```
+pub trait WasiKeyValueNamedView: Send + 'static {
+    /// Returns the [`WasiKeyValue`] to use for the named import identified
+    /// by `id`.
+    fn keyvalue(&mut self, id: NamedId) -> WasiKeyValue<'_>;
+}
+
+struct WasiKeyValueNamed<T>(marker::PhantomData<fn() -> T>);
+
+impl<T: WasiKeyValueNamedView> HasData for WasiKeyValueNamed<T> {
+    type Data<'a> = WasiCtxNamedView<'a, T>;
+}
+
+/// Interfaces that are added via [`add_named_to_linker`].
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Interface {
+    /// `wasi:keyvalue/store`
+    KeyvalueStore,
+    /// `wasi:keyvalue/atomics`
+    KeyvalueAtomics,
+    /// `wasi:keyvalue/batch`
+    KeyvalueBatch,
+}
+
+/// Add all the `wasi-keyvalue` world's interfaces to `linker` for any named
+/// imports of them that `component` has.
+///
+/// This is the named-import counterpart of [`add_to_linker`]: `component`'s
+/// imports are inspected and, for each import that implements a
+/// `wasi:keyvalue` interface under a different name, `lookup` is invoked with
+/// the [`Interface`] being bound and the name of the import. The [`NamedId`]
+/// returned is later passed to [`WasiKeyValueNamedView::keyvalue`] when that
+/// import is used. If `lookup` returns an error then this function returns
+/// that error.
+pub fn add_named_to_linker<T>(
+    linker: &mut Linker<T>,
+    component: &Component,
+    mut lookup: impl FnMut(Interface, &str) -> Result<NamedId>,
+) -> Result<()>
+where
+    T: WasiKeyValueNamedView,
+{
+    use self::generated::named_imports::wasi::keyvalue::{atomics, batch, store};
+
+    store::add_to_linker::<_, WasiKeyValueNamed<T>>(
+        linker,
+        component,
+        |name| lookup(Interface::KeyvalueStore, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    atomics::add_to_linker::<_, WasiKeyValueNamed<T>>(
+        linker,
+        component,
+        |name| lookup(Interface::KeyvalueAtomics, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    batch::add_to_linker::<_, WasiKeyValueNamed<T>>(
+        linker,
+        component,
+        |name| lookup(Interface::KeyvalueBatch, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    Ok(())
+}
+
+mod named {
+    use super::generated::named_imports::wasi::keyvalue::{atomics, batch, store};
+    use super::keyvalue::store::KeyResponse;
+    use super::{Bucket, Error, WasiKeyValueNamedView, keyvalue};
+    use wasmtime::Result;
+    use wasmtime::component::Resource;
+    use wasmtime_wasi::{NamedId, WasiCtxNamedView};
+
+    impl<T: WasiKeyValueNamedView> store::Host for WasiCtxNamedView<'_, T> {
+        fn open(&mut self, id: NamedId, identifier: String) -> Result<Resource<Bucket>, Error> {
+            keyvalue::store::Host::open(&mut self.0.keyvalue(id), identifier)
+        }
+
+        fn convert_error(&mut self, id: NamedId, err: Error) -> Result<keyvalue::store::Error> {
+            keyvalue::store::Host::convert_error(&mut self.0.keyvalue(id), err)
+        }
+    }
+
+    impl<T: WasiKeyValueNamedView> store::HostBucket for WasiCtxNamedView<'_, T> {
+        fn get(
+            &mut self,
+            id: NamedId,
+            bucket: Resource<Bucket>,
+            key: String,
+        ) -> Result<Option<Vec<u8>>, Error> {
+            keyvalue::store::HostBucket::get(&mut self.0.keyvalue(id), bucket, key)
+        }
+
+        fn set(
+            &mut self,
+            id: NamedId,
+            bucket: Resource<Bucket>,
+            key: String,
+            value: Vec<u8>,
+        ) -> Result<(), Error> {
+            keyvalue::store::HostBucket::set(&mut self.0.keyvalue(id), bucket, key, value)
+        }
+
+        fn delete(
+            &mut self,
+            id: NamedId,
+            bucket: Resource<Bucket>,
+            key: String,
+        ) -> Result<(), Error> {
+            keyvalue::store::HostBucket::delete(&mut self.0.keyvalue(id), bucket, key)
+        }
+
+        fn exists(
+            &mut self,
+            id: NamedId,
+            bucket: Resource<Bucket>,
+            key: String,
+        ) -> Result<bool, Error> {
+            keyvalue::store::HostBucket::exists(&mut self.0.keyvalue(id), bucket, key)
+        }
+
+        fn list_keys(
+            &mut self,
+            id: NamedId,
+            bucket: Resource<Bucket>,
+            cursor: Option<u64>,
+        ) -> Result<KeyResponse, Error> {
+            keyvalue::store::HostBucket::list_keys(&mut self.0.keyvalue(id), bucket, cursor)
+        }
+
+        fn drop(&mut self, id: NamedId, bucket: Resource<Bucket>) -> Result<()> {
+            keyvalue::store::HostBucket::drop(&mut self.0.keyvalue(id), bucket)
+        }
+    }
+
+    impl<T: WasiKeyValueNamedView> atomics::Host for WasiCtxNamedView<'_, T> {
+        fn increment(
+            &mut self,
+            id: NamedId,
+            bucket: Resource<Bucket>,
+            key: String,
+            delta: u64,
+        ) -> Result<u64, Error> {
+            keyvalue::atomics::Host::increment(&mut self.0.keyvalue(id), bucket, key, delta)
+        }
+
+        fn convert_error(&mut self, id: NamedId, err: Error) -> Result<keyvalue::store::Error> {
+            keyvalue::store::Host::convert_error(&mut self.0.keyvalue(id), err)
+        }
+    }
+
+    impl<T: WasiKeyValueNamedView> batch::Host for WasiCtxNamedView<'_, T> {
+        fn get_many(
+            &mut self,
+            id: NamedId,
+            bucket: Resource<Bucket>,
+            keys: Vec<String>,
+        ) -> Result<Vec<Option<(String, Vec<u8>)>>, Error> {
+            keyvalue::batch::Host::get_many(&mut self.0.keyvalue(id), bucket, keys)
+        }
+
+        fn set_many(
+            &mut self,
+            id: NamedId,
+            bucket: Resource<Bucket>,
+            key_values: Vec<(String, Vec<u8>)>,
+        ) -> Result<(), Error> {
+            keyvalue::batch::Host::set_many(&mut self.0.keyvalue(id), bucket, key_values)
+        }
+
+        fn delete_many(
+            &mut self,
+            id: NamedId,
+            bucket: Resource<Bucket>,
+            keys: Vec<String>,
+        ) -> Result<(), Error> {
+            keyvalue::batch::Host::delete_many(&mut self.0.keyvalue(id), bucket, keys)
+        }
+
+        fn convert_error(&mut self, id: NamedId, err: Error) -> Result<keyvalue::store::Error> {
+            keyvalue::store::Host::convert_error(&mut self.0.keyvalue(id), err)
+        }
+    }
 }
 
 #[cfg(test)]
