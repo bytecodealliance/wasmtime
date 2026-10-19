@@ -481,6 +481,10 @@ pub(crate) use self::store::ComponentStoreData;
 ///     //
 ///     // The id type must be `Clone + Send + Sync + 'static`.
 ///     //
+///     // As with `with`, a key without a version applies to every version of
+///     // the interface imported by the world, and a key with a version takes
+///     // precedence over one without.
+///     //
 ///     // Without this option the host can only load components whose
 ///     // imports match the shape of the world given to `bindgen!`. With it,
 ///     // the host can also load components which import the listed

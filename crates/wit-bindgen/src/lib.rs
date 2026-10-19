@@ -462,24 +462,62 @@ impl Wasmtime {
     /// These are emitted underneath a top-level `named_imports` module by
     /// `finish`.
     fn generate_named_imports(&mut self, resolve: &Resolve) -> anyhow::Result<()> {
-        // For all named imports see what interface that lines up with in the
-        // `Resolve` which will have bindings generated.
-        'outer: for (interface_name, id_type) in self.opts.named_imports.clone() {
-            for (id, _iface) in resolve.interfaces.iter() {
-                for (key, projection) in lookup_keys(
-                    resolve,
-                    &WorldKey::Interface(id),
-                    LookupItem::InterfaceNoPop,
-                ) {
-                    assert!(projection.is_empty());
-                    if key == interface_name {
-                        self.generate_named_import(resolve, id, &id_type)?;
-                        continue 'outer;
-                    }
+        // Like `with`, each imported interface uses the most specific key that
+        // matches it, so a key without a version applies to every version of
+        // the interface imported by the world.
+        let mut used_keys = HashSet::new();
+        let mut seen = HashSet::new();
+        let imports = self.import_interfaces.keys().copied().collect::<Vec<_>>();
+        for id in imports {
+            let iface = &resolve.interfaces[id];
+            // Skip anonymous interfaces, which can't be named by a key. Also,
+            // wit-parser gives each labelled import (`import a: foo;`) its own
+            // copy of the interface, with `clone_of` pointing at the original,
+            // but named-import bindings are generated once per interface, so
+            // skip copies of an interface that's already been handled.
+            if iface.name.is_none() || !seen.insert(iface.clone_of.unwrap_or(id)) {
+                continue;
+            }
+            let mut id_type = None;
+            for (key, projection) in lookup_keys(
+                resolve,
+                &WorldKey::Interface(id),
+                LookupItem::InterfaceNoPop,
+            ) {
+                assert!(projection.is_empty());
+                if let Some(ty) = self.opts.named_imports.get(&key) {
+                    id_type = Some(ty.clone());
+                    used_keys.insert(key);
+                    break;
                 }
             }
+            if let Some(id_type) = id_type {
+                self.generate_named_import(resolve, id, &id_type)?;
+            }
+        }
 
-            bail!("named imports key {interface_name:?} not found")
+        let mut unused_keys = self
+            .opts
+            .named_imports
+            .keys()
+            .filter(|key| !used_keys.contains(*key))
+            .collect::<Vec<_>>();
+        unused_keys.sort();
+        if let Some(key) = unused_keys.first() {
+            let exists = resolve.interfaces.iter().any(|(id, iface)| {
+                iface.name.is_some()
+                    && lookup_keys(
+                        resolve,
+                        &WorldKey::Interface(id),
+                        LookupItem::InterfaceNoPop,
+                    )
+                    .iter()
+                    .any(|(k, _)| k == *key)
+            });
+            if exists {
+                bail!("named imports key {key:?} is not imported by the world")
+            }
+            bail!("named imports key {key:?} not found")
         }
 
         Ok(())

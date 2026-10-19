@@ -1162,6 +1162,95 @@ mod named_imports {
             },
         });
     }
+
+    // An unversioned key applies to every imported version of the interface.
+    mod unversioned_key_multiple_versions {
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:root;
+
+                package foo:foo@0.1.0 {
+                    interface store {
+                        get: func() -> u32;
+                    }
+                }
+
+                package foo:foo@0.2.0 {
+                    interface store {
+                        get: func() -> u32;
+                        put: func(v: u32);
+                    }
+                }
+
+                world the-world {
+                    import a: foo:foo/store@0.1.0;
+                    import b: foo:foo/store@0.2.0;
+                }
+            ",
+            named_imports: {
+                "foo:foo/store": u32,
+            },
+        });
+
+        struct MyHost;
+
+        impl named_imports::foo::foo0_1_0::store::Host for MyHost {
+            fn get(&mut self, id: u32) -> u32 {
+                id
+            }
+        }
+
+        impl named_imports::foo::foo0_2_0::store::Host for MyHost {
+            fn get(&mut self, id: u32) -> u32 {
+                id
+            }
+            fn put(&mut self, _id: u32, _v: u32) {}
+        }
+    }
+
+    // A versioned key takes precedence over an unversioned one.
+    mod versioned_key_precedence {
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:root;
+
+                package foo:foo@0.1.0 {
+                    interface store {
+                        get: func() -> u32;
+                    }
+                }
+
+                package foo:foo@0.2.0 {
+                    interface store {
+                        get: func() -> u32;
+                    }
+                }
+
+                world the-world {
+                    import foo:foo/store@0.1.0;
+                    import foo:foo/store@0.2.0;
+                }
+            ",
+            named_imports: {
+                "foo:foo/store": u32,
+                "foo:foo/store@0.2.0": String,
+            },
+        });
+
+        struct MyHost;
+
+        impl named_imports::foo::foo0_1_0::store::Host for MyHost {
+            fn get(&mut self, id: u32) -> u32 {
+                id
+            }
+        }
+
+        impl named_imports::foo::foo0_2_0::store::Host for MyHost {
+            fn get(&mut self, id: String) -> u32 {
+                id.len() as u32
+            }
+        }
+    }
 }
 
 mod include_component_type {
