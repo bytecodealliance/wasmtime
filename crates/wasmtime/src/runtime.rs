@@ -112,6 +112,8 @@ pub use trap::*;
 pub use types::*;
 pub use v128::V128;
 pub use values::*;
+#[cfg(all(feature = "async", feature = "std"))]
+pub use vm::HAS_MMU_INTERRUPTION_RUNTIME;
 
 #[cfg(feature = "pooling-allocator")]
 pub use vm::{PoolConcurrencyLimitError, PoolingAllocatorMetrics};
