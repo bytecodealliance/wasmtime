@@ -4285,3 +4285,149 @@ fn map_trampoline_alignment_u64_u8() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn typed_map_roundtrip() -> Result<()> {
+    use std::collections::HashMap;
+
+    let engine = super::map_engine();
+    let mut store = Store::new(&engine, ());
+    let component = Component::new(&engine, super::make_echo_component("(map string u32)", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let echo = instance
+        .get_typed_func::<(&HashMap<String, u32>,), (HashMap<String, u32>,)>(&mut store, "echo")?;
+
+    for input in [
+        HashMap::new(),
+        HashMap::from([("a".to_string(), 1)]),
+        (0..100).map(|i| (format!("key{i}"), i)).collect(),
+    ] {
+        let (output,) = echo.call(&mut store, (&input,))?;
+        assert_eq!(output, input);
+    }
+    Ok(())
+}
+
+#[test]
+fn typed_map_nested_values() -> Result<()> {
+    use std::collections::HashMap;
+
+    let engine = super::map_engine();
+    let mut store = Store::new(&engine, ());
+    let component = Component::new(
+        &engine,
+        super::make_echo_component("(map string (map u8 (list string)))", 8),
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    type Nested = HashMap<String, HashMap<u8, Vec<String>>>;
+    let echo = instance.get_typed_func::<(&Nested,), (Nested,)>(&mut store, "echo")?;
+
+    let input: Nested = HashMap::from([
+        ("empty".to_string(), HashMap::new()),
+        (
+            "full".to_string(),
+            HashMap::from([(1, vec!["a".to_string(), "b".to_string()]), (2, vec![])]),
+        ),
+    ]);
+    let (output,) = echo.call(&mut store, (&input,))?;
+    assert_eq!(output, input);
+    Ok(())
+}
+
+#[test]
+fn typed_map_host_function() -> Result<()> {
+    use std::collections::HashMap;
+
+    let component = format!(
+        r#"
+(component
+    (import "host" (func $host (param "m" (map string u32)) (result (map string u32))))
+    (core module $libc
+        (memory (export "memory") 1)
+        {REALLOC_AND_FREE}
+    )
+    (core instance $libc (instantiate $libc))
+    (core func $host_lower (canon lower (func $host)
+        (memory (core memory $libc "memory"))
+        (realloc (core func $libc "realloc"))
+    ))
+    (core module $m
+        (import "" "host" (func $host (param i32 i32 i32)))
+        (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+        (func (export "echo") (param i32 i32) (result i32)
+            (local $retptr i32)
+            (local.set $retptr
+                (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+            (call $host (local.get 0) (local.get 1) (local.get $retptr))
+            local.get $retptr
+        )
+    )
+    (core instance $i (instantiate $m
+        (with "libc" (instance $libc))
+        (with "" (instance (export "host" (func $host_lower))))
+    ))
+    (func (export "echo") (param "m" (map string u32)) (result (map string u32))
+        (canon lift
+            (core func $i "echo")
+            (memory (core memory $libc "memory"))
+            (realloc (core func $libc "realloc"))
+        )
+    )
+)
+"#
+    );
+
+    let engine = super::map_engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap(
+        "host",
+        |_cx, (mut m,): (HashMap<String, u32>,)| -> Result<(HashMap<String, u32>,)> {
+            m.insert("from-host".to_string(), 42);
+            Ok((m,))
+        },
+    )?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let echo = instance
+        .get_typed_func::<(&HashMap<String, u32>,), (HashMap<String, u32>,)>(&mut store, "echo")?;
+
+    let input = HashMap::from([("a".to_string(), 1), ("b".to_string(), 2)]);
+    let (output,) = echo.call(&mut store, (&input,))?;
+    let mut expected = input.clone();
+    expected.insert("from-host".to_string(), 42);
+    assert_eq!(output, expected);
+    Ok(())
+}
+
+#[test]
+fn typed_map_duplicate_keys_keep_last_value() -> Result<()> {
+    use std::collections::HashMap;
+
+    // The canonical ABI allows duplicate keys; lifting into a `HashMap` keeps
+    // the value of the last entry for each key.
+    let component = r#"
+(component
+    (core module $m
+        (memory (export "memory") 1)
+        (data (i32.const 64) "\01\00\00\00\0a\00\00\00\02\00\00\00\14\00\00\00\01\00\00\00\1e\00\00\00")
+        (data (i32.const 32) "\40\00\00\00\03\00\00\00")
+        (func (export "f") (result i32) i32.const 32)
+        (func (export "realloc") (param i32 i32 i32 i32) (result i32) unreachable)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (result (map u32 u32))
+        (canon lift (core func $i "f") (memory (core memory $i "memory"))
+            (realloc (core func $i "realloc"))))
+)
+"#;
+
+    let engine = super::map_engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let f = instance.get_typed_func::<(), (HashMap<u32, u32>,)>(&mut store, "f")?;
+    let (map,) = f.call(&mut store, ())?;
+    assert_eq!(map, HashMap::from([(1, 30), (2, 20)]));
+    Ok(())
+}
