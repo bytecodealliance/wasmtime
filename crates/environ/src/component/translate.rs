@@ -353,10 +353,7 @@ enum LocalInitializer<'data> {
         HashMap<&'data str, ComponentItem>,
         ComponentInstanceTypeId,
     ),
-    ComponentSynthetic(
-        HashMap<&'data str, (ComponentItem, wasmparser::ComponentExternName<'data>)>,
-        ComponentInstanceTypeId,
-    ),
+    ComponentSynthetic(HashMap<&'data str, ComponentItem>, ComponentInstanceTypeId),
 
     // alias section
     AliasExportFunc(ModuleInstanceIndex, &'data str),
@@ -1625,7 +1622,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
             let idx = self.kind_to_item(export.kind, export.index)?;
-            map.insert(export.name.name, (idx, export.name));
+            map.insert(export.name.name, idx);
         }
 
         Ok(LocalInitializer::ComponentSynthetic(map, ty))

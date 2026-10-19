@@ -137,8 +137,8 @@ pub(super) fn run(
     assert!(frames.is_empty());
 
     let mut export_map = Default::default();
-    for (name, (def, data)) in exports {
-        let data = ComponentExternData::new(data);
+    for (name, def) in exports {
+        let data = ComponentExternData::new(result.exports[name].1);
         inliner.record_export(name, def, data, types, &mut export_map)?;
     }
     inliner.result.exports = export_map;
@@ -350,7 +350,7 @@ enum ComponentInstanceDef<'a> {
     // FIXME: same as the issue on `ComponentClosure` where this is cloned a lot
     // and may need `Rc`.
     Items(
-        IndexMap<&'a str, (ComponentItemDef<'a>, wasmparser::ComponentExternName<'a>)>,
+        IndexMap<&'a str, ComponentItemDef<'a>>,
         TypeComponentInstanceIndex,
     ),
 }
@@ -380,8 +380,7 @@ impl<'a> Inliner<'a> {
         &mut self,
         types: &mut ComponentTypesBuilder,
         frames: &mut Vec<(InlinerFrame<'a>, ResourcesBuilder)>,
-    ) -> Result<IndexMap<&'a str, (ComponentItemDef<'a>, wasmparser::ComponentExternName<'a>)>>
-    {
+    ) -> Result<IndexMap<&'a str, ComponentItemDef<'a>>> {
         // This loop represents the execution of the instantiation of a
         // component. This is an iterative process which is finished once all
         // initializers are processed. Currently this is modeled as an infinite
@@ -408,11 +407,36 @@ impl<'a> Inliner<'a> {
                 // parent frame, if any, as a new component instance or they're
                 // returned from this function for the root set of exports.
                 None => {
+                    let types_ref = frame.translation.types_ref();
                     let exports = frame
                         .translation
                         .exports
                         .iter()
-                        .map(|(name, (item, data))| Ok((*name, (frame.item(*item, types)?, *data))))
+                        .map(|(name, (item, _))| {
+                            let mut def = frame.item(*item, types)?;
+                            // For the root component
+                            // (`frame.instance_ty.is_none()`) re-ascribe
+                            // exported instances with whatever type wasmparser
+                            // recorded for that instance. If the component
+                            // ascribed the type then it might be a subset of
+                            // the exports that the instance actually exports.
+                            //
+                            // Only instances are handled here. Other items can
+                            // be ascribed too, but that doesn't change what the
+                            // host sees: function and value types must match
+                            // exactly, and ascribed types and resources must
+                            // refer to existing ones. Ascriptions of modules
+                            // and components aren't reflected, but the host
+                            // can only inspect those, not instantiate them.
+                            if frame.instance_ty.is_none()
+                                && let ComponentEntityType::Instance(ty) =
+                                    types_ref.component_item_for_export(name).unwrap().ty
+                            {
+                                let ty = types.convert_instance(types_ref, ty)?;
+                                def = def.with_instance_type(ty);
+                            }
+                            Ok((*name, def))
+                        })
                         .collect::<Result<_>>()?;
                     let instance_ty = frame.instance_ty;
                     let (_, snapshot) = frames.pop().unwrap();
@@ -1306,7 +1330,7 @@ impl<'a> Inliner<'a> {
             ComponentSynthetic(map, ty) => {
                 let items = map
                     .iter()
-                    .map(|(name, (index, data))| Ok((*name, (frame.item(*index, types)?, *data))))
+                    .map(|(name, index)| Ok((*name, frame.item(*index, types)?)))
                     .collect::<Result<_>>()?;
                 let types_ref = frame.translation.types_ref();
                 let ty = types.convert_instance(types_ref, *ty)?;
@@ -1421,7 +1445,7 @@ impl<'a> Inliner<'a> {
                     // through instantiation of a component or through a
                     // synthetic renaming of items we just schlep around the
                     // definitions of various items here.
-                    ComponentInstanceDef::Items(map, _) => frame.push_item(map[*name].0.clone()),
+                    ComponentInstanceDef::Items(map, _) => frame.push_item(map[*name].clone()),
                 }
             }
 
@@ -1690,10 +1714,19 @@ impl<'a> Inliner<'a> {
                     // An exported instance which is itself a bag of items is
                     // translated recursively here to our `exports` map which is
                     // the bag of items we're exporting.
+                    //
+                    // Note that `ty` may be a supertype of the items in `map`,
+                    // for example due to an export's type ascription, so `ty`
+                    // determines which items are exported and with which
+                    // attributes.
                     ComponentInstanceDef::Items(map, ty) => {
-                        for (name, (def, data)) in map {
-                            let data = ComponentExternData::new(data);
-                            self.record_export(name, def, data.clone(), types, &mut exports)?;
+                        for (name, export) in types[ty].exports.iter() {
+                            let mut def = map[name.as_str()].clone();
+                            if let TypeDef::ComponentInstance(instance_ty) = export.ty {
+                                def = def.with_instance_type(instance_ty);
+                            }
+                            let data = export.data.clone();
+                            self.record_export(name, def, data, types, &mut exports)?;
                         }
                         dfg::Export::Instance { ty, exports }
                     }
@@ -1844,7 +1877,7 @@ impl<'a> InlinerFrame<'a> {
     /// and which component instantiated it.
     fn finish_instantiate(
         &mut self,
-        exports: IndexMap<&'a str, (ComponentItemDef<'a>, wasmparser::ComponentExternName<'a>)>,
+        exports: IndexMap<&'a str, ComponentItemDef<'a>>,
         ty: ComponentInstanceTypeId,
         types: &mut ComponentTypesBuilder,
     ) -> Result<()> {
@@ -1858,7 +1891,7 @@ impl<'a> InlinerFrame<'a> {
                 &mut path,
                 &mut |path| match path {
                     [] => unreachable!(),
-                    [name, rest @ ..] => exports[name].0.lookup_resource(rest, types),
+                    [name, rest @ ..] => exports[name].lookup_resource(rest, types),
                 },
             );
         }
@@ -1902,6 +1935,25 @@ impl<'a> ComponentItemDef<'a> {
         Ok(item)
     }
 
+    /// Returns this instance as seen through `ty`, a supertype of its own
+    /// type, which determines which of its exports are visible and what
+    /// attributes they have.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` isn't an instance.
+    fn with_instance_type(self, ty: TypeComponentInstanceIndex) -> ComponentItemDef<'a> {
+        match self {
+            ComponentItemDef::Instance(ComponentInstanceDef::Items(map, _)) => {
+                ComponentItemDef::Instance(ComponentInstanceDef::Items(map, ty))
+            }
+            ComponentItemDef::Instance(ComponentInstanceDef::Import(path, _)) => {
+                ComponentItemDef::Instance(ComponentInstanceDef::Import(path, ty))
+            }
+            _ => panic!("only instances have an instance type"),
+        }
+    }
+
     /// Walks the `path` within `self` to find a resource at that path.
     ///
     /// This method is used when resources are found within wasmparser's type
@@ -1922,7 +1974,7 @@ impl<'a> ComponentItemDef<'a> {
             cur = match instance {
                 // If this instance is a "bag of things" then this is as easy as
                 // looking up the name in the bag of names.
-                ComponentInstanceDef::Items(names, _) => names[element].0.clone(),
+                ComponentInstanceDef::Items(names, _) => names[element].clone(),
 
                 // If, however, this instance is an imported instance then this
                 // is a further projection within the import with one more path
