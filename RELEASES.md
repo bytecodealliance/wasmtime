@@ -232,6 +232,21 @@ Unreleased.
   implementation.
   [#14414](https://github.com/bytecodealliance/wasmtime/pull/14414)
 
+* wasi-http p3: Correctly enforce content-length for response bodies
+  [#14822](https://github.com/bytecodealliance/wasmtime/pull/14822)
+
+* wasi-http p3: Apply forbidden header check to trailers
+  [#14823](https://github.com/bytecodealliance/wasmtime/pull/14823)
+
+* wasi-http: Prohibit duplicate content-length headers
+  [#14824](https://github.com/bytecodealliance/wasmtime/pull/14824)
+
+* Cranelift/aarch64: fix br_tables with very large target count
+  [#14826](https://github.com/bytecodealliance/wasmtime/pull/14826)
+
+* Centralize type-checks of futures/streams
+  [#14827](https://github.com/bytecodealliance/wasmtime/pull/14827)
+
 --------------------------------------------------------------------------------
 
 Release notes for previous releases of Wasmtime can be found on the respective
