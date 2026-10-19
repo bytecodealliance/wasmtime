@@ -147,12 +147,12 @@ pub enum Reloc {
 }
 
 impl Reloc {
-    /// The number of bytes from the relocation's offset that applying it may
-    /// read or write.
+    /// The number of bytes from the relocation's offset that applying it, or a
+    /// linker relaxing it, may read or write.
     ///
-    /// For relocations applied to an instruction, including markers such as
-    /// the TLS call relocations, this covers the whole instruction or
-    /// instruction pair.
+    /// This runs to the end of the instruction, or of the whole sequence for
+    /// relocations such as [`Reloc::ElfX86_64TlsGd`] that a linker rewrites
+    /// together. Bytes before the offset are not counted.
     pub fn patched_len(self) -> u32 {
         match self {
             Self::Abs4
