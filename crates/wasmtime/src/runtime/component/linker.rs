@@ -179,9 +179,18 @@ impl<T: 'static> Linker<T> {
         for (_idx, (name, ty)) in env_component.import_types.iter() {
             let import = self.map.get(name, &self.strings);
             cx.definition(&ty.ty, import).with_context(|| {
+                // Imports are looked up by name, not by their `(implements
+                // "...")` interface, so hint at that when it's present.
+                let implements = match &ty.data.implements {
+                    Some(i) => format!(
+                        " (it implements `{i}`, but imports are matched by \
+                         their own name)"
+                    ),
+                    None => String::new(),
+                };
                 format!(
-                    "component imports {desc} `{name}`, but \
-                     a matching implementation was not found in the linker",
+                    "component imports {desc} `{name}`, but a matching \
+                     implementation was not found in the linker{implements}",
                     desc = ty.ty.desc()
                 )
             })?;

@@ -148,6 +148,36 @@ fn linker_substituting_types_issue_8003() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
+fn missing_implements_import_mentions_interface() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_implements(true);
+    let engine = Engine::new(&config)?;
+    let mut linker = Linker::<()>::new(&engine);
+    linker
+        .instance("a:b/kv")?
+        .func_wrap("get", |_, ()| Ok(()))?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "primary" (implements "a:b/kv") (instance
+                (export "get" (func))
+            ))
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let err = linker.instantiate(&mut store, &component).unwrap_err();
+    let err = err.to_string();
+    assert!(
+        err.contains("`primary`") && err.contains("`a:b/kv`"),
+        "{err}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn linker_defines_unknown_imports_as_traps() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::<()>::new(&engine);
