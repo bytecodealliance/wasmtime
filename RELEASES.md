@@ -1,6 +1,6 @@
 ## 49.0.4
 
-Unreleased
+Released 2026-10-19.
 
 ### Fixed
 
@@ -17,6 +17,7 @@ Unreleased
 *  Panic lowering a host-created component model stream into a guest that expects a different payload type.
   [GHSA-9pvw-hwfg-92h5](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-9pvw-hwfg-92h5)
 
+--------------------------------------------------------------------------------
 
 ## 49.0.3
 
