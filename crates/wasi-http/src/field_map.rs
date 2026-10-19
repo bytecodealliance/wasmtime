@@ -115,6 +115,11 @@ impl FieldMap {
             return Err(FieldMapError::Forbidden);
         }
         let (map, limit, size) = self.mutable()?;
+
+        // `Content-Length` may only have a single value, see `append`.
+        if key == http::header::CONTENT_LENGTH && values.len() > 1 {
+            return Err(FieldMapError::InvalidHeaderValue);
+        }
         let values = values
             .into_iter()
             .map(|v| parse_header_value(&key, v))
@@ -206,6 +211,12 @@ impl FieldMap {
             return Err(FieldMapError::Forbidden);
         }
         let value = parse_header_value(&key, value)?;
+        // Multiple `Content-Length` values make message framing ambiguous, as
+        // different parties may disagree on which one to use, so only a single
+        // value is permitted.
+        if key == http::header::CONTENT_LENGTH && self.contains_key(&key) {
+            return Err(FieldMapError::InvalidHeaderValue);
+        }
         self.append_raw(key, value)
     }
 
@@ -490,7 +501,48 @@ mod tests {
     }
 
     #[test]
-    fn field_map_size() {
+    fn content_length_rejects_multiple_values() {
+        let hooks = default_hooks();
+        let cl = || CONTENT_LENGTH.as_str().to_owned();
+
+        let mut map = FieldMap::new_mutable(2000);
+        map.append(hooks, cl(), b"5".to_vec()).unwrap();
+        assert_eq!(
+            map.append(hooks, cl(), b"6".to_vec()),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(
+            map.append(hooks, cl(), b"5".to_vec()),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(
+            map.append(hooks, "Content-Length".to_owned(), b"6".to_vec()),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(map.get_all(CONTENT_LENGTH).iter().count(), 1);
+        assert_eq!(map.size, FieldMap::content_size(&map.map));
+
+        assert_eq!(
+            map.set(hooks, cl(), vec![b"5".to_vec(), b"6".to_vec()]),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(
+            map.set(hooks, cl(), vec![b"5".to_vec(), b"5".to_vec()]),
+            Err(FieldMapError::InvalidHeaderValue)
+        );
+        assert_eq!(map[CONTENT_LENGTH], "5");
+
+        // Replacing the single value is still fine.
+        map.set(hooks, cl(), vec![b"6".to_vec()]).unwrap();
+        assert_eq!(map[CONTENT_LENGTH], "6");
+        assert_eq!(map.get_all(CONTENT_LENGTH).iter().count(), 1);
+        assert_eq!(map.size, FieldMap::content_size(&map.map));
+    }
+
+    #[test]
+    fn full_map_is_not_invalid_syntax() {
+        // try_entry reports MaxSizeReached as InvalidHeaderName (http map.rs:1149),
+        // so a full map must report valid names as too many fields instead.
         let mut map = FieldMap::new_mutable(usize::MAX);
         let mut i = 0;
         let err = loop {
