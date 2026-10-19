@@ -277,6 +277,21 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // entire interfaces at once for example. Only the first matching item
 ///     // in this list is used to configure a function.
 ///     //
+///     // Imports and exports of an interface under a label are keyed
+///     // differently from each other:
+///     //
+///     // * All imports of an interface, labelled or not, share the bindings
+///     //   generated for that interface. Labelled imports, such as
+///     //   `import a: wasi:http/handler;`, are therefore configured through
+///     //   the interface's name, such as "wasi:http/handler.handle", and
+///     //   keys naming the label, such as "a.handle", are an error. The same
+///     //   goes for the keys of `with`, `named_imports`, and
+///     //   `trappable_error_type` below.
+///     //
+///     // * Each labelled export gets its own bindings, so labelled exports,
+///     //   such as `export b: wasi:http/handler;`, are configured through
+///     //   their label instead, such as "b.handle" in `exports` below.
+///     //
 ///     // Configuration for a function is a set of flags which can be added
 ///     // per-function. Each flag's meaning is documented below and the final
 ///     // set of flags for a function are calculated by the first matching
@@ -424,6 +439,10 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // Interfaces mapped with this option should be previously generated
 ///     // with an invocation of this macro. Resources need to be mapped to a
 ///     // Rust type name.
+///     //
+///     // As with `imports` above, labelled imports are remapped through their
+///     // interface's name, while labelled exports are remapped through their
+///     // label.
 ///     with: {
 ///         // This can be used to indicate that entire interfaces have
 ///         // bindings generated elsewhere with a path pointing to the

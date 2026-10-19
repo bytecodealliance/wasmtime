@@ -409,6 +409,7 @@ impl Wasmtime {
                 }
             }
 
+            check_labelled_import_key(resolve, id, "trappable_error_type", &te.wit_path)?;
             bail!(
                 "failed to locate a WIT error type corresponding to the \
                  `trappable_error_type` name `{}` provided",
@@ -477,7 +478,7 @@ impl Wasmtime {
                 self.export(resolve, name, export)?;
             }
         }
-        self.generate_named_imports(resolve)?;
+        self.generate_named_imports(resolve, id)?;
         self.finish(resolve, id)
     }
 
@@ -490,7 +491,7 @@ impl Wasmtime {
     /// reflection-based `add_to_linker`.
     /// These are emitted underneath a top-level `named_imports` module by
     /// `finish`.
-    fn generate_named_imports(&mut self, resolve: &Resolve) -> anyhow::Result<()> {
+    fn generate_named_imports(&mut self, resolve: &Resolve, world: WorldId) -> anyhow::Result<()> {
         // Like `with`, each imported interface uses the most specific key that
         // matches it, so a key without a version applies to every version of
         // the interface imported by the world.
@@ -533,6 +534,7 @@ impl Wasmtime {
             .collect::<Vec<_>>();
         unused_keys.sort();
         if let Some(key) = unused_keys.first() {
+            check_labelled_import_key(resolve, world, "named_imports", key)?;
             let exists = resolve.interfaces.iter().any(|(id, iface)| {
                 iface.name.is_some()
                     && lookup_keys(
@@ -1205,6 +1207,9 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
 
         unused_keys.sort();
 
+        for key in unused_keys.iter() {
+            check_labelled_import_key(resolve, world, "with", key)?;
+        }
         if !unused_keys.is_empty() {
             anyhow::bail!(
                 "interfaces were specified in the `with` config option but are not referenced in the target world: {unused_keys:?}"
@@ -1215,6 +1220,9 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
             self.build_world_struct(resolve, world)?;
         }
 
+        for rule in self.opts.imports.unused_rules() {
+            check_labelled_import_key(resolve, world, "imports", rule)?;
+        }
         self.opts.imports.assert_all_rules_used("imports")?;
         self.opts.exports.assert_all_rules_used("exports")?;
 
@@ -1348,6 +1356,45 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
             .clone()
             .unwrap_or("wasmtime".to_string())
     }
+}
+
+/// Fails if `key`, from the bindings configuration option `option`, names a
+/// labelled import of an interface, such as `a` in `import a: store;`, or an
+/// item within one, such as `a.get`.
+///
+/// Labelled imports share the bindings generated for their interface with all
+/// other imports of it, so they're configured through the interface's name
+/// instead of their label. Keys naming the label otherwise go unused, so this
+/// is used to explain why when an unused key is found.
+fn check_labelled_import_key(
+    resolve: &Resolve,
+    world: WorldId,
+    option: &str,
+    key: &str,
+) -> Result<()> {
+    for (name, item) in resolve.worlds[world].imports.iter() {
+        let (WorldKey::Name(label), WorldItem::Interface { id, .. }) = (name, item) else {
+            continue;
+        };
+        let Some(rest) = key.strip_prefix(label.as_str()) else {
+            continue;
+        };
+        if !rest.is_empty() && !rest.starts_with('.') {
+            continue;
+        }
+        // Labelled imports of anonymous interfaces have their own bindings
+        // which are configured through their label.
+        let Some(interface) = resolve.id_of(*id) else {
+            continue;
+        };
+        bail!(
+            "`{option}` key {key:?} names the labelled import `{label}`, but \
+             labelled imports share the bindings generated for their interface \
+             and are configured through the interface's name instead, for \
+             example \"{interface}{rest}\""
+        );
+    }
+    Ok(())
 }
 
 enum LookupItem<'a> {

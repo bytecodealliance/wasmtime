@@ -151,6 +151,14 @@ impl FunctionConfig {
         *base |= self.default;
     }
 
+    /// Returns the filters of all rules which haven't matched any function.
+    pub(crate) fn unused_rules(&self) -> impl Iterator<Item = &str> {
+        self.rules
+            .iter()
+            .filter(|r| !r.used)
+            .map(|r| r.filter.as_str())
+    }
+
     pub(crate) fn assert_all_rules_used(&self, kind: &str) -> Result<()> {
         let mut unused = Vec::new();
         for rule in self.rules.iter().filter(|r| !r.used) {
