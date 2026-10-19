@@ -133,7 +133,8 @@ fn p2_http_outbound_request_missing_path_and_query() -> Result<()> {
 }
 #[test_log::test]
 fn p2_http_named_imports() {
-    // named imports are intentionally not implemented for sync at this time
+    // intentionally omitted as `add_named_to_linker_sync` defers to the async
+    // version, which is tested in `async_.rs`.
 }
 
 #[test_log::test]

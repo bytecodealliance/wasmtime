@@ -21,3 +21,35 @@ impl crate::p2::bindings::sync::io::poll::HostPollable for ResourceTable {
         async_poll::HostPollable::drop(self, pollable)
     }
 }
+
+mod named {
+    use super::*;
+    use crate::p2::bindings::sync::named_imports::wasi::io::poll as named_poll;
+    use crate::{NamedId, WasiCtxNamedView, WasiNamedView};
+
+    impl<T> named_poll::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        fn poll(&mut self, id: NamedId, pollables: Vec<Resource<DynPollable>>) -> Result<Vec<u32>> {
+            crate::p2::bindings::sync::io::poll::Host::poll(self.0.ctx(id).table, pollables)
+        }
+    }
+
+    impl<T> named_poll::HostPollable for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        fn ready(&mut self, id: NamedId, pollable: Resource<DynPollable>) -> Result<bool> {
+            crate::p2::bindings::sync::io::poll::HostPollable::ready(self.0.ctx(id).table, pollable)
+        }
+
+        fn block(&mut self, id: NamedId, pollable: Resource<DynPollable>) -> Result<()> {
+            crate::p2::bindings::sync::io::poll::HostPollable::block(self.0.ctx(id).table, pollable)
+        }
+
+        fn drop(&mut self, id: NamedId, pollable: Resource<DynPollable>) -> Result<()> {
+            crate::p2::bindings::sync::io::poll::HostPollable::drop(self.0.ctx(id).table, pollable)
+        }
+    }
+}

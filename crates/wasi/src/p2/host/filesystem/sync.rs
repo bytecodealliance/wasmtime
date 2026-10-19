@@ -515,3 +515,378 @@ impl From<async_filesystem::MetadataHashValue> for sync_filesystem::MetadataHash
         }
     }
 }
+
+mod named {
+    use super::*;
+    use crate::filesystem::WasiFilesystemNamedView;
+    use crate::p2::bindings::sync::named_imports::wasi::filesystem::types as named_types;
+    use crate::{NamedId, WasiCtxNamedView};
+
+    impl<T> named_types::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiFilesystemNamedView,
+    {
+        fn convert_error_code(
+            &mut self,
+            id: NamedId,
+            err: FsError,
+        ) -> wasmtime::Result<sync_filesystem::ErrorCode> {
+            sync_filesystem::Host::convert_error_code(&mut self.0.filesystem(id), err)
+        }
+
+        fn filesystem_error_code(
+            &mut self,
+            id: NamedId,
+            err: Resource<streams::Error>,
+        ) -> wasmtime::Result<Option<sync_filesystem::ErrorCode>> {
+            sync_filesystem::Host::filesystem_error_code(&mut self.0.filesystem(id), err)
+        }
+    }
+
+    impl<T> named_types::HostDescriptor for WasiCtxNamedView<'_, T>
+    where
+        T: WasiFilesystemNamedView,
+    {
+        fn advise(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            offset: sync_filesystem::Filesize,
+            len: sync_filesystem::Filesize,
+            advice: sync_filesystem::Advice,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::advise(
+                &mut self.0.filesystem(id),
+                fd,
+                offset,
+                len,
+                advice,
+            )
+        }
+
+        fn sync_data(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::sync_data(&mut self.0.filesystem(id), fd)
+        }
+
+        fn get_flags(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+        ) -> FsResult<sync_filesystem::DescriptorFlags> {
+            sync_filesystem::HostDescriptor::get_flags(&mut self.0.filesystem(id), fd)
+        }
+
+        fn get_type(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+        ) -> FsResult<sync_filesystem::DescriptorType> {
+            sync_filesystem::HostDescriptor::get_type(&mut self.0.filesystem(id), fd)
+        }
+
+        fn set_size(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            size: sync_filesystem::Filesize,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::set_size(&mut self.0.filesystem(id), fd, size)
+        }
+
+        fn set_times(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            atim: sync_filesystem::NewTimestamp,
+            mtim: sync_filesystem::NewTimestamp,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::set_times(&mut self.0.filesystem(id), fd, atim, mtim)
+        }
+
+        fn read(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            len: sync_filesystem::Filesize,
+            offset: sync_filesystem::Filesize,
+        ) -> FsResult<(Vec<u8>, bool)> {
+            sync_filesystem::HostDescriptor::read(&mut self.0.filesystem(id), fd, len, offset)
+        }
+
+        fn write(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            buf: Vec<u8>,
+            offset: sync_filesystem::Filesize,
+        ) -> FsResult<sync_filesystem::Filesize> {
+            sync_filesystem::HostDescriptor::write(&mut self.0.filesystem(id), fd, buf, offset)
+        }
+
+        fn read_directory(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+        ) -> FsResult<Resource<sync_filesystem::DirectoryEntryStream>> {
+            sync_filesystem::HostDescriptor::read_directory(&mut self.0.filesystem(id), fd)
+        }
+
+        fn sync(&mut self, id: NamedId, fd: Resource<sync_filesystem::Descriptor>) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::sync(&mut self.0.filesystem(id), fd)
+        }
+
+        fn create_directory_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            path: String,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::create_directory_at(
+                &mut self.0.filesystem(id),
+                fd,
+                path,
+            )
+        }
+
+        fn stat(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+        ) -> FsResult<sync_filesystem::DescriptorStat> {
+            sync_filesystem::HostDescriptor::stat(&mut self.0.filesystem(id), fd)
+        }
+
+        fn stat_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            path_flags: sync_filesystem::PathFlags,
+            path: String,
+        ) -> FsResult<sync_filesystem::DescriptorStat> {
+            sync_filesystem::HostDescriptor::stat_at(
+                &mut self.0.filesystem(id),
+                fd,
+                path_flags,
+                path,
+            )
+        }
+
+        fn set_times_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            path_flags: sync_filesystem::PathFlags,
+            path: String,
+            atim: sync_filesystem::NewTimestamp,
+            mtim: sync_filesystem::NewTimestamp,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::set_times_at(
+                &mut self.0.filesystem(id),
+                fd,
+                path_flags,
+                path,
+                atim,
+                mtim,
+            )
+        }
+
+        fn link_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>, // TODO delete the path flags from this function
+            old_path_flags: sync_filesystem::PathFlags,
+            old_path: String,
+            new_descriptor: Resource<sync_filesystem::Descriptor>,
+            new_path: String,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::link_at(
+                &mut self.0.filesystem(id),
+                fd, // TODO delete the path flags from this function
+                old_path_flags,
+                old_path,
+                new_descriptor,
+                new_path,
+            )
+        }
+
+        fn open_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            path_flags: sync_filesystem::PathFlags,
+            path: String,
+            oflags: sync_filesystem::OpenFlags,
+            flags: sync_filesystem::DescriptorFlags,
+        ) -> FsResult<Resource<sync_filesystem::Descriptor>> {
+            sync_filesystem::HostDescriptor::open_at(
+                &mut self.0.filesystem(id),
+                fd,
+                path_flags,
+                path,
+                oflags,
+                flags,
+            )
+        }
+
+        fn drop(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+        ) -> wasmtime::Result<()> {
+            sync_filesystem::HostDescriptor::drop(&mut self.0.filesystem(id), fd)
+        }
+
+        fn readlink_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            path: String,
+        ) -> FsResult<String> {
+            sync_filesystem::HostDescriptor::readlink_at(&mut self.0.filesystem(id), fd, path)
+        }
+
+        fn remove_directory_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            path: String,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::remove_directory_at(
+                &mut self.0.filesystem(id),
+                fd,
+                path,
+            )
+        }
+
+        fn rename_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            old_path: String,
+            new_fd: Resource<sync_filesystem::Descriptor>,
+            new_path: String,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::rename_at(
+                &mut self.0.filesystem(id),
+                fd,
+                old_path,
+                new_fd,
+                new_path,
+            )
+        }
+
+        fn symlink_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            src_path: String,
+            dest_path: String,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::symlink_at(
+                &mut self.0.filesystem(id),
+                fd,
+                src_path,
+                dest_path,
+            )
+        }
+
+        fn unlink_file_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            path: String,
+        ) -> FsResult<()> {
+            sync_filesystem::HostDescriptor::unlink_file_at(&mut self.0.filesystem(id), fd, path)
+        }
+
+        fn read_via_stream(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            offset: sync_filesystem::Filesize,
+        ) -> FsResult<Resource<streams::InputStream>> {
+            sync_filesystem::HostDescriptor::read_via_stream(&mut self.0.filesystem(id), fd, offset)
+        }
+
+        fn write_via_stream(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            offset: sync_filesystem::Filesize,
+        ) -> FsResult<Resource<streams::OutputStream>> {
+            sync_filesystem::HostDescriptor::write_via_stream(
+                &mut self.0.filesystem(id),
+                fd,
+                offset,
+            )
+        }
+
+        fn append_via_stream(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+        ) -> FsResult<Resource<streams::OutputStream>> {
+            sync_filesystem::HostDescriptor::append_via_stream(&mut self.0.filesystem(id), fd)
+        }
+
+        fn is_same_object(
+            &mut self,
+            id: NamedId,
+            a: Resource<sync_filesystem::Descriptor>,
+            b: Resource<sync_filesystem::Descriptor>,
+        ) -> wasmtime::Result<bool> {
+            sync_filesystem::HostDescriptor::is_same_object(&mut self.0.filesystem(id), a, b)
+        }
+
+        fn metadata_hash(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+        ) -> FsResult<sync_filesystem::MetadataHashValue> {
+            sync_filesystem::HostDescriptor::metadata_hash(&mut self.0.filesystem(id), fd)
+        }
+
+        fn metadata_hash_at(
+            &mut self,
+            id: NamedId,
+            fd: Resource<sync_filesystem::Descriptor>,
+            path_flags: sync_filesystem::PathFlags,
+            path: String,
+        ) -> FsResult<sync_filesystem::MetadataHashValue> {
+            sync_filesystem::HostDescriptor::metadata_hash_at(
+                &mut self.0.filesystem(id),
+                fd,
+                path_flags,
+                path,
+            )
+        }
+    }
+
+    impl<T> named_types::HostDirectoryEntryStream for WasiCtxNamedView<'_, T>
+    where
+        T: WasiFilesystemNamedView,
+    {
+        fn read_directory_entry(
+            &mut self,
+            id: NamedId,
+            stream: Resource<sync_filesystem::DirectoryEntryStream>,
+        ) -> FsResult<Option<sync_filesystem::DirectoryEntry>> {
+            sync_filesystem::HostDirectoryEntryStream::read_directory_entry(
+                &mut self.0.filesystem(id),
+                stream,
+            )
+        }
+
+        fn drop(
+            &mut self,
+            id: NamedId,
+            stream: Resource<sync_filesystem::DirectoryEntryStream>,
+        ) -> wasmtime::Result<()> {
+            sync_filesystem::HostDirectoryEntryStream::drop(&mut self.0.filesystem(id), stream)
+        }
+    }
+}

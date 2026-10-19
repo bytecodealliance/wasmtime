@@ -455,6 +455,42 @@ where
     Ok(())
 }
 
+/// Add all `wasi:http` interfaces from this crate into the `linker` provided
+/// for any named imports that a component has.
+///
+/// This is the synchronous counterpart of [`add_named_to_linker_async`], to
+/// be used alongside [`add_only_http_to_linker_sync`] and
+/// [`wasmtime_wasi::p2::add_named_to_linker_sync`].
+///
+/// [`wasmtime_wasi::p2::add_named_to_linker_sync`]: wasmtime_wasi::p2::add_named_to_linker_sync
+pub fn add_named_to_linker_sync<T>(
+    linker: &mut Linker<T>,
+    component: &Component,
+    lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiHttpNamedView,
+{
+    let options = bindings::LinkOptions::default(); // FIXME: Thread through to the CLI options.
+    add_named_to_linker_with_options_sync(linker, &options, component, lookup)
+}
+
+/// Same as [`add_named_to_linker_sync`] except [`bindings::LinkOptions`] can
+/// be specified to configure interfaces that are added.
+pub fn add_named_to_linker_with_options_sync<T>(
+    linker: &mut Linker<T>,
+    options: &bindings::LinkOptions,
+    component: &Component,
+    lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiHttpNamedView,
+{
+    // None of the `wasi:http` functions are `async` in these bindings, which
+    // is also why the sync bindings alias them, so they work in both cases.
+    add_named_to_linker_with_options_async(linker, options, component, lookup)
+}
+
 /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
 ///
 /// This function will add the `sync` variant of all interfaces into the

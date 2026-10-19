@@ -183,10 +183,22 @@ pub mod sync {
                 "wasi:io/streams.output-stream": wasmtime_wasi_io::streams::DynOutputStream,
 
             },
+            // Interfaces aliased above reuse the named imports of the async
+            // bindings, so only the remaining ones are listed here.
+            named_imports: {
+                "wasi:io/poll": crate::NamedId,
+                "wasi:io/streams": crate::NamedId,
+                "wasi:filesystem/types": crate::NamedId,
+                "wasi:sockets/tcp": crate::NamedId,
+                "wasi:sockets/udp": crate::NamedId,
+                "wasi:sockets/udp-create-socket": crate::NamedId,
+                "wasi:sockets/ip-name-lookup": crate::NamedId,
+            },
             require_store_data_send: true,
         });
     }
     pub use self::generated::exports;
+    pub use self::generated::named_imports;
     pub use self::generated::wasi::*;
 
     /// Synchronous bindings to execute and run a `wasi:cli/command`.

@@ -34,6 +34,36 @@ pub mod sync {
             in_tokio(async { AsyncHost::create_udp_socket(self, address_family).await })
         }
     }
+
+    mod named {
+        use super::*;
+        use crate::p2::SocketError;
+        use crate::p2::bindings::sockets::network::ErrorCode;
+        use crate::p2::bindings::sync::named_imports::wasi::sockets::udp_create_socket as named_udp_create_socket;
+        use crate::sockets::WasiSocketsNamedView;
+        use crate::{NamedId, WasiCtxNamedView};
+
+        impl<T> named_udp_create_socket::Host for WasiCtxNamedView<'_, T>
+        where
+            T: WasiSocketsNamedView,
+        {
+            fn convert_error_code(
+                &mut self,
+                _id: NamedId,
+                err: SocketError,
+            ) -> wasmtime::Result<ErrorCode> {
+                err.downcast()
+            }
+
+            fn create_udp_socket(
+                &mut self,
+                id: NamedId,
+                address_family: IpAddressFamily,
+            ) -> SocketResult<Resource<UdpSocket>> {
+                udp_create_socket::Host::create_udp_socket(&mut self.0.sockets(id), address_family)
+            }
+        }
+    }
 }
 
 mod named {

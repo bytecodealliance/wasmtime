@@ -537,6 +537,220 @@ pub mod sync {
             }
         }
     }
+
+    mod named {
+        use super::*;
+        use crate::p2::bindings::sockets::network::ErrorCode;
+        use crate::p2::bindings::sync::named_imports::wasi::sockets::udp as named_udp;
+        use crate::sockets::WasiSocketsNamedView;
+        use crate::{NamedId, WasiCtxNamedView};
+
+        impl<T> named_udp::Host for WasiCtxNamedView<'_, T>
+        where
+            T: WasiSocketsNamedView,
+        {
+            fn convert_error_code(
+                &mut self,
+                _id: NamedId,
+                err: SocketError,
+            ) -> wasmtime::Result<ErrorCode> {
+                err.downcast()
+            }
+        }
+
+        impl<T> named_udp::HostUdpSocket for WasiCtxNamedView<'_, T>
+        where
+            T: WasiSocketsNamedView,
+        {
+            fn start_bind(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+                network: Resource<Network>,
+                local_address: IpSocketAddress,
+            ) -> Result<(), SocketError> {
+                HostUdpSocket::start_bind(&mut self.0.sockets(id), self_, network, local_address)
+            }
+
+            fn finish_bind(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+            ) -> Result<(), SocketError> {
+                HostUdpSocket::finish_bind(&mut self.0.sockets(id), self_)
+            }
+
+            fn stream(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+                remote_address: Option<IpSocketAddress>,
+            ) -> Result<
+                (
+                    Resource<IncomingDatagramStream>,
+                    Resource<OutgoingDatagramStream>,
+                ),
+                SocketError,
+            > {
+                HostUdpSocket::stream(&mut self.0.sockets(id), self_, remote_address)
+            }
+
+            fn local_address(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+            ) -> Result<IpSocketAddress, SocketError> {
+                HostUdpSocket::local_address(&mut self.0.sockets(id), self_)
+            }
+
+            fn remote_address(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+            ) -> Result<IpSocketAddress, SocketError> {
+                HostUdpSocket::remote_address(&mut self.0.sockets(id), self_)
+            }
+
+            fn address_family(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+            ) -> wasmtime::Result<IpAddressFamily> {
+                HostUdpSocket::address_family(&mut self.0.sockets(id), self_)
+            }
+
+            fn unicast_hop_limit(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+            ) -> Result<u8, SocketError> {
+                HostUdpSocket::unicast_hop_limit(&mut self.0.sockets(id), self_)
+            }
+
+            fn set_unicast_hop_limit(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+                value: u8,
+            ) -> Result<(), SocketError> {
+                HostUdpSocket::set_unicast_hop_limit(&mut self.0.sockets(id), self_, value)
+            }
+
+            fn receive_buffer_size(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+            ) -> Result<u64, SocketError> {
+                HostUdpSocket::receive_buffer_size(&mut self.0.sockets(id), self_)
+            }
+
+            fn set_receive_buffer_size(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+                value: u64,
+            ) -> Result<(), SocketError> {
+                HostUdpSocket::set_receive_buffer_size(&mut self.0.sockets(id), self_, value)
+            }
+
+            fn send_buffer_size(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+            ) -> Result<u64, SocketError> {
+                HostUdpSocket::send_buffer_size(&mut self.0.sockets(id), self_)
+            }
+
+            fn set_send_buffer_size(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+                value: u64,
+            ) -> Result<(), SocketError> {
+                HostUdpSocket::set_send_buffer_size(&mut self.0.sockets(id), self_, value)
+            }
+
+            fn subscribe(
+                &mut self,
+                id: NamedId,
+                self_: Resource<UdpSocket>,
+            ) -> wasmtime::Result<Resource<Pollable>> {
+                HostUdpSocket::subscribe(&mut self.0.sockets(id), self_)
+            }
+
+            fn drop(&mut self, id: NamedId, rep: Resource<UdpSocket>) -> wasmtime::Result<()> {
+                HostUdpSocket::drop(&mut self.0.sockets(id), rep)
+            }
+        }
+
+        impl<T> named_udp::HostIncomingDatagramStream for WasiCtxNamedView<'_, T>
+        where
+            T: WasiSocketsNamedView,
+        {
+            fn receive(
+                &mut self,
+                id: NamedId,
+                self_: Resource<IncomingDatagramStream>,
+                max_results: u64,
+            ) -> Result<Vec<IncomingDatagram>, SocketError> {
+                HostIncomingDatagramStream::receive(&mut self.0.sockets(id), self_, max_results)
+            }
+
+            fn subscribe(
+                &mut self,
+                id: NamedId,
+                self_: Resource<IncomingDatagramStream>,
+            ) -> wasmtime::Result<Resource<Pollable>> {
+                HostIncomingDatagramStream::subscribe(&mut self.0.sockets(id), self_)
+            }
+
+            fn drop(
+                &mut self,
+                id: NamedId,
+                rep: Resource<IncomingDatagramStream>,
+            ) -> wasmtime::Result<()> {
+                HostIncomingDatagramStream::drop(&mut self.0.sockets(id), rep)
+            }
+        }
+
+        impl<T> named_udp::HostOutgoingDatagramStream for WasiCtxNamedView<'_, T>
+        where
+            T: WasiSocketsNamedView,
+        {
+            fn check_send(
+                &mut self,
+                id: NamedId,
+                self_: Resource<OutgoingDatagramStream>,
+            ) -> Result<u64, SocketError> {
+                HostOutgoingDatagramStream::check_send(&mut self.0.sockets(id), self_)
+            }
+
+            fn send(
+                &mut self,
+                id: NamedId,
+                self_: Resource<OutgoingDatagramStream>,
+                datagrams: Vec<OutgoingDatagram>,
+            ) -> Result<u64, SocketError> {
+                HostOutgoingDatagramStream::send(&mut self.0.sockets(id), self_, datagrams)
+            }
+
+            fn subscribe(
+                &mut self,
+                id: NamedId,
+                self_: Resource<OutgoingDatagramStream>,
+            ) -> wasmtime::Result<Resource<Pollable>> {
+                HostOutgoingDatagramStream::subscribe(&mut self.0.sockets(id), self_)
+            }
+
+            fn drop(
+                &mut self,
+                id: NamedId,
+                rep: Resource<OutgoingDatagramStream>,
+            ) -> wasmtime::Result<()> {
+                HostOutgoingDatagramStream::drop(&mut self.0.sockets(id), rep)
+            }
+        }
+    }
 }
 
 mod named {

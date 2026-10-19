@@ -377,3 +377,172 @@ mod named {
         }
     }
 }
+
+mod sync_named {
+    use super::*;
+    use crate::p2::bindings::sync::named_imports::wasi::io::streams as named_streams;
+    use crate::{NamedId, WasiCtxNamedView, WasiNamedView};
+
+    impl<T> named_streams::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        fn convert_stream_error(
+            &mut self,
+            id: NamedId,
+            err: StreamError,
+        ) -> wasmtime::Result<streams::StreamError> {
+            streams::Host::convert_stream_error(self.0.ctx(id).table, err)
+        }
+    }
+
+    impl<T> named_streams::HostOutputStream for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        fn drop(&mut self, id: NamedId, stream: Resource<OutputStream>) -> wasmtime::Result<()> {
+            streams::HostOutputStream::drop(self.0.ctx(id).table, stream)
+        }
+
+        fn check_write(
+            &mut self,
+            id: NamedId,
+            stream: Resource<OutputStream>,
+        ) -> StreamResult<u64> {
+            streams::HostOutputStream::check_write(self.0.ctx(id).table, stream)
+        }
+
+        fn write(
+            &mut self,
+            id: NamedId,
+            stream: Resource<OutputStream>,
+            bytes: Vec<u8>,
+        ) -> StreamResult<()> {
+            streams::HostOutputStream::write(self.0.ctx(id).table, stream, bytes)
+        }
+
+        fn blocking_write_and_flush(
+            &mut self,
+            id: NamedId,
+            stream: Resource<OutputStream>,
+            bytes: Vec<u8>,
+        ) -> StreamResult<()> {
+            streams::HostOutputStream::blocking_write_and_flush(self.0.ctx(id).table, stream, bytes)
+        }
+
+        fn blocking_write_zeroes_and_flush(
+            &mut self,
+            id: NamedId,
+            stream: Resource<OutputStream>,
+            len: u64,
+        ) -> StreamResult<()> {
+            streams::HostOutputStream::blocking_write_zeroes_and_flush(
+                self.0.ctx(id).table,
+                stream,
+                len,
+            )
+        }
+
+        fn subscribe(
+            &mut self,
+            id: NamedId,
+            stream: Resource<OutputStream>,
+        ) -> wasmtime::Result<Resource<Pollable>> {
+            streams::HostOutputStream::subscribe(self.0.ctx(id).table, stream)
+        }
+
+        fn write_zeroes(
+            &mut self,
+            id: NamedId,
+            stream: Resource<OutputStream>,
+            len: u64,
+        ) -> StreamResult<()> {
+            streams::HostOutputStream::write_zeroes(self.0.ctx(id).table, stream, len)
+        }
+
+        fn flush(&mut self, id: NamedId, stream: Resource<OutputStream>) -> StreamResult<()> {
+            streams::HostOutputStream::flush(self.0.ctx(id).table, stream)
+        }
+
+        fn blocking_flush(
+            &mut self,
+            id: NamedId,
+            stream: Resource<OutputStream>,
+        ) -> StreamResult<()> {
+            streams::HostOutputStream::blocking_flush(self.0.ctx(id).table, stream)
+        }
+
+        fn splice(
+            &mut self,
+            id: NamedId,
+            dst: Resource<OutputStream>,
+            src: Resource<InputStream>,
+            len: u64,
+        ) -> StreamResult<u64> {
+            streams::HostOutputStream::splice(self.0.ctx(id).table, dst, src, len)
+        }
+
+        fn blocking_splice(
+            &mut self,
+            id: NamedId,
+            dst: Resource<OutputStream>,
+            src: Resource<InputStream>,
+            len: u64,
+        ) -> StreamResult<u64> {
+            streams::HostOutputStream::blocking_splice(self.0.ctx(id).table, dst, src, len)
+        }
+    }
+
+    impl<T> named_streams::HostInputStream for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        fn drop(&mut self, id: NamedId, stream: Resource<InputStream>) -> wasmtime::Result<()> {
+            streams::HostInputStream::drop(self.0.ctx(id).table, stream)
+        }
+
+        fn read(
+            &mut self,
+            id: NamedId,
+            stream: Resource<InputStream>,
+            len: u64,
+        ) -> StreamResult<Vec<u8>> {
+            streams::HostInputStream::read(self.0.ctx(id).table, stream, len)
+        }
+
+        fn blocking_read(
+            &mut self,
+            id: NamedId,
+            stream: Resource<InputStream>,
+            len: u64,
+        ) -> StreamResult<Vec<u8>> {
+            streams::HostInputStream::blocking_read(self.0.ctx(id).table, stream, len)
+        }
+
+        fn skip(
+            &mut self,
+            id: NamedId,
+            stream: Resource<InputStream>,
+            len: u64,
+        ) -> StreamResult<u64> {
+            streams::HostInputStream::skip(self.0.ctx(id).table, stream, len)
+        }
+
+        fn blocking_skip(
+            &mut self,
+            id: NamedId,
+            stream: Resource<InputStream>,
+            len: u64,
+        ) -> StreamResult<u64> {
+            streams::HostInputStream::blocking_skip(self.0.ctx(id).table, stream, len)
+        }
+
+        fn subscribe(
+            &mut self,
+            id: NamedId,
+            stream: Resource<InputStream>,
+        ) -> wasmtime::Result<Resource<Pollable>> {
+            streams::HostInputStream::subscribe(self.0.ctx(id).table, stream)
+        }
+    }
+}

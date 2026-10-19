@@ -117,6 +117,65 @@ mod sync {
             ))
         }
     }
+
+    mod named {
+        use super::*;
+        use crate::p2::bindings::sockets::network::ErrorCode;
+        use crate::p2::bindings::sync::named_imports::wasi::sockets::ip_name_lookup as named_ip_name_lookup;
+        use crate::sockets::WasiSocketsNamedView;
+        use crate::{NamedId, WasiCtxNamedView};
+
+        impl<T> named_ip_name_lookup::Host for WasiCtxNamedView<'_, T>
+        where
+            T: WasiSocketsNamedView,
+        {
+            fn convert_error_code(
+                &mut self,
+                _id: NamedId,
+                err: SocketError,
+            ) -> wasmtime::Result<ErrorCode> {
+                err.downcast()
+            }
+
+            fn resolve_addresses(
+                &mut self,
+                id: NamedId,
+                network: Resource<Network>,
+                name: String,
+            ) -> Result<Resource<ResolveAddressStream>, SocketError> {
+                Host::resolve_addresses(&mut self.0.sockets(id), network, name)
+            }
+        }
+
+        impl<T> named_ip_name_lookup::HostResolveAddressStream for WasiCtxNamedView<'_, T>
+        where
+            T: WasiSocketsNamedView,
+        {
+            fn resolve_next_address(
+                &mut self,
+                id: NamedId,
+                resource: Resource<ResolveAddressStream>,
+            ) -> Result<Option<IpAddress>, SocketError> {
+                HostResolveAddressStream::resolve_next_address(&mut self.0.sockets(id), resource)
+            }
+
+            fn subscribe(
+                &mut self,
+                id: NamedId,
+                resource: Resource<ResolveAddressStream>,
+            ) -> Result<Resource<DynPollable>> {
+                HostResolveAddressStream::subscribe(&mut self.0.sockets(id), resource)
+            }
+
+            fn drop(
+                &mut self,
+                id: NamedId,
+                resource: Resource<ResolveAddressStream>,
+            ) -> Result<()> {
+                HostResolveAddressStream::drop(&mut self.0.sockets(id), resource)
+            }
+        }
+    }
 }
 
 mod named {

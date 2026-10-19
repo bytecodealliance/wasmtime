@@ -671,15 +671,11 @@ pub fn add_named_to_linker_with_options_async<T>(
 where
     T: WasiNamedView,
 {
-    use crate::p2::bindings::named_imports::wasi::{cli, clocks, filesystem, io, random, sockets};
+    use crate::p2::bindings::named_imports::wasi::{filesystem, io, sockets};
+
+    add_named_nonblocking_to_linker(linker, options, component, &mut lookup)?;
 
     let l = linker;
-    io::error::add_to_linker::<T, HasIoNamed<T>>(
-        l,
-        component,
-        |name| lookup(Interface::IoError, name),
-        |x| WasiCtxNamedView(x),
-    )?;
     io::poll::add_to_linker::<T, HasIoNamed<T>>(
         l,
         component,
@@ -692,6 +688,138 @@ where
         |name| lookup(Interface::IoStreams, name),
         |x| WasiCtxNamedView(x),
     )?;
+    filesystem::types::add_to_linker::<T, WasiFilesystemNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::FilesystemTypes, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::tcp::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsTcp, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::udp::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsUdp, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::udp_create_socket::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsUdpCreateSocket, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::ip_name_lookup::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsIpNameLookup, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    Ok(())
+}
+
+/// Add all WASI interfaces from this crate into the `linker` provided for any
+/// named imports that a component has.
+///
+/// This is the synchronous counterpart of [`add_named_to_linker_async`], and
+/// adds the same variants of interfaces as [`add_to_linker_sync`] does.
+pub fn add_named_to_linker_sync<T>(
+    linker: &mut Linker<T>,
+    component: &Component,
+    lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiNamedView,
+{
+    let options = bindings::sync::LinkOptions::default();
+    add_named_to_linker_with_options_sync(linker, &options, component, lookup)
+}
+
+/// Same as [`add_named_to_linker_sync`] except [`bindings::sync::LinkOptions`]
+/// can be specified to configure interfaces that are added.
+pub fn add_named_to_linker_with_options_sync<T>(
+    linker: &mut Linker<T>,
+    options: &bindings::sync::LinkOptions,
+    component: &Component,
+    mut lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiNamedView,
+{
+    use crate::p2::bindings::sync::named_imports::wasi::{filesystem, io, sockets};
+
+    add_named_nonblocking_to_linker(linker, options, component, &mut lookup)?;
+
+    let l = linker;
+    io::poll::add_to_linker::<T, HasIoNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::IoPoll, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    io::streams::add_to_linker::<T, HasIoNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::IoStreams, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    filesystem::types::add_to_linker::<T, WasiFilesystemNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::FilesystemTypes, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::tcp::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsTcp, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::udp::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsUdp, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::udp_create_socket::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsUdpCreateSocket, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    sockets::ip_name_lookup::add_to_linker::<T, WasiSocketsNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::SocketsIpNameLookup, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    Ok(())
+}
+
+/// Shared functionality of [`add_named_to_linker_with_options_async`] and
+/// [`add_named_to_linker_with_options_sync`].
+fn add_named_nonblocking_to_linker<'a, T, O>(
+    linker: &mut Linker<T>,
+    options: &'a O,
+    component: &Component,
+    lookup: &mut impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+) -> wasmtime::Result<()>
+where
+    T: WasiNamedView,
+    bindings::sockets::network::LinkOptions: From<&'a O>,
+{
+    use crate::p2::bindings::named_imports::wasi::{cli, clocks, filesystem, io, random, sockets};
+
+    let l = linker;
+    io::error::add_to_linker::<T, HasIoNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::IoError, name),
+        |x| WasiCtxNamedView(x),
+    )?;
     clocks::wall_clock::add_to_linker::<T, WasiClocksNamed<T>>(
         l,
         component,
@@ -702,12 +830,6 @@ where
         l,
         component,
         |name| lookup(Interface::ClocksMonotonicClock, name),
-        |x| WasiCtxNamedView(x),
-    )?;
-    filesystem::types::add_to_linker::<T, WasiFilesystemNamed<T>>(
-        l,
-        component,
-        |name| lookup(Interface::FilesystemTypes, name),
         |x| WasiCtxNamedView(x),
     )?;
     filesystem::preopens::add_to_linker::<T, WasiFilesystemNamed<T>>(
@@ -807,34 +929,10 @@ where
         &options.into(),
         |x| WasiCtxNamedView(x),
     )?;
-    sockets::ip_name_lookup::add_to_linker::<T, WasiSocketsNamed<T>>(
-        l,
-        component,
-        |name| lookup(Interface::SocketsIpNameLookup, name),
-        |x| WasiCtxNamedView(x),
-    )?;
     sockets::tcp_create_socket::add_to_linker::<T, WasiSocketsNamed<T>>(
         l,
         component,
         |name| lookup(Interface::SocketsTcpCreateSocket, name),
-        |x| WasiCtxNamedView(x),
-    )?;
-    sockets::tcp::add_to_linker::<T, WasiSocketsNamed<T>>(
-        l,
-        component,
-        |name| lookup(Interface::SocketsTcp, name),
-        |x| WasiCtxNamedView(x),
-    )?;
-    sockets::udp_create_socket::add_to_linker::<T, WasiSocketsNamed<T>>(
-        l,
-        component,
-        |name| lookup(Interface::SocketsUdpCreateSocket, name),
-        |x| WasiCtxNamedView(x),
-    )?;
-    sockets::udp::add_to_linker::<T, WasiSocketsNamed<T>>(
-        l,
-        component,
-        |name| lookup(Interface::SocketsUdp, name),
         |x| WasiCtxNamedView(x),
     )?;
     Ok(())

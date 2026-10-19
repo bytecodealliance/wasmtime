@@ -487,6 +487,27 @@ fn p2_clock_time_get() {
 
 #[test]
 fn p2_environment_named_imports() {
-    // intentionally omitted as named imports are just for async bindings right
-    // now.
+    // intentionally omitted as named imports with the sync bindings are tested
+    // by `p2_io_named_imports` below.
+}
+
+#[test_log::test]
+fn p2_io_named_imports() -> Result<()> {
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_component_model_implements(true);
+    });
+    let component = Component::new(&engine, super::IO_NAMED_IMPORTS_COMPONENT)?;
+    let mut linker = Linker::new(&engine);
+    add_to_linker_sync(&mut linker)?;
+    wasmtime_wasi::p2::add_named_to_linker_sync(
+        &mut linker,
+        &component,
+        super::IoNamedImports::lookup,
+    )?;
+    let mut store = wasmtime::Store::new(&engine, super::IoNamedImports::default());
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call(&mut store, ())?;
+    assert_eq!(store.data().named_stdout.contents(), "hello");
+    Ok(())
 }
