@@ -1,3 +1,4 @@
+use crate::named::NamedCtx;
 use wasmtime::{
     Result, Store,
     component::{Component, Linker, ResourceTable},
@@ -65,6 +66,8 @@ async fn run_test(provider: Box<dyn TlsProvider>, path: &str) -> Result<()> {
 }
 
 macro_rules! test_case {
+    // This test doesn't use the provider, so it's only run once, below.
+    ($provider:ident, p2_tls_named_imports) => {};
     ($provider:ident, $name:ident) => {
         #[tokio::test(flavor = "multi_thread")]
         async fn $name() -> wasmtime::Result<()> {
@@ -112,4 +115,32 @@ async fn p2_tls_sample_application(provider: Box<dyn TlsProvider>) -> Result<()>
         test_programs_artifacts::P2_TLS_SAMPLE_APPLICATION_COMPONENT,
     )
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn p2_tls_named_imports() -> Result<()> {
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_component_model_implements(true);
+    });
+    let component = Component::from_file(
+        &engine,
+        test_programs_artifacts::P2_TLS_NAMED_IMPORTS_COMPONENT,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+    let mut opts = p2::LinkOptions::default();
+    opts.tls(true);
+    p2::add_named_to_linker(&mut linker, &opts, &component, |i, name| {
+        assert_eq!(i, p2::Interface::TlsTypes);
+        Ok(NamedCtx::lookup(name))
+    })?;
+
+    let mut store = Store::new(&engine, NamedCtx::new());
+    let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+    command
+        .wasi_cli_run()
+        .call_run(&mut store)
+        .await?
+        .map_err(|()| format_err!("command returned with failing exit status"))
 }

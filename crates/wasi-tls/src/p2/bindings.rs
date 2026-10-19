@@ -13,7 +13,12 @@ mod generated {
         },
         imports: { default: trappable },
         require_store_data_send: true,
+        named_imports: {
+            "wasi:tls/types": wasmtime_wasi::NamedId,
+        },
     });
 }
+
+pub(crate) use generated::named_imports;
 
 pub use generated::wasi::tls::*;

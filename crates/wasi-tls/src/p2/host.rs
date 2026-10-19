@@ -155,3 +155,101 @@ impl<'a> bindings::types::HostClientConnection for WasiTlsCtxView<'a> {
         Ok(())
     }
 }
+
+mod named {
+    use super::{HostClientConnection, HostClientHandshake, HostFutureClientStreams};
+    use crate::WasiTlsNamedView;
+    use crate::p2::bindings::named_imports::wasi::tls::types;
+    use crate::p2::bindings::types as unnamed;
+    use wasmtime::component::Resource;
+    use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable, IoError};
+    use wasmtime_wasi::{NamedId, WasiCtxNamedView};
+
+    impl<T: WasiTlsNamedView> types::Host for WasiCtxNamedView<'_, T> {}
+
+    impl<T: WasiTlsNamedView> types::HostClientHandshake for WasiCtxNamedView<'_, T> {
+        fn new(
+            &mut self,
+            id: NamedId,
+            server_name: String,
+            input: Resource<DynInputStream>,
+            output: Resource<DynOutputStream>,
+        ) -> wasmtime::Result<Resource<HostClientHandshake>> {
+            unnamed::HostClientHandshake::new(&mut self.0.tls(id), server_name, input, output)
+        }
+
+        fn finish(
+            &mut self,
+            id: NamedId,
+            this: Resource<HostClientHandshake>,
+        ) -> wasmtime::Result<Resource<HostFutureClientStreams>> {
+            unnamed::HostClientHandshake::finish(&mut self.0.tls(id), this)
+        }
+
+        fn drop(
+            &mut self,
+            id: NamedId,
+            this: Resource<HostClientHandshake>,
+        ) -> wasmtime::Result<()> {
+            unnamed::HostClientHandshake::drop(&mut self.0.tls(id), this)
+        }
+    }
+
+    impl<T: WasiTlsNamedView> types::HostFutureClientStreams for WasiCtxNamedView<'_, T> {
+        fn subscribe(
+            &mut self,
+            id: NamedId,
+            this: Resource<HostFutureClientStreams>,
+        ) -> wasmtime::Result<Resource<DynPollable>> {
+            unnamed::HostFutureClientStreams::subscribe(&mut self.0.tls(id), this)
+        }
+
+        fn get(
+            &mut self,
+            id: NamedId,
+            this: Resource<HostFutureClientStreams>,
+        ) -> wasmtime::Result<
+            Option<
+                Result<
+                    Result<
+                        (
+                            Resource<HostClientConnection>,
+                            Resource<DynInputStream>,
+                            Resource<DynOutputStream>,
+                        ),
+                        Resource<IoError>,
+                    >,
+                    (),
+                >,
+            >,
+        > {
+            unnamed::HostFutureClientStreams::get(&mut self.0.tls(id), this)
+        }
+
+        fn drop(
+            &mut self,
+            id: NamedId,
+            this: Resource<HostFutureClientStreams>,
+        ) -> wasmtime::Result<()> {
+            unnamed::HostFutureClientStreams::drop(&mut self.0.tls(id), this)
+        }
+    }
+
+    impl<T: WasiTlsNamedView> types::HostClientConnection for WasiCtxNamedView<'_, T> {
+        fn close_output(
+            &mut self,
+            id: NamedId,
+            this: Resource<HostClientConnection>,
+        ) -> wasmtime::Result<()> {
+            unnamed::HostClientConnection::close_output(&mut self.0.tls(id), this)
+        }
+
+        fn drop(
+            &mut self,
+            id: NamedId,
+            this: Resource<HostClientConnection>,
+        ) -> wasmtime::Result<()> {
+            unnamed::HostClientConnection::drop(&mut self.0.tls(id), this)
+        }
+    }
+}

@@ -15,7 +15,12 @@ mod generated {
             "wasi:tls/types.error": crate::Error,
         },
         require_store_data_send: true,
+        named_imports: {
+            "wasi:tls/client": wasmtime_wasi::NamedId,
+            "wasi:tls/types": wasmtime_wasi::NamedId,
+        },
     });
 }
 
+pub(crate) use self::generated::named_imports;
 pub use self::generated::wasi::*;

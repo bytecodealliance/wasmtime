@@ -162,6 +162,34 @@ pub trait WasiTlsView: Send {
     fn tls(&mut self) -> WasiTlsCtxView<'_>;
 }
 
+/// A trait used to look up a specific WASI TLS context for a named import.
+///
+/// This is used by `add_named_to_linker` functions, such as
+/// [`p2::add_named_to_linker`] and [`p3::add_named_to_linker`], to resolve a
+/// [`NamedId`], allocated by the embedder, to the [`WasiTlsCtxView`] that a
+/// particular named import operates on.
+///
+/// Resources such as streams can flow between named and unnamed imports, so
+/// the [`ResourceTable`] referenced by the returned [`WasiTlsCtxView`] should
+/// be the same table that's used for all other imports.
+///
+/// [`NamedId`]: wasmtime_wasi::NamedId
+#[cfg(any(feature = "p2", feature = "p3"))]
+pub trait WasiTlsNamedView: Send + 'static {
+    /// Returns the [`WasiTlsCtxView`] to use for the named import identified
+    /// by `id`.
+    fn tls(&mut self, id: wasmtime_wasi::NamedId) -> WasiTlsCtxView<'_>;
+}
+
+/// The type for which this crate implements the `wasi:tls` interfaces when
+/// they're named imports.
+#[cfg(any(feature = "p2", feature = "p3"))]
+pub(crate) struct WasiTlsNamed<T>(core::marker::PhantomData<fn() -> T>);
+#[cfg(any(feature = "p2", feature = "p3"))]
+impl<T: WasiTlsNamedView> HasData for WasiTlsNamed<T> {
+    type Data<'a> = wasmtime_wasi::WasiCtxNamedView<'a, T>;
+}
+
 /// The data stream that carries the encrypted TLS data.
 /// Typically this is a TCP stream.
 pub trait TlsTransport: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
