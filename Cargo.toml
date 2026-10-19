@@ -145,6 +145,7 @@ pulley-interpreter = { workspace = true, features = ["disas"] }
 wasm-encoder = { workspace = true }
 cranelift-native = { workspace = true }
 futures = { workspace = true }
+indexmap = { workspace = true, features = ["std"] }
 rand = { workspace = true }
 
 # Should only be used for tests that are explicitly testing `anyhow::Error` and
