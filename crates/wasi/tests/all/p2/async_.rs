@@ -552,13 +552,13 @@ async fn p2_environment_named_imports() -> Result<()> {
     let component = Component::from_file(&engine, path)?;
     let mut linker = Linker::new(&engine);
     add_to_linker_async(&mut linker)?;
-    wasmtime_wasi::p2::add_named_to_linker_async(&mut linker, &component, |i, name| {
+    wasmtime_wasi::p2::add_named_to_linker_async(&mut linker, &component, |i, name, _| {
         assert_eq!(i, wasmtime_wasi::p2::Interface::CliEnvironment);
-        Ok(match name {
+        Ok(Some(match name {
             "a" => NamedId(0),
             "b" => NamedId(1),
             _ => panic!("unexpected name: {name}"),
-        })
+        }))
     })?;
 
     let (mut store, _td) = Ctx::new_with_workspace_setup(

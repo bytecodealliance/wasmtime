@@ -1245,6 +1245,49 @@ mod named_imports {
         }
     }
 
+    // Spans of traced functions include the name of the import being called.
+    mod traced {
+        macro_rules! traced {
+            ($($flags:tt)*) => {
+                wasmtime::component::bindgen!({
+                    inline: "
+                        package foo:foo;
+
+                        interface store {
+                            resource cache {
+                                constructor();
+                                get: func(key: list<u8>) -> u32;
+                            }
+                            get: func(key: list<u8>) -> u32;
+                            ping: func();
+                        }
+
+                        world the-world {
+                            import a: store;
+                            import b: store;
+                        }
+                    ",
+                    named_imports: {
+                        "foo:foo/store": u32,
+                    },
+                    imports: { default: $($flags)* },
+                });
+            };
+        }
+
+        mod sync {
+            traced!(tracing | verbose_tracing);
+        }
+
+        mod async_ {
+            traced!(async | tracing);
+        }
+
+        mod concurrent {
+            traced!(async |store| tracing);
+        }
+    }
+
     // A versioned key takes precedence over an unversioned one.
     mod versioned_key_precedence {
         wasmtime::component::bindgen!({

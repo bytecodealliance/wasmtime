@@ -4,6 +4,7 @@ use crate::p3::Interface;
 use crate::p3::bindings::random::{insecure, insecure_seed, random};
 use crate::random::{WasiRandom, WasiRandomNamed, WasiRandomNamedView, WasiRandomView};
 use crate::{NamedId, WasiCtxNamedView};
+use wasmtime::component::types::ComponentExtern;
 use wasmtime::component::{Component, Linker};
 
 /// Add all WASI interfaces from this module into the `linker` provided.
@@ -81,13 +82,16 @@ where
 ///
 /// The `lookup` function provided here is invoked for every named import found
 /// for a particular interface. The [`Interface`] given is what's being bound,
-/// and the `&str` argument is the name that the component imports it as. The
-/// embedder can then decide how it would like to allocate a [`NamedId`] for
-/// this import. If `Ok` is returned then the linker is populated with this
-/// name, and imported functions will pass the [`NamedId`] later to the
-/// implementation of [`WasiRandomNamedView`] on `T` when invoked. If `Err` is
-/// returned then the error will cause this entire function to fail and this
-/// function call will return the same error.
+/// the `&str` argument is the name that the component imports it as, and the
+/// [`ComponentExtern`] describes the import, including its `external-id` if it
+/// has one. The embedder can then decide how it would like to allocate a
+/// [`NamedId`] for this import. If `Ok(Some(..))` is returned then the linker
+/// is populated with this name, and imported functions will pass the
+/// [`NamedId`] later to the implementation of [`WasiRandomNamedView`] on `T`
+/// when invoked. If `Ok(None)` is returned then the import is skipped, leaving
+/// it to be defined some other way. If `Err` is returned then the error will
+/// cause this entire function to fail and this function call will return the
+/// same error.
 ///
 /// # Example
 ///
@@ -109,9 +113,9 @@ where
 ///     // and then additionally fill in any specific named imports `component`
 ///     // might have for `wasi:random` interfaces.
 ///     let mut name_map = HashMap::new();
-///     wasmtime_wasi::p3::random::add_named_to_linker(&mut linker, &component, |_i, name| {
+///     wasmtime_wasi::p3::random::add_named_to_linker(&mut linker, &component, |_i, name, _| {
 ///         let len = name_map.len();
-///         Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///         Ok(Some(NamedId(*name_map.entry(name.to_string()).or_insert(len))))
 ///     })?;
 ///
 ///     // Here a `WasiRandomCtx` is allocated per-named-import and will then be
@@ -143,7 +147,7 @@ where
 pub fn add_named_to_linker<T>(
     linker: &mut Linker<T>,
     component: &Component,
-    mut lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+    mut lookup: impl FnMut(Interface, &str, &ComponentExtern<'_>) -> wasmtime::Result<Option<NamedId>>,
 ) -> wasmtime::Result<()>
 where
     T: WasiRandomNamedView + 'static,
@@ -152,19 +156,19 @@ where
     random::add_to_linker::<_, WasiRandomNamed<T>>(
         linker,
         component,
-        |name| lookup(Interface::RandomRandom, name),
+        |name, item| lookup(Interface::RandomRandom, name, item),
         |x| WasiCtxNamedView(x),
     )?;
     insecure::add_to_linker::<_, WasiRandomNamed<T>>(
         linker,
         component,
-        |name| lookup(Interface::RandomInsecure, name),
+        |name, item| lookup(Interface::RandomInsecure, name, item),
         |x| WasiCtxNamedView(x),
     )?;
     insecure_seed::add_to_linker::<_, WasiRandomNamed<T>>(
         linker,
         component,
-        |name| lookup(Interface::RandomInsecureSeed, name),
+        |name, item| lookup(Interface::RandomInsecureSeed, name, item),
         |x| WasiCtxNamedView(x),
     )?;
     Ok(())

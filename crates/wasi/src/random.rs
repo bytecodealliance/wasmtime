@@ -180,9 +180,9 @@ pub fn thread_rng() -> Box<dyn Rng + Send> {
 ///     named_imports::wasi::random::random::add_to_linker::<MyStoreState, WasiRandomNamed<MyStoreState>>(
 ///         &mut linker,
 ///         &component,
-///         |name| {
+///         |name, _| {
 ///             let len = name_map.len();
-///             Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///             Ok(Some(NamedId(*name_map.entry(name.to_string()).or_insert(len))))
 ///         },
 ///         |state| WasiCtxNamedView(state),
 ///     )?;
@@ -251,9 +251,9 @@ where
 ///     wasmtime_wasi::p3::random::add_named_to_linker::<MyStoreState>(
 ///         &mut linker,
 ///         &component,
-///         |_, name| {
+///         |_, name, _| {
 ///             let len = name_map.len();
-///             Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///             Ok(Some(NamedId(*name_map.entry(name.to_string()).or_insert(len))))
 ///         },
 ///     )?;
 ///     Ok(())

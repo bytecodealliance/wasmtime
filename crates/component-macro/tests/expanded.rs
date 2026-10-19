@@ -81,3 +81,30 @@ fn expand_wits() -> Result<()> {
     component_macro_test_helpers::foreach!(genexpand);
     Ok(())
 }
+
+// `named_imports` bindings are only generated when requested, so expand them
+// separately for a world importing an interface under multiple labels.
+#[test]
+fn expand_named_imports() -> Result<()> {
+    process_expanded(
+        "tests/codegen/implements.wit",
+        "_named_imports",
+        wasmtime::component::bindgen!({
+            path: "tests/codegen/implements.wit",
+            named_imports: { "foo:foo/store": u32 },
+            stringify: true,
+        }),
+    )?;
+    process_expanded(
+        "tests/codegen/implements.wit",
+        "_named_imports_tracing_async",
+        wasmtime::component::bindgen!({
+            path: "tests/codegen/implements.wit",
+            named_imports: { "foo:foo/store": u32 },
+            imports: { default: async | tracing },
+            exports: { default: async | tracing },
+            stringify: true,
+        }),
+    )?;
+    Ok(())
+}

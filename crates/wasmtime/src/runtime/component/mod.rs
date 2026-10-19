@@ -482,21 +482,33 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // fn add_to_linker<T, D>(
 ///     //     linker: &mut Linker<T>,
 ///     //     component: &Component,
-///     //     lookup: impl FnMut(&str) -> Result<MyHandlerId>,
+///     //     lookup: impl FnMut(
+///     //         &str,
+///     //         &ComponentExtern<'_>,
+///     //     ) -> Result<Option<MyHandlerId>>,
 ///     //     host_getter: fn(&mut T) -> D::Data<'_>,
 ///     // ) -> Result<()>;
 ///     // ```
 ///     //
 ///     // This inspects `component`'s imports, and for each one whose
 ///     // `(implements "...")` annotation matches `wasi:http/handler` calls
-///     // `lookup` with the import's name to obtain an id. Matching uses
+///     // `lookup` with the import's name and its
+///     // `wasmtime::component::types::ComponentExtern`, which carries the
+///     // import's `(external-id "...")` annotation, if any. Matching uses
 ///     // `ComponentExtern::is_implements`, so semver-compatible versions also
-///     // match. The id is then cloned for each call and passed as the first
-///     // argument to every method, letting a single `Host` implementation
-///     // distinguish between multiple imports of the same interface. To bind a
-///     // single import instead, the generated `add_to_linker_instance` takes a
-///     // `LinkerInstance`, such as `linker.instance("my-handler")?`, and the
-///     // id to use for it.
+///     // match. If `lookup` returns `Ok(Some(id))` then the import is added
+///     // to `linker`, and the id is cloned for each call and passed as the
+///     // first argument to every method, letting a single `Host`
+///     // implementation distinguish between multiple imports of the same
+///     // interface. If `lookup` returns `Ok(None)` then the import is
+///     // skipped, leaving it to be defined some other way, and if it returns
+///     // `Err` then `add_to_linker` fails with that error.
+///     //
+///     // An `add_to_linker_instance` function is generated as well, which
+///     // adds a single import, given its name and id, to a `LinkerInstance`
+///     // such as `linker.instance("my-handler")?`. Spans generated for
+///     // functions with the `tracing` flag include the import's name as
+///     // `label`.
 ///     //
 ///     // The id type must be `Clone + Send + Sync + 'static`.
 ///     //

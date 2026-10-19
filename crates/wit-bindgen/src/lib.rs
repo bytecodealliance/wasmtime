@@ -2809,10 +2809,11 @@ impl<'a> InterfaceGenerator<'a> {
         };
 
         // For named imports the per-instance helper additionally accepts the
-        // host-chosen `id` (by value, cloned into each closure).
-        let id_param = match &self.named_import_id {
-            Some(named) => format!("id: {named},"),
-            None => String::new(),
+        // name of the import, used for tracing, and the host-chosen `id` (by
+        // value, cloned into each closure).
+        let (id_param, name_unused) = match &self.named_import_id {
+            Some(named) => (format!("name: &str, id: {named},"), "let _ = name;"),
+            None => (String::new(), ""),
         };
 
         uwriteln!(
@@ -2829,6 +2830,7 @@ impl<'a> InterfaceGenerator<'a> {
                         for<'a> D::Data<'a>: {sync_bounds},
                         T: 'static {opt_t_send_bound},
                 {{
+                    {name_unused}
             "
         );
 
@@ -2861,7 +2863,10 @@ impl<'a> InterfaceGenerator<'a> {
 pub fn add_to_linker<T, D>(
     linker: &mut {wt}::component::Linker<T>,
     component: &{wt}::component::Component,
-    mut lookup: impl FnMut(&str) -> {wt}::Result<{id_ty}>,
+    mut lookup: impl FnMut(
+        &str,
+        &{wt}::component::types::ComponentExtern<'_>,
+    ) -> {wt}::Result<::core::option::Option<{id_ty}>>,
     {options_param}
     host_getter: fn(&mut T) -> D::Data<'_>,
 ) -> {wt}::Result<()>
@@ -2877,14 +2882,18 @@ pub fn add_to_linker<T, D>(
     let component_ty = component.component_type();
     let mut matched = {wt}::component::__internal::Vec::new();
     for (name, item) in component_ty.imports(&engine) {{
-        if item.is_implements({wit_name:?}) {{
-            matched.push((name, lookup(name)?));
+        if !item.is_implements({wit_name:?}) {{
+            continue;
+        }}
+        if let Some(id) = lookup(name, &item)? {{
+            matched.push((name, id));
         }}
     }}
     for (name, id) in matched {{
         let mut inst = linker.instance(name)?;
         add_to_linker_instance::<T, D>(
             &mut inst,
+            name,
             id,
             {options_param_forward}
             host_getter,
@@ -2954,6 +2963,15 @@ pub fn add_to_linker<T, D>(
         );
         if self.named_import_id.is_some() {
             self.src.push_str("{ let id = id.clone(); ");
+            // Traced functions of named imports include the import's name in
+            // their span, so they additionally capture an owned copy of it.
+            if flags.contains(FunctionFlags::TRACING) {
+                let wt = self.generator.wasmtime_path();
+                uwrite!(
+                    self.src,
+                    "let name = {wt}::component::__internal::String::from(name); "
+                );
+            }
         }
         self.generate_guest_import_closure(owner, func, flags)?;
         if self.named_import_id.is_some() {
@@ -3000,6 +3018,13 @@ pub fn add_to_linker<T, D>(
                 self.src.push_str("use tracing::Instrument;\n");
             }
 
+            // Named imports' bindings are added for each import of their
+            // interface, so record which import, by name, is being called.
+            let label = if self.named_import_id.is_some() {
+                "label = name.as_str(),"
+            } else {
+                ""
+            };
             uwrite!(
                 self.src,
                 "
@@ -3007,6 +3032,7 @@ pub fn add_to_linker<T, D>(
                        tracing::Level::TRACE,
                        \"wit-bindgen import\",
                        module = \"{}\",
+                       {label}
                        function = \"{}\",
                    );
                ",

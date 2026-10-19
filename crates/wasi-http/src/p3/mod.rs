@@ -34,6 +34,7 @@ use crate::{FieldMapError, WasiHttp, WasiHttpNamed, WasiHttpNamedView, WasiHttpV
 use bindings::http::{client, types};
 use core::ops::Deref;
 use std::sync::Arc;
+use wasmtime::component::types::ComponentExtern;
 use wasmtime::component::{Component, Linker};
 use wasmtime_wasi::{NamedId, TrappableError, WasiCtxNamedView};
 
@@ -144,13 +145,16 @@ pub enum Interface {
 ///
 /// The `lookup` function provided here is invoked for every named import found
 /// for a particular interface. The [`Interface`] given is what's being bound,
-/// and the `&str` argument is the name that the component imports it as. The
-/// embedder can then decide how it would like to allocate a [`NamedId`] for
-/// this import. If `Ok` is returned then the linker is populated with this
-/// name, and imported functions will pass the [`NamedId`] later to the
-/// implementation of [`WasiHttpNamedView`] on `T` when invoked. If `Err` is
-/// returned then the error will cause this entire function to fail and this
-/// function call will return the same error.
+/// the `&str` argument is the name that the component imports it as, and the
+/// [`ComponentExtern`] describes the import, including its `external-id` if it
+/// has one. The embedder can then decide how it would like to allocate a
+/// [`NamedId`] for this import. If `Ok(Some(..))` is returned then the linker
+/// is populated with this name, and imported functions will pass the
+/// [`NamedId`] later to the implementation of [`WasiHttpNamedView`] on `T` when
+/// invoked. If `Ok(None)` is returned then the import is skipped, leaving it to
+/// be defined some other way. If `Err` is returned then the error will cause
+/// this entire function to fail and this function call will return the same
+/// error.
 ///
 /// # Example
 ///
@@ -174,9 +178,9 @@ pub enum Interface {
 ///     // and then additionally fill in any specific named imports `component`
 ///     // might have for `wasi:http` interfaces.
 ///     let mut name_map = HashMap::new();
-///     wasmtime_wasi_http::p3::add_named_to_linker(&mut linker, &component, |_i, name| {
+///     wasmtime_wasi_http::p3::add_named_to_linker(&mut linker, &component, |_i, name, _| {
 ///         let len = name_map.len();
-///         Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///         Ok(Some(NamedId(*name_map.entry(name.to_string()).or_insert(len))))
 ///     })?;
 ///
 ///     // Here a `WasiHttpCtx` is allocated per-named-import and will then be
@@ -212,7 +216,7 @@ pub enum Interface {
 pub fn add_named_to_linker<T>(
     linker: &mut Linker<T>,
     component: &Component,
-    mut lookup: impl FnMut(Interface, &str) -> wasmtime::Result<NamedId>,
+    mut lookup: impl FnMut(Interface, &str, &ComponentExtern<'_>) -> wasmtime::Result<Option<NamedId>>,
 ) -> wasmtime::Result<()>
 where
     T: WasiHttpNamedView,
@@ -221,13 +225,13 @@ where
     client::add_to_linker::<_, WasiHttpNamed<T>>(
         linker,
         component,
-        |name| lookup(Interface::HttpClient, name),
+        |name, item| lookup(Interface::HttpClient, name, item),
         |x| WasiCtxNamedView(x),
     )?;
     types::add_to_linker::<_, WasiHttpNamed<T>>(
         linker,
         component,
-        |name| lookup(Interface::HttpTypes, name),
+        |name, item| lookup(Interface::HttpTypes, name, item),
         |x| WasiCtxNamedView(x),
     )?;
     Ok(())

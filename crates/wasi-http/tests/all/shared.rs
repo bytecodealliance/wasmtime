@@ -1,3 +1,4 @@
+use wasmtime::component::types::ComponentExtern;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Result, Store};
 use wasmtime_wasi::{NamedId, WasiCtx, WasiCtxView, WasiView};
@@ -61,7 +62,7 @@ pub async fn run_named_imports_test<T>(
     add_named_to_linker: fn(
         &mut Linker<NamedImportsData>,
         &Component,
-        fn(T, &str) -> Result<NamedId>,
+        fn(T, &str, &ComponentExtern<'_>) -> Result<Option<NamedId>>,
     ) -> Result<()>,
     run: impl AsyncFnOnce(
         &mut Store<NamedImportsData>,
@@ -86,12 +87,12 @@ pub async fn run_named_imports_test<T>(
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
     add_only_http_to_linker(&mut linker)?;
-    add_named_to_linker(&mut linker, &component, |_, name| {
-        Ok(match name {
+    add_named_to_linker(&mut linker, &component, |_, name, _| {
+        Ok(Some(match name {
             "a" => NamedId(0),
             "b" => NamedId(1),
             _ => panic!("unexpected name: {name}"),
-        })
+        }))
     })?;
     run(&mut store, &component, &linker).await
 }

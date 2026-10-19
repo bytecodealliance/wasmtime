@@ -1369,16 +1369,16 @@ mod named_imports {
     });
 
     // A component which imports the `store` interface twice, under arbitrary
-    // names `a` and `b`, each annotated as implementing `demo:pkg/store`. The
-    // exported `run` writes through each import and reads the value back, so a
-    // mix-up in id routing would cause a trap.
+    // names `a` and `b`, each annotated as implementing `demo:pkg/store` and
+    // with an `external-id`. The exported `run` writes through each import and
+    // reads the value back, so a mix-up in id routing would cause a trap.
     const COMPONENT: &str = r#"
         (component
-            (import "a" (implements "demo:pkg/store") (instance $a
+            (import "a" (implements "demo:pkg/store") (external-id "db-1") (instance $a
                 (export "get" (func (param "key" u32) (result u32)))
                 (export "set" (func (param "key" u32) (param "value" u32)))
             ))
-            (import "b" (implements "demo:pkg/store") (instance $b
+            (import "b" (implements "demo:pkg/store") (external-id "db-2") (instance $b
                 (export "get" (func (param "key" u32) (result u32)))
                 (export "set" (func (param "key" u32) (param "value" u32)))
             ))
@@ -1451,9 +1451,9 @@ mod named_imports {
         named_imports::demo::pkg::store::add_to_linker::<_, HasSelf<MyHost>>(
             &mut linker,
             &component,
-            |name| match name {
-                "a" => Ok(MyId(1)),
-                "b" => Ok(MyId(2)),
+            |name, _| match name {
+                "a" => Ok(Some(MyId(1))),
+                "b" => Ok(Some(MyId(2))),
                 other => wasmtime::bail!("unexpected import: {other}"),
             },
             |s| s,
@@ -1479,8 +1479,8 @@ mod named_imports {
         let result = named_imports::demo::pkg::store::add_to_linker::<_, HasSelf<MyHost>>(
             &mut linker,
             &component,
-            |name| match name {
-                "a" => Ok(MyId(1)),
+            |name, _| match name {
+                "a" => Ok(Some(MyId(1))),
                 _ => wasmtime::bail!("bad import"),
             },
             |s| s,
@@ -1490,6 +1490,84 @@ mod named_imports {
             err.to_string().contains("bad import"),
             "unexpected error: {err:?}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn lookup_sees_external_id() -> Result<()> {
+        let engine = implements_engine();
+        let component = Component::new(&engine, COMPONENT)?;
+        let mut linker = Linker::new(&engine);
+        let mut seen = Vec::new();
+        named_imports::demo::pkg::store::add_to_linker::<_, HasSelf<MyHost>>(
+            &mut linker,
+            &component,
+            |name, item| {
+                seen.push((name.to_string(), item.implements.map(str::to_string)));
+                match item.external_id {
+                    Some("db-1") => Ok(Some(MyId(1))),
+                    Some("db-2") => Ok(Some(MyId(2))),
+                    other => wasmtime::bail!("unexpected external id: {other:?}"),
+                }
+            },
+            |s| s,
+        )?;
+        seen.sort();
+        assert_eq!(
+            seen,
+            [
+                ("a".to_string(), Some("demo:pkg/store".to_string())),
+                ("b".to_string(), Some("demo:pkg/store".to_string())),
+            ]
+        );
+
+        let mut store = Store::new(&engine, MyHost::default());
+        let cache = Cache::instantiate(&mut store, &component, &linker)?;
+        cache.call_run(&mut store)?;
+        let calls = &store.data().calls;
+        assert!(calls.contains(&(1, "set")), "calls: {calls:?}");
+        assert!(calls.contains(&(2, "set")), "calls: {calls:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn lookup_can_skip_imports() -> Result<()> {
+        let engine = implements_engine();
+        let component = Component::new(&engine, COMPONENT)?;
+        let mut linker = Linker::new(&engine);
+        named_imports::demo::pkg::store::add_to_linker::<_, HasSelf<MyHost>>(
+            &mut linker,
+            &component,
+            |name, _| match name {
+                "a" => Ok(Some(MyId(1))),
+                _ => Ok(None),
+            },
+            |s| s,
+        )?;
+
+        // The skipped import `b` is left undefined...
+        let err = linker
+            .instantiate_pre(&component)
+            .err()
+            .expect("expected `b` to be undefined");
+        assert!(
+            err.to_string().contains("component imports instance `b`"),
+            "unexpected error: {err:?}"
+        );
+
+        // ...so it can be defined some other way.
+        named_imports::demo::pkg::store::add_to_linker_instance::<_, HasSelf<MyHost>>(
+            &mut linker.instance("b")?,
+            "b",
+            MyId(2),
+            |s| s,
+        )?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let cache = Cache::instantiate(&mut store, &component, &linker)?;
+        cache.call_run(&mut store)?;
+        let calls = &store.data().calls;
+        assert!(calls.contains(&(1, "set")), "calls: {calls:?}");
+        assert!(calls.contains(&(2, "set")), "calls: {calls:?}");
         Ok(())
     }
 }
@@ -1699,9 +1777,9 @@ mod named_imports_resources {
         named_imports::demo::pkg::store::add_to_linker::<_, HasSelf<MyHost>>(
             &mut linker,
             &component,
-            |name| match name {
-                "a" => Ok(MyId(1)),
-                "b" => Ok(MyId(2)),
+            |name, _| match name {
+                "a" => Ok(Some(MyId(1))),
+                "b" => Ok(Some(MyId(2))),
                 other => wasmtime::bail!("unexpected import: {other}"),
             },
             |s| s,
@@ -1845,9 +1923,9 @@ mod named_imports_resources_async {
         named_imports::demo::pkg::store::add_to_linker::<_, HasSelf<MyHost>>(
             &mut linker,
             &component,
-            |name| match name {
-                "a" => Ok(MyId(1)),
-                "b" => Ok(MyId(2)),
+            |name, _| match name {
+                "a" => Ok(Some(MyId(1))),
+                "b" => Ok(Some(MyId(2))),
                 other => wasmtime::bail!("unexpected import: {other}"),
             },
             |s| s,

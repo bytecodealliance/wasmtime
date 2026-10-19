@@ -564,9 +564,9 @@ impl WasiHttpHooks for [(); 0] {}
 ///     named_imports::wasi::http::outgoing_handler::add_to_linker::<MyStoreState, WasiHttpNamed<MyStoreState>>(
 ///         &mut linker,
 ///         &component,
-///         |name| {
+///         |name, _| {
 ///             let len = name_map.len();
-///             Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///             Ok(Some(NamedId(*name_map.entry(name.to_string()).or_insert(len))))
 ///         },
 ///         |state| WasiCtxNamedView(state),
 ///     )?;
@@ -637,9 +637,9 @@ where
 ///     wasmtime_wasi_http::p3::add_named_to_linker::<MyStoreState>(
 ///         &mut linker,
 ///         &component,
-///         |_, name| {
+///         |_, name, _| {
 ///             let len = name_map.len();
-///             Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///             Ok(Some(NamedId(*name_map.entry(name.to_string()).or_insert(len))))
 ///         },
 ///     )?;
 ///     Ok(())

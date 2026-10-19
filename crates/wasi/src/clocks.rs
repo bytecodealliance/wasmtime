@@ -293,9 +293,9 @@ impl From<std::num::TryFromIntError> for DatetimeError {
 ///     named_imports::wasi::clocks::wall_clock::add_to_linker::<MyStoreState, WasiClocksNamed<MyStoreState>>(
 ///         &mut linker,
 ///         &component,
-///         |name| {
+///         |name, _| {
 ///             let len = name_map.len();
-///             Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///             Ok(Some(NamedId(*name_map.entry(name.to_string()).or_insert(len))))
 ///         },
 ///         |state| WasiCtxNamedView(state),
 ///     )?;
@@ -369,9 +369,9 @@ where
 ///     wasmtime_wasi::p3::clocks::add_named_to_linker::<MyStoreState>(
 ///         &mut linker,
 ///         &component,
-///         |_, name| {
+///         |_, name, _| {
 ///             let len = name_map.len();
-///             Ok(NamedId(*name_map.entry(name.to_string()).or_insert(len)))
+///             Ok(Some(NamedId(*name_map.entry(name.to_string()).or_insert(len))))
 ///         },
 ///     )?;
 ///     Ok(())
