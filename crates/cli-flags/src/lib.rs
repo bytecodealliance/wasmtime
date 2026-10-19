@@ -500,7 +500,8 @@ wasmtime_option_group! {
         /// GC support in the component model: this corresponds to the 🛸 emoji
         /// in the component model specification.
         pub component_model_gc: Option<bool>,
-        /// Map support in the component model.
+        /// Map support in the component model: this corresponds to the 🗺️
+        /// emoji in the component model specification.
         pub component_model_map: Option<bool>,
         /// Component model support for `memory64`: this corresponds
         /// to the 🐘 emoji in the component model specification.

@@ -801,6 +801,19 @@ impl Type {
         }
     }
 
+    /// Retrieve the inner [`Map`] of a [`Type::Map`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Map`].
+    pub fn unwrap_map(&self) -> &Map {
+        if let Type::Map(handle) = self {
+            &handle
+        } else {
+            panic!("attempted to unwrap a {} as a map", self.desc())
+        }
+    }
+
     /// Retrieve the inner [`Record`] of a [`Type::Record`].
     ///
     /// # Panics

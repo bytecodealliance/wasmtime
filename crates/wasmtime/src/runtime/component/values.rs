@@ -27,9 +27,9 @@ use wasmtime_environ::component::{
 ///
 /// This type implements both the Rust `PartialEq` and `Eq` traits. This type
 /// additionally contains values which are not necessarily easily equated,
-/// however, such as floats (`Float32` and `Float64`) and resources. Equality
-/// does require that two values have the same type, and then these cases are
-/// handled as:
+/// however, such as floats (`Float32` and `Float64`), resources, and maps.
+/// Equality does require that two values have the same type, and then these
+/// cases are handled as:
 ///
 /// * Floats are tested if they are "semantically the same" meaning all NaN
 ///   values are equal to all other NaN values. Additionally zero values must be
@@ -44,6 +44,9 @@ use wasmtime_environ::component::{
 ///   two different heap allocations of `Box<u32>` can be equal in normal Rust
 ///   if they contain the same value, but will never be considered equal when
 ///   compared as `Val::Resource`s).
+///
+/// * Maps are compared entry-by-entry in order, so the same logical map with
+///   entries in a different order, or with duplicate keys, compares unequal.
 ///
 /// In general if a strict guarantee about equality is required here it's
 /// recommended to "build your own" as this equality intended for fuzzing
@@ -90,7 +93,11 @@ pub enum Val {
     String(String),
     List(Vec<Val>),
     /// A map type represented as a list of key-value pairs.
-    /// Duplicate keys are allowed and follow "last value wins" semantics.
+    ///
+    /// Entries are kept exactly as they appear in the canonical ABI list, in
+    /// order and including duplicate keys. Per the component model, the last
+    /// entry for a key is the one that defines its value when the list is
+    /// interpreted as a map.
     Map(Vec<(Val, Val)>),
     Record(Vec<(String, Val)>),
     Tuple(Vec<Val>),

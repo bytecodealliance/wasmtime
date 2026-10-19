@@ -273,6 +273,26 @@ fn maps_complex_types() -> Result<()> {
 }
 
 #[test]
+fn maps_type() -> Result<()> {
+    let engine = super::map_engine();
+    let mut store = Store::new(&engine, ());
+
+    let component = Component::new(&engine, make_echo_component("(map string (list u32))", 8))?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+    let func_ty = func.ty(&store);
+
+    let (name, param) = func_ty.params().next().unwrap();
+    assert_eq!(name, "a");
+    let map_ty = param.unwrap_map();
+    assert_eq!(map_ty.key(), types::Type::String);
+    assert_eq!(map_ty.value().unwrap_list().ty(), types::Type::U32);
+    assert_eq!(func_ty.results().next().unwrap().unwrap_map(), map_ty);
+
+    Ok(())
+}
+
+#[test]
 fn maps_equality() -> Result<()> {
     let map1 = vec![
         (Val::U32(1), Val::String("one".into())),
