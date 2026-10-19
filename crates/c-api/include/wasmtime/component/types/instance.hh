@@ -35,15 +35,15 @@ class ComponentInstanceType {
 
   /// Retrieves the export with the specified name.
   ///
-  /// The returned `ComponentExtern` borrows from this type and the engine and
-  /// must not outlive either of them.
+  /// The returned `ComponentExtern` borrows from this type and must not
+  /// outlive it.
   std::optional<ComponentExtern> export_get(const Engine &engine,
                                             std::string_view name) const;
 
   /// Retrieves the nth export.
   ///
-  /// The returned `ComponentExtern` borrows from this type and the engine and
-  /// must not outlive either of them.
+  /// The returned `ComponentExtern` borrows from this type and must not
+  /// outlive it.
   std::optional<std::pair<std::string_view, ComponentExtern>>
   export_nth(const Engine &engine, size_t nth) const;
 };

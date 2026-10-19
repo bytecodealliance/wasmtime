@@ -18,9 +18,10 @@ use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::path::Path;
 use wasmtime_environ::component::{
-    CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export, ExportIndex,
-    GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
-    TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
+    CompiledComponentInfo, ComponentArtifacts, ComponentExternData, ComponentTypes, CoreDef,
+    Export, ExportIndex, GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex,
+    StaticModuleIndex, TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic,
+    VMComponentOffsets,
 };
 use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace, WasmChecksum};
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
@@ -832,7 +833,9 @@ impl Component {
     /// The returned [`types::ComponentItem`] is more expensive to calculate
     /// than the [`ComponentExportIndex`]. If you only consume the
     /// [`ComponentExportIndex`], use the related method
-    /// [`Self::get_export_index`] instead.
+    /// [`Self::get_export_index`] instead. If you need metadata attached to
+    /// the export's name, such as `(implements "...")`, use
+    /// [`Self::get_export_extern`] instead.
     ///
     /// [`Instance`](crate::component::Instance) has a corresponding method
     /// [`Instance::get_export`](crate::component::Instance::get_export).
@@ -896,6 +899,67 @@ impl Component {
         ))
     }
 
+    /// Looks up a specific export of this component by `name` optionally
+    /// nested within the `instance` provided.
+    ///
+    /// This is similar to [`Self::get_export`] except that a
+    /// [`types::ComponentExtern`] is returned instead of a
+    /// [`types::ComponentItem`]. In addition to the type of the export this
+    /// contains metadata attached to its name, such as `(implements "...")` or
+    /// `(external-id "...")` annotations.
+    ///
+    /// [`Instance`](crate::component::Instance) has a corresponding method
+    /// [`Instance::get_export_extern`](crate::component::Instance::get_export_extern).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wasmtime::{Config, Engine};
+    /// use wasmtime::component::Component;
+    /// use wasmtime::component::types::ComponentItem;
+    ///
+    /// # fn main() -> wasmtime::Result<()> {
+    /// let mut config = Config::new();
+    /// config.wasm_component_model_implements(true);
+    /// let engine = Engine::new(&config)?;
+    /// let component = Component::new(
+    ///     &engine,
+    ///     r#"
+    ///         (component
+    ///             (import "a" (instance $a))
+    ///             (export "b" (implements "a:b/c") (instance $a))
+    ///         )
+    ///     "#,
+    /// )?;
+    ///
+    /// let (export, _index) = component.get_export_extern(None, "b").unwrap();
+    /// assert!(matches!(export.ty, ComponentItem::ComponentInstance(_)));
+    /// assert_eq!(export.implements, Some("a:b/c"));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get_export_extern(
+        &self,
+        instance: Option<&ComponentExportIndex>,
+        name: &str,
+    ) -> Option<(types::ComponentExtern<'_>, ComponentExportIndex)> {
+        let (index, data) = self.lookup_export_extern(instance, name)?;
+        let item = self.with_uninstantiated_instance_type(|instance| {
+            types::ComponentItem::from_export(
+                &self.inner.engine,
+                &self.env_component().export_items[index],
+                instance,
+            )
+        });
+        Some((
+            types::ComponentExtern::from_parts(item, data),
+            ComponentExportIndex {
+                id: self.inner.id,
+                index,
+            },
+        ))
+    }
+
     pub(crate) fn lookup_export_index(
         &self,
         instance: Option<&ComponentExportIndex>,
@@ -907,6 +971,38 @@ impl Component {
             }
         }
         name.lookup(self, instance.map(|idx| &idx.index))
+    }
+
+    /// Same as `lookup_export_index`, but also returns the metadata attached
+    /// to the name of the export.
+    pub(crate) fn lookup_export_extern(
+        &self,
+        instance: Option<&ComponentExportIndex>,
+        name: &str,
+    ) -> Option<(ExportIndex, &ComponentExternData)> {
+        if let Some(idx) = instance {
+            if idx.id != self.inner.id {
+                return None;
+            }
+        }
+        let (index, data) = self.lookup_export_by_name(instance.map(|idx| &idx.index), name)?;
+        Some((*index, data))
+    }
+
+    fn lookup_export_by_name(
+        &self,
+        instance: Option<&ExportIndex>,
+        name: &str,
+    ) -> Option<&(ExportIndex, ComponentExternData)> {
+        let info = self.env_component();
+        let exports = match instance {
+            Some(idx) => match &info.export_items[*idx] {
+                Export::Instance { exports, .. } => exports,
+                _ => return None,
+            },
+            None => &info.exports,
+        };
+        exports.get(name, &NameMapNoIntern)
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
@@ -1008,15 +1104,7 @@ where
 
 impl ExportLookup for str {
     fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex> {
-        let info = component.env_component();
-        let exports = match instance {
-            Some(idx) => match &info.export_items[*idx] {
-                Export::Instance { exports, .. } => exports,
-                _ => return None,
-            },
-            None => &info.exports,
-        };
-        let (index, _) = exports.get(self, &NameMapNoIntern)?;
+        let (index, _) = component.lookup_export_by_name(instance, self)?;
         Some(*index)
     }
 }

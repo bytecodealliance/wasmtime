@@ -1,7 +1,11 @@
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use crate::wasm_byte_vec_t;
-use crate::{wasm_config_t, wasm_engine_t, wasmtime_component_type_t, wasmtime_error_t};
+use crate::{
+    wasm_config_t, wasm_engine_t, wasmtime_component_extern_t, wasmtime_component_type_t,
+    wasmtime_error_t,
+};
 use std::ffi::{CStr, c_char};
+use std::mem::MaybeUninit;
 use wasmtime::component::{Component, ComponentExportIndex};
 use wasmtime::error::Context;
 
@@ -176,6 +180,27 @@ pub unsafe extern "C" fn wasmtime_component_get_export_index(
         .component
         .get_export_index(instance_export_index.as_ref(), &name)
         .map(|export_index| Box::new(wasmtime_component_export_index_t { export_index }))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_get_export_extern<'a>(
+    component: &'a wasmtime_component_t,
+    instance_export_index: *const wasmtime_component_export_index_t,
+    name: *const u8,
+    name_len: usize,
+    extern_out: &mut MaybeUninit<Box<wasmtime_component_extern_t<'a>>>,
+) -> Option<Box<wasmtime_component_export_index_t>> {
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
+    let Ok(name) = std::str::from_utf8(name) else {
+        return None;
+    };
+    let instance_export_index = unsafe { instance_export_index.as_ref() };
+
+    let (e, export_index) = component
+        .component
+        .get_export_extern(instance_export_index.map(|i| &i.export_index), name)?;
+    extern_out.write(Box::new(e.into()));
+    Some(Box::new(wasmtime_component_export_index_t { export_index }))
 }
 
 #[unsafe(no_mangle)]

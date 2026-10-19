@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 #include <wasmtime/component/component.h>
 #include <wasmtime/component/types/component.hh>
@@ -163,6 +164,28 @@ class Component {
     }
     return std::nullopt;
   };
+
+  /**
+   * \brief Returns a description of the export named `name` in this component
+   * along with its export index.
+   *
+   * This is similar to `export_index` except that the returned
+   * `ComponentExtern` additionally describes the export's type and any
+   * metadata attached to its name, such as `(implements "...")` or
+   * `(external-id "...")` annotations. The `ComponentExtern` borrows from this
+   * component and must not outlive it.
+   */
+  std::optional<std::pair<ComponentExtern, ExportIndex>>
+  export_extern(const ExportIndex *instance, std::string_view name) const {
+    wasmtime_component_extern_t *e = nullptr;
+    auto ret = wasmtime_component_get_export_extern(
+        capi(), instance ? instance->capi() : nullptr, name.data(), name.size(),
+        &e);
+    if (ret == nullptr) {
+      return std::nullopt;
+    }
+    return std::make_pair(ComponentExtern(e), ExportIndex(ret));
+  }
 
   /// \brief Returns the type of this component.
   ComponentType type() const {

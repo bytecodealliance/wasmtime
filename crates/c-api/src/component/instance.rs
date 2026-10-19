@@ -1,6 +1,7 @@
+use std::mem::MaybeUninit;
 use wasmtime::component::{Func, Instance};
 
-use crate::WasmtimeStoreContextMut;
+use crate::{WasmtimeStoreContextMut, wasmtime_component_extern_t};
 
 use super::wasmtime_component_export_index_t;
 
@@ -26,6 +27,30 @@ pub unsafe extern "C" fn wasmtime_component_instance_get_export_index(
     instance
         .get_export_index(context, instance_export_index.as_ref(), &name)
         .map(|export_index| Box::new(wasmtime_component_export_index_t { export_index }))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_instance_get_export_extern<'a>(
+    instance: &Instance,
+    context: WasmtimeStoreContextMut<'a>,
+    instance_export_index: *const wasmtime_component_export_index_t,
+    name: *const u8,
+    name_len: usize,
+    extern_out: &mut MaybeUninit<Box<wasmtime_component_extern_t<'a>>>,
+) -> Option<Box<wasmtime_component_export_index_t>> {
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
+    let Ok(name) = std::str::from_utf8(name) else {
+        return None;
+    };
+    let instance_export_index = unsafe { instance_export_index.as_ref() };
+
+    let (e, export_index) = instance.get_export_extern(
+        context,
+        instance_export_index.map(|i| &i.export_index),
+        name,
+    )?;
+    extern_out.write(Box::new(e.into()));
+    Some(Box::new(wasmtime_component_export_index_t { export_index }))
 }
 
 #[unsafe(no_mangle)]

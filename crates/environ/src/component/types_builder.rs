@@ -8,6 +8,7 @@ use crate::{
 use cranelift_entity::EntityRef;
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::mem;
 use std::ops::Index;
 use wasmparser::component_types::{
     ComponentAnyTypeId, ComponentCoreModuleTypeId, ComponentDefinedType, ComponentDefinedTypeId,
@@ -59,6 +60,11 @@ pub struct ComponentTypesBuilder {
     // These are only allocated within component and instance types when
     // translating them.
     abstract_resources: u32,
+
+    // All imports of the root component, in order, for its type returned by
+    // `finish`. Unlike `Component::import_types` this includes imports of
+    // types which don't need to be provided when instantiating.
+    root_imports: Vec<(String, ComponentExtern)>,
 }
 
 impl<T> Index<T> for ComponentTypesBuilder
@@ -113,6 +119,7 @@ impl ComponentTypesBuilder {
             resources: ResourcesBuilder::default(),
             abstract_resources: 0,
             fixed_length_lists: HashMap::default(),
+            root_imports: Vec::new(),
         }
     }
 
@@ -136,8 +143,8 @@ impl ComponentTypesBuilder {
     /// with `imports` and `exports` specified.
     pub fn finish(mut self, component: &Component) -> (ComponentTypes, TypeComponentIndex) {
         let mut component_ty = TypeComponent::default();
-        for (_, (name, ty)) in component.import_types.iter() {
-            component_ty.imports.insert(name.clone(), ty.clone());
+        for (name, ty) in mem::take(&mut self.root_imports) {
+            component_ty.imports.insert(name, ty);
         }
         for (name, (ty, data)) in component.exports.raw_iter() {
             component_ty.exports.insert(
@@ -152,6 +159,12 @@ impl ComponentTypesBuilder {
 
         self.component_types.module_types = Some(self.module_types.finish());
         (self.component_types, ty)
+    }
+
+    /// Records an import of the root component, to be included in the
+    /// component's type returned by `finish`.
+    pub(crate) fn push_root_import(&mut self, name: &str, ty: ComponentExtern) {
+        self.root_imports.push((name.to_string(), ty));
     }
 
     /// Returns the underlying builder used to build up core wasm module types.

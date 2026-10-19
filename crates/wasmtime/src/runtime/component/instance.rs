@@ -12,7 +12,7 @@ use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, TypedResource, TypedResourceIndex};
 use crate::runtime::vm::{self, UncaughtException, VMFuncRef, VMStore};
 use crate::store::{AsStoreOpaque, Asyncness, StoreOpaque};
-use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
+use crate::{AsContext, AsContextMut, Engine, Module, StoreContext, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
 use core::pin::Pin;
@@ -281,7 +281,9 @@ impl Instance {
     ///
     /// The [`ComponentItem`] is more expensive to compute than the
     /// [`ComponentExportIndex`]. If you are not consuming the
-    /// [`ComponentItem`], use [`Instance::get_export_index`] instead.
+    /// [`ComponentItem`], use [`Instance::get_export_index`] instead. If you
+    /// need metadata attached to the export's name, such as
+    /// `(implements "...")`, use [`Instance::get_export_extern`] instead.
     ///
     /// # Panics
     ///
@@ -313,6 +315,48 @@ impl Instance {
             item,
             ComponentExportIndex {
                 id: data.component().id(),
+                index,
+            },
+        ))
+    }
+
+    /// A method similar to [`Component::get_export_extern`] except for this
+    /// instance.
+    ///
+    /// This method will lookup the `name` provided within the `instance`
+    /// provided and return a
+    /// [`ComponentExtern`](crate::component::types::ComponentExtern)
+    /// describing the export, including metadata attached to its name such as
+    /// `(implements "...")`, and a [`ComponentExportIndex`] which can be passed
+    /// to other `get_*` functions like [`Instance::get_func`].
+    ///
+    /// The returned value borrows from `store`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn get_export_extern<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContext<'a, T>>,
+        instance: Option<&ComponentExportIndex>,
+        name: &str,
+    ) -> Option<(
+        crate::component::types::ComponentExtern<'a>,
+        ComponentExportIndex,
+    )> {
+        let store: &'a StoreOpaque = store.into().0;
+        let data = self.id().get(store);
+        let component = data.component();
+        let (index, extern_data) = component.lookup_export_extern(instance, name)?;
+        let item = ComponentItem::from_export(
+            store.engine(),
+            &component.env_component().export_items[index],
+            &InstanceType::new(data),
+        );
+        Some((
+            crate::component::types::ComponentExtern::from_parts(item, extern_data),
+            ComponentExportIndex {
+                id: component.id(),
                 index,
             },
         ))

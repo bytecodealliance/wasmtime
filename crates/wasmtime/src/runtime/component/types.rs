@@ -10,7 +10,7 @@ use core::fmt;
 use core::ops::Deref;
 use wasmtime_environ::PanicOnOom as _;
 use wasmtime_environ::component::{
-    ComponentTypes, Export, InterfaceType, ResourceIndex, TypeComponentIndex,
+    ComponentExternData, ComponentTypes, Export, InterfaceType, ResourceIndex, TypeComponentIndex,
     TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFixedLengthListIndex, TypeFlagsIndex,
     TypeFuncIndex, TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex,
     TypeModuleIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex,
@@ -1212,7 +1212,7 @@ impl Component {
     }
 
     /// Returns import associated with `name`, if such exists in the component
-    pub fn get_import<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
+    pub fn get_import(&self, engine: &Engine, name: &str) -> Option<ComponentExtern<'_>> {
         self.0.types[self.0.index]
             .imports
             .get(name)
@@ -1222,18 +1222,22 @@ impl Component {
     /// Iterates over imports of the component
     pub fn imports<'a>(
         &'a self,
-        engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + 'a {
-        self.0.types[self.0.index].imports.iter().map(|(name, e)| {
-            (
-                name.as_str(),
-                ComponentExtern::new(engine, &self.0.instance(), e),
-            )
-        })
+        engine: &Engine,
+    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + use<'a> {
+        let engine = engine.clone();
+        self.0.types[self.0.index]
+            .imports
+            .iter()
+            .map(move |(name, e)| {
+                (
+                    name.as_str(),
+                    ComponentExtern::new(&engine, &self.0.instance(), e),
+                )
+            })
     }
 
     /// Returns export associated with `name`, if such exists in the component
-    pub fn get_export<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
+    pub fn get_export(&self, engine: &Engine, name: &str) -> Option<ComponentExtern<'_>> {
         self.0.types[self.0.index]
             .exports
             .get(name)
@@ -1243,14 +1247,18 @@ impl Component {
     /// Iterates over exports of the component
     pub fn exports<'a>(
         &'a self,
-        engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + 'a {
-        self.0.types[self.0.index].exports.iter().map(|(name, e)| {
-            (
-                name.as_str(),
-                ComponentExtern::new(engine, &self.0.instance(), e),
-            )
-        })
+        engine: &Engine,
+    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + use<'a> {
+        let engine = engine.clone();
+        self.0.types[self.0.index]
+            .exports
+            .iter()
+            .map(move |(name, e)| {
+                (
+                    name.as_str(),
+                    ComponentExtern::new(&engine, &self.0.instance(), e),
+                )
+            })
     }
 
     #[doc(hidden)]
@@ -1272,7 +1280,7 @@ impl ComponentInstance {
     }
 
     /// Returns export associated with `name`, if such exists in the component instance
-    pub fn get_export<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
+    pub fn get_export(&self, engine: &Engine, name: &str) -> Option<ComponentExtern<'_>> {
         self.0.types[self.0.index]
             .exports
             .get(name)
@@ -1282,14 +1290,18 @@ impl ComponentInstance {
     /// Iterates over exports of the component instance
     pub fn exports<'a>(
         &'a self,
-        engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> {
-        self.0.types[self.0.index].exports.iter().map(|(name, e)| {
-            (
-                name.as_str(),
-                ComponentExtern::new(engine, &self.0.instance(), e),
-            )
-        })
+        engine: &Engine,
+    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + use<'a> {
+        let engine = engine.clone();
+        self.0.types[self.0.index]
+            .exports
+            .iter()
+            .map(move |(name, e)| {
+                (
+                    name.as_str(),
+                    ComponentExtern::new(&engine, &self.0.instance(), e),
+                )
+            })
     }
 }
 
@@ -1297,7 +1309,14 @@ impl ComponentInstance {
 ///
 /// This records the type of the item that is being imported or exported along
 /// with any other metadata associated.
+///
+/// The exports of a component, or of an instance of it, can also be looked up
+/// directly with
+/// [`Component::get_export_extern`](crate::component::Component::get_export_extern)
+/// and
+/// [`Instance::get_export_extern`](crate::component::Instance::get_export_extern).
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ComponentExtern<'a> {
     /// The type of this item.
     pub ty: ComponentItem,
@@ -1312,14 +1331,18 @@ pub struct ComponentExtern<'a> {
 
 impl<'a> ComponentExtern<'a> {
     fn new(
-        engine: &'a Engine,
+        engine: &Engine,
         instance_ty: &InstanceType<'_>,
         env: &'a wasmtime_environ::component::ComponentExtern,
     ) -> Self {
+        Self::from_parts(ComponentItem::from(engine, &env.ty, instance_ty), &env.data)
+    }
+
+    pub(crate) fn from_parts(ty: ComponentItem, data: &'a ComponentExternData) -> Self {
         Self {
-            implements: env.data.implements.as_deref(),
-            external_id: env.data.external_id.as_deref(),
-            ty: ComponentItem::from(engine, &env.ty, instance_ty),
+            ty,
+            implements: data.implements.as_deref(),
+            external_id: data.external_id.as_deref(),
         }
     }
 

@@ -46,6 +46,27 @@ wasmtime_component_instance_get_export_index(
     const char *name, size_t name_len);
 
 /**
+ * \brief A method similar to #wasmtime_component_get_export_extern except for
+ * this instance.
+ *
+ * \param instance the instance to look up \p name in
+ * \param context the context where \p instance lives in
+ * \param instance_export_index optional (i.e. nullable) instance to look up in
+ * \param name the name of the export
+ * \param name_len length of \p name in bytes
+ * \param extern_out if found, the description of the export, which must be
+ *        deallocated with #wasmtime_component_extern_delete and must not
+ *        outlive the store that \p instance belongs to
+ * \return export index if found, else NULL
+ */
+WASM_API_EXTERN wasmtime_component_export_index_t *
+wasmtime_component_instance_get_export_extern(
+    const wasmtime_component_instance_t *instance, wasmtime_context_t *context,
+    const wasmtime_component_export_index_t *instance_export_index,
+    const char *name, size_t name_len,
+    wasmtime_component_extern_t **extern_out);
+
+/**
  * \brief Looks up an exported function by name within this
  * #wasmtime_component_instance_t.
  *

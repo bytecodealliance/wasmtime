@@ -37,15 +37,15 @@ class ComponentType {
 
   /// Retrieves the import with the specified name.
   ///
-  /// The returned `ComponentExtern` borrows from this type and the engine and
-  /// must not outlive either of them.
+  /// The returned `ComponentExtern` borrows from this type and must not
+  /// outlive it.
   std::optional<ComponentExtern> import_get(const Engine &engine,
                                             std::string_view name) const;
 
   /// Retrieves the nth import.
   ///
-  /// The returned `ComponentExtern` borrows from this type and the engine and
-  /// must not outlive either of them.
+  /// The returned `ComponentExtern` borrows from this type and must not
+  /// outlive it.
   std::optional<std::pair<std::string_view, ComponentExtern>>
   import_nth(const Engine &engine, size_t nth) const;
 
@@ -56,15 +56,15 @@ class ComponentType {
 
   /// Retrieves the export with the specified name.
   ///
-  /// The returned `ComponentExtern` borrows from this type and the engine and
-  /// must not outlive either of them.
+  /// The returned `ComponentExtern` borrows from this type and must not
+  /// outlive it.
   std::optional<ComponentExtern> export_get(const Engine &engine,
                                             std::string_view name) const;
 
   /// Retrieves the nth export.
   ///
-  /// The returned `ComponentExtern` borrows from this type and the engine and
-  /// must not outlive either of them.
+  /// The returned `ComponentExtern` borrows from this type and must not
+  /// outlive it.
   std::optional<std::pair<std::string_view, ComponentExtern>>
   export_nth(const Engine &engine, size_t nth) const;
 };
@@ -190,10 +190,10 @@ public:
  * This carries the type of the item being imported or exported along with any
  * `(implements "...")` or `(external-id "...")` annotations attached to it.
  *
- * Note that this borrows string data from the `ComponentType` or
- * `ComponentInstanceType` it was acquired from (and the `Engine` used to
- * acquire it), so it must not outlive either of those. Copies of this class
- * share the same borrow and are subject to the same restriction.
+ * Note that this borrows string data from the `ComponentType`,
+ * `ComponentInstanceType`, `Component`, or `Store` it was acquired from, so it
+ * must not outlive that. Copies of this class share the same borrow and are
+ * subject to the same restriction.
  */
 class ComponentExtern {
   WASMTIME_CLONE_WRAPPER(ComponentExtern, wasmtime_component_extern);

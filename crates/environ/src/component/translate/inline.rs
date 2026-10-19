@@ -107,6 +107,11 @@ pub(super) fn run(
         // With resources all taken care of it's now possible to convert this
         // into Wasmtime's type system.
         let ty = types.convert_component_entity_type(types_ref, ty)?;
+        let item = ComponentExtern {
+            ty,
+            data: ComponentExternData::new(name),
+        };
+        types.push_root_import(name.name, item.clone());
 
         // Imports of types that aren't resources are not required to be
         // specified by the host since it's just for type information within
@@ -114,13 +119,10 @@ pub(super) fn run(
         if let TypeDef::Interface(_) = ty {
             continue;
         }
-        let index = inliner.result.import_types.push((
-            name.name.to_string(),
-            ComponentExtern {
-                ty,
-                data: ComponentExternData::new(name),
-            },
-        ));
+        let index = inliner
+            .result
+            .import_types
+            .push((name.name.to_string(), item));
         let path = ImportPath::root(index);
         args.insert(name.name, ComponentItemDef::from_import(path, ty)?);
     }

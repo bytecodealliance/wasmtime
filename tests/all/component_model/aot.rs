@@ -287,6 +287,8 @@ fn external_id_shows_up() -> Result<()> {
                 ))
                 (import "c" (instance $c))
                 (export "d" (external-id "queue-1") (instance $a))
+                (type $u (record (field "x" u32)))
+                (import "t" (external-id "type-t") (type (eq $u)))
             )
         "#,
     )?;
@@ -308,6 +310,9 @@ fn external_id_shows_up() -> Result<()> {
         assert_eq!(f.external_id.as_deref(), Some("func-b-f"));
         let (_, c) = imports.next().unwrap();
         assert_eq!(c.external_id.as_deref(), None);
+        let (_, t) = imports.next().unwrap();
+        assert!(matches!(t.ty, ComponentItem::Type(Type::Record(_))));
+        assert_eq!(t.external_id.as_deref(), Some("type-t"));
         let mut exports = ty.exports(&engine);
         let (_, d) = exports.next().unwrap();
         assert_eq!(d.external_id.as_deref(), Some("queue-1"));
@@ -375,6 +380,45 @@ fn attributes_from_export_ascription() -> Result<()> {
     let bytes = component.serialize()?;
     let component = unsafe { Component::deserialize(&engine, &bytes)? };
     assert_reflection(&component);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn export_extern_lookup() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_implements(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (core module $m (func (export "f")))
+                (core instance $i (instantiate $m))
+                (func $f (canon lift (core func $i "f")))
+                (instance $inner
+                    (export "f" (external-id "inner-f") (func $f))
+                )
+                (export "a" (implements "a:b/c") (external-id "id-a") (instance $inner))
+            )
+        "#,
+    )?;
+
+    let (a, a_index) = component.get_export_extern(None, "a").unwrap();
+    assert_eq!(a.implements, Some("a:b/c"));
+    assert_eq!(a.external_id, Some("id-a"));
+    let (f, _) = component.get_export_extern(Some(&a_index), "f").unwrap();
+    assert_eq!(f.external_id, Some("inner-f"));
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let (a, a_index) = instance.get_export_extern(&store, None, "a").unwrap();
+    assert_eq!(a.implements, Some("a:b/c"));
+    let (f, _) = instance
+        .get_export_extern(&store, Some(&a_index), "f")
+        .unwrap();
+    assert_eq!(f.external_id, Some("inner-f"));
 
     Ok(())
 }

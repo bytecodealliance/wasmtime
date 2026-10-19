@@ -2823,18 +2823,12 @@ pub fn add_to_linker<T, D>(
         for<'a> D::Data<'a>: {sync_bounds},
         T: 'static {opt_t_send_bound},
 {{
-    // Collect matching imports up front: iterating `imports`
-    // borrows the engine (via `linker`) immutably while
-    // `linker.instance(..)` needs a mutable borrow.
-    let engine = linker.engine().clone();
     let component_ty = component.component_type();
-    let mut matched = {wt}::component::__internal::Vec::new();
-    for (name, item) in component_ty.imports(&engine) {{
-        if item.is_implements({wit_name:?}) {{
-            matched.push((name, lookup(name)?));
+    for (name, item) in component_ty.imports(linker.engine()) {{
+        if !item.is_implements({wit_name:?}) {{
+            continue;
         }}
-    }}
-    for (name, id) in matched {{
+        let id = lookup(name)?;
         let mut inst = linker.instance(name)?;
         add_to_linker_instance::<T, D>(
             &mut inst,

@@ -26,7 +26,7 @@ pub extern "C" fn wasmtime_component_type_import_count(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_type_import_get<'a>(
     ty: &'a wasmtime_component_type_t,
-    engine: &'a wasm_engine_t,
+    engine: &wasm_engine_t,
     name: *const u8,
     name_len: usize,
     ret: &mut MaybeUninit<Box<wasmtime_component_extern_t<'a>>>,
@@ -47,7 +47,7 @@ pub unsafe extern "C" fn wasmtime_component_type_import_get<'a>(
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_component_type_import_nth<'a>(
     ty: &'a wasmtime_component_type_t,
-    engine: &'a wasm_engine_t,
+    engine: &wasm_engine_t,
     nth: usize,
     name_ret: &mut MaybeUninit<*const u8>,
     name_len_ret: &mut MaybeUninit<usize>,
@@ -76,7 +76,7 @@ pub extern "C" fn wasmtime_component_type_export_count(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_type_export_get<'a>(
     ty: &'a wasmtime_component_type_t,
-    engine: &'a wasm_engine_t,
+    engine: &wasm_engine_t,
     name: *const u8,
     name_len: usize,
     ret: &mut MaybeUninit<Box<wasmtime_component_extern_t<'a>>>,
@@ -97,7 +97,7 @@ pub unsafe extern "C" fn wasmtime_component_type_export_get<'a>(
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_component_type_export_nth<'a>(
     ty: &'a wasmtime_component_type_t,
-    engine: &'a wasm_engine_t,
+    engine: &wasm_engine_t,
     nth: usize,
     name_ret: &mut MaybeUninit<*const u8>,
     name_len_ret: &mut MaybeUninit<usize>,

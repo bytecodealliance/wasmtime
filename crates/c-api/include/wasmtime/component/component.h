@@ -140,6 +140,32 @@ wasmtime_component_get_export_index(
     const char *name, size_t name_len);
 
 /**
+ * \brief Looks up a specific export of this component by \p name optionally
+ * nested within the \p instance provided, along with a description of it.
+ *
+ * This is similar to #wasmtime_component_get_export_index except that a
+ * #wasmtime_component_extern_t describing the export is additionally returned
+ * through \p extern_out. This contains the type of the export along with any
+ * metadata attached to its name, such as `(implements "...")` or
+ * `(external-id "...")` annotations.
+ *
+ * \param component the component to look up \p name in
+ * \param instance_export_index optional (i.e. nullable) instance to look up in
+ * \param name the name of the export
+ * \param name_len length of \p name in bytes
+ * \param extern_out if found, the description of the export, which must be
+ *        deallocated with #wasmtime_component_extern_delete and must not
+ *        outlive \p component
+ * \return export index if found, else NULL
+ */
+WASM_API_EXTERN wasmtime_component_export_index_t *
+wasmtime_component_get_export_extern(
+    const wasmtime_component_t *component,
+    const wasmtime_component_export_index_t *instance_export_index,
+    const char *name, size_t name_len,
+    wasmtime_component_extern_t **extern_out);
+
+/**
  * \brief Creates a new separately-owned copy of the specified index.
  */
 WASM_API_EXTERN wasmtime_component_export_index_t *
