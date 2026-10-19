@@ -4843,17 +4843,33 @@
         (if-let true (has_ssse3))
         (x64_pshufb a (const_to_xmm_mem_128 (shuffle_0_31_mask mask))))
 
+;; If the mask only selects lanes from one operand then only that operand is
+;; shuffled, even when `lhs` and `rhs` are different values. The rules below
+;; would otherwise read the unused operand too, either as a second `pshufb` plus
+;; `por` or as an input of `vpermi2b`, which creates a false dependency on it.
+(rule 2 (lower (shuffle _ a _ (vec_mask_from_immediate (shuffle_lhs_only mask))))
+        (if-let true (has_ssse3))
+        (x64_pshufb a (const_to_xmm_mem_128 (shuffle_0_15_mask mask))))
+(rule 1 (lower (shuffle _ _ b (vec_mask_from_immediate (shuffle_rhs_only mask))))
+        (if-let true (has_ssse3))
+        (x64_pshufb b (const_to_xmm_mem_128 (shuffle_16_31_mask mask))))
+
+(decl shuffle_lhs_only (VecMask) VecMask)
+(extern extractor shuffle_lhs_only shuffle_lhs_only)
+(decl shuffle_rhs_only (VecMask) VecMask)
+(extern extractor shuffle_rhs_only shuffle_rhs_only)
+
 ;; For the case where the shuffle mask contains out-of-bounds values (values
 ;; greater than 31) we must mask off those resulting values in the result of
 ;; `vpermi2b`.
-(rule 2 (lower (shuffle _ a b (vec_mask_from_immediate (perm_from_mask_with_zeros mask zeros))))
+(rule 0 (lower (shuffle _ a b (vec_mask_from_immediate (perm_from_mask_with_zeros mask zeros))))
       (if-let true (has_avx512vl))
       (if-let true (has_avx512vbmi))
       (x64_andps (x64_vpermi2b (x64_xmm_load_const $I8X16 mask) a b) (const_to_xmm_mem_128 zeros)))
 
 ;; However, if the shuffle mask contains no out-of-bounds values, we can use
 ;; `vpermi2b` without any masking.
-(rule 1 (lower (shuffle _ a b (vec_mask_from_immediate mask)))
+(rule -1 (lower (shuffle _ a b (vec_mask_from_immediate mask)))
       (if-let true (has_avx512vl))
       (if-let true (has_avx512vbmi))
       (x64_vpermi2b (x64_xmm_load_const $I8X16 (perm_from_mask mask)) a b))
@@ -4861,7 +4877,7 @@
 ;; If `lhs` and `rhs` are different, we must shuffle each separately and then OR
 ;; them together. This is necessary due to PSHUFB semantics. As in the case
 ;; above, we build the `constructed_mask` for each case statically.
-(rule (lower (shuffle _ a b (vec_mask_from_immediate mask)))
+(rule -2 (lower (shuffle _ a b (vec_mask_from_immediate mask)))
       (x64_por
         (lower_pshufb a (const_to_xmm_mem_128 (shuffle_0_15_mask mask)))
         (lower_pshufb b (const_to_xmm_mem_128 (shuffle_16_31_mask mask)))))
