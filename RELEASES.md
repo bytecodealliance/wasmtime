@@ -1,3 +1,18 @@
+## 36.0.19
+
+Released 2026-10-19.
+
+### Fixed
+
+* wasi-http: Guests can add conflicting content lengths to messages
+  [GHSA-r8xh-cgf7-392j](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-r8xh-cgf7-392j)
+* Cranelift backend on aarch64 can jump to incorrect target on large Wasm `br_table` instruction
+  [GHSA-mghf-wjfp-p5xm](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-mghf-wjfp-p5xm)
+* Bit-packing in Cranelift compiler causes silent overflow and miscompilation
+  [GHSA-897f-g5gm-fmxm](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-897f-g5gm-fmxm)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.18
 
 Released 2026-10-14.

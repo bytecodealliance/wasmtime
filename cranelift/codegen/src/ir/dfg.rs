@@ -718,7 +718,7 @@ enum ValueData {
 /// Layout:
 ///
 /// ```plain
-///        | tag:2 |  type:14        |    x:24       | y:24          |
+///        | tag:2 |  type:14        |    x:32       | y:32          |
 ///
 /// Inst       00     ty               inst output     inst index
 /// Param      01     ty               blockparam num  block index
@@ -727,76 +727,50 @@ enum ValueData {
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-struct ValueDataPacked(u64);
-
-/// Encodes a value in 0..2^32 into 0..2^n, where n is less than 32
-/// (and is implied by `mask`), by translating 2^32-1 (0xffffffff)
-/// into 2^n-1 and panic'ing on 2^n..2^32-1.
-fn encode_narrow_field(x: u32, bits: u8) -> u32 {
-    let max = (1 << bits) - 1;
-    if x == 0xffff_ffff {
-        max
-    } else {
-        debug_assert!(
-            x < max,
-            "{x} does not fit into {bits} bits (must be less than {max} to \
-             allow for a 0xffffffff sentinel)"
-        );
-        x
-    }
-}
-
-/// The inverse of the above `encode_narrow_field`: unpacks 2^n-1 into
-/// 2^32-1.
-fn decode_narrow_field(x: u32, bits: u8) -> u32 {
-    if x == (1 << bits) - 1 { 0xffff_ffff } else { x }
+#[repr(Rust, packed)]
+struct ValueDataPacked {
+    x: u32,
+    y: u32,
+    flags_and_type: u16,
 }
 
 impl ValueDataPacked {
-    const Y_SHIFT: u8 = 0;
-    const Y_BITS: u8 = 24;
-    const X_SHIFT: u8 = Self::Y_SHIFT + Self::Y_BITS;
-    const X_BITS: u8 = 24;
-    const TYPE_SHIFT: u8 = Self::X_SHIFT + Self::X_BITS;
+    const TYPE_SHIFT: u8 = 0;
     const TYPE_BITS: u8 = 14;
     const TAG_SHIFT: u8 = Self::TYPE_SHIFT + Self::TYPE_BITS;
     const TAG_BITS: u8 = 2;
 
-    const TAG_INST: u64 = 0;
-    const TAG_PARAM: u64 = 1;
-    const TAG_ALIAS: u64 = 2;
-    const TAG_UNION: u64 = 3;
+    const TAG_INST: u16 = 0;
+    const TAG_PARAM: u16 = 1;
+    const TAG_ALIAS: u16 = 2;
+    const TAG_UNION: u16 = 3;
 
-    fn make(tag: u64, ty: Type, x: u32, y: u32) -> ValueDataPacked {
+    fn make(tag: u16, ty: Type, x: u32, y: u32) -> ValueDataPacked {
         debug_assert!(tag < (1 << Self::TAG_BITS));
         debug_assert!(ty.repr() < (1 << Self::TYPE_BITS));
 
-        let x = encode_narrow_field(x, Self::X_BITS);
-        let y = encode_narrow_field(y, Self::Y_BITS);
-
-        ValueDataPacked(
-            (tag << Self::TAG_SHIFT)
-                | ((ty.repr() as u64) << Self::TYPE_SHIFT)
-                | ((x as u64) << Self::X_SHIFT)
-                | ((y as u64) << Self::Y_SHIFT),
-        )
+        ValueDataPacked {
+            x,
+            y,
+            flags_and_type: (tag << Self::TAG_SHIFT) | (ty.repr() << Self::TYPE_SHIFT),
+        }
     }
 
     #[inline(always)]
-    fn field(self, shift: u8, bits: u8) -> u64 {
-        (self.0 >> shift) & ((1 << bits) - 1)
+    fn field(self, shift: u8, bits: u8) -> u16 {
+        (self.flags_and_type >> shift) & ((1 << bits) - 1)
     }
 
     #[inline(always)]
     fn ty(self) -> Type {
-        let ty = self.field(ValueDataPacked::TYPE_SHIFT, ValueDataPacked::TYPE_BITS) as u16;
+        let ty = self.field(ValueDataPacked::TYPE_SHIFT, ValueDataPacked::TYPE_BITS);
         Type::from_repr(ty)
     }
 
     #[inline(always)]
     fn set_type(&mut self, ty: Type) {
-        self.0 &= !(((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT);
-        self.0 |= (ty.repr() as u64) << Self::TYPE_SHIFT;
+        self.flags_and_type &= !(((1 << Self::TYPE_BITS) - 1) << Self::TYPE_SHIFT);
+        self.flags_and_type |= ty.repr() << Self::TYPE_SHIFT;
     }
 }
 
@@ -822,35 +796,30 @@ impl From<ValueData> for ValueDataPacked {
 impl From<ValueDataPacked> for ValueData {
     fn from(data: ValueDataPacked) -> Self {
         let tag = data.field(ValueDataPacked::TAG_SHIFT, ValueDataPacked::TAG_BITS);
-        let ty = u16::try_from(data.field(ValueDataPacked::TYPE_SHIFT, ValueDataPacked::TYPE_BITS))
-            .expect("Mask should ensure result fits in a u16");
-        let x = u32::try_from(data.field(ValueDataPacked::X_SHIFT, ValueDataPacked::X_BITS))
-            .expect("Mask should ensure result fits in a u32");
-        let y = u32::try_from(data.field(ValueDataPacked::Y_SHIFT, ValueDataPacked::Y_BITS))
-            .expect("Mask should ensure result fits in a u32");
+        let ty = data.field(ValueDataPacked::TYPE_SHIFT, ValueDataPacked::TYPE_BITS);
 
         let ty = Type::from_repr(ty);
         match tag {
             ValueDataPacked::TAG_INST => ValueData::Inst {
                 ty,
-                num: u16::try_from(x).expect("Inst result num should fit in u16"),
-                inst: Inst::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
+                num: u16::try_from(data.x).expect("Inst result num should fit in u16"),
+                inst: Inst::from_bits(data.y),
             },
             ValueDataPacked::TAG_PARAM => ValueData::Param {
                 ty,
-                num: u16::try_from(x).expect("Blockparam index should fit in u16"),
-                block: Block::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
+                num: u16::try_from(data.x).expect("Blockparam index should fit in u16"),
+                block: Block::from_bits(data.y),
             },
             ValueDataPacked::TAG_ALIAS => ValueData::Alias {
                 ty,
-                original: Value::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
+                original: Value::from_bits(data.y),
             },
             ValueDataPacked::TAG_UNION => ValueData::Union {
                 ty,
-                x: Value::from_bits(decode_narrow_field(x, ValueDataPacked::X_BITS)),
-                y: Value::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
+                x: Value::from_bits(data.x),
+                y: Value::from_bits(data.y),
             },
-            _ => panic!("Invalid tag {} in ValueDataPacked 0x{:x}", tag, data.0),
+            _ => panic!("Invalid tag {tag} in ValueDataPacked"),
         }
     }
 }

@@ -57,6 +57,41 @@ fn main() {
         Err(HeaderError::InvalidSyntax)
     ));
 
+    assert!(matches!(
+        hdrs.append("Content-Length", b"5".as_ref()),
+        Ok(())
+    ));
+
+    assert!(matches!(
+        hdrs.append("Content-Length", b"6".as_ref()),
+        Err(HeaderError::InvalidSyntax)
+    ));
+
+    assert!(matches!(
+        hdrs.append("content-length", b"5".as_ref()),
+        Err(HeaderError::InvalidSyntax)
+    ));
+
+    assert!(matches!(
+        hdrs.set("Content-Length", &[b"5".to_vec(), b"6".to_vec()]),
+        Err(HeaderError::InvalidSyntax)
+    ));
+
+    assert!(matches!(
+        hdrs.set("Content-Length", &[b"10".to_vec()]),
+        Ok(())
+    ));
+
+    assert!(matches!(hdrs.delete("Content-Length"), Ok(())));
+
+    assert!(matches!(
+        Headers::from_list(&[
+            ("Content-Length".to_owned(), b"5".to_vec()),
+            ("Content-Length".to_owned(), b"6".to_vec()),
+        ]),
+        Err(HeaderError::InvalidSyntax)
+    ));
+
     let req = OutgoingRequest::new(hdrs);
     let hdrs = req.headers();
 

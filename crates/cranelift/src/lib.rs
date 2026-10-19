@@ -46,6 +46,20 @@ mod translate;
 
 use self::compiler::Compiler;
 
+/// Implementation limit on the number of (non-default) targets in a
+/// `br_table`.
+///
+/// The Wasm spec allows implementation-defined limits, and this
+/// matches the limit that V8 and SpiderMonkey impose (2^16 -
+/// 16).
+///
+/// wasmparser checks implementation limits during validation, but
+/// this is not a spec'd implementation limit, just a de-facto one.
+///
+/// FIXME: we should put this limit in wasmparser (and then remove the
+/// checks at this level).
+pub const MAX_BR_TABLE_TARGETS: u32 = 65520;
+
 const TRAP_INTERNAL_ASSERT: TrapCode = TrapCode::unwrap_user(1);
 const TRAP_OFFSET: u8 = 2;
 pub const TRAP_ALWAYS: TrapCode =
