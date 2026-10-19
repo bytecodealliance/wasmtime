@@ -3911,10 +3911,7 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .iter()
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
-            TypeDefKind::List(_) => true,
-            TypeDefKind::Map(k, v) => {
-                type_contains_lists(*k, resolve) || type_contains_lists(*v, resolve)
-            }
+            TypeDefKind::List(_) | TypeDefKind::Map(..) => true,
             TypeDefKind::FixedLengthList(elem, ..) => type_contains_lists(*elem, resolve),
         },
 
