@@ -5,6 +5,7 @@ use crate::isa::CallConv;
 use crate::isa::s390x::abi::REG_SAVE_AREA_SIZE;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
+use crate::opts::AtomicRmwOp;
 use cranelift_control::ControlPlane;
 
 /// Debug macro for testing that a regpair is valid: that the high register is even, and the low
@@ -2126,6 +2127,221 @@ impl Inst {
                     emit_info,
                     state,
                 );
+            }
+            &Inst::AtomicRmw128Loop {
+                op,
+                rd,
+                rn,
+                scratch1,
+                scratch2,
+                scratch3,
+                scratch4,
+                ref mem,
+            } => {
+                // rd = VR for previous value
+                // rn = operand value
+                // scratch1: temporary VR for minmax fallback without VXRS_EXT3
+                // scratch2: new value in VR
+                // scratch3: regpair for previous value in GPRs
+                // scratch4: regpair for new value in GPRs
+
+                let loop_label = sink.get_label();
+
+                let scratch3_hi = scratch3.hi;
+                let scratch3_lo = scratch3.lo;
+                debug_assert_valid_regpair!(scratch3_hi.to_reg(), scratch3_lo.to_reg());
+                let scratch4_hi = scratch4.hi;
+                let scratch4_lo = scratch4.lo;
+                debug_assert_valid_regpair!(scratch4_hi.to_reg(), scratch4_lo.to_reg());
+
+                // Do an atomic load of the previous value into a VR
+                Inst::VecLoad {
+                    rd,
+                    mem: mem.clone(),
+                }
+                .emit_with_alloc_consumer(sink, emit_info, state);
+
+                // This is where the compare-and-swap loop starts
+                sink.bind_label(loop_label, &mut state.ctrl_plane);
+
+                // Load the previous value into a pair of GPRs
+                Inst::VecExtractLane {
+                    size: 64,
+                    rd: scratch3.hi,
+                    rn: rd.to_reg(),
+                    lane_imm: 0,
+                    lane_reg: zero_reg(),
+                }
+                .emit_with_alloc_consumer(sink, emit_info, state);
+                Inst::VecExtractLane {
+                    size: 64,
+                    rd: scratch3.lo,
+                    rn: rd.to_reg(),
+                    lane_imm: 1,
+                    lane_reg: zero_reg(),
+                }
+                .emit_with_alloc_consumer(sink, emit_info, state);
+
+                // Optionally, do some math to calculate the new value
+                let new_value_reg = match op {
+                    AtomicRmwOp::Add
+                    | AtomicRmwOp::Sub
+                    | AtomicRmwOp::And
+                    | AtomicRmwOp::Nand
+                    | AtomicRmwOp::Or
+                    | AtomicRmwOp::Xor
+                    | AtomicRmwOp::Smax
+                    | AtomicRmwOp::Smin
+                    | AtomicRmwOp::Umax
+                    | AtomicRmwOp::Umin => {
+                        let has_vxrs_ext3 = emit_info.isa_flags.has_vxrs_ext3();
+                        let is_minmax = matches!(
+                            op,
+                            AtomicRmwOp::Smax
+                                | AtomicRmwOp::Smin
+                                | AtomicRmwOp::Umax
+                                | AtomicRmwOp::Umin
+                        );
+
+                        if !is_minmax || has_vxrs_ext3 {
+                            let binary_op = match op {
+                                AtomicRmwOp::Add => VecBinaryOp::Add128,
+                                AtomicRmwOp::Sub => VecBinaryOp::Sub128,
+                                AtomicRmwOp::And => VecBinaryOp::And128,
+                                AtomicRmwOp::Nand => VecBinaryOp::NotAnd128,
+                                AtomicRmwOp::Or => VecBinaryOp::Orr128,
+                                AtomicRmwOp::Xor => VecBinaryOp::Xor128,
+                                // These require VXRS_EXT3, so use them if possible and otherwise
+                                // go through a fallback.
+                                AtomicRmwOp::Smax => VecBinaryOp::SMax128,
+                                AtomicRmwOp::Smin => VecBinaryOp::SMin128,
+                                AtomicRmwOp::Umax => VecBinaryOp::UMax128,
+                                AtomicRmwOp::Umin => VecBinaryOp::UMin128,
+                                _ => unreachable!(),
+                            };
+
+                            Inst::VecRRR {
+                                op: binary_op,
+                                rd: scratch2,
+                                rn: rd.to_reg(),
+                                rm: rn,
+                            }
+                            .emit_with_alloc_consumer(sink, emit_info, state);
+
+                            scratch2.to_reg()
+                        } else {
+                            // minmax fallbacks without VXRS_EXT3
+                            let lg_label = sink.get_label();
+                            let cmp_end_label = sink.get_label();
+
+                            let (a, b) = match op {
+                                AtomicRmwOp::Umax | AtomicRmwOp::Smax => (rd.to_reg(), rn),
+                                AtomicRmwOp::Umin | AtomicRmwOp::Smin => (rn, rd.to_reg()),
+                                _ => unreachable!(),
+                            };
+
+                            // Sets CC 1 if rd > rn
+                            match op {
+                                AtomicRmwOp::Umin | AtomicRmwOp::Umax => {
+                                    Inst::VecInt128UCmpHi {
+                                        tmp: scratch1,
+                                        rn: rd.to_reg(),
+                                        rm: rn,
+                                    }
+                                    .emit_with_alloc_consumer(sink, emit_info, state);
+                                }
+                                AtomicRmwOp::Smin | AtomicRmwOp::Smax => {
+                                    Inst::VecInt128SCmpHi {
+                                        tmp: scratch1,
+                                        rn: rd.to_reg(),
+                                        rm: rn,
+                                    }
+                                    .emit_with_alloc_consumer(sink, emit_info, state);
+                                }
+                                _ => unreachable!(),
+                            };
+
+                            // If CC 1, branch to larger than
+                            let opcode = 0xc04; // BCRL
+                            sink.use_label_at_offset(
+                                sink.cur_offset(),
+                                lg_label,
+                                LabelUse::BranchRIL,
+                            );
+                            put(sink, &enc_ril_c(opcode, 4, 0));
+
+                            // rd <= rn: write b to scratch2
+                            Inst::VecMov {
+                                rd: scratch2,
+                                rn: b,
+                            }
+                            .emit_with_alloc_consumer(sink, emit_info, state);
+
+                            // Now jump past the other branch
+                            let opcode = 0xc04; // BCRL
+                            sink.use_label_at_offset(
+                                sink.cur_offset(),
+                                cmp_end_label,
+                                LabelUse::BranchRIL,
+                            );
+                            put(sink, &enc_ril_c(opcode, 15, 0));
+
+                            sink.bind_label(lg_label, &mut state.ctrl_plane);
+
+                            // rd > rn: If CC 1, write a to scratch2
+                            Inst::VecMov {
+                                rd: scratch2,
+                                rn: a,
+                            }
+                            .emit_with_alloc_consumer(sink, emit_info, state);
+
+                            sink.bind_label(cmp_end_label, &mut state.ctrl_plane);
+
+                            scratch2.to_reg()
+                        }
+                    }
+                    AtomicRmwOp::Xchg => rn,
+                };
+
+                // Load the new value into a pair of GPRs
+                Inst::VecExtractLane {
+                    size: 64,
+                    rd: scratch4_hi,
+                    rn: new_value_reg,
+                    lane_imm: 0,
+                    lane_reg: zero_reg(),
+                }
+                .emit_with_alloc_consumer(sink, emit_info, state);
+                Inst::VecExtractLane {
+                    size: 64,
+                    rd: scratch4_lo,
+                    rn: new_value_reg,
+                    lane_imm: 1,
+                    lane_reg: zero_reg(),
+                }
+                .emit_with_alloc_consumer(sink, emit_info, state);
+
+                // Perform the CAS
+                Inst::AtomicCas128 {
+                    rd: scratch3,
+                    ri: scratch3.to_regpair(),
+                    rn: scratch4.to_regpair(),
+                    mem: mem.clone(),
+                }
+                .emit_with_alloc_consumer(sink, emit_info, state);
+
+                // Move the old value into a VR
+                Inst::MovToVec128 {
+                    rd,
+                    rn: scratch3_hi.to_reg(),
+                    rm: scratch3_lo.to_reg(),
+                }
+                .emit_with_alloc_consumer(sink, emit_info, state);
+
+                // If the comparison was not equal, try again
+                let opcode = 0xc04; // BCRL
+                sink.use_label_at_offset(sink.cur_offset(), loop_label, LabelUse::BranchRIL);
+                put(sink, &enc_ril_c(opcode, 4, 0));
             }
             &Inst::Loop { ref body, cond } => {
                 // This sequence is *one* instruction in the vcode, and is expanded only here at

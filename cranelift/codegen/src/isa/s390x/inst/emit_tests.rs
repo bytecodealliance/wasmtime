@@ -3341,6 +3341,82 @@ fn test_s390x_binemit() {
         "laxg %r4, %r5, 524287(%r6)",
     ));
     insns.push((
+        Inst::AtomicRmw128Loop {
+            op: AtomicRmwOp::Add,
+            rd: writable_vr(1),
+            rn: vr(2),
+            scratch1: writable_vr(3),
+            scratch2: writable_vr(4),
+            scratch3: w_regpair,
+            scratch4: w_regpair,
+            mem: MemArg::BXD20 {
+                base: zero_reg(),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524288).unwrap(),
+                flags: MachMemFlags::trusted(),
+            },
+        },
+        "E31000008071E71010000006B3CD0021E73100013021E741200040F3B3CD0024E73400013021EB220000803EE71230000062C044FFFFFFED",
+        "atomic_rmw_128_loop_add %v1, %v2, -524288, scratch1=%v3, scratch2=%v4, scratch3=%r2, scratch4=%r2",
+    ));
+    insns.push((
+        Inst::AtomicRmw128Loop {
+            op: AtomicRmwOp::Sub,
+            rd: writable_vr(1),
+            rn: vr(2),
+            scratch1: writable_vr(3),
+            scratch2: writable_vr(4),
+            scratch3: w_regpair,
+            scratch4: w_regpair,
+            mem: MemArg::BXD20 {
+                base: zero_reg(),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MachMemFlags::trusted(),
+            },
+        },
+        "E3100FFF7F71E71010000006B3CD0021E73100013021E741200040F7B3CD0024E73400013021EB220FFF7F3EE71230000062C044FFFFFFED",
+        "atomic_rmw_128_loop_sub %v1, %v2, 524287, scratch1=%v3, scratch2=%v4, scratch3=%r2, scratch4=%r2",
+    ));
+    insns.push((
+        Inst::AtomicRmw128Loop {
+            op: AtomicRmwOp::Or,
+            rd: writable_vr(1),
+            rn: vr(2),
+            scratch1: writable_vr(3),
+            scratch2: writable_vr(4),
+            scratch3: w_regpair,
+            scratch4: w_regpair,
+            mem: MemArg::BXD20 {
+                base: gpr(6),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524288).unwrap(),
+                flags: MachMemFlags::trusted(),
+            },
+        },
+        "E31060008071E71010000006B3CD0021E73100013021E7412000006AB3CD0024E73400013021EB226000803EE71230000062C044FFFFFFED",
+        "atomic_rmw_128_loop_or %v1, %v2, -524288(%r6), scratch1=%v3, scratch2=%v4, scratch3=%r2, scratch4=%r2",
+    ));
+    insns.push((
+        Inst::AtomicRmw128Loop {
+            op: AtomicRmwOp::Umin,
+            rd: writable_vr(1),
+            rn: vr(2),
+            scratch1: writable_vr(3),
+            scratch2: writable_vr(4),
+            scratch3: w_regpair,
+            scratch4: w_regpair,
+            mem: MemArg::BXD20 {
+                base: gpr(6),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MachMemFlags::trusted(),
+            },
+        },
+        "E3106FFF7F71E71010000006B3CD0021E73100013021E741200040FCB3CD0024E73400013021EB226FFF7F3EE71230000062C044FFFFFFED",
+        "atomic_rmw_128_loop_umin %v1, %v2, 524287(%r6), scratch1=%v3, scratch2=%v4, scratch3=%r2, scratch4=%r2",
+    ));
+    insns.push((
         Inst::AtomicCas32 {
             rd: writable_gpr(4),
             ri: gpr(4),

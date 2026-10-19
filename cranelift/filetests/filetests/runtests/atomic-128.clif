@@ -4,9 +4,10 @@ set enable_llvm_abi_extensions
 set enable_multi_ret_implicit_sret
 target x86_64 has_cmpxchg16b
 target aarch64
+target s390x
 
 function %atomic_load(i128) -> i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128):
     v3 = stack_addr.i64 ss0
@@ -25,7 +26,7 @@ block0(v0: i128):
 
 
 function %atomic_store(i128) -> i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128):
     v1 = stack_addr.i64 ss0
@@ -44,7 +45,7 @@ block0(v0: i128):
 
 
 function %atomic_cas(i128, i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128, v2: i128):
     v6 = stack_addr.i64 ss0
@@ -64,7 +65,7 @@ block0(v0: i128, v1: i128, v2: i128):
 
 
 function %atomic_add(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
@@ -85,7 +86,7 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_sub(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
@@ -106,7 +107,7 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_and(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
@@ -127,7 +128,7 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_nand(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
@@ -148,7 +149,7 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_or(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
@@ -169,7 +170,7 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_xor(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
@@ -190,7 +191,7 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_xchg(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
@@ -211,7 +212,7 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_umin(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
@@ -234,7 +235,7 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_umax(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
@@ -257,7 +258,7 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_smin(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
@@ -280,7 +281,7 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_smax(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128):
     v5 = stack_addr.i64 ss0
