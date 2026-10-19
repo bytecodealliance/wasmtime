@@ -1,0 +1,50 @@
+package foo:foo;
+
+interface maps {
+  resource thing;
+
+  type names-by-id = map<u32, string>;
+  type ids-by-name = map<string, u32>;
+
+  named-roundtrip: func(a: names-by-id) -> ids-by-name;
+  bytes-roundtrip: func(a: map<string, list<u8>>) -> map<string, list<u8>>;
+  option-roundtrip: func(a: option<map<string, u32>>) -> option<map<string, u32>>;
+  result-roundtrip: func(a: result<map<u32, string>, string>) -> result<map<u32, string>, string>;
+  tuple-roundtrip: func(a: tuple<map<string, u32>, u64>) -> tuple<map<string, u32>, u64>;
+  nested-roundtrip: func(a: map<string, map<u32, string>>) -> map<string, map<u32, string>>;
+  list-of-maps: func(a: list<map<string, u32>>) -> list<map<string, u32>>;
+
+  record labeled-entry {
+    label: string,
+    values: map<string, u32>,
+  }
+  record-roundtrip: func(a: labeled-entry) -> labeled-entry;
+
+  variant map-or-string {
+    as-map(map<u32, string>),
+    as-string(string),
+  }
+  variant-roundtrip: func(a: map-or-string) -> map-or-string;
+
+  all-key-types: func(
+    a: map<bool, u32>,
+    b: map<u8, u32>,
+    c: map<s8, u32>,
+    d: map<u16, u32>,
+    e: map<s16, u32>,
+    f: map<u32, u32>,
+    g: map<s32, u32>,
+    h: map<u64, u32>,
+    i: map<s64, u32>,
+    j: map<char, u32>,
+    k: map<string, u32>,
+  );
+
+  own-values: func(a: map<string, thing>) -> map<string, thing>;
+  borrowed-values: func(a: map<string, borrow<thing>>);
+}
+
+world the-maps {
+  import maps;
+  export maps;
+}
