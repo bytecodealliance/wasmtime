@@ -132,8 +132,12 @@ pub fn match_val(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
         },
         ComponentConst::Record(e) => match actual {
             Val::Record(a) => {
-                if e.len() != e.len() {
-                    bail!("mismatched number of record fields");
+                if e.len() != a.len() {
+                    bail!(
+                        "mismatched number of record fields: expected {}, found {}",
+                        e.len(),
+                        a.len()
+                    );
                 }
                 for ((e_name, e_val), (a_name, a_val)) in e.iter().zip(a.iter()) {
                     if e_name != a_name {

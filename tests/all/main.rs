@@ -68,6 +68,7 @@ mod threads;
 mod traps;
 mod types;
 mod wait_notify;
+mod wast_harness;
 mod winch_engine_features;
 mod winch_tail_calls;
 
