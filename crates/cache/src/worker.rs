@@ -737,11 +737,11 @@ impl WorkerThread {
 /// validation), so computing `value * percent` directly can overflow, e.g. for
 /// `u64::MAX` and `70%`. Splitting the value keeps every intermediate result
 /// within `u64`: with `value = 100 * q + r` the result is
-/// `q * percent + r * percent / 100`, and both terms are at most `value`
+/// `(q * percent) + ((r * percent) / 100)`, and both terms are at most `value`
 /// because `percent` is at most 100 (see `CacheConfig::validate`).
 fn percent_of(value: u64, percent: u8) -> u64 {
     let percent = u64::from(percent);
-    value / 100 * percent + (value % 100) * percent / 100
+    (value / 100) * percent + ((value % 100) * percent) / 100
 }
 
 fn read_stats_file(path: &Path) -> Option<ModuleCacheStatistics> {
