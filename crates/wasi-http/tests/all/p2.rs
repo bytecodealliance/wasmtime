@@ -101,9 +101,11 @@ impl WasiHttpHooks for MyHttpHooks {
         })
     }
 
-    fn is_forbidden_header(&mut self, name: &hyper::header::HeaderName) -> bool {
-        wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS.contains(name)
-            || name.as_str() == "custom-forbidden-header"
+    fn forbidden_header_filter(&mut self) -> wasmtime_wasi_http::ForbiddenHeaderFilter {
+        Arc::new(|name| {
+            wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS.contains(name)
+                || name.as_str() == "custom-forbidden-header"
+        })
     }
 }
 
