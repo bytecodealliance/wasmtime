@@ -1,6 +1,6 @@
 ## 36.0.19
 
-Unreleased
+Released 2026-10-19.
 
 ### Fixed
 
@@ -10,6 +10,8 @@ Unreleased
   [GHSA-mghf-wjfp-p5xm](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-mghf-wjfp-p5xm)
 * Bit-packing in Cranelift compiler causes silent overflow and miscompilation
   [GHSA-897f-g5gm-fmxm](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-897f-g5gm-fmxm)
+
+--------------------------------------------------------------------------------
 
 ## 36.0.18
 
