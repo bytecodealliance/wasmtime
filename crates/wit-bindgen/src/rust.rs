@@ -191,7 +191,8 @@ pub trait RustGenerator<'a> {
             TypeDefKind::Map(k, v) => {
                 let key = self.ty(k, mode);
                 let value = self.ty(v, mode);
-                format!("std::collections::HashMap<{key}, {value}>")
+                let wt = self.wasmtime_path();
+                format!("{wt}::component::__internal::HashMap<{key}, {value}>")
             }
             TypeDefKind::Unknown => unreachable!(),
             TypeDefKind::FixedLengthList(t, size) => {

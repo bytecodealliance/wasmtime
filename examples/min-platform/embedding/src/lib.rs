@@ -14,6 +14,21 @@ mod panic;
 #[cfg(feature = "wasi")]
 mod wasi;
 
+// Ensure that `bindgen!` output for `map<K, V>` compiles without Wasmtime's
+// `std` feature.
+#[cfg(feature = "wasi")]
+#[allow(dead_code, reason = "only checks that the generated code compiles")]
+mod map_bindgen {
+    wasmtime::component::bindgen!({
+        inline: "
+            package a:b;
+            world maps {
+                import f: func(m: map<string, u32>) -> map<u32, string>;
+            }
+        ",
+    });
+}
+
 /// Entrypoint of this embedding.
 ///
 /// This takes a number of parameters which are the precompiled module AOT

@@ -163,6 +163,7 @@ pub mod __internal {
     };
     pub use super::matching::InstanceType;
     pub use crate::MaybeUninitExt;
+    pub use crate::hash_map::HashMap;
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
     pub use alloc::boxed::Box;

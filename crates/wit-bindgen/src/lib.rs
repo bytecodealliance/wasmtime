@@ -2452,7 +2452,10 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(" = ");
             let key_ty = self.ty(key, mode);
             let value_ty = self.ty(value, mode);
-            self.push_str(&format!("std::collections::HashMap<{key_ty}, {value_ty}>"));
+            let wt = self.wasmtime_path();
+            self.push_str(&format!(
+                "{wt}::component::__internal::HashMap<{key_ty}, {value_ty}>"
+            ));
             self.push_str(";\n");
             self.assert_type(id, &name);
         }
