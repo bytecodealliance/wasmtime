@@ -295,6 +295,10 @@ impl Func {
 
         #[cfg(feature = "component-model-async")]
         if store.0.concurrency_support() {
+            // Fail before the call is staged if the event loop is already
+            // running, since otherwise the staged call would still run later
+            // despite this call returning an error.
+            store.0.check_event_loop_not_running()?;
             let call = self.start_call_concurrent(&mut store, params, results)?;
             return store
                 .run_concurrent_trap_on_idle(async |store| {

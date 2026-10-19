@@ -234,6 +234,8 @@ where
         Return: 'static,
     {
         let mut store = store.as_context_mut();
+        // See `Func::call_async` for why this is checked up front.
+        store.0.check_event_loop_not_running()?;
         let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
         let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
             // SAFETY: The goal here is to get `Params`, a non-`'static`

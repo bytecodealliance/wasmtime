@@ -3291,64 +3291,49 @@ async fn task_group_hook_fails_to_enter_call_async() -> Result<()> {
     Ok(())
 }
 
-/// `call_async` from within a host function, while the event loop is already
-/// running, fails, and dropping that call's future (whose start has already
-/// been queued) doesn't panic. The dropped call fails once the event loop
-/// reaches it, here in the next call.
+/// `Func::call_async` and `TypedFunc::call_async` from within a host function,
+/// while the event loop is already running, fail without queueing the call to
+/// run later.
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn call_async_from_host_function() -> Result<()> {
     use futures::FutureExt as _;
 
-    let engine = Engine::new(Config::new().wasm_component_model_async(true))?;
+    let engine = Engine::default();
     let component = Component::new(
         &engine,
         r#"(component
             (import "host" (func $host))
-            (component $Nop
-                (core func $task.return (canon task.return))
-                (core module $m
-                    (import "" "task.return" (func $task.return))
-                    (func (export "nop") (result i32)
-                        (call $task.return)
-                        (i32.const 0 (; EXIT ;)))
-                    (func (export "cb") (param i32 i32 i32) (result i32) unreachable))
-                (core instance $i (instantiate $m
-                    (with "" (instance (export "task.return" (func $task.return))))))
-                (func (export "nop") async
-                    (canon lift (core func $i "nop") async (callback (core func $i "cb")))))
-            (instance $nop (instantiate $Nop))
             (core func $host (canon lower (func $host)))
             (core module $m
                 (import "" "host" (func $host))
-                (func (export "run") (call $host)))
+                (func (export "run") (call $host))
+                (func (export "trap") unreachable))
             (core instance $i (instantiate $m (with "" (instance (export "host" (func $host))))))
-            (export "nop" (func $nop "nop"))
             (func (export "run") (canon lift (core func $i "run")))
+            (func (export "trap") (canon lift (core func $i "trap")))
         )"#,
     )?;
-    let nop = Arc::new(Mutex::new(None::<TypedFunc<(), ()>>));
+    let trap = Arc::new(Mutex::new(None::<Func>));
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap("host", {
-        let nop = nop.clone();
+        let trap = trap.clone();
         move |mut store, ()| {
-            let nop = nop.lock().unwrap().unwrap();
-            let result = nop.call_async(&mut store, ()).now_or_never();
+            let trap = trap.lock().unwrap().unwrap();
+            let result = trap.call_async(&mut store, &[], &mut []).now_or_never();
+            assert!(matches!(result, Some(Err(_))));
+            let trap = trap.typed::<(), ()>(&store)?;
+            let result = trap.call_async(&mut store, ()).now_or_never();
             assert!(matches!(result, Some(Err(_))));
             Ok(())
         }
     })?;
     let mut store = Store::new(&engine, ());
     let instance = linker.instantiate_async(&mut store, &component).await?;
-    *nop.lock().unwrap() = Some(instance.get_typed_func::<(), ()>(&mut store, "nop")?);
+    *trap.lock().unwrap() = instance.get_func(&mut store, "trap");
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
     run.call_async(&mut store, ()).await?;
-    let nop = nop.lock().unwrap().unwrap();
-    let err = nop.call_async(&mut store, ()).await.unwrap_err();
-    assert!(
-        format!("{err:?}").contains("dropped before it started"),
-        "unexpected error: {err:?}"
-    );
+    run.call_async(&mut store, ()).await?;
     Ok(())
 }
 
