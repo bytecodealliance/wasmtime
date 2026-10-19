@@ -1,5 +1,6 @@
 ;;! reference_types = true
 ;;! exceptions = true
+;;! function_references = true
 
 (component $foo
   (core module (export "a-module"))
@@ -487,3 +488,41 @@
                          (export "m"
                                  (core module
                                        (export "t" (tag (param i32))))))))
+
+;; tables and globals with concrete reference types
+(component $foo
+  (core module (export "m")
+    (type $f (func (result i32)))
+    (table (export "t") 1 (ref null $f))
+    (global (export "g") (ref null $f) (ref.null $f))
+  )
+)
+(component
+  (import "foo" (instance
+    (export "m" (core module
+      (type (func (result i32)))
+      (export "t" (table 1 (ref null 0)))
+      (export "g" (global (ref null 0)))
+    ))
+  ))
+)
+(assert_unlinkable
+  (component
+    (import "foo" (instance
+      (export "m" (core module
+        (type (func (result i64)))
+        (export "t" (table 1 (ref null 0)))
+      ))
+    ))
+  )
+  "export `t` has the wrong type")
+(assert_unlinkable
+  (component
+    (import "foo" (instance
+      (export "m" (core module
+        (type (func (result i64)))
+        (export "g" (global (ref null 0)))
+      ))
+    ))
+  )
+  "export `g` has the wrong type")

@@ -2,8 +2,8 @@ use crate::component::*;
 use crate::error::{Result, bail};
 use crate::prelude::*;
 use crate::{
-    EngineOrModuleTypeIndex, EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, TypeConvert,
-    WasmHeapType,
+    EngineOrModuleTypeIndex, EntityType, ModuleInternedTypeIndex, ModuleTypes, ModuleTypesBuilder,
+    PrimaryMap, TypeConvert, TypeIndex, WasmHeapType, WasmparserTypeConverter,
 };
 use cranelift_entity::EntityRef;
 use std::collections::HashMap;
@@ -397,9 +397,17 @@ impl ComponentTypesBuilder {
                     .intern_type(types, *id)?
                     .into()
             }),
-            Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
+            Table(ty) => {
+                self.intern_ref_type(types, ty.element_type)?;
+                EntityType::Table(self.convert_table_type(ty)?)
+            }
             Memory(ty) => EntityType::Memory((*ty).into()),
-            Global(ty) => EntityType::Global(self.convert_global_type(ty)?),
+            Global(ty) => {
+                if let wasmparser::ValType::Ref(r) = ty.content_type {
+                    self.intern_ref_type(types, r)?;
+                }
+                EntityType::Global(self.convert_global_type(ty)?)
+            }
             Tag(id) => {
                 let func = self.module_types_builder_mut().intern_type(types, *id)?;
                 let exc = self
@@ -412,6 +420,15 @@ impl ComponentTypesBuilder {
             }
             FuncExact(_) => bail!("custom-descriptors proposal not implemented"),
         })
+    }
+
+    /// Interns the concrete type, if any, referenced by `ty` so that it can
+    /// subsequently be converted with this builder's `TypeConvert` impl.
+    fn intern_ref_type(&mut self, types: TypesRef<'_>, ty: wasmparser::RefType) -> Result<()> {
+        if let Some(id) = ty.type_index().and_then(|i| i.as_core_type_id()) {
+            self.module_types_builder_mut().intern_type(types, id)?;
+        }
+        Ok(())
     }
 
     /// Convert a wasmparser `ComponentDefinedTypeId` into Wasmtime's type representation.
@@ -910,12 +927,24 @@ impl ComponentTypesBuilder {
 }
 
 impl TypeConvert for ComponentTypesBuilder {
-    fn lookup_heap_type(&self, _index: wasmparser::UnpackedIndex) -> WasmHeapType {
-        panic!("heap types are not supported yet")
+    fn lookup_heap_type(&self, index: wasmparser::UnpackedIndex) -> WasmHeapType {
+        self.module_type_converter().lookup_heap_type(index)
     }
 
-    fn lookup_type_index(&self, _index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
-        panic!("typed references are not supported yet")
+    fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
+        self.module_type_converter().lookup_type_index(index)
+    }
+}
+
+impl ComponentTypesBuilder {
+    fn module_type_converter(
+        &self,
+    ) -> WasmparserTypeConverter<'_, impl Fn(TypeIndex) -> ModuleInternedTypeIndex> {
+        // Types at the component level are always referred to by their
+        // canonicalized `CoreTypeId`, never by a module-relative index.
+        WasmparserTypeConverter::new(&self.module_types, |_| {
+            unreachable!("component-level types don't use module type indices")
+        })
     }
 }
 
