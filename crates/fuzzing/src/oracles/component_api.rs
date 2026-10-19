@@ -14,11 +14,13 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
 use wasmtime::component::{
-    self, Accessor, Component, ComponentNamedList, Lift, Linker, Lower, Val,
+    self, Accessor, Component, ComponentExportIndex, ComponentNamedList, Lift, Linker,
+    LinkerInstance, Lower, Val,
 };
 use wasmtime::{AsContextMut, Enabled, Engine, Result, Store, StoreContextMut};
 use wasmtime_test_util::component_fuzz::{
-    Declarations, EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH, TestCase, Type,
+    Declarations, EXPORT_FUNCTION, EXPORT_INSTANCE, IMPLEMENTS_INTERFACE, IMPORT_FUNCTION,
+    IMPORT_INSTANCE, MAX_TYPE_DEPTH, TestCase, TestCaseOptions, Type,
 };
 
 /// Minimum length of an arbitrary list value generated for a test case
@@ -177,6 +179,7 @@ fn store<T>(input: &mut Unstructured<'_>, val: T) -> arbitrary::Result<Store<T>>
     config.module_config.component_model_async = true;
     config.module_config.component_model_async_stackful = true;
     config.module_config.component_model_map = true;
+    config.module_config.component_model_implements = true;
     if config.wasmtime.compiler_strategy == CompilerStrategy::Winch {
         config.wasmtime.compiler_strategy = CompilerStrategy::CraneliftNative;
     }
@@ -234,6 +237,43 @@ fn store<T>(input: &mut Unstructured<'_>, val: T) -> arbitrary::Result<Store<T>>
     Ok(store)
 }
 
+/// Returns the linker instance that the host function should be defined in.
+fn host_function_instance<'a, T>(
+    linker: &'a mut Linker<T>,
+    options: &TestCaseOptions,
+) -> LinkerInstance<'a, T> {
+    if options.host_import_implements {
+        linker.instance(IMPORT_INSTANCE).unwrap()
+    } else {
+        linker.root()
+    }
+}
+
+/// Returns the index of the guest function that the host should call, and
+/// asserts that any `(implements "...")` annotations are reflected in the
+/// component's type.
+fn export_function_index(
+    engine: &Engine,
+    component: &Component,
+    options: &TestCaseOptions,
+) -> ComponentExportIndex {
+    let ty = component.component_type();
+    if options.host_import_implements {
+        let import = ty.get_import(engine, IMPORT_INSTANCE).unwrap();
+        assert!(import.is_implements(IMPLEMENTS_INTERFACE));
+    }
+    let instance = if options.guest_export_implements {
+        let export = ty.get_export(engine, EXPORT_INSTANCE).unwrap();
+        assert!(export.is_implements(IMPLEMENTS_INTERFACE));
+        Some(component.get_export_index(None, EXPORT_INSTANCE).unwrap())
+    } else {
+        None
+    };
+    component
+        .get_export_index(instance.as_ref(), EXPORT_FUNCTION)
+        .unwrap()
+}
+
 /// Generate zero or more sets of arbitrary argument and result values and execute the test using those
 /// values, asserting that they flow from host-to-guest and guest-to-host unchanged.
 pub fn static_api_test<'a, P, R>(
@@ -270,6 +310,7 @@ where
     let wat = wat.as_bytes();
     crate::oracles::log_wasm(wat);
     let component = Component::new(&engine, wat).unwrap();
+    let export = export_function_index(&engine, &component, &declarations.options);
     let mut linker = Linker::new(&engine);
 
     fn host_function<P, R>(
@@ -288,22 +329,19 @@ where
         Ok(result.clone())
     }
 
+    let mut host = host_function_instance(&mut linker, &declarations.options);
     if declarations.options.host_async {
-        linker
-            .root()
-            .func_wrap_concurrent(IMPORT_FUNCTION, |a, params| {
-                Box::pin(async move {
-                    a.with(|mut cx| host_function::<P, R>(cx.as_context_mut(), params))
-                })
-            })
-            .unwrap();
+        host.func_wrap_concurrent(IMPORT_FUNCTION, |a, params| {
+            Box::pin(
+                async move { a.with(|mut cx| host_function::<P, R>(cx.as_context_mut(), params)) },
+            )
+        })
+        .unwrap();
     } else {
-        linker
-            .root()
-            .func_wrap(IMPORT_FUNCTION, |cx, params| {
-                host_function::<P, R>(cx, params)
-            })
-            .unwrap();
+        host.func_wrap(IMPORT_FUNCTION, |cx, params| {
+            host_function::<P, R>(cx, params)
+        })
+        .unwrap();
     }
 
     block_on(async {
@@ -312,7 +350,7 @@ where
             .await
             .unwrap();
         let func = instance
-            .get_typed_func::<P, R>(&mut store, EXPORT_FUNCTION)
+            .get_typed_func::<P, R>(&mut store, &export)
             .unwrap();
 
         let mut iters = 0..MAX_ITERS;
@@ -357,6 +395,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     let wat = wat.as_bytes();
     log_wasm(wat);
     let component = Component::new(&engine, wat).unwrap();
+    let export = export_function_index(&engine, &component, &case.options);
     let mut linker = Linker::new(&engine);
 
     fn host_function(
@@ -375,24 +414,21 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
         Ok(())
     }
 
+    let mut host = host_function_instance(&mut linker, &case.options);
     if case.options.host_async {
-        linker
-            .root()
-            .func_new_concurrent(IMPORT_FUNCTION, {
-                move |cx: &Accessor<_, _>, _, params: &[Val], results: &mut [Val]| {
-                    Box::pin(async move {
-                        cx.with(|mut store| host_function(store.as_context_mut(), params, results))
-                    })
-                }
-            })
-            .unwrap();
+        host.func_new_concurrent(IMPORT_FUNCTION, {
+            move |cx: &Accessor<_, _>, _, params: &[Val], results: &mut [Val]| {
+                Box::pin(async move {
+                    cx.with(|mut store| host_function(store.as_context_mut(), params, results))
+                })
+            }
+        })
+        .unwrap();
     } else {
-        linker
-            .root()
-            .func_new(IMPORT_FUNCTION, {
-                move |cx, _, params, results| host_function(cx, params, results)
-            })
-            .unwrap();
+        host.func_new(IMPORT_FUNCTION, {
+            move |cx, _, params, results| host_function(cx, params, results)
+        })
+        .unwrap();
     }
 
     block_on(async {
@@ -400,7 +436,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
             .instantiate_async(&mut store, &component)
             .await
             .unwrap();
-        let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
+        let func = instance.get_func(&mut store, &export).unwrap();
         let ty = func.ty(&store);
 
         let mut iters = 0..MAX_ITERS;

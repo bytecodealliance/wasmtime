@@ -27,6 +27,18 @@ pub const IMPORT_FUNCTION: &str = "echo-import";
 /// The name of the exported guest function which the host should call
 pub const EXPORT_FUNCTION: &str = "echo-export";
 
+/// The name of the instance through which the host function is imported when
+/// [`TestCaseOptions::host_import_implements`] is set.
+pub const IMPORT_INSTANCE: &str = "echo-import-instance";
+
+/// The name of the instance through which the guest function is exported when
+/// [`TestCaseOptions::guest_export_implements`] is set.
+pub const EXPORT_INSTANCE: &str = "echo-export-instance";
+
+/// The interface that [`IMPORT_INSTANCE`] and [`EXPORT_INSTANCE`] are
+/// annotated with via `(implements "...")`.
+pub const IMPLEMENTS_INTERFACE: &str = "wasmtime:fuzz/echo@1.0.0";
+
 /// Wasmtime allows up to 100 type depth so limit this to just under that.
 pub const MAX_TYPE_DEPTH: u32 = 90;
 
@@ -1616,6 +1628,28 @@ impl Declarations {
             options.caller_lower_abi,
         );
         let host_async = if options.host_async { "async" } else { "" };
+        let host_import = if options.host_import_implements {
+            format!(
+                r#"
+                (import "{IMPORT_INSTANCE}" (implements "{IMPLEMENTS_INTERFACE}") (instance $host
+                    (export "{IMPORT_FUNCTION}" (func (type $host_sig)))
+                ))
+                (alias export $host "{IMPORT_FUNCTION}" (func $f))
+                "#
+            )
+        } else {
+            format!(r#"(import "{IMPORT_FUNCTION}" (func $f (type $host_sig)))"#)
+        };
+        let guest_export = if options.guest_export_implements {
+            format!(
+                r#"
+                (instance $export (export "{EXPORT_FUNCTION}" (func $c2 "{EXPORT_FUNCTION}")))
+                (export "{EXPORT_INSTANCE}" (implements "{IMPLEMENTS_INTERFACE}") (instance $export))
+                "#
+            )
+        } else {
+            format!(r#"(export "{EXPORT_FUNCTION}" (func $c2 "{EXPORT_FUNCTION}"))"#)
+        };
 
         format!(
             r#"
@@ -1629,7 +1663,7 @@ impl Declarations {
                 {types}
 
                 (type $host_sig (func {host_async} {params} {results}))
-                (import "{IMPORT_FUNCTION}" (func $f (type $host_sig)))
+                {host_import}
 
                 {c1}
                 {c2}
@@ -1641,7 +1675,7 @@ impl Declarations {
                     {type_instantiation_args}
                     (with "{IMPORT_FUNCTION}" (func $c1 "{EXPORT_FUNCTION}"))
                 ))
-                (export "{EXPORT_FUNCTION}" (func $c2 "{EXPORT_FUNCTION}"))
+                {guest_export}
             )"#,
         )
         .into()
@@ -1688,6 +1722,14 @@ pub struct TestCaseOptions {
     /// The ABI that the callee component is using to lower its import (the
     /// host function).
     pub callee_lower_abi: LowerAbi,
+    /// Whether the host function is imported through an instance named
+    /// [`IMPORT_INSTANCE`] annotated with `(implements "...")` instead of
+    /// directly as a function.
+    pub host_import_implements: bool,
+    /// Whether the guest function is exported through an instance named
+    /// [`EXPORT_INSTANCE`] annotated with `(implements "...")` instead of
+    /// directly as a function.
+    pub guest_export_implements: bool,
 }
 
 #[derive(Debug, Arbitrary, Copy, Clone)]
@@ -1855,6 +1897,8 @@ impl ToTokens for TestCaseOptions {
             callee_lift_abi,
             caller_lower_abi,
             callee_lower_abi,
+            host_import_implements,
+            guest_export_implements,
         } = self;
         tokens.extend(quote!(wasmtime_test_util::component_fuzz::TestCaseOptions {
             guest_caller_async: #guest_caller_async,
@@ -1866,6 +1910,8 @@ impl ToTokens for TestCaseOptions {
             callee_lift_abi: #callee_lift_abi,
             caller_lower_abi: #caller_lower_abi,
             callee_lower_abi: #callee_lower_abi,
+            host_import_implements: #host_import_implements,
+            guest_export_implements: #guest_export_implements,
         }));
     }
 }
