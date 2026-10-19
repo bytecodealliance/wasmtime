@@ -542,7 +542,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         // `{enter,exit}-sync-call` calls.
         component.transparent_adapters = transparent_adapters(&component, self.types.types());
 
-        self.partition_adapter_modules(&mut component);
+        self.partition_adapter_modules(&mut component)?;
 
         analyze_same_vmctx_imports(&component, &mut self.static_modules);
 
