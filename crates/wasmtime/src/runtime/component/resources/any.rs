@@ -304,6 +304,18 @@ impl ResourceAny {
     #[cfg(feature = "async")]
     pub async fn resource_drop_async(self, mut store: impl AsContextMut<Data: Send>) -> Result<()> {
         let mut store = store.as_context_mut();
+
+        // Use the event loop if concurrency support is enabled to handle thread
+        // switches, for example, if wasm is run.
+        #[cfg(feature = "component-model-async")]
+        if store.0.concurrency_support() {
+            return store
+                .run_concurrent_trap_on_idle(async |store| {
+                    self.resource_drop_concurrent(store).await
+                })
+                .await?;
+        }
+
         store
             .on_fiber(|store| self.resource_drop_impl(store))
             .await?
