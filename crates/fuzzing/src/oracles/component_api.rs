@@ -19,8 +19,9 @@ use wasmtime::component::{
 };
 use wasmtime::{AsContextMut, Enabled, Engine, Result, Store, StoreContextMut};
 use wasmtime_test_util::component_fuzz::{
-    Declarations, EXPORT_FUNCTION, EXPORT_INSTANCE, IMPLEMENTS_INTERFACE, IMPORT_FUNCTION,
-    IMPORT_INSTANCE, MAX_TYPE_DEPTH, TestCase, TestCaseOptions, Type,
+    Declarations, EXPORT_FUNCTION, EXPORT_INSTANCE, EXTERNAL_ID, IMPLEMENTS_INTERFACE,
+    IMPORT_DECOY_INSTANCE, IMPORT_FUNCTION, IMPORT_INSTANCE, MAX_TYPE_DEPTH, TestCase,
+    TestCaseOptions, Type,
 };
 
 /// Minimum length of an arbitrary list value generated for a test case
@@ -249,6 +250,28 @@ fn host_function_instance<'a, T>(
     }
 }
 
+/// Defines [`IMPORT_DECOY_INSTANCE`] if the test case imports it. The component
+/// never calls it, so any call is reported as an error.
+fn define_decoy<T: Send + 'static>(linker: &mut Linker<T>, options: &TestCaseOptions) {
+    if !(options.host_import_implements && options.host_import_decoy) {
+        return;
+    }
+    let mut decoy = linker.instance(IMPORT_DECOY_INSTANCE).unwrap();
+    if options.host_async {
+        decoy
+            .func_new_concurrent(IMPORT_FUNCTION, |_, _, _, _| {
+                Box::pin(async { Err(wasmtime::format_err!("decoy import was called")) })
+            })
+            .unwrap();
+    } else {
+        decoy
+            .func_new(IMPORT_FUNCTION, |_, _, _, _| {
+                Err(wasmtime::format_err!("decoy import was called"))
+            })
+            .unwrap();
+    }
+}
+
 /// Returns the index of the guest function that the host should call, and
 /// asserts that any `(implements "...")` annotations are reflected in the
 /// component's type.
@@ -258,13 +281,20 @@ fn export_function_index(
     options: &TestCaseOptions,
 ) -> ComponentExportIndex {
     let ty = component.component_type();
+    let external_id = options.external_ids.then_some(EXTERNAL_ID);
     if options.host_import_implements {
         let import = ty.get_import(engine, IMPORT_INSTANCE).unwrap();
         assert!(import.is_implements(IMPLEMENTS_INTERFACE));
+        assert_eq!(import.external_id, external_id);
+        if options.host_import_decoy {
+            let decoy = ty.get_import(engine, IMPORT_DECOY_INSTANCE).unwrap();
+            assert!(decoy.is_implements(IMPLEMENTS_INTERFACE));
+        }
     }
     let instance = if options.guest_export_implements {
         let export = ty.get_export(engine, EXPORT_INSTANCE).unwrap();
         assert!(export.is_implements(IMPLEMENTS_INTERFACE));
+        assert_eq!(export.external_id, external_id);
         Some(component.get_export_index(None, EXPORT_INSTANCE).unwrap())
     } else {
         None
@@ -344,6 +374,7 @@ where
         .unwrap();
     }
 
+    define_decoy(&mut linker, &declarations.options);
     block_on(async {
         let instance = linker
             .instantiate_async(&mut store, &component)
@@ -431,6 +462,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
         .unwrap();
     }
 
+    define_decoy(&mut linker, &case.options);
     block_on(async {
         let instance = linker
             .instantiate_async(&mut store, &component)

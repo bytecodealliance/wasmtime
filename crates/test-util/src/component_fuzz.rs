@@ -39,6 +39,15 @@ pub const EXPORT_INSTANCE: &str = "echo-export-instance";
 /// annotated with via `(implements "...")`.
 pub const IMPLEMENTS_INTERFACE: &str = "wasmtime:fuzz/echo@1.0.0";
 
+/// A second import implementing [`IMPLEMENTS_INTERFACE`] when
+/// [`TestCaseOptions::host_import_decoy`] is set. The component never calls
+/// it, so the host should only ever be called through [`IMPORT_INSTANCE`].
+pub const IMPORT_DECOY_INSTANCE: &str = "echo-import-decoy";
+
+/// The `(external-id "...")` given to [`IMPORT_INSTANCE`] and
+/// [`EXPORT_INSTANCE`] when [`TestCaseOptions::external_ids`] is set.
+pub const EXTERNAL_ID: &str = "wasmtime-fuzz:echo";
+
 /// Wasmtime allows up to 100 type depth so limit this to just under that.
 pub const MAX_TYPE_DEPTH: u32 = 90;
 
@@ -1628,12 +1637,29 @@ impl Declarations {
             options.caller_lower_abi,
         );
         let host_async = if options.host_async { "async" } else { "" };
+        let external_id = if options.external_ids {
+            format!(r#"(external-id "{EXTERNAL_ID}")"#)
+        } else {
+            String::new()
+        };
         let host_import = if options.host_import_implements {
+            let decoy = if options.host_import_decoy {
+                format!(
+                    r#"
+                    (import "{IMPORT_DECOY_INSTANCE}" (implements "{IMPLEMENTS_INTERFACE}") (instance
+                        (export "{IMPORT_FUNCTION}" (func (type $host_sig)))
+                    ))
+                    "#
+                )
+            } else {
+                String::new()
+            };
             format!(
                 r#"
-                (import "{IMPORT_INSTANCE}" (implements "{IMPLEMENTS_INTERFACE}") (instance $host
+                (import "{IMPORT_INSTANCE}" (implements "{IMPLEMENTS_INTERFACE}") {external_id} (instance $host
                     (export "{IMPORT_FUNCTION}" (func (type $host_sig)))
                 ))
+                {decoy}
                 (alias export $host "{IMPORT_FUNCTION}" (func $f))
                 "#
             )
@@ -1644,7 +1670,7 @@ impl Declarations {
             format!(
                 r#"
                 (instance $export (export "{EXPORT_FUNCTION}" (func $c2 "{EXPORT_FUNCTION}")))
-                (export "{EXPORT_INSTANCE}" (implements "{IMPLEMENTS_INTERFACE}") (instance $export))
+                (export "{EXPORT_INSTANCE}" (implements "{IMPLEMENTS_INTERFACE}") {external_id} (instance $export))
                 "#
             )
         } else {
@@ -1730,6 +1756,13 @@ pub struct TestCaseOptions {
     /// [`EXPORT_INSTANCE`] annotated with `(implements "...")` instead of
     /// directly as a function.
     pub guest_export_implements: bool,
+    /// Whether, when `host_import_implements` is set, the component also
+    /// imports [`IMPORT_DECOY_INSTANCE`], which implements the same interface
+    /// but is never called.
+    pub host_import_decoy: bool,
+    /// Whether instances annotated with `(implements "...")` also get an
+    /// `(external-id "...")` attribute.
+    pub external_ids: bool,
 }
 
 #[derive(Debug, Arbitrary, Copy, Clone)]
@@ -1899,6 +1932,8 @@ impl ToTokens for TestCaseOptions {
             callee_lower_abi,
             host_import_implements,
             guest_export_implements,
+            host_import_decoy,
+            external_ids,
         } = self;
         tokens.extend(quote!(wasmtime_test_util::component_fuzz::TestCaseOptions {
             guest_caller_async: #guest_caller_async,
@@ -1912,6 +1947,8 @@ impl ToTokens for TestCaseOptions {
             callee_lower_abi: #callee_lower_abi,
             host_import_implements: #host_import_implements,
             guest_export_implements: #guest_export_implements,
+            host_import_decoy: #host_import_decoy,
+            external_ids: #external_ids,
         }));
     }
 }
