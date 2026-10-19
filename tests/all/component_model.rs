@@ -168,6 +168,14 @@ fn components_importing_modules() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn map_type_enabled_by_default() -> Result<()> {
+    let engine = wasmtime::Engine::default();
+    Component::new(&engine, "(component (type (map string u32)))")?;
+    Ok(())
+}
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum Type {
     S8,
