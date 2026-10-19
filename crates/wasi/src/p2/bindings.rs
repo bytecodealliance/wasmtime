@@ -374,6 +374,20 @@ mod async_io {
             "wasi:sockets/udp.[drop]outgoing-datagram-stream": async | tracing | trappable,
             "wasi:sockets/udp.[drop]incoming-datagram-stream": async | tracing | trappable,
             "wasi:sockets/ip-name-lookup.[drop]resolve-address-stream": async | tracing | trappable,
+            // `wasi:io` is otherwise aliased to `wasmtime-wasi-io` via `with`
+            // below, so these rules only apply to the `named_imports`
+            // bindings, and they mirror the configuration in that crate.
+            "wasi:io/poll.poll": async | tracing | trappable,
+            "wasi:io/poll.[method]pollable.block": async | tracing | trappable,
+            "wasi:io/poll.[method]pollable.ready": async | tracing | trappable,
+            "wasi:io/streams.[method]input-stream.blocking-read": async | tracing | trappable,
+            "wasi:io/streams.[method]input-stream.blocking-skip": async | tracing | trappable,
+            "wasi:io/streams.[drop]input-stream": async | tracing | trappable,
+            "wasi:io/streams.[method]output-stream.blocking-splice": async | tracing | trappable,
+            "wasi:io/streams.[method]output-stream.blocking-flush": async | tracing | trappable,
+            "wasi:io/streams.[method]output-stream.blocking-write-and-flush": async | tracing | trappable,
+            "wasi:io/streams.[method]output-stream.blocking-write-zeroes-and-flush": async | tracing | trappable,
+            "wasi:io/streams.[drop]output-stream": async | trappable,
             default: tracing | trappable,
         },
         exports: { default: async },
@@ -404,6 +418,9 @@ mod async_io {
             "wasi:cli/terminal-output.terminal-output": crate::p2::stdio::TerminalOutput,
         },
         named_imports: {
+            "wasi:io/error": crate::NamedId,
+            "wasi:io/poll": crate::NamedId,
+            "wasi:io/streams": crate::NamedId,
             "wasi:clocks/monotonic-clock": crate::NamedId,
             "wasi:clocks/wall-clock": crate::NamedId,
             "wasi:random/random": crate::NamedId,

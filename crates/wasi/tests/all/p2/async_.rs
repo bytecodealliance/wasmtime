@@ -579,3 +579,24 @@ async fn p2_environment_named_imports() -> Result<()> {
         .await?
         .map_err(|()| wasmtime::format_err!("run returned a failure"))
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_io_named_imports() -> Result<()> {
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_component_model_implements(true);
+    });
+    let component = Component::new(&engine, super::IO_NAMED_IMPORTS_COMPONENT)?;
+    let mut linker = Linker::new(&engine);
+    add_to_linker_async(&mut linker)?;
+    wasmtime_wasi::p2::add_named_to_linker_async(
+        &mut linker,
+        &component,
+        super::IoNamedImports::lookup,
+    )?;
+    let mut store = wasmtime::Store::new(&engine, super::IoNamedImports::default());
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call_async(&mut store, ()).await?;
+    assert_eq!(store.data().named_stdout.contents(), "hello");
+    Ok(())
+}

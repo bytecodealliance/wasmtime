@@ -491,6 +491,12 @@ impl HasData for HasIo {
     type Data<'a> = &'a mut ResourceTable;
 }
 
+struct HasIoNamed<T>(core::marker::PhantomData<fn() -> T>);
+
+impl<T: WasiNamedView> HasData for HasIoNamed<T> {
+    type Data<'a> = WasiCtxNamedView<'a, T>;
+}
+
 // FIXME: it's a bit unfortunate that this can't use
 // `wasmtime_wasi_io::add_to_linker` and that's because `T: WasiView`, here,
 // not `T: IoView`. Ideally we'd have `impl<T: WasiView> IoView for T` but
@@ -507,6 +513,12 @@ fn add_async_io_to_linker<T: WasiView>(l: &mut Linker<T>) -> wasmtime::Result<()
 /// Interfaces that are added via [`add_named_to_linker_async`].
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Interface {
+    /// `wasi:io/error`
+    IoError,
+    /// `wasi:io/poll`
+    IoPoll,
+    /// `wasi:io/streams`
+    IoStreams,
     /// `wasi:clocks/monotonic-clock`
     ClocksMonotonicClock,
     /// `wasi:clocks/wall-clock`
@@ -659,9 +671,27 @@ pub fn add_named_to_linker_with_options_async<T>(
 where
     T: WasiNamedView,
 {
-    use crate::p2::bindings::named_imports::wasi::{cli, clocks, filesystem, random, sockets};
+    use crate::p2::bindings::named_imports::wasi::{cli, clocks, filesystem, io, random, sockets};
 
     let l = linker;
+    io::error::add_to_linker::<T, HasIoNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::IoError, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    io::poll::add_to_linker::<T, HasIoNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::IoPoll, name),
+        |x| WasiCtxNamedView(x),
+    )?;
+    io::streams::add_to_linker::<T, HasIoNamed<T>>(
+        l,
+        component,
+        |name| lookup(Interface::IoStreams, name),
+        |x| WasiCtxNamedView(x),
+    )?;
     clocks::wall_clock::add_to_linker::<T, WasiClocksNamed<T>>(
         l,
         component,

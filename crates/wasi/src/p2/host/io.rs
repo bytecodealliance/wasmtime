@@ -126,3 +126,254 @@ impl streams::HostInputStream for ResourceTable {
         AsyncHostInputStream::subscribe(self, stream)
     }
 }
+
+mod named {
+    use crate::p2::bindings::named_imports::wasi::io::{error, poll, streams};
+    use crate::{NamedId, WasiCtxNamedView, WasiNamedView};
+    use wasmtime::component::Resource;
+    use wasmtime_wasi_io::bindings::wasi::io::{
+        error as async_error, poll as async_poll, streams as async_streams,
+    };
+    use wasmtime_wasi_io::poll::DynPollable;
+    use wasmtime_wasi_io::streams::{
+        DynInputStream, DynOutputStream, Error, StreamError, StreamResult,
+    };
+
+    // `wasi:io` has no state other than resources in the table, so named
+    // imports only need to locate the table to use.
+
+    impl<T> error::Host for WasiCtxNamedView<'_, T> where T: WasiNamedView {}
+
+    impl<T> error::HostError for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        fn to_debug_string(
+            &mut self,
+            id: NamedId,
+            err: Resource<Error>,
+        ) -> wasmtime::Result<String> {
+            async_error::HostError::to_debug_string(self.0.ctx(id).table, err)
+        }
+
+        fn drop(&mut self, id: NamedId, err: Resource<Error>) -> wasmtime::Result<()> {
+            async_error::HostError::drop(self.0.ctx(id).table, err)
+        }
+    }
+
+    impl<T> poll::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        async fn poll(
+            &mut self,
+            id: NamedId,
+            pollables: Vec<Resource<DynPollable>>,
+        ) -> wasmtime::Result<Vec<u32>> {
+            async_poll::Host::poll(self.0.ctx(id).table, pollables).await
+        }
+    }
+
+    impl<T> poll::HostPollable for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        async fn block(
+            &mut self,
+            id: NamedId,
+            pollable: Resource<DynPollable>,
+        ) -> wasmtime::Result<()> {
+            async_poll::HostPollable::block(self.0.ctx(id).table, pollable).await
+        }
+
+        async fn ready(
+            &mut self,
+            id: NamedId,
+            pollable: Resource<DynPollable>,
+        ) -> wasmtime::Result<bool> {
+            async_poll::HostPollable::ready(self.0.ctx(id).table, pollable).await
+        }
+
+        fn drop(&mut self, id: NamedId, pollable: Resource<DynPollable>) -> wasmtime::Result<()> {
+            async_poll::HostPollable::drop(self.0.ctx(id).table, pollable)
+        }
+    }
+
+    impl<T> streams::Host for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        fn convert_stream_error(
+            &mut self,
+            id: NamedId,
+            err: StreamError,
+        ) -> wasmtime::Result<async_streams::StreamError> {
+            async_streams::Host::convert_stream_error(self.0.ctx(id).table, err)
+        }
+    }
+
+    impl<T> streams::HostOutputStream for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        async fn drop(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynOutputStream>,
+        ) -> wasmtime::Result<()> {
+            async_streams::HostOutputStream::drop(self.0.ctx(id).table, stream).await
+        }
+
+        fn check_write(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynOutputStream>,
+        ) -> StreamResult<u64> {
+            async_streams::HostOutputStream::check_write(self.0.ctx(id).table, stream)
+        }
+
+        fn write(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynOutputStream>,
+            bytes: Vec<u8>,
+        ) -> StreamResult<()> {
+            async_streams::HostOutputStream::write(self.0.ctx(id).table, stream, bytes)
+        }
+
+        fn subscribe(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynOutputStream>,
+        ) -> wasmtime::Result<Resource<DynPollable>> {
+            async_streams::HostOutputStream::subscribe(self.0.ctx(id).table, stream)
+        }
+
+        async fn blocking_write_and_flush(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynOutputStream>,
+            bytes: Vec<u8>,
+        ) -> StreamResult<()> {
+            async_streams::HostOutputStream::blocking_write_and_flush(
+                self.0.ctx(id).table,
+                stream,
+                bytes,
+            )
+            .await
+        }
+
+        async fn blocking_write_zeroes_and_flush(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynOutputStream>,
+            len: u64,
+        ) -> StreamResult<()> {
+            async_streams::HostOutputStream::blocking_write_zeroes_and_flush(
+                self.0.ctx(id).table,
+                stream,
+                len,
+            )
+            .await
+        }
+
+        fn write_zeroes(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynOutputStream>,
+            len: u64,
+        ) -> StreamResult<()> {
+            async_streams::HostOutputStream::write_zeroes(self.0.ctx(id).table, stream, len)
+        }
+
+        fn flush(&mut self, id: NamedId, stream: Resource<DynOutputStream>) -> StreamResult<()> {
+            async_streams::HostOutputStream::flush(self.0.ctx(id).table, stream)
+        }
+
+        async fn blocking_flush(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynOutputStream>,
+        ) -> StreamResult<()> {
+            async_streams::HostOutputStream::blocking_flush(self.0.ctx(id).table, stream).await
+        }
+
+        fn splice(
+            &mut self,
+            id: NamedId,
+            dst: Resource<DynOutputStream>,
+            src: Resource<DynInputStream>,
+            len: u64,
+        ) -> StreamResult<u64> {
+            async_streams::HostOutputStream::splice(self.0.ctx(id).table, dst, src, len)
+        }
+
+        async fn blocking_splice(
+            &mut self,
+            id: NamedId,
+            dst: Resource<DynOutputStream>,
+            src: Resource<DynInputStream>,
+            len: u64,
+        ) -> StreamResult<u64> {
+            async_streams::HostOutputStream::blocking_splice(self.0.ctx(id).table, dst, src, len)
+                .await
+        }
+    }
+
+    impl<T> streams::HostInputStream for WasiCtxNamedView<'_, T>
+    where
+        T: WasiNamedView,
+    {
+        async fn drop(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynInputStream>,
+        ) -> wasmtime::Result<()> {
+            async_streams::HostInputStream::drop(self.0.ctx(id).table, stream).await
+        }
+
+        fn read(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynInputStream>,
+            len: u64,
+        ) -> StreamResult<Vec<u8>> {
+            async_streams::HostInputStream::read(self.0.ctx(id).table, stream, len)
+        }
+
+        async fn blocking_read(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynInputStream>,
+            len: u64,
+        ) -> StreamResult<Vec<u8>> {
+            async_streams::HostInputStream::blocking_read(self.0.ctx(id).table, stream, len).await
+        }
+
+        fn skip(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynInputStream>,
+            len: u64,
+        ) -> StreamResult<u64> {
+            async_streams::HostInputStream::skip(self.0.ctx(id).table, stream, len)
+        }
+
+        async fn blocking_skip(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynInputStream>,
+            len: u64,
+        ) -> StreamResult<u64> {
+            async_streams::HostInputStream::blocking_skip(self.0.ctx(id).table, stream, len).await
+        }
+
+        fn subscribe(
+            &mut self,
+            id: NamedId,
+            stream: Resource<DynInputStream>,
+        ) -> wasmtime::Result<Resource<DynPollable>> {
+            async_streams::HostInputStream::subscribe(self.0.ctx(id).table, stream)
+        }
+    }
+}
