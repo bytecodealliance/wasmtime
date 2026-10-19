@@ -398,6 +398,8 @@ typedef struct wasmtime_component_valrecord_entry {
 
 /// \brief A pair of a key and a value that represents one entry in a value
 /// with kind #WASMTIME_COMPONENT_MAP
+///
+/// Entries of a map value preserve their order and may contain duplicate keys.
 typedef struct wasmtime_component_valmap_entry {
   /// The key of this entry
   wasmtime_component_val_t key;
