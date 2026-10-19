@@ -1027,11 +1027,11 @@ mod implements {
 
     const DUMMY: &str = r#"
         (component
-            (import "hot-cache" (instance $hot
+            (import "hot-cache" (implements "demo:pkg/store") (instance $hot
                 (export "get" (func (param "key" u32) (result u32)))
                 (export "set" (func (param "key" u32) (param "value" u32)))
             ))
-            (import "durable" (instance $dur
+            (import "durable" (implements "demo:pkg/store") (instance $dur
                 (export "get" (func (param "key" u32) (result u32)))
                 (export "set" (func (param "key" u32) (param "value" u32)))
             ))
@@ -1071,6 +1071,13 @@ mod implements {
         )
     "#;
 
+    fn implements_engine() -> Engine {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_implements(true);
+        Engine::new(&config).unwrap()
+    }
+
     #[test]
     fn add_to_linker_can_instantiate() -> Result<()> {
         #[derive(Default)]
@@ -1088,7 +1095,7 @@ mod implements {
             }
         }
 
-        let engine = engine();
+        let engine = implements_engine();
         let mut linker = Linker::new(&engine);
         Cache::add_to_linker::<_, HasSelf<MyHost>>(&mut linker, |s| s)?;
         let component = Component::new(&engine, DUMMY)?;
@@ -1119,7 +1126,7 @@ mod implements {
             durable: HashMap<u32, u32>,
         }
 
-        let engine = engine();
+        let engine = implements_engine();
         let mut linker = Linker::new(&engine);
         demo::pkg::store::add_to_linker_instance::<MyHost, HasSelf<HashMap<u32, u32>>>(
             &mut linker.instance("hot-cache")?,
@@ -1136,7 +1143,6 @@ mod implements {
         Ok(())
     }
 }
-
 mod named_imports {
     use super::*;
     use std::collections::HashMap;
