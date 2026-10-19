@@ -415,6 +415,43 @@ mod with_works_with_hierarchy {
     }
 }
 
+// A labelled import reuses the remapped module of a plain import of the same
+// interface.
+mod implements_plain_and_labelled_with {
+    mod bindings {
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:foo;
+
+                interface store {
+                    get: func() -> u32;
+                }
+
+                world w {
+                    import store;
+                }
+            ",
+        });
+    }
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            interface store {
+                get: func() -> u32;
+            }
+
+            world w {
+                import a: store;
+                import store;
+                import b: store;
+            }
+        ",
+        with: { "foo:foo/store": bindings::foo::foo::store },
+    });
+}
+
 mod trappable_imports {
     mod none {
         wasmtime::component::bindgen!({

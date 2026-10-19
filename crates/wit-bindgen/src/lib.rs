@@ -71,7 +71,10 @@ struct Wasmtime {
     import_interfaces: IndexMap<InterfaceId, ImportInterface>,
     world_import_functions: Vec<Function>,
     world_implements_interfaces: Vec<(String, InterfaceId)>,
-    interfaces_for_implements: HashMap<InterfaceId, InterfaceId>,
+    /// For each named interface imported by the world, the import whose
+    /// bindings are shared by all of the world's imports of the interface, and
+    /// whether that's a plain (rather than labelled) import.
+    interfaces_for_implements: HashMap<InterfaceId, (InterfaceId, bool)>,
     exports: Exports,
     types: Types,
     sizes: SizeAlign,
@@ -437,6 +440,32 @@ impl Wasmtime {
         }
 
         let world = &resolve.worlds[id];
+
+        // All imports of a named interface, plain or labelled (`import a: foo;`),
+        // share one set of bindings: those of the plain import if there is
+        // one, and otherwise those of the first labelled import. Choose these
+        // up front, since a plain import may come after the labelled ones.
+        for (name, import) in world.imports.iter() {
+            let WorldItem::Interface { id, .. } = import else {
+                continue;
+            };
+            if resolve.interfaces[*id].name.is_none() {
+                continue;
+            }
+            let og_interface = resolve.interfaces[*id].clone_of.unwrap_or(*id);
+            match name {
+                WorldKey::Interface(_) => {
+                    self.interfaces_for_implements
+                        .insert(og_interface, (*id, true));
+                }
+                WorldKey::Name(_) => {
+                    self.interfaces_for_implements
+                        .entry(og_interface)
+                        .or_insert((*id, false));
+                }
+            }
+        }
+
         for (name, import) in world.imports.iter() {
             if !self.opts.only_interfaces || matches!(import, WorldItem::Interface { .. }) {
                 self.import(resolve, name, import)?;
@@ -559,14 +588,12 @@ impl Wasmtime {
                     && resolve.interfaces[*id].name.is_some()
                 {
                     let og_interface = resolve.interfaces[*id].clone_of.unwrap_or(*id);
-                    let implements = match self.interfaces_for_implements.get(&og_interface) {
-                        Some(id) => *id,
-                        None => {
-                            self.interfaces_for_implements.insert(og_interface, *id);
-                            self.import_interface(resolve, &WorldKey::Interface(*id), *id, false)?;
-                            *id
-                        }
-                    };
+                    let (implements, plain) = self.interfaces_for_implements[&og_interface];
+                    // Bindings shared with a plain import are generated for
+                    // that import instead.
+                    if !plain && implements == *id {
+                        self.import_interface(resolve, &WorldKey::Interface(*id), *id, false)?;
+                    }
                     self.world_implements_interfaces
                         .push((kebab.to_string(), implements));
                 } else {

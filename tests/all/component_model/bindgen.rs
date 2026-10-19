@@ -1227,6 +1227,118 @@ mod implements {
         Ok(())
     }
 }
+
+mod implements_plain_and_labelled {
+    use super::*;
+    use wasmtime::component::HasSelf;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package demo:pkg;
+
+            interface store {
+                get: func() -> u32;
+            }
+
+            world w {
+                import store;
+                import a: store;
+
+                export get-plain: func() -> u32;
+                export get-a: func() -> u32;
+            }
+        ",
+    });
+
+    // A component importing `demo:pkg/store` both plainly and under the label
+    // `a`, exporting a function which forwards to each import.
+    const COMPONENT: &str = r#"
+        (component
+            (import "demo:pkg/store" (instance $plain
+                (export "get" (func (result u32)))
+            ))
+            (import "a" (implements "demo:pkg/store") (instance $a
+                (export "get" (func (result u32)))
+            ))
+
+            (core func $plain-get (canon lower (func $plain "get")))
+            (core func $a-get (canon lower (func $a "get")))
+
+            (core module $m
+                (import "" "plain-get" (func $plain-get (result i32)))
+                (import "" "a-get" (func $a-get (result i32)))
+                (func (export "get-plain") (result i32) call $plain-get)
+                (func (export "get-a") (result i32) call $a-get)
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "plain-get" (func $plain-get))
+                    (export "a-get" (func $a-get))
+                ))
+            ))
+
+            (func (export "get-plain") (result u32) (canon lift (core func $i "get-plain")))
+            (func (export "get-a") (result u32) (canon lift (core func $i "get-a")))
+        )
+    "#;
+
+    fn implements_engine() -> Engine {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_implements(true);
+        Engine::new(&config).unwrap()
+    }
+
+    #[derive(Default)]
+    struct Counter(u32);
+
+    impl demo::pkg::store::Host for Counter {
+        fn get(&mut self) -> u32 {
+            self.0 += 1;
+            self.0
+        }
+    }
+
+    #[test]
+    fn world_add_to_linker_links_both() -> Result<()> {
+        let engine = implements_engine();
+        let component = Component::new(&engine, COMPONENT)?;
+        let mut linker = Linker::new(&engine);
+        W::add_to_linker::<_, HasSelf<Counter>>(&mut linker, |s| s)?;
+        let mut store = Store::new(&engine, Counter::default());
+        let w = W::instantiate(&mut store, &component, &linker)?;
+        assert_eq!(w.call_get_plain(&mut store)?, 1);
+        assert_eq!(w.call_get_a(&mut store)?, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn imports_can_be_linked_separately() -> Result<()> {
+        #[derive(Default)]
+        struct MyHost {
+            plain: Counter,
+            a: Counter,
+        }
+
+        let engine = implements_engine();
+        let component = Component::new(&engine, COMPONENT)?;
+        let mut linker = Linker::new(&engine);
+        demo::pkg::store::add_to_linker::<MyHost, HasSelf<Counter>>(&mut linker, |s| &mut s.plain)?;
+        demo::pkg::store::add_to_linker_instance::<MyHost, HasSelf<Counter>>(
+            &mut linker.instance("a")?,
+            |s| &mut s.a,
+        )?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let w = W::instantiate(&mut store, &component, &linker)?;
+        assert_eq!(w.call_get_plain(&mut store)?, 1);
+        assert_eq!(w.call_get_plain(&mut store)?, 2);
+        assert_eq!(w.call_get_a(&mut store)?, 1);
+        assert_eq!(store.data().plain.0, 2);
+        assert_eq!(store.data().a.0, 1);
+        Ok(())
+    }
+}
+
 mod named_imports {
     use super::*;
     use std::collections::HashMap;
