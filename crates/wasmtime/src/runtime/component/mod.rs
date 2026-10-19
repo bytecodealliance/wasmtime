@@ -451,11 +451,12 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // interfaces, used together with the component model's
 ///     // `(implements "...")` annotation.
 ///     //
-///     // For each interface listed here an extra `Host` trait is generated
-///     // under a top-level `named_imports` module (mirroring the interface's
-///     // normal module path) whose methods each take an additional first
-///     // argument: a reference to the host-chosen "id" type given as the value
-///     // (here `MyHandlerId`). Alongside the trait a reflection-based
+///     // Each key must name an interface that the world imports. For each
+///     // one an extra `Host` trait is generated under a top-level
+///     // `named_imports` module (mirroring the interface's normal module
+///     // path) whose methods each take an additional first argument: the
+///     // host-chosen "id" type given as the value (here `MyHandlerId`),
+///     // passed by value. Alongside the trait a reflection-based
 ///     // `add_to_linker` is generated:
 ///     //
 ///     // ```ignore
@@ -467,15 +468,23 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // ) -> Result<()>;
 ///     // ```
 ///     //
-///     // This inspects `component`'s imports, and for each one annotated with
-///     // `(implements "wasi:http/handler")` calls `lookup` with the import's
-///     // name to obtain an id. That id is then cloned into each linker closure
-///     // and passed as the first argument to every method call, letting a
-///     // single `Host` implementation distinguish between multiple imports
-///     // of the same interface.
+///     // This inspects `component`'s imports, and for each one whose
+///     // `(implements "...")` annotation matches `wasi:http/handler` calls
+///     // `lookup` with the import's name to obtain an id. Matching uses
+///     // `ComponentExtern::is_implements`, so semver-compatible versions also
+///     // match. The id is then cloned for each call and passed as the first
+///     // argument to every method, letting a single `Host` implementation
+///     // distinguish between multiple imports of the same interface. To bind a
+///     // single import instead, the generated `add_to_linker_instance` takes a
+///     // `LinkerInstance`, such as `linker.instance("my-handler")?`, and the
+///     // id to use for it.
 ///     //
-///     // The id type must be `Clone + Send + Sync + 'static`. Interfaces that
-///     // define a resource are not supported here and cause a compile error.
+///     // The id type must be `Clone + Send + Sync + 'static`.
+///     //
+///     // Without this option the host can only load components whose
+///     // imports match the shape of the world given to `bindgen!`. With it,
+///     // the host can also load components which import the listed
+///     // interfaces under any names of their choosing.
 ///     named_imports: {
 ///         "wasi:http/handler": MyHandlerId,
 ///     },
