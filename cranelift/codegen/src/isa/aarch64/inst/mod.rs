@@ -299,38 +299,33 @@ impl Inst {
         }
     }
 
-    /// Zero- or sign-extend `from_reg` from `from_bits` to `to_bits`.
-    pub fn gen_extend(
-        to_reg: Writable<Reg>,
-        from_reg: Reg,
-        signed: bool,
-        from_bits: u8,
-        to_bits: u8,
-    ) -> Inst {
-        assert!(from_bits < to_bits);
-        assert!(to_bits <= 64);
+    /// Zero- or sign-extend `from_reg` as described by `op` into a `to`-sized result.
+    pub fn gen_extend(to_reg: Writable<Reg>, from_reg: Reg, op: ExtendOp, to: OperandSize) -> Inst {
+        assert!(op.from_bits() < to.bits());
 
-        match (signed, from_bits, to_bits) {
+        let bfm = |size, bfm_op| Inst::BitfieldMove {
+            size,
+            bfm_op,
+            rd: to_reg,
+            rn: from_reg,
+            immr: UImm6::maybe_from_u8(0).unwrap(),
+            imms: UImm6::maybe_from_u8(op.from_bits() - 1).unwrap(),
+        };
+
+        match op {
             // A 32-bit move zeroes the upper half of the destination.
-            (false, 32, 64) => Inst::Mov {
+            ExtendOp::UXTW => Inst::Mov {
                 size: OperandSize::Size32,
                 rd: to_reg,
                 rm: from_reg,
             },
-            _ => Inst::BitfieldMove {
-                // UBFM at 32 bits already zeroes the upper half; SBFM must be
-                // 64-bit to sign-fill it.
-                size: if signed {
-                    OperandSize::from_bits(to_bits)
-                } else {
-                    OperandSize::Size32
-                },
-                bfm_op: if signed { BfmOp::SBfm } else { BfmOp::UBfm },
-                rd: to_reg,
-                rn: from_reg,
-                immr: UImm6::maybe_from_u8(0).unwrap(),
-                imms: UImm6::maybe_from_u8(from_bits - 1).unwrap(),
-            },
+            // 32-bit UBFM already zeroes the upper half, so it's equivalent to the
+            // 64-bit form; using it preserves the encoding emitted previously.
+            ExtendOp::UXTB | ExtendOp::UXTH => bfm(OperandSize::Size32, BfmOp::UBfm),
+            // SBFM must run at the destination width to sign-fill it.
+            ExtendOp::SXTB | ExtendOp::SXTH | ExtendOp::SXTW => bfm(to, BfmOp::SBfm),
+            // These cases are excluded by the assertion above.
+            ExtendOp::UXTX | ExtendOp::SXTX => unreachable!(),
         }
     }
 

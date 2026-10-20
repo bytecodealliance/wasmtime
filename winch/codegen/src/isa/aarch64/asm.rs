@@ -1273,13 +1273,22 @@ impl Assembler {
     }
 
     pub fn extend(&mut self, rn: Reg, rd: WritableReg, kind: ExtendKind) {
-        self.emit(Inst::gen_extend(
-            rd.map(Into::into),
-            rn.into(),
-            kind.signed(),
-            kind.from_bits(),
-            kind.to_bits(),
-        ))
+        use inst::args::OperandSize;
+
+        let (op, to) = match kind {
+            ExtendKind::Unsigned(Extend::I32Extend8) => (ExtendOp::UXTB, OperandSize::Size32),
+            ExtendKind::Unsigned(Extend::I32Extend16) => (ExtendOp::UXTH, OperandSize::Size32),
+            ExtendKind::Unsigned(Extend::I64Extend8) => (ExtendOp::UXTB, OperandSize::Size64),
+            ExtendKind::Unsigned(Extend::I64Extend16) => (ExtendOp::UXTH, OperandSize::Size64),
+            ExtendKind::Unsigned(Extend::I64Extend32) => (ExtendOp::UXTW, OperandSize::Size64),
+            ExtendKind::Signed(Extend::I32Extend8) => (ExtendOp::SXTB, OperandSize::Size32),
+            ExtendKind::Signed(Extend::I32Extend16) => (ExtendOp::SXTH, OperandSize::Size32),
+            ExtendKind::Signed(Extend::I64Extend8) => (ExtendOp::SXTB, OperandSize::Size64),
+            ExtendKind::Signed(Extend::I64Extend16) => (ExtendOp::SXTH, OperandSize::Size64),
+            ExtendKind::Signed(Extend::I64Extend32) => (ExtendOp::SXTW, OperandSize::Size64),
+        };
+
+        self.emit(Inst::gen_extend(rd.map(Into::into), rn.into(), op, to))
     }
 
     /// Bitwise AND (shifted register), setting flags.

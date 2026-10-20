@@ -1575,8 +1575,8 @@ impl MachInstEmit for Inst {
                 let size = OperandSize::from_ty(ty);
                 let sign_ext = match op {
                     AtomicRMWLoopOp::Smin | AtomicRMWLoopOp::Smax => match ty {
-                        I16 => Some((ExtendOp::SXTH, 16)),
-                        I8 => Some((ExtendOp::SXTB, 8)),
+                        I16 => Some(ExtendOp::SXTH),
+                        I8 => Some(ExtendOp::SXTB),
                         _ => None,
                     },
                     _ => None,
@@ -1590,9 +1590,8 @@ impl MachInstEmit for Inst {
                     _ => None,
                 };
                 // sxt{b|h} the loaded result if necessary.
-                if let Some((_, from_bits)) = sign_ext {
-                    Inst::gen_extend(x27wr, x27, true, from_bits, size.bits())
-                        .emit(sink, emit_info, state);
+                if let Some(op) = sign_ext {
+                    Inst::gen_extend(x27wr, x27, op, size).emit(sink, emit_info, state);
                 }
 
                 match op {
@@ -1634,7 +1633,7 @@ impl MachInstEmit for Inst {
                             _ => unreachable!(),
                         };
 
-                        if let Some(extendop) = sign_ext.map(|(op, _)| op).or(zero_ext) {
+                        if let Some(extendop) = sign_ext.or(zero_ext) {
                             Inst::AluRRRExtend {
                                 alu_op: ALUOp::SubS,
                                 size,
