@@ -250,6 +250,29 @@ fn implements_shows_up() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn implements_with_canonical_names() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_implements(true);
+    config.wasm_component_model_canonical_names(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "p" (implements "a:b/c@1") (version-suffix ".2.3") (instance))
+        )"#,
+    )?;
+
+    let ty = component.component_type();
+    let (_, p) = ty.imports(&engine).next().unwrap();
+    assert_eq!(p.implements.as_deref(), Some("a:b/c@1"));
+    assert!(p.is_implements("a:b/c@1.2.3"));
+    assert!(p.is_implements("a:b/c@1.0.0"));
+    assert!(!p.is_implements("a:b/c@2.0.0"));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn external_id_shows_up() -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_implements(true);
