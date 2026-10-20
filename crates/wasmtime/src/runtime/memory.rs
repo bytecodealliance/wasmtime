@@ -1,10 +1,10 @@
+use crate::Trap;
 use crate::prelude::*;
 use crate::runtime::vm::{self, ExportMemory};
 use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
 #[cfg(feature = "async")]
 use crate::vm::VMStore;
-use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use alloc::sync::Arc;
 use core::any::Any;
@@ -948,6 +948,20 @@ impl fmt::Debug for MemoryImage {
     }
 }
 
+impl PartialEq for MemoryImage {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.image, &other.image)
+    }
+}
+
+impl Eq for MemoryImage {}
+
+impl core::hash::Hash for MemoryImage {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        core::ptr::hash(Arc::as_ptr(&self.image), state)
+    }
+}
+
 /// A memory creator. Can be used to provide a memory creator
 /// to wasmtime which supplies host managed memory.
 ///
@@ -1408,6 +1422,38 @@ mod tests {
         // Clones share the same underlying image.
         let clone = image.clone();
         assert!(core::ptr::eq(clone.vm(), image.vm()));
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(all(target_os = "linux", not(miri)))]
+    fn memory_image_identity() -> Result<()> {
+        use std::hash::{BuildHasher, RandomState};
+
+        let mut config = Config::new();
+        config.memory_init_cow(true);
+        let engine = Engine::new(&config)?;
+        let wat = r#"(module (memory 1) (data (i32.const 0) "hello"))"#;
+        let image_of = |module: &Module| -> Result<MemoryImage> {
+            let images = module.memory_images()?.expect("module has memory images");
+            let image = images
+                .get_memory_image(wasmtime_environ::DefinedMemoryIndex::from_u32(0))
+                .expect("memory 0 has an image");
+            Ok(MemoryImage::new(image.clone()))
+        };
+
+        let module = Module::new(&engine, wat)?;
+        let image = image_of(&module)?;
+        let same = image_of(&module)?; // Same module instance gives the same image.
+        let clone = image.clone(); // Clone just clones an Arc.
+
+        assert_eq!(image, same);
+        assert_eq!(image, clone);
+
+        let hasher = RandomState::new();
+        assert_eq!(hasher.hash_one(&image), hasher.hash_one(&same));
+        assert_eq!(hasher.hash_one(&image), hasher.hash_one(&clone));
+
         Ok(())
     }
 

@@ -2,13 +2,13 @@
 //! modules, and logic to support mapping these backing images into memory.
 
 use super::sys::DecommitBehavior;
+use crate::Engine;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
-use crate::runtime::vm::sys::vm::{self, reset_with_pagemap, MemoryImageSource, PageMap};
+use crate::runtime::vm::sys::vm::{self, MemoryImageSource, PageMap, reset_with_pagemap};
 use crate::runtime::vm::{
-    host_page_size, HostAlignedByteCount, MmapOffset, ModuleMemoryImageSource,
+    HostAlignedByteCount, MmapOffset, ModuleMemoryImageSource, host_page_size,
 };
-use crate::Engine;
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Range;
@@ -829,7 +829,7 @@ mod test {
     use super::*;
     use crate::runtime::vm::mmap::{AlignedLength, Mmap};
     use crate::runtime::vm::sys::vm::{decommit_pages, iovec};
-    use crate::runtime::vm::{host_page_size, HostAlignedByteCount, MmapVec};
+    use crate::runtime::vm::{HostAlignedByteCount, MmapVec, host_page_size};
     use std::sync::Arc;
     use wasmtime_environ::{IndexType, Limits, Memory, MemoryKind, Tunables};
 
