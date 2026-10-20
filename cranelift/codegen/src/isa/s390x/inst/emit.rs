@@ -2218,7 +2218,7 @@ impl Inst {
 
                             Inst::VecRRR {
                                 op: binary_op,
-                                rd: rd,
+                                rd,
                                 rn: rd.to_reg(),
                                 rm: rn,
                             }
@@ -2288,7 +2288,7 @@ impl Inst {
                             Inst::VecExtractLane {
                                 size: 64,
                                 rd: scratch2_hi,
-                                rn: rn,
+                                rn,
                                 lane_imm: 0,
                                 lane_reg: zero_reg(),
                             }
@@ -2296,7 +2296,7 @@ impl Inst {
                             Inst::VecExtractLane {
                                 size: 64,
                                 rd: scratch2_lo,
-                                rn: rn,
+                                rn,
                                 lane_imm: 1,
                                 lane_reg: zero_reg(),
                             }
