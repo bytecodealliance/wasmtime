@@ -588,9 +588,11 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             ..
         } => {
             collector.reg_use(rn);
-            collector.reg_def(rt1);
-            collector.reg_def(rt2);
-            collector.reg_def(scratch);
+            // These registers are written to in a retry loop so their register
+            // assignment can't reuse `rn`, thus they are early-defs.
+            collector.reg_early_def(rt1);
+            collector.reg_early_def(rt2);
+            collector.reg_early_def(scratch);
         }
         Inst::StoreRelease { rt, rn, .. } => {
             collector.reg_use(rn);

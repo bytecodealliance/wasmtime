@@ -31,6 +31,36 @@ block0(v0: i128):
 ; run: %atomic_load(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678) == 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678
 
 
+; specifically testing the case where the address of what's being loaded is dead
+; after the atomic load
+function %atomic_load_dead_addr_callee(i64) -> i128 {
+block0(v0: i64):
+    v1 = atomic_load.i128 v0
+    return v1
+}
+
+function %atomic_load_dead_addr(i128) -> i128 {
+    ss0 = explicit_slot 32, align=8
+    fn0 = %atomic_load_dead_addr_callee(i64) -> i128
+
+block0(v0: i128):
+    ; Dynamically align the slot to 16
+    v1 = stack_addr.i64 ss0
+    v2 = iconst.i64 15
+    v3 = band v1, v2
+    v4 = iconst.i64 16
+    v5 = isub v4, v3
+    v6 = iadd v1, v5
+
+    store.i128 notrap v0, v6
+    v7 = call fn0(v6)
+    return v7
+}
+; run: %atomic_load_dead_addr(0) == 0
+; run: %atomic_load_dead_addr(0x1234) == 0x1234
+; run: %atomic_load_dead_addr(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678) == 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678
+
+
 function %atomic_store(i128) -> i128 {
     ss0 = explicit_slot 32, align=8
 
