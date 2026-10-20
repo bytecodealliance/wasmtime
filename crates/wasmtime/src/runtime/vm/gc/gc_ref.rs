@@ -230,6 +230,7 @@ impl VMGcRef {
     /// Get this GC reference as a u32 index into its GC heap.
     ///
     /// Panics when called for `i31ref`s.
+    #[inline]
     pub fn heap_index(&self) -> Result<NonZeroU32> {
         if self.is_i31() {
             bail_bug!("attempted to get heap index of i31")
