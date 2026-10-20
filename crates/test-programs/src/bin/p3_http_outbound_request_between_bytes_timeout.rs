@@ -14,7 +14,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             .into_iter()
             .find_map(|(k, v)| k.eq("HTTP_SERVER").then_some(v))
             .unwrap();
-        let between_bytes = Duration::from_millis(500).as_nanos() as u64;
+        let between_bytes = Duration::from_millis(100).as_nanos() as u64;
 
         let res = test_programs::p3::http::request(
             Method::Get,
