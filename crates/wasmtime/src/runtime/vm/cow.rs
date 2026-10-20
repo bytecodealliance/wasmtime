@@ -2,13 +2,13 @@
 //! modules, and logic to support mapping these backing images into memory.
 
 use super::sys::DecommitBehavior;
-use crate::Engine;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
-use crate::runtime::vm::sys::vm::{self, MemoryImageSource, PageMap, reset_with_pagemap};
+use crate::runtime::vm::sys::vm::{self, reset_with_pagemap, MemoryImageSource, PageMap};
 use crate::runtime::vm::{
-    HostAlignedByteCount, MmapOffset, ModuleMemoryImageSource, host_page_size,
+    host_page_size, HostAlignedByteCount, MmapOffset, ModuleMemoryImageSource,
 };
+use crate::Engine;
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Range;
@@ -154,6 +154,12 @@ impl MemoryImage {
     /// Length, in bytes, of this image.
     pub(crate) fn len(&self) -> usize {
         self.len.byte_count()
+    }
+
+    /// The bytes of this image, as stored in the module's data.
+    /// The length is exactly [`self.len`](Self::len).
+    pub(crate) fn data(&self) -> &[u8] {
+        &self.module_source.wasm_data()[self.module_source_offset..][..self.len.byte_count()]
     }
 
     /// Maps this image at `base + self.linear_memory_offset`.
@@ -823,7 +829,7 @@ mod test {
     use super::*;
     use crate::runtime::vm::mmap::{AlignedLength, Mmap};
     use crate::runtime::vm::sys::vm::{decommit_pages, iovec};
-    use crate::runtime::vm::{HostAlignedByteCount, MmapVec, host_page_size};
+    use crate::runtime::vm::{host_page_size, HostAlignedByteCount, MmapVec};
     use std::sync::Arc;
     use wasmtime_environ::{IndexType, Limits, Memory, MemoryKind, Tunables};
 

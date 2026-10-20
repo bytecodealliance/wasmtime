@@ -32,6 +32,10 @@ impl MemoryImage {
         match *self {}
     }
 
+    pub(crate) fn data(&self) -> &[u8] {
+        match *self {}
+    }
+
     pub(crate) unsafe fn map_at_ptr(&self, _base: *mut u8) -> Result<()> {
         match *self {}
     }

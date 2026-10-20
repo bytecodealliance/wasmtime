@@ -1,10 +1,10 @@
-use crate::Trap;
 use crate::prelude::*;
 use crate::runtime::vm::{self, ExportMemory};
 use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
 #[cfg(feature = "async")]
 use crate::vm::VMStore;
+use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use alloc::sync::Arc;
 use core::any::Any;
@@ -899,6 +899,16 @@ impl MemoryImage {
         self.len() == 0
     }
 
+    /// Returns the bytes of this image.
+    ///
+    /// The returned slice is [`len()`](MemoryImage::len) bytes long and holds
+    /// the initial contents of linear memory starting at
+    /// [`linear_memory_offset()`](MemoryImage::linear_memory_offset). All
+    /// bytes of the memory outside of that range are initially zero.
+    pub fn data(&self) -> &[u8] {
+        self.image.data()
+    }
+
     /// Maps this image copy-on-write into the linear memory starting at
     /// `base`.
     ///
@@ -1387,6 +1397,14 @@ mod tests {
         // ... and reaches past the end of the data.
         assert!(offset + len >= IMAGE_DATA_OFFSET + "hello".len());
 
+        let data = image.data();
+        assert_eq!(data.len(), len);
+        assert_eq!(data, image.vm().data());
+        let data_start = IMAGE_DATA_OFFSET - offset;
+        assert_eq!(&data[data_start..][..5], b"hello");
+        assert!(data[..data_start].iter().all(|b| *b == 0));
+        assert!(data[data_start + 5..].iter().all(|b| *b == 0));
+
         // Clones share the same underlying image.
         let clone = image.clone();
         assert!(core::ptr::eq(clone.vm(), image.vm()));
@@ -1415,9 +1433,12 @@ mod tests {
             core::slice::from_raw_parts(base.add(image.linear_memory_offset()), image.len())
         };
         let data_start = IMAGE_DATA_OFFSET - image.linear_memory_offset();
+
+        assert_eq!(mapped, image.data());
         assert_eq!(&mapped[data_start..][..5], b"hello");
         assert!(mapped[..data_start].iter().all(|b| *b == 0));
         assert!(mapped[data_start + 5..].iter().all(|b| *b == 0));
+
         Ok(())
     }
 }
