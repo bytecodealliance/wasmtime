@@ -1,6 +1,6 @@
 ## 50.0.0
 
-Unreleased.
+Released 2026-10-20.
 
 ### Added
 
