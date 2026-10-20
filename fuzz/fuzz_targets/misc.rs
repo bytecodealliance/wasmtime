@@ -70,6 +70,7 @@ run_fuzzers! {
     dominator_tree
     gc_access
     assembler_roundtrip_xed
+    component_implements
 }
 
 fn pulley_roundtrip(u: Unstructured<'_>) -> Result<()> {
@@ -208,4 +209,8 @@ fn gc_access(mut u: Unstructured<'_>) -> Result<()> {
     let input: wasmtime_fuzzing::generators::GcAccess = u.arbitrary()?;
     wasmtime_fuzzing::oracles::gc_access(config, input);
     Ok(())
+}
+
+fn component_implements(mut u: Unstructured<'_>) -> Result<()> {
+    wasmtime_fuzzing::oracles::component_implements::component_implements(&mut u)
 }

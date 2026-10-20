@@ -31,7 +31,7 @@ const MAX_LIST_LENGTH: u32 = 10;
 const MAX_ITERS: usize = 1_000;
 
 /// Generate an arbitrary instance of the specified type.
-fn arbitrary_val(
+pub(crate) fn arbitrary_val(
     ty: &component::Type,
     fuel: &mut u32,
     input: &mut Unstructured,

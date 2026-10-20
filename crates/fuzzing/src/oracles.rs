@@ -11,6 +11,7 @@
 //! panicking.
 
 pub mod component_api;
+pub mod component_implements;
 #[cfg(feature = "fuzz-spec-interpreter")]
 pub mod diff_spec;
 pub mod diff_wasmi;

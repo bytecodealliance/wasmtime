@@ -379,6 +379,7 @@ wasm-smith = "0.262.0"
 wasm-mutate = "0.262.0"
 wit-parser = "0.262.0"
 wit-component = "0.262.0"
+wit-smith = "0.262.0"
 wasm-wave = "0.262.0"
 wasm-compose = { version = "0.262.0", default-features = false }
 json-from-wast = "0.262.0"

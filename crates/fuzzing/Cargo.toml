@@ -33,6 +33,9 @@ wasmtime = { workspace = true, features = ['default', 'winch', 'gc-copying'] }
 wasmtime-core = { workspace = true, features = ['backtrace', 'serde'] }
 wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true, features = ['serde'] }
+wit-component = { workspace = true }
+wit-parser = { workspace = true }
+wit-smith = { workspace = true }
 wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
 wasmi = { version = "1.0.8", default-features = false, features = ["std", "simd"] }

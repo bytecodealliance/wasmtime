@@ -4866,6 +4866,9 @@ dependencies = [
  "wasmtime-test-util",
  "wasmtime-wast",
  "wat",
+ "wit-component 0.262.0",
+ "wit-parser 0.262.0",
+ "wit-smith",
 ]
 
 [[package]]
@@ -5804,6 +5807,21 @@ dependencies = [
  "serde_json",
  "unicode-ident",
  "wasmparser 0.262.0",
+]
+
+[[package]]
+name = "wit-smith"
+version = "0.262.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b5a1f2b64978f838618e139719910b8e2bb6ffc2b058d7cd4e1e3c4a32dba34"
+dependencies = [
+ "arbitrary",
+ "indexmap 2.14.0",
+ "log",
+ "semver",
+ "wasmparser 0.262.0",
+ "wit-component 0.262.0",
+ "wit-parser 0.262.0",
 ]
 
 [[package]]
