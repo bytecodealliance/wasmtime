@@ -232,10 +232,8 @@
       (op AtomicRmwOp)
       (rd WritableReg)
       (rn Reg)
-      (scratch1 WritableReg)
-      (scratch2 WritableReg)
-      (scratch3 WritableRegPair)
-      (scratch4 WritableRegPair)
+      (scratch1 WritableRegPair)
+      (scratch2 WritableRegPair)
       (mem MemArg))
 
     ;; A 32-bit atomic compare-and-swap operation.
@@ -2366,8 +2364,6 @@
             (_ Unit (emit (MInst.AtomicRmw128Loop op
                                                   dst
                                                   src
-                                                  (temp_writable_reg $I128)
-                                                  (temp_writable_reg $I128)
                                                   (temp_writable_regpair $I64)
                                                   (temp_writable_regpair $I64)
                                                   mem))))

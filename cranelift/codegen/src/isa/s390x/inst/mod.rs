@@ -56,7 +56,7 @@ pub struct ReturnCallInfo<T> {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(56, core::mem::size_of::<Inst>());
+    assert_eq!(48, core::mem::size_of::<Inst>());
 }
 
 /// A register pair. Enum so it can be destructured in ISLE.
@@ -588,31 +588,19 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             memarg_operands(mem, collector);
         }
         Inst::AtomicRmw128Loop {
-            op,
             rd,
             rn,
             scratch1,
             scratch2,
-            scratch3,
-            scratch4,
             mem,
             ..
         } => {
             collector.reg_early_def(rd);
             collector.reg_use(rn);
-            if matches!(
-                op,
-                AtomicRmwOp::Umin | AtomicRmwOp::Umax | AtomicRmwOp::Smin | AtomicRmwOp::Smax
-            ) {
-                collector.reg_early_def(scratch1);
-            }
-            if *op != AtomicRmwOp::Xchg {
-                collector.reg_early_def(scratch2);
-            }
-            collector.reg_fixed_early_def(&mut scratch3.hi, gpr(2));
-            collector.reg_fixed_early_def(&mut scratch3.lo, gpr(3));
-            collector.reg_fixed_early_def(&mut scratch4.hi, gpr(4));
-            collector.reg_fixed_early_def(&mut scratch4.lo, gpr(5));
+            collector.reg_fixed_early_def(&mut scratch1.hi, gpr(2));
+            collector.reg_fixed_early_def(&mut scratch1.lo, gpr(3));
+            collector.reg_fixed_early_def(&mut scratch2.hi, gpr(4));
+            collector.reg_fixed_early_def(&mut scratch2.lo, gpr(5));
             memarg_operands(mem, collector);
         }
         Inst::AtomicCas32 {
@@ -1894,8 +1882,6 @@ impl Inst {
                 rn,
                 scratch1,
                 scratch2,
-                scratch3,
-                scratch4,
                 ref mem,
             } => {
                 let op = match op {
@@ -1914,10 +1900,8 @@ impl Inst {
 
                 let rd = pretty_print_reg(rd.to_reg());
                 let rn = pretty_print_reg(rn);
-                let scratch1 = pretty_print_reg(scratch1.to_reg());
-                let scratch2 = pretty_print_reg(scratch2.to_reg());
-                let scratch3 = pretty_print_regpair(scratch3.to_regpair());
-                let scratch4 = pretty_print_regpair(scratch4.to_regpair());
+                let scratch1 = pretty_print_regpair(scratch1.to_regpair());
+                let scratch2 = pretty_print_regpair(scratch2.to_regpair());
                 let mem = mem.clone();
                 let (mem_str, mem) = mem_finalize_for_show(
                     &mem,
@@ -1932,7 +1916,7 @@ impl Inst {
                 );
                 let mem = mem.pretty_print_default();
                 format!(
-                    "{mem_str}atomic_rmw_128_loop_{op} {rd}, {rn}, {mem}, scratch1={scratch1}, scratch2={scratch2}, scratch3={scratch3}, scratch4={scratch4}"
+                    "{mem_str}atomic_rmw_128_loop_{op} {rd}, {rn}, {mem}, scratch1={scratch1}, scratch2={scratch2}"
                 )
             }
             &Inst::AtomicCas32 {

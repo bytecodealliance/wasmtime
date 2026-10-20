@@ -2134,25 +2134,21 @@ impl Inst {
                 rn,
                 scratch1,
                 scratch2,
-                scratch3,
-                scratch4,
                 ref mem,
             } => {
                 // rd = VR for previous value
                 // rn = operand value
-                // scratch1: temporary VR for minmax fallback without VXRS_EXT3
-                // scratch2: new value in VR
-                // scratch3: regpair for previous value in GPRs
-                // scratch4: regpair for new value in GPRs
+                // scratch1: regpair for previous value in GPRs
+                // scratch2: regpair for new value in GPRs
 
                 let loop_label = sink.get_label();
 
-                let scratch3_hi = scratch3.hi;
-                let scratch3_lo = scratch3.lo;
-                debug_assert_valid_regpair!(scratch3_hi.to_reg(), scratch3_lo.to_reg());
-                let scratch4_hi = scratch4.hi;
-                let scratch4_lo = scratch4.lo;
-                debug_assert_valid_regpair!(scratch4_hi.to_reg(), scratch4_lo.to_reg());
+                let scratch1_hi = scratch1.hi;
+                let scratch1_lo = scratch1.lo;
+                debug_assert_valid_regpair!(scratch1_hi.to_reg(), scratch1_lo.to_reg());
+                let scratch2_hi = scratch2.hi;
+                let scratch2_lo = scratch2.lo;
+                debug_assert_valid_regpair!(scratch2_hi.to_reg(), scratch2_lo.to_reg());
 
                 // Do an atomic load of the previous value into a VR
                 Inst::VecLoad {
@@ -2161,13 +2157,10 @@ impl Inst {
                 }
                 .emit_with_alloc_consumer(sink, emit_info, state);
 
-                // This is where the compare-and-swap loop starts
-                sink.bind_label(loop_label, &mut state.ctrl_plane);
-
                 // Load the previous value into a pair of GPRs
                 Inst::VecExtractLane {
                     size: 64,
-                    rd: scratch3.hi,
+                    rd: scratch1.hi,
                     rn: rd.to_reg(),
                     lane_imm: 0,
                     lane_reg: zero_reg(),
@@ -2175,15 +2168,18 @@ impl Inst {
                 .emit_with_alloc_consumer(sink, emit_info, state);
                 Inst::VecExtractLane {
                     size: 64,
-                    rd: scratch3.lo,
+                    rd: scratch1.lo,
                     rn: rd.to_reg(),
                     lane_imm: 1,
                     lane_reg: zero_reg(),
                 }
                 .emit_with_alloc_consumer(sink, emit_info, state);
 
+                // This is where the compare-and-swap loop starts
+                sink.bind_label(loop_label, &mut state.ctrl_plane);
+
                 // Optionally, do some math to calculate the new value
-                let new_value_reg = match op {
+                match op {
                     AtomicRmwOp::Add
                     | AtomicRmwOp::Sub
                     | AtomicRmwOp::And
@@ -2222,13 +2218,29 @@ impl Inst {
 
                             Inst::VecRRR {
                                 op: binary_op,
-                                rd: scratch2,
+                                rd: rd,
                                 rn: rd.to_reg(),
                                 rm: rn,
                             }
                             .emit_with_alloc_consumer(sink, emit_info, state);
 
-                            scratch2.to_reg()
+                            // Load the new value into a pair of GPRs
+                            Inst::VecExtractLane {
+                                size: 64,
+                                rd: scratch2_hi,
+                                rn: rd.to_reg(),
+                                lane_imm: 0,
+                                lane_reg: zero_reg(),
+                            }
+                            .emit_with_alloc_consumer(sink, emit_info, state);
+                            Inst::VecExtractLane {
+                                size: 64,
+                                rd: scratch2_lo,
+                                rn: rd.to_reg(),
+                                lane_imm: 1,
+                                lane_reg: zero_reg(),
+                            }
+                            .emit_with_alloc_consumer(sink, emit_info, state);
                         } else {
                             // minmax fallbacks without VXRS_EXT3
                             let lg_label = sink.get_label();
@@ -2240,21 +2252,21 @@ impl Inst {
                                 _ => unreachable!(),
                             };
 
-                            // Sets CC 1 if rd > rn
+                            // Sets CC 1 if previous value should be kept
                             match op {
                                 AtomicRmwOp::Umin | AtomicRmwOp::Umax => {
                                     Inst::VecInt128UCmpHi {
-                                        tmp: scratch1,
-                                        rn: rd.to_reg(),
-                                        rm: rn,
+                                        tmp: rd,
+                                        rn: a,
+                                        rm: b,
                                     }
                                     .emit_with_alloc_consumer(sink, emit_info, state);
                                 }
                                 AtomicRmwOp::Smin | AtomicRmwOp::Smax => {
                                     Inst::VecInt128SCmpHi {
-                                        tmp: scratch1,
-                                        rn: rd.to_reg(),
-                                        rm: rn,
+                                        tmp: rd,
+                                        rn: a,
+                                        rm: b,
                                     }
                                     .emit_with_alloc_consumer(sink, emit_info, state);
                                 }
@@ -2270,10 +2282,23 @@ impl Inst {
                             );
                             put(sink, &enc_ril_c(opcode, 4, 0));
 
-                            // rd <= rn: write b to scratch2
-                            Inst::VecMov {
-                                rd: scratch2,
-                                rn: b,
+                            // If CC not 1, write new value
+
+                            // Load the new value into a pair of GPRs
+                            Inst::VecExtractLane {
+                                size: 64,
+                                rd: scratch2_hi,
+                                rn: rn,
+                                lane_imm: 0,
+                                lane_reg: zero_reg(),
+                            }
+                            .emit_with_alloc_consumer(sink, emit_info, state);
+                            Inst::VecExtractLane {
+                                size: 64,
+                                rd: scratch2_lo,
+                                rn: rn,
+                                lane_imm: 1,
+                                lane_reg: zero_reg(),
                             }
                             .emit_with_alloc_consumer(sink, emit_info, state);
 
@@ -2288,44 +2313,48 @@ impl Inst {
 
                             sink.bind_label(lg_label, &mut state.ctrl_plane);
 
-                            // rd > rn: If CC 1, write a to scratch2
-                            Inst::VecMov {
-                                rd: scratch2,
-                                rn: a,
+                            // If CC 1, keep previous value
+
+                            Inst::Mov64 {
+                                rd: scratch2_hi,
+                                rm: scratch1_hi.to_reg(),
+                            }
+                            .emit_with_alloc_consumer(sink, emit_info, state);
+                            Inst::Mov64 {
+                                rd: scratch2_lo,
+                                rm: scratch1_lo.to_reg(),
                             }
                             .emit_with_alloc_consumer(sink, emit_info, state);
 
                             sink.bind_label(cmp_end_label, &mut state.ctrl_plane);
-
-                            scratch2.to_reg()
                         }
                     }
-                    AtomicRmwOp::Xchg => rn,
+                    AtomicRmwOp::Xchg => {
+                        // Load the new value into a pair of GPRs
+                        Inst::VecExtractLane {
+                            size: 64,
+                            rd: scratch2_hi,
+                            rn,
+                            lane_imm: 0,
+                            lane_reg: zero_reg(),
+                        }
+                        .emit_with_alloc_consumer(sink, emit_info, state);
+                        Inst::VecExtractLane {
+                            size: 64,
+                            rd: scratch2_lo,
+                            rn,
+                            lane_imm: 1,
+                            lane_reg: zero_reg(),
+                        }
+                        .emit_with_alloc_consumer(sink, emit_info, state);
+                    }
                 };
-
-                // Load the new value into a pair of GPRs
-                Inst::VecExtractLane {
-                    size: 64,
-                    rd: scratch4_hi,
-                    rn: new_value_reg,
-                    lane_imm: 0,
-                    lane_reg: zero_reg(),
-                }
-                .emit_with_alloc_consumer(sink, emit_info, state);
-                Inst::VecExtractLane {
-                    size: 64,
-                    rd: scratch4_lo,
-                    rn: new_value_reg,
-                    lane_imm: 1,
-                    lane_reg: zero_reg(),
-                }
-                .emit_with_alloc_consumer(sink, emit_info, state);
 
                 // Perform the CAS
                 Inst::AtomicCas128 {
-                    rd: scratch3,
-                    ri: scratch3.to_regpair(),
-                    rn: scratch4.to_regpair(),
+                    rd: scratch1,
+                    ri: scratch1.to_regpair(),
+                    rn: scratch2.to_regpair(),
                     mem: mem.clone(),
                 }
                 .emit_with_alloc_consumer(sink, emit_info, state);
@@ -2333,8 +2362,8 @@ impl Inst {
                 // Move the old value into a VR
                 Inst::MovToVec128 {
                     rd,
-                    rn: scratch3_hi.to_reg(),
-                    rm: scratch3_lo.to_reg(),
+                    rn: scratch1_hi.to_reg(),
+                    rm: scratch1_lo.to_reg(),
                 }
                 .emit_with_alloc_consumer(sink, emit_info, state);
 
