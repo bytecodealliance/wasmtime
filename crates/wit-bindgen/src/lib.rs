@@ -457,7 +457,8 @@ impl Wasmtime {
     ///
     /// For each configured interface this generates, into a body stored in
     /// `named_import_modules`, a `Host`/`HostWithStore` trait whose methods take
-    /// an extra `&Id` parameter alongside a reflection-based `add_to_linker`.
+    /// an extra `Id` parameter (by value, cloned for each call) alongside a
+    /// reflection-based `add_to_linker`.
     /// These are emitted underneath a top-level `named_imports` module by
     /// `finish`.
     fn generate_named_imports(&mut self, resolve: &Resolve) -> anyhow::Result<()> {

@@ -466,8 +466,11 @@ pub struct ComponentExtern {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComponentExternData {
     /// The `(implements "...")` annotation, if present: the name of the
-    /// interface that this item implements, used when matching this item
-    /// against imports by interface name rather than by import name.
+    /// interface that this item implements.
+    ///
+    /// This is metadata only: imports are resolved by their own name (e.g.
+    /// `my-label`), not by this interface name. Embedders can use it to find
+    /// out which interface a labelled item implements.
     pub implements: Option<String>,
     /// The `(external-id "...")` annotation, if present: a free-form
     /// host-defined identifier which is ignored by type checking.

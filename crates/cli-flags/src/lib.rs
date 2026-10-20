@@ -529,8 +529,9 @@ wasmtime_option_group! {
         /// Component model support for fixed-length lists: this corresponds
         /// to the 🔧 emoji in the component model specification
         pub component_model_fixed_length_lists: Option<bool>,
-        /// Component model support for `(implements ...)`, corresponds to the
-        /// 🏷️ emoji in the upstream spec.
+        /// Component model support for `(implements ...)` and
+        /// `(external-id ...)`, corresponds to the 🏷️ emoji in the upstream
+        /// spec.
         pub component_model_implements: Option<bool>,
         /// Component model support for canonical names, corresponds to the
         /// 🔗 emoji in the upstream spec.

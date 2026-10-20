@@ -1415,6 +1415,9 @@ impl Config {
         self
     }
 
+    /// Configures whether the component model `(implements "...")` and
+    /// `(external-id "...")` name annotations are enabled.
+    ///
     /// This corresponds to the 🏷️ emoji in the component model specification.
     ///
     /// Please note that Wasmtime's support for this feature is a work in
