@@ -454,11 +454,21 @@ impl MmapOffset {
             .offset
             .checked_add(memory_offset)
             .expect("self.offset + memory_offset is in bounds");
+        assert!(
+            total_offset
+                .checked_add(memory_len)
+                .is_ok_and(|end| end <= self.mmap.len_aligned()),
+            "image mapping is in bounds of the mmap"
+        );
         unsafe {
-            self.mmap
-                .sys
-                .map_image_at(image_source, source_offset, total_offset, memory_len)
+            let base = self
+                .mmap
+                .as_non_null()
+                .byte_add(total_offset.byte_count())
+                .as_ptr();
+            image_source.map_at(base, source_offset, memory_len.byte_count())?;
         }
+        Ok(())
     }
 }
 
@@ -489,5 +499,73 @@ mod tests {
             mem.make_readonly(pagex3.byte_count()..pagex3.byte_count())
                 .expect("make_readonly succeeded");
         };
+    }
+
+    /// Creates a two-page inaccessible mmap and a one-page image source whose
+    /// bytes are all `0x67`.
+    #[cfg(all(target_os = "linux", not(miri)))]
+    fn mmap_and_image_source() -> (Arc<Mmap<AlignedLength>>, MemoryImageSource) {
+        let page_size = HostAlignedByteCount::host_page_size();
+        let pagex2 = page_size.checked_mul(2).unwrap();
+        let mmap = Mmap::accessible_reserved(HostAlignedByteCount::ZERO, pagex2)
+            .expect("allocated memory");
+        let data = vec![0x67; page_size.byte_count()];
+        let source = MemoryImageSource::from_data(&data)
+            .expect("created image source")
+            .expect("memfd is supported");
+        (Arc::new(mmap), source)
+    }
+
+    #[test]
+    #[cfg(all(target_os = "linux", not(miri)))]
+    fn map_image_at_up_to_end_of_mmap() {
+        let page_size = HostAlignedByteCount::host_page_size();
+        let (mmap, source) = mmap_and_image_source();
+        let base = mmap.offset(page_size).unwrap();
+        // SAFETY: the mmap was just created and nothing references it.
+        unsafe {
+            base.map_image_at(&source, 0, HostAlignedByteCount::ZERO, page_size)
+                .expect("mapped image");
+            let mapped = core::slice::from_raw_parts(base.as_mut_ptr(), page_size.byte_count());
+            assert!(mapped.iter().all(|b| *b == 0x67));
+        }
+    }
+
+    #[test]
+    #[cfg(all(target_os = "linux", not(miri)))]
+    #[should_panic(expected = "image mapping is in bounds of the mmap")]
+    fn map_image_at_past_end_of_mmap() {
+        let page_size = HostAlignedByteCount::host_page_size();
+        let (mmap, source) = mmap_and_image_source();
+        let base = mmap.offset(page_size).unwrap();
+        // End the mapping at the highest page-aligned address: `offset + len`
+        // doesn't overflow, but `len` exceeds any address space, so should the
+        // assertion ever regress the kernel rejects the `mmap` instead of
+        // mapping over memory that this test doesn't own.
+        let max_aligned = usize::MAX - usize::MAX % page_size.byte_count();
+        let max = HostAlignedByteCount::new(max_aligned).unwrap();
+        let huge = max.checked_sub(page_size).unwrap();
+        // SAFETY: the mmap was just created and nothing references it. The
+        // call is expected to panic before mapping anything.
+        unsafe {
+            let _ = base.map_image_at(&source, 0, HostAlignedByteCount::ZERO, huge);
+        }
+    }
+
+    /// An offset and length whose sum overflows must be rejected as well.
+    #[test]
+    #[cfg(all(target_os = "linux", not(miri)))]
+    #[should_panic(expected = "image mapping is in bounds of the mmap")]
+    fn map_image_at_overflowing_length() {
+        let page_size = HostAlignedByteCount::host_page_size();
+        let (mmap, source) = mmap_and_image_source();
+        let base = mmap.offset(page_size).unwrap();
+        let max_aligned = usize::MAX - usize::MAX % page_size.byte_count();
+        let max = HostAlignedByteCount::new(max_aligned).unwrap();
+        // SAFETY: the mmap was just created and nothing references it. The
+        // call is expected to panic before mapping anything.
+        unsafe {
+            let _ = base.map_image_at(&source, 0, HostAlignedByteCount::ZERO, max);
+        }
     }
 }

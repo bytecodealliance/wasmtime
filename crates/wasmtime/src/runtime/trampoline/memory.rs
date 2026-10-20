@@ -4,8 +4,8 @@ use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     CompiledModuleId, InstanceAllocationRequest, InstanceAllocator, Memory, MemoryAllocationIndex,
-    MemoryBase, ModuleRuntimeInfo, OnDemandInstanceAllocator, RuntimeLinearMemory,
-    RuntimeMemoryCreator, SharedMemory, Table, TableAllocationIndex,
+    ModuleRuntimeInfo, OnDemandInstanceAllocator, RuntimeMemoryCreator, SharedMemory, Table,
+    TableAllocationIndex,
 };
 use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque, StoreResourceLimiter};
 use alloc::sync::Arc;
@@ -68,36 +68,6 @@ pub async fn create_memory(
     }
 }
 
-struct LinearMemoryProxy {
-    mem: Box<dyn LinearMemory>,
-}
-
-impl RuntimeLinearMemory for LinearMemoryProxy {
-    fn byte_size(&self) -> usize {
-        self.mem.byte_size()
-    }
-
-    fn byte_capacity(&self) -> usize {
-        self.mem.byte_capacity()
-    }
-
-    fn grow_to(&mut self, new_size: usize) -> Result<()> {
-        self.mem.grow_to(new_size)
-    }
-
-    fn base(&self) -> MemoryBase {
-        MemoryBase::new_raw(self.mem.as_ptr())
-    }
-
-    fn vmmemory(&self) -> crate::vm::VMMemoryDefinition {
-        let base = core::ptr::NonNull::new(self.mem.as_ptr()).unwrap();
-        crate::vm::VMMemoryDefinition {
-            base: base.into(),
-            current_length: self.mem.byte_size().into(),
-        }
-    }
-}
-
 #[derive(Clone)]
 pub(crate) struct MemoryCreatorProxy(pub Arc<dyn MemoryCreator>);
 
@@ -108,7 +78,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
         memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
         maximum: Option<usize>,
-    ) -> Result<Box<dyn RuntimeLinearMemory>> {
+    ) -> Result<Box<dyn LinearMemory>> {
         let reserved_size_in_bytes = Some(memory_tunables.reservation().try_into().unwrap());
         self.0
             .new_memory(
@@ -118,7 +88,6 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
                 reserved_size_in_bytes,
                 usize::try_from(memory_tunables.guard_size()).unwrap(),
             )
-            .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
             .map_err(|e| format_err!(e))
     }
 }

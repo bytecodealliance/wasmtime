@@ -1,12 +1,12 @@
-//! Support for implementing the [`RuntimeLinearMemory`] trait in terms of a
+//! Support for implementing the [`LinearMemory`] trait in terms of a
 //! platform memory allocation primitive (e.g. `malloc`)
 //!
 //! Note that memory is allocated here using `Vec::try_reserve` to explicitly
 //! handle memory allocation failures.
 
+use crate::LinearMemory;
 use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
-use crate::runtime::vm::memory::{MemoryBase, RuntimeLinearMemory};
 use core::mem;
 use core::ptr::NonNull;
 use wasmtime_environ::MemoryTunables;
@@ -66,7 +66,16 @@ impl MallocMemory {
     }
 }
 
-impl RuntimeLinearMemory for MallocMemory {
+// SAFETY:
+// - **Valid region.** We use a Vec with at least `minimum` bytes, possibly more with 16-alignment.
+// - **Size.** Is exactly `minimum` at creation and is set to exactly `new_size` on growth.
+// - **Base pointer stability.** `grow_to` calls `Vec::try_reserve`, which is guaranteed to not
+// reallocate if the new length does not exceed capacity. The Vec's capacity is what is reported in
+// `byte_capacity`.
+// - **Base pointer alignment.** The pointer is 16-byte aligned. The other conditions are checked
+// to be false within the constructor, so we do not require host page alignment.
+// - **Inaccessible region** moot because the conditions are checked to be false.
+unsafe impl LinearMemory for MallocMemory {
     fn byte_size(&self) -> usize {
         self.byte_len
     }
@@ -89,16 +98,8 @@ impl RuntimeLinearMemory for MallocMemory {
         Ok(())
     }
 
-    fn base(&self) -> MemoryBase {
-        MemoryBase::Raw(self.base_ptr)
-    }
-
-    fn vmmemory(&self) -> crate::vm::VMMemoryDefinition {
-        let base = self.base_ptr.as_non_null();
-        crate::vm::VMMemoryDefinition {
-            base: base.into(),
-            current_length: self.byte_len.into(),
-        }
+    fn as_ptr(&self) -> *mut u8 {
+        self.base_ptr.as_ptr()
     }
 }
 

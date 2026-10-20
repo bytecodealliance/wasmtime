@@ -95,9 +95,16 @@ impl MemoryImageSource {
         }
     }
 
-    #[inline]
-    pub(super) fn image_ptr(&self) -> SendSyncPtr<capi::wasmtime_memory_image> {
-        self.data
+    /// See the documentation of the unix implementation of this method.
+    pub unsafe fn map_at(&self, base: *mut u8, source_offset: u64, len: usize) -> Result<()> {
+        assert_eq!(source_offset, 0);
+        unsafe {
+            cvt(capi::wasmtime_memory_image_map_at(
+                self.data.as_ptr(),
+                base.cast(),
+                len,
+            ))
+        }
     }
 
     pub unsafe fn remap_as_zeros_at(&self, base: *mut u8, len: usize) -> Result<()> {

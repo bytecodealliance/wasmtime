@@ -1,11 +1,13 @@
-use crate::Trap;
 use crate::prelude::*;
 use crate::runtime::vm::{self, ExportMemory};
 use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
 #[cfg(feature = "async")]
 use crate::vm::VMStore;
+use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
+use alloc::sync::Arc;
+use core::any::Any;
 use core::cell::UnsafeCell;
 use core::fmt;
 use core::slice;
@@ -731,24 +733,70 @@ impl Memory {
 /// MemoryCreator, one can supply wasmtime with custom allocated host managed
 /// memory.
 ///
-/// # Safety
-///
-/// The memory should be page aligned and a multiple of page size.
-/// To prevent possible silent overflows, the memory should be protected by a
-/// guard page.  Additionally the safety concerns explained in ['Memory'], for
-/// accessing the memory apply here as well.
-///
-/// The value returned by [`LinearMemory::byte_size`] must be at least the
-/// `minimum` size the memory was created with, must be at least `new_size`
-/// after a successful [`LinearMemory::grow_to`], and must never decrease.
-/// At least that many bytes starting at [`LinearMemory::as_ptr`] must be
-/// valid to read and write. Compiled WebAssembly code relies on these
-/// properties when performing bounds checks, so violating them can lead to
-/// out-of-bounds memory accesses.
-///
 /// Note that this is a relatively advanced feature and it is recommended to be
 /// familiar with wasmtime runtime code to use it.
-pub unsafe trait LinearMemory: Send + Sync + 'static {
+///
+/// In the following, `minimum`, `reserved_size_in_bytes`, and `guard_size_in_bytes` arguments are given to a
+/// [`MemoryCreator::new_memory`] implementation.
+///
+/// # Safety
+///
+/// Wasmtime's compiled code and runtime rely on the following invariants for memory safety.
+///
+/// - **Valid region.** From creation until the memory is dropped, the first
+/// [`byte_size`] bytes starting at the [`as_ptr`]
+/// memory location must be allocated, initialized, readable, and writeable.
+/// The pointer must be non-null.
+/// Nothing other than Wasmtime may read, write, unmap, or otherwise modify this region while the
+/// memory is in use by Wasmtime.
+/// If the memory moves (although see conditions on stability below), the previous region is no
+/// longer in use by Wasmtime.
+/// Moreover, be aware that Wasmtime currently has a soundness hole for shared memory,
+/// as multiple threads may access the same slice of memory mutably at the same time (aliasing) (see
+/// [issue #4203](https://github.com/bytecodealliance/wasmtime/issues/4203)).
+///
+/// - **Size.** [`byte_size`] must be at least `minimum` after creation
+/// and at least `new_size` after a successful call to [`grow_to`],
+/// and it must never decrease.
+///
+/// - **Base pointer stability.** A call to [`as_ptr`] must return the same
+/// address until the next successful call to [`grow_to`].
+/// Moreover, a successful [`grow_to(new_size)`][`grow_to`] call where `new_size` is at most the [`byte_capacity`](LinearMemory::byte_capacity)
+/// reported before the call must not change the result of [`as_ptr`].
+/// If static memory is forced (e.g. when using shared memory or when [`Config::memory_may_move`](crate::Config::memory_may_move) is disabled), Wasmtime will never ask the memory to grow beyond its [`byte_capacity`].
+///
+/// - **Base pointer alignment.** The base pointer returned by [`as_ptr`] must always be 8-byte aligned.
+/// Moreover, if `guard_size_in_bytes` is non-zero, or `reserved_size_in_bytes` is `Some` and non-zero, then [`as_ptr`] must be
+/// aligned to the host page size at all times.
+///
+/// - **Inaccessible region.** If: `guard_size_in_bytes` is non-zero, or `reserved_size_in_bytes` is `Some` and non-zero;
+/// then every byte from `as_ptr() + byte_size()`, rounded up to the next host page boundary, up to
+/// `as_ptr() + max(reserved_size_in_bytes, byte_size()) + guard_size_in_bytes` must be
+/// inaccessible, so that any access to it faults. This must hold at all times, including after growth.
+///
+/// Additionally, observe the safety requirements when the memory is accessed, as explained in [`Memory`].
+///
+/// # Correctness
+///
+/// The following constraints do not cause memory safety issues, but break WebAssembly semantics,
+/// or expose potentially unwanted data to WebAssembly programs:
+///
+/// - [`byte_size`] should be exactly `minimum` after creation and exactly `new_size` after a
+/// successful call to [`grow_to(new_size)`][`grow_to`]. Wasmtime only requests sizes that are
+/// multiples of the Wasm page size.
+///
+/// - The memory's contents must be zeroed at creation, and bytes made accessible by [`grow_to`] must
+/// be zeroed.
+///
+/// - If [`init_from_image`] returns `Ok(true)`, then the bytes at [`MemoryImage::linear_memory_offset`]
+/// must equal the image and all other bytes must be zero.
+///
+/// [`grow_to`]: LinearMemory::grow_to
+/// [`byte_size`]: LinearMemory::byte_size
+/// [`as_ptr`]: LinearMemory::as_ptr
+/// [`byte_capacity`]: LinearMemory::byte_capacity
+/// [`init_from_image`]: LinearMemory::init_from_image
+pub unsafe trait LinearMemory: Any + Send + Sync {
     /// Returns the number of allocated bytes which are accessible at this time.
     fn byte_size(&self) -> usize;
 
@@ -767,6 +815,127 @@ pub unsafe trait LinearMemory: Send + Sync + 'static {
 
     /// Return the allocated memory as a mutable pointer to u8.
     fn as_ptr(&self) -> *mut u8;
+
+    /// Optionally initializes this memory's contents from a copy-on-write
+    /// [`MemoryImage`].
+    ///
+    /// When [copy-on-write memory initialization][cow_config] is enabled and a
+    /// module's data segments for this memory can be represented as an image,
+    /// Wasmtime calls this method once, right after the memory is created
+    /// and before anything else reads or writes it.
+    ///
+    /// If the function succeeds with `false`, the runtime assumes the memory was not initialized.
+    /// It then fully copies the module's data segments into the memory region.
+    /// This is always correct and is essentially equivalent to CoW being disabled.
+    ///
+    /// If the function succeeds with `true`, the runtime assumes the memory's contents match `image` exactly.
+    /// The bytes of the image must start at [`MemoryImage::linear_memory_offset`] and all other bytes must be zero.
+    ///
+    /// ## Shortcut for memory maps
+    ///
+    /// [`MemoryImage`] exposes a shortcut, [`MemoryImage::map_at`], which allows an implementation
+    /// backed by a memory map to replace a portion of its mapping with the pages of the image.
+    /// Consult that function's documentation for safety notes.
+    ///
+    /// Returning an error causes instantiation to fail with that error.
+    ///
+    /// [cow_config]: crate::Config::memory_init_cow
+    fn init_from_image(&mut self, image: &MemoryImage) -> Result<bool> {
+        let _ = image;
+        Ok(false)
+    }
+}
+
+/// A copy-on-write image of the initial contents of a linear memory.
+///
+/// When [`Config::memory_init_cow`](crate::Config::memory_init_cow) is enabled
+/// Wasmtime prepares, where possible, an image of a module's data segments for
+/// each of its linear memories that can be mapped into memory copy-on-write
+/// instead of being copied byte-by-byte. Such images are handed to
+/// [`LinearMemory::init_from_image`] for the specific memory implementation to map into its
+/// underlying representation.
+///
+/// An image covers [`len()`](MemoryImage::len) bytes of the linear memory starting at
+/// [`linear_memory_offset()`](MemoryImage::linear_memory_offset).
+/// Both values are multiples of the host page size, and the image always lies within
+/// the minimum size of the memory it was created for.
+/// All other bytes are expected to be zero.
+///
+/// Cloning a `MemoryImage` is cheap and keeps the underlying image alive.
+#[derive(Clone)]
+pub struct MemoryImage {
+    image: Arc<vm::MemoryImage>,
+}
+
+impl MemoryImage {
+    pub(crate) fn new(image: Arc<vm::MemoryImage>) -> MemoryImage {
+        MemoryImage { image }
+    }
+
+    /// This is a convenience method for the internal `MmapMemory` to access the underlying image
+    /// directly and use its [`map_at`](vm::MemoryImage::map_at) function.
+    #[cfg(has_virtual_memory)]
+    pub(crate) fn vm(&self) -> &vm::MemoryImage {
+        &self.image
+    }
+
+    /// Returns the offset, in bytes, within linear memory where this image
+    /// starts.
+    ///
+    /// This is guaranteed to be a multiple of the host page size.
+    pub fn linear_memory_offset(&self) -> usize {
+        self.image.linear_memory_offset()
+    }
+
+    /// Returns the length, in bytes, of this image.
+    ///
+    /// This is guaranteed to be a multiple of the host page size.
+    pub fn len(&self) -> usize {
+        self.image.len()
+    }
+
+    /// Returns whether this image is empty (length equal to zero).
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Maps this image copy-on-write into the linear memory starting at
+    /// `base`.
+    ///
+    /// The bytes `base + linear_memory_offset()` up to
+    /// `base + linear_memory_offset() + len()` are replaced with a private,
+    /// readable and writable copy-on-write mapping of the image. Nothing
+    /// outside of that range is modified.
+    ///
+    /// Returns an error if `base` is not aligned to the host page size or if
+    /// the underlying mapping operation fails.
+    ///
+    /// # Safety
+    ///
+    /// The caller must exclusively own the virtual memory range being mapped
+    /// over, nothing may hold references into it, and it must be valid for
+    /// its pages to be replaced by a new mapping (for example by `mmap` with
+    /// `MAP_FIXED` on Unix). Any previous contents and memory protections of
+    /// that range are lost. The mapping lives until the range is unmapped or
+    /// mapped over again by its owner. In particular, the runtime does not unmap the image by itself.
+    /// The owner of the virtual memory range must clean it up after usage.
+    ///
+    /// The typical usage is owning a memory-mapped region and requesting the image to be mapped
+    /// into a subrange of that mapping. Unmapping the entire region at the end of the memory's
+    /// lifetime takes care of the cleanup.
+    pub unsafe fn map_at(&self, base: *mut u8) -> Result<()> {
+        // SAFETY: forwarded to the caller.
+        unsafe { self.image.map_at_ptr(base) }
+    }
+}
+
+impl fmt::Debug for MemoryImage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MemoryImage")
+            .field("linear_memory_offset", &self.linear_memory_offset())
+            .field("len", &self.len())
+            .finish_non_exhaustive()
+    }
 }
 
 /// A memory creator. Can be used to provide a memory creator
@@ -1169,6 +1338,86 @@ mod tests {
         let m3 = instance2.get_memory(&mut store, "m").unwrap();
         assert!(m1.hash_key(&store.as_context().0) != m3.hash_key(&store.as_context().0));
 
+        Ok(())
+    }
+
+    /// Offset of the data segment used by the `MemoryImage` tests: inside the
+    /// second Wasm page, but not at the start of a host page.
+    #[cfg(all(target_os = "linux", not(miri)))]
+    const IMAGE_DATA_OFFSET: usize = 0x10000 + 8;
+
+    /// Compiles a module whose single memory is initialized by one data segment
+    /// at `IMAGE_DATA_OFFSET` and returns the CoW image Wasmtime builds for it.
+    /// The module is never instantiated, we just take the image of the memory.
+    #[cfg(all(target_os = "linux", not(miri)))]
+    fn memory_image_for_data(data: &str) -> Result<MemoryImage> {
+        let mut config = Config::new();
+        config.memory_init_cow(true);
+        let engine = Engine::new(&config)?;
+        let module = Module::new(
+            &engine,
+            // Module with (at least) 2 pages of memory with data written at IMAGE_DATA_OFFSET.
+            format!("(module (memory 2) (data (i32.const {IMAGE_DATA_OFFSET}) \"{data}\"))"),
+        )?;
+        let images = module.memory_images()?.expect("module has memory images");
+        let image = images
+            .get_memory_image(wasmtime_environ::DefinedMemoryIndex::from_u32(0))
+            .expect("memory 0 has an image");
+        Ok(MemoryImage::new(image.clone()))
+    }
+
+    /// The public accessors report the internal image's placement, and:
+    /// - both values are multiples of the host page size; and
+    /// - the image covers the module's data.
+    #[test]
+    #[cfg(all(target_os = "linux", not(miri)))]
+    fn memory_image_accessors() -> Result<()> {
+        let page_size = crate::runtime::vm::host_page_size();
+        let image = memory_image_for_data("hello")?;
+        let offset = image.linear_memory_offset();
+        let len = image.len();
+
+        assert_eq!(offset, image.vm().linear_memory_offset());
+        assert_eq!(len, image.vm().len());
+        assert_eq!(offset % page_size, 0);
+        assert_eq!(len % page_size, 0);
+        assert!(!image.is_empty());
+        // Image starts at or before the data...
+        assert!(offset <= IMAGE_DATA_OFFSET);
+        // ... and reaches past the end of the data.
+        assert!(offset + len >= IMAGE_DATA_OFFSET + "hello".len());
+
+        // Clones share the same underlying image.
+        let clone = image.clone();
+        assert!(core::ptr::eq(clone.vm(), image.vm()));
+        Ok(())
+    }
+
+    /// `MemoryImage::map_at` places the image's bytes at
+    /// `base + linear_memory_offset()` and zeroes the rest.
+    #[test]
+    #[cfg(all(target_os = "linux", not(miri)))]
+    fn memory_image_map_at() -> Result<()> {
+        use crate::runtime::vm::{HostAlignedByteCount, Mmap};
+
+        let image = memory_image_for_data("hello")?;
+        let size =
+            HostAlignedByteCount::new_rounded_up(image.linear_memory_offset() + image.len())?;
+        let mmap = Mmap::accessible_reserved(HostAlignedByteCount::ZERO, size)?;
+        let base = mmap.as_non_null().as_ptr();
+
+        // SAFETY: `mmap` was just created, is owned by this test and covers
+        // the whole range the image is mapped into.
+        unsafe { image.map_at(base)? };
+
+        // SAFETY: `map_at` made the image's range readable.
+        let mapped = unsafe {
+            core::slice::from_raw_parts(base.add(image.linear_memory_offset()), image.len())
+        };
+        let data_start = IMAGE_DATA_OFFSET - image.linear_memory_offset();
+        assert_eq!(&mapped[data_start..][..5], b"hello");
+        assert!(mapped[..data_start].iter().all(|b| *b == 0));
+        assert!(mapped[data_start + 5..].iter().all(|b| *b == 0));
         Ok(())
     }
 }

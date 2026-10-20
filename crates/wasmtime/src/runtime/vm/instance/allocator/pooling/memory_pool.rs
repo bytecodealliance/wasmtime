@@ -58,8 +58,8 @@ use crate::config::InstanceLimits;
 use crate::config::PoolingAllocationConfig;
 use crate::prelude::*;
 use crate::runtime::vm::{
-    CompiledModuleId, InstanceAllocationRequest, Memory, MemoryBase, MemoryImageSlot, Mmap,
-    MmapOffset, mmap::AlignedLength,
+    CompiledModuleId, InstanceAllocationRequest, Memory, MemoryImageSlot, Mmap, MmapOffset,
+    mmap::AlignedLength,
 };
 use crate::vm::sys::vm::{decommit_pages, iovec};
 use crate::{
@@ -432,7 +432,7 @@ impl MemoryPool {
         let memory = Memory::new_static(
             ty,
             &memory_tunables,
-            MemoryBase::Mmap(base),
+            base,
             base_capacity.byte_count(),
             slot,
             request.limiter.as_deref_mut(),
