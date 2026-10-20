@@ -25,6 +25,12 @@ pub fn val(v: &ComponentConst<'_>) -> Result<Val> {
             let vals = vals.iter().map(|v| val(v)).collect::<Result<Vec<_>>>()?;
             Val::List(vals)
         }
+        ComponentConst::Map(entries) => Val::Map(
+            entries
+                .iter()
+                .map(|(k, v)| Ok((val(k)?, val(v)?)))
+                .collect::<Result<Vec<_>>>()?,
+        ),
         ComponentConst::Record(vals) => {
             let mut fields = Vec::new();
             for (name, v) in vals {
@@ -125,6 +131,21 @@ pub fn match_val(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
                 for (i, (expected, actual)) in e.iter().zip(a.iter()).enumerate() {
                     match_val(expected, actual)
                         .with_context(|| format!("failed to match list element {i}"))?;
+                }
+                Ok(())
+            }
+            _ => mismatch(expected, actual),
+        },
+        ComponentConst::Map(e) => match actual {
+            Val::Map(a) => {
+                if e.len() != a.len() {
+                    bail!("expected {} map entries got {}", e.len(), a.len());
+                }
+                for (i, ((e_key, e_val), (a_key, a_val))) in e.iter().zip(a.iter()).enumerate() {
+                    match_val(e_key, a_key)
+                        .with_context(|| format!("failed to match key of map entry {i}"))?;
+                    match_val(e_val, a_val)
+                        .with_context(|| format!("failed to match value of map entry {i}"))?;
                 }
                 Ok(())
             }
@@ -256,6 +277,7 @@ fn mismatch(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
         ComponentConst::Char(..) => "char",
         ComponentConst::String(..) => "string",
         ComponentConst::List(..) => "list",
+        ComponentConst::Map(..) => "map",
         ComponentConst::Record(..) => "record",
         ComponentConst::Tuple(..) => "tuple",
         ComponentConst::Enum(..) => "enum",
