@@ -1157,7 +1157,12 @@ pub mod exports {
                             .func();
                         let bytes_roundtrip = *_instance
                             .get_typed_func::<
-                                (std::collections::HashMap<&str, &[u8]>,),
+                                (
+                                    &std::collections::HashMap<
+                                        wasmtime::component::__internal::String,
+                                        wasmtime::component::__internal::Vec<u8>,
+                                    >,
+                                ),
                                 (
                                     std::collections::HashMap<
                                         wasmtime::component::__internal::String,
@@ -1168,7 +1173,14 @@ pub mod exports {
                             .func();
                         let option_roundtrip = *_instance
                             .get_typed_func::<
-                                (Option<std::collections::HashMap<&str, u32>>,),
+                                (
+                                    Option<
+                                        &std::collections::HashMap<
+                                            wasmtime::component::__internal::String,
+                                            u32,
+                                        >,
+                                    >,
+                                ),
                                 (
                                     Option<
                                         std::collections::HashMap<
@@ -1181,7 +1193,15 @@ pub mod exports {
                             .func();
                         let result_roundtrip = *_instance
                             .get_typed_func::<
-                                (Result<std::collections::HashMap<u32, &str>, &str>,),
+                                (
+                                    Result<
+                                        &std::collections::HashMap<
+                                            u32,
+                                            wasmtime::component::__internal::String,
+                                        >,
+                                        &str,
+                                    >,
+                                ),
                                 (
                                     Result<
                                         std::collections::HashMap<
@@ -1195,7 +1215,15 @@ pub mod exports {
                             .func();
                         let tuple_roundtrip = *_instance
                             .get_typed_func::<
-                                ((std::collections::HashMap<&str, u32>, u64),),
+                                (
+                                    (
+                                        &std::collections::HashMap<
+                                            wasmtime::component::__internal::String,
+                                            u32,
+                                        >,
+                                        u64,
+                                    ),
+                                ),
                                 (
                                     (
                                         std::collections::HashMap<
@@ -1210,9 +1238,12 @@ pub mod exports {
                         let nested_roundtrip = *_instance
                             .get_typed_func::<
                                 (
-                                    std::collections::HashMap<
-                                        &str,
-                                        std::collections::HashMap<u32, &str>,
+                                    &std::collections::HashMap<
+                                        wasmtime::component::__internal::String,
+                                        std::collections::HashMap<
+                                            u32,
+                                            wasmtime::component::__internal::String,
+                                        >,
                                     >,
                                 ),
                                 (
@@ -1259,17 +1290,20 @@ pub mod exports {
                         let all_key_types = *_instance
                             .get_typed_func::<
                                 (
-                                    std::collections::HashMap<bool, u32>,
-                                    std::collections::HashMap<u8, u32>,
-                                    std::collections::HashMap<i8, u32>,
-                                    std::collections::HashMap<u16, u32>,
-                                    std::collections::HashMap<i16, u32>,
-                                    std::collections::HashMap<u32, u32>,
-                                    std::collections::HashMap<i32, u32>,
-                                    std::collections::HashMap<u64, u32>,
-                                    std::collections::HashMap<i64, u32>,
-                                    std::collections::HashMap<char, u32>,
-                                    std::collections::HashMap<&str, u32>,
+                                    &std::collections::HashMap<bool, u32>,
+                                    &std::collections::HashMap<u8, u32>,
+                                    &std::collections::HashMap<i8, u32>,
+                                    &std::collections::HashMap<u16, u32>,
+                                    &std::collections::HashMap<i16, u32>,
+                                    &std::collections::HashMap<u32, u32>,
+                                    &std::collections::HashMap<i32, u32>,
+                                    &std::collections::HashMap<u64, u32>,
+                                    &std::collections::HashMap<i64, u32>,
+                                    &std::collections::HashMap<char, u32>,
+                                    &std::collections::HashMap<
+                                        wasmtime::component::__internal::String,
+                                        u32,
+                                    >,
                                 ),
                                 (),
                             >(&mut store, &self.all_key_types)?
@@ -1277,8 +1311,8 @@ pub mod exports {
                         let own_values = *_instance
                             .get_typed_func::<
                                 (
-                                    std::collections::HashMap<
-                                        &str,
+                                    &std::collections::HashMap<
+                                        wasmtime::component::__internal::String,
                                         wasmtime::component::ResourceAny,
                                     >,
                                 ),
@@ -1293,8 +1327,8 @@ pub mod exports {
                         let borrowed_values = *_instance
                             .get_typed_func::<
                                 (
-                                    std::collections::HashMap<
-                                        &str,
+                                    &std::collections::HashMap<
+                                        wasmtime::component::__internal::String,
                                         wasmtime::component::ResourceAny,
                                     >,
                                 ),
@@ -1345,7 +1379,12 @@ pub mod exports {
                     pub fn func_bytes_roundtrip(
                         &self,
                     ) -> wasmtime::component::TypedFunc<
-                        (std::collections::HashMap<&str, &[u8]>,),
+                        (
+                            &std::collections::HashMap<
+                                wasmtime::component::__internal::String,
+                                wasmtime::component::__internal::Vec<u8>,
+                            >,
+                        ),
                         (
                             std::collections::HashMap<
                                 wasmtime::component::__internal::String,
@@ -1355,7 +1394,12 @@ pub mod exports {
                     > {
                         unsafe {
                             wasmtime::component::TypedFunc::<
-                                (std::collections::HashMap<&str, &[u8]>,),
+                                (
+                                    &std::collections::HashMap<
+                                        wasmtime::component::__internal::String,
+                                        wasmtime::component::__internal::Vec<u8>,
+                                    >,
+                                ),
                                 (
                                     std::collections::HashMap<
                                         wasmtime::component::__internal::String,
@@ -1368,7 +1412,10 @@ pub mod exports {
                     pub async fn call_bytes_roundtrip<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                        arg0: std::collections::HashMap<&str, &[u8]>,
+                        arg0: &std::collections::HashMap<
+                            wasmtime::component::__internal::String,
+                            wasmtime::component::__internal::Vec<u8>,
+                        >,
                     ) -> wasmtime::Result<
                         std::collections::HashMap<
                             wasmtime::component::__internal::String,
@@ -1387,7 +1434,14 @@ pub mod exports {
                     pub fn func_option_roundtrip(
                         &self,
                     ) -> wasmtime::component::TypedFunc<
-                        (Option<std::collections::HashMap<&str, u32>>,),
+                        (
+                            Option<
+                                &std::collections::HashMap<
+                                    wasmtime::component::__internal::String,
+                                    u32,
+                                >,
+                            >,
+                        ),
                         (
                             Option<
                                 std::collections::HashMap<
@@ -1399,7 +1453,14 @@ pub mod exports {
                     > {
                         unsafe {
                             wasmtime::component::TypedFunc::<
-                                (Option<std::collections::HashMap<&str, u32>>,),
+                                (
+                                    Option<
+                                        &std::collections::HashMap<
+                                            wasmtime::component::__internal::String,
+                                            u32,
+                                        >,
+                                    >,
+                                ),
                                 (
                                     Option<
                                         std::collections::HashMap<
@@ -1414,7 +1475,12 @@ pub mod exports {
                     pub async fn call_option_roundtrip<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                        arg0: Option<std::collections::HashMap<&str, u32>>,
+                        arg0: Option<
+                            &std::collections::HashMap<
+                                wasmtime::component::__internal::String,
+                                u32,
+                            >,
+                        >,
                     ) -> wasmtime::Result<
                         Option<
                             std::collections::HashMap<
@@ -1435,7 +1501,15 @@ pub mod exports {
                     pub fn func_result_roundtrip(
                         &self,
                     ) -> wasmtime::component::TypedFunc<
-                        (Result<std::collections::HashMap<u32, &str>, &str>,),
+                        (
+                            Result<
+                                &std::collections::HashMap<
+                                    u32,
+                                    wasmtime::component::__internal::String,
+                                >,
+                                &str,
+                            >,
+                        ),
                         (
                             Result<
                                 std::collections::HashMap<
@@ -1448,7 +1522,15 @@ pub mod exports {
                     > {
                         unsafe {
                             wasmtime::component::TypedFunc::<
-                                (Result<std::collections::HashMap<u32, &str>, &str>,),
+                                (
+                                    Result<
+                                        &std::collections::HashMap<
+                                            u32,
+                                            wasmtime::component::__internal::String,
+                                        >,
+                                        &str,
+                                    >,
+                                ),
                                 (
                                     Result<
                                         std::collections::HashMap<
@@ -1464,7 +1546,13 @@ pub mod exports {
                     pub async fn call_result_roundtrip<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                        arg0: Result<std::collections::HashMap<u32, &str>, &str>,
+                        arg0: Result<
+                            &std::collections::HashMap<
+                                u32,
+                                wasmtime::component::__internal::String,
+                            >,
+                            &str,
+                        >,
                     ) -> wasmtime::Result<
                         Result<
                             std::collections::HashMap<
@@ -1486,7 +1574,15 @@ pub mod exports {
                     pub fn func_tuple_roundtrip(
                         &self,
                     ) -> wasmtime::component::TypedFunc<
-                        ((std::collections::HashMap<&str, u32>, u64),),
+                        (
+                            (
+                                &std::collections::HashMap<
+                                    wasmtime::component::__internal::String,
+                                    u32,
+                                >,
+                                u64,
+                            ),
+                        ),
                         (
                             (
                                 std::collections::HashMap<
@@ -1499,7 +1595,15 @@ pub mod exports {
                     > {
                         unsafe {
                             wasmtime::component::TypedFunc::<
-                                ((std::collections::HashMap<&str, u32>, u64),),
+                                (
+                                    (
+                                        &std::collections::HashMap<
+                                            wasmtime::component::__internal::String,
+                                            u32,
+                                        >,
+                                        u64,
+                                    ),
+                                ),
                                 (
                                     (
                                         std::collections::HashMap<
@@ -1515,7 +1619,13 @@ pub mod exports {
                     pub async fn call_tuple_roundtrip<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                        arg0: (std::collections::HashMap<&str, u32>, u64),
+                        arg0: (
+                            &std::collections::HashMap<
+                                wasmtime::component::__internal::String,
+                                u32,
+                            >,
+                            u64,
+                        ),
                     ) -> wasmtime::Result<
                         (
                             std::collections::HashMap<
@@ -1538,9 +1648,12 @@ pub mod exports {
                         &self,
                     ) -> wasmtime::component::TypedFunc<
                         (
-                            std::collections::HashMap<
-                                &str,
-                                std::collections::HashMap<u32, &str>,
+                            &std::collections::HashMap<
+                                wasmtime::component::__internal::String,
+                                std::collections::HashMap<
+                                    u32,
+                                    wasmtime::component::__internal::String,
+                                >,
                             >,
                         ),
                         (
@@ -1556,9 +1669,12 @@ pub mod exports {
                         unsafe {
                             wasmtime::component::TypedFunc::<
                                 (
-                                    std::collections::HashMap<
-                                        &str,
-                                        std::collections::HashMap<u32, &str>,
+                                    &std::collections::HashMap<
+                                        wasmtime::component::__internal::String,
+                                        std::collections::HashMap<
+                                            u32,
+                                            wasmtime::component::__internal::String,
+                                        >,
                                     >,
                                 ),
                                 (
@@ -1576,9 +1692,12 @@ pub mod exports {
                     pub async fn call_nested_roundtrip<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                        arg0: std::collections::HashMap<
-                            &str,
-                            std::collections::HashMap<u32, &str>,
+                        arg0: &std::collections::HashMap<
+                            wasmtime::component::__internal::String,
+                            std::collections::HashMap<
+                                u32,
+                                wasmtime::component::__internal::String,
+                            >,
                         >,
                     ) -> wasmtime::Result<
                         std::collections::HashMap<
@@ -1717,34 +1836,40 @@ pub mod exports {
                         &self,
                     ) -> wasmtime::component::TypedFunc<
                         (
-                            std::collections::HashMap<bool, u32>,
-                            std::collections::HashMap<u8, u32>,
-                            std::collections::HashMap<i8, u32>,
-                            std::collections::HashMap<u16, u32>,
-                            std::collections::HashMap<i16, u32>,
-                            std::collections::HashMap<u32, u32>,
-                            std::collections::HashMap<i32, u32>,
-                            std::collections::HashMap<u64, u32>,
-                            std::collections::HashMap<i64, u32>,
-                            std::collections::HashMap<char, u32>,
-                            std::collections::HashMap<&str, u32>,
+                            &std::collections::HashMap<bool, u32>,
+                            &std::collections::HashMap<u8, u32>,
+                            &std::collections::HashMap<i8, u32>,
+                            &std::collections::HashMap<u16, u32>,
+                            &std::collections::HashMap<i16, u32>,
+                            &std::collections::HashMap<u32, u32>,
+                            &std::collections::HashMap<i32, u32>,
+                            &std::collections::HashMap<u64, u32>,
+                            &std::collections::HashMap<i64, u32>,
+                            &std::collections::HashMap<char, u32>,
+                            &std::collections::HashMap<
+                                wasmtime::component::__internal::String,
+                                u32,
+                            >,
                         ),
                         (),
                     > {
                         unsafe {
                             wasmtime::component::TypedFunc::<
                                 (
-                                    std::collections::HashMap<bool, u32>,
-                                    std::collections::HashMap<u8, u32>,
-                                    std::collections::HashMap<i8, u32>,
-                                    std::collections::HashMap<u16, u32>,
-                                    std::collections::HashMap<i16, u32>,
-                                    std::collections::HashMap<u32, u32>,
-                                    std::collections::HashMap<i32, u32>,
-                                    std::collections::HashMap<u64, u32>,
-                                    std::collections::HashMap<i64, u32>,
-                                    std::collections::HashMap<char, u32>,
-                                    std::collections::HashMap<&str, u32>,
+                                    &std::collections::HashMap<bool, u32>,
+                                    &std::collections::HashMap<u8, u32>,
+                                    &std::collections::HashMap<i8, u32>,
+                                    &std::collections::HashMap<u16, u32>,
+                                    &std::collections::HashMap<i16, u32>,
+                                    &std::collections::HashMap<u32, u32>,
+                                    &std::collections::HashMap<i32, u32>,
+                                    &std::collections::HashMap<u64, u32>,
+                                    &std::collections::HashMap<i64, u32>,
+                                    &std::collections::HashMap<char, u32>,
+                                    &std::collections::HashMap<
+                                        wasmtime::component::__internal::String,
+                                        u32,
+                                    >,
                                 ),
                                 (),
                             >::new_unchecked(self.all_key_types)
@@ -1753,17 +1878,20 @@ pub mod exports {
                     pub async fn call_all_key_types<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                        arg0: std::collections::HashMap<bool, u32>,
-                        arg1: std::collections::HashMap<u8, u32>,
-                        arg2: std::collections::HashMap<i8, u32>,
-                        arg3: std::collections::HashMap<u16, u32>,
-                        arg4: std::collections::HashMap<i16, u32>,
-                        arg5: std::collections::HashMap<u32, u32>,
-                        arg6: std::collections::HashMap<i32, u32>,
-                        arg7: std::collections::HashMap<u64, u32>,
-                        arg8: std::collections::HashMap<i64, u32>,
-                        arg9: std::collections::HashMap<char, u32>,
-                        arg10: std::collections::HashMap<&str, u32>,
+                        arg0: &std::collections::HashMap<bool, u32>,
+                        arg1: &std::collections::HashMap<u8, u32>,
+                        arg2: &std::collections::HashMap<i8, u32>,
+                        arg3: &std::collections::HashMap<u16, u32>,
+                        arg4: &std::collections::HashMap<i16, u32>,
+                        arg5: &std::collections::HashMap<u32, u32>,
+                        arg6: &std::collections::HashMap<i32, u32>,
+                        arg7: &std::collections::HashMap<u64, u32>,
+                        arg8: &std::collections::HashMap<i64, u32>,
+                        arg9: &std::collections::HashMap<char, u32>,
+                        arg10: &std::collections::HashMap<
+                            wasmtime::component::__internal::String,
+                            u32,
+                        >,
                     ) -> wasmtime::Result<()>
                     where
                         <S as wasmtime::AsContext>::Data: Send,
@@ -1793,8 +1921,8 @@ pub mod exports {
                         &self,
                     ) -> wasmtime::component::TypedFunc<
                         (
-                            std::collections::HashMap<
-                                &str,
+                            &std::collections::HashMap<
+                                wasmtime::component::__internal::String,
                                 wasmtime::component::ResourceAny,
                             >,
                         ),
@@ -1808,8 +1936,8 @@ pub mod exports {
                         unsafe {
                             wasmtime::component::TypedFunc::<
                                 (
-                                    std::collections::HashMap<
-                                        &str,
+                                    &std::collections::HashMap<
+                                        wasmtime::component::__internal::String,
                                         wasmtime::component::ResourceAny,
                                     >,
                                 ),
@@ -1825,8 +1953,8 @@ pub mod exports {
                     pub async fn call_own_values<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                        arg0: std::collections::HashMap<
-                            &str,
+                        arg0: &std::collections::HashMap<
+                            wasmtime::component::__internal::String,
                             wasmtime::component::ResourceAny,
                         >,
                     ) -> wasmtime::Result<
@@ -1848,8 +1976,8 @@ pub mod exports {
                         &self,
                     ) -> wasmtime::component::TypedFunc<
                         (
-                            std::collections::HashMap<
-                                &str,
+                            &std::collections::HashMap<
+                                wasmtime::component::__internal::String,
                                 wasmtime::component::ResourceAny,
                             >,
                         ),
@@ -1858,8 +1986,8 @@ pub mod exports {
                         unsafe {
                             wasmtime::component::TypedFunc::<
                                 (
-                                    std::collections::HashMap<
-                                        &str,
+                                    &std::collections::HashMap<
+                                        wasmtime::component::__internal::String,
                                         wasmtime::component::ResourceAny,
                                     >,
                                 ),
@@ -1870,8 +1998,8 @@ pub mod exports {
                     pub async fn call_borrowed_values<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                        arg0: std::collections::HashMap<
-                            &str,
+                        arg0: &std::collections::HashMap<
+                            wasmtime::component::__internal::String,
                             wasmtime::component::ResourceAny,
                         >,
                     ) -> wasmtime::Result<()>

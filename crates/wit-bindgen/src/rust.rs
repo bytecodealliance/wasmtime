@@ -188,11 +188,7 @@ pub trait RustGenerator<'a> {
             TypeDefKind::Resource => unreachable!(),
 
             TypeDefKind::Type(t) => self.ty(t, mode),
-            TypeDefKind::Map(k, v) => {
-                let key = self.ty(k, mode);
-                let value = self.ty(v, mode);
-                format!("std::collections::HashMap<{key}, {value}>")
-            }
+            TypeDefKind::Map(k, v) => self.map(k, v, mode),
             TypeDefKind::Unknown => unreachable!(),
             TypeDefKind::FixedLengthList(t, size) => {
                 format!("[{}; {}]", self.ty(t, mode), size)
@@ -234,6 +230,27 @@ pub trait RustGenerator<'a> {
                 let wt = self.wasmtime_path();
                 format!("{wt}::component::__internal::Vec<{ty}>")
             }
+        }
+    }
+
+    fn map(&self, key: &Type, value: &Type, mode: TypeMode) -> String {
+        let next_mode = if matches!(self.ownership(), Ownership::Owning) {
+            TypeMode::Owned
+        } else {
+            mode
+        };
+        let key = self.ty(key, next_mode);
+        let value = self.ty(value, next_mode);
+        let map = format!("std::collections::HashMap<{key}, {value}>");
+        match mode {
+            TypeMode::AllBorrowed(lt) => {
+                if lt != "'_" {
+                    format!("&{lt} {map}")
+                } else {
+                    format!("&{map}")
+                }
+            }
+            TypeMode::Owned => map,
         }
     }
 
