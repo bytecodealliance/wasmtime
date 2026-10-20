@@ -3688,3 +3688,57 @@ async fn stream_consumer_failed_nested_call_then_yield() -> Result<()> {
     );
     Ok(())
 }
+
+/// A destructor run by `ResourceAny::resource_drop_async` can yield to another
+/// task of its instance, more than once.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn resource_drop_async_dtor_yields() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core func $thread.yield (canon thread.yield))
+  (core module $dtor
+    (import "" "thread.yield" (func $thread.yield (result i32)))
+    (func (export "dtor") (param i32)
+      (drop (call $thread.yield))
+      (drop (call $thread.yield))))
+  (core instance $dtor (instantiate $dtor
+    (with "" (instance (export "thread.yield" (func $thread.yield))))))
+  (type $r (resource (rep i32) (dtor (core func $dtor "dtor"))))
+  (core func $resource.new (canon resource.new $r))
+  (core func $task.return (canon task.return))
+  (core module $m
+    (import "" "resource.new" (func $resource.new (param i32) (result i32)))
+    (import "" "task.return" (func $task.return))
+    (func (export "make") (result i32) (call $resource.new (i32.const 42)))
+    ;; Returns right away, but its task keeps yielding forever, leaving work
+    ;; queued for this instance.
+    (func (export "spin") (result i32)
+      (call $task.return)
+      (i32.const 1 (; YIELD ;)))
+    (func (export "spin-cb") (param i32 i32 i32) (result i32)
+      (i32.const 1 (; YIELD ;))))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "resource.new" (func $resource.new))
+    (export "task.return" (func $task.return))))))
+  (export $r' "r" (type $r))
+  (func (export "make") (result (own $r')) (canon lift (core func $m "make")))
+  (func (export "spin") async
+    (canon lift (core func $m "spin") async (callback (core func $m "spin-cb"))))
+)
+"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let make = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, "make")?;
+    let spin = instance.get_typed_func::<(), ()>(&mut store, "spin")?;
+    let (r,) = make.call_async(&mut store, ()).await?;
+    spin.call_async(&mut store, ()).await?;
+    r.resource_drop_async(&mut store).await?;
+    Ok(())
+}
