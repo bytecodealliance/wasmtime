@@ -791,3 +791,21 @@ fpr = "fpr"
 
 [workspace.metadata.typos.files]
 extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt", "*.isle" ]
+
+# [DO NOT MERGE] Use wasm-tools main, which has the unreleased `map.const` support
+# in `wast` and `json-from-wast`. All of the wasm-tools crates are patched so
+# that their types are not duplicated across crate boundaries.
+[patch.crates-io]
+json-from-wast = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wasm-compose = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wasm-encoder = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wasm-metadata = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wasm-mutate = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wasm-smith = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wasm-wave = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wasmparser = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wasmprinter = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wast = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wat = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wit-component = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
+wit-parser = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "3cb44a647c67d24a6a1f3f52c61a89bb726e42c6" }
