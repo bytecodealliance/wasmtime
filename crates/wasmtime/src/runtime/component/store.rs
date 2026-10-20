@@ -1,11 +1,12 @@
 use crate::prelude::*;
-use crate::runtime::component::{HostResourceData, Instance};
+use crate::runtime::component::{HostResourceData, Instance, Val};
 use crate::runtime::vm;
 use crate::runtime::vm::component::{
     CallContext, ComponentInstance, HandleCounter, HandleTable, OwnedComponentInstance, Scope,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
+use core::mem;
 use core::pin::Pin;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::prelude::TryPrimaryMap;
@@ -67,6 +68,10 @@ pub struct ComponentStoreData {
     /// Caps the size of the allocations made on the host to this amount
     /// effectively.
     hostcall_fuel: usize,
+
+    /// Handles recorded by `LiftContext::discard` which still need to be
+    /// dropped.
+    discarded_handles: TryVec<Val>,
 }
 
 /// State tracking for tasks within components.
@@ -116,6 +121,7 @@ impl ComponentStoreData {
                 ComponentTaskState::NotConcurrent(Default::default())
             },
             hostcall_fuel: DEFAULT_HOSTCALL_FUEL,
+            discarded_handles: TryVec::new(),
         }
     }
 
@@ -411,6 +417,7 @@ impl StoreOpaque {
         &mut HandleTable,
         &mut HandleCounter,
         &mut HostResourceData,
+        &mut TryVec<Val>,
         Pin<&mut ComponentInstance>,
     ) {
         let instance = instance.id();
@@ -421,6 +428,7 @@ impl StoreOpaque {
             &mut data.component_host_table,
             &mut data.handle_counter,
             &mut data.host_resource_data,
+            &mut data.discarded_handles,
             data.instances[instance.instance]
                 .as_mut()
                 .unwrap()
@@ -491,6 +499,13 @@ impl StoreOpaque {
 
     pub(crate) fn hostcall_fuel(&self) -> usize {
         self.component_data().hostcall_fuel
+    }
+
+    /// Returns whether there are handles to drop with
+    /// `StoreContextMut::drop_discarded_handles`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn has_discarded_handles(&self) -> bool {
+        !self.component_data().discarded_handles.is_empty()
     }
 
     pub(crate) fn set_hostcall_fuel(&mut self, fuel: usize) {
@@ -645,6 +660,19 @@ impl<T> StoreContextMut<'_, T> {
     #[cfg(feature = "component-model-async")]
     pub fn concurrent_resource_table(&mut self) -> Option<&mut ResourceTable> {
         self.0.concurrent_resource_table()
+    }
+
+    /// Drops the handles recorded by `LiftContext::discard`. This may run
+    /// resource destructors, so it must not be called in the middle of a lift.
+    pub(crate) fn drop_discarded_handles(&mut self) -> Result<()>
+    where
+        T: 'static,
+    {
+        let handles = mem::take(&mut self.0.component_data_mut().discarded_handles);
+        for handle in handles {
+            handle.drop_handles(self.as_context_mut())?;
+        }
+        Ok(())
     }
 }
 

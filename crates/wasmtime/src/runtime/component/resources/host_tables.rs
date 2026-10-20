@@ -255,7 +255,7 @@ impl<'a> HostResourceTables<'a> {
     /// Returns an error if `idx` doesn't point to a valid resource, points to
     /// an `own` with active borrows, or if it doesn't have the type `expected`
     /// in the host tables.
-    pub(super) fn host_resource_drop(
+    pub(crate) fn host_resource_drop(
         &mut self,
         idx: HostResourceIndex,
     ) -> Result<Option<(u32, TableSlot)>> {

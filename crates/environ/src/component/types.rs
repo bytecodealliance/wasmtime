@@ -1318,6 +1318,8 @@ pub struct TypeMap {
     /// Offset in bytes from the start of the entry tuple to the value field in
     /// memory64.
     pub value_offset64: u32,
+    /// Whether the value type contains any handles.
+    pub value_contains_handles: bool,
 }
 
 /// Shape of a "fixed size list" interface type.

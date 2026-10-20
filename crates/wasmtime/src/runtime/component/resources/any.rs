@@ -16,7 +16,7 @@ use crate::component::resources::{HostResourceIndex, HostResourceTables};
 use crate::component::{ComponentType, Lift, Lower, Resource, ResourceDynamic, ResourceType};
 use crate::prelude::*;
 use crate::runtime::vm::{UncaughtException, ValRaw};
-use crate::{AsContextMut, StoreContextMut, Trap};
+use crate::{AsContextMut, StoreContextMut, Trap, bail_bug};
 use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
@@ -291,6 +291,15 @@ impl ResourceAny {
         store: &mut StoreContextMut<'_, T>,
     ) -> Result<()> {
         self.resource_drop_impl(store)
+    }
+
+    /// Releases this `borrow`, which was lifted with `cx`. This never runs any
+    /// code, so it may happen in the middle of a lift.
+    pub(crate) fn release_lifted_borrow(self, cx: &mut LiftContext<'_>) -> Result<()> {
+        match self.idx {
+            ResourceAnyIndex::Table(idx) if !self.owned => cx.host_resource_drop_borrow(idx),
+            _ => bail_bug!("expected a lifted `borrow` resource"),
+        }
     }
 
     /// Same as [`ResourceAny::resource_drop`] except for use with async stores

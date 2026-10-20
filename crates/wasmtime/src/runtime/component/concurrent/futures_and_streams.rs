@@ -891,7 +891,7 @@ impl<'a, T> Source<'a, T> {
             let count = input.remaining().len().min(buffer.remaining_capacity());
             buffer.move_from(*input, count);
         } else {
-            let store = store.as_context_mut();
+            let mut store = store.as_context_mut();
             let transmit = store.0.concurrent_state_mut()?.get_mut(self.id)?;
 
             let &ReadState::HostReady { guest_offset, .. } = &transmit.read else {
@@ -920,6 +920,15 @@ impl<'a, T> Source<'a, T> {
                 address + (T::SIZE32 * guest_offset.as_usize()),
                 count.as_usize() - guest_offset.as_usize(),
             )?;
+
+            // This may be in the middle of the guest's write, so drop any
+            // discarded handles on the event loop.
+            if store.0.has_discarded_handles() {
+                let token = StoreToken::new(store.as_context_mut());
+                store.0.queue_task(move |store| {
+                    token.as_context_mut(store).drop_discarded_handles()
+                })?;
+            }
 
             let transmit = store.0.concurrent_state_mut()?.get_mut(self.id)?;
 
@@ -4662,7 +4671,7 @@ impl Instance {
         ty: TransmitIndex,
         src_idx: u32,
     ) -> Result<TableId<TransmitHandle>> {
-        let (state, _, counter, _, instance) = store.lift_context_parts(self);
+        let (state, _, counter, _, _, instance) = store.lift_context_parts(self);
         lift_index_to_transmit(instance, counter, state.concurrent_state_mut(), ty, src_idx)
     }
 
@@ -4672,7 +4681,7 @@ impl Instance {
         ty: TransmitIndex,
         id: TableId<TransmitHandle>,
     ) -> Result<u32> {
-        let (state, _, counter, _, instance) = store.lift_context_parts(self);
+        let (state, _, counter, _, _, instance) = store.lift_context_parts(self);
         lower_transmit_to_index(instance, counter, state.concurrent_state_mut(), ty, id)
     }
 

@@ -712,12 +712,15 @@ impl ComponentTypesBuilder {
         key_abi.next_field64(&mut offset64);
         let value_offset64 = value_abi.next_field64(&mut offset64);
 
+        let value_contains_handles = self.ty_contains_any_handle(&value_ty);
+
         Ok(self.add_map_type(TypeMap {
             key: key_ty,
             value: value_ty,
             entry_abi,
             value_offset32,
             value_offset64,
+            value_contains_handles,
         }))
     }
 

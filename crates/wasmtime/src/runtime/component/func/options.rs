@@ -1,16 +1,16 @@
-use crate::StoreContextMut;
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::ConcurrentState;
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceData, HostResourceIndex, HostResourceTables};
 use crate::component::store::ComponentTaskState;
-use crate::component::{Instance, ResourceType, RuntimeInstance};
+use crate::component::{Instance, ResourceType, RuntimeInstance, Val};
 use crate::prelude::*;
 use crate::runtime::vm::component::{
     ComponentInstance, CurrentScope, HandleCounter, HandleTable, ResourceTables,
 };
 use crate::runtime::vm::{UncaughtException, VMFuncRef};
 use crate::store::{StoreId, StoreOpaque};
+use crate::{StoreContextMut, bail_bug};
 use alloc::sync::Arc;
 use core::fmt;
 use core::pin::Pin;
@@ -357,6 +357,9 @@ pub struct LiftContext<'a> {
     handle_counter: &'a mut HandleCounter,
     host_resource_data: &'a mut HostResourceData,
 
+    /// See [`LiftContext::discard`].
+    discarded_handles: &'a mut TryVec<Val>,
+
     task_state: &'a mut ComponentTaskState,
 
     /// Remaining fuel for this hostcall/lift operation.
@@ -386,8 +389,14 @@ impl<'a> LiftContext<'a> {
         // at this time.
         let memory =
             instance_handle.options_memory(unsafe { &*(store as *const StoreOpaque) }, options);
-        let (task_state, host_table, handle_counter, host_resource_data, instance) =
-            store.lift_context_parts(instance_handle);
+        let (
+            task_state,
+            host_table,
+            handle_counter,
+            host_resource_data,
+            discarded_handles,
+            instance,
+        ) = store.lift_context_parts(instance_handle);
         let (component, instance) = instance.component_and_self();
 
         Ok(LiftContext {
@@ -402,6 +411,7 @@ impl<'a> LiftContext<'a> {
             host_table,
             handle_counter,
             host_resource_data,
+            discarded_handles,
             hostcall_fuel,
         })
     }
@@ -497,6 +507,27 @@ impl<'a> LiftContext<'a> {
     /// inserted at.
     pub fn host_resource_lower_borrow(&mut self, rep: u32) -> Result<HostResourceIndex> {
         self.resource_tables().host_resource_lower_borrow(rep)
+    }
+
+    /// Removes a `borrow` resource, which was inserted with
+    /// [`Self::host_resource_lower_borrow`], from the host-owned table.
+    pub(crate) fn host_resource_drop_borrow(&mut self, idx: HostResourceIndex) -> Result<()> {
+        match self.resource_tables().host_resource_drop(idx)? {
+            None => Ok(()),
+            Some(_) => bail_bug!("expected a `borrow` resource"),
+        }
+    }
+
+    /// Drops the handles within `val`, a lifted value which won't be handed to
+    /// the embedder.
+    ///
+    /// Borrows are released right away. Other handles may run a destructor, so
+    /// they're left for `StoreContextMut::drop_discarded_handles`.
+    pub(crate) fn discard(&mut self, val: Val) -> Result<()> {
+        val.for_each_handle(&mut |handle| match handle {
+            Val::Resource(resource) if !resource.owned() => resource.release_lifted_borrow(self),
+            _ => Ok(self.discarded_handles.push(handle.clone())?),
+        })
     }
 
     /// Returns the underlying type of the resource table specified by `ty`.

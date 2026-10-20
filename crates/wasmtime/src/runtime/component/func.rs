@@ -561,6 +561,8 @@ impl Func {
         }
         store.0.exit_guest_sync_call()?;
 
+        store.drop_discarded_handles()?;
+
         Ok(val)
     }
 

@@ -1,8 +1,8 @@
-use crate::ValRaw;
 use crate::component::ResourceAny;
 use crate::component::concurrent::{self, ErrorContext, FutureAny, StreamAny};
 use crate::component::func::{Lift, LiftContext, Lower, LowerContext, desc};
 use crate::prelude::*;
+use crate::{StoreContextMut, ValRaw, bail_bug};
 use core::mem::MaybeUninit;
 use core::slice::{Iter, IterMut};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
@@ -785,6 +785,69 @@ impl Val {
             Val::ErrorContext(_) => "error-context",
             Val::FixedLengthList(_) => "list<_, N>",
         }
+    }
+
+    /// Calls `f` with each handle within this value which needs to be dropped.
+    /// A lifted `error-context` doesn't own a handle, so it's skipped.
+    pub(crate) fn for_each_handle(&self, f: &mut impl FnMut(&Val) -> Result<()>) -> Result<()> {
+        match self {
+            Val::Resource(_) | Val::Future(_) | Val::Stream(_) => f(self),
+            Val::List(vals) | Val::Tuple(vals) | Val::FixedLengthList(vals) => {
+                vals.iter().try_for_each(|val| val.for_each_handle(f))
+            }
+            Val::Record(fields) => fields
+                .iter()
+                .try_for_each(|(_, val)| val.for_each_handle(f)),
+            Val::Map(entries) => entries.iter().try_for_each(|(key, val)| {
+                key.for_each_handle(f)?;
+                val.for_each_handle(f)
+            }),
+            Val::Variant(_, Some(val))
+            | Val::Option(Some(val))
+            | Val::Result(Ok(Some(val)) | Err(Some(val))) => val.for_each_handle(f),
+            Val::ErrorContext(_)
+            | Val::Bool(_)
+            | Val::S8(_)
+            | Val::U8(_)
+            | Val::S16(_)
+            | Val::U16(_)
+            | Val::S32(_)
+            | Val::U32(_)
+            | Val::S64(_)
+            | Val::U64(_)
+            | Val::Float32(_)
+            | Val::Float64(_)
+            | Val::Char(_)
+            | Val::String(_)
+            | Val::Enum(_)
+            | Val::Flags(_)
+            | Val::Variant(_, None)
+            | Val::Option(None)
+            | Val::Result(Ok(None) | Err(None)) => Ok(()),
+        }
+    }
+
+    /// Drops every handle within this value, which may run resource
+    /// destructors.
+    pub(crate) fn drop_handles<T: 'static>(&self, mut store: StoreContextMut<'_, T>) -> Result<()> {
+        self.for_each_handle(&mut |handle| match handle {
+            // Drop through the internal entry point rather than the public
+            // `resource_drop`, whose `validate_sync_call` check would reject
+            // the drop on a fiber, such as while servicing a guest call.
+            Val::Resource(resource) => resource.resource_drop_in_guest_call(&mut store),
+
+            #[cfg(feature = "component-model-async")]
+            Val::Future(future) => future.clone().close(&mut store),
+            #[cfg(feature = "component-model-async")]
+            Val::Stream(stream) => stream.clone().close(&mut store),
+
+            // Without `component-model-async` these are uninhabited, so there
+            // is nothing to close.
+            #[cfg(not(feature = "component-model-async"))]
+            Val::Future(_) | Val::Stream(_) => Ok(()),
+
+            _ => bail_bug!("`{}` is not a handle", handle.desc()),
+        })
     }
 
     /// Deserialize a [`Val`] from its [`crate::component::wasm_wave`] encoding. Deserialization

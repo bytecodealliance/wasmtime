@@ -448,6 +448,7 @@ where
 
         let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_PARAMS, storage)?;
+        store.drop_discarded_handles()?;
 
         let ret = self
             .run(store.as_context_mut(), params)
@@ -512,9 +513,10 @@ where
         // memory.
         let mut lift = LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
         let (params, rest) = self.load_params(&mut lift, ty, MAX_FLAT_ASYNC_PARAMS, storage)?;
+        store.drop_discarded_handles()?;
 
         // Load/validate the return pointer, if present.
-        let retptr = if !lift.types[fty.results].types.is_empty() {
+        let retptr = if !types[fty.results].types.is_empty() {
             let mut lower = LowerContext::new(store.as_context_mut(), options, instance);
             // SAFETY: see `load_params` below about how the return pointer
             // should be safe to use.
@@ -568,6 +570,9 @@ where
     ///
     /// This will internally decide the ABI source of the parameters and use
     /// `storage` appropriately.
+    ///
+    /// Handles discarded while lifting must then be dropped with
+    /// `StoreContextMut::drop_discarded_handles`.
     fn load_params<'a>(
         &self,
         lift: &mut LiftContext<'_>,

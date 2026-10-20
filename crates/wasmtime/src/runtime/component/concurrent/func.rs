@@ -1,12 +1,16 @@
 use crate::component::concurrent::{self, PreparedCall, TaskGroupId, TaskId};
 use crate::component::func::LowerContext;
-use crate::component::{AsAccessor, ComponentNamedList, Func, Lift, Lower, TypedFunc, Val};
+use crate::component::{
+    Accessor, AsAccessor, ComponentNamedList, Func, HasData, Lift, Lower, TypedFunc, Val,
+};
 use crate::prelude::*;
 use crate::runtime::vm::SendSyncPtr;
+use crate::store::StoreToken;
 use crate::{AsContextMut, StoreContextMut, ValRaw};
 use core::marker;
 use core::mem::MaybeUninit;
 use core::ptr::NonNull;
+use futures::channel::oneshot;
 use wasmtime_environ::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 
 /// Returned from [`Func::start_call_concurrent`] to represent a
@@ -282,7 +286,11 @@ where
         wrapper
             .store
             .as_context_mut()
-            .run_concurrent_trap_on_idle(async |_| result.await)
+            .run_concurrent_trap_on_idle(async |accessor| {
+                let result = result.await?;
+                drop_discarded_handles(accessor).await?;
+                Ok(result)
+            })
             .await?
     }
 
@@ -407,10 +415,9 @@ where
         Params: 'static,
         Return: 'static,
     {
-        // Intentionally not used today, but left here for future API
-        // compatibility with using this.
-        let _ = accessor;
-        call.call.await
+        let result = call.call.await?;
+        drop_discarded_handles(accessor.as_accessor()).await?;
+        Ok(result)
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
@@ -508,5 +515,33 @@ impl<T, P, R> TypedFuncCallConcurrent<T, P, R> {
     /// `task-group-hook` feature is enabled.
     pub fn group(&self) -> TaskGroupId {
         self.call.group
+    }
+}
+
+/// Drops the handles discarded while lifting a concurrent call's result, which
+/// must be done on the event loop.
+async fn drop_discarded_handles<T, D>(accessor: &Accessor<T, D>) -> Result<()>
+where
+    T: 'static,
+    D: HasData + ?Sized,
+{
+    let rx = accessor.with(|mut access| -> Result<_> {
+        let mut store = access.as_context_mut();
+        if !store.0.has_discarded_handles() {
+            return Ok(None);
+        }
+        let (tx, rx) = oneshot::channel();
+        let token = StoreToken::new(store.as_context_mut());
+        store.0.queue_task(move |store| {
+            _ = tx.send(token.as_context_mut(store).drop_discarded_handles());
+            Ok(())
+        })?;
+        Ok(Some(rx))
+    })?;
+    match rx {
+        Some(rx) => rx
+            .await
+            .map_err(|_| format_err!("dropping discarded handles was canceled"))?,
+        None => Ok(()),
     }
 }
