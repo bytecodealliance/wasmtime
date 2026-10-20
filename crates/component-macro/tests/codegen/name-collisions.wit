@@ -1,0 +1,83 @@
+package foo:foo;
+
+interface store {
+  get: func() -> u32;
+}
+
+interface greeter {
+  greet: func();
+}
+
+package exports:bar {
+  interface baz {
+    f: func();
+  }
+}
+
+package %use:%fn {
+  interface %self {
+    f: func();
+  }
+}
+
+// Each name which collides with one claimed before it has underscores
+// appended to it, see "Generated names" in the documentation of `bindgen!`.
+world name-collisions {
+  // The modules `exports` and `named_imports` are always reserved, so the
+  // namespace of `exports:bar/baz` is generated in `exports_`, and the module
+  // `foo` is claimed by the namespace of `store`.
+  import store;
+  import exports:bar/baz;
+
+  // Labelled imports of a named interface share its bindings in
+  // `foo::foo::store`, while anonymous interfaces are generated in modules
+  // named after their labels.
+  import a: store;
+  import foo: interface {
+    f: func();
+  }
+  import exports: interface {
+    f: func();
+  }
+  import named-imports: interface {
+    f: func();
+  }
+
+  // Names which are Rust keywords, also in uppercase, have an underscore
+  // appended to them.
+  import %use:%fn/%self;
+  import %type: interface {
+    f: func();
+  }
+  import SELF: interface {
+    f: func();
+  }
+  export %use:%fn/%self;
+  export %type: func();
+
+  // The module `foo` within `exports` is claimed by the namespace of
+  // `greeter`, and the method `foo_foo_greeter` by its accessor.
+  export greeter;
+  export foo: greeter;
+  export foo-foo-greeter: greeter;
+
+  // Methods of the world's struct are reserved.
+  export new: interface {}
+  export instantiate: interface {}
+  export instantiate-async: interface {}
+  export add-to-linker: interface {}
+  export add-to-linker-imports: interface {}
+
+  // The methods `call_run` and `func_run` are claimed by the function `run`
+  // before labels.
+  export call-run: interface {}
+  export run: func();
+
+  // The world's struct has a field for each export, named after functions,
+  // and `interface{N}` for interfaces where `N` is their index in the world's
+  // exports, which lists functions first. The field of `%use:%fn/%self` would
+  // therefore be `interface4`, but that's claimed by the function first.
+  // Fields are also loaded into local variables next to `store`.
+  export interface4: func();
+  export store: func();
+}

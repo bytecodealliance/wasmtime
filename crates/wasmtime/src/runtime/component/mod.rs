@@ -208,6 +208,48 @@ pub(crate) use self::store::ComponentStoreData;
 /// what's generated. It's also recommended to browse the [`bindgen_examples`]
 /// for example generated structures and example generated code.
 ///
+/// # Generated names
+///
+/// The bindings for a world's imports and exports are generated in modules
+/// named after them, and exports additionally have methods named after them:
+///
+/// * `import foo:bar/baz;` is generated in the module `foo::bar::baz`, which
+///   labelled imports of the same interface, such as `import a: foo:bar/baz;`,
+///   share.
+/// * `import a: interface { ... }` is generated in the module `a`.
+/// * `export foo:bar/baz;` is generated in the module `exports::foo::bar::baz`,
+///   and returned by the method `foo_bar_baz` of the world's structure.
+/// * `export a: foo:bar/baz;` and `export a: interface { ... }` are generated
+///   in the module `exports::a`, and returned by the method `a`.
+/// * `export a: func();` is called by the method `call_a`, and returned by the
+///   method `func_a`.
+///
+/// These names can collide, for example `import foo: interface { ... }` and
+/// the namespace of `import foo:bar/baz;` would both be generated in the module
+/// `foo`. To avoid this, names are claimed in the following order, and a name
+/// which is already claimed has underscores appended to it until it's unique,
+/// here making the module of the label `foo_`:
+///
+/// 1. The names of items which may always be generated: the `exports` and
+///    `named_imports` modules, and the world structure's `new`,
+///    `instantiate`, `instantiate_async`, `add_to_linker`, and
+///    `add_to_linker_imports` methods. Namespaces named `exports` and
+///    `named-imports` are therefore always generated in the modules
+///    `exports_` and `named_imports_`.
+/// 2. The modules of namespaces, and the methods returning interfaces which
+///    are exported without a label, such as `foo_bar_baz` above.
+/// 3. The `call_*` and `func_*` methods of exported functions.
+/// 4. The modules of anonymous interfaces imported under labels and of
+///    labelled exports, and the methods returning labelled exports.
+///
+/// Names within each of these are claimed in the order of the world's imports
+/// and exports. Each name only needs to be unique among the modules or methods
+/// next to it, so for example `export foo: foo:bar/baz;` is generated in the
+/// module `exports::foo_` but returned by the method `foo`. As with other
+/// identifiers, names which are Rust keywords have an underscore appended, for
+/// example `export %type: interface { ... }` is generated in the module
+/// `exports::type_`.
+///
 /// # Syntax
 ///
 /// This procedural macro accepts a few different syntaxes. The primary purpose

@@ -437,7 +437,10 @@ pub trait RustGenerator<'a> {
 
 /// Translate `name` to a Rust `snake_case` identifier.
 pub fn to_rust_ident(name: &str) -> String {
-    match name {
+    // Note that keywords are matched after conversion to snake case, since
+    // WIT also allows uppercase names such as `TYPE`.
+    let name = name.to_snake_case();
+    match name.as_str() {
         // Escape Rust keywords.
         // Source: https://doc.rust-lang.org/reference/keywords.html
         "as" => "as_".into(),
@@ -491,7 +494,7 @@ pub fn to_rust_ident(name: &str) -> String {
         "yield" => "yield_".into(),
         "try" => "try_".into(),
         "gen" => "gen_".into(),
-        s => s.to_snake_case(),
+        _ => name,
     }
 }
 

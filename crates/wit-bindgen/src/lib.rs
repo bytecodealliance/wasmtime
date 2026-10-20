@@ -63,6 +63,181 @@ enum InterfaceName {
     Path(Vec<String>),
 }
 
+impl InterfaceName {
+    /// The path, from the root of the `bindgen!` macro, to the module generated
+    /// for this interface.
+    fn local_path(&self) -> &[String] {
+        match self {
+            InterfaceName::Remapped { local_path, .. } => local_path,
+            InterfaceName::Path(path) => path,
+        }
+    }
+}
+
+/// Modules at the root of the bindings which may be generated regardless of
+/// the world's imports.
+const RESERVED_MODULES: &[&str] = &["exports", "named_imports"];
+
+/// Methods of the world's struct which may be generated regardless of the
+/// world's exports.
+const RESERVED_METHODS: &[&str] = &[
+    "new",
+    "instantiate",
+    "instantiate_async",
+    "add_to_linker",
+    "add_to_linker_imports",
+];
+
+/// Names which fields of the world's struct can't have, since fields are also
+/// bound to local variables of the same name when loading the world's exports,
+/// which mustn't shadow the `store` argument.
+const RESERVED_FIELDS: &[&str] = &["store"];
+
+/// The names of the modules, methods, and fields generated for the imports
+/// and exports of a world, chosen such that none of them collide.
+///
+/// Imports and exports of interfaces are generated in modules named after
+/// their namespace or label, and exports additionally have methods and fields
+/// in the world's struct named after them. These names can collide with each
+/// other, for example the module `foo` of the label in
+/// `import foo: interface { .. }` and the module of the namespace in
+/// `import foo:bar/baz;`, as well as with `RESERVED_MODULES`,
+/// `RESERVED_METHODS`, and `RESERVED_FIELDS`. Names are therefore claimed in
+/// the order documented for `bindgen!`, and a name which is already claimed
+/// has underscores appended to it until it's unique.
+#[derive(Default)]
+struct WorldNames {
+    /// The module, at the root of the bindings, of each anonymous interface
+    /// imported under a label. Labelled imports of named interfaces share the
+    /// bindings of the interface, which are in the module of its namespace.
+    import_modules: HashMap<String, String>,
+    /// The module, within the `exports` module, of each labelled export.
+    export_modules: HashMap<String, String>,
+    /// The method of the world's struct which returns each exported
+    /// interface, or for exported functions the suffix of their `call_*` and
+    /// `func_*` methods.
+    export_methods: HashMap<WorldKey, String>,
+    /// The field of the world's struct for each export.
+    export_fields: HashMap<WorldKey, String>,
+}
+
+impl WorldNames {
+    fn new(resolve: &Resolve, world: WorldId) -> WorldNames {
+        let world = &resolve.worlds[world];
+        let mut names = WorldNames::default();
+
+        // Imports are generated in modules at the root of the bindings. Named
+        // interfaces are always generated in the module of their namespace,
+        // even when only imported under labels. Namespaces are shared by all
+        // of their interfaces, and are only renamed by `namespace_module`.
+        let mut modules = Claims::new(RESERVED_MODULES);
+        for item in world.imports.values() {
+            if let WorldItem::Interface { id, .. } = item
+                && resolve.interfaces[*id].name.is_some()
+            {
+                modules.0.insert(namespace_module(resolve, *id));
+            }
+        }
+        for (key, item) in world.imports.iter() {
+            if let (WorldKey::Name(label), WorldItem::Interface { id, .. }) = (key, item)
+                && resolve.interfaces[*id].name.is_none()
+            {
+                let module = modules.claim(to_rust_ident(label));
+                names.import_modules.insert(label.clone(), module);
+            }
+        }
+
+        // Exports are generated in modules within the `exports` module, where
+        // all labelled exports have modules of their own.
+        let mut modules = Claims::new(&[]);
+        for key in world.exports.keys() {
+            if let WorldKey::Interface(id) = key {
+                modules.0.insert(namespace_module(resolve, *id));
+            }
+        }
+        for (key, item) in world.exports.iter() {
+            if let (WorldKey::Name(label), WorldItem::Interface { .. }) = (key, item) {
+                let module = modules.claim(to_rust_ident(label));
+                names.export_modules.insert(label.clone(), module);
+            }
+        }
+
+        // Exports additionally have methods and fields in the world's struct.
+        // Exported functions claim theirs before labelled interfaces.
+        let mut methods = Claims::new(RESERVED_METHODS);
+        let mut fields = Claims::new(RESERVED_FIELDS);
+        for key in world.exports.keys() {
+            if let WorldKey::Interface(id) = key {
+                let iface = &resolve.interfaces[*id];
+                let pkg = iface.package.unwrap();
+                let method = methods.claim(format!(
+                    "{}_{}_{}",
+                    resolve.packages[pkg].name.namespace.to_snake_case(),
+                    Wasmtime::name_package_module(resolve, pkg),
+                    to_rust_ident(iface.name.as_ref().unwrap()),
+                ));
+                names.export_methods.insert(key.clone(), method);
+            }
+        }
+        for (key, item) in world.exports.iter() {
+            if let WorldItem::Function(func) = item {
+                let mut name = func.item_name().to_snake_case();
+                while methods.0.contains(&format!("call_{name}"))
+                    || methods.0.contains(&format!("func_{name}"))
+                {
+                    name.push('_');
+                }
+                methods.0.insert(format!("call_{name}"));
+                methods.0.insert(format!("func_{name}"));
+                names.export_methods.insert(key.clone(), name);
+                let field = fields.claim(to_rust_ident(func.item_name()));
+                names.export_fields.insert(key.clone(), field);
+            }
+        }
+        for (i, (key, item)) in world.exports.iter().enumerate() {
+            if let WorldItem::Interface { .. } = item {
+                if let WorldKey::Name(label) = key {
+                    let method = methods.claim(to_rust_ident(label));
+                    names.export_methods.insert(key.clone(), method);
+                }
+                let field = fields.claim(format!("interface{i}"));
+                names.export_fields.insert(key.clone(), field);
+            }
+        }
+
+        names
+    }
+}
+
+/// A set of names claimed by items within the same Rust namespace.
+struct Claims(HashSet<String>);
+
+impl Claims {
+    fn new(reserved: &[&str]) -> Claims {
+        Claims(reserved.iter().map(|s| s.to_string()).collect())
+    }
+
+    /// Claims `name`, with underscores appended to it until it's unique.
+    fn claim(&mut self, mut name: String) -> String {
+        while !self.0.insert(name.clone()) {
+            name.push('_');
+        }
+        name
+    }
+}
+
+/// Returns the name of the module generated for the namespace of the
+/// interface `id`, which may be within the root of the bindings, `exports`, or
+/// `named_imports`.
+fn namespace_module(resolve: &Resolve, id: InterfaceId) -> String {
+    let pkg = resolve.interfaces[id].package.unwrap();
+    let mut name = to_rust_ident(&resolve.packages[pkg].name.namespace);
+    while RESERVED_MODULES.contains(&name.as_str()) {
+        name.push('_');
+    }
+    name
+}
+
 #[derive(Default)]
 struct Wasmtime {
     src: Source,
@@ -87,6 +262,7 @@ struct Wasmtime {
     named_import_modules: Vec<(String, InterfaceName)>,
     world_link_options: LinkOptionsBuilder,
     interface_link_options: HashMap<InterfaceId, LinkOptionsBuilder>,
+    names: WorldNames,
 }
 
 struct ImportInterface {
@@ -281,14 +457,18 @@ impl Wasmtime {
             InterfaceKind::Named => path.push("named_imports".to_string()),
         }
         match name {
-            WorldKey::Name(name) => {
-                path.push(name.to_snake_case());
-            }
+            WorldKey::Name(name) => path.push(match interface_kind {
+                InterfaceKind::Import => self.names.import_modules[name].clone(),
+                InterfaceKind::Export => self.names.export_modules[name].clone(),
+                InterfaceKind::Named => unreachable!(),
+            }),
             WorldKey::Interface(_) => {
                 let iface = &resolve.interfaces[id];
-                let pkgname = &resolve.packages[iface.package.unwrap()].name;
-                path.push(pkgname.namespace.to_snake_case());
-                path.push(self.name_package_module(resolve, iface.package.unwrap()));
+                path.push(namespace_module(resolve, id));
+                path.push(to_rust_ident(&Self::name_package_module(
+                    resolve,
+                    iface.package.unwrap(),
+                )));
                 path.push(to_rust_ident(iface.name.as_ref().unwrap()));
             }
         }
@@ -324,7 +504,7 @@ impl Wasmtime {
     /// then pass through the name unmodified. If, however, there are multiple
     /// versions of this package then the package module is going to get version
     /// information.
-    fn name_package_module(&self, resolve: &Resolve, id: PackageId) -> String {
+    fn name_package_module(resolve: &Resolve, id: PackageId) -> String {
         let pkg = &resolve.packages[id];
         let versions_with_same_name = resolve
             .packages
@@ -367,6 +547,7 @@ impl Wasmtime {
 
     fn generate(&mut self, resolve: &Resolve, id: WorldId) -> anyhow::Result<String> {
         self.types.analyze(resolve, id);
+        self.names = WorldNames::new(resolve, id);
 
         self.world_link_options.write_struct(&mut self.src);
 
@@ -624,18 +805,15 @@ impl Wasmtime {
         let mut generator = InterfaceGenerator::new(self, resolve);
 
         generator.current_interface = Some((id, name, InterfaceKind::Import));
-        let snake = to_rust_ident(&match name {
-            WorldKey::Name(s) => s.to_snake_case(),
-            WorldKey::Interface(id) => resolve.interfaces[*id]
-                .name
-                .as_ref()
-                .unwrap()
-                .to_snake_case(),
-        });
-        let module = if generator
+        let remapped = generator
             .generator
-            .name_interface(resolve, id, name, InterfaceKind::Import)
-        {
+            .name_interface(resolve, id, name, InterfaceKind::Import);
+        let snake = generator.generator.interface_names[&id]
+            .local_path()
+            .last()
+            .unwrap()
+            .clone();
+        let module = if remapped {
             // If this interface is remapped then that means that it was
             // provided via the `with` key in the bindgen configuration.
             // That means that bindings generation is skipped here. To
@@ -712,7 +890,7 @@ impl Wasmtime {
                 assert!(generator.src.is_empty());
                 generator.generator.exports.funcs.push(body);
                 ty_index = format!("{wt}::component::ComponentExportIndex");
-                field = func_field_name(resolve, func)?;
+                field = generator.generator.names.export_fields[name].clone();
                 ty = format!("{wt}::component::Func");
                 let sig = generator.typedfunc_sig(func, TypeMode::AllBorrowed("'_"));
                 let typecheck = format!(
@@ -745,10 +923,6 @@ impl Wasmtime {
                 generator.types(*id)?;
                 let struct_name = "Guest";
                 let iface = &resolve.interfaces[*id];
-                let iface_name = match name {
-                    WorldKey::Name(name) => name,
-                    WorldKey::Interface(_) => iface.name.as_ref().unwrap(),
-                };
                 uwriteln!(generator.src, "#[derive(Clone)]");
                 uwriteln!(generator.src, "pub struct {struct_name} {{");
                 for (_, func) in iface.functions.iter() {
@@ -879,7 +1053,9 @@ pub fn new<_T>(
                 }
 
                 let module = &generator.src[..];
-                let snake = to_rust_ident(iface_name);
+                let local_path = generator.generator.interface_names[id].local_path();
+                let snake = local_path.last().unwrap();
+                let path = format!("{}::{struct_name}", local_path.join("::"));
 
                 let module = format!(
                     "
@@ -892,32 +1068,12 @@ pub fn new<_T>(
                         }}
                     "
                 );
-                let pkgname = match name {
-                    WorldKey::Name(_) => None,
-                    WorldKey::Interface(_) => {
-                        Some(resolve.packages[iface.package.unwrap()].name.clone())
-                    }
-                };
                 self.exports
                     .modules
                     .push((module, self.interface_names[id].clone()));
 
-                let (path, method_name) = match pkgname {
-                    Some(pkgname) => (
-                        format!(
-                            "exports::{}::{}::{snake}::{struct_name}",
-                            pkgname.namespace.to_snake_case(),
-                            self.name_package_module(resolve, iface.package.unwrap()),
-                        ),
-                        format!(
-                            "{}_{}_{snake}",
-                            pkgname.namespace.to_snake_case(),
-                            self.name_package_module(resolve, iface.package.unwrap())
-                        ),
-                    ),
-                    None => (format!("exports::{snake}::{struct_name}"), snake.clone()),
-                };
-                field = format!("interface{}", self.exports.fields.len());
+                let method_name = &self.names.export_methods[name];
+                field = self.names.export_fields[name].clone();
                 load = format!("self.{field}.load(&mut store, &_instance)?");
                 self.exports.funcs.push(format!(
                     "
@@ -3207,8 +3363,29 @@ pub fn add_to_linker<T, D>(
         }
     }
 
+    /// Returns the suffix of the `call_*` and `func_*` methods, and the name
+    /// of the field, generated for the exported function `func`.
+    fn export_func_names(&self, func: &Function) -> Result<(String, String)> {
+        match self.current_interface {
+            // Functions exported by the world are methods of the world's
+            // struct, see `WorldNames`.
+            None => {
+                let key = WorldKey::Name(func.name.clone());
+                let names = &self.generator.names;
+                Ok((
+                    names.export_methods[&key].clone(),
+                    names.export_fields[&key].clone(),
+                ))
+            }
+            Some(_) => Ok((
+                func.item_name().to_snake_case(),
+                func_field_name(self.resolve, func)?,
+            )),
+        }
+    }
+
     fn extract_typed_function(&mut self, func: &Function) -> Result<(String, String)> {
-        let snake = func_field_name(self.resolve, func)?;
+        let (_, snake) = self.export_func_names(func)?;
         let sig = self.typedfunc_sig(func, TypeMode::AllBorrowed("'_"));
         let extract =
             format!("*_instance.get_typed_func::<{sig}>(&mut store, &self.{snake})?.func()");
@@ -3233,12 +3410,12 @@ pub fn add_to_linker<T, D>(
             TypeMode::AllBorrowed("'_")
         };
         let wt = self.generator.wasmtime_path();
+        let (method, field) = self.export_func_names(func)?;
 
         // First generate an accessor to get the raw `TypedFunc` itself.
         uwrite!(
             self.src,
-            "pub fn func_{}(&self) -> {wt}::component::TypedFunc<{}> {{\n",
-            func.item_name().to_snake_case(),
+            "pub fn func_{method}(&self) -> {wt}::component::TypedFunc<{}> {{\n",
             self.typedfunc_sig(func, param_mode)
         );
 
@@ -3255,19 +3432,14 @@ pub fn add_to_linker<T, D>(
         };
         uwriteln!(
             self.src,
-            "::new_unchecked(self{projection_to_func}.{})",
-            func_field_name(self.resolve, func)?,
+            "::new_unchecked(self{projection_to_func}.{field})"
         );
         self.src.push_str("}\n");
         self.src.push_str("}\n");
 
         // Next generate the actual function itself.
         self.rustdoc(&func.docs);
-        uwrite!(
-            self.src,
-            "pub {async_} fn call_{}",
-            func.item_name().to_snake_case(),
-        );
+        uwrite!(self.src, "pub {async_} fn call_{method}");
         if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
             uwrite!(
                 self.src,
@@ -3324,11 +3496,7 @@ pub fn add_to_linker<T, D>(
             }
         }
 
-        uwriteln!(
-            self.src,
-            "let callee = self.func_{}();",
-            func.item_name().to_snake_case(),
-        );
+        uwriteln!(self.src, "let callee = self.func_{method}();");
 
         self.src.push_str("let (");
         if func.result.is_some() {
