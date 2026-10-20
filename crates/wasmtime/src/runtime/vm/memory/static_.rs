@@ -1,9 +1,9 @@
 //! Support for implementing the [`LinearMemory`] trait in terms of a
 //! fixed allocation that cannot move.
 
+use crate::LinearMemory;
 use crate::prelude::*;
 use crate::runtime::vm::{MemoryImageSlot, MmapOffset, SendSyncPtr};
-use crate::LinearMemory;
 
 /// A "static" memory where the lifetime of the backing memory is managed
 /// elsewhere. Currently used with the pooling allocator.
