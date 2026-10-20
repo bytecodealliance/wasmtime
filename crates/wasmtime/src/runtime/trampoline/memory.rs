@@ -49,10 +49,16 @@ pub async fn create_memory(
     // We create an instance in the on-demand allocator when creating handles
     // associated with external objects. The configured instance allocator
     // should only be used when creating module instances as we don't want host
-    // objects to count towards instance limits.
+    // objects to count towards instance limits. Host-created memories must
+    // still use the configured memory creator, though, see
+    // `Config::with_host_memory`.
     let allocator = SingleMemoryInstance {
         preallocation,
-        ondemand: OnDemandInstanceAllocator::default(),
+        ondemand: OnDemandInstanceAllocator::new(
+            store.engine().config().mem_creator.clone(),
+            0,
+            false,
+        ),
     };
     unsafe {
         store

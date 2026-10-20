@@ -347,4 +347,49 @@ mod not_for_windows {
 
         Ok(())
     }
+
+    // Regression test: memories created by the host with `Memory::new` used to
+    // ignore the configured `MemoryCreator`.
+    #[test]
+    fn host_created_memory_uses_creator() -> wasmtime::Result<()> {
+        let page_size = wasmtime_environ::Memory::DEFAULT_PAGE_SIZE as usize;
+        let (mut store, mem_creator) = config();
+
+        let memory = Memory::new(&mut store, MemoryType::new(1, Some(3))?)?;
+        assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 1);
+        assert_eq!(*mem_creator.num_total_bytes.lock().unwrap(), page_size);
+
+        // Growing from the host goes through `CustomMemory::grow_to`...
+        memory.grow(&mut store, 1)?;
+        assert_eq!(*mem_creator.num_total_bytes.lock().unwrap(), 2 * page_size);
+
+        // ... and so does growing from Wasm.
+        memory.data_mut(&mut store)[page_size] = 42;
+        let module = Module::new(
+            store.engine(),
+            r#"
+            (module
+                (memory (import "" "memory") 1)
+                (func (export "grow") (result i32) (memory.grow (i32.const 1)))
+                (func (export "load") (param i32) (result i32)
+                    (i32.load8_u (local.get 0)))
+            )
+        "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[memory.into()])?;
+        let load = instance.get_typed_func::<i32, i32>(&mut store, "load")?;
+        let grow = instance.get_typed_func::<(), i32>(&mut store, "grow")?;
+
+        assert_eq!(load.call(&mut store, page_size as i32)?, 42);
+        assert_eq!(grow.call(&mut store, ())?, 2);
+        assert_eq!(*mem_creator.num_total_bytes.lock().unwrap(), 3 * page_size);
+
+        // The importing instance didn't create a memory of its own.
+        assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 1);
+
+        drop(store);
+        assert_eq!(*mem_creator.num_total_bytes.lock().unwrap(), 0);
+
+        Ok(())
+    }
 }
