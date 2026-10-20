@@ -115,7 +115,7 @@ mod generated {
             tracing::debug!("host error: {:?}", e);
             match e {
                 WasiNnError::BackendError(_) => Ok(types::NnErrno::RuntimeError),
-                WasiNnError::GuestError(_) => unimplemented!("guest error conversion"),
+                WasiNnError::GuestError(e) => Err(e.into()),
                 WasiNnError::UsageError(_) => Ok(types::NnErrno::UnsupportedOperation),
                 WasiNnError::NotEnoughMemory(_) => Ok(types::NnErrno::TooLarge),
             }
@@ -306,4 +306,42 @@ pub enum UsageError {
     InvalidExecutionContextHandle,
     #[error("No graph found with name: {0}")]
     NotFound(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::InMemoryRegistry;
+    use wasmtime::{Engine, Linker, Module, Store};
+
+    #[test]
+    fn guest_memory_errors_trap() -> wasmtime::Result<()> {
+        let engine = Engine::default();
+        let mut linker = Linker::<WasiNnCtx>::new(&engine);
+        add_to_linker(&mut linker, |s| s)?;
+        let module = Module::new(
+            &engine,
+            r#"(module
+                (import "wasi_ephemeral_nn" "load_by_name"
+                    (func $load_by_name (param i32 i32 i32) (result i32)))
+                (memory (export "memory") 1)
+                (data (i32.const 0) "\ff")
+                (func (export "out-of-bounds") (result i32)
+                    (call $load_by_name (i32.const 0xffff0000) (i32.const 16) (i32.const 8)))
+                (func (export "invalid-utf8") (result i32)
+                    (call $load_by_name (i32.const 0) (i32.const 1) (i32.const 8))))"#,
+        )?;
+        for name in ["out-of-bounds", "invalid-utf8"] {
+            let ctx = WasiNnCtx::new([], InMemoryRegistry::new().into());
+            let mut store = Store::new(&engine, ctx);
+            let instance = linker.instantiate(&mut store, &module)?;
+            let func = instance.get_typed_func::<(), i32>(&mut store, name)?;
+            let err = func.call(&mut store, ()).unwrap_err();
+            assert!(
+                err.downcast_ref::<GuestError>().is_some(),
+                "{name}: {err:?}"
+            );
+        }
+        Ok(())
+    }
 }
