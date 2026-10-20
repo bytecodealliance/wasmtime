@@ -64,7 +64,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_instance<'a>(
     name_len: usize,
     linker_instance_out: &mut *mut wasmtime_component_linker_instance_t<'a>,
 ) -> Option<Box<wasmtime_error_t>> {
-    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return crate::bad_utf8();
     };
@@ -84,7 +84,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_module(
     name_len: usize,
     module: &wasmtime_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return crate::bad_utf8();
     };
@@ -117,7 +117,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func(
 ) -> Option<Box<wasmtime_error_t>> {
     let foreign = crate::ForeignData { data, finalizer };
 
-    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return crate::bad_utf8();
     };
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func_async(
 ) -> Option<Box<wasmtime_error_t>> {
     let foreign = crate::ForeignData { data, finalizer };
 
-    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return crate::bad_utf8();
     };
@@ -336,7 +336,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_resource(
 ) -> Option<Box<wasmtime_error_t>> {
     let foreign = crate::ForeignData { data, finalizer };
 
-    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return crate::bad_utf8();
     };

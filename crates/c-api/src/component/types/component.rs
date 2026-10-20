@@ -31,7 +31,7 @@ pub unsafe extern "C" fn wasmtime_component_type_import_get<'a>(
     name_len: usize,
     ret: &mut MaybeUninit<Box<wasmtime_component_extern_t<'a>>>,
 ) -> bool {
-    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return false;
     };
@@ -81,7 +81,7 @@ pub unsafe extern "C" fn wasmtime_component_type_export_get<'a>(
     name_len: usize,
     ret: &mut MaybeUninit<Box<wasmtime_component_extern_t<'a>>>,
 ) -> bool {
-    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return false;
     };
