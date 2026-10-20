@@ -1,0 +1,42 @@
+; There is no s390x lowering for `fpromote` or `fdemote` with an `f16`
+; operand or result. Compilation must fail cleanly with an unsupported-feature
+; error rather than panicking.
+test compile expect-fail
+target s390x
+
+function %fpromote_f16_f32(f16) -> f32 {
+block0(v0: f16):
+    v1 = fpromote.f32 v0
+    return v1
+}
+
+function %fpromote_f16_f64(f16) -> f64 {
+block0(v0: f16):
+    v1 = fpromote.f64 v0
+    return v1
+}
+
+function %fpromote_f16_f128(f16, i64) {
+block0(v0: f16, v1: i64):
+    v2 = fpromote.f128 v0
+    store v2, v1
+    return
+}
+
+function %fdemote_f32_f16(f32) -> f16 {
+block0(v0: f32):
+    v1 = fdemote.f16 v0
+    return v1
+}
+
+function %fdemote_f64_f16(f64) -> f16 {
+block0(v0: f64):
+    v1 = fdemote.f16 v0
+    return v1
+}
+
+function %fdemote_f128_f16(f128) -> f16 {
+block0(v0: f128):
+    v1 = fdemote.f16 v0
+    return v1
+}

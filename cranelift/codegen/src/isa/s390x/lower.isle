@@ -1996,9 +1996,12 @@
 
 ;;;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Promote a register.
-(rule (lower (fpromote dst_ty x @ (value_type src_ty)))
-      (fpromote_reg dst_ty src_ty x))
+;; Promote a register. There is no `f16` conversion, so `f16` operands are left
+;; unmatched and rejected as unsupported.
+(rule (lower (fpromote $F64 x @ (value_type $F32)))
+      (fpromote_reg $F64 $F32 x))
+(rule (lower (fpromote $F128 x @ (value_type $F64)))
+      (fpromote_reg $F128 $F64 x))
 
 (rule 1 (lower (fpromote $F128 x @ (value_type $F32)))
       (fpromote_reg $F128 $F64 (fpromote_reg $F64 $F32 x)))
@@ -2013,9 +2016,12 @@
 
 ;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Demote a register.
-(rule (lower (fdemote dst_ty x @ (value_type src_ty)))
-      (fdemote_reg dst_ty src_ty (FpuRoundMode.Current) x))
+;; Demote a register. There is no `f16` conversion, so `f16` results are left
+;; unmatched and rejected as unsupported.
+(rule (lower (fdemote $F32 x @ (value_type $F64)))
+      (fdemote_reg $F32 $F64 (FpuRoundMode.Current) x))
+(rule (lower (fdemote $F64 x @ (value_type $F128)))
+      (fdemote_reg $F64 $F128 (FpuRoundMode.Current) x))
 
 (rule 1 (lower (fdemote $F32 x @ (value_type $F128)))
       (fdemote_reg $F32 $F64 (FpuRoundMode.Current)
