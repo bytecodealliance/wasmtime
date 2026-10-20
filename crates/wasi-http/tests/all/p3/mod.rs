@@ -234,7 +234,7 @@ async fn p3_http_outbound_request_get() -> wasmtime::Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_get_with_body() -> wasmtime::Result<()> {
-    let server = Server::http1(2)?;
+    let server = Server::http1(3)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_GET_WITH_BODY_COMPONENT, &server).await
 }
 

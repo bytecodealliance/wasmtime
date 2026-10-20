@@ -51,6 +51,23 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         println!("/get-with-body: {res:?}");
         assert_eq!(res.status, 200);
         assert_eq!(res.body, BODY, "invalid body returned");
+        let res = test_programs::p3::http::request(
+            Method::Get,
+            Scheme::Http,
+            &addr,
+            "/get-with-empty-body",
+            Some(b""),
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .context("/get-with-empty-body")
+        .unwrap();
+        println!("/get-with-empty-body: {res:?}");
+        assert_eq!(res.status, 200);
+        assert_eq!(res.body, b"", "invalid body returned");
         Ok(())
     }
 }
