@@ -1331,7 +1331,8 @@ impl<'a> ComponentExtern<'a> {
     /// returned. Failing that, this attempts to perform version-matching to see
     /// if a compatible version of this item is implemented. For example if
     /// `(implements "a:b/c@1.1.0")` is specified then this will return `true`
-    /// for `a:b/c@1.0.0` and `a:b/c@1.2.0` as well.
+    /// for `a:b/c@1.0.0` and `a:b/c@1.2.0` as well. The same goes for a
+    /// canonical name such as `(implements "a:b/c@1")`.
     pub fn is_implements(&self, name: &str) -> bool {
         let implements = match self.implements {
             Some(s) => s,
@@ -1341,10 +1342,11 @@ impl<'a> ComponentExtern<'a> {
             return true;
         }
 
-        match (alternate_lookup_key(implements), alternate_lookup_key(name)) {
-            (Some((alt_implements, _)), Some((alt_name, _))) => alt_implements == alt_name,
-            _ => false,
-        }
+        // Compare semver-compatible versions in their reduced form, for
+        // example `a:b/c@1.2.0` as `a:b/c@1`. Canonical names are already in
+        // that form, so they're compared as-is.
+        let reduced = |name| alternate_lookup_key(name).map_or(name, |(name, _)| name);
+        reduced(implements) == reduced(name)
     }
 }
 
