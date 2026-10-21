@@ -3432,29 +3432,31 @@ impl FuncEnvironment<'_> {
         let type_index = self.module_interned_to_shared_ty(pos, sig);
         let vmctx = self.vmctx_val(pos);
 
-        // Note that these stores must not use the `readonly` flags of these
-        // fields, see above.
+        // Note that these fields by default are `#[readonly]` which would
+        // produce invalid CLIF with the default `store` method, so go out of
+        // our way to remove the `readonly` flag here for these lazily
+        // initialized fields.
         let regions = &mut self.alias_regions;
         regions
             .vm_func_ref()
             .array_call()
             .relative_to(func_ref_offset)
-            .store_init(pos, vmctx, array_call);
+            .store_without_readonly(pos, vmctx, array_call);
         regions
             .vm_func_ref()
             .wasm_call()
             .relative_to(func_ref_offset)
-            .store_init(pos, vmctx, wasm_call);
+            .store_without_readonly(pos, vmctx, wasm_call);
         regions
             .vm_func_ref()
             .vmctx()
             .relative_to(func_ref_offset)
-            .store_init(pos, vmctx, vmctx);
+            .store_without_readonly(pos, vmctx, vmctx);
         regions
             .vm_func_ref()
             .type_index()
             .relative_to(func_ref_offset)
-            .store_init(pos, vmctx, type_index);
+            .store_without_readonly(pos, vmctx, type_index);
         pos.ins().iadd_imm_s(vmctx, i64::from(func_ref_offset))
     }
 
