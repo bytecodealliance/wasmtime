@@ -56,6 +56,19 @@ pub unsafe fn decommit_pages(iov: &[iovec]) -> io::Result<()> {
     Ok(())
 }
 
+/// Releases the physical memory backing `len` bytes at `ptr` and replaces it
+/// with fresh zero pages that are readable and writable.
+///
+/// This decommits and then recommits the range, which is two system calls; the
+/// range is briefly inaccessible in between, so it must not be in concurrent
+/// use.
+pub unsafe fn discard_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
+    unsafe {
+        erase_existing_mapping(ptr, len)?;
+        expose_existing_mapping(ptr, len)
+    }
+}
+
 pub fn get_page_size() -> usize {
     unsafe {
         let mut info = MaybeUninit::uninit();

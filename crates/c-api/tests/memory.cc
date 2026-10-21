@@ -17,6 +17,27 @@ TEST(Memory, Smoke) {
   EXPECT_EQ(m.page_size(store), 1 << 16);
 }
 
+TEST(Memory, Discard) {
+  Engine engine;
+  Store store(engine);
+  Memory m = Memory::create(store, MemoryType(2)).unwrap();
+  for (auto &byte : m.data(store)) {
+    byte = 0xa5;
+  }
+
+  m.discard(store, 1, 1).unwrap();
+  auto data = m.data(store);
+  EXPECT_EQ(data[0], 0xa5);
+  EXPECT_EQ(data[(1 << 16) - 1], 0xa5);
+  EXPECT_EQ(data[1 << 16], 0);
+  EXPECT_EQ(data[(2 << 16) - 1], 0);
+  EXPECT_EQ(m.size(store), 2);
+
+  // Out of bounds, and the memory is unchanged.
+  EXPECT_FALSE(m.discard(store, 1, 2));
+  EXPECT_EQ(m.data(store)[0], 0xa5);
+}
+
 TEST(Memory, OneBytePageSize) {
   Engine engine;
   Store store(engine);

@@ -59,6 +59,19 @@ pub unsafe fn decommit_pages(iov: &[iovec]) -> Result<()> {
     Ok(())
 }
 
+pub unsafe fn discard_pages(ptr: *mut u8, len: usize) -> Result<()> {
+    if len == 0 {
+        return Ok(());
+    }
+    unsafe {
+        cvt(capi::wasmtime_mmap_remap(
+            ptr.cast(),
+            len,
+            capi::PROT_READ | capi::PROT_WRITE,
+        ))
+    }
+}
+
 pub fn get_page_size() -> usize {
     unsafe { capi::wasmtime_page_size() }
 }
