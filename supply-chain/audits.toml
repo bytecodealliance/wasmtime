@@ -4664,6 +4664,12 @@ criteria = "safe-to-deploy"
 delta = "0.103.13 -> 0.103.15"
 notes = "Minor updates and feature shufflings."
 
+[[audits.rustls-webpki]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.103.15 -> 0.103.16"
+notes = "Updated with new certificates"
+
 [[audits.safetensors]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -6403,6 +6409,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.26.1 -> 1.0.7"
 notes = "Minor changes, new certs, etc. Nothing major"
+
+[[audits.webpki-roots]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.7 -> 1.0.10"
+notes = "Only contains updated certs"
 
 [[audits.which]]
 who = "Alex Crichton <alex@alexcrichton.com>"
