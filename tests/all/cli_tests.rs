@@ -2906,6 +2906,47 @@ start a print 1234
     }
 
     #[cfg(unix)]
+    #[test]
+    fn serve_reject_addr_with_systemd_listenfd() -> Result<()> {
+        // `--systemd-listenfd` takes the sockets from the environment; an
+        // explicit `--addr` used to be accepted and silently ignored.
+        let mut cmd = super::get_wasmtime_command()?;
+        cmd.args([
+            "serve",
+            "-Scli",
+            "--systemd-listenfd",
+            "--addr",
+            "127.0.0.1:0",
+            P2_CLI_SERVE_HELLO_WORLD_COMPONENT,
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+        let mut child = cmd.spawn()?;
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while child.try_wait()?.is_none() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "--addr with --systemd-listenfd was accepted and the server kept running"
+            );
+            thread::sleep(Duration::from_millis(100));
+        }
+        let output = child.wait_with_output()?;
+        assert!(
+            !output.status.success(),
+            "--addr with --systemd-listenfd was accepted"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("cannot be used with")
+                && stderr.contains("--addr")
+                && stderr.contains("--systemd-listenfd"),
+            "unexpected stderr: {stderr}"
+        );
+        Ok(())
+    }
+
+    #[cfg(unix)]
     #[tokio::test]
     async fn serve_inherit() -> Result<()> {
         use std::mem::ManuallyDrop;
