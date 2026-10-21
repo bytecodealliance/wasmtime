@@ -453,6 +453,13 @@ where
             .run(store.as_context_mut(), params)
             .finish_sync(store.0, entered_host_task)?;
 
+        // If the store was poisoned while the host function ran, e.g. because
+        // it made a nested call back into the guest which failed but then
+        // returned normally, then don't let the guest continue running.
+        if store.0.trapped() {
+            bail!(crate::Trap::CannotEnterComponent);
+        }
+
         let mut lower = LowerContext::new(store, options, instance);
         let fty = &lower.types[ty];
         let result_tys = &lower.types[fty.results];
