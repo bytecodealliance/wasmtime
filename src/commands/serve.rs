@@ -109,7 +109,9 @@ pub struct ServeCommand {
     run: RunCommon,
 
     /// Socket addresses for the web server to bind to.
-    #[arg(long , value_name = "SOCKADDR", default_values_t = DEFAULT_ADDRS)]
+    ///
+    /// Defaults to `0.0.0.0:8080`.
+    #[arg(long, value_name = "SOCKADDR", conflicts_with = "systemd_listenfd")]
     addr: Vec<SocketAddr>,
 
     /// Socket address where, when connected to, will initiate a graceful
@@ -664,8 +666,13 @@ impl ServeCommand {
                 listeners
             }
             None => {
+                let addrs = if self.addr.is_empty() {
+                    DEFAULT_ADDRS.to_vec()
+                } else {
+                    self.addr.clone()
+                };
                 let mut servers = vec![];
-                for addr in &self.addr {
+                for addr in &addrs {
                     let socket = match addr {
                         SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
                         SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
