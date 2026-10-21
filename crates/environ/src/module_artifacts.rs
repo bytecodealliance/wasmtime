@@ -595,7 +595,7 @@ pub struct CompiledModuleInfo {
     pub meta: Metadata,
 
     /// Sorted list, by function index, of names we have for this module.
-    pub func_names: Vec<FunctionName>,
+    pub func_names: TryVec<FunctionName>,
 
     /// Checksum of the source Wasm binary from which this module was compiled.
     pub checksum: WasmChecksum,
@@ -633,7 +633,7 @@ pub struct Metadata {
 
     /// Dwarf sections and the offsets at which they're stored in the
     /// ELF_WASMTIME_DWARF
-    pub dwarf: Vec<(u8, Range<u64>)>,
+    pub dwarf: TryVec<(u8, Range<u64>)>,
 }
 
 /// Value of a configured setting for a [`Compiler`](crate::Compiler)
