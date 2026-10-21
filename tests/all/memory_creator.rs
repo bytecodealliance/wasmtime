@@ -3,8 +3,8 @@
 #![cfg(not(miri))]
 
 use std::ptr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use std::sync::Arc;
 use wasmtime::*;
 
 const WASM_PAGE: usize = 0x10000;
@@ -473,7 +473,7 @@ fn growth_limited_to_capacity_when_memory_may_not_move() -> Result<()> {
 // Wasmtime does not guarantee that this is detected, but it is an easy check that prevents
 // potentially catastrophic errors, so we make sure it leads to a panic.
 #[test]
-#[should_panic(expected = "assertion `left == right` failed")]
+#[should_panic(expected = "linear memory moved on grow when it must not have")]
 fn growth_within_capacity_that_moves_memory_panics() {
     let creator = CustomMemoryCreator::new(ImageMode::ReturnFalse)
         .with_capacity(2 * WASM_PAGE)
@@ -492,7 +492,7 @@ mod sys {
 
     #[cfg(unix)]
     mod unix {
-        use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap_anonymous, mprotect, munmap};
+        use rustix::mm::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
 
         pub unsafe fn reserve(size: usize) -> *mut u8 {
             let ptr = unsafe {
@@ -519,8 +519,8 @@ mod sys {
     #[cfg(windows)]
     mod windows {
         use windows_sys::Win32::System::Memory::{
-            MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE, VirtualAlloc,
-            VirtualFree,
+            VirtualAlloc, VirtualFree, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_NOACCESS,
+            PAGE_READWRITE,
         };
 
         pub unsafe fn reserve(size: usize) -> *mut u8 {

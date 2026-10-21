@@ -75,8 +75,8 @@
 
 use crate::prelude::*;
 use crate::runtime::store::StoreResourceLimiter;
-use crate::runtime::vm::MemoryImage;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
+use crate::runtime::vm::MemoryImage;
 #[cfg(feature = "pooling-allocator")]
 use crate::runtime::vm::{MemoryImageSlot, MmapOffset};
 use crate::{Engine, LinearMemory};
@@ -595,7 +595,11 @@ impl LocalMemory {
                 // On successful growth double-check that the base pointer
                 // didn't move if it shouldn't have.
                 if required_to_not_move_memory {
-                    assert_eq!(base_ptr_before, self.alloc.as_ptr());
+                    assert_eq!(
+                        base_ptr_before,
+                        self.alloc.as_ptr(),
+                        "linear memory moved on grow when it must not have"
+                    );
                 }
 
                 Ok(Some((old_byte_size, new_byte_size)))
