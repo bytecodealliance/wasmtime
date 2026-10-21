@@ -71,7 +71,10 @@ struct Wasmtime {
     import_interfaces: IndexMap<InterfaceId, ImportInterface>,
     world_import_functions: Vec<Function>,
     world_implements_interfaces: Vec<(String, InterfaceId)>,
-    interfaces_for_implements: HashMap<InterfaceId, InterfaceId>,
+    /// For each named interface imported by the world, the import whose
+    /// bindings are shared by all of the world's imports of the interface, and
+    /// whether that's a plain (rather than labelled) import.
+    interfaces_for_implements: HashMap<InterfaceId, (InterfaceId, bool)>,
     exports: Exports,
     types: Types,
     sizes: SizeAlign,
@@ -437,6 +440,32 @@ impl Wasmtime {
         }
 
         let world = &resolve.worlds[id];
+
+        // All imports of a named interface, plain or labelled (`import a: foo;`),
+        // share one set of bindings: those of the plain import if there is
+        // one, and otherwise those of the first labelled import. Choose these
+        // up front, since a plain import may come after the labelled ones.
+        for (name, import) in world.imports.iter() {
+            let WorldItem::Interface { id, .. } = import else {
+                continue;
+            };
+            if resolve.interfaces[*id].name.is_none() {
+                continue;
+            }
+            let og_interface = resolve.interfaces[*id].clone_of.unwrap_or(*id);
+            match name {
+                WorldKey::Interface(_) => {
+                    self.interfaces_for_implements
+                        .insert(og_interface, (*id, true));
+                }
+                WorldKey::Name(_) => {
+                    self.interfaces_for_implements
+                        .entry(og_interface)
+                        .or_insert((*id, false));
+                }
+            }
+        }
+
         for (name, import) in world.imports.iter() {
             if !self.opts.only_interfaces || matches!(import, WorldItem::Interface { .. }) {
                 self.import(resolve, name, import)?;
@@ -462,24 +491,62 @@ impl Wasmtime {
     /// These are emitted underneath a top-level `named_imports` module by
     /// `finish`.
     fn generate_named_imports(&mut self, resolve: &Resolve) -> anyhow::Result<()> {
-        // For all named imports see what interface that lines up with in the
-        // `Resolve` which will have bindings generated.
-        'outer: for (interface_name, id_type) in self.opts.named_imports.clone() {
-            for (id, _iface) in resolve.interfaces.iter() {
-                for (key, projection) in lookup_keys(
-                    resolve,
-                    &WorldKey::Interface(id),
-                    LookupItem::InterfaceNoPop,
-                ) {
-                    assert!(projection.is_empty());
-                    if key == interface_name {
-                        self.generate_named_import(resolve, id, &id_type)?;
-                        continue 'outer;
-                    }
+        // Like `with`, each imported interface uses the most specific key that
+        // matches it, so a key without a version applies to every version of
+        // the interface imported by the world.
+        let mut used_keys = HashSet::new();
+        let mut seen = HashSet::new();
+        let imports = self.import_interfaces.keys().copied().collect::<Vec<_>>();
+        for id in imports {
+            let iface = &resolve.interfaces[id];
+            // Skip anonymous interfaces, which can't be named by a key. Also,
+            // wit-parser gives each labelled import (`import a: foo;`) its own
+            // copy of the interface, with `clone_of` pointing at the original,
+            // but named-import bindings are generated once per interface, so
+            // skip copies of an interface that's already been handled.
+            if iface.name.is_none() || !seen.insert(iface.clone_of.unwrap_or(id)) {
+                continue;
+            }
+            let mut id_type = None;
+            for (key, projection) in lookup_keys(
+                resolve,
+                &WorldKey::Interface(id),
+                LookupItem::InterfaceNoPop,
+            ) {
+                assert!(projection.is_empty());
+                if let Some(ty) = self.opts.named_imports.get(&key) {
+                    id_type = Some(ty.clone());
+                    used_keys.insert(key);
+                    break;
                 }
             }
+            if let Some(id_type) = id_type {
+                self.generate_named_import(resolve, id, &id_type)?;
+            }
+        }
 
-            bail!("named imports key {interface_name:?} not found")
+        let mut unused_keys = self
+            .opts
+            .named_imports
+            .keys()
+            .filter(|key| !used_keys.contains(*key))
+            .collect::<Vec<_>>();
+        unused_keys.sort();
+        if let Some(key) = unused_keys.first() {
+            let exists = resolve.interfaces.iter().any(|(id, iface)| {
+                iface.name.is_some()
+                    && lookup_keys(
+                        resolve,
+                        &WorldKey::Interface(id),
+                        LookupItem::InterfaceNoPop,
+                    )
+                    .iter()
+                    .any(|(k, _)| k == *key)
+            });
+            if exists {
+                bail!("named imports key {key:?} is not imported by the world")
+            }
+            bail!("named imports key {key:?} not found")
         }
 
         Ok(())
@@ -521,14 +588,12 @@ impl Wasmtime {
                     && resolve.interfaces[*id].name.is_some()
                 {
                     let og_interface = resolve.interfaces[*id].clone_of.unwrap_or(*id);
-                    let implements = match self.interfaces_for_implements.get(&og_interface) {
-                        Some(id) => *id,
-                        None => {
-                            self.interfaces_for_implements.insert(og_interface, *id);
-                            self.import_interface(resolve, &WorldKey::Interface(*id), *id, false)?;
-                            *id
-                        }
-                    };
+                    let (implements, plain) = self.interfaces_for_implements[&og_interface];
+                    // Bindings shared with a plain import are generated for
+                    // that import instead.
+                    if !plain && implements == *id {
+                        self.import_interface(resolve, &WorldKey::Interface(*id), *id, false)?;
+                    }
                     self.world_implements_interfaces
                         .push((kebab.to_string(), implements));
                 } else {
@@ -1647,17 +1712,19 @@ impl Wasmtime {
                 ""
             };
 
-            let import_stability = resolve.worlds[world]
-                .imports
-                .iter()
-                .filter_map(|(_, i)| match i {
-                    WorldItem::Interface { id, stability, .. } if *id == interface_id => {
-                        Some(stability.clone())
-                    }
-                    _ => None,
-                })
-                .next()
-                .unwrap_or(Stability::Unknown);
+            let imports = &resolve.worlds[world].imports;
+            let import = match &name_override {
+                // Labelled imports of the same interface share an
+                // `interface_id`, so find these by their label instead.
+                Some(name) => imports.get(&WorldKey::Name(name.clone())),
+                None => imports
+                    .values()
+                    .find(|i| matches!(i, WorldItem::Interface { id, .. } if *id == interface_id)),
+            };
+            let import_stability = match import {
+                Some(WorldItem::Interface { stability, .. }) => stability.clone(),
+                _ => Stability::Unknown,
+            };
 
             let gate = FeatureGate::open(&mut self.src, &import_stability);
             match &name_override {
