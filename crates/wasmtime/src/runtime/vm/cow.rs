@@ -2,13 +2,13 @@
 //! modules, and logic to support mapping these backing images into memory.
 
 use super::sys::DecommitBehavior;
-use crate::Engine;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
-use crate::runtime::vm::sys::vm::{self, MemoryImageSource, PageMap, reset_with_pagemap};
+use crate::runtime::vm::sys::vm::{self, reset_with_pagemap, MemoryImageSource, PageMap};
 use crate::runtime::vm::{
-    HostAlignedByteCount, MmapOffset, ModuleMemoryImageSource, host_page_size,
+    host_page_size, HostAlignedByteCount, MmapOffset, ModuleMemoryImageSource,
 };
+use crate::Engine;
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Range;
@@ -348,7 +348,7 @@ impl ModuleMemoryImages {
 /// with a fresh zero'd mmap, meaning that reuse is effectively not supported.
 #[cfg_attr(
     not(feature = "pooling-allocator"),
-    allow(dead_code, reason = "only used by the pooling allocator")
+    expect(dead_code, reason = "only used by the pooling allocator")
 )]
 pub struct MemoryImageSlot {
     /// The mmap and offset within it that contains the linear memory for this
@@ -409,7 +409,7 @@ impl fmt::Debug for MemoryImageSlot {
 
 #[cfg_attr(
     not(feature = "pooling-allocator"),
-    allow(dead_code, reason = "only used by the pooling allocator")
+    expect(dead_code, reason = "only used by the pooling allocator")
 )]
 impl MemoryImageSlot {
     /// Create a new MemoryImageSlot. Assumes that there is an anonymous
@@ -592,7 +592,11 @@ impl MemoryImageSlot {
     ///
     /// Returns the number of bytes still resident in memory after this function
     /// has returned.
-    #[allow(dead_code, reason = "only used in some cfgs")]
+
+    #[cfg_attr(
+        not(feature = "pooling-allocator"),
+        expect(dead_code, reason = "only used by the pooling allocator")
+    )]
     pub(crate) fn clear_and_remain_ready(
         &mut self,
         pagemap: Option<&PageMap>,
@@ -608,7 +612,10 @@ impl MemoryImageSlot {
         Ok(bytes_resident)
     }
 
-    #[allow(dead_code, reason = "only used in some cfgs")]
+    #[cfg_attr(
+        not(feature = "pooling-allocator"),
+        expect(dead_code, reason = "only used by the pooling allocator")
+    )]
     unsafe fn reset_all_memory_contents(
         &mut self,
         pagemap: Option<&PageMap>,
@@ -634,7 +641,10 @@ impl MemoryImageSlot {
         }
     }
 
-    #[allow(dead_code, reason = "only used in some cfgs")]
+    #[cfg_attr(
+        not(feature = "pooling-allocator"),
+        expect(dead_code, reason = "only used by the pooling allocator")
+    )]
     unsafe fn reset_with_original_mapping(
         &mut self,
         pagemap: Option<&PageMap>,
@@ -794,7 +804,10 @@ impl MemoryImageSlot {
         self.image.is_some()
     }
 
-    #[allow(dead_code, reason = "only used in some cfgs")]
+    #[cfg_attr(
+        not(feature = "pooling-allocator"),
+        expect(dead_code, reason = "only used by the pooling allocator")
+    )]
     pub(crate) fn is_dirty(&self) -> bool {
         self.dirty
     }
@@ -829,7 +842,7 @@ mod test {
     use super::*;
     use crate::runtime::vm::mmap::{AlignedLength, Mmap};
     use crate::runtime::vm::sys::vm::{decommit_pages, iovec};
-    use crate::runtime::vm::{HostAlignedByteCount, MmapVec, host_page_size};
+    use crate::runtime::vm::{host_page_size, HostAlignedByteCount, MmapVec};
     use std::sync::Arc;
     use wasmtime_environ::{IndexType, Limits, Memory, MemoryKind, Tunables};
 
