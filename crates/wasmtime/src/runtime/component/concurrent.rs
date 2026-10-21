@@ -2641,8 +2641,13 @@ impl StoreOpaque {
 
         // Clean up the thread within this task as it's now never going
         // to run.
+        //
+        // Note that `next_switch_item`, if any, belongs to the canceller and
+        // not this thread since this thread never ran, so it's saved and
+        // restored here to prevent `cleanup_thread` from taking it.
         assert_eq!(1, task.threads.len());
         let thread = *task.threads.iter().next().unwrap();
+        let next_switch_item = concurrent_state.save_next_switch_item()?;
         self.cleanup_thread(
             QualifiedThreadId {
                 task: guest_task,
@@ -2650,6 +2655,8 @@ impl StoreOpaque {
             },
             caller_instance,
         )?;
+        self.concurrent_state_mut()?
+            .restore_next_switch_item(next_switch_item)?;
 
         // Not yet started; cancel and remove from pending
         let pending = &mut self.instance_state(instance).concurrent_state().pending;
