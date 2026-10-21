@@ -115,7 +115,8 @@ pub struct ServeCommand {
     /// Socket address where, when connected to, will initiate a graceful
     /// shutdown.
     ///
-    /// Note that graceful shutdown is also supported on ctrl-c.
+    /// Note that graceful shutdown is also supported on ctrl-c and, on Unix,
+    /// SIGTERM.
     #[arg(long, value_name = "SOCKADDR")]
     shutdown_addr: Option<SocketAddr>,
 
@@ -620,13 +621,13 @@ impl ServeCommand {
         let instance = ProxyPre::P2(wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance)?);
 
         // Spawn background task(s) waiting for graceful shutdown signals. This
-        // always listens for ctrl-c but additionally can listen for a TCP
-        // connection to the specified address.
+        // always listens for ctrl-c (and SIGTERM on Unix) but additionally can
+        // listen for a TCP connection to the specified address.
         let shutdown = Arc::new(GracefulShutdown::default());
         tokio::task::spawn({
             let shutdown = shutdown.clone();
             async move {
-                tokio::signal::ctrl_c().await.unwrap();
+                wait_for_shutdown_signal().await;
                 shutdown.request_shutdown();
             }
         });
@@ -815,11 +816,11 @@ impl ServeCommand {
         // connections but there may still be outstanding connections
         // processing in child tasks. If there are wait for those to complete
         // before shutting down completely. Also enable short-circuiting this
-        // wait with a second ctrl-c signal.
+        // wait with a second ctrl-c (or SIGTERM) signal.
         if let Some(wait_for_remaining) = shutdown.close() {
             eprintln!("Waiting for child tasks to exit, ctrl-c again to quit sooner...");
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => {}
+                _ = wait_for_shutdown_signal() => {}
                 _ = wait_for_remaining => {}
             }
         }
@@ -1040,6 +1041,22 @@ impl HandlerState for HostHandlerState {
 }
 
 use shutdown::GracefulShutdown;
+
+/// Waits for ctrl-c or, on Unix, SIGTERM (as sent by systemd and docker).
+async fn wait_for_shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut sigterm = signal(SignalKind::terminate()).unwrap();
+        tokio::select! {
+            r = tokio::signal::ctrl_c() => r.unwrap(),
+            _ = sigterm.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    tokio::signal::ctrl_c().await.unwrap();
+}
+
 mod shutdown {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
