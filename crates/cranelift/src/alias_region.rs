@@ -462,7 +462,7 @@ impl<'a, Offsets> Field<'a, Offsets> {
     /// than being a static property of the field; this method allows callers
     /// to mark the load as `readonly` in these cases.
     pub fn readonly(mut self) -> Self {
-        self.flags.set_readonly();
+        self.flags.set_readonly(true);
         self
     }
 
@@ -478,7 +478,7 @@ impl<'a, Offsets> Field<'a, Offsets> {
     ///
     /// See the note on [`Field::readonly`].
     pub fn can_move(mut self) -> Self {
-        self.flags = self.flags.with_can_move();
+        self.flags = self.flags.with_can_move(true);
         self
     }
 
@@ -664,8 +664,8 @@ macro_rules! define_vm_type_alias_region_helpers {
     // `#[can_move]` markers map to the corresponding `MemFlagsData` builder
     // methods; doc comments have no effect on flags; any other attribute is a
     // compile error.
-    (@apply_attr $flags:expr, [readonly]) => { $flags.with_readonly() };
-    (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move() };
+    (@apply_attr $flags:expr, [readonly]) => { $flags.with_readonly(true) };
+    (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move(true) };
     (@apply_attr $flags:expr, [doc = $d:literal]) => { $flags };
 
     // Emit the accessor method for a single ordinary (scalar) field.
@@ -894,8 +894,8 @@ macro_rules! define_vmctx_alias_region_helpers {
     };
 
     // Apply a field attribute to its access flags.
-    (@apply_attr $flags:expr, [readonly]) => { $flags.with_readonly() };
-    (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move() };
+    (@apply_attr $flags:expr, [readonly]) => { $flags.with_readonly(true) };
+    (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move(true) };
     (@apply_attr $flags:expr, [access_as = $($t:tt)*]) => { $flags };
     (@apply_attr $flags:expr, [ptr_size_offset]) => { $flags };
     (@apply_attr $flags:expr, [pointee( $($t:tt)* )]) => { $flags };

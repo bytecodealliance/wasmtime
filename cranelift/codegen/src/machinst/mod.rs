@@ -115,15 +115,19 @@ impl MachMemFlags {
 
     /// Create a set of flags representing an access from a "trusted" address.
     pub const fn trusted() -> Self {
-        Self::new().with_notrap().with_aligned()
+        Self::new().with_notrap().with_aligned(true)
     }
 
     const fn read_bit(self, bit: u16) -> bool {
         self.bits & bit != 0
     }
 
-    const fn with_bit(mut self, bit: u16) -> Self {
-        self.bits |= bit;
+    const fn with_bit(mut self, bit: u16, enabled: bool) -> Self {
+        if enabled {
+            self.bits |= bit;
+        } else {
+            self.bits &= !bit;
+        }
         self
     }
 
@@ -152,8 +156,8 @@ impl MachMemFlags {
     /// Set endianness of the memory access, returning new flags.
     pub const fn with_endianness(self, endianness: Endianness) -> Self {
         let res = match endianness {
-            Endianness::Little => self.with_bit(BIT_LITTLE_ENDIAN),
-            Endianness::Big => self.with_bit(BIT_BIG_ENDIAN),
+            Endianness::Little => self.with_bit(BIT_LITTLE_ENDIAN, true),
+            Endianness::Big => self.with_bit(BIT_BIG_ENDIAN, true),
         };
         assert!(!(res.read_bit(BIT_LITTLE_ENDIAN) && res.read_bit(BIT_BIG_ENDIAN)));
         res
@@ -174,9 +178,9 @@ impl MachMemFlags {
         self.read_bit(BIT_CAN_MOVE)
     }
 
-    /// Set the `can_move` flag, returning new flags.
-    pub const fn with_can_move(self) -> Self {
-        self.with_bit(BIT_CAN_MOVE)
+    /// Set or clear the `can_move` flag, returning new flags.
+    pub const fn with_can_move(self, enabled: bool) -> Self {
+        self.with_bit(BIT_CAN_MOVE, enabled)
     }
 
     /// Test if the `aligned` flag is set.
@@ -184,9 +188,9 @@ impl MachMemFlags {
         self.read_bit(BIT_ALIGNED)
     }
 
-    /// Set the `aligned` flag, returning new flags.
-    pub const fn with_aligned(self) -> Self {
-        self.with_bit(BIT_ALIGNED)
+    /// Set or clear the `aligned` flag, returning new flags.
+    pub const fn with_aligned(self, enabled: bool) -> Self {
+        self.with_bit(BIT_ALIGNED, enabled)
     }
 
     /// Test if the `readonly` flag is set.
@@ -194,9 +198,9 @@ impl MachMemFlags {
         self.read_bit(BIT_READONLY)
     }
 
-    /// Set the `readonly` flag, returning new flags.
-    pub const fn with_readonly(self) -> Self {
-        self.with_bit(BIT_READONLY)
+    /// Set or clear the `readonly` flag, returning new flags.
+    pub const fn with_readonly(self, enabled: bool) -> Self {
+        self.with_bit(BIT_READONLY, enabled)
     }
 
     /// Get the trap code to report if this memory access traps.

@@ -109,7 +109,7 @@ impl TableData {
 
         let region = env.table_alias_region(pos.func, table_index);
         let base_flags = ir::MemFlagsData::new()
-            .with_aligned()
+            .with_aligned(true)
             .with_alias_region(Some(region));
         if spectre_mitigations_enabled {
             // Short-circuit the computed table element address to a null pointer

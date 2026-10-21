@@ -292,7 +292,7 @@ fn emit_gc_kind_assert(
     );
     let flags = func_env
         .gc_memflags(&mut builder.func, GcAccess::HeaderKind)
-        .with_readonly();
+        .with_readonly(true);
     let kind_and_reserved_bits = builder.ins().load(ir::types::I32, flags, kind_addr, 0);
     let kind_mask = builder
         .ins()
@@ -1044,7 +1044,7 @@ pub fn translate_array_len(
     );
     let flags = func_env
         .gc_memflags(&mut builder.func, GcAccess::ArrayLength)
-        .with_readonly();
+        .with_readonly(true);
     let result = builder.ins().load(ir::types::I32, flags, len_field, 0);
     log::trace!("translate_array_len(..) -> {result:?}");
     Ok(result)
@@ -1376,7 +1376,7 @@ pub fn translate_ref_test(
         );
         let kind_flags = func_env
             .gc_memflags(&mut builder.func, GcAccess::HeaderKind)
-            .with_readonly();
+            .with_readonly(true);
         let actual_kind = builder.ins().load(ir::types::I32, kind_flags, kind_addr, 0);
         let expected_kind = builder
             .ins()
@@ -1457,7 +1457,7 @@ pub fn translate_ref_test(
             );
             let ty_flags = func_env
                 .gc_memflags(&mut builder.func, GcAccess::HeaderTypeIndex)
-                .with_readonly();
+                .with_readonly(true);
             let actual_shared_ty = builder.ins().load(ir::types::I32, ty_flags, ty_addr, 0);
 
             func_env.is_subtype(
@@ -1692,8 +1692,8 @@ impl FuncEnvironment<'_> {
             .gc_heap_memory_type()
             .memory_may_move(&memory_tunables)
         {
-            flags.set_readonly();
-            flags.set_can_move();
+            flags.set_readonly(true);
+            flags.set_can_move(true);
         }
 
         let store_context_ptr = self.get_vmstore_context_ptr(builder);
@@ -1737,8 +1737,8 @@ impl FuncEnvironment<'_> {
             .gc_heap_memory_type()
             .memory_may_move(&memory_tunables)
         {
-            base_flags.set_readonly();
-            base_flags.set_can_move();
+            base_flags.set_readonly(true);
+            base_flags.set_can_move(true);
         }
         let base = self
             .alias_regions
