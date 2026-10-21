@@ -75,8 +75,8 @@
 
 use crate::prelude::*;
 use crate::runtime::store::StoreResourceLimiter;
-use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 use crate::runtime::vm::MemoryImage;
+use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 #[cfg(feature = "pooling-allocator")]
 use crate::runtime::vm::{MemoryImageSlot, MmapOffset};
 use crate::{Engine, LinearMemory};
