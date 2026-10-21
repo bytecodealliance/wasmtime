@@ -147,7 +147,7 @@ impl CompiledFunction {
     pub fn relocations(&self) -> impl Iterator<Item = Relocation> + '_ {
         let mut prev_hi20 = None;
         self.buffer.relocs().iter().map(move |r| {
-            // On riscv64 the this relocation points to the previous instruction
+            // On riscv64 this relocation points to the previous instruction
             // which is `auipc` and has its own relocation. To more easily
             // handle that here the target of the relocation is rewritten to the
             // target of the previous `auipc` relocation.

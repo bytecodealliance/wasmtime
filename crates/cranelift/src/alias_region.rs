@@ -582,10 +582,18 @@ impl<'a, Offsets> Field<'a, Offsets> {
             .store(flags, value, ptr, i32::try_from(self.offset).unwrap());
     }
 
-    /// TODO: seems bad and probably wants something else...
-    pub fn store_init(&mut self, cursor: &mut FuncCursor<'_>, ptr: ir::Value, value: ir::Value) {
-        let region = self.region(cursor.func);
-        let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
+    /// Like [`Self::store`], except removes the `readonly` flag for this region
+    /// if one would otherwise be specified.
+    ///
+    /// This is useful for `#[readonly]` fields that are initialized precisely
+    /// once before use, such as `VMFuncRef` fields.
+    pub fn store_without_readonly(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        ptr: ir::Value,
+        value: ir::Value,
+    ) {
+        let flags = self.flags_with_region(cursor.func).with_readonly(false);
         cursor
             .ins()
             .store(flags, value, ptr, i32::try_from(self.offset).unwrap());
