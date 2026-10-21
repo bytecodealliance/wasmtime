@@ -1,10 +1,10 @@
+use crate::Trap;
 use crate::prelude::*;
 use crate::runtime::vm::{self, ExportMemory};
 use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
 #[cfg(feature = "async")]
 use crate::vm::VMStore;
-use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use alloc::sync::Arc;
 use core::any::Any;

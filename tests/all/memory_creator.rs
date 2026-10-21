@@ -3,8 +3,8 @@
 #![cfg(not(miri))]
 
 use std::ptr;
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 const WASM_PAGE: usize = 0x10000;
@@ -492,7 +492,7 @@ mod sys {
 
     #[cfg(unix)]
     mod unix {
-        use rustix::mm::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
+        use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap_anonymous, mprotect, munmap};
 
         pub unsafe fn reserve(size: usize) -> *mut u8 {
             let ptr = unsafe {
@@ -519,8 +519,8 @@ mod sys {
     #[cfg(windows)]
     mod windows {
         use windows_sys::Win32::System::Memory::{
-            VirtualAlloc, VirtualFree, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_NOACCESS,
-            PAGE_READWRITE,
+            MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE, VirtualAlloc,
+            VirtualFree,
         };
 
         pub unsafe fn reserve(size: usize) -> *mut u8 {
