@@ -786,20 +786,30 @@ impl GuestCall {
     /// A call will not be ready to run if either:
     ///
     /// - the (sub-)component instance to be called has already been entered and
-    /// cannot be reentered until an in-progress call completes
+    ///   cannot be reentered until an in-progress call completes, and the task
+    ///   requires the exclusive lock
     ///
     /// - the call is for a not-yet started task and the (sub-)component
-    /// instance to be called has backpressure enabled
+    ///   instance to be called has backpressure enabled
     fn is_ready(&self, store: &mut StoreOpaque) -> Result<bool> {
         let task = store.concurrent_state_mut()?.get_mut(self.thread.task)?;
         let async_typed = task.async_typed;
+        let async_lifted = task.async_lifted;
+        let has_callback = task.callback.is_some();
         let instance = task.instance;
         let state = store.instance_state(instance).concurrent_state();
 
         let ready = match &self.kind {
             GuestCallKind::DeliverEvent { .. } => !state.do_not_enter,
             GuestCallKind::StartImplicit(_) => {
-                !async_typed || !(state.do_not_enter || state.backpressure > 0)
+                if async_typed {
+                    // Sync- and callback-lifted exports need the instance's
+                    // exclusive lock to start, but stackful ones don't.
+                    let needs_exclusive = !async_lifted || has_callback;
+                    !((needs_exclusive && state.do_not_enter) || state.backpressure > 0)
+                } else {
+                    true
+                }
             }
             GuestCallKind::StartExplicit(_) => true,
         };
