@@ -41,8 +41,7 @@ impl SharedMemory {
         // `assert_ready` should never panic.
         let (minimum_bytes, maximum_bytes) = vm::assert_ready(Memory::limit_new(ty, None))?;
         let mmap_memory = MmapMemory::new(ty, &memory_tunables, minimum_bytes, maximum_bytes)?;
-        let boxed: Box<dyn crate::runtime::vm::RuntimeLinearMemory> =
-            try_new::<Box<_>>(mmap_memory)?;
+        let boxed: Box<dyn crate::LinearMemory> = try_new::<Box<_>>(mmap_memory)?;
         Self::wrap(
             engine,
             ty,
@@ -87,7 +86,7 @@ impl SharedMemory {
         NonNull::from(&self.0.def.0)
     }
 
-    /// Same as `RuntimeLinearMemory::grow`, except with `&self`.
+    /// Same as `LocalMemory::grow`, except with `&self`.
     pub fn grow(&self, delta_pages: u64) -> Result<Option<(usize, usize)>, Error> {
         let mut memory = self.0.memory.write().unwrap();
         // Without a limiter being passed in this shouldn't have an await point,

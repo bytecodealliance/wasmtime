@@ -1,15 +1,23 @@
-//! Support for implementing the [`RuntimeLinearMemory`] trait in terms of a
+//! Support for implementing the [`LinearMemory`] trait in terms of a
 //! platform mmap primitive.
 
 use crate::prelude::*;
-use crate::runtime::vm::memory::RuntimeLinearMemory;
 use crate::runtime::vm::{HostAlignedByteCount, Mmap, mmap::AlignedLength};
+use crate::{LinearMemory, MemoryImage};
 use alloc::sync::Arc;
 use wasmtime_environ::MemoryTunables;
 
-use super::MemoryBase;
-
 /// A linear memory instance.
+///
+/// The layout of a single Mmap is:
+///
+/// ```text
+/// [ pre_guard ][ accessible = len rounded up | PROT_NONE up to capacity ][ offset_guard ]
+///               ^ as_ptr()
+///               |<------------------ current_capacity() --------------->|
+/// ```
+///
+/// The amount of reserved memory depends on tunables (see the [`new`](MmapMemory::new) function).
 #[derive(Debug)]
 pub struct MmapMemory {
     // The underlying allocation.
@@ -144,7 +152,17 @@ impl MmapMemory {
     }
 }
 
-impl RuntimeLinearMemory for MmapMemory {
+/// SAFETY:
+///
+/// - **Valid region.** The memory map is always kept valid for self.len bytes.
+/// - **Size.** [`MmapMemory::new`] maps at least `minimum` bytes.
+/// - **Base pointer stability.** `grow_to` does not modify the mapping while the request is within
+/// capacity.
+/// - **Base pointer alignment.** The mmap call always returns a page-aligned pointer, and guard
+/// bytes are ensured to be a multiple of page-size.
+/// - **Inaccessible region.** Inaccessible memory is protected (implementation delegated to the
+/// `sys` submodule).
+unsafe impl LinearMemory for MmapMemory {
     fn byte_size(&self) -> usize {
         self.len
     }
@@ -221,31 +239,32 @@ impl RuntimeLinearMemory for MmapMemory {
         Ok(())
     }
 
-    fn set_byte_size(&mut self, len: usize) {
-        self.len = len;
-    }
-
-    fn base(&self) -> MemoryBase {
-        MemoryBase::Mmap(
+    fn as_ptr(&self) -> *mut u8 {
+        // SAFETY: `pre_guard_size` is within the mmap allocation.
+        unsafe {
             self.mmap
-                .offset(self.pre_guard_size)
-                .expect("pre_guard_size is in bounds"),
-        )
+                .as_non_null()
+                .byte_add(self.pre_guard_size.byte_count())
+                .as_ptr()
+        }
     }
 
-    fn vmmemory(&self) -> crate::vm::VMMemoryDefinition {
-        let pre_guard_size = self.pre_guard_size.byte_count();
-        assert!(pre_guard_size <= self.mmap.len());
-        let pre_guard_size = isize::try_from(pre_guard_size).unwrap();
-        let mmap = self.mmap.as_non_null();
-        let base = unsafe {
-            // Safety: `pre_guard_size` is within the mmap allocation.
-            mmap.offset(pre_guard_size)
-        };
-
-        crate::vm::VMMemoryDefinition {
-            base: base.into(),
-            current_length: self.len.into(),
+    fn init_from_image(&mut self, image: &MemoryImage) -> Result<bool> {
+        // Images always fit within the minimum size of a memory, which is
+        // accessible from creation. If this ever changes our assumptions are incorrect for CoW, so
+        // explode loudly.
+        let image_end = image.linear_memory_offset().checked_add(image.len());
+        assert!(
+            image_end.is_some_and(|end| end <= self.len),
+            "MemoryImage does not fit into the MmapMemory"
+        );
+        let base = self.mmap.offset(self.pre_guard_size)?;
+        // SAFETY: this memory was just created and no one else has a reference
+        // to it yet. The image's range lies within this memory's accessible
+        // region of the mmap, which this memory exclusively owns.
+        unsafe {
+            image.vm().map_at(&base)?;
         }
+        Ok(true)
     }
 }
