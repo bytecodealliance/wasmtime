@@ -863,12 +863,14 @@ impl ServeCommand {
             // concurrent requests can't be served. Otherwise though spawn a
             // task to handle this client.
             match &mut debuggee_store {
-                Some(store) => handle_client(stream, &handler, &shutdown, Some(store)).await,
+                Some(store) => {
+                    handle_client_with_debugger(stream, &handler, &shutdown, &mut **store).await
+                }
                 None => {
                     let handler = handler.clone();
                     let shutdown = shutdown.clone();
                     tokio::task::spawn(async move {
-                        handle_client(stream, &handler, &shutdown, None).await;
+                        handle_client(stream, handler, &shutdown).await;
                         drop(shutdown_guard);
                         drop(connection_permit);
                     });
@@ -1311,36 +1313,114 @@ fn setup_guest_profiler(
 
 type Request = hyper::Request<hyper::body::Incoming>;
 
-async fn handle_client(
-    client: impl AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
-    handler: &ProxyHandler<HostHandlerState>,
-    shutdown: &GracefulShutdown,
-    debuggee_store: Option<&mut Store<Host>>,
-) {
-    // Hyper's `service_fn` takes an `Fn` closure, so to bridge the need to
-    // transfer a mutable store to each request for debugging a tokio mutex is
-    // used. The tokio mutex is required as the returned future must also be
-    // `Send`.
-    let lock = &debuggee_store.map(tokio::sync::Mutex::new);
+/// The HTTP/2 connection preface which every client sends before any frame.
+const HTTP2_PREFACE: &[u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 
-    let conn = http1::Builder::new().keep_alive(true).serve_connection(
-        TokioIo::new(client),
-        hyper::service::service_fn(move |req| async move {
-            let mut debuggee_store = match &lock {
-                Some(store) => Some(store.lock().await),
-                None => None,
-            };
-            let debuggee_store = debuggee_store.as_mut().map(|s| &mut ***s);
-            match handle_request(handler, debuggee_store, req).await {
-                Ok(r) => Ok::<_, Infallible>(r),
-                Err(e) => {
-                    eprintln!("error: {e:?}");
-                    let status = e
-                        .downcast_ref::<ErrorResponse>()
-                        .map(|e| e.status())
-                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-                    let error_html = format!(
-                        "\
+/// A client stream whose first bytes have been inspected to pick a protocol.
+struct PrefixedStream<T> {
+    inner: T,
+    prefix: Vec<u8>,
+    pos: usize,
+}
+
+impl<T> PrefixedStream<T> {
+    fn new(inner: T) -> Self {
+        Self {
+            inner,
+            prefix: Vec::new(),
+            pos: 0,
+        }
+    }
+
+    /// Reads just enough of the connection to tell HTTP/2 from HTTP/1.1.
+    async fn is_http2(&mut self) -> std::io::Result<bool>
+    where
+        T: AsyncRead + Unpin,
+    {
+        use tokio::io::AsyncReadExt as _;
+
+        let mut buf = [0u8; 24];
+        let mut filled = 0;
+        // Read one byte first so that an HTTP/1.1 client is not stalled while
+        // waiting for a full HTTP/2 preface.
+        let n = self.inner.read(&mut buf[filled..]).await?;
+        filled += n;
+        if n == 0 || buf[0] != HTTP2_PREFACE[0] {
+            self.prefix.extend_from_slice(&buf[..filled]);
+            return Ok(false);
+        }
+        while filled < HTTP2_PREFACE.len() {
+            let n = self.inner.read(&mut buf[filled..]).await?;
+            if n == 0 {
+                break;
+            }
+            filled += n;
+        }
+        self.prefix.extend_from_slice(&buf[..filled]);
+        Ok(filled == HTTP2_PREFACE.len() && &buf[..filled] == HTTP2_PREFACE)
+    }
+}
+
+impl<T: AsyncRead + Unpin> AsyncRead for PrefixedStream<T> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let replay = &self.prefix[self.pos..];
+        if !replay.is_empty() {
+            let n = replay.len().min(buf.remaining());
+            let start = self.pos;
+            buf.put_slice(&self.prefix[start..start + n]);
+            self.pos += n;
+            return Poll::Ready(Ok(()));
+        }
+        Pin::new(&mut self.inner).poll_read(cx, buf)
+    }
+}
+
+impl<T: AsyncWrite + Unpin> AsyncWrite for PrefixedStream<T> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.inner).poll_write(cx, buf)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
+}
+
+/// An executor for hyper's HTTP/2 connection tasks.
+#[derive(Clone, Copy)]
+struct TokioExecutor;
+
+impl<F> hyper::rt::Executor<F> for TokioExecutor
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    fn execute(&self, fut: F) {
+        tokio::spawn(fut);
+    }
+}
+
+/// Builds the HTML error response used when a request fails before producing a
+/// response of its own.
+fn error_response(e: wasmtime::Error) -> Response<wasmtime_wasi_http::WasiBody> {
+    eprintln!("error: {e:?}");
+    let status = e
+        .downcast_ref::<ErrorResponse>()
+        .map(|e| e.status())
+        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let error_html = format!(
+        "\
 <!doctype html>
 <html>
 <head>
@@ -1354,18 +1434,99 @@ async fn handle_client(
     </center>
 </body>
 </html>"
-                    );
-                    Ok(Response::builder()
-                        .status(status)
-                        .header("Content-Type", "text/html; charset=UTF-8")
-                        .body(
-                            Full::new(bytes::Bytes::from(error_html))
-                                .map_err(|_| unreachable!())
-                                .boxed_unsync(),
-                        )
-                        .unwrap())
-                }
+    );
+    Response::builder()
+        .status(status)
+        .header("Content-Type", "text/html; charset=UTF-8")
+        .body(
+            Full::new(bytes::Bytes::from(error_html))
+                .map_err(|_| unreachable!())
+                .boxed_unsync(),
+        )
+        .unwrap()
+}
+
+/// Serves a single connection, speaking whichever HTTP version the client asks
+/// for.
+async fn handle_client(
+    client: impl AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
+    handler: ProxyHandler<HostHandlerState>,
+    shutdown: &GracefulShutdown,
+) {
+    let make_service = move || {
+        let handler = handler.clone();
+        hyper::service::service_fn(move |req| {
+            let handler = handler.clone();
+            async move {
+                Ok::<_, Infallible>(match handle_request(&handler, None, req).await {
+                    Ok(r) => r,
+                    Err(e) => error_response(e),
+                })
             }
+        })
+    };
+
+    let mut client = PrefixedStream::new(client);
+    let is_http2 = match client.is_http2().await {
+        Ok(is_http2) => is_http2,
+        Err(e) => {
+            eprintln!("error: {e:?}");
+            return;
+        }
+    };
+
+    if is_http2 {
+        let conn = hyper::server::conn::http2::Builder::new(TokioExecutor)
+            .serve_connection(TokioIo::new(client), make_service());
+        let mut conn = std::pin::pin!(conn);
+        let result = tokio::select! {
+            result = conn.as_mut() => result,
+            _ = shutdown.requested() => {
+                conn.as_mut().graceful_shutdown();
+                conn.await
+            }
+        };
+        if let Err(e) = result {
+            eprintln!("error: {e:?}");
+        }
+        return;
+    }
+
+    let conn = http1::Builder::new()
+        .keep_alive(true)
+        .serve_connection(TokioIo::new(client), make_service());
+    let mut conn = std::pin::pin!(conn);
+    let result = tokio::select! {
+        result = conn.as_mut() => result,
+        _ = shutdown.requested() => {
+            conn.as_mut().graceful_shutdown();
+            conn.await
+        }
+    };
+    if let Err(e) = result {
+        eprintln!("error: {e:?}");
+    }
+}
+
+/// Serves a single connection for `--debug <key>` handling (HTTP/1.1 only).
+async fn handle_client_with_debugger(
+    client: impl AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
+    handler: &ProxyHandler<HostHandlerState>,
+    shutdown: &GracefulShutdown,
+    debuggee_store: &mut Store<Host>,
+) {
+    // A tokio mutex bridges the mutable store into the `Send` handler future.
+    let debuggee_store = tokio::sync::Mutex::new(debuggee_store);
+    let lock = &debuggee_store;
+    let conn = http1::Builder::new().keep_alive(true).serve_connection(
+        TokioIo::new(client),
+        hyper::service::service_fn(move |req| async move {
+            let mut debuggee_store = Some(lock.lock().await);
+            let debuggee_store = debuggee_store.as_mut().map(|s| &mut ***s);
+            Ok::<_, Infallible>(match handle_request(handler, debuggee_store, req).await {
+                Ok(r) => r,
+                Err(e) => error_response(e),
+            })
         }),
     );
     let mut conn = std::pin::pin!(conn);

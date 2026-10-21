@@ -2828,6 +2828,62 @@ start a print 1234
         .await
     }
 
+    /// An executor for hyper's client, backed by the tokio runtime.
+    #[derive(Clone)]
+    struct TokioExecutor;
+
+    impl<F> hyper::rt::Executor<F> for TokioExecutor
+    where
+        F: std::future::Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        fn execute(&self, fut: F) {
+            tokio::task::spawn(fut);
+        }
+    }
+
+    /// The client speaks HTTP/2 with prior knowledge, so this only passes if
+    /// `serve` accepts h2c connections as well as HTTP/1.1 ones.
+    #[tokio::test]
+    async fn p2_cli_serve_hello_world_http2() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        let tcp = TcpStream::connect(server.first_addr())
+            .await
+            .context("failed to connect")?;
+        let (mut send, conn) = hyper::client::conn::http2::Builder::new(TokioExecutor)
+            .handshake(wasmtime_wasi_http::io::TokioIo::new(tcp))
+            .await
+            .context("failed http2 handshake")?;
+        let conn_task = tokio::task::spawn(conn);
+
+        let response = send
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await
+            .context("error sending request")?;
+        assert!(response.status().is_success());
+
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .context("failed to read body")?;
+        assert_eq!(std::str::from_utf8(&body.to_bytes())?, "Hello, WASI!");
+
+        drop(send);
+        conn_task.await??;
+
+        server.finish()?;
+        Ok(())
+    }
+
     const CONNECTION_COUNT_MANY: usize = 20;
     const REQUESTS_PER_CONNECTION_MANY: usize = 5;
 

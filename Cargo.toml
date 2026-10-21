@@ -97,7 +97,7 @@ smallvec = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
-hyper = { workspace = true, optional = true }
+hyper = { workspace = true, optional = true, features = ["http2"] }
 http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
