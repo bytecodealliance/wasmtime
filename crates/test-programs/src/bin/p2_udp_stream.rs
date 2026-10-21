@@ -38,9 +38,11 @@ fn test_udp_send_receive_multiple(net: &Network, family: IpAddressFamily) {
     {
         let (stream, _) = dest.stream(Some(src_addr)).unwrap();
 
-        stream.subscribe().block();
-
-        let datagrams = stream.receive(2).unwrap();
+        let mut datagrams = Vec::new();
+        while datagrams.len() < 2 {
+            stream.subscribe().block();
+            datagrams.extend(stream.receive(2 - datagrams.len() as u64).unwrap());
+        }
 
         assert_eq!(datagrams.len(), 2);
         assert_eq!(datagrams[0].data, b"1");
