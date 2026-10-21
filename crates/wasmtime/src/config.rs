@@ -1128,10 +1128,9 @@ impl Config {
     /// is SSE2 for the Cranelift compiler and AVX for the Winch compiler.
     ///
     /// On riscv64 the Cranelift compiler requires the `has_v` (or
-    /// `has_zvl128b`) setting for SIMD. This option is enabled by default, so
-    /// without that setting, for example when `--target` is used, either
-    /// `has_v` must be set or SIMD must be disabled with this option and
-    /// [`Config::wasm_relaxed_simd`], otherwise creating an engine fails.
+    /// `has_zvl128b`) setting for SIMD, which is not detected when
+    /// [`Config::target`] is used. Without it creating an [`Engine`] fails
+    /// unless this option and [`Config::wasm_relaxed_simd`] are disabled.
     ///
     /// This is `true` by default.
     ///
@@ -1162,10 +1161,8 @@ impl Config {
     /// specification, at the cost of performance.
     ///
     /// On riscv64 the Cranelift compiler requires the `has_v` (or
-    /// `has_zvl128b`) setting for relaxed SIMD. This option is enabled by
-    /// default, so without that setting either `has_v` must be set or relaxed
-    /// SIMD must be disabled with this option, otherwise creating an engine
-    /// fails.
+    /// `has_zvl128b`) setting for relaxed SIMD. Without it creating an
+    /// [`Engine`] fails unless this option is disabled.
     ///
     /// This is `true` by default.
     ///
@@ -3211,7 +3208,7 @@ impl Config {
         let compiler = compiler.build()?;
 
         // SIMD support can depend on ISA flags, such as `has_v` on riscv64,
-        // which aren't known until now. Otherwise this is the same as
+        // which aren't known until now, so it's checked here and not in
         // `compiler_panicking_wasm_features`.
         if !compiler.supports_wasm_simd() {
             let simd = WasmFeatures::SIMD | WasmFeatures::RELAXED_SIMD;
