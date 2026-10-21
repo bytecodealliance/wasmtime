@@ -2249,6 +2249,27 @@ start a print 1234
         Ok(())
     }
 
+    #[tokio::test]
+    async fn p3_cli_serve_authority_and_scheme() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("/")
+                    .header("Host", "localhost")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+
+        Ok(())
+    }
+
     // A body can fail to parse after the guest read part of it.
     // `future-trailers` must report an error, not a successful body.
     #[tokio::test]
