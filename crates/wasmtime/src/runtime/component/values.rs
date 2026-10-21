@@ -184,7 +184,7 @@ impl Val {
 
                 let (k, _) = vty.cases.get_index(discriminant as usize).unwrap();
                 cx.consume_fuel(k.len())?;
-                Val::Variant(k.clone(), value)
+                Val::Variant(k.to_string(), value)
             }
             InterfaceType::Enum(i) => {
                 let ety = &cx.types[i];
@@ -197,7 +197,7 @@ impl Val {
 
                 let name = &ety.names[discriminant as usize];
                 cx.consume_fuel(name.len())?;
-                Val::Enum(name.clone())
+                Val::Enum(name.to_string())
             }
             InterfaceType::Option(i) => {
                 let (_discriminant, value) = lift_variant(
@@ -327,7 +327,7 @@ impl Val {
 
                 let (k, _) = ty.cases.get_index(discriminant as usize).unwrap();
                 cx.consume_fuel(k.len())?;
-                Val::Variant(k.clone(), value)
+                Val::Variant(k.to_string(), value)
             }
             InterfaceType::Enum(i) => {
                 let ty = &cx.types[i];
@@ -336,7 +336,7 @@ impl Val {
 
                 let name = &ty.names[discriminant as usize];
                 cx.consume_fuel(name.len())?;
-                Val::Enum(name.clone())
+                Val::Enum(name.to_string())
             }
             InterfaceType::Option(i) => {
                 let ty = &cx.types[i];
@@ -505,7 +505,7 @@ impl Val {
                     bail!("expected {} fields, got {}", ty.fields.len(), values.len());
                 }
                 for ((name, value), field) in values.iter().zip(ty.fields.iter()) {
-                    if *name != field.name {
+                    if **name != *field.name {
                         bail!("expected field `{}`, got `{name}`", field.name);
                     }
                     value.lower(cx, field.ty, dst)?;
@@ -654,7 +654,7 @@ impl Val {
                 }
                 let mut offset = offset;
                 for ((name, value), field) in values.iter().zip(ty.fields.iter()) {
-                    if *name != field.name {
+                    if **name != *field.name {
                         bail!("expected field `{}`, got `{name}`", field.name);
                     }
                     value.store(
@@ -1239,7 +1239,7 @@ fn push_flags(
         if bits & 1 != 0 {
             let name = &ty.names[offset as usize];
             cx.consume_fuel(name.len())?;
-            flags.push(name.clone());
+            flags.push(name.to_string());
         }
         bits >>= 1;
         offset += 1;
@@ -1257,7 +1257,7 @@ fn flags_to_storage(ty: &TypeFlags, flags: &[String]) -> Result<Vec<u32>> {
     for flag in flags {
         let bit = ty
             .names
-            .get_index_of(flag)
+            .get_index_of(flag.as_str())
             .ok_or_else(|| crate::format_err!("unknown flag: `{flag}`"))?;
         storage[bit / 32] |= 1 << (bit % 32);
     }

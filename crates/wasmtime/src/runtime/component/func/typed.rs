@@ -2230,7 +2230,7 @@ pub fn typecheck_record(
                 check(&field.ty, types)
                     .with_context(|| format!("type mismatch for field {name}"))?;
 
-                if field.name != name {
+                if *field.name != *name {
                     bail!("expected record field named {}, found {}", name, field.name);
                 }
             }
@@ -2264,7 +2264,7 @@ pub fn typecheck_variant(
             }
 
             for ((case_name, case_ty), &(name, check)) in cases.iter().zip(expected) {
-                if *case_name != name {
+                if **case_name != *name {
                     bail!("expected variant case named {name}, found {case_name}");
                 }
 
@@ -2307,7 +2307,7 @@ pub fn typecheck_enum(
             }
 
             for (name, expected) in names.iter().zip(expected) {
-                if name != expected {
+                if **name != **expected {
                     bail!("expected enum case named {expected}, found {name}");
                 }
             }
@@ -2338,7 +2338,7 @@ pub fn typecheck_flags(
             }
 
             for (name, expected) in names.iter().zip(expected) {
-                if name != expected {
+                if **name != **expected {
                     bail!("expected flag named {expected}, found {name}");
                 }
             }

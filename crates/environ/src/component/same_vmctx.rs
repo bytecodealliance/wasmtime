@@ -25,9 +25,9 @@
 //! it, so the DFG is a DAG and one pass reaches the fixpoint.
 
 use crate::compile::ModuleTranslation;
-use crate::component::ExportItem;
 use crate::component::dfg::{
-    AdapterId, AdapterModuleId, ComponentDfg, CoreDef, Export, Instance, InstanceId, SideEffect,
+    AdapterId, AdapterModuleId, ComponentDfg, CoreDef, Export, ExportItem, Instance, InstanceId,
+    SideEffect,
 };
 use crate::prelude::*;
 use crate::union_find::UnionFind;

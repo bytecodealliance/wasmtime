@@ -1,5 +1,5 @@
 use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
-use crate::{EntityType, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap};
+use crate::{EntityType, ModuleInternedTypeIndex, ModuleTypes, PanicOnOom as _};
 use crate::{TypeTrace, prelude::*};
 use core::hash::{Hash, Hasher};
 use core::ops::Index;
@@ -286,28 +286,29 @@ pub enum ComponentItem {
 /// will have a pointer to this value as well.
 #[derive(Default, Serialize, Deserialize)]
 pub struct ComponentTypes {
-    pub(super) modules: PrimaryMap<TypeModuleIndex, TypeModule>,
-    pub(super) components: PrimaryMap<TypeComponentIndex, TypeComponent>,
-    pub(super) component_instances: PrimaryMap<TypeComponentInstanceIndex, TypeComponentInstance>,
-    pub(super) functions: PrimaryMap<TypeFuncIndex, TypeFunc>,
-    pub(super) lists: PrimaryMap<TypeListIndex, TypeList>,
-    pub(super) maps: PrimaryMap<TypeMapIndex, TypeMap>,
-    pub(super) records: PrimaryMap<TypeRecordIndex, TypeRecord>,
-    pub(super) variants: PrimaryMap<TypeVariantIndex, TypeVariant>,
-    pub(super) tuples: PrimaryMap<TypeTupleIndex, TypeTuple>,
-    pub(super) enums: PrimaryMap<TypeEnumIndex, TypeEnum>,
-    pub(super) flags: PrimaryMap<TypeFlagsIndex, TypeFlags>,
-    pub(super) options: PrimaryMap<TypeOptionIndex, TypeOption>,
-    pub(super) results: PrimaryMap<TypeResultIndex, TypeResult>,
-    pub(super) resource_tables: PrimaryMap<TypeResourceTableIndex, TypeResourceTable>,
+    pub(super) modules: TryPrimaryMap<TypeModuleIndex, TypeModule>,
+    pub(super) components: TryPrimaryMap<TypeComponentIndex, TypeComponent>,
+    pub(super) component_instances:
+        TryPrimaryMap<TypeComponentInstanceIndex, TypeComponentInstance>,
+    pub(super) functions: TryPrimaryMap<TypeFuncIndex, TypeFunc>,
+    pub(super) lists: TryPrimaryMap<TypeListIndex, TypeList>,
+    pub(super) maps: TryPrimaryMap<TypeMapIndex, TypeMap>,
+    pub(super) records: TryPrimaryMap<TypeRecordIndex, TypeRecord>,
+    pub(super) variants: TryPrimaryMap<TypeVariantIndex, TypeVariant>,
+    pub(super) tuples: TryPrimaryMap<TypeTupleIndex, TypeTuple>,
+    pub(super) enums: TryPrimaryMap<TypeEnumIndex, TypeEnum>,
+    pub(super) flags: TryPrimaryMap<TypeFlagsIndex, TypeFlags>,
+    pub(super) options: TryPrimaryMap<TypeOptionIndex, TypeOption>,
+    pub(super) results: TryPrimaryMap<TypeResultIndex, TypeResult>,
+    pub(super) resource_tables: TryPrimaryMap<TypeResourceTableIndex, TypeResourceTable>,
     pub(super) module_types: Option<ModuleTypes>,
-    pub(super) futures: PrimaryMap<TypeFutureIndex, TypeFuture>,
-    pub(super) future_tables: PrimaryMap<TypeFutureTableIndex, TypeFutureTable>,
-    pub(super) streams: PrimaryMap<TypeStreamIndex, TypeStream>,
-    pub(super) stream_tables: PrimaryMap<TypeStreamTableIndex, TypeStreamTable>,
+    pub(super) futures: TryPrimaryMap<TypeFutureIndex, TypeFuture>,
+    pub(super) future_tables: TryPrimaryMap<TypeFutureTableIndex, TypeFutureTable>,
+    pub(super) streams: TryPrimaryMap<TypeStreamIndex, TypeStream>,
+    pub(super) stream_tables: TryPrimaryMap<TypeStreamTableIndex, TypeStreamTable>,
     pub(super) error_context_tables:
-        PrimaryMap<TypeComponentLocalErrorContextTableIndex, TypeErrorContextTable>,
-    pub(super) fixed_length_lists: PrimaryMap<TypeFixedLengthListIndex, TypeFixedLengthList>,
+        TryPrimaryMap<TypeComponentLocalErrorContextTableIndex, TypeErrorContextTable>,
+    pub(super) fixed_length_lists: TryPrimaryMap<TypeFixedLengthListIndex, TypeFixedLengthList>,
 }
 
 impl TypeTrace for ComponentTypes {
@@ -389,7 +390,7 @@ impl ComponentTypes {
 
     /// Adds a new `table` to the list of resource tables for this component.
     pub fn push_resource_table(&mut self, table: TypeResourceTable) -> TypeResourceTableIndex {
-        self.resource_tables.push(table)
+        self.resource_tables.push(table).panic_on_oom()
     }
 }
 
@@ -453,7 +454,7 @@ where
 ///
 /// This records the type of the item that is being imported or exported along
 /// with any metadata associated with the item.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ComponentExtern {
     /// Metadata associated with this item's name, such as
     /// `(implements "...")`.
@@ -462,8 +463,17 @@ pub struct ComponentExtern {
     pub ty: TypeDef,
 }
 
+impl TryClone for ComponentExtern {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(ComponentExtern {
+            data: self.data.try_clone()?,
+            ty: self.ty,
+        })
+    }
+}
+
 /// Metadata associated with the name of a component import or export.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ComponentExternData {
     /// The `(implements "...")` annotation, if present: the name of the
     /// interface that this item implements.
@@ -471,10 +481,19 @@ pub struct ComponentExternData {
     /// This is metadata only: imports are resolved by their own name (e.g.
     /// `my-label`), not by this interface name. Embedders can use it to find
     /// out which interface a labelled item implements.
-    pub implements: Option<String>,
+    pub implements: Option<TryString>,
     /// The `(external-id "...")` annotation, if present: a free-form
     /// host-defined identifier which is ignored by type checking.
-    pub external_id: Option<String>,
+    pub external_id: Option<TryString>,
+}
+
+impl TryClone for ComponentExternData {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(ComponentExternData {
+            implements: self.implements.try_clone()?,
+            external_id: self.external_id.try_clone()?,
+        })
+    }
 }
 
 /// Types of imports and exports in the component model.
@@ -536,13 +555,13 @@ pub struct TypeModule {
     /// two-level namespace of core WebAssembly, but unlike core wasm all import
     /// names are required to be unique to describe a module in the component
     /// model.
-    pub imports: IndexMap<(String, String), EntityType>,
+    pub imports: TryIndexMap<(TryString, TryString), EntityType>,
 
     /// The values that this module exports.
     ///
     /// Note that the value of this map is the core wasm `EntityType` to
     /// represent that core wasm items are being exported.
-    pub exports: IndexMap<String, EntityType>,
+    pub exports: TryIndexMap<TryString, EntityType>,
 }
 
 impl TypeTrace for TypeModule {
@@ -577,9 +596,9 @@ impl TypeTrace for TypeModule {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponent {
     /// The named values that this component imports.
-    pub imports: IndexMap<String, ComponentExtern>,
+    pub imports: TryIndexMap<TryString, ComponentExtern>,
     /// The named values that this component exports.
-    pub exports: IndexMap<String, ComponentExtern>,
+    pub exports: TryIndexMap<TryString, ComponentExtern>,
 }
 
 /// The type of a component instance in the component model, or an instantiated
@@ -589,20 +608,31 @@ pub struct TypeComponent {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponentInstance {
     /// The list of exports that this component has along with their types.
-    pub exports: IndexMap<String, ComponentExtern>,
+    pub exports: TryIndexMap<TryString, ComponentExtern>,
 }
 
 /// A component function type in the component model.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
 pub struct TypeFunc {
     /// Whether or not this is an async function.
     pub async_: bool,
     /// Names of parameters.
-    pub param_names: Vec<String>,
+    pub param_names: TryVec<TryString>,
     /// Parameters to the function represented as a tuple.
     pub params: TypeTupleIndex,
     /// Results of the function represented as a tuple.
     pub results: TypeTupleIndex,
+}
+
+impl TryClone for TypeFunc {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(TypeFunc {
+            async_: self.async_,
+            param_names: self.param_names.try_clone()?,
+            params: self.params,
+            results: self.results,
+        })
+    }
 }
 
 /// All possible interface types that values can have.
@@ -642,6 +672,12 @@ pub enum InterfaceType {
     Stream(TypeStreamTableIndex),
     ErrorContext(TypeComponentLocalErrorContextTableIndex),
     FixedLengthList(TypeFixedLengthListIndex),
+}
+
+impl TryClone for InterfaceType {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
 }
 
 /// Bye information about a type in the canonical ABI, with metadata for both
@@ -1034,21 +1070,39 @@ mod serde_discrim_size {
 /// Shape of a "record" type in interface types.
 ///
 /// This is equivalent to a `struct` in Rust.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
 pub struct TypeRecord {
     /// The fields that are contained within this struct type.
-    pub fields: Box<[RecordField]>,
+    pub fields: TryVec<RecordField>,
     /// Byte information about this type in the canonical ABI.
     pub abi: CanonicalAbiInfo,
 }
 
+impl TryClone for TypeRecord {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(TypeRecord {
+            fields: self.fields.try_clone()?,
+            abi: self.abi.clone(),
+        })
+    }
+}
+
 /// One field within a record.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
 pub struct RecordField {
     /// The name of the field, unique amongst all fields in a record.
-    pub name: String,
+    pub name: TryString,
     /// The type that this field contains.
     pub ty: InterfaceType,
+}
+
+impl TryClone for RecordField {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(RecordField {
+            name: self.name.try_clone()?,
+            ty: self.ty,
+        })
+    }
 }
 
 /// Shape of a "variant" type in interface types.
@@ -1056,10 +1110,10 @@ pub struct RecordField {
 /// Variants are close to Rust `enum` declarations where a value is one of many
 /// cases and each case has a unique name and an optional payload associated
 /// with it.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TypeVariant {
     /// The list of cases that this variant can take.
-    pub cases: IndexMap<String, Option<InterfaceType>>,
+    pub cases: TryIndexMap<TryString, Option<InterfaceType>>,
     /// Byte information about this type in the canonical ABI.
     pub abi: CanonicalAbiInfo,
     /// Byte information about this variant type.
@@ -1080,6 +1134,16 @@ impl PartialEq for TypeVariant {
 
 impl Eq for TypeVariant {}
 
+impl TryClone for TypeVariant {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(TypeVariant {
+            cases: self.cases.try_clone()?,
+            abi: self.abi.clone(),
+            info: self.info.clone(),
+        })
+    }
+}
+
 impl Hash for TypeVariant {
     fn hash<H: Hasher>(&self, h: &mut H) {
         let TypeVariant { cases, abi, info } = self;
@@ -1096,22 +1160,31 @@ impl Hash for TypeVariant {
 ///
 /// This is largely the same as a tuple in Rust, basically a record with
 /// unnamed fields.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
 pub struct TypeTuple {
     /// The types that are contained within this tuple.
-    pub types: Box<[InterfaceType]>,
+    pub types: TryVec<InterfaceType>,
     /// Byte information about this type in the canonical ABI.
     pub abi: CanonicalAbiInfo,
+}
+
+impl TryClone for TypeTuple {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(TypeTuple {
+            types: self.types.try_clone()?,
+            abi: self.abi.clone(),
+        })
+    }
 }
 
 /// Shape of a "flags" type in interface types.
 ///
 /// This can be thought of as a record-of-bools, although the representation is
 /// more efficient as bitflags.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TypeFlags {
     /// The names of all flags, all of which are unique.
-    pub names: IndexSet<String>,
+    pub names: TryIndexSet<TryString>,
     /// Byte information about this type in the canonical ABI.
     pub abi: CanonicalAbiInfo,
 }
@@ -1126,6 +1199,15 @@ impl PartialEq for TypeFlags {
 }
 
 impl Eq for TypeFlags {}
+
+impl TryClone for TypeFlags {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(TypeFlags {
+            names: self.names.try_clone()?,
+            abi: self.abi.clone(),
+        })
+    }
+}
 
 impl Hash for TypeFlags {
     fn hash<H: Hasher>(&self, h: &mut H) {
@@ -1143,10 +1225,10 @@ impl Hash for TypeFlags {
 ///
 /// In interface types enums are simply a bag of names, and can be seen as a
 /// variant where all payloads are `Unit`.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TypeEnum {
     /// The names of this enum, all of which are unique.
-    pub names: IndexSet<String>,
+    pub names: TryIndexSet<TryString>,
     /// Byte information about this type in the canonical ABI.
     pub abi: CanonicalAbiInfo,
     /// Byte information about this variant type.
@@ -1166,6 +1248,16 @@ impl PartialEq for TypeEnum {
 }
 
 impl Eq for TypeEnum {}
+
+impl TryClone for TypeEnum {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(TypeEnum {
+            names: self.names.try_clone()?,
+            abi: self.abi.clone(),
+            info: self.info.clone(),
+        })
+    }
+}
 
 impl Hash for TypeEnum {
     fn hash<H: Hasher>(&self, h: &mut H) {
@@ -1331,6 +1423,31 @@ pub struct TypeFixedLengthList {
     pub abi: CanonicalAbiInfo,
 }
 
+macro_rules! impl_try_clone_via_clone {
+    ($($ty:ty),* $(,)?) => {$(
+        impl TryClone for $ty {
+            fn try_clone(&self) -> Result<Self, OutOfMemory> {
+                Ok(self.clone())
+            }
+        }
+    )*};
+}
+
+// These types don't contain any heap allocations, so cloning them can't fail.
+impl_try_clone_via_clone! {
+    TypeOption,
+    TypeResult,
+    TypeFuture,
+    TypeFutureTable,
+    TypeStream,
+    TypeStreamTable,
+    TypeErrorContextTable,
+    TypeResourceTable,
+    TypeList,
+    TypeMap,
+    TypeFixedLengthList,
+}
+
 /// Maximum number of flat types, for either params or results.
 pub const MAX_FLAT_TYPES: usize = if MAX_FLAT_PARAMS > MAX_FLAT_RESULTS {
     MAX_FLAT_PARAMS
@@ -1401,8 +1518,9 @@ mod tests {
         TypeVariant {
             cases: cases
                 .iter()
-                .map(|(name, ty)| (name.to_string(), Some(*ty)))
-                .collect(),
+                .map(|(name, ty)| Ok((TryString::try_from(*name)?, Some(*ty))))
+                .try_collect::<_, OutOfMemory>()
+                .panic_on_oom(),
             abi: CanonicalAbiInfo::default(),
             info: VariantInfo {
                 size: DiscriminantSize::Size1,
@@ -1414,14 +1532,22 @@ mod tests {
 
     fn flags(names: &[&str]) -> TypeFlags {
         TypeFlags {
-            names: names.iter().map(|n| n.to_string()).collect(),
+            names: names
+                .iter()
+                .map(|n| TryString::try_from(*n))
+                .try_collect::<_, OutOfMemory>()
+                .panic_on_oom(),
             abi: CanonicalAbiInfo::default(),
         }
     }
 
     fn enum_(names: &[&str]) -> TypeEnum {
         TypeEnum {
-            names: names.iter().map(|n| n.to_string()).collect(),
+            names: names
+                .iter()
+                .map(|n| TryString::try_from(*n))
+                .try_collect::<_, OutOfMemory>()
+                .panic_on_oom(),
             abi: CanonicalAbiInfo::default(),
             info: VariantInfo {
                 size: DiscriminantSize::Size1,
@@ -1436,7 +1562,7 @@ mod tests {
         let a = variant(&[("n", InterfaceType::U32), ("s", InterfaceType::String)]);
         let b = variant(&[("s", InterfaceType::String), ("n", InterfaceType::U32)]);
         assert_ne!(a, b);
-        assert_eq!(a, a.clone());
+        assert_eq!(a, a.clone_panic_on_oom());
     }
 
     #[test]
@@ -1445,7 +1571,7 @@ mod tests {
         let b = flags(&["c", "b", "a"]);
 
         assert_ne!(a, b);
-        assert_eq!(a, a.clone());
+        assert_eq!(a, a.clone_panic_on_oom());
     }
 
     #[test]
@@ -1454,6 +1580,6 @@ mod tests {
         let b = enum_(&["blue", "green", "red"]);
 
         assert_ne!(a, b);
-        assert_eq!(a, a.clone());
+        assert_eq!(a, a.clone_panic_on_oom());
     }
 }

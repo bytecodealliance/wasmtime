@@ -143,7 +143,7 @@ impl TypeChecker<'_> {
             // TODO: shouldn't need a `.to_string()` here ideally
             let expected = expected
                 .imports
-                .get(&(module.to_string(), name.to_string()))
+                .get(&(module.to_string().into(), name.to_string().into()))
                 .ok_or_else(|| format_err!("module import `{module}::{name}` not defined"))?;
             matching::entity_ty(self.engine, &actual, expected)
                 .with_context(|| format!("module import `{module}::{name}` has the wrong type"))?;

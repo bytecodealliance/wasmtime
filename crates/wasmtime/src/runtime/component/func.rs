@@ -66,12 +66,9 @@ impl Func {
         instance: Instance,
         index: ExportIndex,
     ) -> Func {
-        let def = {
-            let vminstance = instance.id().get(store);
-            let (_ty, def, _options) = vminstance.component().export_lifted_function(index);
-            def.clone()
-        };
-        let unsafe_func_ref = match instance.lookup_vmdef(store, &def) {
+        let (component, store) = instance.component_and_store_mut(store);
+        let (_ty, def, _options) = component.export_lifted_function(index);
+        let unsafe_func_ref = match instance.lookup_vmdef(store, def) {
             Export::Function(f) => f.vm_func_ref(store),
             _ => unreachable!(),
         }

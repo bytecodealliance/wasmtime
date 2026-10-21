@@ -21,8 +21,8 @@
 
 pub use crate::collections::{
     TryBTreeMap, TryClone, TryCollect, TryEntitySet, TryExtend, TryFromIterator, TryHashMap,
-    TryHashSet, TryIndexMap, TryNew, TryPrimaryMap, TrySecondaryMap, TryString, TryToOwned, TryVec,
-    try_new, try_vec,
+    TryHashSet, TryIndexMap, TryIndexSet, TryNew, TryPrimaryMap, TrySecondaryMap, TryString,
+    TryToOwned, TryVec, try_new, try_vec,
 };
 pub use crate::error::{Context, Error, OutOfMemory, Result, bail, ensure, format_err};
 pub use alloc::borrow::ToOwned;

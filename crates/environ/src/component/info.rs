@@ -76,7 +76,7 @@ pub struct Component {
     ///
     /// Note that each name is given an `ImportIndex` here for the next map to
     /// refer back to.
-    pub import_types: PrimaryMap<ImportIndex, (String, ComponentExtern)>,
+    pub import_types: TryPrimaryMap<ImportIndex, (TryString, ComponentExtern)>,
 
     /// A list of "flattened" imports that are used by this instance.
     ///
@@ -104,7 +104,7 @@ pub struct Component {
     // strings could otherwise be globally intern'd via some other mechanism to
     // avoid `Linker`-specific intern-ing plus intern-ing here. Unsure what the
     // best route is or whether such an optimization is even necessary here.
-    pub imports: PrimaryMap<RuntimeImportIndex, (ImportIndex, Vec<String>)>,
+    pub imports: TryPrimaryMap<RuntimeImportIndex, (ImportIndex, TryVec<TryString>)>,
 
     /// This component's own root exports from the component itself.
     pub exports: NameMap<TryString, (ExportIndex, ComponentExternData)>,
@@ -113,7 +113,7 @@ pub struct Component {
     ///
     /// This is indexed by `ExportIndex` for fast lookup and `Export::Instance`
     /// will refer back into this list.
-    pub export_items: PrimaryMap<ExportIndex, Export>,
+    pub export_items: TryPrimaryMap<ExportIndex, Export>,
 
     /// Initializers that must be processed when instantiating this component.
     ///
@@ -124,7 +124,7 @@ pub struct Component {
     /// have instantiations, for example, in addition to entries which
     /// initialize `VMComponentContext` fields with previously instantiated
     /// instances.
-    pub initializers: Vec<GlobalInitializer>,
+    pub initializers: TryVec<GlobalInitializer>,
 
     /// The number of runtime instances (maximum `RuntimeInstanceIndex`) created
     /// when instantiating this component.
@@ -161,7 +161,7 @@ pub struct Component {
     pub num_runtime_post_returns: u32,
 
     /// WebAssembly type signature of all trampolines.
-    pub trampolines: PrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
+    pub trampolines: TryPrimaryMap<TrampolineIndex, ModuleInternedTypeIndex>,
 
     /// A map from a `UnsafeIntrinsic::index()` to that intrinsic's
     /// module-interned type.
@@ -191,18 +191,19 @@ pub struct Component {
     /// imports array.
     ///
     /// This map is only as large as the number of imported resources.
-    pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
+    pub imported_resources: TryPrimaryMap<ResourceIndex, RuntimeImportIndex>,
 
     /// Metadata about which component instances defined each resource within
     /// this component.
     ///
     /// This is used to determine which set of instance flags are inspected when
     /// testing reentrance.
-    pub defined_resource_instances: PrimaryMap<DefinedResourceIndex, RuntimeComponentInstanceIndex>,
+    pub defined_resource_instances:
+        TryPrimaryMap<DefinedResourceIndex, RuntimeComponentInstanceIndex>,
 
     /// All canonical options used by this component. Stored as a table here
     /// from index-to-options so the options can be consulted at runtime.
-    pub options: PrimaryMap<OptionsIndex, CanonicalOptions>,
+    pub options: TryPrimaryMap<OptionsIndex, CanonicalOptions>,
 }
 
 impl Component {
@@ -359,7 +360,7 @@ pub enum InstantiateModule {
     /// order of imports required is statically known and can be pre-calculated
     /// to avoid string lookups related to names at runtime, represented by the
     /// flat list of arguments here.
-    Static(StaticModuleIndex, Box<[CoreDef]>),
+    Static(StaticModuleIndex, TryVec<CoreDef>),
 
     /// An imported module is being instantiated.
     ///
@@ -368,7 +369,7 @@ pub enum InstantiateModule {
     /// runtime.
     Import(
         RuntimeImportIndex,
-        IndexMap<String, IndexMap<String, CoreDef>>,
+        TryIndexMap<TryString, TryIndexMap<TryString, CoreDef>>,
     ),
 }
 
@@ -379,7 +380,7 @@ pub enum InstantiateModule {
 /// during compile time of the component itself. References to core wasm items
 /// are "compiled" to either referring to a previous instance or to some sort of
 /// lowered host import.
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub enum CoreDef {
     /// This item refers to an export of a previously instantiated core wasm
     /// instance.
@@ -392,6 +393,17 @@ pub enum CoreDef {
     Trampoline(TrampolineIndex),
     /// An intrinsic for compile-time builtins.
     UnsafeIntrinsic(UnsafeIntrinsic),
+}
+
+impl TryClone for CoreDef {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(match self {
+            CoreDef::Export(e) => CoreDef::Export(e.try_clone()?),
+            CoreDef::InstanceFlags(i) => CoreDef::InstanceFlags(*i),
+            CoreDef::Trampoline(i) => CoreDef::Trampoline(*i),
+            CoreDef::UnsafeIntrinsic(i) => CoreDef::UnsafeIntrinsic(*i),
+        })
+    }
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -408,7 +420,7 @@ where
 /// Note that the `T` here is the index type for exports which can be
 /// identified by index. The `T` is monomorphized with types like
 /// [`EntityIndex`] or [`FuncIndex`].
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct CoreExport<T> {
     /// The instance that this item is located within.
     ///
@@ -419,6 +431,15 @@ pub struct CoreExport<T> {
 
     /// The item that this export is referencing, either by name or by index.
     pub item: ExportItem<T>,
+}
+
+impl<T: TryClone> TryClone for CoreExport<T> {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(CoreExport {
+            instance: self.instance,
+            item: self.item.try_clone()?,
+        })
+    }
 }
 
 impl<T> CoreExport<T> {
@@ -436,7 +457,7 @@ impl<T> CoreExport<T> {
 }
 
 /// An index at which to find an item within a runtime instance.
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub enum ExportItem<T> {
     /// An exact index that the target can be found at.
     ///
@@ -451,7 +472,16 @@ pub enum ExportItem<T> {
     ///
     /// This is used for instantiations of imported modules, for example, since
     /// the precise shape of the module is not known.
-    Name(String),
+    Name(TryString),
+}
+
+impl<T: TryClone> TryClone for ExportItem<T> {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(match self {
+            ExportItem::Index(i) => ExportItem::Index(i.try_clone()?),
+            ExportItem::Name(name) => ExportItem::Name(name.try_clone()?),
+        })
+    }
 }
 
 /// Possible exports from a component.
