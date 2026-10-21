@@ -454,12 +454,12 @@ impl MmapOffset {
             .offset
             .checked_add(memory_offset)
             .expect("self.offset + memory_offset is in bounds");
-        assert!(
-            total_offset
-                .checked_add(memory_len)
-                .is_ok_and(|end| end <= self.mmap.len_aligned()),
-            "image mapping is in bounds of the mmap"
-        );
+        if !total_offset
+            .checked_add(memory_len)
+            .is_ok_and(|end| end <= self.mmap.len_aligned())
+        {
+            bail!("image mapping must be in bounds of the mmap")
+        }
         unsafe {
             let base = self
                 .mmap
@@ -533,7 +533,6 @@ mod tests {
 
     #[test]
     #[cfg(all(target_os = "linux", not(miri)))]
-    #[should_panic(expected = "image mapping is in bounds of the mmap")]
     fn map_image_at_past_end_of_mmap() {
         let page_size = HostAlignedByteCount::host_page_size();
         let (mmap, source) = mmap_and_image_source();
@@ -546,16 +545,14 @@ mod tests {
         let max = HostAlignedByteCount::new(max_aligned).unwrap();
         let huge = max.checked_sub(page_size).unwrap();
         // SAFETY: the mmap was just created and nothing references it. The
-        // call is expected to panic before mapping anything.
-        unsafe {
-            let _ = base.map_image_at(&source, 0, HostAlignedByteCount::ZERO, huge);
-        }
+        // call is expected to return Err before mapping anything.
+        let result = unsafe { base.map_image_at(&source, 0, HostAlignedByteCount::ZERO, huge) };
+        assert!(result.is_err());
     }
 
     /// An offset and length whose sum overflows must be rejected as well.
     #[test]
     #[cfg(all(target_os = "linux", not(miri)))]
-    #[should_panic(expected = "image mapping is in bounds of the mmap")]
     fn map_image_at_overflowing_length() {
         let page_size = HostAlignedByteCount::host_page_size();
         let (mmap, source) = mmap_and_image_source();
@@ -564,8 +561,7 @@ mod tests {
         let max = HostAlignedByteCount::new(max_aligned).unwrap();
         // SAFETY: the mmap was just created and nothing references it. The
         // call is expected to panic before mapping anything.
-        unsafe {
-            let _ = base.map_image_at(&source, 0, HostAlignedByteCount::ZERO, max);
-        }
+        let result = unsafe { base.map_image_at(&source, 0, HostAlignedByteCount::ZERO, max) };
+        assert!(result.is_err());
     }
 }
