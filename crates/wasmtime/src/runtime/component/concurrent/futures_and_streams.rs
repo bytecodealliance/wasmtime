@@ -910,6 +910,12 @@ impl<'a, T> Source<'a, T> {
                 bail_bug!("expected WriteState::GuestReady");
             };
 
+            // Zero-length writes are exempt from bounds/alignment checks, so
+            // there's nothing to lift.
+            if guest_offset >= count {
+                return Ok(());
+            }
+
             let cx = &mut LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
             let ty = ty.payload(cx.types);
             let old_remaining = buffer.remaining_capacity();

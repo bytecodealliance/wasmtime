@@ -54,9 +54,9 @@ const COMPONENT: &str = r#"
       (global.set $w (i32.wrap_i64 (i64.shr_u (local.get $rw) (i64.const 32))))
       (i32.wrap_i64 (local.get $rw)))
 
-    ;; Writes `n` items, returning the result of `stream.write`.
-    (func (export "write") (param $n i32) (result i32)
-      (call $stream.write (global.get $w) (i32.const 100) (local.get $n))))
+    ;; Writes `n` items at `ptr`, returning the result of `stream.write`.
+    (func (export "write") (param $ptr i32) (param $n i32) (result i32)
+      (call $stream.write (global.get $w) (local.get $ptr) (local.get $n))))
   (core instance $i (instantiate $m (with "" (instance
     (export "mem" (memory $libc "mem"))
     (export "stream.new" (func $stream.new))
@@ -71,7 +71,7 @@ const COMPONENT: &str = r#"
     (canon lift (core func $i "read-then-cancel") async
       (callback (core func $i "cb"))))
   (func (export "new") (result $s) (canon lift (core func $i "new")))
-  (func (export "write") (param "n" u32) (result u32)
+  (func (export "write") (param "ptr" u32) (param "n" u32) (result u32)
     (canon lift (core func $i "write")))
 )
 "#;
@@ -196,14 +196,15 @@ async fn guest_read(export: &str, producer: Produce, n: u32) -> Result<u32> {
     Ok(func.call_async(&mut store, (reader, n)).await?.0)
 }
 
-/// Has the guest write `n` items to a stream consumed by a `TestConsumer`.
-async fn guest_write(take: bool, n: u32) -> Result<u32> {
+/// Has the guest write `n` items at `ptr` to a stream consumed by a
+/// `TestConsumer`.
+async fn guest_write(take: bool, ptr: u32, n: u32) -> Result<u32> {
     let (mut store, instance) = instantiate().await?;
     let new = instance.get_typed_func::<(), (StreamReader<u8>,)>(&mut store, "new")?;
-    let write = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "write")?;
+    let write = instance.get_typed_func::<(u32, u32), (u32,)>(&mut store, "write")?;
     let (reader,) = new.call_async(&mut store, ()).await?;
     reader.pipe(&mut store, TestConsumer::new(take).0)?;
-    Ok(write.call_async(&mut store, (n,)).await?.0)
+    Ok(write.call_async(&mut store, (ptr, n)).await?.0)
 }
 
 /// Pipes `producer` to a `TestConsumer` on the host, returning what the
@@ -219,12 +220,15 @@ async fn host_pipe(producer: Produce, take: bool) -> Result<Vec<u8>> {
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn consumer_completed_without_consuming() -> Result<()> {
-    assert!(guest_write(false, 1).await.is_err());
+    assert!(guest_write(false, 100, 1).await.is_err());
     assert!(host_pipe(Produce::Items, false).await.is_err());
 
     // A zero-length write may complete without anything being consumed.
-    assert_eq!(guest_write(false, 0).await?, 0);
-    assert_eq!(guest_write(true, 4).await?, 4 << 4); // COMPLETED(4)
+    assert_eq!(guest_write(false, 100, 0).await?, 0);
+    assert_eq!(guest_write(true, 100, 4).await?, 4 << 4); // COMPLETED(4)
+
+    // A zero-length write isn't bounds-checked, even when it's consumed.
+    assert_eq!(guest_write(true, u32::MAX, 0).await?, 0);
     Ok(())
 }
 
