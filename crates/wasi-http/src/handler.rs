@@ -1015,7 +1015,6 @@ impl<'a, T: Send> Prepared<'a, T> {
                     ..
                 } = parts;
                 let http::uri::Parts {
-                    scheme,
                     authority,
                     path_and_query,
                     ..
@@ -1031,12 +1030,11 @@ impl<'a, T: Send> Prepared<'a, T> {
                 };
                 let hooks = view(store.data_mut()).hooks;
                 let headers = crate::FieldMap::new_immutable(hooks, request_headers);
-                // `serve` speaks plaintext HTTP, so that is the scheme of a
-                // request which does not name one.
-                let scheme = scheme.unwrap_or(http::uri::Scheme::HTTP);
+                // `serve` speaks plaintext HTTP, so that is the scheme of every
+                // request, whatever scheme its request target names (as in p2).
                 let (request, request_io_result) = p3::Request::new(
                     method,
-                    Some(scheme),
+                    Some(http::uri::Scheme::HTTP),
                     authority,
                     path_and_query,
                     headers,

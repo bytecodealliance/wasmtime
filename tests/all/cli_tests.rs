@@ -2267,6 +2267,18 @@ start a print 1234
             .await?;
         assert!(resp.status().is_success());
 
+        // The scheme is that of the connection, not of an absolute-form
+        // request target.
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("https://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+
         Ok(())
     }
 
