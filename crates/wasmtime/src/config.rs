@@ -2468,7 +2468,11 @@ impl Config {
     /// partially supported. For example at the time of this writing the Winch
     /// backend partially supports simd so it's not listed here. Winch doesn't
     /// fully support simd but unimplemented instructions just return errors.
-    fn compiler_panicking_wasm_features(&self) -> WasmFeatures {
+    ///
+    /// Whether SIMD is supported can depend on ISA flags, such as `has_v` on
+    /// riscv64, which are only known once the compiler is built. Until then
+    /// `compiler_supports_simd` is `true`.
+    fn compiler_panicking_wasm_features(&self, compiler_supports_simd: bool) -> WasmFeatures {
         // First we compute the set of features that Wasmtime itself knows;
         // this is a sort of "maximal set" that we invert to create a set
         // of features we _definitely can't support_ because wasmtime
@@ -2546,6 +2550,11 @@ impl Config {
             }
             Some(Strategy::Auto) => unreachable!(),
         }
+
+        if !compiler_supports_simd {
+            unsupported |= WasmFeatures::SIMD | WasmFeatures::RELAXED_SIMD;
+        }
+
         unsupported
     }
 
@@ -2579,6 +2588,12 @@ impl Config {
     /// what's going on, and users should in theory be able to understand "ok
     /// yeah that's why I can't enable that feature here".
     fn features(&self) -> WasmFeatures {
+        self.features_for_compiler(true)
+    }
+
+    /// Same as `features`, but for a built compiler which knows whether it
+    /// supports SIMD.
+    pub(crate) fn features_for_compiler(&self, compiler_supports_simd: bool) -> WasmFeatures {
         let mut features;
 
         // Next add in all on-by-default features that Wasmtime has which are
@@ -2651,7 +2666,7 @@ impl Config {
         // support. This handles cases where Winch, for example, doesn't
         // implement a feature yet but Cranelift does. Or maybe Cranelift only
         // supports one particular platform and not others. Things like that.
-        features = features & !self.compiler_panicking_wasm_features();
+        features = features & !self.compiler_panicking_wasm_features(compiler_supports_simd);
 
         // And, finally, process all explicitly enabled/disabled features on
         // behalf of the embedder's frobbing `Config::wasm_*`. These have the
@@ -2689,14 +2704,16 @@ impl Config {
             || self.tunables.gc_heap_may_move.is_some()
     }
 
-    pub(crate) fn validate(&self) -> Result<(Tunables, WasmFeatures)> {
-        let features = self.features();
-
-        // First validate that the selected compiler backend and configuration
-        // supports the set of `features` that are enabled. This will help
-        // provide more first class errors instead of panics about unsupported
-        // features and configurations.
-        let unsupported = features & self.compiler_panicking_wasm_features();
+    /// Validates that the selected compiler backend and configuration support
+    /// the set of `features` that are enabled. This helps provide more first
+    /// class errors instead of panics about unsupported features and
+    /// configurations.
+    fn validate_features(
+        &self,
+        features: WasmFeatures,
+        compiler_supports_simd: bool,
+    ) -> Result<()> {
+        let unsupported = features & self.compiler_panicking_wasm_features(compiler_supports_simd);
         if !unsupported.is_empty() {
             for flag in WasmFeatures::FLAGS.iter() {
                 if !unsupported.contains(*flag.value()) {
@@ -2710,6 +2727,12 @@ impl Config {
 
             panic!("should have returned an error by now")
         }
+        Ok(())
+    }
+
+    pub(crate) fn validate(&self) -> Result<(Tunables, WasmFeatures)> {
+        let features = self.features();
+        self.validate_features(features, true)?;
 
         if self.max_wasm_stack > self.async_stack_size {
             bail!("max_wasm_stack size cannot exceed the async_stack_size");
@@ -3056,7 +3079,7 @@ impl Config {
     pub(crate) fn build_compiler(
         mut self,
         tunables: &mut Tunables,
-        features: &mut WasmFeatures,
+        features: WasmFeatures,
     ) -> Result<(Self, Box<dyn wasmtime_environ::Compiler>)> {
         let target = self.compiler_target();
 
@@ -3207,18 +3230,13 @@ impl Config {
         let compiler = compiler.build()?;
 
         // SIMD support can depend on ISA flags, such as `has_v` on riscv64,
-        // which aren't known until now. Otherwise this is the same as
-        // `compiler_panicking_wasm_features`.
-        if !compiler.supports_wasm_simd() {
-            let simd = WasmFeatures::SIMD | WasmFeatures::RELAXED_SIMD;
-            if let Some((name, _)) = (self.enabled_features & simd).iter_names().next() {
-                bail!(
-                    "the wasm_{} feature is not supported on this compiler configuration",
-                    name.to_lowercase()
-                );
-            }
-            features.remove(simd);
-        }
+        // which aren't known until now. Check the features again with the
+        // built compiler, which rejects SIMD that was explicitly enabled.
+        let compiler_supports_simd = compiler.supports_wasm_simd();
+        self.validate_features(
+            self.features_for_compiler(compiler_supports_simd),
+            compiler_supports_simd,
+        )?;
 
         Ok((self, compiler))
     }

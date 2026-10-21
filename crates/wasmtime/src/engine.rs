@@ -142,7 +142,8 @@ impl Engine {
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         let (config, compiler) = if config.has_compiler() {
-            let (config, compiler) = config.build_compiler(&mut tunables, &mut features)?;
+            let (config, compiler) = config.build_compiler(&mut tunables, features)?;
+            features = config.features_for_compiler(compiler.supports_wasm_simd());
             (config, Some(compiler))
         } else {
             (config.clone(), None)
