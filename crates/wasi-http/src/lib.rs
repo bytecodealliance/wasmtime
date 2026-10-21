@@ -62,6 +62,45 @@ fn get_content_length(headers: &http::HeaderMap) -> wasmtime::Result<Option<u64>
     Ok(Some(v))
 }
 
+/// `hyper`'s HTTP/1.1 encoder sends no body for `GET`, `HEAD` and `CONNECT` unless
+/// `content-length` or `transfer-encoding` is present, so frame those ourselves.
+#[cfg(any(feature = "p2", feature = "p3"))]
+fn needs_chunked_framing(method: &http::Method, headers: &http::HeaderMap, has_body: bool) -> bool {
+    has_body
+        && matches!(
+            *method,
+            http::Method::GET | http::Method::HEAD | http::Method::CONNECT
+        )
+        && !headers.contains_key(header::CONTENT_LENGTH)
+        && !headers.contains_key(header::TRANSFER_ENCODING)
+}
+
+#[cfg(all(test, any(feature = "p2", feature = "p3")))]
+mod framing_tests {
+    use super::*;
+
+    #[test]
+    fn chunked_framing_is_added_only_when_no_framing_is_set() {
+        let none = http::HeaderMap::new();
+        let with_cl = http::HeaderMap::from_iter([(
+            header::CONTENT_LENGTH,
+            http::HeaderValue::from_static("10"),
+        )]);
+        let with_te = http::HeaderMap::from_iter([(
+            header::TRANSFER_ENCODING,
+            http::HeaderValue::from_static("chunked"),
+        )]);
+
+        for method in [http::Method::GET, http::Method::HEAD, http::Method::CONNECT] {
+            assert!(needs_chunked_framing(&method, &none, true));
+            assert!(!needs_chunked_framing(&method, &with_cl, true));
+            assert!(!needs_chunked_framing(&method, &with_te, true));
+            assert!(!needs_chunked_framing(&method, &none, false));
+        }
+        assert!(!needs_chunked_framing(&http::Method::POST, &none, true));
+    }
+}
+
 /// Parse the specified string as an `http::uri::PathAndQuery`, if possible.
 ///
 /// As of `http` v1.4.1, `PathAndQuery::from_str` will return an error if given

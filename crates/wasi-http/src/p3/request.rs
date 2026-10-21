@@ -3,10 +3,10 @@ use crate::p3::body::{Body, BodyExt as _, GuestBody};
 use crate::p3::{HttpError, HttpResult};
 use crate::{
     Error, FieldMap, RequestOptions, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
-    get_content_length,
+    get_content_length, needs_chunked_framing,
 };
 use bytes::Bytes;
-use http::header::HOST;
+use http::header::{HOST, TRANSFER_ENCODING};
 use http::uri::{Authority, PathAndQuery, Scheme};
 use http::{HeaderValue, Method, Uri};
 use http_body_util::BodyExt as _;
@@ -156,6 +156,13 @@ impl Request {
             options,
             body,
         } = self;
+        let has_body = !matches!(
+            &body,
+            Body::Guest {
+                contents_rx: None,
+                ..
+            }
+        );
         // `Content-Length` header value is validated in `fields` implementation
         let content_length = match get_content_length(&headers) {
             Ok(content_length) => content_length,
@@ -218,6 +225,11 @@ impl Request {
                 HeaderValue::from_static("")
             };
             headers.append_raw(HOST, host).map_err(HttpError::trap)?;
+        }
+        if needs_chunked_framing(&method, &headers, has_body) {
+            headers
+                .append_raw(TRANSFER_ENCODING, HeaderValue::from_static("chunked"))
+                .map_err(HttpError::trap)?;
         }
         let scheme = match scheme {
             None => hooks.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,
