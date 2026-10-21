@@ -139,29 +139,30 @@ fn simd_without_riscv_v() -> Result<()> {
         Ok(config)
     };
 
-    // SIMD is off by default, so the module fails validation instead of
-    // panicking in the backend.
-    let engine = Engine::new(&new_config(false)?)?;
-    let err = engine.precompile_module(wat).unwrap_err();
+    // SIMD is enabled by default, so without vector support creating an
+    // engine is an error instead of a panic in the backend later on.
+    let err = Engine::new(&new_config(false)?).unwrap_err();
     assert!(
-        format!("{err:?}").contains("SIMD support is not enabled"),
+        format!("{err:?}").contains("wasm_simd feature is not supported"),
         "bad error: {err:?}"
     );
 
-    // Asking for SIMD explicitly is an error.
+    // Disabling only relaxed SIMD leaves SIMD enabled.
     let mut config = new_config(false)?;
-    config.wasm_simd(true);
+    config.wasm_relaxed_simd(false);
     let err = Engine::new(&config).unwrap_err();
     assert!(
         format!("{err:?}").contains("wasm_simd feature is not supported"),
         "bad error: {err:?}"
     );
 
+    // Disabling both works, and modules using SIMD then fail validation.
     let mut config = new_config(false)?;
-    config.wasm_relaxed_simd(true);
-    let err = Engine::new(&config).unwrap_err();
+    config.wasm_simd(false).wasm_relaxed_simd(false);
+    let engine = Engine::new(&config)?;
+    let err = engine.precompile_module(wat).unwrap_err();
     assert!(
-        format!("{err:?}").contains("wasm_relaxed_simd feature is not supported"),
+        format!("{err:?}").contains("SIMD support is not enabled"),
         "bad error: {err:?}"
     );
 

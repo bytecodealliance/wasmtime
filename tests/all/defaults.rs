@@ -23,6 +23,8 @@ fn test_tail_call_default() -> Result<()> {
             true,
             Config::new()
                 .strategy(Strategy::Cranelift)
+                .wasm_simd(false)
+                .wasm_relaxed_simd(false)
                 .target("riscv64")?,
         ),
         (

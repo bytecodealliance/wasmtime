@@ -1128,8 +1128,10 @@ impl Config {
     /// is SSE2 for the Cranelift compiler and AVX for the Winch compiler.
     ///
     /// On riscv64 the Cranelift compiler requires the `has_v` (or
-    /// `has_zvl128b`) setting for SIMD. Without it SIMD is disabled by default
-    /// and enabling it is an error.
+    /// `has_zvl128b`) setting for SIMD. This option is enabled by default, so
+    /// without that setting, for example when `--target` is used, either
+    /// `has_v` must be set or SIMD must be disabled with this option and
+    /// [`Config::wasm_relaxed_simd`], otherwise creating an engine fails.
     ///
     /// This is `true` by default.
     ///
@@ -1160,8 +1162,10 @@ impl Config {
     /// specification, at the cost of performance.
     ///
     /// On riscv64 the Cranelift compiler requires the `has_v` (or
-    /// `has_zvl128b`) setting for relaxed SIMD. Without it relaxed SIMD is
-    /// disabled by default and enabling it is an error.
+    /// `has_zvl128b`) setting for relaxed SIMD. This option is enabled by
+    /// default, so without that setting either `has_v` must be set or relaxed
+    /// SIMD must be disabled with this option, otherwise creating an engine
+    /// fails.
     ///
     /// This is `true` by default.
     ///
@@ -3056,7 +3060,7 @@ impl Config {
     pub(crate) fn build_compiler(
         mut self,
         tunables: &mut Tunables,
-        features: &mut WasmFeatures,
+        features: WasmFeatures,
     ) -> Result<(Self, Box<dyn wasmtime_environ::Compiler>)> {
         let target = self.compiler_target();
 
@@ -3211,13 +3215,14 @@ impl Config {
         // `compiler_panicking_wasm_features`.
         if !compiler.supports_wasm_simd() {
             let simd = WasmFeatures::SIMD | WasmFeatures::RELAXED_SIMD;
-            if let Some((name, _)) = (self.enabled_features & simd).iter_names().next() {
+            if let Some((name, _)) = (features & simd).iter_names().next() {
                 bail!(
-                    "the wasm_{} feature is not supported on this compiler configuration",
+                    "the wasm_{} feature is not supported on this compiler \
+                     configuration, enable the target's vector extension or \
+                     disable both simd and relaxed-simd",
                     name.to_lowercase()
                 );
             }
-            features.remove(simd);
         }
 
         Ok((self, compiler))
