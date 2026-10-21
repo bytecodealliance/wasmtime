@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use super::{canonicalize_nan32, canonicalize_nan64, unwrap_2val, unwrap_val};
 use component::wasm_wave::wasm::{
-    DisplayValue, WasmFunc, WasmType, WasmTypeKind, WasmValue, WasmValueError, ensure_type_kind,
+    WasmFunc, WasmType, WasmTypeKind, WasmValue, WasmValueError, ensure_type_kind,
 };
 
 macro_rules! maybe_unwrap_type {
@@ -306,7 +306,7 @@ fn ensure_type_val(ty: &component::Type, val: &component::Val) -> Result<(), Was
     let wrong_value_type = || -> Result<(), WasmValueError> {
         Err(WasmValueError::WrongValueType {
             ty: wasm_wave::wasm::DisplayType(ty).to_string(),
-            val: wasm_wave::wasm::DisplayValue(val).to_string(),
+            val: val.to_wave().unwrap_or_else(|_| format!("{val:?}")),
         })
     };
 
@@ -394,9 +394,7 @@ fn ensure_type_val(ty: &component::Type, val: &component::Val) -> Result<(), Was
             }
         }
         component::Val::Resource(_) => {
-            return Err(WasmValueError::UnsupportedType(
-                DisplayValue(val).to_string(),
-            ));
+            return Err(WasmValueError::UnsupportedType(val.desc().to_string()));
         }
 
         // Any leaf variant type has already had its kind compared above; nothing further to check.

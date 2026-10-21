@@ -688,6 +688,29 @@ fn component_invoke_multiple_run_exports() -> Result<()> {
 
 #[test]
 #[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_invoke_wave_unsupported_result() -> Result<()> {
+    // WAVE can't represent resources, so printing the result of this call
+    // fails with an error.
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--invoke",
+            "f()",
+            "tests/all/cli_tests/component-resource-result.wat",
+        ])
+        .output()?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "bad stderr: {stderr}");
+    assert!(
+        stderr.contains("unsupported value type"),
+        "bad stderr: {stderr}"
+    );
+    assert!(!stderr.contains("panicked"), "bad stderr: {stderr}");
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
 fn component_unknown_imports_default() -> Result<()> {
     let path = "tests/all/cli_tests/component-unknown-imports.wat";
 
