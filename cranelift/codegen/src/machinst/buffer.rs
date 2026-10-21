@@ -381,6 +381,14 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Indicates when a patchable region is currently open, to guard that it's
     /// not possible to nest patchable regions.
     open_patchable: bool,
+    /// Whether constants go to a separate pool instead of islands in the code.
+    separate_constants: bool,
+    /// With `separate_constants`, the constant each constant label stands for.
+    separate_constant_labels: crate::FxHashMap<MachLabel, VCodeConstant>,
+    /// With `separate_constants`, the constants in order of first use.
+    separate_constant_order: SmallVec<[VCodeConstant; 16]>,
+    /// With `separate_constants`, label uses that refer to constants.
+    separate_constant_fixups: SmallVec<[(CodeOffset, VCodeConstant, I::LabelUse); 16]>,
 }
 
 /// Bulk data that is common between `MachBuffer` and
@@ -438,6 +446,35 @@ pub struct MachBufferInner {
     pub(crate) srclocs: SmallVec<[MachSrcLoc; 64]>,
     /// The required alignment of this buffer.
     pub min_alignment: u32,
+    /// With `separate_constant_pool`, the function's constants, kept out of `data`.
+    pub(crate) constant_pool: Vec<u8>,
+    /// Required alignment of `constant_pool`.
+    pub(crate) constant_pool_align: u32,
+    /// References from `data` into `constant_pool`.
+    pub(crate) constant_pool_relocs: Vec<MachConstantReloc>,
+}
+
+/// A reference from code to a constant in a function's separate constant pool
+/// (see the `separate_constant_pool` setting).
+///
+/// It is resolved like a [`MachReloc`] whose target is the constant's address,
+/// except that, as for a label use, the result is added to the bytes already
+/// at `offset`. On x86-64 they hold minus the size of any immediate after the
+/// displacement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub struct MachConstantReloc {
+    /// Offset of the reference in the code.
+    pub offset: CodeOffset,
+    /// The kind of relocation to apply.
+    pub kind: Reloc,
+    /// The addend, as for `MachReloc::addend`.
+    pub addend: Addend,
+    /// Offset of the referenced constant within the function's constant pool.
+    pub constant_offset: u32,
 }
 
 impl<I: VCodeInst> Deref for MachBuffer<I> {
@@ -568,6 +605,9 @@ impl<I: VCodeInst> MachBuffer<I> {
             frame_layout: None,
             srclocs: SmallVec::new(),
             min_alignment: I::function_alignment().minimum,
+            constant_pool: Vec::new(),
+            constant_pool_align: 1,
+            constant_pool_relocs: Vec::new(),
         });
         MachBuffer {
             inner,
@@ -586,7 +626,17 @@ impl<I: VCodeInst> MachBuffer<I> {
             constants: Default::default(),
             used_constants: Default::default(),
             open_patchable: false,
+            separate_constants: false,
+            separate_constant_labels: Default::default(),
+            separate_constant_order: Default::default(),
+            separate_constant_fixups: Default::default(),
         }
+    }
+
+    /// Keep constants out of the code and return them as a separate pool
+    /// with relocations (the `separate_constant_pool` setting).
+    pub fn set_separate_constants(&mut self, enable: bool) {
+        self.separate_constants = enable;
     }
 
     /// Current offset from start of buffer.
@@ -747,6 +797,40 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
+    /// Lays out the separate constant pool and turns constant label uses into
+    /// relocations into it.
+    fn finish_separate_constants(&mut self, constants: &VCodeConstants) {
+        if self.separate_constant_order.is_empty() {
+            return;
+        }
+        let mut offsets = SecondaryMap::<VCodeConstant, u32>::new();
+        let mut pool = Vec::new();
+        let mut pool_align = 1;
+        for &c in self.separate_constant_order.iter() {
+            let data = constants.get(c);
+            let align = data.alignment() as usize;
+            pool_align = pool_align.max(data.alignment());
+            pool.resize(pool.len().next_multiple_of(align), 0);
+            offsets[c] = u32::try_from(pool.len()).unwrap();
+            pool.extend_from_slice(data.as_slice());
+        }
+        let mut relocs = Vec::with_capacity(self.separate_constant_fixups.len());
+        for &(offset, c, kind) in self.separate_constant_fixups.iter() {
+            let (kind, addend) = kind
+                .to_reloc()
+                .unwrap_or_else(|| panic!("no relocation for constant label use {kind:?}"));
+            relocs.push(MachConstantReloc {
+                offset,
+                kind,
+                addend,
+                constant_offset: offsets[c],
+            });
+        }
+        self.inner.constant_pool = pool;
+        self.inner.constant_pool_align = pool_align;
+        self.inner.constant_pool_relocs = relocs;
+    }
+
     /// Returns a label that can be used to refer to the `constant` provided.
     ///
     /// This will automatically defer a new constant to be emitted for
@@ -766,6 +850,13 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
 
         let label = self.get_label();
+        if self.separate_constants {
+            // The label is never bound: its uses become constant pool relocations.
+            self.separate_constant_labels.insert(label, constant);
+            self.separate_constant_order.push(constant);
+            self.constants[constant].upcoming_label = Some(label);
+            return label;
+        }
         trace!(
             "defer constant: eventually emit {size} bytes aligned \
              to {align} at label {label:?}",
@@ -845,6 +936,11 @@ impl<I: VCodeInst> MachBuffer<I> {
             "MachBuffer: use_label_at_offset: offset {} label {:?} kind {:?}",
             offset, label, kind
         );
+
+        if let Some(&constant) = self.separate_constant_labels.get(&label) {
+            self.separate_constant_fixups.push((offset, constant, kind));
+            return;
+        }
 
         // Add the fixup, and update the worst-case island size based on a
         // veneer for this label use.
@@ -1687,6 +1783,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         self.finish_emission_maybe_forcing_veneers(ForceVeneers::No, ctrl_plane);
         self.finish_constants(constants);
+        self.finish_separate_constants(constants);
 
         // Resolve all labels to their offsets.
         let mut relocs = core::mem::take(&mut self.relocs);
@@ -1992,6 +2089,21 @@ impl MachBufferFinalized {
     /// Get the list of external relocations for this code.
     pub fn relocs(&self) -> &[MachReloc] {
         &self.relocs[..]
+    }
+
+    /// The separate constant pool (empty unless `separate_constant_pool` is set).
+    pub fn constant_pool(&self) -> &[u8] {
+        &self.constant_pool[..]
+    }
+
+    /// Required alignment of the separate constant pool.
+    pub fn constant_pool_align(&self) -> u32 {
+        self.constant_pool_align
+    }
+
+    /// References from the code into the separate constant pool.
+    pub fn constant_pool_relocs(&self) -> &[MachConstantReloc] {
+        &self.constant_pool_relocs[..]
     }
 
     /// Get the list of trap records for this code.

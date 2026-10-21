@@ -284,3 +284,78 @@ fn isa_constructor(
     let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags)?;
     Ok(backend.wrapped())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::Context;
+    use crate::binemit::Reloc;
+    use crate::cursor::{Cursor, FuncCursor};
+    use crate::ir::{AbiParam, Function, InstBuilder, Signature, constant::ConstantData, types};
+    use crate::isa::{CallConv, lookup};
+    use crate::machinst::MachConstantReloc;
+    use crate::settings::{Configurable, Flags, builder};
+    use alloc::vec::Vec;
+    use target_lexicon::triple;
+
+    const CONSTANT: [u8; 16] = [
+        0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xf0,
+        0x0f,
+    ];
+
+    fn compile_vconst(separate_constant_pool: bool) -> Context {
+        let mut flags = builder();
+        if separate_constant_pool {
+            flags.enable("separate_constant_pool").unwrap();
+        }
+        let isa = lookup(triple!("x86_64"))
+            .unwrap()
+            .finish(Flags::new(flags))
+            .unwrap();
+
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.returns.push(AbiParam::new(types::I8X16));
+        let mut func = Function::with_name_signature(Default::default(), sig);
+        let block0 = func.dfg.make_block();
+        let constant = func.dfg.constants.insert(ConstantData::from(&CONSTANT[..]));
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(block0);
+        let v0 = pos.ins().vconst(types::I8X16, constant);
+        pos.ins().return_(&[v0]);
+
+        let mut context = Context::for_function(func);
+        context.compile(&*isa, &mut Default::default()).unwrap();
+        context
+    }
+
+    fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+        haystack.windows(needle.len()).any(|w| w == needle)
+    }
+
+    #[test]
+    fn constants_stay_in_code_by_default() {
+        let context = compile_vconst(false);
+        let code = context.compiled_code().unwrap();
+        assert!(contains(code.code_buffer(), &CONSTANT));
+        assert!(code.buffer.constant_pool().is_empty());
+        assert!(code.buffer.constant_pool_relocs().is_empty());
+    }
+
+    #[test]
+    fn separate_constant_pool() {
+        let context = compile_vconst(true);
+        let code = context.compiled_code().unwrap();
+        assert!(!contains(code.code_buffer(), &CONSTANT));
+        assert_eq!(code.buffer.constant_pool(), &CONSTANT);
+        assert_eq!(code.buffer.constant_pool_align(), 16);
+
+        // The load's RIP-relative displacement is left zero for the embedder
+        // to patch.
+        let relocs: Vec<MachConstantReloc> = code.buffer.constant_pool_relocs().to_vec();
+        assert_eq!(relocs.len(), 1);
+        assert_eq!(relocs[0].kind, Reloc::X86PCRel4);
+        assert_eq!(relocs[0].addend, -4);
+        assert_eq!(relocs[0].constant_offset, 0);
+        let disp = relocs[0].offset as usize;
+        assert_eq!(&code.code_buffer()[disp..disp + 4], &[0; 4]);
+    }
+}

@@ -746,6 +746,7 @@ impl<I: VCodeInst> VCode<I> {
         let _tt = timing::vcode_emit();
         let mut buffer = MachBuffer::new();
         buffer.set_log2_min_function_alignment(self.log2_min_function_alignment);
+        buffer.set_separate_constants(flags.separate_constant_pool());
         let mut bb_starts: Vec<Option<CodeOffset>> = vec![];
 
         // The first M MachLabels are reserved for block indices.

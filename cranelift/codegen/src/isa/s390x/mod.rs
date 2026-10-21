@@ -245,6 +245,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         triple,
         setup: s390x_settings::builder(),
         constructor: |triple, shared_flags, builder| {
+            super::check_no_separate_constant_pool(&shared_flags, "s390x")?;
             let isa_flags = s390x_settings::Flags::new(&shared_flags, builder);
             let backend = S390xBackend::new_with_flags(triple, shared_flags, isa_flags);
             Ok(backend.wrapped())

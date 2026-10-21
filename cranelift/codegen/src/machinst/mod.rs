@@ -487,6 +487,23 @@ pub trait MachInstLabelUse: Clone + Copy + Debug + Eq {
     /// This returns `None` if the relocation doesn't have a corresponding
     /// representation for the target architecture.
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self>;
+
+    /// The inverse of `from_reloc`, used for references into a separate
+    /// constant pool (the `separate_constant_pool` setting).
+    ///
+    /// This returns `None` if the label use has no corresponding relocation.
+    fn to_reloc(self) -> Option<(Reloc, Addend)> {
+        None
+    }
+
+    /// Like `from_reloc`, for a reference from code into a separate constant
+    /// pool.
+    ///
+    /// The reference is patched once the pool has been placed, so a backend can
+    /// accept relocations here that `from_reloc` must not turn into label uses.
+    fn from_constant_reloc(reloc: Reloc, addend: Addend) -> Option<Self> {
+        Self::from_reloc(reloc, addend)
+    }
 }
 
 /// Classification of call instruction types for granular analysis.
