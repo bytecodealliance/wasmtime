@@ -1,10 +1,10 @@
-use crate::Trap;
 use crate::prelude::*;
 use crate::runtime::vm::{self, ExportMemory};
 use crate::store::{StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_memory_export;
 #[cfg(feature = "async")]
 use crate::vm::VMStore;
+use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use alloc::sync::Arc;
 use core::any::Any;
@@ -742,6 +742,10 @@ impl Memory {
 /// # Safety
 ///
 /// Wasmtime's compiled code and runtime rely on the following invariants for memory safety.
+/// Note that while we strive to be thorough in this documentation, we do not guarantee that the
+/// following points are exhaustive.
+/// When using a custom memory backend in a security-sensitive context auditing just the external
+/// implementation of this trait is not sufficient.
 ///
 /// - **Valid region.** From creation until the memory is dropped, the first
 /// [`byte_size`] bytes starting at the [`as_ptr`]
