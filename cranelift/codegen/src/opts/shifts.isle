@@ -368,3 +368,9 @@
 
 ;; ((x & M) << k) & M --> (x << k) & M (M = 2^n - 1)
 (rule (simplify (band ty (ishl ty (band ty x (iconst_u ty y)) z) (iconst_u ty y))) (if-let true (u64_eq (u64_and y (u64_wrapping_add y 1)) 0)) (band ty (ishl ty x z) (iconst_u ty y)))
+
+;; ~rotl(~x, k) --> rotl(x, k)
+(rule (simplify (bnot ty (rotl ty (bnot ty x) y))) (rotl ty x y))
+
+;; ~rotr(~x, k) --> rotr(x, k)
+(rule (simplify (bnot ty (rotr ty (bnot ty x) y))) (rotr ty x y))

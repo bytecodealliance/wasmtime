@@ -626,3 +626,52 @@
 (rule (simplify (bor ty (ne ty x (iconst_u cty 0)) (ne ty y (iconst_u cty 0)))) (ne ty (bor cty x y) (all_zero cty)))
 ;; (x == 0) & (y == 0) --> (x | y) == 0
 (rule (simplify (band ty (eq ty x (iconst_u cty 0)) (eq ty y (iconst_u cty 0)))) (eq ty (bor cty x y) (all_zero cty)))
+
+;; (x << 1) == x --> x == 0
+(rule (simplify (eq ty (ishl cty x (iconst_u _ 1)) x)) (eq ty x (all_zero cty)))
+(rule (simplify (eq ty x (ishl cty x (iconst_u _ 1)))) (eq ty x (all_zero cty)))
+
+;; (x >>u 1) == x --> x == 0
+(rule (simplify (eq ty (ushr cty x (iconst_u _ 1)) x)) (eq ty x (all_zero cty)))
+(rule (simplify (eq ty x (ushr cty x (iconst_u _ 1)))) (eq ty x (all_zero cty)))
+
+;; (~x & y) == y --> (y & x) == 0
+(rule (simplify (eq ty (band cty (bnot cty x) y) y)) (eq ty (band cty y x) (all_zero cty)))
+(rule (simplify (eq ty (band cty x (bnot cty y)) x)) (eq ty (band cty x y) (all_zero cty)))
+(rule (simplify (eq ty x (band cty (bnot cty y) x))) (eq ty (band cty x y) (all_zero cty)))
+(rule (simplify (eq ty x (band cty x (bnot cty y)))) (eq ty (band cty x y) (all_zero cty)))
+
+;; umax(x, y) OP 0 --> (x | y) OP 0 (OP = {==, !=})
+(rule (simplify (eq ty (umax cty x y) (all_zero cty))) (eq ty (bor cty x y) (all_zero cty)))
+(rule (simplify (ne ty (umax cty x y) (all_zero cty))) (ne ty (bor cty x y) (all_zero cty)))
+
+;; umax(x, y) OP umin(x, y) --> x OP y (OP = {==, !=})
+(rule (simplify (eq ty (umax cty x y) (umin cty x y))) (eq ty x y))
+(rule (simplify (eq ty (umax cty x y) (umin cty y x))) (eq ty x y))
+(rule (simplify (eq ty (umin cty x y) (umax cty x y))) (eq ty x y))
+(rule (simplify (eq ty (umin cty x y) (umax cty y x))) (eq ty x y))
+(rule (simplify (ne ty (umax cty x y) (umin cty x y))) (ne ty x y))
+(rule (simplify (ne ty (umax cty x y) (umin cty y x))) (ne ty x y))
+(rule (simplify (ne ty (umin cty x y) (umax cty x y))) (ne ty x y))
+(rule (simplify (ne ty (umin cty x y) (umax cty y x))) (ne ty x y))
+
+;; ~x == (~x | y) --> (y & x) == 0
+(rule (simplify (eq ty (bnot cty x) (bor cty (bnot cty x) y))) (eq ty (band cty y x) (all_zero cty)))
+(rule (simplify (eq ty (bnot cty x) (bor cty y (bnot cty x)))) (eq ty (band cty y x) (all_zero cty)))
+(rule (simplify (eq ty (bor cty (bnot cty x) y) (bnot cty x))) (eq ty (band cty y x) (all_zero cty)))
+(rule (simplify (eq ty (bor cty x (bnot cty y)) (bnot cty y))) (eq ty (band cty x y) (all_zero cty)))
+
+;; (c ? x : y) == (c ? y : x) --> x == y
+(rule (simplify (eq ty (select cty x y z) (select cty x z y))) (eq ty y z))
+
+;; (x >=s y) & (y >=s x) --> x == y
+(rule (simplify (band ty (sge ty x @ (value_type cty) y @ (value_type cty)) (sge ty y x))) (eq ty x y))
+(rule (simplify (band ty (sge ty x @ (value_type cty) y @ (value_type cty)) (sle ty x y))) (eq ty x y))
+(rule (simplify (band ty (sle ty x @ (value_type cty) y @ (value_type cty)) (sge ty x y))) (eq ty x y))
+(rule (simplify (band ty (sle ty x @ (value_type cty) y @ (value_type cty)) (sle ty y x))) (eq ty x y))
+
+;; (x >=u y) & (y >=u x) --> x == y
+(rule (simplify (band ty (uge ty x @ (value_type cty) y @ (value_type cty)) (uge ty y x))) (eq ty x y))
+(rule (simplify (band ty (uge ty x @ (value_type cty) y @ (value_type cty)) (ule ty x y))) (eq ty x y))
+(rule (simplify (band ty (ule ty x @ (value_type cty) y @ (value_type cty)) (uge ty x y))) (eq ty x y))
+(rule (simplify (band ty (ule ty x @ (value_type cty) y @ (value_type cty)) (ule ty y x))) (eq ty x y))
