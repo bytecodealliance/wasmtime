@@ -1,0 +1,209 @@
+test compile precise-output
+target x86_64 has_apx
+
+; Folding a load into an NDD instruction. Only ModRM.rm can name memory, so
+; whichever operand ends up there is the one that can absorb a load. For the
+; commutative operations that means a load on the left has to be commuted into
+; ModRM.rm; otherwise APX emits a separate load where the legacy two-operand
+; lowering folds it, and ends up one instruction worse.
+
+; want: rax = [rsi] + rdi, one instruction
+function %add_load_lhs(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = load.i64 v1
+    v3 = iadd v2, v0
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq %rdi, (%rsi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x01, 0x3e, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
+function %add_load_rhs(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = load.i64 v1
+    v3 = iadd v0, v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq %rdi, (%rsi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x01, 0x3e, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
+function %and_load_lhs_i32(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+    v2 = load.i32 v0
+    v3 = band v2, v1
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   andl %esi, (%rdi), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0x7c, 0x18, 0x21, 0x37, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
+function %or_load_lhs(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = load.i64 v1
+    v3 = bor v2, v0
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   orq %rdi, (%rsi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x09, 0x3e, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
+function %xor_load_lhs(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = load.i64 v1
+    v3 = bxor v2, v0
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   xorq %rdi, (%rsi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x31, 0x3e, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
+function %add_load_lhs_imm(i64) -> i64 {
+block0(v0: i64):
+    v1 = load.i64 v0
+    v2 = iconst.i64 5
+    v3 = iadd v1, v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   addq $0x5, (%rdi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x83, 0x07, 0x05, 0x48 ; trap: heap_oob
+;   .byte 0x89, 0xec, 0x5d, 0xc3
+
+function %and_load_lhs_wide_imm(i64) -> i64 {
+block0(v0: i64):
+    v1 = load.i64 v0
+    v2 = iconst.i64 0x1234_5678_9abc
+    v3 = band v1, v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movabsq $0x123456789abc, %rsi
+;   andq %rsi, (%rdi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0x123456789abc, %rsi
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x21, 0x37, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+
+function %xor_load_both(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = load.i64 v0
+    v3 = load.i64 v1
+    v4 = bxor v2, v3
+    return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq (%rdi), %rdi
+;   xorq %rdi, (%rsi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq (%rdi), %rdi ; trap: heap_oob
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x31, 0x3e, 0x48, 0x89 ; trap: heap_oob
+;   .byte 0xec, 0x5d, 0xc3
+

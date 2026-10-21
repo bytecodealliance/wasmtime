@@ -104,5 +104,27 @@ pub fn list() -> Vec<Inst> {
         // the two sources occupy ModRM.reg and ModRM.rm. `addq` is 64-bit so
         // the `W` bit is set (`.w1()`); use `.w0()` for the 32-bit `addl` form.
         inst("addq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x01).r(), _64b & apx),
+        inst("addl", fmt("RVM", [r(r32b), w(r32a), r(rm32)]), evex(L128, Full).map4().w0().nd().op(0x01).r(), _64b & apx),
+        // APX: NDD forms taking an immediate source. These mirror the legacy
+        // `MI` encodings (opcode `0x81` with a full-width immediate, `0x83`
+        // with a sign-extended byte) but, because `ND = 1` reassigns the
+        // destination to `vvvv`, the ModRM.rm operand becomes a pure *source*
+        // rather than a read-modify-write operand. Without these the lowering
+        // has nowhere to put a constant and would be forced to spill it to a
+        // constant pool and load it back.
+        inst("addq", fmt("VMI_SXL", [w(r64a), r(rm64), sxq(imm32)]), evex(L128, Full).map4().w1().nd().op(0x81).digit(0), _64b & apx),
+        inst("addl", fmt("VMI", [w(r32a), r(rm32), r(imm32)]), evex(L128, Full).map4().w0().nd().op(0x81).digit(0), _64b & apx),
+        inst("addq", fmt("VMI_SXB", [w(r64a), r(rm64), sxq(imm8)]), evex(L128, Full).map4().w1().nd().op(0x83).digit(0).ib(), _64b & apx),
+        inst("addl", fmt("VMI_SXB", [w(r32a), r(rm32), sxl(imm8)]), evex(L128, Full).map4().w0().nd().op(0x83).digit(0).ib(), _64b & apx),
+        // APX: the same treatment for `ADC`, which carries the high half of an
+        // `i128` addition. `adc` commutes like `add`, so the `RVM` form alone
+        // covers the register and memory sources; `digit(2)` selects `adc` out
+        // of the group-1 immediate opcodes.
+        inst("adcq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x11).r(), _64b & apx),
+        inst("adcl", fmt("RVM", [r(r32b), w(r32a), r(rm32)]), evex(L128, Full).map4().w0().nd().op(0x11).r(), _64b & apx),
+        inst("adcq", fmt("VMI_SXL", [w(r64a), r(rm64), sxq(imm32)]), evex(L128, Full).map4().w1().nd().op(0x81).digit(2), _64b & apx),
+        inst("adcl", fmt("VMI", [w(r32a), r(rm32), r(imm32)]), evex(L128, Full).map4().w0().nd().op(0x81).digit(2), _64b & apx),
+        inst("adcq", fmt("VMI_SXB", [w(r64a), r(rm64), sxq(imm8)]), evex(L128, Full).map4().w1().nd().op(0x83).digit(2).ib(), _64b & apx),
+        inst("adcl", fmt("VMI_SXB", [w(r32a), r(rm32), sxl(imm8)]), evex(L128, Full).map4().w0().nd().op(0x83).digit(2).ib(), _64b & apx),
     ]
 }

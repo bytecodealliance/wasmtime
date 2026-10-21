@@ -23,6 +23,17 @@ pub fn list() -> Vec<Inst> {
         inst("imulw", fmt("RMI", [w(r16), r(rm16), r(imm16)]), rex([0x66, 0x69]).iw(), _64b | compat),
         inst("imull", fmt("RMI", [w(r32), r(rm32), r(imm32)]), rex(0x69).id(), _64b | compat),
         inst("imulq", fmt("RMI_SXL", [w(r64), r(rm64), sxq(imm32)]), rex(0x69).w().id(), _64b),
+        // APX: a "new data destination" form of the two-operand multiply. The
+        // immediate forms above already write to a separate register, so only
+        // this one gains anything.
+        //
+        // Unlike the group-1 arithmetic, the legacy opcode here is an RM form:
+        // ModRM.reg is the destination, so the NDD operand order is
+        // `ndd, reg, rm` rather than `ndd, rm, reg`, which is why this is MRV.
+        // Note also that `0xAF` lives in legacy map 1, but the promoted form
+        // moves to map 4 like every other NDD instruction.
+        inst("imull", fmt("MRV", [r(rm32), r(r32b), w(r32a)]), evex(L128, Full).map4().w0().nd().op(0xAF).r(), _64b & apx),
+        inst("imulq", fmt("MRV", [r(rm64), r(r64b), w(r64a)]), evex(L128, Full).map4().w1().nd().op(0xAF).r(), _64b & apx),
         // MULX, a BMI2 extension
         //
         // Note that these have custom visitors for regalloc to handle the case

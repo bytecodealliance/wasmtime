@@ -1941,6 +1941,19 @@
 ;; Helper for creating raw `add` instructions.
 (decl x64_add_raw (Type Gpr GprMemImm) AssemblerOutputs)
 
+;; With APX the result can go to a third register. `x64_add_ndd` already covers
+;; the plain `iadd` lowering; these rules cover the paths that reach the raw
+;; constructor instead, which is how the halves of an `i128` and the
+;; overflow-checked forms are built. `src1` moves into ModRM.rm for the
+;; immediate forms and into ModRM.reg for the rest, which keeps `src2` in
+;; ModRM.rm where a memory operand can still be encoded.
+(rule 5 (x64_add_raw $I32 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_addl_vmi_sxb_raw (gpr_to_gpr_mem_32 src1) src2))
+(rule 5 (x64_add_raw $I64 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_addq_vmi_sxb_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 4 (x64_add_raw $I32 src1 (is_imm32 src2))  (if-let true (use_apx)) (x64_addl_vmi_raw     (gpr_to_gpr_mem_32 src1) src2))
+(rule 4 (x64_add_raw $I64 src1 (is_simm32 src2)) (if-let true (use_apx)) (x64_addq_vmi_sxl_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 3 (x64_add_raw ty @ $I32 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_addl_rvm_raw src1 (gpr_mem_32_for_ty ty src2)))
+(rule 3 (x64_add_raw ty @ $I64 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_addq_rvm_raw src1 (gpr_mem_64_for_ty ty src2)))
+
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
 (rule 2 (x64_add_raw $I32 src1 (is_simm8 src2))   (x64_addl_mi_sxb_raw src1 src2))
 (rule 2 (x64_add_raw $I64 src1 (is_simm8 src2))   (x64_addq_mi_sxb_raw src1 src2))
@@ -1981,6 +1994,10 @@
 ;; variant of this instruction. As with `add`, we match 8-bit immediates first;
 ;; this allows a smaller instruction encoding.
 (decl x64_adc_raw (Type Gpr GprMemImm) AssemblerOutputs)
+;; See `x64_add_raw` for the APX rules; `adc` commutes the same way.
+(rule 5 (x64_adc_raw $I64 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_adcq_vmi_sxb_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 4 (x64_adc_raw $I64 src1 (is_simm32 src2)) (if-let true (use_apx)) (x64_adcq_vmi_sxl_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 3 (x64_adc_raw ty @ $I64 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_adcq_rvm_raw src1 (gpr_mem_64_for_ty ty src2)))
 (rule 2 (x64_adc_raw $I64 src1 (is_simm8 src2))   (x64_adcq_mi_sxb_raw src1 src2))
 (rule 1 (x64_adc_raw $I64 src1 (is_simm32 src2))  (x64_adcq_mi_sxl_raw src1 src2))
 (rule 0 (x64_adc_raw ty @ $I64 src1 (is_gpr_mem src2)) (x64_adcq_rm_raw src1 (gpr_mem_64_for_ty ty src2)))
@@ -1997,6 +2014,16 @@
 
 ;; Helper for emitting raw `sub` instructions.
 (decl x64_sub_raw (Type Gpr GprMemImm) AssemblerOutputs)
+
+;; See `x64_add_raw` for the APX rules. `sub` does not commute, so the
+;; register/memory form is the `MRV` one, which computes `reg - rm` and so
+;; leaves the subtrahend in ModRM.rm.
+(rule 6 (x64_sub_raw $I32 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_subl_vmi_sxb_raw (gpr_to_gpr_mem_32 src1) src2))
+(rule 6 (x64_sub_raw $I64 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_subq_vmi_sxb_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 5 (x64_sub_raw $I32 src1 (is_imm32 src2))  (if-let true (use_apx)) (x64_subl_vmi_raw     (gpr_to_gpr_mem_32 src1) src2))
+(rule 5 (x64_sub_raw $I64 src1 (is_simm32 src2)) (if-let true (use_apx)) (x64_subq_vmi_sxl_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 4 (x64_sub_raw ty @ $I32 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_subl_mrv_raw (gpr_mem_32_for_ty ty src2) src1))
+(rule 4 (x64_sub_raw ty @ $I64 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_subq_mrv_raw (gpr_mem_64_for_ty ty src2) src1))
 
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
 (rule 3 (x64_sub_raw $I32 src1 (is_simm8 src2))   (x64_subl_mi_sxb_raw src1 src2))
@@ -2036,6 +2063,14 @@
 ;; Helper for creating raw `sbb` instructions; Cranelift only uses the 64-bit
 ;; variant of this instruction.
 (decl x64_sbb_raw (Type Gpr GprMemImm) AssemblerOutputs)
+
+;; See `x64_sub_raw` for the APX rules; `sbb` borrows in the same direction.
+(rule 5 (x64_sbb_raw $I32 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_sbbl_vmi_sxb_raw (gpr_to_gpr_mem_32 src1) src2))
+(rule 5 (x64_sbb_raw $I64 src1 (is_simm8 src2))  (if-let true (use_apx)) (x64_sbbq_vmi_sxb_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 4 (x64_sbb_raw $I32 src1 (is_imm32 src2))  (if-let true (use_apx)) (x64_sbbl_vmi_raw     (gpr_to_gpr_mem_32 src1) src2))
+(rule 4 (x64_sbb_raw $I64 src1 (is_simm32 src2)) (if-let true (use_apx)) (x64_sbbq_vmi_sxl_raw (gpr_to_gpr_mem_64 src1) src2))
+(rule 3 (x64_sbb_raw ty @ $I32 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_sbbl_mrv_raw (gpr_mem_32_for_ty ty src2) src1))
+(rule 3 (x64_sbb_raw ty @ $I64 src1 (is_gpr_mem src2)) (if-let true (use_apx)) (x64_sbbq_mrv_raw (gpr_mem_64_for_ty ty src2) src1))
 
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
 (rule 2 (x64_sbb_raw $I32 src1 (is_simm8 src2))   (x64_sbbl_mi_sxb_raw src1 src2))
@@ -2127,6 +2162,16 @@
 (rule (x64_imul ty @ $I16 src1 src2) (x64_imulw_rm src1 (gpr_mem_16_for_ty ty src2)))
 (rule (x64_imul ty @ $I32 src1 src2) (x64_imull_rm src1 (gpr_mem_32_for_ty ty src2)))
 (rule (x64_imul ty @ $I64 src1 src2) (x64_imulq_rm src1 (gpr_mem_64_for_ty ty src2)))
+;; With APX the product can go to a third register, which saves the move the
+;; two-operand forms above need. `src2` keeps its place in ModRM.rm so that a
+;; sinkable load can still be folded there. ($I16 is left alone: it would have
+;; to widen to the 32-bit encoding, and a 16-bit load cannot come along.)
+(rule 1 (x64_imul ty @ $I32 src1 src2)
+        (if-let true (use_apx))
+        (x64_imull_mrv (gpr_mem_32_for_ty ty src2) src1))
+(rule 1 (x64_imul ty @ $I64 src1 src2)
+        (if-let true (use_apx))
+        (x64_imulq_mrv (gpr_mem_64_for_ty ty src2) src1))
 
 ;; Helper for creating `imul` instructions with an immediate operand. Match
 ;; 8-bit immediates first to allow a smaller instruction encoding.
@@ -2249,6 +2294,161 @@
 (rule (x64_andn ty @ $I32 src1 src2) (x64_andnl_rvm src1 (gpr_mem_32_for_ty ty src2)))
 (rule (x64_andn ty @ $I64 src1 src2) (x64_andnq_rvm src1 (gpr_mem_64_for_ty ty src2)))
 
+;;;; APX NDD ("new data destination") constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; These mirror the legacy helpers above, but select the APX three-operand
+;; encodings, which write their result to a fresh register instead of
+;; overwriting one of their sources. Callers must gate them on `use_apx`.
+;;
+;; Every one of them computes `src1 <op> src2` and ends with a fallback to the
+;; corresponding legacy helper, so they are safe to apply unconditionally: a
+;; type with no NDD encoding simply produces the code it would have produced
+;; without APX.
+;;
+;; The `vmi` rules exist so that a constant operand can stay inside the
+;; instruction. Without them a constant would reach the `Value`-to-`GprMem`
+;; conversion, which parks it in a constant pool and loads it back at run time;
+;; the same hazard is why constants that are too wide for an immediate are
+;; explicitly steered into a register below.
+;;
+;; Note the operand placement: the APX NDD form of `sub` computes
+;; `dest = rm - reg`, so for `sub` the *minuend* is ModRM.rm. The commutative
+;; operations put `src2` in ModRM.rm instead, which keeps a sinkable load on
+;; the right-hand side foldable exactly as it is in the legacy lowering.
+;;
+;; As with `x64_add_break_deps` above, `i8`/`i16` use the 32-bit encoding: a
+;; 32-bit write zero-extends and so breaks the false dependency on the
+;; destination's previous value, whereas an 8/16-bit write merges with it. The
+;; upper bits of a narrow result are don't-care.
+
+(decl x64_add_ndd (Type Value Value) Gpr)
+;; `add` commutes, so a constant on either side can feed the immediate slot.
+(rule 7 (x64_add_ndd $I64 (i8_from_iconst x) y)  (x64_addq_vmi_sxb y x))
+(rule 7 (x64_add_ndd $I32 (i8_from_iconst x) y)  (x64_addl_vmi_sxb y x))
+(rule 6 (x64_add_ndd $I64 (i32_from_iconst x) y) (x64_addq_vmi_sxl y x))
+(rule 6 (x64_add_ndd $I32 (u32_from_iconst x) y) (x64_addl_vmi y x))
+(rule 5 (x64_add_ndd $I64 x (i8_from_iconst y))  (x64_addq_vmi_sxb x y))
+(rule 5 (x64_add_ndd $I32 x (i8_from_iconst y))  (x64_addl_vmi_sxb x y))
+(rule 5 (x64_add_ndd $I16 x (i8_from_iconst y))  (x64_addl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 5 (x64_add_ndd $I8  x (i8_from_iconst y))  (x64_addl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 4 (x64_add_ndd $I64 x (i32_from_iconst y)) (x64_addq_vmi_sxl x y))
+(rule 4 (x64_add_ndd $I32 x (u32_from_iconst y)) (x64_addl_vmi x y))
+;; Only the ModRM.rm operand can name memory, and the rules below put `src1`
+;; there only after forcing it through `put_in_gpr`. A sinkable load on the left
+;; would therefore become a separate load, where the legacy lowering folds it
+;; into the arithmetic. Commute instead so the load lands in ModRM.rm and sinks.
+;; The immediate rules above still win, which is what we want: with a constant
+;; on the other side the load sinks *and* the constant stays in the instruction.
+(rule 3 (x64_add_ndd $I64 (sinkable_load_64 x) y) (x64_addq_rvm (put_in_gpr y) (sink_load_64_to_gpr_mem_64 x)))
+(rule 3 (x64_add_ndd $I32 (sinkable_load_32 x) y) (x64_addl_rvm (put_in_gpr y) (sink_load_32_to_gpr_mem_32 x)))
+;; An `i64` constant too wide for the sign-extended `imm32` form above would be
+;; spilled to a constant pool by the `Value`-to-`GprMem` conversion; materialise
+;; it into a register instead. (`i8`/`i16`/`i32` need no such guard: the former
+;; two route both operands through `put_in_gpr`, and every `i32` constant fits
+;; the immediate form.)
+(rule 2 (x64_add_ndd $I64 x y @ (i64_from_iconst _)) (x64_addq_rvm (put_in_gpr x) (gpr_to_gpr_mem_64 (put_in_gpr y))))
+(rule 1 (x64_add_ndd $I64 x y) (x64_addq_rvm (put_in_gpr x) y))
+(rule 1 (x64_add_ndd $I32 x y) (x64_addl_rvm (put_in_gpr x) y))
+(rule 1 (x64_add_ndd $I16 x y) (x64_addl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 1 (x64_add_ndd $I8  x y) (x64_addl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 0 (x64_add_ndd ty x y) (x64_add ty (put_in_gpr x) y))
+
+(decl x64_sub_ndd (Type Value Value) Gpr)
+;; Only ModRM.rm can name a memory operand, and the `rm - reg` encoding used
+;; below holds the *minuend* there. A subtrahend that is a sinkable load
+;; therefore needs the other direction, `reg - rm`; without it the load has to
+;; be materialised into a register first, which is strictly worse than the
+;; two-operand `sub` the legacy lowering would have emitted. (`i8`/`i16` are
+;; absent on purpose: they widen to the 32-bit encoding below, and a narrow
+;; load cannot be folded into a 32-bit memory operand without reading too far.)
+(rule 6 (x64_sub_ndd $I64 x (sinkable_load_64 y)) (x64_subq_mrv (sink_load_64_to_gpr_mem_64 y) (put_in_gpr x)))
+(rule 6 (x64_sub_ndd $I32 x (sinkable_load_32 y)) (x64_subl_mrv (sink_load_32_to_gpr_mem_32 y) (put_in_gpr x)))
+(rule 5 (x64_sub_ndd $I64 x (i8_from_iconst y))  (x64_subq_vmi_sxb x y))
+(rule 5 (x64_sub_ndd $I32 x (i8_from_iconst y))  (x64_subl_vmi_sxb x y))
+(rule 5 (x64_sub_ndd $I16 x (i8_from_iconst y))  (x64_subl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 5 (x64_sub_ndd $I8  x (i8_from_iconst y))  (x64_subl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 4 (x64_sub_ndd $I64 x (i32_from_iconst y)) (x64_subq_vmi_sxl x y))
+(rule 4 (x64_sub_ndd $I32 x (u32_from_iconst y)) (x64_subl_vmi x y))
+;; `sub` does not commute, so the minuend has to stay in ModRM.rm. A constant
+;; minuend therefore cannot be moved into the immediate slot; materialise it
+;; into a register rather than letting it become a constant-pool load.
+(rule 3 (x64_sub_ndd $I64 x @ (i64_from_iconst _) y) (x64_subq_rvm (put_in_gpr y) (gpr_to_gpr_mem_64 (put_in_gpr x))))
+(rule 3 (x64_sub_ndd $I32 x @ (i64_from_iconst _) y) (x64_subl_rvm (put_in_gpr y) (gpr_to_gpr_mem_32 (put_in_gpr x))))
+(rule 2 (x64_sub_ndd $I64 x y) (x64_subq_rvm (put_in_gpr y) x))
+(rule 2 (x64_sub_ndd $I32 x y) (x64_subl_rvm (put_in_gpr y) x))
+(rule 2 (x64_sub_ndd $I16 x y) (x64_subl_rvm (put_in_gpr y) (gpr_to_gpr_mem_32 (put_in_gpr x))))
+(rule 2 (x64_sub_ndd $I8  x y) (x64_subl_rvm (put_in_gpr y) (gpr_to_gpr_mem_32 (put_in_gpr x))))
+(rule 0 (x64_sub_ndd ty x y) (x64_sub ty (put_in_gpr x) y))
+
+(decl x64_and_ndd (Type Value Value) Gpr)
+;; `and` commutes; see `x64_add_ndd`.
+(rule 7 (x64_and_ndd $I64 (i8_from_iconst x) y)  (x64_andq_vmi_sxb y x))
+(rule 7 (x64_and_ndd $I32 (i8_from_iconst x) y)  (x64_andl_vmi_sxb y x))
+(rule 6 (x64_and_ndd $I64 (i32_from_iconst x) y) (x64_andq_vmi_sxl y x))
+(rule 6 (x64_and_ndd $I32 (u32_from_iconst x) y) (x64_andl_vmi y x))
+(rule 5 (x64_and_ndd $I64 x (i8_from_iconst y))  (x64_andq_vmi_sxb x y))
+(rule 5 (x64_and_ndd $I32 x (i8_from_iconst y))  (x64_andl_vmi_sxb x y))
+(rule 5 (x64_and_ndd $I16 x (i8_from_iconst y))  (x64_andl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 5 (x64_and_ndd $I8  x (i8_from_iconst y))  (x64_andl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 4 (x64_and_ndd $I64 x (i32_from_iconst y)) (x64_andq_vmi_sxl x y))
+(rule 4 (x64_and_ndd $I32 x (u32_from_iconst y)) (x64_andl_vmi x y))
+;; Commute a sinkable load into ModRM.rm; see `x64_add_ndd`.
+(rule 3 (x64_and_ndd $I64 (sinkable_load_64 x) y) (x64_andq_rvm (put_in_gpr y) (sink_load_64_to_gpr_mem_64 x)))
+(rule 3 (x64_and_ndd $I32 (sinkable_load_32 x) y) (x64_andl_rvm (put_in_gpr y) (sink_load_32_to_gpr_mem_32 x)))
+;; Keep wide constants out of ModRM.rm; see `x64_add_ndd`.
+(rule 2 (x64_and_ndd $I64 x y @ (i64_from_iconst _)) (x64_andq_rvm (put_in_gpr x) (gpr_to_gpr_mem_64 (put_in_gpr y))))
+(rule 1 (x64_and_ndd $I64 x y) (x64_andq_rvm (put_in_gpr x) y))
+(rule 1 (x64_and_ndd $I32 x y) (x64_andl_rvm (put_in_gpr x) y))
+(rule 1 (x64_and_ndd $I16 x y) (x64_andl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 1 (x64_and_ndd $I8  x y) (x64_andl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 0 (x64_and_ndd ty x y) (x64_and ty (put_in_gpr x) y))
+
+(decl x64_or_ndd (Type Value Value) Gpr)
+;; `or` commutes; see `x64_add_ndd`.
+(rule 7 (x64_or_ndd $I64 (i8_from_iconst x) y)  (x64_orq_vmi_sxb y x))
+(rule 7 (x64_or_ndd $I32 (i8_from_iconst x) y)  (x64_orl_vmi_sxb y x))
+(rule 6 (x64_or_ndd $I64 (i32_from_iconst x) y) (x64_orq_vmi_sxl y x))
+(rule 6 (x64_or_ndd $I32 (u32_from_iconst x) y) (x64_orl_vmi y x))
+(rule 5 (x64_or_ndd $I64 x (i8_from_iconst y))  (x64_orq_vmi_sxb x y))
+(rule 5 (x64_or_ndd $I32 x (i8_from_iconst y))  (x64_orl_vmi_sxb x y))
+(rule 5 (x64_or_ndd $I16 x (i8_from_iconst y))  (x64_orl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 5 (x64_or_ndd $I8  x (i8_from_iconst y))  (x64_orl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 4 (x64_or_ndd $I64 x (i32_from_iconst y)) (x64_orq_vmi_sxl x y))
+(rule 4 (x64_or_ndd $I32 x (u32_from_iconst y)) (x64_orl_vmi x y))
+;; Commute a sinkable load into ModRM.rm; see `x64_add_ndd`.
+(rule 3 (x64_or_ndd $I64 (sinkable_load_64 x) y) (x64_orq_rvm (put_in_gpr y) (sink_load_64_to_gpr_mem_64 x)))
+(rule 3 (x64_or_ndd $I32 (sinkable_load_32 x) y) (x64_orl_rvm (put_in_gpr y) (sink_load_32_to_gpr_mem_32 x)))
+;; Keep wide constants out of ModRM.rm; see `x64_add_ndd`.
+(rule 2 (x64_or_ndd $I64 x y @ (i64_from_iconst _)) (x64_orq_rvm (put_in_gpr x) (gpr_to_gpr_mem_64 (put_in_gpr y))))
+(rule 1 (x64_or_ndd $I64 x y) (x64_orq_rvm (put_in_gpr x) y))
+(rule 1 (x64_or_ndd $I32 x y) (x64_orl_rvm (put_in_gpr x) y))
+(rule 1 (x64_or_ndd $I16 x y) (x64_orl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 1 (x64_or_ndd $I8  x y) (x64_orl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 0 (x64_or_ndd ty x y) (x64_or ty (put_in_gpr x) y))
+
+(decl x64_xor_ndd (Type Value Value) Gpr)
+;; `xor` commutes; see `x64_add_ndd`.
+(rule 7 (x64_xor_ndd $I64 (i8_from_iconst x) y)  (x64_xorq_vmi_sxb y x))
+(rule 7 (x64_xor_ndd $I32 (i8_from_iconst x) y)  (x64_xorl_vmi_sxb y x))
+(rule 6 (x64_xor_ndd $I64 (i32_from_iconst x) y) (x64_xorq_vmi_sxl y x))
+(rule 6 (x64_xor_ndd $I32 (u32_from_iconst x) y) (x64_xorl_vmi y x))
+(rule 5 (x64_xor_ndd $I64 x (i8_from_iconst y))  (x64_xorq_vmi_sxb x y))
+(rule 5 (x64_xor_ndd $I32 x (i8_from_iconst y))  (x64_xorl_vmi_sxb x y))
+(rule 5 (x64_xor_ndd $I16 x (i8_from_iconst y))  (x64_xorl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 5 (x64_xor_ndd $I8  x (i8_from_iconst y))  (x64_xorl_vmi_sxb (gpr_to_gpr_mem_32 (put_in_gpr x)) y))
+(rule 4 (x64_xor_ndd $I64 x (i32_from_iconst y)) (x64_xorq_vmi_sxl x y))
+(rule 4 (x64_xor_ndd $I32 x (u32_from_iconst y)) (x64_xorl_vmi x y))
+;; Commute a sinkable load into ModRM.rm; see `x64_add_ndd`.
+(rule 3 (x64_xor_ndd $I64 (sinkable_load_64 x) y) (x64_xorq_rvm (put_in_gpr y) (sink_load_64_to_gpr_mem_64 x)))
+(rule 3 (x64_xor_ndd $I32 (sinkable_load_32 x) y) (x64_xorl_rvm (put_in_gpr y) (sink_load_32_to_gpr_mem_32 x)))
+;; Keep wide constants out of ModRM.rm; see `x64_add_ndd`.
+(rule 2 (x64_xor_ndd $I64 x y @ (i64_from_iconst _)) (x64_xorq_rvm (put_in_gpr x) (gpr_to_gpr_mem_64 (put_in_gpr y))))
+(rule 1 (x64_xor_ndd $I64 x y) (x64_xorq_rvm (put_in_gpr x) y))
+(rule 1 (x64_xor_ndd $I32 x y) (x64_xorl_rvm (put_in_gpr x) y))
+(rule 1 (x64_xor_ndd $I16 x y) (x64_xorl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 1 (x64_xor_ndd $I8  x y) (x64_xorl_rvm (put_in_gpr x) (gpr_to_gpr_mem_32 (put_in_gpr y))))
+(rule 0 (x64_xor_ndd ty x y) (x64_xor ty (put_in_gpr x) y))
+
 ;; Helper for emitting immediates with an `i64` value. Note that
 ;; integer constants in ISLE are always parsed as `i128`s; this enables
 ;; negative numbers to be used as immediates.
@@ -2327,6 +2527,16 @@
 (rule 2 (x64_rotl (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
         (if-let true (has_bmi2))
         (x64_rorx ty src (u8_wrapping_sub (ty_bits ty) imm)))
+;; With APX the destination can be a third register, which removes the move the
+;; rules above need to preserve `src1`. Only the variable-amount case is taken:
+;; a rotate by an immediate is already handled by `rorx` just above, which is no
+;; worse and does not write flags. The amount still has to be in `cl`.
+(rule 3 (x64_rotl $I32 src1 (Imm8Gpr.Gpr src2))
+        (if-let true (use_apx))
+        (x64_roll_vmc (gpr_to_gpr_mem_32 src1) src2))
+(rule 3 (x64_rotl $I64 src1 (Imm8Gpr.Gpr src2))
+        (if-let true (use_apx))
+        (x64_rolq_vmc (gpr_to_gpr_mem_64 src1) src2))
 
 ;; Helper for creating `rotr` instructions.
 (decl x64_rotr (Type Gpr Imm8Gpr) Gpr)
@@ -2345,6 +2555,13 @@
 (rule 2 (x64_rotr (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
         (if-let true (has_bmi2))
         (x64_rorx ty src imm))
+;; see `x64_rotl` for why only the variable-amount case is taken here
+(rule 3 (x64_rotr $I32 src1 (Imm8Gpr.Gpr src2))
+        (if-let true (use_apx))
+        (x64_rorl_vmc (gpr_to_gpr_mem_32 src1) src2))
+(rule 3 (x64_rotr $I64 src1 (Imm8Gpr.Gpr src2))
+        (if-let true (use_apx))
+        (x64_rorq_vmc (gpr_to_gpr_mem_64 src1) src2))
 
 ;; Helper for creating `shl` instructions.
 (spec (x64_shl ty src amt)
@@ -2394,6 +2611,18 @@
 (rule 1 (x64_shl (ty_32_or_64 ty) src1 (Imm8Gpr.Gpr src2))
         (if-let true (has_bmi2))
         (x64_shlx ty src1 src2))
+;; With APX the destination can be a third register, which removes the move the
+;; destructive rules above need to preserve `src1`. Only the immediate case is
+;; taken: `shlx` above already handles a register amount, and handles it better
+;; since it is not restricted to `cl`. That leaves a register amount lowered
+;; destructively if APX is enabled without BMI2, which is not a configuration
+;; any real CPU presents.
+(rule 3 (x64_shl $I32 src1 (Imm8Gpr.Imm8 src2))
+        (if-let true (use_apx))
+        (x64_shll_vmi (gpr_to_gpr_mem_32 src1) src2))
+(rule 3 (x64_shl $I64 src1 (Imm8Gpr.Imm8 src2))
+        (if-let true (use_apx))
+        (x64_shlq_vmi (gpr_to_gpr_mem_64 src1) src2))
 
 ;; Helper for creating logical shift-right instructions.
 (decl x64_shr (Type Gpr Imm8Gpr) Gpr)
@@ -2413,6 +2642,13 @@
 (rule 1 (x64_shr (ty_32_or_64 ty) src1 (Imm8Gpr.Gpr src2))
         (if-let true (has_bmi2))
         (x64_shrx ty src1 src2))
+;; see `x64_shl` for why only the immediate case is taken here
+(rule 3 (x64_shr $I32 src1 (Imm8Gpr.Imm8 src2))
+        (if-let true (use_apx))
+        (x64_shrl_vmi (gpr_to_gpr_mem_32 src1) src2))
+(rule 3 (x64_shr $I64 src1 (Imm8Gpr.Imm8 src2))
+        (if-let true (use_apx))
+        (x64_shrq_vmi (gpr_to_gpr_mem_64 src1) src2))
 
 ;; Helper for creating arithmetic shift-right instructions.
 (decl x64_sar (Type Gpr Imm8Gpr) Gpr)
@@ -2432,6 +2668,13 @@
 (rule 1 (x64_sar (ty_32_or_64 ty) src1 (Imm8Gpr.Gpr src2))
         (if-let true (has_bmi2))
         (x64_sarx ty src1 src2))
+;; see `x64_shl` for why only the immediate case is taken here
+(rule 3 (x64_sar $I32 src1 (Imm8Gpr.Imm8 src2))
+        (if-let true (use_apx))
+        (x64_sarl_vmi (gpr_to_gpr_mem_32 src1) src2))
+(rule 3 (x64_sar $I64 src1 (Imm8Gpr.Imm8 src2))
+        (if-let true (use_apx))
+        (x64_sarq_vmi (gpr_to_gpr_mem_64 src1) src2))
 
 ;; Helper for creating `shld` instructions.
 (decl x64_shld (Type Gpr Gpr u8) Gpr)
@@ -2439,6 +2682,17 @@
 (rule (x64_shld $I16 src1 src2 amt) (x64_shldw_mri src1 src2 amt))
 (rule (x64_shld $I32 src1 src2 amt) (x64_shldl_mri src1 src2 amt))
 (rule (x64_shld $I64 src1 src2 amt) (x64_shldq_mri src1 src2 amt))
+
+;; With APX the result can go to a third register, which removes the move the
+;; rules above need to preserve `src1`. ($I16 is left alone: a 16-bit NDD form
+;; would need the operand-size prefix, and the lowering is rare enough there not
+;; to be worth a second encoding.)
+(rule 1 (x64_shld $I32 src1 src2 amt)
+        (if-let true (use_apx))
+        (x64_shldl_rvmi src2 (gpr_to_gpr_mem_32 src1) amt))
+(rule 1 (x64_shld $I64 src1 src2 amt)
+        (if-let true (use_apx))
+        (x64_shldq_rvmi src2 (gpr_to_gpr_mem_64 src1) amt))
 
 ;; Helper for creating zeroing-of-high-bits instructions bzhi
 (decl x64_bzhi (Type GprMem Gpr) Gpr)
@@ -2545,6 +2799,47 @@
 (rule 1 (cmove ty @ $I64 (CC.NLE) c a) (x64_cmovgq_rm  a (gpr_mem_64_for_ty ty c))) ;; nle ==  g
 (rule 1 (cmove ty @ $I64 (CC.P)   c a) (x64_cmovpq_rm  a (gpr_mem_64_for_ty ty c)))
 (rule 1 (cmove ty @ $I64 (CC.NP)  c a) (x64_cmovnpq_rm a (gpr_mem_64_for_ty ty c)))
+
+;; With APX the result can go to a third register. The rules above have to
+;; receive `a` in the register they write, so a `select` whose "else" value is
+;; live afterwards pays for a move; these do not. `c` keeps its place in ModRM.rm
+;; so that a sinkable load still folds there.
+;;
+;; The NDD operand order is `dst, reg, rm` and the move is `dst = cc ? rm : reg`,
+;; which is why `a` (the "else" value, previously the read-write destination)
+;; becomes the second argument.
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.O)   c a) (if-let true (use_apx)) (x64_cmovol_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NO)  c a) (if-let true (use_apx)) (x64_cmovnol_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.B)   c a) (if-let true (use_apx)) (x64_cmovbl_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NB)  c a) (if-let true (use_apx)) (x64_cmovael_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.Z)   c a) (if-let true (use_apx)) (x64_cmovel_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NZ)  c a) (if-let true (use_apx)) (x64_cmovnel_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.BE)  c a) (if-let true (use_apx)) (x64_cmovbel_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NBE) c a) (if-let true (use_apx)) (x64_cmoval_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.S)   c a) (if-let true (use_apx)) (x64_cmovsl_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NS)  c a) (if-let true (use_apx)) (x64_cmovnsl_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.L)   c a) (if-let true (use_apx)) (x64_cmovll_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NL)  c a) (if-let true (use_apx)) (x64_cmovgel_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.LE)  c a) (if-let true (use_apx)) (x64_cmovlel_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NLE) c a) (if-let true (use_apx)) (x64_cmovgl_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.P)   c a) (if-let true (use_apx)) (x64_cmovpl_mrv  (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 2 (cmove ty @ (fits_in_32 _) (CC.NP)  c a) (if-let true (use_apx)) (x64_cmovnpl_mrv (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.O)   c a) (if-let true (use_apx)) (x64_cmovoq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NO)  c a) (if-let true (use_apx)) (x64_cmovnoq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.B)   c a) (if-let true (use_apx)) (x64_cmovbq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NB)  c a) (if-let true (use_apx)) (x64_cmovaeq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.Z)   c a) (if-let true (use_apx)) (x64_cmoveq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NZ)  c a) (if-let true (use_apx)) (x64_cmovneq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.BE)  c a) (if-let true (use_apx)) (x64_cmovbeq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NBE) c a) (if-let true (use_apx)) (x64_cmovaq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.S)   c a) (if-let true (use_apx)) (x64_cmovsq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NS)  c a) (if-let true (use_apx)) (x64_cmovnsq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.L)   c a) (if-let true (use_apx)) (x64_cmovlq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NL)  c a) (if-let true (use_apx)) (x64_cmovgeq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.LE)  c a) (if-let true (use_apx)) (x64_cmovleq_mrv (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NLE) c a) (if-let true (use_apx)) (x64_cmovgq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.P)   c a) (if-let true (use_apx)) (x64_cmovpq_mrv  (gpr_mem_64_for_ty ty c) a))
+(rule 3 (cmove ty @ $I64 (CC.NP)  c a) (if-let true (use_apx)) (x64_cmovnpq_mrv (gpr_mem_64_for_ty ty c) a))
 
 (decl cmove_xmm (Type CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
