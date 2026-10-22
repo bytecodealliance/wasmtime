@@ -1358,7 +1358,7 @@ impl TypeRegistryInner {
         log::trace!("    type_to_rec_group.resize({types_capacity})");
         type_to_rec_group.resize(types_capacity)?;
 
-        log::trace!("    type_to_rec_group.reserve({types_capacity})");
+        log::trace!("    drop_stack.reserve({types_capacity})");
         debug_assert!(drop_stack.is_empty());
         drop_stack.reserve(types_capacity)?;
 
@@ -1595,7 +1595,7 @@ impl TypeRegistryInner {
 
         // Okay, we are really going to unregister this entry. Enqueue it on the
         // drop stack.
-        debug_assert!(self.drop_stack.capacity() >= self.types.capacity());
+        debug_assert!(self.drop_stack.capacity() >= self.types.len());
         self.push_to_drop_stack(entry);
         self.drain_drop_stack();
     }
