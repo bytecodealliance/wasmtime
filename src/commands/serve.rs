@@ -182,15 +182,26 @@ pub struct ServeCommand {
 
     /// Maximum number of concurrent requests that can be processed at any one
     /// point in time.
-    #[arg(long)]
+    #[arg(long, value_parser = parse_concurrency_limit)]
     max_concurrent_requests: Option<NonZeroUsize>,
     /// Maximum number of concurrent connections that can be held at any one
     /// point in time.
-    #[arg(long)]
+    #[arg(long, value_parser = parse_concurrency_limit)]
     max_concurrent_connections: Option<NonZeroUsize>,
 
     #[arg(skip)]
     inherited_sockets: InheritedSockets,
+}
+
+/// Both limits are handed to a semaphore, which panics above its permit limit.
+fn parse_concurrency_limit(s: &str) -> Result<NonZeroUsize, String> {
+    let n: NonZeroUsize = s
+        .parse()
+        .map_err(|e: std::num::ParseIntError| e.to_string())?;
+    if n.get() > Semaphore::MAX_PERMITS {
+        return Err(format!("maximum is {}", Semaphore::MAX_PERMITS));
+    }
+    Ok(n)
 }
 
 impl ServeCommand {
