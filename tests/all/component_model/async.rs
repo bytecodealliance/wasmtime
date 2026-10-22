@@ -2769,11 +2769,15 @@ fn sync_call_async_typed() -> Result<()> {
       (call $task.return (i32.const 42))
       (i32.const 0 (; EXIT ;)))
     (func (export "run-cb") (param i32 i32 i32) (result i32)
-      unreachable))
+      unreachable)
+    (func (export "run-sync-lifted") (result i32)
+      (i32.const 42)))
   (core instance $i (instantiate $m
     (with "" (instance (export "task.return" (func $task.return))))))
   (func (export "run") async (result u32)
     (canon lift (core func $i "run") async (callback (core func $i "run-cb"))))
+  (func (export "run-sync-lifted") async (result u32)
+    (canon lift (core func $i "run-sync-lifted")))
 )
 "#;
 
@@ -2782,26 +2786,26 @@ fn sync_call_async_typed() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    let func = instance.get_func(&mut store, "run").unwrap();
-    let mut results = [Val::U32(0)];
-    let error = func.call(&mut store, &[], &mut results).unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("cannot synchronously call an async-lifted export"),
-        "{error}"
-    );
+    for name in ["run", "run-sync-lifted"] {
+        let func = instance.get_func(&mut store, name).unwrap();
+        let mut results = [Val::U32(0)];
+        let error = func.call(&mut store, &[], &mut results).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot synchronously call an async function"),
+            "{error}"
+        );
 
-    let func = instance
-        .get_typed_func::<(), (u32,)>(&mut store, "run")
-        .unwrap();
-    let error = func.call(&mut store, ()).unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("cannot synchronously call an async-lifted export"),
-        "{error}"
-    );
+        let func = instance.get_typed_func::<(), (u32,)>(&mut store, name)?;
+        let error = func.call(&mut store, ()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot synchronously call an async function"),
+            "{error}"
+        );
+    }
 
     Ok(())
 }
