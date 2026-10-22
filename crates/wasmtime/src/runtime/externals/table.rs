@@ -696,4 +696,25 @@ mod tests {
             _assert_send(table.grow(store, 0, init))
         }
     }
+
+    #[test]
+    #[cfg(feature = "gc")]
+    fn grow_with_unrooted_ref_returns_err() -> Result<()> {
+        let mut config = crate::Config::new();
+        config.wasm_gc(true);
+        let engine = crate::Engine::new(&config)?;
+        let mut store = Store::new(&engine, ());
+        let ty = crate::TableType::new(crate::RefType::EXTERNREF, 2, None)?;
+        let table = Table::new(&mut store, ty, Ref::Extern(None))?;
+
+        let unrooted = {
+            let mut scope = crate::RootScope::new(&mut store);
+            ExternRef::new(&mut scope, 1u32)?
+        };
+
+        let res = table.grow(&mut store, 1, Ref::Extern(Some(unrooted)));
+        assert!(res.is_err());
+        assert_eq!(table.size(&store), 2);
+        Ok(())
+    }
 }
