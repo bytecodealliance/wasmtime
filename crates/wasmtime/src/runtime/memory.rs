@@ -305,6 +305,7 @@ impl Memory {
         if ty.is_shared() {
             bail!("shared memories must be created through `SharedMemory`")
         }
+        store.bump_memory_count()?;
         Ok(generate_memory_export(store, limiter, &ty, None)
             .await?
             .unshared()

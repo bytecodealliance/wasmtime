@@ -134,6 +134,7 @@ impl Table {
     ) -> Result<Table> {
         init.ensure_matches_ty(store, ty.element())
             .context("type mismatch: value does not match table element type")?;
+        store.bump_table_count()?;
         let table = generate_table_export(store, limiter, &ty).await?;
 
         // Tables are always allocated as all zeroes, so skip the fill below if
