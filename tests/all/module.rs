@@ -32,7 +32,14 @@ fn checks_incompatible_target() -> Result<()> {
     return Ok(());
 
     fn assert_invalid_target(target: &str) -> Result<()> {
-        match Module::new(&Engine::new(Config::new().target(target)?)?, "(module)") {
+        // A riscv64 target without `has_v` rejects SIMD, which would fail
+        // engine creation before the mismatch is reported.
+        let mut config = Config::new();
+        config
+            .target(target)?
+            .wasm_simd(false)
+            .wasm_relaxed_simd(false);
+        match Module::new(&Engine::new(&config)?, "(module)") {
             Ok(_) => unreachable!(),
             Err(e) => assert!(
                 format!("{e:?}").contains("configuration does not match the host"),
