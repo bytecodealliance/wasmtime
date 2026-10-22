@@ -267,17 +267,18 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
         )
     };
 
-    if address % usize::try_from(T::ALIGN32)? != 0 {
-        bail!("read pointer not aligned");
-    }
-    lower
-        .as_slice_mut()
-        .get_mut(address..)
-        .and_then(|b| b.get_mut(..T::SIZE32 * count))
-        .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
+    // Note that validation only happens with operations that have a payload.
+    if let Some(ty) = ty.payload(lower.types).copied() {
+        if address % usize::try_from(T::ALIGN32)? != 0 {
+            bail!("read pointer not aligned");
+        }
+        lower
+            .as_slice_mut()
+            .get_mut(address..)
+            .and_then(|b| b.get_mut(..T::SIZE32 * count))
+            .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
 
-    if let Some(ty) = ty.payload(lower.types) {
-        T::linear_store_list_to_memory(lower, *ty, address, &buffer.remaining()[..count])?;
+        T::linear_store_list_to_memory(lower, ty, address, &buffer.remaining()[..count])?;
     }
 
     if let Some(old_thread) = old_thread {
