@@ -1,0 +1,63 @@
+test compile precise-output
+target aarch64
+
+;; A call's stack map is associated with its return PC, while an
+;; `interrupt_poll`'s stack map is associated with the faulting load's PC. A
+;; `preserve_all` call preserves every register, so a constant live in the
+;; poll's context register across the call requires no post-call move and the
+;; two PCs coincide. The emitter separates them with a nop so that exact-PC
+;; stack map lookups remain unambiguous.
+
+function %f(i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+    ss0 = explicit_slot 8, align = 8
+    sig0 = () preserve_all
+    fn0 = %g sig0
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64):
+    v9 = stack_addr.i64 ss0
+    store notrap v0, v9
+    v11 = iconst.i64 0
+    call fn0(), stack_map=[i64 @ ss0+0]
+    v10 = interrupt_poll v8, v11, user3, stack_map=[i64 @ ss0+0]
+    return v10
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   ldr x10, [sp, #48]
+;   str x2, [sp]
+;   movz x0, #0
+;   load_ext_name_far x8, TestCase(%g)+0
+;   blr x8
+;   ; UserStackMap { by_type: [(types::I64, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
+;   x10 = interrupt_poll load_ptr=x10, context=x0, scratch=x9 #trap=user3
+;   ; UserStackMap { by_type: [(types::I64, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
+;   mov x2, x10
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   add sp, sp, #32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   ldur x10, [sp, #0x30]
+;   stur x2, [sp]
+;   mov x0, #0
+;   ldr x8, #0x20
+;   b #0x28
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
+;   blr x8
+;   nop
+;   ldr x9, [x10] ; trap: user3
+;   mov x2, x10
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   add sp, sp, #0x20
+;   ret

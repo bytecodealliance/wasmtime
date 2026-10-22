@@ -1,0 +1,57 @@
+test compile precise-output
+target x86_64
+
+;; A call's stack map is associated with its return PC, while an
+;; `interrupt_poll`'s stack map is associated with the faulting load's PC. A
+;; `preserve_all` call preserves every register, so a following poll can use
+;; incoming registers without any operand setup and the two PCs coincide. The
+;; emitter separates them with a nop so that exact-PC stack map lookups remain
+;; unambiguous.
+
+function %f(i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+    ss0 = explicit_slot 8, align = 8
+    sig0 = () preserve_all
+    fn0 = %g sig0
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64):
+    v9 = stack_addr.i64 ss0
+    store notrap v0, v9
+    call fn0(), stack_map=[i64 @ ss0+0]
+    v10 = interrupt_poll v8, v0, user3, stack_map=[i64 @ ss0+0]
+    return v10
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block0:
+;   movq <offset:0>+-0x10(%rbp), %r11
+;   movq %rdi, <offset:1>+(%rsp)
+;   load_ext_name %g+0, %r8
+;   call    *%r8
+;   ; UserStackMap { by_type: [(types::I64, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
+;   %r11 = interrupt_poll load_ptr=%r11, context=%rdi, scratch=%r10 #trap=user3
+;   ; UserStackMap { by_type: [(types::I64, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
+;   movq %r11, %rax
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq $0x20
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   movq 0x20(%rbp), %r11
+;   movq %rdi, (%rsp)
+;   movabsq $0, %r8 ; reloc_external Abs8 %g 0
+;   callq *%r8
+;   nop
+;   movq (%r11), %r10 ; trap: user3
+;   movq %r11, %rax
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq $0x20
