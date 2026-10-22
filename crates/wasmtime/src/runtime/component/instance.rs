@@ -429,21 +429,25 @@ impl Instance {
         src: TypeResourceTableIndex,
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
-        let dst_owns_resource = self.id().get(store).resource_owned_by_own_instance(dst);
+        debug_assert!(
+            !self.id().get(store).resource_owned_by_own_instance(dst),
+            "should have used `resource.transfer-borrow-to-owner` instead",
+        );
         let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
-        // Implement `lower_borrow`'s special case here where if a borrow's
-        // resource type is owned by `dst` then the destination receives the
-        // representation directly rather than a handle to the representation.
-        //
-        // This can perhaps become a different libcall in the future to avoid
-        // this check at runtime since we know at compile time whether the
-        // destination type owns the resource, but that's left as a future
-        // refactoring if truly necessary.
-        if dst_owns_resource {
-            return Ok(rep);
-        }
         tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
+    }
+
+    /// Variant of `resource_transfer_borrow` for when the destination instance
+    /// owns the resource, and so receives the representation directly.
+    pub(crate) fn resource_transfer_borrow_to_owner(
+        self,
+        store: &mut StoreOpaque,
+        index: u32,
+        src: TypeResourceTableIndex,
+    ) -> Result<u32> {
+        let mut tables = store.component_resource_tables(Some(self))?;
+        tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })
     }
 
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {

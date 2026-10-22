@@ -3388,7 +3388,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected a `Future`"),
         };
         let transfer = self.module.import_future_transfer();
-        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+        self.translate_handle(src_ty.as_u32(), src, Some(dst_ty.as_u32()), dst, transfer);
     }
 
     fn translate_stream(
@@ -3403,7 +3403,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected a `Stream`"),
         };
         let transfer = self.module.import_stream_transfer();
-        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+        self.translate_handle(src_ty.as_u32(), src, Some(dst_ty.as_u32()), dst, transfer);
     }
 
     fn translate_error_context(
@@ -3418,7 +3418,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected an `ErrorContext`"),
         };
         let transfer = self.module.import_error_context_transfer();
-        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+        self.translate_handle(src_ty.as_u32(), src, Some(dst_ty.as_u32()), dst, transfer);
     }
 
     fn translate_own(
@@ -3433,7 +3433,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected an `Own`"),
         };
         let transfer = self.module.import_resource_transfer_own();
-        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+        self.translate_handle(src_ty.as_u32(), src, Some(dst_ty.as_u32()), dst, transfer);
     }
 
     fn translate_borrow(
@@ -3448,8 +3448,15 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected an `Borrow`"),
         };
 
-        let transfer = self.module.import_resource_transfer_borrow();
-        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+        let (transfer, dst_ty) = if self.module.resource_owned_by_own_instance(dst_ty) {
+            (self.module.import_resource_transfer_borrow_to_owner(), None)
+        } else {
+            (
+                self.module.import_resource_transfer_borrow(),
+                Some(dst_ty.as_u32()),
+            )
+        };
+        self.translate_handle(src_ty.as_u32(), src, dst_ty, dst, transfer);
     }
 
     /// Translates the index `src`, which resides in the table `src_ty`, into
@@ -3463,7 +3470,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         &mut self,
         src_ty: u32,
         src: &Source<'_>,
-        dst_ty: u32,
+        dst_ty: Option<u32>,
         dst: &Destination,
         transfer: FuncIndex,
     ) {
@@ -3474,7 +3481,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
             Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
         }
         self.instruction(I32Const(src_ty as i32));
-        self.instruction(I32Const(dst_ty as i32));
+        if let Some(dst_ty) = dst_ty {
+            self.instruction(I32Const(dst_ty as i32));
+        }
         self.instruction(Call(transfer.as_u32()));
         match dst {
             Destination::Memory(mem) => self.i32_store(mem),

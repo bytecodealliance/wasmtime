@@ -470,6 +470,7 @@ pub enum Trampoline {
     },
     ResourceTransferOwn,
     ResourceTransferBorrow,
+    ResourceTransferBorrowToOwner,
     PrepareCall {
         memory: Option<MemoryId>,
     },
@@ -713,6 +714,24 @@ impl ComponentDfg {
     /// number of imported resources.
     pub fn resource_index(&self, defined: DefinedResourceIndex) -> ResourceIndex {
         ResourceIndex::from_u32(defined.as_u32() + (self.imported_resources.len() as u32))
+    }
+
+    /// Convert a resource index into a defined index, or `None` if `idx` is for
+    /// an imported resource.
+    pub fn defined_resource_index(&self, idx: ResourceIndex) -> Option<DefinedResourceIndex> {
+        let idx = idx
+            .as_u32()
+            .checked_sub(u32::try_from(self.imported_resources.len()).unwrap())?;
+        Some(DefinedResourceIndex::from_u32(idx))
+    }
+
+    /// Returns the component instance which defines `idx`, or `None` if `idx`
+    /// is for an imported resource.
+    pub fn defined_resource_instance(
+        &self,
+        idx: ResourceIndex,
+    ) -> Option<RuntimeComponentInstanceIndex> {
+        Some(self.resources[self.defined_resource_index(idx)?].instance)
     }
 }
 
@@ -1168,6 +1187,9 @@ impl LinearizeDfg<'_> {
             },
             Trampoline::ResourceTransferOwn => info::Trampoline::ResourceTransferOwn,
             Trampoline::ResourceTransferBorrow => info::Trampoline::ResourceTransferBorrow,
+            Trampoline::ResourceTransferBorrowToOwner => {
+                info::Trampoline::ResourceTransferBorrowToOwner
+            }
             Trampoline::PrepareCall { memory } => info::Trampoline::PrepareCall {
                 memory: memory.map(|v| self.runtime_memory(v)),
             },

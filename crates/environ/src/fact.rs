@@ -22,7 +22,7 @@ use crate::component::dfg::{AdapterId, ComponentDfg, CoreDef};
 use crate::component::{
     AdapterOptions as AdapterOptionsDfg, CanonicalAbiInfo, ComponentTypesBuilder, FlatType,
     InterfaceType, RuntimeComponentInstanceIndex, StringEncoding, Transcode, TypeFuncIndex,
-    UnsafeIntrinsic,
+    TypeResourceTableIndex, UnsafeIntrinsic,
 };
 use crate::fact::transcode::Transcoder;
 use crate::prelude::*;
@@ -62,6 +62,9 @@ pub struct Module<'a> {
     /// Type information from the creator of this `Module`
     types: &'a ComponentTypesBuilder,
 
+    /// The component being adapted.
+    component: &'a ComponentDfg,
+
     /// The Wasm features enabled for validation of this module.
     features: WasmFeatures,
 
@@ -84,6 +87,7 @@ pub struct Module<'a> {
     /// Cached versions of imported trampolines for working with resources.
     imported_resource_transfer_own: Option<FuncIndex>,
     imported_resource_transfer_borrow: Option<FuncIndex>,
+    imported_resource_transfer_borrow_to_owner: Option<FuncIndex>,
 
     // Cached versions of imported trampolines for working with the async ABI.
     imported_start_calls: HashMap<(Option<FuncIndex>, Option<FuncIndex>, Vec<ValType>), FuncIndex>,
@@ -270,12 +274,14 @@ impl<'a> Module<'a> {
     /// Creates an empty module.
     pub fn new(
         types: &'a ComponentTypesBuilder,
+        component: &'a ComponentDfg,
         tunables: &'a Tunables,
         features: WasmFeatures,
     ) -> Module<'a> {
         Module {
             tunables,
             types,
+            component,
             features,
             core_types: Default::default(),
             core_imports: Default::default(),
@@ -290,6 +296,7 @@ impl<'a> Module<'a> {
             helper_worklist: Vec::new(),
             imported_resource_transfer_own: None,
             imported_resource_transfer_borrow: None,
+            imported_resource_transfer_borrow_to_owner: None,
             imported_start_calls: HashMap::new(),
             imported_future_transfer: None,
             imported_stream_transfer: None,
@@ -305,11 +312,11 @@ impl<'a> Module<'a> {
     /// Registers a new adapter within this adapter module.
     ///
     /// The `name` provided is the export name of the adapter from the final
-    /// module, and `adapter` indexes into `component` for all the metadata
-    /// necessary for compilation.
-    pub fn adapt(&mut self, name: &str, component: &ComponentDfg, adapter: AdapterId) {
-        let thread_transparent = component.transparent_adapters.contains(adapter);
-        let adapter = &component.adapters[adapter];
+    /// module, and `adapter` indexes into this module's component for all the
+    /// metadata necessary for compilation.
+    pub fn adapt(&mut self, name: &str, adapter: AdapterId) {
+        let thread_transparent = self.component.transparent_adapters.contains(adapter);
+        let adapter = &self.component.adapters[adapter];
 
         // Import any items required by the various canonical options
         // (memories, reallocs, etc)
@@ -689,6 +696,24 @@ impl<'a> Module<'a> {
         )
     }
 
+    /// Returns whether a borrow lowered into the resource table `ty` has its
+    /// resource owned by `ty`'s own instance.
+    fn resource_owned_by_own_instance(&self, ty: TypeResourceTableIndex) -> bool {
+        self.types
+            .resource_owned_by_own_instance(ty, |idx| self.component.defined_resource_instance(idx))
+    }
+
+    fn import_resource_transfer_borrow_to_owner(&mut self) -> FuncIndex {
+        self.import_simple(
+            "resource",
+            "transfer-borrow-to-owner",
+            &[ValType::I32, ValType::I32],
+            &[ValType::I32],
+            Import::ResourceTransferBorrowToOwner,
+            |me| &mut me.imported_resource_transfer_borrow_to_owner,
+        )
+    }
+
     fn import_enter_sync_call(&mut self) -> FuncIndex {
         self.import_simple(
             "async",
@@ -877,6 +902,9 @@ pub enum Import {
     ResourceTransferOwn,
     /// Transfers a borrowed resource from one table to another.
     ResourceTransferBorrow,
+    /// Lifts a borrowed resource for a destination which owns the resource and
+    /// therefore receives its representation rather than a handle.
+    ResourceTransferBorrowToOwner,
     /// An intrinsic used by FACT-generated modules to begin a call involving
     /// an async-lowered import and/or an async-lifted export.
     PrepareCall {
