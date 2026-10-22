@@ -27,7 +27,8 @@ TEST(TableType, Table64) {
           "(import \"\" \"t\" (table i64 0x100000000 0x200000000 funcref))"
           ")")
           .unwrap();
-  auto import = *module.imports().begin();
+  auto imports = module.imports();
+  auto import = *imports.begin();
   auto ty = std::get<TableType::Ref>(ExternType::from_import(import));
   EXPECT_EQ(ty.min(), 0x100000000);
   EXPECT_EQ(ty.max(), 0x200000000);
