@@ -11,6 +11,7 @@ use alloc::sync::Arc;
 use core::marker::PhantomData;
 use core::ops::Range;
 use core::ptr::NonNull;
+use wasmtime_core::undo::Undo;
 use wasmtime_environ::{
     CompiledFunctionsTable, FuncKey, StaticModuleIndex, VMSharedTypeIndex,
     collections::btree_map::Entry,
@@ -284,53 +285,94 @@ impl ModuleRegistry {
             #[cfg(feature = "component-model")]
             ModuleOrComponent::Component(component) => component.engine_code(),
         };
+
         // Register the module, if any.
+        let mut new_module = false;
         let id = match module_or_component {
             ModuleOrComponent::Module(module) => {
                 let id = RegisteredModuleId(compiled_id);
-                self.modules.entry(id).or_insert_with(|| module.clone())?;
+                if !self.modules.contains_key(id) {
+                    self.modules.insert(id, module.clone())?;
+                    new_module = true;
+                }
                 Some(id)
             }
             #[cfg(feature = "component-model")]
             ModuleOrComponent::Component(_) => None,
         };
+        // If further steps fail then undo the registration that just happened,
+        // if one happened.
+        let mut module_undo = Undo::new(self, |registry| {
+            if new_module {
+                registry.modules.remove(id.unwrap());
+            }
+        });
+        let this = &mut **module_undo;
 
         // Create a StoreCode if one does not already exist.
-        let store_code_pc = match self.store_code.entry(code.text_range().start) {
+        let engine_code_pc = code.text_range().start;
+        let (store_code_pc, new_code) = match this.store_code.entry(engine_code_pc) {
             Entry::Vacant(v) => {
                 let store_code = StoreCode::new(engine, code)?;
                 let store_code_pc = store_code.text_range().start;
-                assert_no_overlap(&self.loaded_code, store_code.text_range());
+                assert_no_overlap(&this.loaded_code, store_code.text_range());
                 let index = match module_or_component {
                     ModuleOrComponent::Module(module) => module.index(),
                     #[cfg(feature = "component-model")]
                     ModuleOrComponent::Component(component) => component.index(),
                 };
-                self.loaded_code.insert(
+                v.insert(store_code_pc)?;
+                let result = this.loaded_code.insert(
                     store_code_pc,
                     LoadedCode {
                         code: store_code,
                         index: index.clone(),
                         modules: Default::default(),
                     },
-                )?;
-                *v.insert(store_code_pc)?
+                );
+                if let Err(e) = result {
+                    this.store_code.remove(engine_code_pc);
+                    return Err(e.into());
+                }
+                (store_code_pc, true)
             }
-            Entry::Occupied(o) => *o.get(),
+            Entry::Occupied(o) => (*o.get(), false),
         };
+        // Like with `module_undo`, remove the entries inserted above if that
+        // just happened.
+        let mut code_undo = Undo::new(this, |registry| {
+            if new_code {
+                registry.store_code.remove(engine_code_pc);
+                registry.loaded_code.remove(store_code_pc);
+            }
+        });
+        let this = &mut **code_undo;
 
         // Add this module to the LoadedCode if not present.
         if let (ModuleOrComponent::Module(module), Some(id)) = (module_or_component, id) {
-            let loaded_code = self
+            let module_index = module.env_module().module_index;
+            let loaded_code = this
                 .loaded_code
                 .get_mut(store_code_pc)
                 .expect("loaded_code must have entry for StoreCodePC");
-            loaded_code
-                .modules
-                .insert(module.env_module().module_index, Some(id))?;
-            breakpoint_state.update(&mut loaded_code.code, module)?;
+            let prev = loaded_code.modules.insert(module_index, Some(id))?;
+            match breakpoint_state.update(&mut loaded_code.code, module) {
+                Ok(()) => {}
+                Err(e) => {
+                    if prev.flatten().is_none() {
+                        loaded_code.modules.remove(module_index);
+                    }
+                    return Err(e);
+                }
+            }
         }
 
+        // NB: if more logic is added here before the `Undo::commit`s below, be
+        // sure to add a new `Undo` for the `breakpoint_state` and `modules`
+        // update above.
+
+        Undo::commit(code_undo);
+        Undo::commit(module_undo);
         Ok(id)
     }
 
