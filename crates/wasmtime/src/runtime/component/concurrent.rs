@@ -3515,8 +3515,15 @@ impl Instance {
         let guest_thread = store.0.current_guest_thread()?;
         let state = store.0.concurrent_state_mut()?;
 
+        // FIXME(#14950): this in theory should be a `bail_bug!`, but this can
+        // be hit through `Func::call` for example. This isn't great because it
+        // means that `Func::call` is sort of fundamentally incompatible with
+        // component-model-async...
         if !state.event_loop_running {
-            bail_bug!("Instance::start_call called without a running event loop");
+            bail!(
+                "async function started during an original synchronous \
+                 entrypoint; please use an async-style entrypoint instead"
+            );
         }
 
         let callee = SendSyncPtr::new(callee);
