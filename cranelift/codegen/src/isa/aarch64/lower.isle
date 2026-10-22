@@ -2403,7 +2403,7 @@
 (rule (lower (splat ty (iconst _ (u64_from_imm64 n))))
       (splat_const n (vector_size ty)))
 
-(rule (lower (splat ty x @ (load _ (mem_flags_data flags) _ _)))
+(rule (lower (splat ty x @ (load _ (little_or_native_endian flags) _ _)))
       (if-let mem_op (is_sinkable_inst x))
       (let ((addr Reg (sink_load_into_addr (lane_type ty) mem_op)))
             (ld1r addr (vector_size ty) flags)))
