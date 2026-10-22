@@ -237,6 +237,31 @@ where
     }
 }
 
+impl<K, V> TryFromIterator<V, OutOfMemory> for TryPrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn try_from_iter<I>(iter: I) -> Result<Self, OutOfMemory>
+    where
+        I: Iterator<Item = V>,
+    {
+        Ok(iter.try_collect::<TryVec<_>, _>()?.into())
+    }
+}
+
+impl<K, V, E> TryFromIterator<Result<V, E>, E> for TryPrimaryMap<K, V>
+where
+    K: EntityRef,
+    E: From<OutOfMemory>,
+{
+    fn try_from_iter<I>(iter: I) -> Result<Self, E>
+    where
+        I: Iterator<Item = Result<V, E>>,
+    {
+        Ok(iter.try_collect::<TryVec<_>, E>()?.into())
+    }
+}
+
 impl<K, V> Index<K> for TryPrimaryMap<K, V>
 where
     K: EntityRef,

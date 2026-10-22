@@ -1791,6 +1791,12 @@ pub enum EntityIndex {
     Tag(TagIndex),
 }
 
+impl TryClone for EntityIndex {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
+}
+
 impl From<FuncIndex> for EntityIndex {
     fn from(idx: FuncIndex) -> EntityIndex {
         EntityIndex::Function(idx)

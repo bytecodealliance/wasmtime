@@ -23,7 +23,7 @@ use wasmtime_environ::component::{
     TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
 };
 use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace, WasmChecksum};
-use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
+use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind};
 
 /// A compiled WebAssembly Component.
 ///
@@ -89,7 +89,7 @@ struct ComponentInner {
 
     /// Core wasm modules that the component defined internally, indexed by the
     /// compile-time-assigned `ModuleUpvarIndex`.
-    static_modules: PrimaryMap<StaticModuleIndex, Module>,
+    static_modules: TryPrimaryMap<StaticModuleIndex, Module>,
 
     /// Code-related information such as the compiled artifact, type
     /// information, etc.
@@ -444,7 +444,7 @@ impl Component {
             Some(artifacts) => artifacts,
             None => postcard::from_bytes(code_memory.wasmtime_info())?,
         };
-        let index = Arc::new(index);
+        let index = try_new::<Arc<_>>(index)?;
 
         // Validate that the component can be used with the current instance
         // allocator.
@@ -465,8 +465,8 @@ impl Component {
 
         // Assemble the `EngineCode` artifact which is shared by all core wasm
         // modules as well as the final component.
-        let types = Arc::new(types);
-        let code = Arc::new(EngineCode::new(code_memory, signatures, types.into())?);
+        let types = try_new::<Arc<_>>(types)?;
+        let code = try_new::<Arc<_>>(EngineCode::new(code_memory, signatures, types.into())?)?;
 
         // Convert all information about static core wasm modules into actual
         // `Module` instances by converting each `CompiledModuleInfo`, the
@@ -476,16 +476,16 @@ impl Component {
             .map(|(_, info)| {
                 Module::from_parts_raw(engine, code.clone(), info, index.clone(), false)
             })
-            .collect::<Result<_>>()?;
+            .try_collect::<_, Error>()?;
 
-        let realloc_func_type = Arc::new(FuncType::new(
+        let realloc_func_type = try_new::<Arc<_>>(FuncType::try_new(
             engine,
             [ValType::I32, ValType::I32, ValType::I32, ValType::I32],
             [ValType::I32],
-        ));
+        )?)?;
 
         Ok(Component {
-            inner: Arc::new(ComponentInner {
+            inner: try_new::<Arc<_>>(ComponentInner {
                 id: CompiledModuleId::new(),
                 engine: engine.clone(),
                 ty,
@@ -495,7 +495,7 @@ impl Component {
                 index,
                 realloc_func_type,
                 checksum,
-            }),
+            })?,
         })
     }
 

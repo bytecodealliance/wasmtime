@@ -1,3 +1,4 @@
+use crate::PanicOnOom as _;
 use crate::component::*;
 use crate::error::{Result, bail};
 use crate::prelude::*;
@@ -76,7 +77,11 @@ macro_rules! intern_and_fill_flat_types {
         if let Some(idx) = $me.$name.get(&$val) {
             *idx
         } else {
-            let idx = $me.component_types.$name.push($val.clone());
+            let idx = $me
+                .component_types
+                .$name
+                .push($val.clone_panic_on_oom())
+                .panic_on_oom();
             let mut info = TypeInformation::new();
             info.$name($me, &$val);
             let idx2 = $me.type_info.$name.push(info);
@@ -118,7 +123,7 @@ impl ComponentTypesBuilder {
 
     fn export_type_def(
         &mut self,
-        export_items: &PrimaryMap<ExportIndex, Export>,
+        export_items: &TryPrimaryMap<ExportIndex, Export>,
         idx: ExportIndex,
     ) -> TypeDef {
         match &export_items[idx] {
@@ -137,18 +142,28 @@ impl ComponentTypesBuilder {
     pub fn finish(mut self, component: &Component) -> (ComponentTypes, TypeComponentIndex) {
         let mut component_ty = TypeComponent::default();
         for (_, (name, ty)) in component.import_types.iter() {
-            component_ty.imports.insert(name.clone(), ty.clone());
+            component_ty
+                .imports
+                .insert(name.clone_panic_on_oom(), ty.clone_panic_on_oom())
+                .panic_on_oom();
         }
         for (name, (ty, data)) in component.exports.raw_iter() {
-            component_ty.exports.insert(
-                name.clone_panic_on_oom().into(),
-                ComponentExtern {
-                    data: data.clone(),
-                    ty: self.export_type_def(&component.export_items, *ty),
-                },
-            );
+            component_ty
+                .exports
+                .insert(
+                    name.clone_panic_on_oom(),
+                    ComponentExtern {
+                        data: data.clone_panic_on_oom(),
+                        ty: self.export_type_def(&component.export_items, *ty),
+                    },
+                )
+                .panic_on_oom();
         }
-        let ty = self.component_types.components.push(component_ty);
+        let ty = self
+            .component_types
+            .components
+            .push(component_ty)
+            .panic_on_oom();
 
         self.component_types.module_types = Some(self.module_types.finish());
         (self.component_types, ty)
@@ -216,7 +231,11 @@ impl ComponentTypesBuilder {
     ) -> Result<TypeFuncIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
-        let param_names = ty.params.iter().map(|(name, _)| name.to_string()).collect();
+        let param_names = ty
+            .params
+            .iter()
+            .map(|(name, _)| TryString::try_from(name.as_str()))
+            .try_collect::<TryVec<_>, _>()?;
         let params = ty
             .params
             .iter()
@@ -248,8 +267,8 @@ impl ComponentTypesBuilder {
         Ok(ComponentExtern {
             ty: self.convert_component_entity_type(types, ty.ty)?,
             data: ComponentExternData {
-                implements: ty.implements.clone(),
-                external_id: ty.external_id.clone(),
+                implements: ty.implements.clone().map(Into::into),
+                external_id: ty.external_id.clone().map(Into::into),
             },
         })
     }
@@ -316,15 +335,15 @@ impl ComponentTypesBuilder {
             self.register_abstract_component_entity_type(types, ty.ty);
             result
                 .imports
-                .insert(name.clone(), self.convert_component_item(types, ty)?);
+                .insert(name.clone().into(), self.convert_component_item(types, ty)?)?;
         }
         for (name, ty) in ty.exports.iter() {
             self.register_abstract_component_entity_type(types, ty.ty);
             result
                 .exports
-                .insert(name.clone(), self.convert_component_item(types, ty)?);
+                .insert(name.clone().into(), self.convert_component_item(types, ty)?)?;
         }
-        Ok(self.component_types.components.push(result))
+        Ok(self.component_types.components.push(result)?)
     }
 
     pub(crate) fn convert_instance(
@@ -339,9 +358,9 @@ impl ComponentTypesBuilder {
             self.register_abstract_component_entity_type(types, ty.ty);
             result
                 .exports
-                .insert(name.clone(), self.convert_component_item(types, ty)?);
+                .insert(name.clone().into(), self.convert_component_item(types, ty)?)?;
         }
-        Ok(self.component_types.component_instances.push(result))
+        Ok(self.component_types.component_instances.push(result)?)
     }
 
     fn register_abstract_component_entity_type(
@@ -371,16 +390,16 @@ impl ComponentTypesBuilder {
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
             result.imports.insert(
-                (module.clone(), field.clone()),
+                (module.clone().into(), field.clone().into()),
                 self.entity_type(types, ty)?,
-            );
+            )?;
         }
         for (name, ty) in ty.exports.iter() {
             result
                 .exports
-                .insert(name.clone(), self.entity_type(types, ty)?);
+                .insert(name.clone().into(), self.entity_type(types, ty)?)?;
         }
-        Ok(self.component_types.modules.push(result))
+        Ok(self.component_types.modules.push(result)?)
     }
 
     fn entity_type(
@@ -522,11 +541,11 @@ impl ComponentTypesBuilder {
             .iter()
             .map(|(name, ty)| {
                 Ok(RecordField {
-                    name: name.to_string(),
+                    name: TryString::try_from(name.as_str())?,
                     ty: self.valtype(types, ty)?,
                 })
             })
-            .collect::<Result<Box<[_]>>>()?;
+            .try_collect::<TryVec<_>, Error>()?;
         let abi = CanonicalAbiInfo::record(
             fields
                 .iter()
@@ -542,14 +561,14 @@ impl ComponentTypesBuilder {
             .iter()
             .map(|(name, case)| {
                 Ok((
-                    name.to_string(),
+                    TryString::try_from(name.as_str())?,
                     match &case.ty.as_ref() {
                         Some(ty) => Some(self.valtype(types, ty)?),
                         None => None,
                     },
                 ))
             })
-            .collect::<Result<IndexMap<_, _>>>()?;
+            .try_collect::<TryIndexMap<_, _>, Error>()?;
         let (info, abi) = VariantInfo::new(
             cases
                 .iter()
@@ -574,7 +593,10 @@ impl ComponentTypesBuilder {
                 .iter()
                 .map(|ty| self.component_types.canonical_abi(ty)),
         );
-        self.add_tuple_type(TypeTuple { types, abi })
+        self.add_tuple_type(TypeTuple {
+            types: types.into(),
+            abi,
+        })
     }
 
     fn fixed_length_list_type(
@@ -603,7 +625,11 @@ impl ComponentTypesBuilder {
 
     fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
         let flags = TypeFlags {
-            names: flags.iter().map(|s| s.to_string()).collect(),
+            names: flags
+                .iter()
+                .map(|s| TryString::try_from(s.as_str()))
+                .try_collect::<TryIndexSet<_>, _>()
+                .panic_on_oom(),
             abi: CanonicalAbiInfo::flags(flags.len()),
         };
         self.add_flags_type(flags)
@@ -612,8 +638,9 @@ impl ComponentTypesBuilder {
     fn enum_type(&mut self, variants: &IndexSet<KebabString>) -> TypeEnumIndex {
         let names = variants
             .iter()
-            .map(|s| s.to_string())
-            .collect::<IndexSet<_>>();
+            .map(|s| TryString::try_from(s.as_str()))
+            .try_collect::<TryIndexSet<_>, _>()
+            .panic_on_oom();
         let (info, abi) = VariantInfo::new(names.iter().map(|_| None));
         self.add_enum_type(TypeEnum { names, abi, info })
     }
@@ -948,15 +975,15 @@ impl ComponentTypesBuilder {
     }
 }
 
-fn intern<T, U>(map: &mut HashMap<T, U>, list: &mut PrimaryMap<U, T>, item: T) -> U
+fn intern<T, U>(map: &mut HashMap<T, U>, list: &mut TryPrimaryMap<U, T>, item: T) -> U
 where
-    T: Hash + Clone + Eq,
+    T: Hash + TryClone + Eq,
     U: Copy + EntityRef,
 {
     if let Some(idx) = map.get(&item) {
         return *idx;
     }
-    let idx = list.push(item.clone());
+    let idx = list.push(item.clone_panic_on_oom()).panic_on_oom();
     map.insert(item, idx);
     return idx;
 }

@@ -45,6 +45,7 @@
 //! side-effectful initializers are emitted to the `GlobalInitializer` list in the
 //! final `Component`.
 
+use crate::component::dfg::ExportItem;
 use crate::component::translate::*;
 use crate::{EntityType, Memory};
 use core::str::FromStr;
@@ -1570,7 +1571,7 @@ impl<'a> Inliner<'a> {
                 ExportItem::Name(_) => unreachable!(),
             },
             InstanceModule::Import(ty) => match &memory.item {
-                ExportItem::Name(name) => match types[*ty].exports[name] {
+                ExportItem::Name(name) => match types[*ty].exports[name.as_str()] {
                     EntityType::Memory(m) => m,
                     _ => unreachable!(),
                 },
@@ -1704,9 +1705,15 @@ impl<'a> Inliner<'a> {
                     // module-exporting instances.
                     ComponentInstanceDef::Import(path, ty) => {
                         for (name, ty) in types[ty].exports.iter() {
-                            let path = path.push(name);
+                            let path = path.push(name.as_str());
                             let def = ComponentItemDef::from_import(path, ty.ty)?;
-                            self.record_export(name, def, ty.data.clone(), types, &mut exports)?;
+                            self.record_export(
+                                name,
+                                def,
+                                ty.data.try_clone()?,
+                                types,
+                                &mut exports,
+                            )?;
                         }
                         dfg::Export::Instance { ty, exports }
                     }
@@ -1725,7 +1732,7 @@ impl<'a> Inliner<'a> {
                             if let TypeDef::ComponentInstance(instance_ty) = export.ty {
                                 def = def.with_instance_type(instance_ty);
                             }
-                            let data = export.data.clone();
+                            let data = export.data.try_clone()?;
                             self.record_export(name, def, data, types, &mut exports)?;
                         }
                         dfg::Export::Instance { ty, exports }
@@ -2010,8 +2017,8 @@ enum InstanceModule {
 impl ComponentExternData {
     fn new(data: wasmparser::ComponentExternName<'_>) -> Self {
         ComponentExternData {
-            implements: data.implements.map(|s| s.to_string()),
-            external_id: data.external_id.map(|s| s.to_string()),
+            implements: data.implements.map(|s| s.to_string().into()),
+            external_id: data.external_id.map(|s| s.to_string().into()),
         }
     }
 }
