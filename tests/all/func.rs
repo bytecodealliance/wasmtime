@@ -1749,6 +1749,72 @@ fn typed_concrete_param(config: &mut Config) -> wasmtime::Result<()> {
     Ok(())
 }
 
+#[wasmtime_test(wasm_features(gc, function_references))]
+#[cfg_attr(miri, ignore)]
+fn typed_concrete_gc_param_with_i31_and_none(config: &mut Config) -> wasmtime::Result<()> {
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $s (struct (field i32)))
+                (type $a (array i32))
+                (type $f (func))
+                (func (export "nullable-struct") (param (ref null $s)))
+                (func (export "struct") (param (ref $s)))
+                (func (export "array") (param (ref $a)))
+                (func (export "func") (param (ref $f)))
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    // `(ref null none)` is a subtype of every nullable struct and array type,
+    // so passing null is fine.
+    let f = instance.get_typed_func::<Option<NoneRef>, ()>(&mut store, "nullable-struct")?;
+    f.call(&mut store, None)?;
+
+    // however while `i31ref` is in the same type hierarchy as `(ref null
+    // $struct)` to get `f` here it fails the type-check at runtime.
+    let f = instance.get_typed_func::<Option<I31>, ()>(&mut store, "nullable-struct")?;
+    f.call(&mut store, None)?;
+    assert!(f.call(&mut store, I31::new_i32(7)).is_err());
+
+    // Similar to above, these types are all in the same hierarchy so getting
+    // `f` works but actually calling it should fail.
+    for name in ["struct", "array"] {
+        let f = instance.get_typed_func::<I31, ()>(&mut store, name)?;
+        assert!(f.call(&mut store, I31::new_i32(7).unwrap()).is_err());
+
+        let f = instance.get_typed_func::<Option<I31>, ()>(&mut store, name)?;
+        assert!(f.call(&mut store, None).is_err());
+
+        let f = instance.get_typed_func::<Option<NoneRef>, ()>(&mut store, name)?;
+        assert!(f.call(&mut store, None).is_err());
+    }
+
+    // outside of the type hierarchy entirely, however, just fails to get `f` to
+    // begin with.
+    assert!(
+        instance
+            .get_typed_func::<I31, ()>(&mut store, "func")
+            .is_err()
+    );
+    assert!(
+        instance
+            .get_typed_func::<Option<I31>, ()>(&mut store, "func")
+            .is_err()
+    );
+    assert!(
+        instance
+            .get_typed_func::<Option<NoneRef>, ()>(&mut store, "func")
+            .is_err()
+    );
+
+    Ok(())
+}
+
 #[wasmtime_test(wasm_features(function_references, bulk_memory))]
 #[cfg_attr(miri, ignore)]
 fn typed_concrete_result(config: &mut Config) -> wasmtime::Result<()> {
