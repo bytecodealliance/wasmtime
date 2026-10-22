@@ -654,4 +654,122 @@ mod test {
         let assembled = assemble(&inst.into());
         assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418017F50");
     }
+
+    /// Byte-level encoding check for the APX NDD (new-data-destination) form of
+    /// `SUB`, promoted into EVEX "map 4" via the extended-EVEX prefix.
+    ///
+    /// Operand placement is the same as [`apx_addq_rvm_ndd_encoding`]: in `RVM`
+    /// format the constructor arguments are `[ModRM.reg source,
+    /// vvvv destination, ModRM.rm source]`. For `subq %rax, %rcx, %rdx`
+    /// (destination `%rax` = 0 in `vvvv`, source `%rcx` = 1 in ModRM.reg,
+    /// source `%rdx` = 2 in ModRM.rm), `W = 1`, `ND = 1`, `NF = 0`, and the
+    /// legacy `SUB r/m, reg` opcode byte is `0x29`.
+    #[test]
+    fn apx_subq_rvm_ndd_encoding() {
+        use crate::inst::subq_rvm;
+
+        let inst = subq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1829CA");
+    }
+
+    /// Companion to [`apx_subq_rvm_ndd_encoding`] covering a memory operand.
+    #[test]
+    fn apx_subq_rvm_ndd_disp8_is_unscaled() {
+        use crate::inst::subq_rvm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = subq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418297F50");
+    }
+
+    #[test]
+    fn apx_andq_rvm_ndd_encoding() {
+        use crate::inst::andq_rvm;
+
+        let inst = andq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1821CA");
+    }
+
+    #[test]
+    fn apx_andq_rvm_ndd_disp8_is_unscaled() {
+        use crate::inst::andq_rvm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = andq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418217F50");
+    }
+
+    #[test]
+    fn apx_orq_rvm_ndd_encoding() {
+        use crate::inst::orq_rvm;
+
+        let inst = orq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1809CA");
+    }
+
+    #[test]
+    fn apx_orq_rvm_ndd_disp8_is_unscaled() {
+        use crate::inst::orq_rvm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = orq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418097F50");
+    }
+
+    #[test]
+    fn apx_xorq_rvm_ndd_encoding() {
+        use crate::inst::xorq_rvm;
+
+        let inst = xorq_rvm::<FuzzRegs>::new(FuzzReg::new(1), FuzzReg::new(0), FuzzReg::new(2));
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4FC1831CA");
+    }
+
+    #[test]
+    fn apx_xorq_rvm_ndd_disp8_is_unscaled() {
+        use crate::inst::xorq_rvm;
+        use crate::mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, GprMem};
+
+        let mem: GprMem<FuzzReg, FuzzReg> = GprMem::Mem(Amode::ImmReg {
+            base: FuzzReg::new(7),
+            simm32: AmodeOffsetPlusKnownOffset {
+                simm32: AmodeOffset::new(0x50),
+                offset: None,
+            },
+            trap: None,
+        });
+        let inst = xorq_rvm::<FuzzRegs>::new(FuzzReg::new(7), FuzzReg::new(7), mem);
+        let assembled = assemble(&inst.into());
+        assert_eq!(pretty_print_hexadecimal(&assembled), "62F4C418317F50");
+    }
 }

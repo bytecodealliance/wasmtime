@@ -306,6 +306,18 @@
 
 ;; `i64` and smaller.
 
+;; APX: when the `has_apx` feature is enabled, use the NDD (new-data-
+;; destination) form of `sub` for 64-bit subtracts. Unlike the legacy two-
+;; operand `sub`, the NDD form writes its result to a fresh register encoded in
+;; the EVEX `vvvv` field, so the register allocator does not need to insert a
+;; move to preserve either input.
+;;
+;; Note that the NDD form computes `dest = rm - reg`, so the minuend goes in
+;; ModRM.rm (the second argument here) and the subtrahend in ModRM.reg.
+(rule isub_apx_ndd 1 (lower (isub $I64 x y))
+      (if-let true (use_apx))
+      (x64_subq_rvm (put_in_gpr y) x))
+
 ;; Sub two registers.
 (rule -3 (lower (isub (fits_in_64 ty) x y))
       (x64_sub ty x y))
@@ -369,6 +381,12 @@
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `{i,b}64` and smaller.
+
+;; APX: when the `has_apx` feature is enabled, use the NDD form of `and` for
+;; 64-bit integer values.
+(rule band_apx_ndd 3 (lower (band $I64 x y))
+      (if-let true (use_apx))
+      (x64_andq_rvm x y))
 
 ;; And two registers.
 (rule 0 (lower (band ty x y))
@@ -499,6 +517,12 @@
 
 ;; `{i,b}64` and smaller.
 
+;; APX: when the `has_apx` feature is enabled, use the NDD form of `or` for
+;; 64-bit integer values.
+(rule bor_apx_ndd 3 (lower (bor $I64 x y))
+      (if-let true (use_apx))
+      (x64_orq_rvm x y))
+
 ;; Or two registers.
 (rule 0 (lower (bor ty x y))
       (if (ty_int_ref_scalar_64 ty))
@@ -571,6 +595,12 @@
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `{i,b}64` and smaller.
+
+;; APX: when the `has_apx` feature is enabled, use the NDD form of `xor` for
+;; 64-bit integer values.
+(rule bxor_apx_ndd 3 (lower (bxor $I64 x y))
+      (if-let true (use_apx))
+      (x64_xorq_rvm x y))
 
 ;; Xor two registers.
 (rule 0 (lower (bxor ty x y))
