@@ -1903,12 +1903,15 @@ mod test_programs {
         // Both limits are handed to a semaphore, so a zero leaves the server
         // listening but never serving anything.
         let component = P2_CLI_SERVE_HELLO_WORLD_COMPONENT;
+        let too_large = format!("={}", usize::MAX);
         for option in [
-            "--max-concurrent-requests=0",
-            "--max-concurrent-connections=0",
+            "--max-concurrent-requests=0".to_string(),
+            "--max-concurrent-connections=0".to_string(),
+            format!("--max-concurrent-requests{too_large}"),
+            format!("--max-concurrent-connections{too_large}"),
         ] {
             let mut cmd = super::get_wasmtime_command()?;
-            cmd.args(["serve", "-Scli", option, component])
+            cmd.args(["serve", "-Scli", option.as_str(), component])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::piped());
