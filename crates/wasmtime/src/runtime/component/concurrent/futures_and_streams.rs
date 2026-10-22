@@ -2332,11 +2332,26 @@ impl fmt::Debug for ReadState {
     }
 }
 
-fn return_code(kind: TransmitKind, state: StreamResult, count: ItemCount) -> Result<ReturnCode> {
-    Ok(match state {
-        StreamResult::Dropped => ReturnCode::Dropped(count),
-        StreamResult::Completed => ReturnCode::completed(kind, count),
-        StreamResult::Cancelled => ReturnCode::Cancelled(count),
+fn return_code(
+    kind: TransmitKind,
+    state: StreamResult,
+    count: ItemCount,
+    cancel: bool,
+) -> Result<ReturnCode> {
+    // The spec says that for streams the priority of return codes is
+    //
+    //   DROPPED > CANCELLED > COMPLETED
+    //
+    // where for futures it's
+    //
+    //   COMPLETED > DROPPED > CANCELLED
+    //
+    // which is what's implemented here.
+    Ok(match (state, kind) {
+        (StreamResult::Dropped, _) => ReturnCode::Dropped(count),
+        (StreamResult::Completed, TransmitKind::Stream) if cancel => ReturnCode::Cancelled(count),
+        (StreamResult::Completed, _) => ReturnCode::completed(kind, count),
+        (StreamResult::Cancelled, _) => ReturnCode::Cancelled(count),
     })
 }
 
@@ -2348,12 +2363,13 @@ fn settle_host_read(
     let ReadState::HostReady {
         consume,
         guest_offset,
+        cancel,
         ..
     } = mem::replace(&mut transmit.read, ReadState::Open)
     else {
         bail_bug!("expected ReadState::HostReady")
     };
-    let code = return_code(kind, state, guest_offset)?;
+    let code = return_code(kind, state, guest_offset, cancel)?;
     transmit.read = match state {
         StreamResult::Dropped => ReadState::Dropped,
         StreamResult::Completed | StreamResult::Cancelled => ReadState::HostReady {
@@ -2375,12 +2391,13 @@ fn settle_host_write(
         produce,
         try_into,
         guest_offset,
+        cancel,
         ..
     } = mem::replace(&mut transmit.write, WriteState::Open)
     else {
         bail_bug!("expected WriteState::HostReady")
     };
-    let code = return_code(kind, state, guest_offset)?;
+    let code = return_code(kind, state, guest_offset, cancel)?;
     transmit.write = match state {
         StreamResult::Dropped => WriteState::Dropped,
         StreamResult::Completed | StreamResult::Cancelled => WriteState::HostReady {
@@ -2733,7 +2750,6 @@ impl<T> StoreContextMut<'_, T> {
                                 {
                                     let WriteState::HostReady {
                                         guest_offset,
-                                        cancel,
                                         cancel_waker,
                                         ..
                                     } = &mut transmit.write
@@ -2741,7 +2757,7 @@ impl<T> StoreContextMut<'_, T> {
                                         bail_bug!("expected WriteState::HostReady")
                                     };
 
-                                    if poll.is_pending() {
+                                    *cancel_waker = if poll.is_pending() {
                                         if !buffer.remaining().is_empty()
                                             || *guest_offset > 0
                                             || host_offset > 0
@@ -2751,11 +2767,10 @@ impl<T> StoreContextMut<'_, T> {
                                                  after producing at least one item"
                                             )
                                         }
-                                        *cancel_waker = Some(cx.waker().clone());
+                                         Some(cx.waker().clone())
                                     } else {
-                                        *cancel_waker = None;
-                                        *cancel = false;
-                                    }
+                                         None
+                                    };
                                 }
 
                                 Ok(poll.map(|v| v.map(|result| (result, cancel))))
@@ -2893,18 +2908,14 @@ impl<T> StoreContextMut<'_, T> {
                             cancel,
                         );
 
-                        if let ReadState::HostReady {
-                            cancel_waker,
-                            cancel,
-                            ..
-                        } = &mut store.concurrent_state_mut()?.get_mut(id)?.read
+                        if let ReadState::HostReady { cancel_waker, .. } =
+                            &mut store.concurrent_state_mut()?.get_mut(id)?.read
                         {
-                            if poll.is_pending() {
-                                *cancel_waker = Some(cx.waker().clone());
+                            *cancel_waker = if poll.is_pending() {
+                                Some(cx.waker().clone())
                             } else {
-                                *cancel_waker = None;
-                                *cancel = false;
-                            }
+                                None
+                            };
                         }
 
                         Ok(poll.map(|v| v.map(|result| (result, cancel))))

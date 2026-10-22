@@ -3742,3 +3742,77 @@ async fn resource_drop_async_dtor_yields() -> Result<()> {
     r.resource_drop_async(&mut store).await?;
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn cancel_stream_read_completed_by_host() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc (memory (export "memory") 1))
+  (core instance $libc (instantiate $libc))
+  (type $s (stream u8))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "memory"))))
+  (core func $stream.cancel-read (canon stream.cancel-read $s))
+  (core func $task.return (canon task.return (result u32)))
+  (core module $m
+    (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+    (import "" "stream.cancel-read" (func $stream.cancel-read (param i32) (result i32)))
+    (import "" "task.return" (func $task.return (param i32)))
+    (func (export "run") (param $r i32) (result i32)
+      (if (i32.ne (call $stream.read (local.get $r) (i32.const 0) (i32.const 4))
+            (i32.const -1 (; BLOCKED ;)))
+        (then unreachable))
+      (call $task.return (call $stream.cancel-read (local.get $r)))
+      (i32.const 0 (; EXIT ;)))
+    (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+  )
+  (core instance $i (instantiate $m (with "" (instance
+    (export "stream.read" (func $stream.read))
+    (export "stream.cancel-read" (func $stream.cancel-read))
+    (export "task.return" (func $task.return))))))
+  (func (export "run") async (param "s" $s) (result u32)
+    (canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let run = instance.get_typed_func::<(StreamReader<u8>,), (u32,)>(&mut store, "run")?;
+
+    // The host only completes the read, with one item, once the guest cancels
+    // it, which must still report CANCELLED(1).
+    let reader = StreamReader::new(&mut store, ProduceOnFinish)?;
+    let (code,) = run.call_async(&mut store, (reader,)).await?;
+    assert_eq!(code, (1 << 4) | 2, "{code:#x}");
+    return Ok(());
+
+    struct ProduceOnFinish;
+
+    impl StreamProducer<()> for ProduceOnFinish {
+        type Item = u8;
+        type Buffer = Option<u8>;
+
+        fn poll_produce<'a>(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<'a, ()>,
+            mut destination: Destination<'a, u8, Option<u8>>,
+            finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            if finish {
+                destination.set_buffer(Some(0));
+                Poll::Ready(Ok(StreamResult::Completed))
+            } else {
+                Poll::Pending
+            }
+        }
+    }
+}
