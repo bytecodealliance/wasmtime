@@ -362,6 +362,7 @@ fn passive_elem_segment_drop(
 }
 
 // Implementation of `memory.copy`.
+#[inline]
 unsafe fn memory_copy(
     _store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -375,6 +376,7 @@ unsafe fn memory_copy(
     unsafe { src.copy_to(dst, len) }
 }
 
+#[inline]
 unsafe fn memory_fill(
     _store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -425,6 +427,7 @@ fn table_get_lazy_init_func_ref(
 
 /// Drop a GC reference.
 #[cfg(feature = "gc-drc")]
+#[inline]
 fn drop_gc_ref(store: &mut dyn VMStore, _instance: InstanceId, gc_ref: u32) {
     log::trace!("libcalls::drop_gc_ref({gc_ref:#x})");
     let gc_ref = VMGcRef::from_raw_u32(gc_ref).expect("non-null VMGcRef");
@@ -436,6 +439,7 @@ fn drop_gc_ref(store: &mut dyn VMStore, _instance: InstanceId, gc_ref: u32) {
 
 /// Force a DRC GC cycle.
 #[cfg(feature = "gc-drc")]
+#[inline]
 fn force_gc(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
     let store = store.store_opaque_mut();
     block_on!(store, async |store, asyncness| {
@@ -447,6 +451,7 @@ fn force_gc(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
 
 /// Grow the GC heap.
 #[cfg(feature = "gc-null")]
+#[inline]
 fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u64) -> Result<()> {
     let orig_len = u64::try_from(
         store
@@ -490,6 +495,7 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
 ///
 /// The Wasm code is responsible for initializing the object.
 #[cfg(any(feature = "gc-drc", feature = "gc-copying"))]
+#[inline]
 fn gc_alloc_raw(
     store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -550,6 +556,7 @@ fn gc_alloc_raw(
 //
 // This libcall may not GC.
 #[cfg(feature = "gc")]
+#[inline]
 unsafe fn intern_func_ref_for_gc_heap(
     store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -578,6 +585,7 @@ unsafe fn intern_func_ref_for_gc_heap(
 //
 // This libcall may not GC.
 #[cfg(feature = "gc")]
+#[inline]
 fn get_interned_func_ref(
     store: &mut dyn VMStore,
     instance: InstanceId,
@@ -663,6 +671,7 @@ unsafe fn get_interned_contref(
 }
 
 #[cfg(feature = "gc")]
+#[inline]
 fn is_subtype(
     store: &mut dyn VMStore,
     _instance: InstanceId,
