@@ -53,6 +53,7 @@ bumpalo = { workspace = true }
 fxprof-processed-profile = { version = "0.8.1", optional = true }
 gimli = { workspace = true, optional = true }
 addr2line = { workspace = true, optional = true }
+indexmap = { workspace = true, optional = true }
 semver = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
 bitflags = { workspace = true }
@@ -233,6 +234,7 @@ component-model = [
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
   "dep:semver",
+  "dep:indexmap",
 ]
 
 wmemcheck = [

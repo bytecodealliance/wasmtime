@@ -166,6 +166,7 @@ pub mod __internal {
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
     pub use alloc::boxed::Box;
+    pub use alloc::collections::BTreeMap;
     pub use alloc::string::String;
     pub use alloc::vec::Vec;
     pub use core::cell::RefCell;
@@ -501,6 +502,12 @@ pub(crate) use self::store::ComponentStoreData;
 ///         serde::Deserialize,
 ///         serde::Serialize,
 ///     ],
+///
+///     // The Rust type to use for WIT `map<K, V>` types: `BTreeMap`,
+///     // `std::collections::HashMap`, or `indexmap::IndexMap`.
+///     //
+///     // By default this is `BTreeMap`.
+///     map_type: std::collections::HashMap,
 ///
 ///     // An niche configuration option to require that the `T` in `Store<T>`
 ///     // is always `Send` in the generated bindings. Typically not needed

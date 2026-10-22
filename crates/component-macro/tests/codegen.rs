@@ -1316,3 +1316,100 @@ mod include_component_type {
         assert_eq!(world.exports.len(), 1);
     }
 }
+
+mod map_type {
+    mod default {
+        use std::collections::{BTreeMap, BTreeSet, HashSet};
+        use wasmtime::{Result, Store};
+
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline;
+
+                interface maps {
+                    type names-by-id = map<u32, string>;
+
+                    record entry {
+                        label: string,
+                        values: map<string, u32>,
+                    }
+
+                    named: func(a: names-by-id) -> names-by-id;
+                    anonymous: func(a: map<string, list<u8>>) -> map<string, u32>;
+                    record-roundtrip: func(a: entry) -> entry;
+                }
+
+                world maps-world {
+                    import maps;
+                    export maps;
+                }
+            ",
+            // Maps are `BTreeMap`s by default, which implement these traits,
+            // so they can be derived for records containing maps.
+            additional_derives: [Hash, PartialEq, Eq, PartialOrd, Ord],
+        });
+
+        use my::inline::maps::{Entry, Host, NamesById};
+
+        struct X;
+
+        impl Host for X {
+            fn named(&mut self, a: NamesById) -> BTreeMap<u32, String> {
+                a
+            }
+
+            fn anonymous(&mut self, a: BTreeMap<String, Vec<u8>>) -> BTreeMap<String, u32> {
+                a.into_iter()
+                    .map(|(k, v)| (k, u32::try_from(v.len()).unwrap()))
+                    .collect()
+            }
+
+            fn record_roundtrip(&mut self, a: Entry) -> Entry {
+                let _ = BTreeSet::from([a.clone()]);
+                let _ = HashSet::from([a.clone()]);
+                a
+            }
+        }
+
+        fn call_exports(store: &mut Store<()>, bindings: &MapsWorld) -> Result<()> {
+            let maps = bindings.my_inline_maps();
+            let _: BTreeMap<u32, String> = maps.call_named(&mut *store, &BTreeMap::new())?;
+            let entry = exports::my::inline::maps::Entry {
+                label: String::new(),
+                values: BTreeMap::new(),
+            };
+            let _ = maps.call_record_roundtrip(&mut *store, &entry)?;
+            Ok(())
+        }
+    }
+
+    mod custom_hasher {
+        use std::collections::HashMap;
+        use std::hash::{BuildHasherDefault, DefaultHasher};
+
+        pub type CustomMap<K, V> = HashMap<K, V, BuildHasherDefault<DefaultHasher>>;
+
+        wasmtime::component::bindgen!({
+            inline: "
+                package my:inline;
+
+                interface maps {
+                    named: func(a: map<u32, string>) -> map<string, u32>;
+                }
+
+                world maps-world {
+                    import maps;
+                }
+            ",
+            map_type: crate::map_type::custom_hasher::CustomMap,
+        });
+
+        struct X;
+
+        impl my::inline::maps::Host for X {
+            fn named(&mut self, a: CustomMap<u32, String>) -> CustomMap<String, u32> {
+                a.into_iter().map(|(k, v)| (v, k)).collect()
+            }
+        }
+    }
+}
