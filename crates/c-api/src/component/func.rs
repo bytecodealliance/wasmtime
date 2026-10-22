@@ -14,10 +14,12 @@ pub unsafe extern "C" fn wasmtime_component_func_call(
     let c_args = unsafe { crate::slice_from_raw_parts(args, args_len) };
     let c_results = unsafe { crate::slice_from_raw_parts_mut(results, results_len) };
 
-    let args = c_args.iter().map(Val::from).collect::<Vec<_>>();
     let mut results = vec![Val::Bool(false); results_len];
-
-    let result = func.call(&mut context, &args, &mut results);
+    let result = c_args
+        .iter()
+        .map(Val::try_from)
+        .collect::<wasmtime::Result<Vec<_>>>()
+        .and_then(|args| func.call(&mut context, &args, &mut results));
 
     crate::handle_result(result, |_| {
         for (c_val, rust_val) in std::iter::zip(c_results, results) {
@@ -40,7 +42,13 @@ pub unsafe extern "C" fn wasmtime_component_func_call_async<'a>(
     let c_args = unsafe { crate::slice_from_raw_parts(args, args_len) };
     let c_results = unsafe { crate::slice_from_raw_parts_mut(results, results_len) };
     let fut = Box::pin(async move {
-        let args = c_args.iter().map(Val::from).collect::<Vec<_>>();
+        let args = match c_args.iter().map(Val::try_from).collect::<wasmtime::Result<Vec<_>>>() {
+            Ok(args) => args,
+            Err(err) => {
+                *err_ret = Box::into_raw(Box::new(wasmtime_error_t::from(err)));
+                return;
+            }
+        };
         let mut results = vec![Val::Bool(false); c_results.len()];
 
         match func.call_async(&mut context, &args, &mut results).await {

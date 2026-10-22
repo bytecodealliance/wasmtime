@@ -1170,3 +1170,62 @@ TEST(component, resources) {
   EXPECT_TRUE(r5.owned());
   EXPECT_EQ(r5.type(), ResourceType(2));
 }
+
+TEST(component, value_invalid_char_and_string) {
+  // A surrogate isn't a valid `char`, as an argument or a host result.
+  auto ctx = create(
+      R"(char)", R"(
+(param $x i32)
+(result i32)
+local.get $x
+call $do
+	  )",
+      "(param i32) (result i32)",
+      +[](Store::Context, const FuncType &, Span<const Val>,
+          Span<Val> rets) -> Result<std::monostate> {
+        rets[0] = Val::char_(0xd800);
+        return std::monostate();
+      });
+
+  auto arg = Val::char_(0xd800);
+  auto res = Val(false);
+  EXPECT_FALSE(
+      ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1)));
+
+  arg = Val::char_('a');
+  EXPECT_FALSE(
+      ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1)));
+
+  // Strings must be valid UTF-8, as an argument or a host result.
+  ctx = create(
+      R"(string)", R"(
+(param $x i32)
+(param $y i32)
+(result i32)
+(local $res i32)
+local.get $x
+local.get $y
+(call $realloc
+	(i32.const 0)
+	(i32.const 0)
+	(i32.const 4)
+	(i32.const 8))
+local.tee $res
+call $do
+local.get $res
+	  )",
+      "(param i32 i32 i32)",
+      +[](Store::Context, const FuncType &, Span<const Val>,
+          Span<Val> rets) -> Result<std::monostate> {
+        rets[0] = Val::string("\xff\xfe");
+        return std::monostate();
+      });
+
+  arg = Val::string("\xff\xfe");
+  EXPECT_FALSE(
+      ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1)));
+
+  arg = Val::string("ok");
+  EXPECT_FALSE(
+      ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1)));
+}

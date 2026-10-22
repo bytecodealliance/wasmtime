@@ -13,3 +13,9 @@ TEST(Engine, Simple) {
   engine2 = Engine();
   engine.is_pulley();
 }
+
+TEST(Engine, InvalidConfig) {
+  wasm_config_t *config = wasm_config_new();
+  wasmtime_config_cranelift_flag_set(config, "no_such_flag", "true");
+  EXPECT_EQ(wasm_engine_new_with_config(config), nullptr);
+}
