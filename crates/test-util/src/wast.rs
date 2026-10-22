@@ -204,6 +204,7 @@ fn spec_test_config(test: &Path) -> TestConfig {
                 || test_name.contains("unreached-valid")
                 || test_name.contains("select")
                 || test_name.contains("data")
+                || test_name.contains("cast")
             {
                 ret.gc = Some(true);
             }
@@ -224,6 +225,7 @@ fn spec_test_config(test: &Path) -> TestConfig {
                 || test_name.contains("ref")
                 || test_name.contains("instance")
                 || test_name.contains("imports")
+                || test_name.contains("cast")
             {
                 ret.exceptions = Some(true);
             }
