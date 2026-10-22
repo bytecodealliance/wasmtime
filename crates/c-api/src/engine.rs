@@ -28,9 +28,7 @@ pub extern "C" fn wasm_engine_new() -> Box<wasm_engine_t> {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn wasm_engine_new_with_config(
-    c: Box<wasm_config_t>,
-) -> Option<Box<wasm_engine_t>> {
+pub extern "C" fn wasm_engine_new_with_config(c: Box<wasm_config_t>) -> Option<Box<wasm_engine_t>> {
     #[cfg(feature = "logging")]
     drop(env_logger::try_init());
 

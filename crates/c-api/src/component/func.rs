@@ -42,7 +42,11 @@ pub unsafe extern "C" fn wasmtime_component_func_call_async<'a>(
     let c_args = unsafe { crate::slice_from_raw_parts(args, args_len) };
     let c_results = unsafe { crate::slice_from_raw_parts_mut(results, results_len) };
     let fut = Box::pin(async move {
-        let args = match c_args.iter().map(Val::try_from).collect::<wasmtime::Result<Vec<_>>>() {
+        let args = match c_args
+            .iter()
+            .map(Val::try_from)
+            .collect::<wasmtime::Result<Vec<_>>>()
+        {
             Ok(args) => args,
             Err(err) => {
                 *err_ret = Box::into_raw(Box::new(wasmtime_error_t::from(err)));
