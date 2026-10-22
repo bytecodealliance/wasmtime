@@ -3002,7 +3002,11 @@
   (rv_vrgather_vv x y (unmasked) ty))
 
 (rule 1 (lower (swizzle (ty_supported_vec ty) x (splat _ y)))
-  (rv_vrgather_vx x y (unmasked) ty))
+  ;; The upper bits of an `i8`/`i16`/`i32` value are not guaranteed to be
+  ;; zero, and `vrgather.vx` uses the full scalar register as the index.
+  ;; Zero-extend the index first so out-of-range upper bits can't change the
+  ;; result.
+  (rv_vrgather_vx x (zext y) (unmasked) ty))
 
 (rule 2 (lower (swizzle (ty_supported_vec ty) x y))
   (if-let y_imm (replicated_uimm5 y))
