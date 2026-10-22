@@ -91,7 +91,7 @@ pub fn link_spectest<T>(
 pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<()> {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
-    use wasmtime::component::{Resource, ResourceType};
+    use wasmtime::component::{FutureReader, Resource, ResourceType};
 
     let engine = linker.engine().clone();
     linker
@@ -221,5 +221,8 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
         },
     )?;
     i.func_wrap("return-hi", |_cx, (): ()| Ok(("hi".to_string(),)))?;
+    i.func_wrap("unit-future", |mut cx, (): ()| {
+        Ok((FutureReader::new(&mut cx, async { Ok::<_, Error>(()) })?,))
+    })?;
     Ok(())
 }
