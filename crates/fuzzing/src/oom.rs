@@ -14,7 +14,7 @@ use std::{
     task::{Context, Poll},
     time,
 };
-use wasmtime_core::error::{OutOfMemory, Result, bail, ensure};
+use wasmtime_core::error::{Context as _, OutOfMemory, Result, bail, ensure};
 
 /// An allocator for use with `OomTest`.
 #[non_exhaustive]
@@ -221,6 +221,24 @@ unsafe impl GlobalAlloc for OomTestAllocator {
 ///         })
 /// }
 /// ```
+///
+/// Use `test_with_reuse` when you also want to check that some context is still
+/// usable after the OOM, e.g. that nothing was left half-registered in state
+/// that is shared with an `Engine`:
+///
+/// ```no_run
+/// use wasmtime::Result;
+/// use wasmtime_fuzzing::oom::OomTest;
+///
+/// #[test]
+/// fn my_oom_reuse_test() -> Result<()> {
+///     OomTest::new().test_with_reuse(
+///         || todo!("create the context that is reused after the OOM..."),
+///         |context| todo!("insert code here that should handle OOM here..."),
+///         |context| todo!("check that `context` is still usable..."),
+///     )
+/// }
+/// ```
 pub struct OomTest {
     max_iters: Option<u32>,
     max_duration: Option<time::Duration>,
@@ -319,7 +337,58 @@ impl OomTest {
 
     /// The same as `test` but `async`.
     pub async fn test_async(&self, test_func: impl AsyncFn() -> Result<()>) -> Result<()> {
-        let total_allocs = Self::count_allocations(&test_func).await?;
+        self.test_with_reuse_async(
+            async || Ok(()),
+            async |_: &mut ()| test_func().await,
+            async |_: ()| Ok(()),
+        )
+        .await
+    }
+
+    /// The same as `test`, but additionally exercising context that is reused
+    /// after the OOM is triggered.
+    ///
+    /// Each iteration runs three phases in sequence:
+    ///
+    /// 1. `make_context` creates the context that is shared between the two
+    ///    phases that follow. It is called afresh every iteration, so that each
+    ///    iteration begins from identical state.
+    ///
+    /// 2. `test_func` is the main OOM test, and is the only phase into which
+    ///    OOMs are injected. It is otherwise the same as the function given to
+    ///    `test`.
+    ///
+    /// 3. `post_oom_func` checks that we recovered from the OOM correctly and
+    ///    that we can still interact with the context afterwards, e.g. that
+    ///    nothing was left half-registered in shared state, rather than
+    ///    properly cleaned up, when the OOM happened.
+    ///
+    /// OOMs are never injected into `make_context` or `post_oom_func` and
+    /// neither's allocations are counted. An `Err(_)` returned from either is a
+    /// test failure.
+    pub fn test_with_reuse<T>(
+        &self,
+        make_context: impl Fn() -> Result<T>,
+        test_func: impl Fn(&mut T) -> Result<()>,
+        post_oom_func: impl Fn(T) -> Result<()>,
+    ) -> Result<()> {
+        let future = self.test_with_reuse_async(
+            async || make_context(),
+            async |context: &mut T| test_func(context),
+            async |context: T| post_oom_func(context),
+        );
+        crate::block_on(future)
+    }
+
+    /// The same as `test_with_reuse` but `async`.
+    pub async fn test_with_reuse_async<T>(
+        &self,
+        make_context: impl AsyncFn() -> Result<T>,
+        test_func: impl AsyncFn(&mut T) -> Result<()>,
+        post_oom_func: impl AsyncFn(T) -> Result<()>,
+    ) -> Result<()> {
+        let total_allocs =
+            Self::count_allocations(&make_context, &test_func, &post_oom_func).await?;
 
         let start = time::Instant::now();
 
@@ -331,7 +400,8 @@ impl OomTest {
             }
 
             log::trace!("=== Injecting OOM after {i} allocations ===");
-            self.run_one_oom_injection(&test_func, i).await?;
+            self.run_one_oom_injection(&make_context, &test_func, &post_oom_func, i)
+                .await?;
         }
 
         Ok(())
@@ -353,7 +423,12 @@ impl OomTest {
             None => bail!("OomTest::fuzz requires max_iters to be set"),
         };
 
-        let total_allocs = Self::count_allocations(&test_func).await?;
+        let make_context = async || Ok(());
+        let test_func = async |_: &mut ()| test_func().await;
+        let post_oom_func = async |_: ()| Ok(());
+
+        let total_allocs =
+            Self::count_allocations(&make_context, &test_func, &post_oom_func).await?;
 
         if total_allocs == 0 {
             return Ok(());
@@ -364,7 +439,8 @@ impl OomTest {
         for _ in 0..max_iters {
             let i = rng.random_range(0..total_allocs);
             log::trace!("=== Injecting OOM after {i} allocations (fuzz) ===");
-            self.run_one_oom_injection(&test_func, i).await?;
+            self.run_one_oom_injection(&make_context, &test_func, &post_oom_func, i)
+                .await?;
         }
 
         Ok(())
@@ -372,21 +448,29 @@ impl OomTest {
 
     /// Run the test function once, injecting OOM on the `i`th allocation, and
     /// check that the result correctly reflects whether an OOM was hit.
-    async fn run_one_oom_injection(
+    async fn run_one_oom_injection<T>(
         &self,
-        test_func: &impl AsyncFn() -> Result<()>,
+        make_context: &impl AsyncFn() -> Result<T>,
+        test_func: &impl AsyncFn(&mut T) -> Result<()>,
+        post_oom_func: &impl AsyncFn(T) -> Result<()>,
         i: u32,
     ) -> Result<()> {
-        let future = std::pin::pin!(test_func());
-        let (result, oom_state) = OomTestFuture::new(
-            future,
-            OomState::OomOnAlloc {
-                counter: i,
-                allow_alloc_after: self.allow_alloc_after_oom,
-                alloc_succeeds_after: self.alloc_succeeds_after_oom,
-            },
-        )
-        .await;
+        let mut context = make_context()
+            .await
+            .context("OOM test failed to create its reused context")?;
+
+        let (result, oom_state) = {
+            let future = std::pin::pin!(test_func(&mut context));
+            OomTestFuture::new(
+                future,
+                OomState::OomOnAlloc {
+                    counter: i,
+                    allow_alloc_after: self.allow_alloc_after_oom,
+                    alloc_succeeds_after: self.alloc_succeeds_after_oom,
+                },
+            )
+            .await
+        };
 
         match (result, oom_state) {
             (_, OomState::OutsideOomTest | OomState::Counting { .. }) => unreachable!(),
@@ -424,7 +508,9 @@ impl OomTest {
             }
         }
 
-        Ok(())
+        post_oom_func(context)
+            .await
+            .context("OOM test's post-OOM function failed")
     }
 
     /// Run the test function without injecting OOMs, counting allocations.
@@ -432,16 +518,31 @@ impl OomTest {
     /// Repeats until the count stabilizes across two consecutive runs,
     /// since the first run may change internal state (e.g. grow hash map
     /// capacities) that subsequent runs reuse.
-    async fn count_allocations(test_func: &impl AsyncFn() -> Result<()>) -> Result<u32> {
+    async fn count_allocations<T>(
+        make_context: &impl AsyncFn() -> Result<T>,
+        test_func: &impl AsyncFn(&mut T) -> Result<()>,
+        post_oom_func: &impl AsyncFn(T) -> Result<()>,
+    ) -> Result<u32> {
         const MAX_DRY_RUN_ITERS: usize = 10;
 
         let mut total_allocs = u32::MAX;
         for i in 0..MAX_DRY_RUN_ITERS {
             log::trace!("=== Counting allocations (dry run {i}) ===");
-            let future = std::pin::pin!(test_func());
-            let (result, oom_state) =
-                OomTestFuture::new(future, OomState::Counting { count: 0 }).await;
+
+            let mut context = make_context()
+                .await
+                .context("OOM test failed to create its reused context")?;
+
+            let (result, oom_state) = {
+                let future = std::pin::pin!(test_func(&mut context));
+                OomTestFuture::new(future, OomState::Counting { count: 0 }).await
+            };
             result?;
+
+            post_oom_func(context)
+                .await
+                .context("OOM test's post-OOM function failed")?;
+
             let count = match oom_state {
                 OomState::Counting { count } => count,
                 _ => unreachable!(),
