@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::{
     HeapType, Ref, RefType, Result, Val, ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque},
@@ -135,10 +136,18 @@ unsafe impl WasmTy for Option<NoneRef> {
     fn dynamic_concrete_type_check(
         &self,
         _store: &StoreOpaque,
-        _nullable: bool,
-        _ty: &HeapType,
+        nullable: bool,
+        ty: &HeapType,
     ) -> Result<()> {
-        unreachable!()
+        if nullable {
+            // `(ref null none) <: (ref null $t)` for all struct and array
+            // types `$t`, and this method is only ever invoked with concrete
+            // types in the `any` type hierarchy, so there's no need to check
+            // for concrete function references or such here.
+            Ok(())
+        } else {
+            bail!("argument type mismatch: expected non-nullable (ref {ty}), found null reference")
+        }
     }
 
     #[inline]
