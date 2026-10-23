@@ -403,7 +403,7 @@ async fn module_registry_reuse_store() -> Result<()> {
         module_linker: Linker<()>,
     }
 
-    let make_context = || -> Result<Context> {
+    let make_context = async || -> Result<Context> {
         let mut store = Store::try_new(&engine, ())?;
         let host_func = Func::try_wrap(&mut store, || 100i32)?;
         let mut module_linker = Linker::<()>::new(&engine);
@@ -425,7 +425,7 @@ async fn module_registry_reuse_store() -> Result<()> {
     OomTest::new()
         .allow_alloc_after_oom(true)
         .test_with_reuse_async(
-            async || make_context(),
+            async || make_context().await,
             async |cx: &mut Context| {
                 let imports = [cx.host_func.into()];
 
@@ -489,6 +489,100 @@ async fn module_registry_reuse_store() -> Result<()> {
                     !trace.frames().is_empty(),
                     "backtrace should have at least one frame"
                 );
+
+                Ok(())
+            },
+        )
+        .await
+}
+
+/// Check that an OOM partway through a pooling allocation returns every slot
+/// it took.
+///
+/// The pools hold exactly one of everything, so a leaked slot fails the
+/// post-OOM instantiation.
+#[tokio::test]
+async fn pooling_allocator_reuse_engine() -> Result<()> {
+    let module_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        let engine = Engine::new(&config)?;
+        Module::new(
+            &engine,
+            r#"
+                (module
+                    (memory (export "m") 1)
+                    (table (export "t") 1 funcref)
+                    (func (export "f") (result i32) (i32.const 42))
+                )
+            "#,
+        )?
+        .serialize()?
+    };
+
+    struct Context {
+        engine: Engine,
+        module: Module,
+    }
+
+    let make_context = async || -> Result<Context> {
+        let mut pool = PoolingAllocationConfig::default();
+        pool.total_memories(1);
+        pool.total_tables(1);
+        pool.total_core_instances(1);
+        pool.total_stacks(1);
+
+        let mut config = Config::new();
+        config.enable_compiler(false);
+        config.concurrency_support(false);
+        config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+        let engine = Engine::new(&config)?;
+        let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+
+        // Warm every pool outside the OOM region: on macOS a
+        // `std::sync::Mutex` infallibly box-allocates its pthread mutex on
+        // first lock, which would abort under an injected OOM.
+        let mut store = Store::try_new(&engine, ())?;
+        let instance = Instance::new_async(&mut store, &module, &[]).await?;
+        let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+        assert_eq!(f.call_async(&mut store, ()).await?, 42);
+        drop(store);
+
+        Ok(Context { engine, module })
+    };
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .test_with_reuse_async(
+            async || make_context().await,
+            async |cx: &mut Context| {
+                // Every slot taken here must come back on drop.
+                let mut store = Store::try_new(&cx.engine, ())?;
+                let instance = Instance::new_async(&mut store, &cx.module, &[]).await?;
+                let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+                assert_eq!(f.call_async(&mut store, ()).await?, 42);
+                drop(store);
+
+                // Re-allocate the slots just returned.
+                let mut store = Store::try_new(&cx.engine, ())?;
+                let instance = Instance::new_async(&mut store, &cx.module, &[]).await?;
+                let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+                assert_eq!(f.call_async(&mut store, ()).await?, 42);
+
+                Ok(())
+            },
+            async |cx: Context| {
+                // With room for exactly one of each, this only succeeds if
+                // nothing was leaked.
+                let mut store = Store::try_new(&cx.engine, ())?;
+                let instance = Instance::new_async(&mut store, &cx.module, &[]).await?;
+                let f = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+                assert_eq!(f.call_async(&mut store, ()).await?, 42);
+
+                let memory = instance.get_memory(&mut store, "m").unwrap();
+                assert_eq!(memory.size(&store), 1);
+                let table = instance.get_table(&mut store, "t").unwrap();
+                assert_eq!(table.size(&store), 1);
 
                 Ok(())
             },
