@@ -179,9 +179,7 @@ impl Engine {
         for (module_ty, module_trampoline_ty) in module_types.trampoline_types() {
             let shared_ty = types[module_ty];
             let trampoline_shared_ty = registry.trampoline_type(shared_ty);
-            trampolines
-                .insert(trampoline_shared_ty, Some(module_trampoline_ty).into())
-                .expect("reserved space");
+            trampolines.insert(trampoline_shared_ty, Some(module_trampoline_ty).into())?;
         }
 
         // Finally, to ensure that no matter which API from which layer
