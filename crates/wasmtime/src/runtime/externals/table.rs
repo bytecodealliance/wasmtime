@@ -315,9 +315,10 @@ impl Table {
     /// [`Store::limiter_async`](`crate::Store::limiter_async`)).  When using an
     /// async resource limiter, use [`Table::grow_async`] instead.
     ///
-    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
-    /// memory allocation fails. See the `OutOfMemory` type's documentation for
-    /// details on Wasmtime's out-of-memory handling.
+    /// This function will handle out-of-memory conditions and report an error
+    /// in such cases, see the `OutOfMemory` type's documentation for details on
+    /// Wasmtime's out-of-memory handling. Note that the `OutOfMemory` type may
+    /// not literally be returned for detecting this condition.
     ///
     /// # Panics
     ///
@@ -369,9 +370,7 @@ impl Table {
     ///
     /// # Errors
     ///
-    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
-    /// memory allocation fails. See the `OutOfMemory` type's documentation for
-    /// details on Wasmtime's out-of-memory handling.
+    /// This function may return errors for the same reasons as [`Table::grow`].
     ///
     /// # Panics
     ///

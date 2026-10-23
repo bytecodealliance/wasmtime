@@ -609,9 +609,10 @@ impl Memory {
     /// [`Store::limiter_async`](`crate::Store::limiter_async`). When using an
     /// async resource limiter, use [`Memory::grow_async`] instead.
     ///
-    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
-    /// memory allocation fails. See the `OutOfMemory` type's documentation for
-    /// details on Wasmtime's out-of-memory handling.
+    /// This function will handle out-of-memory conditions and report an error
+    /// in such cases, see the `OutOfMemory` type's documentation for details on
+    /// Wasmtime's out-of-memory handling. Note that the `OutOfMemory` type may
+    /// not literally be returned for detecting this condition.
     ///
     /// # Panics
     ///
@@ -653,9 +654,8 @@ impl Memory {
     ///
     /// # Errors
     ///
-    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
-    /// memory allocation fails. See the `OutOfMemory` type's documentation for
-    /// details on Wasmtime's out-of-memory handling.
+    /// This function will return errors for the same reasons as
+    /// [`Memory::grow`].
     #[cfg(feature = "async")]
     pub async fn grow_async(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut();
@@ -1165,14 +1165,8 @@ impl SharedMemory {
     ///
     /// # Errors
     ///
-    /// Returns an error if memory could not be grown, for example if it exceeds
-    /// the maximum limits of this memory. A
-    /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
-    /// preventing a memory to grow.
-    ///
-    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
-    /// memory allocation fails. See the `OutOfMemory` type's documentation for
-    /// details on Wasmtime's out-of-memory handling.
+    /// This function will return errors for a similar reason as
+    /// [`Memory::grow`].
     pub fn grow(&self, delta: u64) -> Result<u64> {
         match self.vm.grow(delta)? {
             Some((old_size, _new_size)) => {
