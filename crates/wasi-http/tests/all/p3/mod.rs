@@ -192,6 +192,46 @@ async fn run_cli(path: &str, server: &Server) -> wasmtime::Result<()> {
         .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
 }
 
+/// Run the `p3_http_api_bench` guest for a single iteration of each API to
+/// make sure it keeps working.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_api_bench() -> Result<()> {
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+        config.wasm_component_model_async(true);
+    });
+    let component = Component::from_file(&engine, P3_HTTP_API_BENCH_COMPONENT)?;
+    let mut linker = Linker::new(&engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+        .context("failed to link `wasi:cli@0.2.x`")?;
+    wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
+    wasmtime_wasi_http::p3::add_to_linker(&mut linker)
+        .context("failed to link `wasi:http@0.3.x`")?;
+
+    for api in ["request.new", "response.consume-body", "client.send"] {
+        // `TestHooks` only accepts a single request to `p3-test`, so use a
+        // fresh store and a single iteration for each API.
+        let mut store = Store::new(
+            &engine,
+            Ctx {
+                wasi: WasiCtxBuilder::new()
+                    .args(&["p3_http_api_bench", api, "1"])
+                    .inherit_stdio()
+                    .build(),
+                ..Ctx::new(oneshot::channel().0)
+            },
+        );
+        let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+        store
+            .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
+            .await
+            .context("failed to call `wasi:cli/run#run`")?
+            .context("guest trapped")?
+            .map_err(|()| format_err!("`{api}` failed"))?;
+    }
+    Ok(())
+}
+
 async fn run_http<E: Into<Error> + 'static>(
     component_filename: &str,
     req: http::Request<impl Body<Data = Bytes, Error = E> + Send + Sync + 'static>,
