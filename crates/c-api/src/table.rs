@@ -73,7 +73,8 @@ pub unsafe extern "C" fn wasm_table_get(
     index: wasm_table_size_t,
 ) -> Option<Box<wasm_ref_t>> {
     let table = t.table();
-    let r = table.get(t.ext.store.context_mut(), u64::from(index))?;
+    let mut store = RootScope::new(t.ext.store.context_mut());
+    let r = table.get(&mut store, u64::from(index))?;
     wasm_ref_t::new(r)
 }
 
