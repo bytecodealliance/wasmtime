@@ -4931,6 +4931,7 @@ dependencies = [
  "hashbrown 0.17.0",
  "libc",
  "libm",
+ "libtest-mimic",
  "serde",
 ]
 

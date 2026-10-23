@@ -17,9 +17,14 @@ serde = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 libc = { workspace = true }
+libtest-mimic = { workspace = true }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "mpk"
+harness = false
 
 [features]
 # Enable the use of the `std` crate.
@@ -30,3 +35,5 @@ backtrace = ["std"]
 # `Error::from_anyhow` constructor.
 anyhow = ["dep:anyhow"]
 serde = ["dep:serde"]
+
+
