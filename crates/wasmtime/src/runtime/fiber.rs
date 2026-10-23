@@ -92,6 +92,11 @@ pub(crate) struct AsyncState {
     // stack at a time and making the number tunable via `Config`.
     last_fiber_stack: Option<wasmtime_fiber::FiberStack>,
 
+    // Bookkeeping for keeping track of the number of fiber stacks (aka fibers)
+    // actively in use within this store.
+    pub(crate) live_fibers: u32,
+    pub(crate) max_fibers: u32,
+
     /// Whether or not this store has async host functions defined somewhere
     /// within it or some other store-related configuration (e.g. epochs
     /// yielding) which requires that wasm is executed on a fiber, thus async
@@ -115,6 +120,8 @@ impl Default for AsyncState {
             current_suspend: None,
             current_future_cx: None,
             last_fiber_stack: None,
+            live_fibers: 0,
+            max_fibers: 64,
             async_required: false,
         }
     }
@@ -745,6 +752,12 @@ fn resume_fiber<'a>(
         fn drop(&mut self) {
             self.fiber.state =
                 Some(unsafe { self.state.take().unwrap().replace(self.store).into() });
+
+            // Return a fiber's stack back to the store once it has completed.
+            if self.fiber.fiber().unwrap().done() {
+                let stack = self.fiber.take_fiber_stack().unwrap();
+                self.store.deallocate_fiber_stack(stack);
+            }
         }
     }
     let result = unsafe {
@@ -763,13 +776,8 @@ fn resume_fiber<'a>(
     };
 
     match &result {
-        // The fiber has finished, so recycle its stack by disposing of the
-        // underlying fiber itself.
-        Ok(_) => {
-            if let Some(stack) = fiber.take_fiber_stack() {
-                store.deallocate_fiber_stack(stack);
-            }
-        }
+        // The fiber has finished, nothing more to do.
+        Ok(_) => {}
 
         // The fiber has not yet finished, so it stays as-is.
         Err(_) => {
@@ -869,7 +877,7 @@ where
         Ok(fiber) => fiber,
         Err((e, stack)) => {
             unsafe {
-                engine.allocator().deallocate_fiber_stack(stack);
+                (*store).as_store_opaque().deallocate_fiber_stack(stack);
             }
             return Err(e);
         }

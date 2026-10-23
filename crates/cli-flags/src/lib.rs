@@ -635,6 +635,8 @@ wasmtime_option_group! {
         /// resources, streams, futures) per store; allocating past it traps.
         /// (default: 100000)
         pub max_component_handles: Option<usize>,
+        /// Maximum number of simultaneously-live fibers per store.
+        pub max_fibers: Option<u32>,
         /// Maximum value, in bytes, for a wasi-random 0.2
         /// `get{,-insecure}-random-bytes` `len` parameter. Calls with a value
         /// exceeding this limit will trap.

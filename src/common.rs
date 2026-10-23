@@ -520,6 +520,9 @@ impl RunCommon {
         if let Some(max) = self.common.wasi.max_component_handles {
             store.set_max_component_handles(max);
         }
+        if let Some(max) = self.common.wasi.max_fibers {
+            store.set_max_fibers(max);
+        }
 
         *limits(store.data_mut()) = self.store_limits();
         store.limiter(move |t| limits(t));
