@@ -319,6 +319,25 @@ pub fn substitute(expr: SpecExpr, substitutions: &HashMap<String, SpecExpr>) -> 
                 pos,
             }
         }
+        SpecExpr::LaneMap {
+            binders,
+            body,
+            reduce,
+            pos,
+        } => SpecExpr::LaneMap {
+            binders: binders
+                .into_iter()
+                .map(|(var, expr)| {
+                    if substitutions.contains_key(&var.0) {
+                        bail!("substituted variable collides with lane binding");
+                    }
+                    Ok((var, substitute(expr, substitutions)?))
+                })
+                .collect::<Result<_>>()?,
+            body: Box::new(substitute(*body, substitutions)?),
+            reduce,
+            pos,
+        },
 
         // Recurse into child expressions.
         SpecExpr::As { x, ty, pos } => SpecExpr::As {

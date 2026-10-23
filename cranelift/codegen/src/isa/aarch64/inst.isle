@@ -2427,11 +2427,12 @@
 
 (spec (integral_ty ty)
       (provide (= result ty))
-      (match (or
-            (= (:bits result) 8)
-            (= (:bits result) 16)
-            (= (:bits result) 32)
-            (= (:bits result) 64))))
+      (match (= (:lanes result) 1)
+             (or
+                  (= (:bits result) 8)
+                  (= (:bits result) 16)
+                  (= (:bits result) 32)
+                  (= (:bits result) 64))))
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
 

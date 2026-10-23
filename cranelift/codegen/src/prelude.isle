@@ -13,7 +13,7 @@
 (decl pure unit () Unit)
 (extern constructor unit unit)
 ;; `cranelift-entity`-based identifiers.
-(model Type (type (struct (bits Int))))
+(model Type (type (struct (bits Int) (lanes Int))))
 (type Type (primitive Type))
 
 (model Value (type (bv (8 16 32 64))))
@@ -33,7 +33,7 @@
 (type ValueSlice (primitive ValueSlice))
 
 ;; Extract the type of a `Value`.
-(spec (value_type ty) (provide (= (:bits ty) (widthof result))))
+(spec (value_type ty) (provide (= (:bits ty) (widthof result)) (= (:lanes ty) (lanesof result))))
 (decl value_type (Type) Value)
 (extern extractor infallible value_type value_type)
 
@@ -327,7 +327,9 @@
 (decl pure lane_type (Type) Type)
 (extern constructor lane_type lane_type)
 ;; For now: single-lane, non-vector types assumed here
-(spec (lane_type ty) (provide (= result ty)))
+(spec (lane_type ty)
+      (provide (= (:lanes result) 1)
+               (= (:bits ty) (* (:bits result) (:lanes ty)))))
 
 ;; Get a type with the same element type, but half the number of lanes.
 (decl pure partial ty_half_lanes (Type) Type)
@@ -472,7 +474,8 @@
                   (= (:bits result) 8)
                   (= (:bits result) 16)
                   (= (:bits result) 32)
-                  (= (:bits result) 64)))
+                  (= (:bits result) 64))
+            (= (:lanes result) 1))
       (provide (= result ty)))
 (decl pure partial ty_int_ref_scalar_64_extract (Type) Type)
 (extern extractor ty_int_ref_scalar_64_extract ty_int_ref_scalar_64_extract)
@@ -505,7 +508,9 @@
 (extern extractor ty_int_ref_16_to_64 ty_int_ref_16_to_64)
 
 ;; An extractor that only matches integers.
-(spec (ty_int arg) (provide (= arg result)))
+(spec (ty_int arg)
+      (match (= (:lanes result) 1))
+      (provide (= arg result)))
 (decl ty_int (Type) Type)
 (extern extractor ty_int ty_int)
 
@@ -515,7 +520,8 @@
 
 ;; An extractor that only matches scalar floating-point types.
 (spec (ty_scalar_float ty)
-      (match (or (= (:bits result) 32) (= (:bits result) 64)))
+      (match (or (= (:bits result) 32) (= (:bits result) 64))
+             (= (:lanes result) 1))
       (provide (= result ty)))
 (decl ty_scalar_float (Type) Type)
 (extern extractor ty_scalar_float ty_scalar_float)
@@ -759,15 +765,15 @@
 (model i64 (type (bv 64)))
 (model isize (type Int))
 
-(model I8 (const (struct (bits 8))))
-(model I16 (const (struct (bits 16))))
-(model I32 (const (struct (bits 32))))
-(model I64 (const (struct (bits 64))))
-(model I128 (const (struct (bits 128))))
-(model F16 (const (struct (bits 16))))
-(model F32 (const (struct (bits 32))))
-(model F64 (const (struct (bits 64))))
-(model I8X16 (const (struct (bits 128))))
+(model I8 (const (struct (bits 8) (lanes 1))))
+(model I16 (const (struct (bits 16) (lanes 1))))
+(model I32 (const (struct (bits 32) (lanes 1))))
+(model I64 (const (struct (bits 64) (lanes 1))))
+(model I128 (const (struct (bits 128) (lanes 1))))
+(model F16 (const (struct (bits 16) (lanes 1))))
+(model F32 (const (struct (bits 32) (lanes 1))))
+(model F64 (const (struct (bits 64) (lanes 1))))
+(model I8X16 (const (struct (bits 128) (lanes 16))))
 
 (spec (i64_neg x) (provide (= result (bvneg x))))
 (spec (u64_sub x y) (provide (= result (bvsub x y))))

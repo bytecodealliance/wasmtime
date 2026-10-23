@@ -1,0 +1,36 @@
+; Building a scalar-only term from a type that may be a vector, as in
+; Cranelift issue #14566: the vector instantiation reaches `zero` with two
+; lanes, violating its requirement.
+
+(type Type (primitive Type))
+(model Type (type (struct (bits Int) (lanes Int))))
+
+(type Value (primitive Value))
+(model Value (type (bv (8 16))))
+
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+(instantiate test
+    ((args (bv 16)) (ret (bv 16)))
+    ((args (bv 8 x 2)) (ret (bv 8 x 2))))
+
+(decl sub (Type Value Value) Value)
+(extern extractor sub sub)
+(spec (sub ty x y)
+    (provide (= result (lanemap ((x x) (y y)) (bvsub x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
+(instantiate sub
+    ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 8 x 2) (bv 8 x 2)) (ret (bv 8 x 2))))
+
+; Scalar zero.
+(decl zero (Type) Value)
+(extern constructor zero zero)
+(spec (zero ty)
+    (require (= (:lanes ty) 1))
+    (provide (= result (conv_to (widthof result) #x0000))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
+
+(rule test (test (sub ty x x)) (zero ty))
