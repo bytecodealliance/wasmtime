@@ -336,6 +336,18 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     remaining_reg_vals -= 2;
                     continue;
                 }
+
+                // (Stage C.13) When a composite argument is passed on the
+                // stack, the NGRN is set to 8, so all later integer
+                // arguments are passed on the stack as well.
+                if args_or_rets == ArgsOrRets::Args
+                    && matches!(
+                        call_conv,
+                        isa::CallConv::SystemV | isa::CallConv::AppleAarch64
+                    )
+                {
+                    next_xreg = max_per_class_reg_vals;
+                }
             } else {
                 // Single Register parameters
                 let rc = rcs[0];
