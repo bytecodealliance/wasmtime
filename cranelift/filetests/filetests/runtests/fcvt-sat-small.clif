@@ -1,7 +1,9 @@
+test interpret
 test run
 target aarch64
 target s390x
-; x86_64 does not support `fcvt_to_{u,s}int_sat` to integers < 32 bits.
+target x86_64
+target x86_64 has_avx
 
 function %fcvt_to_sint_sat_i8(f32) -> i8 {
 block0(v0: f32):
@@ -96,7 +98,7 @@ block0(v0: f64):
 ; run: %fcvt_to_uint_sat_i8_f64(0xB2D05E00.0) == 255
 ; run: %fcvt_to_uint_sat_i8_f64(-0xB2D05E00.0) == 0
 ; run: %fcvt_to_uint_sat_i8_f64(0x1.fffffffffffffp1023) == 255
-; run: %fcvt_to_sint_sat_i8_f64(-0x1.fffffffffffffp1023) == 0
+; run: %fcvt_to_uint_sat_i8_f64(-0x1.fffffffffffffp1023) == 0
 ; run: %fcvt_to_uint_sat_i8_f64(NaN) == 0
 
 function %fcvt_to_sint_sat_i16_f64(f64) -> i16 {

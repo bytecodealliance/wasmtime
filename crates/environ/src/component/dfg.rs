@@ -30,7 +30,9 @@
 use crate::component::*;
 use crate::error::Result;
 use crate::prelude::*;
-use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, Trap, WasmValType};
+use crate::{
+    EntityIndex, EntityRef, ModuleInternedTypeIndex, PanicOnOom as _, PrimaryMap, Trap, WasmValType,
+};
 use cranelift_entity::EntitySet;
 use cranelift_entity::packed_option::PackedOption;
 use indexmap::IndexMap;
@@ -301,6 +303,14 @@ pub struct CoreExport<T> {
     pub item: ExportItem<T>,
 }
 
+/// Same as `info::ExportItem`
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[expect(missing_docs, reason = "self-describing variants")]
+pub enum ExportItem<T> {
+    Index(T),
+    Name(String),
+}
+
 impl<T> CoreExport<T> {
     #[expect(missing_docs, reason = "self-describing function")]
     pub fn map_index<U>(self, f: impl FnOnce(T) -> U) -> CoreExport<U> {
@@ -463,10 +473,7 @@ pub enum Trampoline {
     PrepareCall {
         memory: Option<MemoryId>,
     },
-    SyncStartCall {
-        callback: Option<CallbackId>,
-    },
-    AsyncStartCall {
+    StartCall {
         callback: Option<CallbackId>,
         post_return: Option<PostReturnId>,
     },
@@ -481,7 +488,7 @@ pub enum Trampoline {
     },
     ThreadNewIndirect {
         instance: RuntimeComponentInstanceIndex,
-        start_func_ty_idx: ComponentTypeIndex,
+        start_func_ty_idx: ModuleInternedTypeIndex,
         start_func_table_id: TableId,
     },
     ThreadResumeLater {
@@ -645,7 +652,12 @@ impl ComponentDfg {
         for (name, (export, data)) in self.exports.iter() {
             let export =
                 linearize.export(export, &mut export_items, wasmtime_types, wasmparser_types)?;
-            exports.insert(name, &mut NameMapNoIntern, false, (export, data.clone()))?;
+            exports.insert(
+                name,
+                &mut NameMapNoIntern,
+                false,
+                (export, data.try_clone()?),
+            )?;
         }
 
         // With all those pieces done the results of the dataflow-based
@@ -656,12 +668,12 @@ impl ComponentDfg {
             trampolines: linearize.trampoline_defs,
             component: Component {
                 exports,
-                export_items,
-                initializers: linearize.initializers,
+                export_items: export_items.into(),
+                initializers: linearize.initializers.into(),
                 unsafe_intrinsics: linearize.unsafe_intrinsics,
-                trampolines: linearize.trampolines,
+                trampolines: linearize.trampolines.into(),
                 num_lowerings: linearize.num_lowerings,
-                options: linearize.options,
+                options: linearize.options.into(),
 
                 num_runtime_memories: linearize.runtime_memories.len() as u32,
                 num_runtime_tables: linearize.runtime_tables.len() as u32,
@@ -669,19 +681,30 @@ impl ComponentDfg {
                 num_runtime_reallocs: linearize.runtime_reallocs.len() as u32,
                 num_runtime_callbacks: linearize.runtime_callbacks.len() as u32,
                 num_runtime_instances: linearize.runtime_instances.len() as u32,
-                imports: self.imports,
-                import_types: self.import_types,
+                imports: self
+                    .imports
+                    .into_iter()
+                    .map(|(_, (import, path))| {
+                        let path = path.into_iter().map(TryString::from).try_collect()?;
+                        Ok((import, path))
+                    })
+                    .try_collect::<_, OutOfMemory>()?,
+                import_types: self
+                    .import_types
+                    .into_iter()
+                    .map(|(_, (name, ty))| (TryString::from(name), ty))
+                    .try_collect()?,
                 num_runtime_component_instances: self.num_runtime_component_instances,
                 num_future_tables: self.num_future_tables,
                 num_stream_tables: self.num_stream_tables,
                 num_error_context_tables: self.num_error_context_tables,
                 num_resources: (self.resources.len() + self.imported_resources.len()) as u32,
-                imported_resources: self.imported_resources,
+                imported_resources: self.imported_resources.into(),
                 defined_resource_instances: self
                     .resources
                     .iter()
                     .map(|(_, r)| r.instance)
-                    .collect(),
+                    .try_collect()?,
             },
         })
     }
@@ -739,7 +762,10 @@ impl LinearizeDfg<'_> {
         let instantiation = match args {
             Instance::Static(index, args) => InstantiateModule::Static(
                 *index,
-                args.iter().map(|def| self.core_def(def)).collect(),
+                args.iter()
+                    .map(|def| self.core_def(def))
+                    .try_collect()
+                    .panic_on_oom(),
             ),
             Instance::Import(index, args) => InstantiateModule::Import(
                 *index,
@@ -747,11 +773,14 @@ impl LinearizeDfg<'_> {
                     .map(|(module, values)| {
                         let values = values
                             .iter()
-                            .map(|(name, def)| (name.clone(), self.core_def(def)))
-                            .collect();
-                        (module.clone(), values)
+                            .map(|(name, def)| {
+                                Ok((TryString::try_from(name.as_str())?, self.core_def(def)))
+                            })
+                            .try_collect::<_, OutOfMemory>()?;
+                        Ok((TryString::try_from(module.as_str())?, values))
                     })
-                    .collect(),
+                    .try_collect::<_, OutOfMemory>()
+                    .panic_on_oom(),
             ),
         };
         let index = RuntimeInstanceIndex::new(self.runtime_instances.len());
@@ -808,7 +837,12 @@ impl LinearizeDfg<'_> {
                     for (name, (export, data)) in exports {
                         let export =
                             self.export(export, items, wasmtime_types, wasmparser_types)?;
-                        map.insert(name, &mut NameMapNoIntern, false, (export, data.clone()))?;
+                        map.insert(
+                            name,
+                            &mut NameMapNoIntern,
+                            false,
+                            (export, data.try_clone()?),
+                        )?;
                     }
                     map
                 },
@@ -1137,13 +1171,10 @@ impl LinearizeDfg<'_> {
             Trampoline::PrepareCall { memory } => info::Trampoline::PrepareCall {
                 memory: memory.map(|v| self.runtime_memory(v)),
             },
-            Trampoline::SyncStartCall { callback } => info::Trampoline::SyncStartCall {
-                callback: callback.map(|v| self.runtime_callback(v)),
-            },
-            Trampoline::AsyncStartCall {
+            Trampoline::StartCall {
                 callback,
                 post_return,
-            } => info::Trampoline::AsyncStartCall {
+            } => info::Trampoline::StartCall {
                 callback: callback.map(|v| self.runtime_callback(v)),
                 post_return: post_return.map(|v| self.runtime_post_return(v)),
             },
@@ -1210,7 +1241,10 @@ impl LinearizeDfg<'_> {
         log::trace!("referencing export of {instance:?}");
         info::CoreExport {
             instance: self.runtime_instances[&RuntimeInstance::Normal(instance)],
-            item: export.item.clone(),
+            item: match &export.item {
+                ExportItem::Index(i) => info::ExportItem::Index(i.clone()),
+                ExportItem::Name(name) => info::ExportItem::Name(name.clone().into()),
+            },
         }
     }
 
@@ -1225,7 +1259,7 @@ impl LinearizeDfg<'_> {
         // This adapter is always an export of the instance.
         info::CoreExport {
             instance,
-            item: ExportItem::Index(entity_index),
+            item: info::ExportItem::Index(entity_index),
         }
     }
 
@@ -1236,7 +1270,11 @@ impl LinearizeDfg<'_> {
             |me, _| {
                 log::debug!("instantiating {adapter_module:?}");
                 let (module_index, args) = &me.dfg.adapter_modules[adapter_module];
-                let args = args.iter().map(|arg| me.core_def(arg)).collect();
+                let args = args
+                    .iter()
+                    .map(|arg| me.core_def(arg))
+                    .try_collect()
+                    .panic_on_oom();
                 let instantiate = InstantiateModule::Static(*module_index, args);
                 GlobalInitializer::InstantiateModule(instantiate, None)
             },

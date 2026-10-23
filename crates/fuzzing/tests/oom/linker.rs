@@ -1,6 +1,6 @@
 #![cfg(arc_try_new)]
 
-use wasmtime::{Config, Engine, Func, FuncType, Linker, Module, Result, Store};
+use wasmtime::{Config, Engine, Func, FuncType, Instance, Linker, Module, Result, Store};
 use wasmtime_fuzzing::oom::OomTest;
 
 #[test]
@@ -28,33 +28,7 @@ fn linker_func_wrap() -> Result<()> {
 
 #[test]
 fn linker_instantiate_pre() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        let module = Module::new(
-            &engine,
-            r#"
-                (module
-                    (import "module" "func" (func (param i32) (result i32)))
-
-                    (memory (export "memory") 1)
-                    (data (i32.const 0) "a")
-
-                    (table (export "table") 1 funcref)
-                    (elem (i32.const 0) func 1)
-
-                    (func (export "func") (param i32) (result i32)
-                        (call 0 (local.get 0))
-                    )
-                )
-            "#,
-        )?;
-        module.serialize()?
-    };
-
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
 
     let engine = Engine::new(&config)?;
@@ -62,7 +36,24 @@ fn linker_instantiate_pre() -> Result<()> {
     let mut linker = Linker::<()>::new(&engine);
     linker.func_wrap("module", "func", |x: i32| x * 2)?;
 
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "module" "func" (func (param i32) (result i32)))
+
+                (memory (export "memory") 1)
+                (data (i32.const 0) "a")
+
+                (table (export "table") 1 funcref)
+                (elem (i32.const 0) func 1)
+
+                (func (export "func") (param i32) (result i32)
+                    (call 0 (local.get 0))
+                )
+            )
+        "#,
+    )?;
 
     OomTest::new().test(|| {
         let _ = linker.instantiate_pre(&module)?;
@@ -72,33 +63,7 @@ fn linker_instantiate_pre() -> Result<()> {
 
 #[tokio::test]
 async fn linker_instantiate_async() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        let module = Module::new(
-            &engine,
-            r#"
-                (module
-                    (import "module" "func" (func (param i32) (result i32)))
-
-                    (memory (export "memory") 1)
-                    (data (i32.const 0) "a")
-
-                    (table (export "table") 1 funcref)
-                    (elem (i32.const 0) func 1)
-
-                    (func (export "func") (param i32) (result i32)
-                        (call 0 (local.get 0))
-                    )
-                )
-            "#,
-        )?;
-        module.serialize()?
-    };
-
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
 
     let engine = Engine::new(&config)?;
@@ -106,7 +71,24 @@ async fn linker_instantiate_async() -> Result<()> {
     let mut linker = Linker::<()>::new(&engine);
     linker.func_wrap("module", "func", |x: i32| x * 2)?;
 
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "module" "func" (func (param i32) (result i32)))
+
+                (memory (export "memory") 1)
+                (data (i32.const 0) "a")
+
+                (table (export "table") 1 funcref)
+                (elem (i32.const 0) func 1)
+
+                (func (export "func") (param i32) (result i32)
+                    (call 0 (local.get 0))
+                )
+            )
+        "#,
+    )?;
 
     OomTest::new()
         .test_async(|| async {
@@ -154,21 +136,13 @@ fn linker_func_new() -> Result<()> {
 
 #[test]
 fn linker_instance() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(
-            &engine,
-            r#"(module (func (export "f")) (memory (export "m") 1))"#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(
+        &engine,
+        r#"(module (func (export "f")) (memory (export "m") 1))"#,
+    )?;
     let pre_linker = Linker::<()>::new(&engine);
     let instance_pre = pre_linker.instantiate_pre(&module)?;
 
@@ -199,18 +173,36 @@ fn linker_get() -> Result<()> {
 }
 
 #[test]
-fn linker_get_by_import() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(&engine, r#"(module (import "mod" "func" (func)))"#)?.serialize()?
-    };
+fn linker_get_then_instantiate() -> Result<()> {
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(&engine, "(module)")?;
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .alloc_succeeds_after_oom(true)
+        .test(|| {
+            let mut store = Store::try_new(&engine, ())?;
+            let mut linker = Linker::<()>::new(&engine);
+            linker.func_wrap("mod", "func", || {})?;
+            let item = linker.get(&mut store, "mod", "func");
+            // Drop the linker so the store holds the only remaining reference
+            // to the host function, if any. Whether or not `get` hit OOM, the
+            // store must still be usable afterwards.
+            drop(linker);
+            Instance::new(&mut store, &module, &[])?;
+            item?;
+            Ok(())
+        })
+}
+
+#[test]
+fn linker_get_by_import() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, r#"(module (import "mod" "func" (func)))"#)?;
 
     let mut linker = Linker::<()>::new(&engine);
     linker.func_wrap("mod", "func", || {})?;
@@ -227,17 +219,10 @@ fn linker_get_by_import() -> Result<()> {
 
 #[test]
 fn linker_get_default() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(&engine, r#"(module (func (export "_start")))"#)?.serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(&engine, r#"(module (func (export "_start")))"#)?;
     let linker = Linker::<()>::new(&engine);
     let instance_pre = linker.instantiate_pre(&module)?;
 
@@ -253,21 +238,13 @@ fn linker_get_default() -> Result<()> {
 
 #[tokio::test]
 async fn linker_module_async() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(
-            &engine,
-            r#"(module (func (export "f")) (memory (export "m") 1))"#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(
+        &engine,
+        r#"(module (func (export "f")) (memory (export "m") 1))"#,
+    )?;
 
     OomTest::new()
         .test_async(|| async {

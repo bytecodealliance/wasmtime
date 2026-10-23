@@ -22,6 +22,7 @@ pub use self::signals::*;
 
 #[cfg(feature = "gc")]
 use crate::ThrownException;
+#[cfg(has_native_signals)]
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
@@ -49,9 +50,19 @@ pub use traphandlers::SignalHandler;
 pub(crate) struct TrapRegisters {
     pub pc: usize,
     pub fp: usize,
+    /// The return address of the trapping function, on platforms where it is
+    /// held in a register (rather than on the stack) until the function sets
+    /// up its frame.
+    ///
+    /// This is only consulted for stack-overflow traps, which on such
+    /// platforms (s390x and Pulley) occur before the trapping function has
+    /// set up its frame, while `fp` is still its caller's frame pointer. See
+    /// `set_jit_trap` for how this is used.
+    pub lr: Option<usize>,
 }
 
 /// Return value from `test_if_trap`.
+#[cfg(has_native_signals)]
 pub(crate) enum TrapTest {
     /// Not a wasm trap, need to delegate to whatever process handler is next.
     NotWasm,
@@ -122,8 +133,15 @@ pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
 /// This function acts as a bridge between the two to appropriately handle
 /// encoding host values to Cranelift-understood ABIs via the `HostResult`
 /// trait.
+///
+/// The `uncaught_exception` parameter controls what happens when `f` throws an
+/// exception (returns a `ThrownException` error). Core wasm host functions
+/// propagate the exception to their wasm caller, but component host functions
+/// and intrinsics are a component boundary which exceptions cannot cross, so
+/// there the exception is instead turned into a trap.
 pub fn catch_unwind_and_record_trap<R>(
     store: &mut dyn VMStore,
+    uncaught_exception: UncaughtException,
     f: impl FnOnce(&mut dyn VMStore) -> R,
 ) -> R::Abi
 where
@@ -134,7 +152,10 @@ where
     // (e.g. `ret` is a "false"-y value) then it's recorded in TLS for the
     // unwind operation that's about to happen from Cranelift-generated code.
     let (ret, unwind) = R::maybe_catch_unwind(store, |store| f(store));
-    if let Some(unwind) = unwind {
+    if let Some(mut unwind) = unwind {
+        if let UnwindReason::Trap(Ok(trap)) = &mut unwind {
+            uncaught_exception.apply(&mut trap.reason);
+        }
         tls::with(|info| info.unwrap().record_unwind(unwind));
     }
     ret
@@ -452,11 +473,38 @@ where
     }
 }
 
+/// Controls what happens when a Wasm exception escapes a `catch_traps`
+/// activation without being caught by a handler on its stack.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum UncaughtException {
+    /// Propagate the exception to the host as a `ThrownException`.
+    Propagate,
+    /// Convert the escaping exception into a `Trap::UncaughtException`.
+    #[cfg(feature = "component-model")]
+    Trap,
+}
+
+impl UncaughtException {
+    fn apply(self, reason: &mut TrapReason) {
+        #[cfg(all(feature = "gc", feature = "component-model"))]
+        if self == UncaughtException::Trap
+            && let TrapReason::User(err) = reason
+            && err.is::<ThrownException>()
+        {
+            // FIXME: this throws away the entire `err` and replaces it with a
+            // `Trap`, so any context on `err` is lost.
+            *err = crate::Trap::UncaughtException.into();
+        }
+        let _ = (self, reason);
+    }
+}
+
 /// Catches any wasm traps that happen within the execution of `closure`,
 /// returning them as a `Result`.
 pub fn catch_traps<T, F>(
     store: &mut StoreContextMut<'_, T>,
     old_state: &mut EntryStoreContext,
+    uncaught_exception: UncaughtException,
     mut closure: F,
 ) -> Result<()>
 where
@@ -464,11 +512,14 @@ where
 {
     let caller = store.0.default_caller();
 
-    let result = CallThreadState::new(store.0, old_state).with(|_cx| match store.0.executor() {
-        ExecutorRef::Interpreter(r) => closure(caller, Some(r)),
-        #[cfg(has_host_compiler_backend)]
-        ExecutorRef::Native => closure(caller, None),
-    });
+    let result =
+        CallThreadState::new(store.0, old_state, uncaught_exception).with(|_cx| {
+            match store.0.executor() {
+                ExecutorRef::Interpreter(r) => closure(caller, Some(r)),
+                #[cfg(has_host_compiler_backend)]
+                ExecutorRef::Native => closure(caller, None),
+            }
+        });
 
     match result {
         Ok(x) => Ok(x),
@@ -512,6 +563,7 @@ mod call_thread_state {
         /// reached for host-code destinations and right when
         /// performing the jump for Wasm-code destinations).
         pub(super) unwind: Cell<Option<UnwindReason>>,
+        pub(super) uncaught_exception: UncaughtException,
         #[cfg(all(has_native_signals))]
         pub(super) signal_handler: Option<*const SignalHandler>,
         pub(super) capture_backtrace: bool,
@@ -547,9 +599,11 @@ mod call_thread_state {
         pub(super) fn new(
             store: &mut StoreOpaque,
             old_state: *mut EntryStoreContext,
+            uncaught_exception: UncaughtException,
         ) -> CallThreadState {
             CallThreadState {
                 unwind: Cell::new(None),
+                uncaught_exception,
                 unwinder: store.unwinder(),
                 #[cfg(all(has_native_signals))]
                 signal_handler: store.signal_handler(),
@@ -818,7 +872,30 @@ impl CallThreadState {
                         event = crate::DebugEvent::Exception(exn.clone());
                     }
 
-                    store.block_on_debug_handler(event)
+                    // The debug handler is embedder code and may panic. This
+                    // function is called from the `raise` libcall, which
+                    // doesn't catch panics, so catch them here and replace
+                    // the unwind reason with the panic so that it's
+                    // resumed on the other side of wasm, like a panic in a
+                    // host function.
+                    let f = || {
+                        store
+                            .block_on_debug_handler(event)
+                            .map_err(UnwindReason::from)
+                    };
+
+                    #[cfg(all(feature = "std", panic = "unwind"))]
+                    {
+                        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+                            Ok(result) => result,
+                            Err(panic) => Err(UnwindReason::Panic(panic)),
+                        }
+                    }
+
+                    #[cfg(not(all(feature = "std", panic = "unwind")))]
+                    {
+                        f()
+                    }
                 }
 
                 TrapReason::Jit { .. } => {
@@ -831,10 +908,10 @@ impl CallThreadState {
 
             // If the debugger invocation itself resulted in an `Err`
             // (which can only come from the `block_on` hitting a
-            // failure mode), we need to override our unwind as-if
-            // were handling a host error.
-            if let Err(err) = result {
-                unwind = Some(UnwindReason::from(err));
+            // failure mode, or from the handler panicking), we need to
+            // override our unwind with that reason.
+            if let Err(reason) = result {
+                unwind = Some(reason);
             }
         }
 
@@ -892,6 +969,10 @@ impl CallThreadState {
                     trap.backtrace = self.capture_backtrace(store.vm_store_context_mut(), None);
                     trap.coredumpstack = self.capture_coredump(store.vm_store_context_mut(), None);
                 }
+
+                // Handle `UncaughtException` if we've come this far (as caught
+                // exceptions are handled above).
+                self.uncaught_exception.apply(&mut trap.reason);
             }
 
             // If this wasn't a wasm-caught exception, then catch the exception
@@ -973,6 +1054,7 @@ impl CallThreadState {
     ///   this signal, nothing else to do.
     /// * `TrapTest::Trap` - this is a wasm trap an the stack needs to be
     ///   unwound now.
+    #[cfg(has_native_signals)]
     pub(crate) fn test_if_trap(
         &self,
         regs: TrapRegisters,
@@ -1012,9 +1094,40 @@ impl CallThreadState {
 
     pub(crate) fn set_jit_trap(
         &self,
-        TrapRegisters { pc, fp, .. }: TrapRegisters,
+        TrapRegisters { pc, fp, lr }: TrapRegisters,
         faulting_addr: Option<usize>,
         trap: wasmtime_environ::CompiledTrap,
+    ) {
+        // The backtrace starts at the trapping PC and FP, except for stack
+        // overflows that are detected before the trapping function has set up
+        // its frame (indicated by the presence of `lr`). In that case we
+        // attribute the stack overflow to the call site in the caller, as if the
+        // caller were responsible for allocating the callee's frame: we start
+        // the backtrace at the return address in the caller, with the caller's
+        // FP, which is still the current one. The PC recorded in the trap
+        // reason remains the actual trapping PC, so the backtrace's youngest
+        // frame is treated like any other return address and resolves to the
+        // call instruction.
+        let backtrace_pc = match trap {
+            wasmtime_environ::CompiledTrap::Normal(wasmtime_environ::Trap::StackOverflow) => {
+                lr.unwrap_or(pc)
+            }
+            _ => pc,
+        };
+        self.record_jit_trap(pc, faulting_addr, trap, Some((backtrace_pc, fp)));
+    }
+
+    /// Records a trap at `pc`, capturing a backtrace starting from
+    /// `backtrace_pc_and_fp` in the current activation.
+    ///
+    /// If `backtrace_pc_and_fp` is `None` then the current activation has no
+    /// Wasm frames, and only older activations are included in the backtrace.
+    pub(crate) fn record_jit_trap(
+        &self,
+        pc: usize,
+        faulting_addr: Option<usize>,
+        trap: wasmtime_environ::CompiledTrap,
+        backtrace_pc_and_fp: Option<(usize, usize)>,
     ) {
         let mut unwind = UnwindReason::from(TrapReason::Jit {
             pc,
@@ -1023,9 +1136,9 @@ impl CallThreadState {
         });
         if let UnwindReason::Trap(Ok(trap)) = &mut unwind {
             trap.backtrace =
-                self.capture_backtrace(self.vm_store_context.get().as_ptr(), Some((pc, fp)));
+                self.capture_backtrace(self.vm_store_context.get().as_ptr(), backtrace_pc_and_fp);
             trap.coredumpstack =
-                self.capture_coredump(self.vm_store_context.get().as_ptr(), Some((pc, fp)));
+                self.capture_coredump(self.vm_store_context.get().as_ptr(), backtrace_pc_and_fp);
         }
         self.record_unwind(unwind);
     }
@@ -1318,6 +1431,13 @@ pub(crate) mod tls {
             let mut ptr = self.state;
             unsafe {
                 while let Some(state) = ptr.as_ref() {
+                    ptr = state.prev.get();
+
+                    // Skip activations that entered no Wasm.
+                    if state.old_last_wasm_exit_pc() == 0 {
+                        continue;
+                    }
+
                     let _ = wasmtime_unwinder::visit_frames::<()>(
                         unwind,
                         state.old_last_wasm_exit_pc(),
@@ -1328,8 +1448,6 @@ pub(crate) mod tls {
                             core::ops::ControlFlow::Continue(())
                         },
                     );
-
-                    ptr = state.prev.get();
                 }
             }
         }

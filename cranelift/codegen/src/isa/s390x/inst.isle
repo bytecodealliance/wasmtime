@@ -225,6 +225,17 @@
       (rn Reg)
       (mem MemArg))
 
+    ;; An atomic read-modify-write operation with a memory in-/out operand,
+    ;; a register destination, and a register source implemented via an
+    ;; atomic compare-and-swap loop.
+    (AtomicRmw128Loop
+      (op AtomicRmwOp)
+      (rd WritableReg)
+      (rn Reg)
+      (scratch1 WritableRegPair)
+      (scratch2 WritableRegPair)
+      (mem MemArg))
+
     ;; A 32-bit atomic compare-and-swap operation.
     (AtomicCas32
       (rd WritableReg)
@@ -237,6 +248,13 @@
       (rd WritableReg)
       (ri Reg)
       (rn Reg)
+      (mem MemArg))
+
+    ;; A 128-bit atomic compare-and-swap operation.
+    (AtomicCas128
+      (rd WritableRegPair)
+      (ri RegPair)
+      (rn RegPair)
       (mem MemArg))
 
     ;; A memory fence operation.
@@ -2339,6 +2357,18 @@
             (_ Unit (emit (MInst.AtomicRmw op dst src mem))))
         dst))
 
+;; Helper for emitting `MInst.AtomicRmw128Loop` instructions.
+(decl atomic_rmw_128_loop (AtomicRmwOp Reg MemArg) Reg)
+(rule (atomic_rmw_128_loop op src mem)
+      (let ((dst WritableReg (temp_writable_reg $I128))
+            (_ Unit (emit (MInst.AtomicRmw128Loop op
+                                                  dst
+                                                  src
+                                                  (temp_writable_regpair $I64)
+                                                  (temp_writable_regpair $I64)
+                                                  mem))))
+        dst))
+
 ;; Helper for emitting `MInst.AtomicCas32` instructions.
 (decl atomic_cas32 (Reg Reg MemArg) Reg)
 (rule (atomic_cas32 src1 src2 mem)
@@ -2351,6 +2381,13 @@
 (rule (atomic_cas64 src1 src2 mem)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AtomicCas64 dst src1 src2 mem))))
+        dst))
+
+;; Helper for emitting `MInst.AtomicCas128` instructions.
+(decl atomic_cas128 (RegPair RegPair MemArg) RegPair)
+(rule (atomic_cas128 src1 src2 mem)
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
+            (_ Unit (emit (MInst.AtomicCas128 dst src1 src2 mem))))
         dst))
 
 ;; Helper for emitting `MInst.Fence` instructions.

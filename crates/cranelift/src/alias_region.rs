@@ -42,13 +42,8 @@ enum VmType {
     VMStoreContext,
     VMMemoryDefinition,
     VMTableDefinition,
-    // NB: these two are currently only referenced by macro-generated
+    // NB: this is currently only referenced by macro-generated
     // `AliasRegions` helpers that are not all wired up to call sites yet.
-    #[allow(
-        dead_code,
-        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
-    )]
-    VMGlobalDefinition,
     #[allow(
         dead_code,
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
@@ -85,6 +80,11 @@ enum VmType {
     VMGcHeader,
     VMDrcHeader,
     VMCopyingHeader,
+    #[allow(
+        dead_code,
+        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
+    )]
+    VMAsanStackSupport,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -503,10 +503,8 @@ impl<'a, Offsets> Field<'a, Offsets> {
 
     /// Cast this field to the given type.
     ///
-    /// This can be used, for example, to cast a `Field` that points to a
-    /// `VMGlobalDefinition`'s storage (a `[u8; 16]` represented as
-    /// `ir::types::I8X16`) to the global's actual Wasm type's representation
-    /// (`ir::types::I32` for a Wasm `i32`).
+    /// This can be used, for example, to load a field as a narrower or
+    /// differently-typed value than its declared Cranelift type.
     pub fn cast(mut self, ty: ir::Type) -> Self {
         self.ty = ty;
         self
@@ -648,7 +646,6 @@ macro_rules! define_vm_type_alias_region_helpers {
     // `VMLazyThread` is a pointer-sized bitpacked integer; see its definition in
     // `for_each_vm_type!`.
     (@field_ty $pt:expr, VMLazyThread) => { $pt };
-    (@field_ty $pt:expr, [u8; 16]) => { ir::types::I8X16 };
     (@field_ty $pt:expr, VMSharedTypeIndex) => { ir::types::I32 };
     (@field_ty $pt:expr, DefinedTableIndex) => { ir::types::I32 };
     (@field_ty $pt:expr, DefinedMemoryIndex) => { ir::types::I32 };

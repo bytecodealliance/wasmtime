@@ -30,6 +30,15 @@ block0(v0: i8x16, v1: i8):
 ; run: %swizzle_splat_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], 5) == [6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6]
 ; run: %swizzle_splat_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], 99) == [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
 
+function %swizzle_splat_junk_upper_bits(i8x16, i64) -> i8x16 {
+block0(v0: i8x16, v1: i64):
+    v2 = ireduce.i8 v1
+    v3 = splat.i8x16 v2
+    v4 = swizzle v0, v3
+    return v4
+}
+; run: %swizzle_splat_junk_upper_bits([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], 0x100) == [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+
 
 function %swizzle_splat_const_i8x16(i8x16) -> i8x16 {
 block0(v0: i8x16):

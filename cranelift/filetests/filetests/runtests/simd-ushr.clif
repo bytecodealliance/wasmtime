@@ -131,3 +131,93 @@ block0(v0: i64x2):
 ; run: %i64x2_ushr_const([0x1 0xf]) == [0 0]
 ; run: %i64x2_ushr_const([0x100000000 0]) == [1 0]
 ; run: %i64x2_ushr_const([-1 -1]) == [0xffffffff 0xffffffff]
+
+function %bor_sshr_sshr_same_count_i32x4(i32x4, i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32x4, v2: i32):
+    v3 = sshr v0, v2
+    v4 = sshr v1, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %bor_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 0) == [-1 -1 -1 -1]
+; run: %bor_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 1) == [-1 -1 -1 -1]
+; run: %bor_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 31) == [-1 -1 -1 -1]
+; run: %bor_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 32) == [-1 -1 -1 -1]
+; run: %bor_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 33) == [-1 -1 -1 -1]
+; run: %bor_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], -1) == [-1 -1 -1 -1]
+
+function %bor_ushr_ushr_same_count_i32x4(i32x4, i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32x4, v2: i32):
+    v3 = ushr v0, v2
+    v4 = ushr v1, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %bor_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 0) == [-1 -1 -1 -1]
+; run: %bor_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 1) == [2147483647 2147483647 2147483647 2147483647]
+; run: %bor_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 31) == [1 1 1 1]
+; run: %bor_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 32) == [-1 -1 -1 -1]
+; run: %bor_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 33) == [2147483647 2147483647 2147483647 2147483647]
+; run: %bor_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], -1) == [1 1 1 1]
+
+function %band_sshr_sshr_same_count_i32x4(i32x4, i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32x4, v2: i32):
+    v3 = sshr v0, v2
+    v4 = sshr v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 0) == [-2147483648 0 0 0]
+; run: %band_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 1) == [-1073741824 0 0 0]
+; run: %band_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 31) == [-1 0 0 0]
+; run: %band_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 32) == [-2147483648 0 0 0]
+; run: %band_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 33) == [-1073741824 0 0 0]
+; run: %band_sshr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], -1) == [-1 0 0 0]
+
+function %band_ushr_ushr_same_count_i32x4(i32x4, i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32x4, v2: i32):
+    v3 = ushr v0, v2
+    v4 = ushr v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 0) == [-2147483648 0 0 0]
+; run: %band_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 1) == [1073741824 0 0 0]
+; run: %band_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 31) == [1 0 0 0]
+; run: %band_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 32) == [-2147483648 0 0 0]
+; run: %band_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 33) == [1073741824 0 0 0]
+; run: %band_ushr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], -1) == [1 0 0 0]
+
+function %band_sshr_ushr_same_count_i32x4(i32x4, i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32x4, v2: i32):
+    v3 = sshr v0, v2
+    v4 = ushr v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_sshr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 0) == [-2147483648 0 0 0]
+; run: %band_sshr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 1) == [1073741824 0 0 0]
+; run: %band_sshr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 31) == [1 0 0 0]
+; run: %band_sshr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 32) == [-2147483648 0 0 0]
+; run: %band_sshr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 33) == [1073741824 0 0 0]
+; run: %band_sshr_ushr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], -1) == [1 0 0 0]
+
+function %band_ushr_sshr_same_count_i32x4(i32x4, i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32x4, v2: i32):
+    v3 = ushr v0, v2
+    v4 = sshr v1, v2
+    v5 = band v3, v4
+    return v5
+}
+
+; run: %band_ushr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 0) == [-2147483648 0 0 0]
+; run: %band_ushr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 1) == [1073741824 0 0 0]
+; run: %band_ushr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 31) == [1 0 0 0]
+; run: %band_ushr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 32) == [-2147483648 0 0 0]
+; run: %band_ushr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], 33) == [1073741824 0 0 0]
+; run: %band_ushr_sshr_same_count_i32x4([-1 -2147483648 0 1431655765], [-2147483648 2147483647 -1 0xaaaaaaaa], -1) == [1 0 0 0]

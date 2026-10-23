@@ -52,7 +52,7 @@
        ;; =========================================
        ;; Stack manipulation.
 
-      ;; Emits a inline stack probe loop.
+      ;; Emits an inline stack probe loop.
       (StackProbeLoop (tmp WritableReg)
                       (frame_size u32)
                       (guard_size u32))
@@ -193,6 +193,14 @@
                     (name BoxExternalName)
                     (offset i64)
                     (distance RelocDistance))
+
+       ;; A load whose result is discarded; `context` is pinned to rdi, `dst`
+       ;; to r10, and `load_ptr`/`next_load_ptr` share r11.
+       (InterruptPoll (dst WritableGpr)
+                            (load_ptr Gpr)
+                            (context Gpr)
+                            (trap_code TrapCode)
+                            (next_load_ptr WritableGpr))
 
        ;; =========================================
        ;; Instructions pertaining to atomic memory accesses.
@@ -435,11 +443,6 @@
 (decl synthetic_amode_slot (i32) SyntheticAmode)
 (extern constructor synthetic_amode_slot synthetic_amode_slot)
 
-;; Helper for loads/stores to/from stackslots.
-(decl stackslot_amode (StackSlot Offset32 Offset32) SyntheticAmode)
-(rule (stackslot_amode slot offset1 offset2)
-      (let ((slot_offset i32 (abi_stackslot_offset_into_slot_region slot offset1 offset2)))
-        (synthetic_amode_slot slot_offset)))
 
 ;; An `Amode` represents a possible addressing mode that can be used
 ;; in instructions. These denote a 64-bit value only.
@@ -539,7 +542,8 @@
 
 (rule 2
       (to_amode flags (stack_addr _ slot offset1) offset2)
-      (stackslot_amode slot offset1 offset2))
+      (if-let slot_offset (abi_stackslot_offset_into_slot_region slot offset1 offset2))
+      (synthetic_amode_slot slot_offset))
 
 ;; Same as `to_amode`, except that the base address is computed via the addition
 ;; of the two `Value` arguments provided.
@@ -584,7 +588,17 @@
 (decl amode_imm_reg (MemFlagsData Value Offset32) Amode)
 (rule amode_imm_reg_base 0 (amode_imm_reg flags base offset)
         (Amode.ImmReg offset base flags))
-(rule amode_imm_reg_iadd 1 (amode_imm_reg flags (iadd _ x y) offset)
+
+;; Only fold an `i32` sum into the amode if it has a transitively unique use.
+;; This accounts for uses on loop backedges that lowering has not seen yet,
+;; and avoids extending the live ranges of `x` and `y`.
+;;
+;; For `i64` sums, allow folding even with multiple uses. Loads/stores can
+;; use base+index directly, avoiding extra temporaries for shared addresses.
+(rule amode_imm_reg_iadd_i32 1 (amode_imm_reg flags base @ (iadd $I32 x y) offset)
+        (if-let _ (is_sinkable_inst base))
+        (amode_imm_reg_reg_shift flags x y offset))
+(rule amode_imm_reg_iadd_i64 1 (amode_imm_reg flags (iadd $I64 x y) offset)
         (amode_imm_reg_reg_shift flags x y offset))
 
 (attr amode_imm_reg_reg_shift (veri chain))
@@ -3878,8 +3892,10 @@
 (rule 2 (is_nonzero (band _ a @ (value_type (ty_int (fits_in_64 ty))) b))
       (is_nonzero_band ty a b))
 
-;; Using the flags output of `uadd_overflow` can produce a `CC` and give an
-;; opportunistic def of the other output.
+;; Using the flags output of `uadd_overflow`, `usub_overflow`, `sadd_overflow`
+;; or `ssub_overflow` can produce a `CC` and give an opportunistic def of the
+;; other output. The `add`/`sub` itself sets the flags: CF is the carry or
+;; borrow (unsigned overflow, `CC.B`) and OF is signed overflow (`CC.O`).
 (rule 3
       (is_nonzero
        (is_second_result uadd @ (uadd_overflow (fits_in_64 ty) x y)))
@@ -3888,6 +3904,33 @@
         (CondResult.CC
          (produces_flags_opportunistic_def producer sum_value)
          (CC.B))))
+
+(rule 3
+      (is_nonzero
+       (is_second_result usub @ (usub_overflow (fits_in_64 ty) x y)))
+      (if-let (first_result diff_value) usub)
+      (let ((producer ProducesFlags (x64_sub_with_flags_paired ty x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer diff_value)
+         (CC.B))))
+
+(rule 3
+      (is_nonzero
+       (is_second_result sadd @ (sadd_overflow (fits_in_64 ty) x y)))
+      (if-let (first_result sum_value) sadd)
+      (let ((producer ProducesFlags (x64_add_with_flags_paired ty x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer sum_value)
+         (CC.O))))
+
+(rule 3
+      (is_nonzero
+       (is_second_result ssub @ (ssub_overflow (fits_in_64 ty) x y)))
+      (if-let (first_result diff_value) ssub)
+      (let ((producer ProducesFlags (x64_sub_with_flags_paired ty x y)))
+        (CondResult.CC
+         (produces_flags_opportunistic_def producer diff_value)
+         (CC.O))))
 
 ;; Using the flags output of `umul_overflow`/`smul_overflow` can produce a
 ;; `CC` and give an opportunistic def of the other output. The multiply
@@ -3947,9 +3990,10 @@
 ;; can pattern-match to the native `bt` instruction. Note that to have the
 ;; same semantics this requires that `a` is in a register which forces `bt` to
 ;; use modulo semantics for the second operand `b`, thus `put_in_gpr` is
-;; manually used.
+;; manually used. The shift amount `b` may be an `i128`; only its low 64 bits
+;; matter, since the amount is taken modulo the type's width.
 (rule 1 (is_nonzero_band (ty_32_or_64 ty) a (ishl _ (u64_from_iconst 1) b))
-  (CondResult.CC (x64_bt ty (put_in_gpr a) b) (CC.B)))
+  (CondResult.CC (x64_bt ty (put_in_gpr a) (lo_gpr b)) (CC.B)))
 
 ;; If a value is and'd one shifted by a variable value that matches `bt` as
 ;; well.

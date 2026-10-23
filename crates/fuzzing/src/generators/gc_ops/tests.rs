@@ -1,9 +1,8 @@
 use crate::generators::gc_ops::{
     limits::GcOpsLimits,
     ops::{GcOp, GcOps, OP_NAMES},
-    types::{
-        ArrayType, CompositeType, FieldType, RecGroupId, StackType, StructField, TypeId, Types,
-    },
+    stack::StackType,
+    types::{ArrayType, CompositeType, FieldType, RecGroupId, StructField, TypeId, Types},
 };
 use mutatis;
 use mutatis::mutators as m;
@@ -179,7 +178,7 @@ fn limits_stay_in_range() -> mutatis::Result<()> {
     let _ = env_logger::try_init();
 
     let mut ops = test_ops(5, 5, 5);
-    ops.limits.fixup();
+    ops.limits.fixup_limits();
 
     let mut session = mutatis::Session::new().seed(0xC0FFEE);
     for _ in 0..2048 {
@@ -466,7 +465,7 @@ fn fixup_preserves_subtyping_within_same_rec_group() {
         array_length: 5,
     };
 
-    types.fixup(&limits, &mut Vec::new());
+    types.fixup_types(&limits, &mut Vec::new());
 
     assert_eq!(types.rec_group_of(super_ty), Some(g));
     assert_eq!(types.rec_group_of(sub_ty), Some(g));
@@ -515,7 +514,7 @@ fn fixup_breaks_one_edge_in_multi_rec_group_type_cycle() {
         array_length: 5,
     };
 
-    types.fixup(&limits, &mut Vec::new());
+    types.fixup_types(&limits, &mut Vec::new());
 
     let a_super = types.type_defs.get(&a).unwrap().supertype;
     let c_super = types.type_defs.get(&c).unwrap().supertype;
@@ -797,7 +796,7 @@ fn stacktype_fixup_accepts_subtype_for_supertype_requirement() {
     let mut stack = vec![StackType::Struct(Some(2))];
     let mut out = vec![];
 
-    StackType::fixup(
+    StackType::fixup_operand(
         Some(StackType::Struct(Some(1))),
         &mut stack,
         &mut out,
@@ -819,7 +818,7 @@ fn stacktype_fixup_accepts_subtype_for_supertype_requirement() {
     let mut stack = vec![StackType::Struct(Some(2))];
     let mut out = vec![];
 
-    StackType::fixup(
+    StackType::fixup_operand(
         Some(StackType::Struct(Some(0))),
         &mut stack,
         &mut out,
@@ -838,7 +837,7 @@ fn stacktype_fixup_accepts_subtype_for_supertype_requirement() {
     let mut stack = vec![StackType::Struct(Some(0))];
     let mut out = vec![];
 
-    StackType::fixup(
+    StackType::fixup_operand(
         Some(StackType::Struct(Some(1))),
         &mut stack,
         &mut out,
@@ -1162,7 +1161,7 @@ fn fixup_repoints_dangling_references() {
         }],
     );
 
-    types.fixup(&limits, &mut Vec::new());
+    types.fixup_types(&limits, &mut Vec::new());
 
     let def = types.type_defs.get(&TypeId(40)).unwrap();
     assert_eq!(

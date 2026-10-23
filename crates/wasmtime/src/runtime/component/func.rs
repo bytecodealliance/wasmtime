@@ -5,7 +5,7 @@ use crate::component::types::ComponentFunc;
 use crate::component::values::Val;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, InstanceFlags};
-use crate::runtime::vm::{Export, SendSyncPtr, VMFuncRef};
+use crate::runtime::vm::{Export, SendSyncPtr, UncaughtException, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use core::mem::{self, MaybeUninit};
@@ -66,12 +66,9 @@ impl Func {
         instance: Instance,
         index: ExportIndex,
     ) -> Func {
-        let def = {
-            let vminstance = instance.id().get(store);
-            let (_ty, def, _options) = vminstance.component().export_lifted_function(index);
-            def.clone()
-        };
-        let unsafe_func_ref = match instance.lookup_vmdef(store, &def) {
+        let (component, store) = instance.component_and_store_mut(store);
+        let (_ty, def, _options) = component.export_lifted_function(index);
+        let unsafe_func_ref = match instance.lookup_vmdef(store, def) {
             Export::Function(f) => f.vm_func_ref(store),
             _ => unreachable!(),
         }
@@ -247,6 +244,9 @@ impl Func {
     /// * The function calls a host function which returns an error
     /// * The `store` used requires the use of [`Func::call_async`] instead. See
     ///   [store documentation](crate#async) for more information.
+    /// * The call is recursive from within e.g. a `call_async` invocation.
+    /// * If the function is async-lifted, in which case either
+    ///   [`Self::call_async`] or [`Self::call_concurrent`] must be used.
     ///
     /// See [`TypedFunc::call`] for more information in addition to
     /// [`wasmtime::Func::call`](crate::Func::call).
@@ -292,10 +292,9 @@ impl Func {
 
         #[cfg(feature = "component-model-async")]
         if store.0.concurrency_support() {
-            let call = self.start_call_concurrent(&mut store, params, results)?;
             return store
                 .run_concurrent_trap_on_idle(async |store| {
-                    self.finish_call_concurrent(store, call).await
+                    self.call_concurrent(store, params, results).await
                 })
                 .await?;
         }
@@ -342,9 +341,9 @@ impl Func {
         self.check_params_results(store.as_context_mut(), params, results)?;
 
         if self.abi_async(store.0) {
-            unreachable!(
-                "async-lifted exports should have failed validation \
-                 when `component-model-async` feature disabled"
+            bail!(
+                "cannot synchronously call an async-lifted export; \
+                 use `call_async` or `call_concurrent` instead"
             );
         }
 
@@ -498,7 +497,6 @@ impl Func {
             self.instance,
             store.as_context_mut(),
             options_idx,
-            flags,
             ty,
             |cx, ty| lower(cx, ty, map_maybe_uninit!(space.params)),
         )?;
@@ -519,6 +517,7 @@ impl Func {
                     mem::size_of_val(space) / mem::size_of::<ValRaw>(),
                 ))
                 .unwrap(),
+                UncaughtException::Trap,
             )?;
         }
 
@@ -680,21 +679,12 @@ impl Func {
         instance: Instance,
         mut store: StoreContextMut<T>,
         options: OptionsIndex,
-        mut flags: InstanceFlags,
         ty: TypeFuncIndex,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
     ) -> Result<()> {
-        // Perform the actual lowering, where while this is running the
-        // component is forbidden from calling imports.
-        unsafe {
-            debug_assert!(flags.may_leave());
-            flags.set_may_leave(false);
-        }
         let mut cx = LowerContext::new(store.as_context_mut(), options, instance);
         let param_ty = InterfaceType::Tuple(cx.types[ty].params);
-        let result = lower(&mut cx, param_ty);
-        unsafe { flags.set_may_leave(true) };
-        result
+        lower(&mut cx, param_ty)
     }
 
     /// Creates a `LiftContext` using the provided configuration values and runs
@@ -733,6 +723,7 @@ pub(crate) unsafe fn call_post_return(
                 &mut store.as_context_mut(),
                 func,
                 core::slice::from_ref(&arg).into(),
+                UncaughtException::Trap,
             )?;
         }
 

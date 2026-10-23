@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = "-W exceptions -C collector=copying"
+;;! flags = "-W exceptions,gc-support -C collector=copying"
 
 ;; A `catch_ref` landing pad appends the exception reference after the tag's
 ;; payload fields before branching to its target.

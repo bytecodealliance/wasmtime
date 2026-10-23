@@ -208,8 +208,11 @@ pub mod foo {
                 #[component(name = "c")]
                 pub c: wasmtime::component::__internal::Vec<u8>,
             }
-            impl core::fmt::Debug for OtherRecord {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for OtherRecord {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("OtherRecord")
                         .field("a1", &self.a1)
                         .field("a2", &self.a2)
@@ -249,8 +252,11 @@ pub mod foo {
                 #[component(name = "c4")]
                 pub c4: i64,
             }
-            impl core::fmt::Debug for SomeRecord {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for SomeRecord {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("SomeRecord")
                         .field("x", &self.x)
                         .field("y", &self.y)
@@ -283,8 +289,11 @@ pub mod foo {
                 #[component(name = "c")]
                 C(wasmtime::component::__internal::String),
             }
-            impl core::fmt::Debug for OtherVariant {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for OtherVariant {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         OtherVariant::A => f.debug_tuple("OtherVariant::A").finish(),
                         OtherVariant::B(e) => {
@@ -319,8 +328,11 @@ pub mod foo {
                 #[component(name = "d")]
                 D(wasmtime::component::__internal::Vec<OtherVariant>),
             }
-            impl core::fmt::Debug for SomeVariant {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for SomeVariant {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     match self {
                         SomeVariant::A(e) => {
                             f.debug_tuple("SomeVariant::A").field(e).finish()
@@ -1152,11 +1164,11 @@ pub mod exports {
                     #[component(name = "c")]
                     pub c: wasmtime::component::__internal::Vec<u8>,
                 }
-                impl core::fmt::Debug for OtherRecord {
+                impl ::core::fmt::Debug for OtherRecord {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("OtherRecord")
                             .field("a1", &self.a1)
                             .field("a2", &self.a2)
@@ -1198,11 +1210,11 @@ pub mod exports {
                     #[component(name = "c4")]
                     pub c4: i64,
                 }
-                impl core::fmt::Debug for SomeRecord {
+                impl ::core::fmt::Debug for SomeRecord {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("SomeRecord")
                             .field("x", &self.x)
                             .field("y", &self.y)
@@ -1237,11 +1249,11 @@ pub mod exports {
                     #[component(name = "c")]
                     C(wasmtime::component::__internal::String),
                 }
-                impl core::fmt::Debug for OtherVariant {
+                impl ::core::fmt::Debug for OtherVariant {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             OtherVariant::A => f.debug_tuple("OtherVariant::A").finish(),
                             OtherVariant::B(e) => {
@@ -1278,11 +1290,11 @@ pub mod exports {
                     #[component(name = "d")]
                     D(wasmtime::component::__internal::Vec<OtherVariant>),
                 }
-                impl core::fmt::Debug for SomeVariant {
+                impl ::core::fmt::Debug for SomeVariant {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         match self {
                             SomeVariant::A(e) => {
                                 f.debug_tuple("SomeVariant::A").field(e).finish()

@@ -32,7 +32,7 @@ fn shared_memory_failed_creation() -> Result<()> {
     let Ok(engine) = Engine::new(&config) else {
         return Ok(());
     };
-    assert!(SharedMemory::new(&engine, MemoryType::shared(1, 1)).is_err());
+    assert!(SharedMemory::new(&engine, MemoryType::shared(1, 1)?).is_err());
     let wat = r#"(module (memory 1 1 shared))"#;
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
@@ -62,7 +62,7 @@ fn test_import_shared_memory() -> Result<()> {
     };
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
-    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5))?;
+    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5)?)?;
     let _instance = Instance::new(&mut store, &module, &[shared_memory.into()])?;
     Ok(())
 }
@@ -98,7 +98,7 @@ fn test_sharing_of_shared_memory() -> Result<()> {
     };
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
-    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5))?;
+    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5)?)?;
     let instance1 = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
     let instance2 = Instance::new(&mut store, &module, &[shared_memory.clone().into()])?;
     let data = shared_memory.data();
@@ -171,7 +171,7 @@ fn test_multi_memory() -> Result<()> {
     };
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
-    let incoming_shared_memory = SharedMemory::new(&engine, MemoryType::shared(5, 10))?;
+    let incoming_shared_memory = SharedMemory::new(&engine, MemoryType::shared(5, 10)?)?;
     let instance = Instance::new(&mut store, &module, &[incoming_shared_memory.into()])?;
     let owned_memory = instance.get_memory(&mut store, "owned").unwrap();
     let shared_memory = instance.get_shared_memory(&mut store, "shared").unwrap();
@@ -208,7 +208,7 @@ fn test_grow_memory_in_multiple_threads() -> Result<()> {
         return Ok(());
     };
     let module = Module::new(&engine, wat)?;
-    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, NUM_GROW_OPS as u32))?;
+    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, NUM_GROW_OPS as u32)?)?;
     let mut threads = vec![];
     let observed_sizes = Arc::new(RwLock::new(vec![]));
 
@@ -280,7 +280,7 @@ fn test_memory_size_accessibility() -> Result<()> {
         return Ok(());
     };
     let module = Module::new(&engine, wat)?;
-    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, NUM_GROW_OPS as u32))?;
+    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, NUM_GROW_OPS as u32)?)?;
     let done = Arc::new(AtomicBool::new(false));
 
     let grow_memory = shared_memory.clone();
@@ -318,6 +318,6 @@ fn test_memory_size_accessibility() -> Result<()> {
 fn create_shared_memory_through_memory() -> Result<()> {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
-    assert!(Memory::new(&mut store, MemoryType::shared(1, 1)).is_err());
+    assert!(Memory::new(&mut store, MemoryType::shared(1, 1)?).is_err());
     Ok(())
 }

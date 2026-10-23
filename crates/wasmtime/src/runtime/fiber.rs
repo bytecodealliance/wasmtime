@@ -418,7 +418,7 @@ pub(crate) struct StoreFiber<'a> {
     /// Note that using `StoreFiberYield` as the `Yield` type parameter allows
     /// the fiber to indicate whether it needs exclusive access to the store
     /// across suspend points (in which case it will pass `KeepStore` when
-    /// suspending , meaning the store must not be used at all until the fiber
+    /// suspending, meaning the store must not be used at all until the fiber
     /// is resumed again) or whether it is giving up exclusive access (in which
     /// case it will pass `ReleaseStore` when yielding, meaning exclusive access
     /// may be given to another fiber that runs concurrently.
@@ -452,13 +452,19 @@ impl<'a> StoreFiber<'a> {
         self.fiber.take().map(|f| f.into_inner().0.into_stack())
     }
 
-    pub(crate) fn dispose(&mut self, store: &mut StoreOpaque) {
+    /// Cancels this fiber, if it's still in progress, by resuming it with an
+    /// error so that it unwinds and completes.
+    ///
+    /// Returns whether the fiber was in progress and had to be cancelled.
+    pub(crate) fn dispose(&mut self, store: &mut StoreOpaque) -> bool {
         if let Some(fiber) = self.fiber() {
             if !fiber.done() {
                 let result = resume_fiber(store, self, Err(format_err!("future dropped")));
                 debug_assert!(result.is_ok());
+                return true;
             }
         }
+        false
     }
 
     #[cfg(all(feature = "component-model-async", feature = "gc"))]
@@ -1007,7 +1013,14 @@ impl<'b> Future for FiberFuture<'_, 'b> {
 impl Drop for FiberFuture<'_, '_> {
     fn drop(&mut self) {
         if let Some(fiber) = &mut self.fiber {
-            fiber.dispose(self.store);
+            let cancelled = fiber.dispose(self.store);
+
+            // If the fiber was cancelled partway through then whatever it was
+            // doing has been abandoned, and whatever it was doing may only be
+            // partially reflected within the store, so lock down the store.
+            if cancelled {
+                self.store.set_trapped();
+            }
         }
     }
 }

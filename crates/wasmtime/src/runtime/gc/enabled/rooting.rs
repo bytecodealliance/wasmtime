@@ -428,7 +428,7 @@ impl PackedIndex {
 
     fn as_owned(&self) -> Option<SlabId> {
         if self.is_owned() {
-            Some(SlabId::from_raw(self.payload()))
+            Some(SlabId::try_from_raw(self.payload()).unwrap())
         } else {
             None
         }
@@ -516,7 +516,12 @@ impl RootSet {
     #[inline(never)]
     #[cold]
     fn exit_lifo_scope_slow(&mut self, mut gc_store: Option<&mut GcStore>, scope: usize) {
-        self.lifo_generation += 1;
+        // Note that this explicitly uses `wrapping_add` to avoid panicking on
+        // overflow. This is intended to assist with the lifetime issues on the
+        // host but is not required for memory safety, so in the event of a
+        // wraparound it may mean that preexisting issues on the host go
+        // undetected.
+        self.lifo_generation = self.lifo_generation.wrapping_add(1);
 
         // TODO: In the case where we have a tracing GC that doesn't need to
         // drop barriers, this should really be:

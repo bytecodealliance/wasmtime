@@ -154,7 +154,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
     }
 
     fn remote_address(&mut self, this: Resource<TcpSocket>) -> SocketResult<IpSocketAddress> {
-        let socket = self.table.get(&this)?;
+        let socket = self.table.get_mut(&this)?;
         Ok(socket.inner.remote_address()?.into())
     }
 

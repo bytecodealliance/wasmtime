@@ -70,7 +70,9 @@ mod unix {
         // happens.
         let mut stores = Vec::new();
         loop {
-            let mut store = Store::new(&engine, ());
+            let Ok(mut store) = Store::try_new(&engine, ()) else {
+                break;
+            };
             if Instance::new(&mut store, &module, &[]).is_ok() {
                 stores.push(store);
             } else {

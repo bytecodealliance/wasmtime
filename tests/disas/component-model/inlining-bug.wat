@@ -37,7 +37,7 @@
 ;; function u2:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 25 ""
+;;     region2 = 42 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -63,7 +63,7 @@
 ;;
 ;;                                 block4:
 ;; @00d4                               v2 = load.i64 notrap aligned readonly can_move region2 v0+72
-;;                                     v6 = load.i64 notrap aligned readonly can_move region2 v2+104
+;;                                     v6 = load.i64 notrap aligned readonly can_move region2 v2+72
 ;;                                     call fn2(v6, v6)
 ;;                                     jump block5
 ;;

@@ -1,10 +1,9 @@
 use std::ffi::c_void;
 use std::io::Error;
+use wasmtime_core::error::Result;
 use windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache;
 use windows_sys::Win32::System::Threading::FlushProcessWriteBuffers;
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
-
-pub use std::io::Result;
 
 /// See docs on [crate::pipeline_flush_mt] for a description of what this function is trying to do.
 #[inline]
@@ -39,7 +38,7 @@ pub(crate) fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
     unsafe {
         let res = FlushInstructionCache(GetCurrentProcess(), ptr, len);
         if res == 0 {
-            return Err(Error::last_os_error());
+            return Err(Error::last_os_error().into());
         }
     }
 

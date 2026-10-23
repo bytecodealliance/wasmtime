@@ -28,9 +28,30 @@ pub struct ExternRefHostDataTable {
 }
 
 /// ID into the `externref` host data table.
+///
+/// Not every bit pattern is a valid ID, so this must never be a field of a
+/// type reinterpreted from GC heap bytes; use `into_raw` and `from_raw`
+/// instead.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(transparent)]
 pub struct ExternRefHostDataId(Id);
+
+impl ExternRefHostDataId {
+    /// Get the raw `u32` to store in the GC heap for this ID.
+    ///
+    /// Biased by one so that zero is never a valid encoding.
+    pub fn into_raw(self) -> u32 {
+        self.0.into_raw() + 1
+    }
+
+    /// Resolve a raw ID loaded from the GC heap, if it is well-formed.
+    ///
+    /// A well-formed ID is not necessarily a live one; lookups are still
+    /// checked.
+    pub fn from_raw(raw: u32) -> Option<Self> {
+        let id = raw.checked_sub(1)?;
+        Some(ExternRefHostDataId(Id::try_from_raw(id)?))
+    }
+}
 
 fn deref_box<T: ?Sized>(b: &Box<T>) -> &T {
     &**b

@@ -1,0 +1,26 @@
+test compile precise-output
+target aarch64
+
+;; Operands deliberately arrive outside x10/x0 so the pinning moves show.
+function %interrupt_poll(i64, i64, i64) -> i64 tail {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = interrupt_poll v1, v2, user3
+    return v3
+}
+
+; VCode:
+; block0:
+;   mov x0, x4
+;   mov x10, x3
+;   x10 = interrupt_poll load_ptr=x10, context=x0, scratch=x9 #trap=user3
+;   mov x2, x10
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, x4
+;   mov x10, x3
+;   ldr x9, [x10] ; trap: user3
+;   mov x2, x10
+;   ret
+

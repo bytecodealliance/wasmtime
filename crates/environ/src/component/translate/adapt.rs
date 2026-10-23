@@ -185,7 +185,10 @@ impl<'data> Translator<'_, 'data> {
     ///
     /// This will mutate the provided `component` in-place and fill out the dfg
     /// metadata for adapter modules.
-    pub(super) fn partition_adapter_modules(&mut self, component: &mut dfg::ComponentDfg) {
+    pub(super) fn partition_adapter_modules(
+        &mut self,
+        component: &mut dfg::ComponentDfg,
+    ) -> Result<()> {
         // Visit each adapter, in order of its original definition, during the
         // partitioning. This allows for the guarantee that dependencies are
         // visited in a topological fashion ideally.
@@ -227,10 +230,7 @@ impl<'data> Translator<'_, 'data> {
             }
 
             // With the wasm binary this is then pushed through general
-            // translation, validation, etc. Note that multi-memory is
-            // specifically enabled here since the adapter module is highly
-            // likely to use that if anything is actually indirected through
-            // memory.
+            // translation, validation, etc.
             self.validator.reset();
             let static_module_index = self.static_modules.next_key();
             let translation = ModuleEnvironment::new(
@@ -240,7 +240,7 @@ impl<'data> Translator<'_, 'data> {
                 static_module_index,
             )
             .translate(Parser::new(0), wasm)
-            .expect("invalid adapter module generated");
+            .context("failed to validate a fused adapter module")?;
 
             // Record, for each adapter in this adapter module, the module that
             // the adapter was placed within as well as the function index of
@@ -269,6 +269,8 @@ impl<'data> Translator<'_, 'data> {
             let id = component.adapter_modules.push((static_module_index, args));
             assert_eq!(id, module_id);
         }
+
+        Ok(())
     }
 }
 
@@ -325,15 +327,10 @@ fn fact_import_to_core_def(
         fact::Import::PrepareCall { memory } => simple_intrinsic(dfg::Trampoline::PrepareCall {
             memory: memory.as_ref().map(|v| dfg.memories.push(unwrap_memory(v))),
         }),
-        fact::Import::SyncStartCall { callback } => {
-            simple_intrinsic(dfg::Trampoline::SyncStartCall {
-                callback: callback.clone().map(|v| dfg.callbacks.push(v)),
-            })
-        }
-        fact::Import::AsyncStartCall {
+        fact::Import::StartCall {
             callback,
             post_return,
-        } => simple_intrinsic(dfg::Trampoline::AsyncStartCall {
+        } => simple_intrinsic(dfg::Trampoline::StartCall {
             callback: callback.clone().map(|v| dfg.callbacks.push(v)),
             post_return: post_return.clone().map(|v| dfg.post_returns.push(v)),
         }),

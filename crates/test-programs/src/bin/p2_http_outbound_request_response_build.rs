@@ -52,6 +52,14 @@ fn main() {
         // IPv6 addresses with and without a port should be allowed
         assert!(req.set_authority(Some("[::]:443")).is_ok());
         assert!(req.set_authority(Some("[::]")).is_ok());
+        // RFC 9110 forbids sending a userinfo subcomponent, which would
+        // otherwise end up verbatim in the `Host` header.
+        assert!(req.set_authority(Some("user@example.com")).is_err());
+        assert!(
+            req.set_authority(Some("user:pass@example.com:443"))
+                .is_err()
+        );
+        assert!(req.set_authority(Some("user@[::1]:443")).is_err());
 
         assert!(
             req.set_scheme(Some(&http_types::Scheme::Other("bad\nscheme".to_string())))
@@ -59,6 +67,23 @@ fn main() {
         );
 
         assert!(req.set_path_with_query(Some("/bad\npath")).is_err());
+        // With an authority, RFC 3986 requires the path to be empty or start
+        // with `/`, optionally followed by a query.
+        assert!(
+            req.set_path_with_query(Some("http://other.example/x"))
+                .is_err()
+        );
+        assert!(
+            req.set_path_with_query(Some("https://other.example:8443/"))
+                .is_err()
+        );
+        assert!(req.set_path_with_query(Some("other.example/x")).is_err());
+        assert!(req.set_path_with_query(Some("*")).is_err());
+        assert!(req.set_path_with_query(Some("")).is_ok());
+        assert!(req.set_path_with_query(Some("/")).is_ok());
+        assert!(req.set_path_with_query(Some("/a?b=c")).is_ok());
+        assert!(req.set_path_with_query(Some("?a")).is_ok());
+        assert!(req.set_path_with_query(Some("//a/b")).is_ok());
     }
 
     println!("Done");

@@ -66,20 +66,20 @@ pub fn link_spectest<T>(
     let g = Global::new(&mut *store, ty, Val::F64(0x4084_d4cc_cccc_cccd))?;
     linker.define(&mut *store, "spectest", "global_f64", g)?;
 
-    let ty = TableType::new(RefType::FUNCREF, 10, Some(20));
+    let ty = TableType::new(RefType::FUNCREF, 10, Some(20))?;
     let table = Table::new(&mut *store, ty, Ref::Func(None))?;
     linker.define(&mut *store, "spectest", "table", table)?;
 
-    let ty = TableType::new64(RefType::FUNCREF, 10, Some(20));
+    let ty = TableType::new64(RefType::FUNCREF, 10, Some(20))?;
     let table = Table::new(&mut *store, ty, Ref::Func(None))?;
     linker.define(&mut *store, "spectest", "table64", table)?;
 
-    let ty = MemoryType::new(1, Some(2));
+    let ty = MemoryType::new(1, Some(2))?;
     let memory = Memory::new(&mut *store, ty)?;
     linker.define(&mut *store, "spectest", "memory", memory)?;
 
     if config.use_shared_memory {
-        let ty = MemoryType::shared(1, 1);
+        let ty = MemoryType::shared(1, 1)?;
         let memory = SharedMemory::new(store.engine(), ty)?;
         linker.define(&mut *store, "spectest", "shared_memory", memory)?;
     }
@@ -91,7 +91,7 @@ pub fn link_spectest<T>(
 pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<()> {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
-    use wasmtime::component::{Resource, ResourceType};
+    use wasmtime::component::{FutureReader, Resource, ResourceType};
 
     let engine = linker.engine().clone();
     linker
@@ -221,5 +221,8 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
         },
     )?;
     i.func_wrap("return-hi", |_cx, (): ()| Ok(("hi".to_string(),)))?;
+    i.func_wrap("unit-future", |mut cx, (): ()| {
+        Ok((FutureReader::new(&mut cx, async { Ok::<_, Error>(()) })?,))
+    })?;
     Ok(())
 }

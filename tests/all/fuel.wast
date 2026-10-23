@@ -182,6 +182,195 @@
     (table funcref (elem $other))
     (start $f)))
 
+(assert_fuel 6
+  (module
+    (type $t (func))
+    (func $f
+      ref.func $other
+      call_ref $t
+    )
+    (func $other)
+    (elem declare func $other)
+    (start $f)))
+
+(assert_fuel 9
+  (module
+    (type $t (func))
+    (func $f
+      ref.func $other
+      call_ref $t
+    )
+    (func $other
+      i32.const 0
+      i32.const 0
+      i32.const 0
+      drop
+      drop
+      drop
+    )
+    (elem declare func $other)
+    (start $f)))
+
+(assert_fuel 6
+  (module
+    (tag $e)
+    (func $f
+      block $catch
+        try_table (catch $e $catch)
+          call $other
+        end
+      end
+    )
+    (func $other)
+    (start $f)))
+
+(assert_fuel 9
+  (module
+    (tag $e)
+    (func $f
+      block $catch
+        try_table (catch $e $catch)
+          call $other
+        end
+      end
+    )
+    (func $other
+      i32.const 0
+      i32.const 0
+      i32.const 0
+      drop
+      drop
+      drop
+    )
+    (start $f)))
+
+(assert_fuel 7
+  (module
+    (tag $e)
+    (func $f
+      block $catch
+        try_table (catch $e $catch)
+          call $other
+        end
+      end
+    )
+    (func $other
+      throw $e
+    )
+    (start $f)))
+
+(assert_fuel 10
+  (module
+    (tag $e)
+    (func $f
+      block $catch
+        try_table (catch $e $catch)
+          call $other
+        end
+      end
+    )
+    (func $other
+      i32.const 0
+      i32.const 0
+      i32.const 0
+      drop
+      drop
+      drop
+      throw $e
+    )
+    (start $f)))
+
+(assert_fuel 10
+  (module
+    (tag $e)
+    (func $f
+      block $catch
+        try_table (catch_all $catch)
+          call $other
+        end
+      end
+    )
+    (func $other
+      i32.const 0
+      i32.const 0
+      i32.const 0
+      drop
+      drop
+      drop
+      throw $e
+    )
+    (start $f)))
+
+(assert_fuel 10
+  (module
+    (tag $e)
+    (func $f
+      block $catch (result exnref)
+        try_table (catch_ref $e $catch)
+          call $other
+        end
+        unreachable
+      end
+      drop
+    )
+    (func $other
+      i32.const 0
+      i32.const 0
+      i32.const 0
+      drop
+      drop
+      drop
+      throw $e
+    )
+    (start $f)))
+
+(assert_fuel 12
+  (module
+    (tag $e (param i32))
+    (func $f
+      block $catch (result i32)
+        try_table (result i32) (catch $e $catch)
+          call $other
+        end
+      end
+      i32.const 1
+      i32.add
+      drop
+    )
+    (func $other (result i32)
+      i32.const 0
+      i32.const 0
+      i32.const 0
+      drop
+      drop
+      throw $e
+    )
+    (start $f)))
+
+(assert_fuel 11
+  (module
+    (type $t (func))
+    (tag $e)
+    (func $f
+      block $catch
+        try_table (catch $e $catch)
+          ref.func $other
+          call_ref $t
+        end
+      end
+    )
+    (func $other
+      i32.const 0
+      i32.const 0
+      i32.const 0
+      drop
+      drop
+      drop
+      throw $e
+    )
+    (elem declare func $other)
+    (start $f)))
+
 ;; loops!
 (assert_fuel 3
   (module

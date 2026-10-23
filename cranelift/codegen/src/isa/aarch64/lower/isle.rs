@@ -342,7 +342,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     /// This is target-word-size dependent.  And it excludes booleans and reftypes.
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
         match ty {
-            I8 | I16 | I32 | I64 => Some(ty),
+            I8 | I16 | I32 | I64 | I128 => Some(ty),
             _ => None,
         }
     }
@@ -674,8 +674,8 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn targets_jt_space(&mut self, elements: &BoxVecMachLabel) -> CodeOffset {
         // calculate the number of bytes needed for the jumptable sequence:
         // 4 bytes per instruction, with 8 instructions base + the size of
-        // the jumptable more.
-        (4 * (8 + elements.len())).try_into().unwrap()
+        // the jumptable more (including the default entry).
+        (4 * (8 + elements.len() + 1)).try_into().unwrap()
     }
 
     fn min_fp_value(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {

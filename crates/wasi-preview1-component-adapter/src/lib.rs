@@ -457,7 +457,7 @@ impl ImportAlloc {
 #[derive(Clone)]
 struct BumpAlloc {
     base: *mut u8,
-    len: usize,
+    len: usize, // remaining size available for allocation
 }
 
 impl BumpAlloc {
@@ -1102,7 +1102,7 @@ pub unsafe extern "C" fn fd_filestat_set_times(
                 fst_flags & FSTFLAGS_MTIM_NOW == FSTFLAGS_MTIM_NOW,
             )?;
             let ds = state.descriptors();
-            let file = ds.get_file(fd)?;
+            let file = ds.get_file_or_dir(fd)?;
             file.fd.set_times(atim, mtim)?;
             Ok(())
         })

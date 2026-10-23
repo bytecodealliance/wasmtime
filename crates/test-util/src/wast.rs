@@ -18,7 +18,7 @@ use wasmtime_environ::prelude::*;
 pub mod limits {
     pub const MEMORY_SIZE: usize = 805 << 16;
     pub const MEMORIES: u32 = 450;
-    pub const GC_HEAP_SIZE: usize = 10 << 16;
+    pub const GC_HEAP_SIZE: usize = 2 << 20; // 2MiB
     pub const TABLES: u32 = 200;
     pub const MEMORIES_PER_MODULE: u32 = 9;
     pub const TABLES_PER_MODULE: u32 = 5;
@@ -148,6 +148,16 @@ fn spec_test_config(test: &Path) -> TestConfig {
         Some("custom-descriptors") => {
             ret.custom_descriptors = Some(true);
         }
+        Some("compact-import-section") => {
+            ret.compact_imports = Some(true);
+            ret.reference_types = Some(true);
+            ret.multi_memory = Some(true);
+            ret.exceptions = Some(true);
+        }
+        Some("extended-name-section") => {
+            ret.gc = Some(true);
+            ret.exceptions = Some(true);
+        }
         Some(proposal) => panic!("unsupported proposal {proposal:?}"),
 
         // The rough goal here is to enable a minimal set of features for the
@@ -194,6 +204,7 @@ fn spec_test_config(test: &Path) -> TestConfig {
                 || test_name.contains("unreached-valid")
                 || test_name.contains("select")
                 || test_name.contains("data")
+                || test_name.contains("cast")
             {
                 ret.gc = Some(true);
             }
@@ -205,12 +216,16 @@ fn spec_test_config(test: &Path) -> TestConfig {
             if test_name.contains("return_") || test_name.contains("try_table") {
                 ret.tail_call = Some(true);
             }
+            if test_name == "return_call.wast" || test_name == "return_call_indirect.wast" {
+                ret.function_references = Some(true);
+            }
             if test_name.contains("tag")
                 || test_name.contains("try_table")
                 || test_name.contains("throw")
                 || test_name.contains("ref")
                 || test_name.contains("instance")
                 || test_name.contains("imports")
+                || test_name.contains("cast")
             {
                 ret.exceptions = Some(true);
             }
@@ -253,6 +268,7 @@ fn component_test_config(test: &Path) -> TestConfig {
     ret.multi_memory = Some(true);
     ret.component_model_implements = Some(true);
     ret.component_model_canonical_names = Some(true);
+    ret.component_model_accessors = Some(true);
     ret.bulk_memory = Some(true);
     ret.component_model_async = Some(true);
     ret.component_model_more_async_builtins = Some(true);
@@ -336,6 +352,7 @@ macro_rules! foreach_config_option {
             extended_const
             wide_arithmetic
             branch_hinting
+            compact_imports
             hogs_memory
             nan_canonicalization
             component_model_async
@@ -349,6 +366,7 @@ macro_rules! foreach_config_option {
             component_model_fixed_length_lists
             component_model_implements
             component_model_canonical_names
+            component_model_accessors
             simd
             gc_types
             exceptions
@@ -563,6 +581,15 @@ impl WastTest {
             return true;
         }
 
+        // Wasmtime doesn't implement `assert_{invalid,malformed}_custom`
+        let unsupported = [
+            "spec_testsuite/proposals/extended-name-section/custom/name_annot.wast",
+            "spec_testsuite/proposals/extended-name-section/custom/name.wast",
+        ];
+        if unsupported.iter().any(|part| self.path.ends_with(part)) {
+            return true;
+        }
+
         // Disable spec tests per target for proposals that Winch does not implement yet.
         if config.compiler == Compiler::Winch {
             // Common list for tests that fail in all targets supported by Winch.
@@ -703,6 +730,14 @@ impl WastTest {
         if uses_stream_forward
             .iter()
             .any(|part| self.path.ends_with(part))
+        {
+            return true;
+        }
+
+        // Obsolete test to be removed in https://github.com/WebAssembly/component-model/pull/726
+        if self
+            .path
+            .ends_with("component-model/test/async/cancel-instance-wide-resume.wast")
         {
             return true;
         }

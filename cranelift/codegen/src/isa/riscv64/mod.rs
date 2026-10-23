@@ -36,6 +36,19 @@ pub struct Riscv64Backend {
 }
 
 impl Riscv64Backend {
+    fn supports_vector_element_type(&self, ty: Type) -> bool {
+        use ir::types::*;
+
+        match ty {
+            I8 | I16 | I32 | I64 => true,
+            // FP16 vector operations require Zvfh.
+            F16 => self.isa_flags.has_f() && self.isa_flags.has_zvfh(),
+            F32 => self.isa_flags.has_f(),
+            F64 => self.isa_flags.has_d(),
+            _ => false,
+        }
+    }
+
     /// Create a new riscv64 backend with the given (shared) flags.
     pub fn new_with_flags(
         triple: Triple,
@@ -211,6 +224,12 @@ impl TargetIsa for Riscv64Backend {
 
     fn has_native_fma(&self) -> bool {
         true
+    }
+
+    fn supports_vector_load_store(&self, ty: Type) -> bool {
+        ty.is_vector()
+            && u64::from(ty.bits()) <= self.isa_flags.min_vec_reg_size()
+            && self.supports_vector_element_type(ty.lane_type())
     }
 
     fn has_round(&self) -> bool {

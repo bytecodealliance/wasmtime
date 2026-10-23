@@ -13,7 +13,7 @@ use crate::{
     WasmValType, WasmparserTypeConverter,
 };
 use alloc::borrow::Cow;
-use cranelift_entity::packed_option::ReservedValue;
+use cranelift_entity::packed_option::{PackedOption, ReservedValue};
 use cranelift_entity::{EntitySet, SecondaryMap};
 use std::collections::HashMap;
 use std::mem;
@@ -128,6 +128,19 @@ pub struct ModuleTranslation<'data> {
     /// `FuncKey::DefinedWasmFunction(..)`s, `FuncKey::Intrinsic(..)`s, and
     /// `FuncKey::FactInlineIntrinsic`s.
     pub known_imported_functions: SecondaryMap<FuncIndex, Option<KnownFunc>>,
+
+    /// For each function import, the function import whose `vmctx` this one
+    /// is statically guaranteed to always share, when that is not itself.
+    ///
+    /// Function imports that always resolve to functions from the same
+    /// instance hold the same `vmctx` pointer in their `VMFunctionImport`
+    /// slots, so they can all load the callee `vmctx` from a single slot and
+    /// let GVN collapse what would otherwise be many identical loads into one.
+    ///
+    /// No value means this import must use its own slot.
+    ///
+    /// Only filled in for modules compiled as part of a component.
+    pub imported_func_vmctx_representative: SecondaryMap<FuncIndex, PackedOption<FuncIndex>>,
 
     /// For each imported global, memory, or table, the single statically-known
     /// defined entity that always satisfies that import, if any.
@@ -313,6 +326,7 @@ impl<'data> ModuleTranslation<'data> {
             wasm_module_offset: 0,
             function_body_inputs: PrimaryMap::default(),
             known_imported_functions: SecondaryMap::default(),
+            imported_func_vmctx_representative: SecondaryMap::default(),
             known_imported_globals: SecondaryMap::default(),
             known_imported_memories: SecondaryMap::default(),
             known_imported_tables: SecondaryMap::default(),
@@ -811,11 +825,15 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 }
             }
 
-            Payload::CodeSectionStart { count, range, .. } => {
-                self.validator.code_section_start(&range)?;
+            Payload::CodeSectionStart {
+                count,
+                unchecked_range,
+                ..
+            } => {
+                self.validator.code_section_start(&unchecked_range)?;
                 let cnt = usize::try_from(count).unwrap();
                 self.result.function_body_inputs.reserve_exact(cnt);
-                self.result.debuginfo.wasm_file.code_section_offset = range.start;
+                self.result.debuginfo.wasm_file.code_section_offset = unchecked_range.start;
             }
 
             Payload::CodeSectionEntry(body) => {
@@ -1155,6 +1173,8 @@ and for re-adding support for interface types you can see this issue:
                 | wasmparser::Name::Data(_)
                 | wasmparser::Name::Tag(_)
                 | wasmparser::Name::Field(_)
+                | wasmparser::Name::Parameter(_)
+                | wasmparser::Name::TagParameter(_)
                 | wasmparser::Name::Unknown { .. } => {}
             }
         }
@@ -1197,7 +1217,11 @@ impl ModuleTranslation<'_> {
         max_image_size_always_allowed: u64,
         types: &mut ModuleTypesBuilder,
     ) {
-        if tunables.memory_init_cow {
+        // Memory images are installed before the module's startup function
+        // runs. If a table initializer can trap, using a memory image would
+        // initialize memory even though the startup function should trap
+        // before reaching the memory initializers.
+        if tunables.memory_init_cow && !self.table_initialization_may_trap() {
             self.try_static_init(page_size, max_image_size_always_allowed);
         }
 
@@ -1250,6 +1274,29 @@ impl ModuleTranslation<'_> {
             cur += len;
             assert_eq!(idx, i);
         }
+    }
+
+    /// Returns whether an active table initializer may trap during startup.
+    ///
+    /// Memory images are installed while allocating an instance, before the
+    /// startup function executes. Therefore a memory image cannot be used when
+    /// a table initializer might trap: doing so would make the memory
+    /// observable even though execution should stop before reaching the memory
+    /// initializers.
+    fn table_initialization_may_trap(&self) -> bool {
+        self.table_initialization.segments.iter().any(|segment| {
+            let offset = match segment.offset.ops() {
+                &[ConstOp::I32Const(offset)] => u64::from(offset.cast_unsigned()),
+                &[ConstOp::I64Const(offset)] => offset.cast_unsigned(),
+                // A dynamic offset cannot be proven to be in bounds here.
+                _ => return true,
+            };
+            let top = match offset.checked_add(segment.elements.len()) {
+                Some(top) => top,
+                None => return true,
+            };
+            top > self.module.tables[segment.table_index].limits.min
+        })
     }
 
     /// Attempts to convert segmented memory initialization into static

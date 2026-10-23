@@ -13,7 +13,7 @@ fn main() {
     if !PathBuf::from("../Cargo.toml").exists() {
         std::fs::write(
             out_dir.join("gen.rs"),
-            "pub const GDBSTUB_COMPONENT: &[u8] = &[];\n",
+            "pub const GDBSTUB_COMPONENT: Option<&[u8]> = None;\n",
         )
         .unwrap();
         return;
@@ -57,7 +57,8 @@ fn main() {
         }
     }
 
-    let generated = format!("pub const GDBSTUB_COMPONENT: &[u8] = include_bytes!({wasm:?});\n");
+    let generated =
+        format!("pub const GDBSTUB_COMPONENT: Option<&[u8]> = Some(include_bytes!({wasm:?}));\n");
     std::fs::write(out_dir.join("gen.rs"), generated).unwrap();
 }
 

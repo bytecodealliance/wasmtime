@@ -105,7 +105,8 @@ pub use resources::*;
 #[cfg(all(feature = "async", feature = "call-hook"))]
 pub use store::CallHookHandler;
 pub use store::{
-    AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut, UpdateDeadline,
+    AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut, StoreHookState,
+    UpdateDeadline,
 };
 pub use trap::*;
 pub use types::*;
@@ -118,7 +119,7 @@ pub use vm::{PoolConcurrencyLimitError, PoolingAllocatorMetrics};
 #[cfg(feature = "profiling")]
 mod profiling;
 #[cfg(feature = "profiling")]
-pub use profiling::GuestProfiler;
+pub use profiling::{GuestProfiler, GuestProfilerModules};
 
 #[cfg(feature = "async")]
 pub(crate) mod stack;

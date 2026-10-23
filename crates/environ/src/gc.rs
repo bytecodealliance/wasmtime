@@ -516,19 +516,14 @@ impl VMGcKind {
 
     /// Convert the given value into a `VMGcKind` by masking off the unused
     /// bottom bits.
+    ///
+    /// Returns `None` if the remaining bits do not name a kind, which most
+    /// callers must be prepared for, since these values come out of the
+    /// untrusted GC heap.
     #[inline]
-    pub fn from_high_bits_of_u32(val: u32) -> VMGcKind {
+    pub fn from_high_bits_of_u32(val: u32) -> Option<VMGcKind> {
         let masked = val & Self::MASK;
-        let result = Self::try_from_u32(masked)
-            .unwrap_or_else(|| panic!("invalid `VMGcKind`: {masked:#032b}"));
-
-        let poison_kind = u32::from_le_bytes([POISON, POISON, POISON, POISON]) & VMGcKind::MASK;
-        debug_assert_ne!(
-            masked, poison_kind,
-            "No valid `VMGcKind` should overlap with the poison pattern"
-        );
-
-        result
+        Self::try_from_u32(masked)
     }
 
     /// Does this kind match the other kind?
@@ -565,7 +560,13 @@ impl VMGcKind {
 #[cfg(test)]
 mod tests {
     use super::VMGcKind::*;
-    use crate::prelude::*;
+    use super::*;
+
+    #[test]
+    fn poison_is_not_a_kind() {
+        let poison = u32::from_le_bytes([POISON, POISON, POISON, POISON]);
+        assert!(VMGcKind::from_high_bits_of_u32(poison).is_none());
+    }
 
     #[test]
     fn kind_matches() {

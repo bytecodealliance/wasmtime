@@ -13,6 +13,7 @@ bindgen!({
                 warn,
                 error,
             }
+
             resource logger {
                 constructor(max-level: level);
 
@@ -21,6 +22,10 @@ bindgen!({
 
                 log: func(level: level, msg: string);
             }
+
+            inspect-logger: func(logger: borrow<logger>) -> level;
+            take-logger: func(logger: logger);
+            get-default-logger: func() -> logger;
         }
     "#,
 });

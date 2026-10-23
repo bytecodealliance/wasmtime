@@ -135,6 +135,8 @@ impl std::fmt::Display for Constraint {
 #[derive(Clone)]
 pub enum Choice {
     TermInstantiation(TermId, Signature),
+    /// Width chosen from a declared width set.
+    BitVectorWidth(ExprId, usize),
 }
 
 impl std::fmt::Display for Choice {
@@ -142,6 +144,9 @@ impl std::fmt::Display for Choice {
         match self {
             Choice::TermInstantiation(term_id, sig) => {
                 write!(f, "term_instantiation({}, {sig})", term_id.index())
+            }
+            Choice::BitVectorWidth(x, width) => {
+                write!(f, "bit_vector_width({}, {width})", x.index())
             }
         }
     }
@@ -163,6 +168,7 @@ pub struct System {
     choices: Vec<Choice>,
     constraints: Vec<Constraint>,
     branches: Vec<Branch>,
+    width_domains: Vec<(ExprId, Vec<usize>)>,
 }
 
 impl System {
@@ -185,6 +191,7 @@ impl System {
                 constraints,
                 choices,
                 branches: branches.clone(),
+                width_domains: self.width_domains.clone(),
             })
         }
 
@@ -271,6 +278,8 @@ impl<'a> SystemBuilder<'a> {
         for qualifier in &self.conditions.qualifiers {
             self.qualifier(qualifier);
         }
+
+        self.system.width_domains = self.conditions.width_domains.clone();
 
         self.system
     }
@@ -929,6 +938,33 @@ impl Solver {
 
         // Done?
         if system.branches.is_empty() {
+            // Branch over the declared widths of an undetermined bit-vector.
+            let undetermined = system
+                .width_domains
+                .iter()
+                .find(|(x, _)| self.assignment.bit_vector_width(*x).is_none());
+            if let Some((x, widths)) = undetermined {
+                let x = *x;
+                let mut solutions = Vec::new();
+                for &width in widths {
+                    let mut choices = system.choices.clone();
+                    choices.push(Choice::BitVectorWidth(x, width));
+                    let mut constraints = system.constraints.clone();
+                    constraints.push(Constraint::Type {
+                        x,
+                        ty: Type::BitVector(Width::Bits(width)),
+                    });
+                    let child = System {
+                        choices,
+                        constraints,
+                        branches: Vec::new(),
+                        width_domains: system.width_domains.clone(),
+                    };
+                    solutions.extend(self.clone().solve(&child));
+                }
+                return solutions;
+            }
+
             let status = if self.assignment.is_concrete() {
                 Status::Solved
             } else {

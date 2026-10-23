@@ -172,7 +172,7 @@ impl<T: 'static> Linker<T> {
             imported_resources: try_new::<Arc<_>>(TryPrimaryMap::new())?,
         };
 
-        // Walk over the component's list of import names and use that to lookup
+        // Walk over the component's list of import names and use that to look up
         // the definition within this linker that it corresponds to. When found
         // perform a typecheck against the component's expected type.
         let env_component = component.env_component();
@@ -250,7 +250,7 @@ impl<T: 'static> Linker<T> {
         // using the import map within the component created at
         // component-compile-time.
         let env_component = component.env_component();
-        let mut imports = PrimaryMap::with_capacity(env_component.imports.len());
+        let mut imports = TryPrimaryMap::with_capacity(env_component.imports.len())?;
         for (idx, (import, names)) in env_component.imports.iter() {
             let (root, _) = &env_component.import_types[*import];
 
@@ -277,13 +277,13 @@ impl<T: 'static> Linker<T> {
                 // runtime imports are never instances.
                 Definition::Instance(_) => unreachable!(),
             };
-            let i = imports.push(import);
+            let i = imports.push(import)?;
             assert_eq!(i, idx);
         }
         Ok(unsafe {
             InstancePre::new_unchecked(
                 component.clone(),
-                try_new::<Arc<_>>(imports)?,
+                try_new::<Arc<_>>(PrimaryMap::from(imports))?,
                 imported_resources,
             )
         })
@@ -355,16 +355,65 @@ impl<T: 'static> Linker<T> {
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
     pub fn define_unknown_imports_as_traps(&mut self, component: &Component) -> Result<()> {
-        use wasmtime_environ::component::ComponentTypes;
-        use wasmtime_environ::component::TypeDef;
-        // Recursively stub out all imports of the component with a function that traps.
+        self.define_unknown_imports(component, StubKind::Trap)
+    }
+
+    /// Implement any imports of the given [`Component`] with functions which
+    /// ignore their arguments and return default values.
+    ///
+    /// By default a [`Linker`] will error when unknown imports are encountered
+    /// when instantiating a [`Component`]. This changes that behavior from an
+    /// instant error to returning defaults when the import is called. See
+    /// [`Type::default_value`](crate::component::types::Type::default_value)
+    /// for what each type defaults to.
+    ///
+    /// Values are built when the import is called, not here, as a handle's
+    /// type depends on the instance it is flowing into.
+    ///
+    /// Not every result has a default: a `future`, `stream`, or
+    /// `error-context`, or a guest-defined resource, has none. Such an import
+    /// is still defined, but traps when called rather than preventing
+    /// instantiation, so a component which never calls it can still be run.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    pub fn define_unknown_imports_as_default_values(
+        &mut self,
+        _store: impl AsContextMut<Data = T>,
+        component: &Component,
+    ) -> Result<()> {
+        self.define_unknown_imports(component, StubKind::DefaultValue)
+    }
+
+    /// Stub out all of `component`'s undefined imports.
+    fn define_unknown_imports(&mut self, component: &Component, kind: StubKind) -> Result<()> {
+        // Recursively stub out all imports of the component.
+        use wasmtime_environ::component::{ComponentTypes, ResourceIndex, TypeDef};
+
         fn stub_item<T>(
             linker: &mut LinkerInstance<T>,
+            resources: &mut TryEntitySet<ResourceIndex>,
             item_name: &str,
             item_def: &TypeDef,
             parent_instance: Option<&str>,
-            types: &ComponentTypes,
+            types: &Arc<ComponentTypes>,
+            kind: StubKind,
         ) -> Result<()> {
+            // The first definition of a resource needs to be present, but all other future
+            // references to the same resource are aliases of the original resource definition.
+            // Once a resource is visited here all future hits on the same resource shouldn't
+            // do anything else effectively. If item_name is already defined then we'll bail
+            // out in the below matches!, and otherwise a stub will be inserted, so no matter
+            // what the first resource is defined and all others will refer to that.
+            if let TypeDef::Resource(ty) = item_def
+                && !resources.insert(types[*ty].unwrap_concrete_ty())?
+            {
+                return Ok(());
+            }
+
             // Skip if the item isn't an instance and has already been defined in the linker.
             if !matches!(item_def, TypeDef::ComponentInstance(_)) && linker.get(item_name).is_some()
             {
@@ -392,27 +441,45 @@ impl<T: 'static> Linker<T> {
                     // `func_new` (only a sync-typed import can) — see
                     // `typecheck_async`'s doc comment. Stub it with
                     // `func_new_concurrent` instead so unsatisfied async
-                    // imports can be stubbed-as-traps too, not just sync
+                    // imports can be stubbed too, not just sync
                     // ones; if concurrency support isn't enabled there's no
                     // way to stub it here, so fall through to `func_new` and
                     // let instantiation fail with that same explanatory
                     // error.
                     #[cfg(feature = "component-model-async")]
                     if types[*_func_idx].async_ && linker.engine.tunables().concurrency_support {
-                        linker.func_new_concurrent(&item_name, move |_, _, _, _| {
+                        linker.func_new_concurrent(&item_name, move |accessor, ty, params, results| {
                             let fully_qualified_name = fully_qualified_name.try_clone();
                             Box::pin(async move {
                                 let fully_qualified_name = fully_qualified_name?;
-                                bail!(
-                                    "unknown import: `{fully_qualified_name}` has not been defined"
-                                )
+                                match kind {
+                                    StubKind::Trap => bail!(
+                                        "unknown import: `{fully_qualified_name}` has not been defined"
+                                    ),
+                                    StubKind::DefaultValue => accessor
+                                        .with(|store| fill_defaults(store, &ty, params, results))
+                                        .with_context(|| {
+                                            format_err!(
+                                                "unknown import: `{fully_qualified_name}` has no \
+                                                 default value"
+                                            )
+                                        }),
+                                }
                             })
                         })?;
                         return Ok(());
                     }
 
-                    linker.func_new(&item_name, move |_, _, _, _| {
-                        bail!("unknown import: `{fully_qualified_name}` has not been defined")
+                    linker.func_new(&item_name, move |store, ty, params, results| match kind {
+                        StubKind::Trap => {
+                            bail!("unknown import: `{fully_qualified_name}` has not been defined")
+                        }
+                        StubKind::DefaultValue => fill_defaults(store, &ty, params, results)
+                            .with_context(|| {
+                                format_err!(
+                                    "unknown import: `{fully_qualified_name}` has no default value"
+                                )
+                            }),
                     })?;
                 }
                 TypeDef::ComponentInstance(i) => {
@@ -421,10 +488,12 @@ impl<T: 'static> Linker<T> {
                     for (export_name, export) in instance.exports.iter() {
                         stub_item(
                             &mut linker_instance,
+                            resources,
                             export_name,
                             &export.ty,
                             Some(item_name),
                             types,
+                            kind,
                         )?;
                     }
                 }
@@ -433,24 +502,145 @@ impl<T: 'static> Linker<T> {
                     linker.resource(item_name, ty, |_, _| Ok(()))?;
                 }
                 TypeDef::Component(_) | TypeDef::Module(_) => {
-                    bail!("unable to define {} imports as traps", item_def.desc())
+                    bail!(
+                        "unable to define {} imports as {}",
+                        item_def.desc(),
+                        kind.desc()
+                    )
                 }
                 _ => {}
             }
             Ok(())
         }
 
+        let mut resources = TryEntitySet::new();
+
         for (_, (import_name, import_type)) in &component.env_component().import_types {
             stub_item(
                 &mut self.root(),
+                &mut resources,
                 import_name,
                 &import_type.ty,
                 None,
                 component.types(),
+                kind,
             )?;
         }
         Ok(())
     }
+}
+
+/// Which flavor of stub `Linker::define_unknown_imports` installs.
+#[derive(Copy, Clone)]
+enum StubKind {
+    /// Stubs trap when called.
+    Trap,
+    /// Stubs return default values; see
+    /// `Linker::define_unknown_imports_as_default_values`.
+    DefaultValue,
+}
+
+impl StubKind {
+    /// A human readable description, for error messages.
+    fn desc(&self) -> &'static str {
+        match self {
+            StubKind::Trap => "traps",
+            StubKind::DefaultValue => "default values",
+        }
+    }
+}
+
+/// Drop every handle within `params`.
+fn drop_params(mut store: impl AsContextMut, params: &[Val]) -> Result<()> {
+    let mut store = store.as_context_mut();
+    for param in params {
+        drop_val(store.as_context_mut(), param)?;
+    }
+    Ok(())
+}
+
+/// Drop every handle within `val`.
+fn drop_val<T>(mut store: StoreContextMut<'_, T>, val: &Val) -> Result<()> {
+    match val {
+        // Drop through the internal entry point rather than the public
+        // `resource_drop`: this runs while servicing a guest call on a fiber,
+        // where `resource_drop`'s `validate_sync_call` check would reject the
+        // drop with "cannot do blocking `call` from an async context".
+        Val::Resource(resource) => resource.resource_drop_in_guest_call(&mut store)?,
+
+        // Without `component-model-async` these are uninhabited, so there is
+        // nothing to close.
+        #[cfg(feature = "component-model-async")]
+        Val::Future(future) => future.clone().close(&mut store)?,
+        #[cfg(feature = "component-model-async")]
+        Val::Stream(stream) => stream.clone().close(&mut store)?,
+        #[cfg(not(feature = "component-model-async"))]
+        Val::Future(_) | Val::Stream(_) => {}
+
+        Val::List(vals) | Val::Tuple(vals) | Val::FixedLengthList(vals) => {
+            for val in vals {
+                drop_val(store.as_context_mut(), val)?;
+            }
+        }
+        Val::Record(fields) => {
+            for (_, val) in fields {
+                drop_val(store.as_context_mut(), val)?;
+            }
+        }
+        Val::Map(entries) => {
+            for (key, val) in entries {
+                drop_val(store.as_context_mut(), key)?;
+                drop_val(store.as_context_mut(), val)?;
+            }
+        }
+        Val::Variant(_, Some(val)) | Val::Option(Some(val)) => {
+            drop_val(store.as_context_mut(), val)?
+        }
+        Val::Result(Ok(Some(val)) | Err(Some(val))) => drop_val(store.as_context_mut(), val)?,
+
+        // Lifting an `error-context` reads its representation without taking
+        // ownership of a handle, so there is nothing to drop.
+        Val::ErrorContext(_) => {}
+
+        Val::Bool(_)
+        | Val::S8(_)
+        | Val::U8(_)
+        | Val::S16(_)
+        | Val::U16(_)
+        | Val::S32(_)
+        | Val::U32(_)
+        | Val::S64(_)
+        | Val::U64(_)
+        | Val::Float32(_)
+        | Val::Float64(_)
+        | Val::Char(_)
+        | Val::String(_)
+        | Val::Enum(_)
+        | Val::Flags(_)
+        | Val::Variant(_, None)
+        | Val::Option(None)
+        | Val::Result(Ok(None) | Err(None)) => {}
+    }
+    Ok(())
+}
+
+/// Write a default value for each of `ty`'s results into `results`, after
+/// disposing of `params`.
+///
+/// `ty` comes from the call itself rather than from the linker, so its `own`
+/// and `borrow` types are those of the instance being called, which is what
+/// makes the handles this produces pass the guest's type check.
+fn fill_defaults(
+    mut store: impl AsContextMut,
+    ty: &types::ComponentFunc,
+    params: &[Val],
+    results: &mut [Val],
+) -> Result<()> {
+    drop_params(&mut store, params)?;
+    for (slot, ty) in results.iter_mut().zip(ty.results()) {
+        *slot = ty.default_value(&mut store)?;
+    }
+    Ok(())
 }
 
 impl<T: 'static> LinkerInstance<'_, T> {

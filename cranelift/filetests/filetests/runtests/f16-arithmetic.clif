@@ -1,3 +1,4 @@
+test interpret
 test run
 target riscv64 has_zfhmin has_zfh
 

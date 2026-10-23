@@ -4,7 +4,7 @@ use super::REALLOC_AND_FREE;
 use std::ops::Deref;
 use wasmtime::Result;
 use wasmtime::component::*;
-use wasmtime::{Config, Engine, Store, StoreContextMut, WasmBacktrace};
+use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, WasmBacktrace};
 
 #[test]
 fn can_compile() -> Result<()> {
@@ -477,6 +477,63 @@ fn reenter_during_host() -> Result<()> {
     let func = instance.get_func(&mut store, "run").unwrap();
     store.data_mut().func = Some(func);
     func.call(&mut store, &[], &mut [])?;
+
+    Ok(())
+}
+
+#[test]
+fn reenter_during_host_and_trap() -> Result<()> {
+    let component = r#"
+(component
+  (import "thunk" (func $thunk))
+  (core func $thunk_lower (canon lower (func $thunk)))
+
+  (core module $m
+    (import "host" "thunk" (func $thunk))
+
+    (func (export "run")
+      call $thunk
+      unreachable)
+    (func (export "trap")
+      unreachable)
+  )
+  (core instance $m (instantiate $m
+    (with "host" (instance (export "thunk" (func $thunk_lower))))
+  ))
+
+  (func (export "run")
+    (canon lift (core func $m "run"))
+  )
+  (func (export "trap")
+    (canon lift (core func $m "trap"))
+  )
+)
+    "#;
+
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+
+    // The host handles the reentrant call's trap and returns normally, but
+    // the store is now poisoned so the guest must not continue running.
+    let mut store = Store::new(&engine, None);
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap(
+        "thunk",
+        |mut store: StoreContextMut<'_, Option<TypedFunc<(), ()>>>, _: ()| -> Result<()> {
+            let func = store.data().unwrap();
+            assert!(func.call(&mut store, ()).is_err());
+            Ok(())
+        },
+    )?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    *store.data_mut() = Some(instance.get_typed_func::<(), ()>(&mut store, "trap")?);
+    let err = run.call(&mut store, ()).unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent),
+        "{err:?}"
+    );
 
     Ok(())
 }
@@ -1249,5 +1306,56 @@ fn hostcall_fuel_limits_val() -> Result<()> {
     store.set_hostcall_fuel(100);
     assert!(run.call(&mut store, &[], &mut []).is_err());
 
+    Ok(())
+}
+
+#[test]
+fn host_throw_is_trap() -> Result<()> {
+    for concurrency in [true, false] {
+        let mut config = Config::new();
+        config.wasm_exceptions(true);
+        config.wasm_component_model(true);
+        config.concurrency_support(concurrency);
+        let engine = Engine::new(&config)?;
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (import "f" (func $f))
+                    (core func $f (canon lower (func $f)))
+                    (core module $m
+                        (import "" "f" (func $f))
+                        (func (export "run")
+                            (block $caught
+                                (try_table (catch_all $caught)
+                                    (call $f))
+                                return)
+                            unreachable)
+                    )
+                    (core instance $i (instantiate $m
+                        (with "" (instance (export "f" (func $f))))
+                    ))
+                    (func (export "run") (canon lift (core func $i "run")))
+                )
+            "#,
+        )?;
+        let mut linker = Linker::<()>::new(&engine);
+        linker.root().func_wrap("f", |mut store, (): ()| {
+            let ty = wasmtime::TagType::new(wasmtime::FuncType::new(store.engine(), [], []));
+            let tag = wasmtime::Tag::new(&mut store, &ty)?;
+            let pre = wasmtime::ExnRefPre::new(&mut store, wasmtime::ExnType::from_tag_type(&ty)?);
+            let exn = wasmtime::ExnRef::new(&mut store, &pre, &tag, &[])?;
+            store.throw::<()>(exn)
+        })?;
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate(&mut store, &component)?;
+        let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+        let err = run.call(&mut store, ()).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<wasmtime::Trap>(),
+            Some(&wasmtime::Trap::UncaughtException),
+            "{err:?}",
+        );
+    }
     Ok(())
 }

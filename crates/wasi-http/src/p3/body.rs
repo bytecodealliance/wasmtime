@@ -1,6 +1,7 @@
+use crate::field_map::remove_forbidden;
 use crate::p3::bindings::http::types::{ErrorCode, Trailers};
 use crate::p3::helpers::FutureReaderExt;
-use crate::{Error, FieldMap, WasiHttpCtxView};
+use crate::{Error, FieldMap, ForbiddenHeaderFilter, WasiHttpCtxView};
 use bytes::Bytes;
 use core::iter;
 use core::num::NonZeroUsize;
@@ -20,6 +21,12 @@ use wasmtime::component::{
 };
 use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, StoreContextMut};
+
+/// Clamp a requested outgoing body channel capacity into the range that
+/// `tokio::sync::mpsc::channel` accepts (it panics outside of it).
+fn channel_capacity(requested: usize) -> usize {
+    requested.clamp(1, tokio::sync::Semaphore::MAX_PERMITS)
+}
 
 /// The concrete type behind a `wasi:http/types.body` resource.
 pub(crate) enum Body {
@@ -234,7 +241,7 @@ impl<D> StreamConsumer<D> for LimitedGuestBodyConsumer {
     ) -> Poll<wasmtime::Result<StreamResult>> {
         debug_assert!(!self.closed);
         let mut src = src.as_direct(store);
-        let buf = src.remaining();
+        let buf = src.remaining()?;
         let n = buf.len().min(self.max_chunk_size);
         let buf = &buf[..n];
 
@@ -297,7 +304,7 @@ impl<D> StreamConsumer<D> for UnlimitedGuestBodyConsumer {
         match self.contents_tx.poll_reserve(cx) {
             Poll::Ready(Ok(())) => {
                 let mut src = src.as_direct(store);
-                let buf = src.remaining();
+                let buf = src.remaining()?;
                 let n = buf.len().min(self.max_chunk_size);
                 let buf = Bytes::copy_from_slice(&buf[..n]);
                 match self.contents_tx.send_item(Ok(buf)) {
@@ -338,6 +345,10 @@ impl GuestBody {
             .hooks
             .p3_outgoing_body_chunk_size()
             .max(1);
+        let buffer_chunks = getter(store.as_context_mut().data_mut())
+            .hooks
+            .p3_outgoing_body_buffer_chunks()
+            .max(1);
 
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
         trailers_rx.pipe_cb(&mut store, move |data, res| {
@@ -357,7 +368,10 @@ impl GuestBody {
         })?;
 
         let contents_rx = if let Some(rx) = contents_rx {
-            let (http_tx, http_rx) = mpsc::channel(1);
+            // `PollSender` can use every slot, so no extra one is needed, but the
+            // capacity still has to stay inside what `mpsc::channel` accepts.
+            let capacity = channel_capacity(buffer_chunks);
+            let (http_tx, http_rx) = mpsc::channel(capacity);
             let contents_tx = PollSender::new(http_tx);
             if let Some(limit) = content_length {
                 let (error_tx, error_rx) = oneshot::channel();
@@ -516,7 +530,7 @@ where
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         let res = 'result: {
-            let cap = match dst.remaining(&mut store).map(NonZeroUsize::new) {
+            let cap = match dst.remaining(&mut store)?.map(NonZeroUsize::new) {
                 Some(Some(cap)) => Some(cap),
                 Some(None) => {
                     // On 0-length the best we can do is check that underlying stream has not
@@ -555,12 +569,12 @@ where
                                         // data frame does not fit in destination, fill it and buffer the rest
                                         dst.set_buffer(frame.split_off(cap));
                                         let mut dst = dst.as_direct(store, cap);
-                                        dst.remaining().copy_from_slice(&frame);
+                                        dst.remaining()?.copy_from_slice(&frame);
                                         dst.mark_written(cap);
                                     } else {
                                         // copy the whole frame into the destination
                                         let mut dst = dst.as_direct(store, n);
-                                        dst.remaining()[..n].copy_from_slice(&frame);
+                                        dst.remaining()?[..n].copy_from_slice(&frame);
                                         dst.mark_written(n);
                                     }
                                 } else {
@@ -689,25 +703,75 @@ where
 
     #[inline]
     fn is_end_stream(&self) -> bool {
+        // Do not report end of stream before `limit` bytes were sent, otherwise
+        // the consumer might stop polling before a short write is detected in
+        // `poll_frame`.
+        self.sent == self.limit && self.body.is_end_stream()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> http_body::SizeHint {
+        http_body::SizeHint::with_exact(self.limit.saturating_sub(self.sent))
+    }
+}
+
+/// A wrapper around [http_body::Body], which removes forbidden fields from
+/// trailers
+pub(crate) struct BodyWithFilteredTrailers<T> {
+    body: T,
+    is_forbidden: ForbiddenHeaderFilter,
+}
+
+impl<T> http_body::Body for BodyWithFilteredTrailers<T>
+where
+    T: http_body::Body<Data = Bytes> + Unpin,
+{
+    type Data = T::Data;
+    type Error = T::Error;
+
+    #[inline]
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        let frame = match ready!(Pin::new(&mut self.as_mut().body).poll_frame(cx)) {
+            Some(Ok(frame)) => frame,
+            other => return Poll::Ready(other),
+        };
+        match frame.into_trailers() {
+            Ok(mut trailers) => {
+                remove_forbidden(&mut trailers, &self.is_forbidden);
+                Poll::Ready(Some(Ok(http_body::Frame::trailers(trailers))))
+            }
+            Err(frame) => Poll::Ready(Some(Ok(frame))),
+        }
+    }
+
+    #[inline]
+    fn is_end_stream(&self) -> bool {
         self.body.is_end_stream()
     }
 
     #[inline]
     fn size_hint(&self) -> http_body::SizeHint {
-        let n = self.limit.saturating_sub(self.sent);
-        let mut hint = self.body.size_hint();
-        if hint.lower() >= n {
-            hint.set_exact(n)
-        } else if let Some(max) = hint.upper() {
-            hint.set_upper(n.min(max))
-        } else {
-            hint.set_upper(n)
-        }
-        hint
+        self.body.size_hint()
     }
 }
 
 pub(crate) trait BodyExt {
+    fn with_filtered_trailers(
+        self,
+        is_forbidden: ForbiddenHeaderFilter,
+    ) -> BodyWithFilteredTrailers<Self>
+    where
+        Self: Sized,
+    {
+        BodyWithFilteredTrailers {
+            body: self,
+            is_forbidden,
+        }
+    }
+
     fn with_state<T>(self, state: T) -> BodyWithState<Self, T>
     where
         Self: Sized,
@@ -738,3 +802,112 @@ pub(crate) trait BodyExt {
 }
 
 impl<T> BodyExt for T {}
+
+#[cfg(test)]
+mod tests {
+    use super::{BodyExt as _, channel_capacity};
+    use crate::Error;
+    use bytes::Bytes;
+    use core::pin::pin;
+    use core::task::{Context, Poll, Waker};
+    use http_body::Body as _;
+    use http_body_util::{BodyExt as _, Full};
+    use tokio::sync::oneshot;
+
+    /// A body shorter than its `Content-Length` must not report end of stream
+    /// or a size hint based on its actual length, otherwise a consumer like
+    /// `hyper` frames the message by the wrong length without ever observing
+    /// the short write.
+    #[test]
+    fn content_length_short_body() {
+        let (error_tx, mut error_rx) = oneshot::channel();
+        let body = Full::new(Bytes::from_static(b"hello"))
+            .map_err(|never| match never {})
+            .with_content_length(10, error_tx, Error::HttpResponseBodySize);
+        let mut body = pin!(body);
+        assert!(!body.is_end_stream());
+        assert_eq!(body.size_hint().exact(), Some(10));
+
+        let mut cx = Context::from_waker(Waker::noop());
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Ok(frame))) => assert_eq!(frame.into_data().unwrap(), "hello"),
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(!body.is_end_stream());
+        assert_eq!(body.size_hint().exact(), Some(5));
+
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Err(Error::HttpResponseBodySize(Some(5))))) => {}
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(matches!(
+            error_rx.try_recv(),
+            Ok(Error::HttpResponseBodySize(Some(5)))
+        ));
+    }
+
+    /// A body longer than its `Content-Length` must fail before any data
+    /// exceeding the limit is produced.
+    #[test]
+    fn content_length_long_body() {
+        let (error_tx, mut error_rx) = oneshot::channel();
+        let body = Full::new(Bytes::from_static(b"helloworld"))
+            .map_err(|never| match never {})
+            .with_content_length(3, error_tx, Error::HttpResponseBodySize);
+        let mut body = pin!(body);
+        assert!(!body.is_end_stream());
+        assert_eq!(body.size_hint().exact(), Some(3));
+
+        let mut cx = Context::from_waker(Waker::noop());
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Err(Error::HttpResponseBodySize(Some(10))))) => {}
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(matches!(
+            error_rx.try_recv(),
+            Ok(Error::HttpResponseBodySize(Some(10)))
+        ));
+    }
+
+    /// A body matching its `Content-Length` is passed through unchanged.
+    #[test]
+    fn content_length_exact_body() {
+        let (error_tx, mut error_rx) = oneshot::channel();
+        let body = Full::new(Bytes::from_static(b"hello"))
+            .map_err(|never| match never {})
+            .with_content_length(5, error_tx, Error::HttpResponseBodySize);
+        let mut body = pin!(body);
+        assert!(!body.is_end_stream());
+        assert_eq!(body.size_hint().exact(), Some(5));
+
+        let mut cx = Context::from_waker(Waker::noop());
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Ok(frame))) => assert_eq!(frame.into_data().unwrap(), "hello"),
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(body.is_end_stream());
+        assert_eq!(body.size_hint().exact(), Some(0));
+        assert!(matches!(
+            body.as_mut().poll_frame(&mut cx),
+            Poll::Ready(None)
+        ));
+        assert!(error_rx.try_recv().is_err());
+    }
+
+    /// `mpsc::channel` panics above `Semaphore::MAX_PERMITS` and at zero, so the
+    /// capacity handed to it must always be clamped - including for the huge
+    /// values an embedder or `-Shttp-outgoing-body-buffer-chunks` can supply.
+    #[test]
+    fn outgoing_body_channel_capacity_is_always_accepted() {
+        let max = tokio::sync::Semaphore::MAX_PERMITS;
+        for requested in [0, 1, 1024, max, max + 1, usize::MAX] {
+            let capacity = channel_capacity(requested);
+            assert!(
+                capacity >= 1 && capacity <= max,
+                "capacity {capacity} out of range"
+            );
+            // Not panicking is the point: that is what the clamp buys us.
+            let _ = tokio::sync::mpsc::channel::<u8>(capacity);
+        }
+    }
+}

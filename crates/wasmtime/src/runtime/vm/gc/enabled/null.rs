@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::{
-    Engine, Trap,
+    Engine, Trap, bail_bug,
     prelude::*,
     vm::{
         ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
@@ -76,7 +76,7 @@ struct VMNullArrayHeader {
 unsafe impl GcHeapObject for VMNullArrayHeader {
     #[inline]
     fn is(header: &VMGcHeader) -> bool {
-        header.kind() == VMGcKind::ArrayRef
+        header.kind() == Some(VMGcKind::ArrayRef)
     }
 }
 
@@ -95,13 +95,15 @@ impl VMNullArrayHeader {
 #[repr(C)]
 struct VMNullExternRef {
     header: VMGcHeader,
-    host_data: ExternRefHostDataId,
+    // The raw encoding of an `ExternRefHostDataId`; the ID type does not accept
+    // every bit pattern, and heap bytes are untrusted.
+    host_data: u32,
 }
 
 unsafe impl GcHeapObject for VMNullExternRef {
     #[inline]
     fn is(header: &VMGcHeader) -> bool {
-        header.kind() == VMGcKind::ExternRef
+        header.kind() == Some(VMGcKind::ExternRef)
     }
 }
 
@@ -182,7 +184,9 @@ impl NullHeap {
 
         debug_assert_eq!(header.reserved_u26(), 0);
         header.set_reserved_u26(size);
-        *self.header_mut(&gc_ref)? = header;
+        // NB: not `header_mut`, whose validity assertion would read this
+        // object's still-uninitialized memory.
+        *self.index_mut::<VMGcHeader>(gc_ref.as_typed_unchecked())? = header;
 
         Ok(Ok(gc_ref))
     }
@@ -272,13 +276,16 @@ unsafe impl GcHeap for NullHeap {
             Err(bytes_needed) => return Ok(Err(bytes_needed)),
         };
         self.index_mut::<VMNullExternRef>(gc_ref.as_typed_unchecked())?
-            .host_data = host_data;
+            .host_data = host_data.into_raw();
         Ok(Ok(gc_ref.into_externref_unchecked()))
     }
 
     fn externref_host_data(&self, externref: &VMExternRef) -> Result<ExternRefHostDataId> {
         let typed_ref = VMNullExternRef::typed_ref(self, externref);
-        Ok(self.index(typed_ref)?.host_data)
+        match ExternRefHostDataId::from_raw(self.index(typed_ref)?.host_data) {
+            Some(id) => Ok(id),
+            None => bail_bug!("invalid `ExternRefHostDataId`"),
+        }
     }
 
     fn object_size(&self, gc_ref: &VMGcRef) -> Result<usize> {
@@ -287,11 +294,25 @@ unsafe impl GcHeap for NullHeap {
     }
 
     fn header(&self, gc_ref: &VMGcRef) -> Result<&VMGcHeader> {
-        self.index(gc_ref.as_typed_unchecked())
+        let header: &VMGcHeader = self.index(gc_ref.as_typed_unchecked())?;
+
+        debug_assert!(
+            header.kind().is_some(),
+            "header: invalid VMGcKind at gc_ref {gc_ref:#p}",
+        );
+
+        Ok(header)
     }
 
     fn header_mut(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcHeader> {
-        self.index_mut(gc_ref.as_typed_unchecked())
+        let header: &mut VMGcHeader = self.index_mut(gc_ref.as_typed_unchecked())?;
+
+        debug_assert!(
+            header.kind().is_some(),
+            "header_mut: invalid VMGcKind at gc_ref {gc_ref:#p}",
+        );
+
+        Ok(header)
     }
 
     fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>> {

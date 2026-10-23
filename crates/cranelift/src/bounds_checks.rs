@@ -328,7 +328,7 @@ fn bounds_check_field_access(
     // Special case for when we can rely on virtual memory, the minimum
     // byte size of this memory fits within the memory reservation, and
     // memory isn't allowed to move. In this situation we know that
-    // memory will statically not grow beyond `memory_reservation` so we
+    // memory will statically not grow beyond `memory_reservation`
     // and we know that memory from 0 to that limit is guaranteed to be
     // valid or trap. Here we effectively assume that the dynamic size
     // of linear memory is its maximal value, `memory_reservation`, and
@@ -343,7 +343,15 @@ fn bounds_check_field_access(
     // Since we have to emit explicit bounds checks, we might as well be
     // precise, not rely on the virtual memory subsystem at all, and not
     // factor in the guard pages here.
+    //
+    // Note that this is not applicable to imported memories. The minimum size
+    // of an imported memory's type is only a lower bound on the actual
+    // memory's minimum size, which may be larger than `memory_reservation`.
+    // In that situation the actual memory's allocation is larger than
+    // `memory_reservation` and accesses beyond `memory_reservation` may be
+    // in-bounds.
     if can_use_virtual_memory
+        && !heap.imported
         && heap.memory.minimum_byte_size().unwrap_or(u64::MAX) <= memory_reservation
         && !heap.memory.memory_may_move(&memory_tunables)
         && memory_reservation >= offset_and_size

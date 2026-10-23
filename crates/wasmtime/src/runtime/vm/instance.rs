@@ -14,8 +14,8 @@ use crate::runtime::vm::vmcontext::{
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    GcStore, HostResult, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMGlobalKind, VMStore,
-    VMStoreRawPtr, VmPtr, VmSafe, WasmFault, catch_unwind_and_record_trap,
+    GcStore, HostResult, Imports, ModuleRuntimeInfo, SendSyncPtr, UncaughtException, VMGcRef,
+    VMGlobalKind, VMStore, VMStoreRawPtr, VmPtr, VmSafe, WasmFault, catch_unwind_and_record_trap,
 };
 use crate::store::{InstanceId, StoreId, StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::vm::{VMWasmCallFunction, ValRaw};
@@ -337,7 +337,9 @@ impl Instance {
 
         // Thread the `store` and `instance` through panic/trap infrastructure
         // back into `f`.
-        catch_unwind_and_record_trap(store, |store| f(store, instance))
+        catch_unwind_and_record_trap(store, UncaughtException::Propagate, |store| {
+            f(store, instance)
+        })
     }
 
     /// Converts the provided `*mut VMContext` to an `Instance` pointer and
@@ -1323,10 +1325,10 @@ impl Instance {
             for (index, val) in module.global_initializers.iter() {
                 let mut def = VMGlobalDefinition::new();
                 match val {
-                    GlobalConstValue::I32(i) => *def.as_i32_mut() = *i,
-                    GlobalConstValue::I64(i) => *def.as_i64_mut() = *i,
-                    GlobalConstValue::F32(i) => *def.as_f32_bits_mut() = *i,
-                    GlobalConstValue::F64(i) => *def.as_f64_bits_mut() = *i,
+                    GlobalConstValue::I32(i) => def.set_i32(*i),
+                    GlobalConstValue::I64(i) => def.set_i64(*i),
+                    GlobalConstValue::F32(i) => def.set_f32_bits(*i),
+                    GlobalConstValue::F64(i) => def.set_f64_bits(*i),
                     GlobalConstValue::V128(i) => def.set_u128(*i),
                 }
                 instance.global_ptr(*index).write(def);

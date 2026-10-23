@@ -10,6 +10,7 @@ use http_body_util::{BodyExt as _, Collected, Empty};
 use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use test_programs_artifacts::*;
 use tokio::{fs, try_join};
@@ -23,19 +24,32 @@ use wasmtime_wasi_http::p3::Request;
 use wasmtime_wasi_http::p3::bindings::Service;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
 use wasmtime_wasi_http::{
-    DEFAULT_FORBIDDEN_HEADERS, Error, RequestOptions, WasiBody, WasiHttpCtx, WasiHttpCtxView,
-    WasiHttpHooks, WasiHttpView, default_send_request,
+    DEFAULT_FORBIDDEN_HEADERS, Error, ForbiddenHeaderFilter, RequestOptions, WasiBody, WasiHttpCtx,
+    WasiHttpCtxView, WasiHttpHooks, WasiHttpView, default_send_request,
 };
 
 foreach_p3_http!(assert_test_exists);
 
+#[derive(Default)]
 struct TestHooks {
     request_tx: Option<oneshot::Sender<http::Request<WasiBody>>>,
+    io_dropped_tx: Option<oneshot::Sender<()>>,
+}
+
+impl TestHooks {
+    fn new(request_tx: oneshot::Sender<http::Request<WasiBody>>) -> Self {
+        Self {
+            request_tx: Some(request_tx),
+            ..Self::default()
+        }
+    }
 }
 
 impl WasiHttpHooks for TestHooks {
-    fn is_forbidden_header(&mut self, name: &http::header::HeaderName) -> bool {
-        name.as_str() == "custom-forbidden-header" || DEFAULT_FORBIDDEN_HEADERS.contains(name)
+    fn forbidden_header_filter(&mut self) -> ForbiddenHeaderFilter {
+        Arc::new(|name| {
+            name.as_str() == "custom-forbidden-header" || DEFAULT_FORBIDDEN_HEADERS.contains(name)
+        })
     }
 
     fn send_request(
@@ -63,6 +77,35 @@ impl WasiHttpHooks for TestHooks {
                     Box::new(async { Ok(()) }) as Box<dyn Future<Output = _> + Send>,
                 ))
             })
+        } else if let Some("p3-test-keep-open") = request.uri().authority().map(|v| v.as_str()) {
+            // Simulate a long-running connection by returning an `io` future
+            // that owns the request and never resolves. `io_dropped_tx` is
+            // dropped along with it, which the test observes to tell whether
+            // the I/O was cancelled.
+            let io_dropped_tx = self.io_dropped_tx.take();
+            Box::new(async {
+                Ok((
+                    http::Response::new(Default::default()),
+                    Box::new(async move {
+                        let _request = request;
+                        let _io_dropped_tx = io_dropped_tx;
+                        std::future::pending::<()>().await;
+                        Ok(())
+                    }) as Box<dyn Future<Output = _> + Send>,
+                ))
+            })
+        } else if let Some("p3-test-trailers") = request.uri().authority().map(|v| v.as_str()) {
+            _ = self.request_tx.take().unwrap().send(request);
+            let body = http_body_util::StreamBody::new(futures::stream::iter([
+                Ok(http_body::Frame::data(Bytes::from_static(b"response"))),
+                Ok(http_body::Frame::trailers(forbidden_trailers())),
+            ]));
+            Box::new(async {
+                Ok((
+                    http::Response::new(body.boxed_unsync()),
+                    Box::new(async { Ok(()) }) as Box<dyn Future<Output = _> + Send>,
+                ))
+            })
         } else {
             Box::new(async move {
                 use http_body_util::BodyExt;
@@ -86,13 +129,15 @@ struct Ctx {
 
 impl Ctx {
     fn new(request_tx: oneshot::Sender<http::Request<WasiBody>>) -> Self {
+        Self::with_hooks(TestHooks::new(request_tx))
+    }
+
+    fn with_hooks(hooks: TestHooks) -> Self {
         Self {
             table: ResourceTable::default(),
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
             http: WasiHttpCtx::new(),
-            hooks: TestHooks {
-                request_tx: Some(request_tx),
-            },
+            hooks,
         }
     }
 }
@@ -152,13 +197,21 @@ async fn run_http<E: Into<Error> + 'static>(
     req: http::Request<impl Body<Data = Bytes, Error = E> + Send + Sync + 'static>,
     request_tx: oneshot::Sender<http::Request<WasiBody>>,
 ) -> wasmtime::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
+    run_http_with_hooks(component_filename, req, TestHooks::new(request_tx)).await
+}
+
+async fn run_http_with_hooks<E: Into<Error> + 'static>(
+    component_filename: &str,
+    req: http::Request<impl Body<Data = Bytes, Error = E> + Send + Sync + 'static>,
+    hooks: TestHooks,
+) -> wasmtime::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
     let engine = test_programs_artifacts::engine(|config| {
         config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
         config.wasm_component_model_async(true);
     });
     let component = Component::from_file(&engine, component_filename)?;
 
-    let mut store = Store::new(&engine, Ctx::new(request_tx));
+    let mut store = Store::new(&engine, Ctx::with_hooks(hooks));
 
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
@@ -195,8 +248,28 @@ async fn p3_http_outbound_request_get() -> wasmtime::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_between_bytes_timeout() -> wasmtime::Result<()> {
+    let server = Server::http1_stalled_body(1, std::time::Duration::from_secs(5))?;
+    run_cli(
+        P3_HTTP_OUTBOUND_REQUEST_BETWEEN_BYTES_TIMEOUT_COMPONENT,
+        &server,
+    )
+    .await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_first_byte_timeout() -> wasmtime::Result<()> {
+    let server = Server::http1_delayed(1, std::time::Duration::from_secs(5))?;
+    run_cli(
+        P3_HTTP_OUTBOUND_REQUEST_FIRST_BYTE_TIMEOUT_COMPONENT,
+        &server,
+    )
+    .await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_timeout() -> wasmtime::Result<()> {
-    let server = Server::http1(1)?;
+    let server = Server::http1(3)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_TIMEOUT_COMPONENT, &server).await
 }
 
@@ -210,6 +283,12 @@ async fn p3_http_outbound_request_post() -> wasmtime::Result<()> {
 async fn p3_http_outbound_request_large_post() -> wasmtime::Result<()> {
     let server = Server::http1(1)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_LARGE_POST_COMPONENT, &server).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_long_path() -> wasmtime::Result<()> {
+    let server = Server::http1(1)?;
+    run_cli(P3_HTTP_OUTBOUND_REQUEST_LONG_PATH_COMPONENT, &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -309,6 +388,72 @@ async fn p3_http_echo() -> Result<()> {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_echo_host_to_host() -> Result<()> {
     test_http_echo(P3_HTTP_ECHO_COMPONENT, false, true).await
+}
+
+/// A guest forwarding a host body as its response body must not be able to
+/// declare a `content-length` which does not match the body.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_echo_host_to_host_content_length() -> Result<()> {
+    async fn echo(declared: &str, body: &'static [u8]) -> Result<Result<Bytes, Error>> {
+        let engine = test_programs_artifacts::engine(|config| {
+            config.wasm_component_model_async(true);
+        });
+        let component = Component::from_file(&engine, P3_HTTP_ECHO_COMPONENT)?;
+        let mut store = Store::new(&engine, Ctx::new(oneshot::channel().0));
+        let mut linker = Linker::new(&engine);
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+        wasmtime_wasi::p3::add_to_linker(&mut linker)?;
+        wasmtime_wasi_http::p3::add_to_linker(&mut linker)?;
+        let service = Service::instantiate_async(&mut store, &component, &linker).await?;
+
+        // The echo service echoes the request headers, so the request's
+        // `content-length` becomes the response's. The request body is
+        // deliberately not checked against it here, to model a guest which
+        // sets a mismatched `content-length` on a forwarded host body.
+        let req = http::Request::builder()
+            .uri("http://localhost/")
+            .header("x-host-to-host", "true")
+            .header("content-length", declared)
+            .body(http_body_util::Full::new(Bytes::from_static(body)))?;
+        let (req, _io) = Request::from_http(&mut store.data_mut().hooks, req);
+        store
+            .run_concurrent(async |store| {
+                let res = service.handle(store, req).await?.unwrap();
+                let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
+                assert_eq!(res.headers()["content-length"], declared);
+                let body = res.into_body();
+                // `hyper` frames the response by the size hint and stops
+                // polling once the body reports end of stream, so these must
+                // match the declared length.
+                let declared = declared.parse::<u64>()?;
+                assert_eq!(body.size_hint().exact(), Some(declared));
+                let res = body.collect().await.map(|body| body.to_bytes());
+                Ok(res)
+            })
+            .await?
+    }
+
+    let body = echo("10", b"HELLOWORLD").await?.unwrap();
+    assert_eq!(body, "HELLOWORLD");
+
+    let err = echo("3", b"HELLOWORLD").await?.unwrap_err();
+    assert!(
+        matches!(err, Error::HttpResponseBodySize(Some(10))),
+        "{err:?}"
+    );
+
+    let err = echo("20", b"HELLOWORLD").await?.unwrap_err();
+    assert!(
+        matches!(err, Error::HttpResponseBodySize(Some(10))),
+        "{err:?}"
+    );
+
+    let err = echo("0", b"HTTP/1.1 302 Found\r\n\r\n").await?.unwrap_err();
+    assert!(
+        matches!(err, Error::HttpResponseBodySize(Some(_))),
+        "{err:?}"
+    );
+    Ok(())
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -650,6 +795,107 @@ async fn p3_http_proxy() -> Result<()> {
     );
 
     assert_eq!(request_body, body.as_slice());
+    Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_proxy_store_drop_cancels_io() -> Result<()> {
+    let (_body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(1);
+
+    // Tell the guest to forward the request to `http://p3-test-keep-open/`,
+    // which we handle specially in `TestHooks::send_request` above by
+    // immediately returning a response paired with an I/O future that never
+    // resolves.
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET)
+        .header("url", "http://p3-test-keep-open/");
+
+    let (io_dropped_tx, io_dropped_rx) = oneshot::channel();
+    let response = run_http_with_hooks(
+        P3_HTTP_PROXY_COMPONENT,
+        request.body(http_body_util::StreamBody::new(body_rx))?,
+        TestHooks {
+            io_dropped_tx: Some(io_dropped_tx),
+            ..TestHooks::default()
+        },
+    )
+    .await?
+    .unwrap();
+    assert_eq!(response.status().as_u16(), 200);
+
+    // The guest has exited, the response body has been consumed and the store
+    // has been dropped, so nothing references the I/O task anymore and it
+    // must be cancelled.
+    let result = tokio::time::timeout(std::time::Duration::from_secs(10), io_dropped_rx).await;
+    assert_eq!(
+        result,
+        Ok(Err(oneshot::Canceled)),
+        "I/O task should have been cancelled"
+    );
+    Ok(())
+}
+
+/// Trailers containing both forbidden and allowed fields.
+fn forbidden_trailers() -> http::HeaderMap {
+    let mut trailers = http::HeaderMap::new();
+    trailers.insert("connection", HeaderValue::from_static("x-hop"));
+    trailers.insert(
+        "proxy-authorization",
+        HeaderValue::from_static("Basic c2VjcmV0OnNlY3JldA=="),
+    );
+    trailers.insert("upgrade", HeaderValue::from_static("h2c"));
+    trailers.insert("custom-forbidden-header", HeaderValue::from_static("yes"));
+    trailers.insert("x-ok", HeaderValue::from_static("1"));
+    trailers
+}
+
+#[track_caller]
+fn assert_trailers_filtered(trailers: Option<&http::HeaderMap>, what: &str) {
+    let trailers = trailers.unwrap_or_else(|| panic!("{what}: trailers missing"));
+    for name in [
+        "connection",
+        "proxy-authorization",
+        "upgrade",
+        "custom-forbidden-header",
+    ] {
+        assert!(
+            trailers.get(name).is_none(),
+            "{what}: forbidden trailer `{name}` leaked: {trailers:?}",
+        );
+    }
+    assert_eq!(
+        trailers.get("x-ok").map(|v| v.as_bytes()),
+        Some(b"1".as_slice()),
+        "{what}: allowed trailer missing: {trailers:?}",
+    );
+}
+
+// A guest which forwards a host body as-is must not let forbidden trailers
+// through, in either direction.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_forwarded_trailers_filtered() -> Result<()> {
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::POST)
+        .header("url", "http://p3-test-trailers/");
+    let body = http_body_util::StreamBody::new(futures::stream::iter([
+        Ok::<_, ErrorCode>(http_body::Frame::data(Bytes::from_static(b"request"))),
+        Ok(http_body::Frame::trailers(forbidden_trailers())),
+    ]));
+
+    let (request_tx, request_rx) = oneshot::channel();
+    let response = run_http(P3_HTTP_PROXY_COMPONENT, request.body(body)?, request_tx)
+        .await?
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 200);
+    let response = response.into_body();
+    assert_trailers_filtered(response.trailers(), "response to client");
+    assert_eq!(response.to_bytes(), b"response".as_slice());
+
+    let upstream = request_rx.await.unwrap().into_body().collect().await?;
+    assert_trailers_filtered(upstream.trailers(), "request to upstream");
+    assert_eq!(upstream.to_bytes(), b"request".as_slice());
     Ok(())
 }
 

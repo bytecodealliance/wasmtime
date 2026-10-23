@@ -134,6 +134,13 @@ impl CompiledFunction {
             tags.next();
             patchable_callsites.next();
         }
+        // A patchable call site without debug tags at its return address
+        // would never be NOPed out, and so would always call its callee.
+        debug_assert_eq!(
+            self.breakpoint_patch_points.len(),
+            self.buffer.patchable_call_sites().count(),
+            "patchable call site without debug tags"
+        );
     }
 
     /// Returns an iterator to the function's relocation information.

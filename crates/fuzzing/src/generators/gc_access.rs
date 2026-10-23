@@ -390,7 +390,7 @@ impl<'a> Emitter<'a> {
         };
         types.ty().subtype(&wasm_encoder::SubType {
             is_final: true,
-            supertype_idx: None,
+            supertype_idxs: Default::default(),
             composite_type: wasm_encoder::CompositeType {
                 inner: obj_composite,
                 shared: false,
@@ -404,7 +404,7 @@ impl<'a> Emitter<'a> {
             let fi = self.filler_type.unwrap();
             types.ty().subtype(&wasm_encoder::SubType {
                 is_final: true,
-                supertype_idx: None,
+                supertype_idxs: Default::default(),
                 composite_type: wasm_encoder::CompositeType {
                     inner: wasm_encoder::CompositeInnerType::Struct(wasm_encoder::StructType {
                         fields: Box::new([wasm_encoder::FieldType {
@@ -429,7 +429,7 @@ impl<'a> Emitter<'a> {
             self.nested_obj_type = Some(types.len());
             types.ty().subtype(&wasm_encoder::SubType {
                 is_final: true,
-                supertype_idx: None,
+                supertype_idxs: Default::default(),
                 composite_type: wasm_encoder::CompositeType {
                     inner: wasm_encoder::CompositeInnerType::Struct(wasm_encoder::StructType {
                         fields: Box::new([]),

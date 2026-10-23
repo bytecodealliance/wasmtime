@@ -273,8 +273,16 @@ impl Drop for TypeCollection {
 
 #[inline]
 fn shared_type_index_to_slab_id(index: VMSharedTypeIndex) -> SlabId {
-    assert!(!index.is_reserved_value());
-    SlabId::from_raw(index.bits())
+    try_shared_type_index_to_slab_id(index).unwrap()
+}
+
+/// Like `shared_type_index_to_slab_id`, but for untrusted indices.
+#[inline]
+fn try_shared_type_index_to_slab_id(index: VMSharedTypeIndex) -> Option<SlabId> {
+    if index.is_reserved_value() {
+        return None;
+    }
+    SlabId::try_from_raw(index.bits())
 }
 
 #[inline]
@@ -423,19 +431,19 @@ impl RegisteredType {
         ))
     }
 
-    /// Create an owning handle to the given index's associated type.
+    /// Create an owning handle to the given index's associated type, if that
+    /// index names a registered type.
     ///
     /// This will prevent the associated type from being unregistered as long as
-    /// the returned `RegisteredType` is kept alive.
-    pub fn root(engine: &Engine, index: VMSharedTypeIndex) -> RegisteredType {
-        engine.signatures().debug_assert_contains(index);
-
+    /// the returned `RegisteredType` is kept alive. `index` may come from an
+    /// untrusted source, such as the GC heap.
+    pub fn try_root(engine: &Engine, index: VMSharedTypeIndex) -> Option<RegisteredType> {
         let (entry, ty, layout) = {
-            let id = shared_type_index_to_slab_id(index);
+            let id = try_shared_type_index_to_slab_id(index)?;
             let inner = engine.signatures().0.read();
 
-            let ty = inner.types[id].clone().unwrap();
-            let entry = inner.type_to_rec_group[index].clone().unwrap();
+            let ty = inner.types.get(id)?.clone()?;
+            let entry = inner.type_to_rec_group.get(index)?.clone()?;
             let layout = inner.type_to_gc_layout.get(index).and_then(|l| l.clone());
 
             // NB: make sure to incref while the lock is held to prevent:
@@ -444,12 +452,18 @@ impl RegisteredType {
             // * Other thread: drops `RegisteredType` for entry E, decref
             //   reaches zero, write locks registry, unregisters entry
             // * This thread: increfs entry, but it isn't in the registry anymore
-            entry.incref("RegisteredType::root");
+            entry.incref("RegisteredType::try_root");
 
             (entry, ty, layout)
         };
 
-        RegisteredType::from_parts(engine.clone(), entry, index, ty, layout)
+        Some(RegisteredType::from_parts(
+            engine.clone(),
+            entry,
+            index,
+            ty,
+            layout,
+        ))
     }
 
     /// Construct a new `RegisteredType`.
@@ -688,6 +702,11 @@ struct TypeRegistryInner {
     // to avoid recursion when dropping a type that is holding the last
     // reference to another type, etc...
     drop_stack: TryVec<RecGroupEntry>,
+
+    #[cfg(debug_assertions)]
+    /// Is set if we are already within a call to `drain_drop_stack`. Used to
+    /// debug assert that `drain_drop_stock` does not recursively call itself.
+    draining_drop_stack: bool,
 }
 
 impl TypeRegistryInner {
@@ -1151,6 +1170,10 @@ impl TypeRegistryInner {
     }
 
     /// Remove the rec group's associated trampoline information.
+    ///
+    /// This function pushes onto the drop stack without calling
+    /// `drain_drop_stack`. So it should only be called from within a
+    /// `drain_drop_stack` loop.
     fn remove_entry_trampolines(&mut self, entry: &RecGroupEntry) {
         // We delay allocating space for this arena until we actually see a
         // function type that is not its own trampoline type, so early exit if
@@ -1168,8 +1191,6 @@ impl TypeRegistryInner {
                 }
             }
         }
-
-        self.drain_drop_stack();
     }
 
     /// Insert the GC layout information for this rec group's types.
@@ -1283,6 +1304,10 @@ impl TypeRegistryInner {
 
     /// For each cross-rec group type reference inside `entry`, decrement the
     /// referenced rec group's registration count.
+    ///
+    /// This function pushes to the drop stack without calling
+    /// `drain_drop_stack`. So it should only be called from within a
+    /// `drain_drop_stack` loop itself.
     fn decref_outgoing_edges(&mut self, entry: &RecGroupEntry) {
         let key = &entry.0.hash_consing_key;
         debug_assert!(key.is_canonicalized_for_hash_consing());
@@ -1296,7 +1321,6 @@ impl TypeRegistryInner {
             Ok(())
         })
         .unwrap();
-        self.drain_drop_stack();
     }
 
     /// Pre-allocate capacity for a rec group of size `num_types` in our various
@@ -1318,6 +1342,8 @@ impl TypeRegistryInner {
             type_to_supertypes: _,
             type_to_trampoline: _,
             type_to_gc_layout: _,
+            #[cfg(debug_assertions)]
+                draining_drop_stack: _,
         } = self;
 
         // This map contains rec groups, not types, so only reserve space for
@@ -1332,7 +1358,7 @@ impl TypeRegistryInner {
         log::trace!("    type_to_rec_group.resize({types_capacity})");
         type_to_rec_group.resize(types_capacity)?;
 
-        log::trace!("    type_to_rec_group.reserve({types_capacity})");
+        log::trace!("    drop_stack.reserve({types_capacity})");
         debug_assert!(drop_stack.is_empty());
         drop_stack.reserve(types_capacity)?;
 
@@ -1569,15 +1595,16 @@ impl TypeRegistryInner {
 
         // Okay, we are really going to unregister this entry. Enqueue it on the
         // drop stack.
-        debug_assert!(self.drop_stack.capacity() >= self.types.capacity());
+        debug_assert!(self.drop_stack.capacity() >= self.types.len());
         self.push_to_drop_stack(entry);
         self.drain_drop_stack();
     }
 
     /// Enqueue an entry for dropping.
     ///
-    /// Should always be followed by some call to `drain_drop_stack()`, although
-    /// it is fine to associate many `push_to_drop_stack()` calls with one final
+    /// Should always be called within the `drain_drop_stack` loop *xor*
+    /// followed by some call to `drain_drop_stack()`. Although it is fine to
+    /// associate many `push_to_drop_stack()` calls with one final
     /// `drain_drop_stack()` call.
     fn push_to_drop_stack(&mut self, entry: RecGroupEntry) {
         log::trace!("Pushing entry to drop stack: {entry:?}");
@@ -1593,16 +1620,33 @@ impl TypeRegistryInner {
     /// unregister that other type as well. However, we use an explicit drop
     /// stack to avoid recursion and the potential stack overflows that
     /// recursion implies.
+    ///
+    /// # Warning
+    ///
+    /// In order to avoid recursion and stack overflows, `drain_drop_stack` must
+    /// not recursively call itself. Ensure this invariant is maintained
+    /// whenever adding a call to `drain_drop_stack` or modifying its
+    /// implementation.
     fn drain_drop_stack(&mut self) {
-        if self.drop_stack.is_empty() {
-            return;
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(
+                !self.draining_drop_stack,
+                "`drain_drop_stack` must not recursively call itself"
+            );
+            self.draining_drop_stack = true;
         }
-        log::trace!("Draining drop stack");
+
         while let Some(entry) = self.drop_stack.pop() {
             log::trace!("Begin unregistering {entry:?}");
             self.debug_assert_all_registered(&entry);
             self.remove_entry_impl(&entry, true);
             log::trace!("End unregistering {entry:?}");
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            self.draining_drop_stack = false;
         }
     }
 }
@@ -1620,6 +1664,7 @@ impl Drop for TypeRegistryInner {
             type_to_trampoline,
             type_to_gc_layout,
             drop_stack,
+            draining_drop_stack: _,
         } = self;
         assert!(
             hash_consing_map.is_empty(),
@@ -1677,7 +1722,7 @@ impl TypeRegistry {
     /// Looks up a function type from a shared type index.
     ///
     /// This does *NOT* prevent the type from being unregistered while you are
-    /// still using the resulting value! Use the `RegisteredType::root`
+    /// still using the resulting value! Use the `RegisteredType::try_root`
     /// constructor if you need to ensure that property and you don't have some
     /// other mechanism already keeping the type registered.
     pub fn borrow(&self, index: VMSharedTypeIndex) -> Option<Arc<WasmSubType>> {

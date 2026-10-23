@@ -60,7 +60,7 @@ where
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         // If the destination buffer is empty then this is a readiness check.
-        if dst.remaining(&mut store) == Some(0) {
+        if dst.remaining(&mut store)? == Some(0) {
             return match self.listener.poll_ready(cx) {
                 Poll::Ready(()) => Poll::Ready(Ok(StreamResult::Completed)),
                 Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
@@ -115,7 +115,7 @@ impl<D> StreamProducer<D> for ReceiveStreamProducer {
         };
 
         // 0-length read is a readiness check.
-        if dst.remaining(store.as_context_mut()) == Some(0) {
+        if dst.remaining(store.as_context_mut())? == Some(0) {
             return match stream.poll_ready(cx) {
                 Poll::Ready(()) => Poll::Ready(Ok(StreamResult::Completed)),
                 Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
@@ -124,7 +124,7 @@ impl<D> StreamProducer<D> for ReceiveStreamProducer {
         }
 
         let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
-        let buf = dst.remaining();
+        let buf = dst.remaining()?;
         match stream.poll_read(cx, buf) {
             Poll::Ready(Ok(0)) => {
                 self.close(Ok(()));
@@ -177,7 +177,7 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
         let mut src = src.as_direct(store);
 
         // A 0-length write is a readiness check.
-        if src.remaining().is_empty() {
+        if src.remaining()?.is_empty() {
             return match stream.poll_ready(cx) {
                 Poll::Ready(()) => Poll::Ready(Ok(StreamResult::Completed)),
                 Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
@@ -185,7 +185,7 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
             };
         }
 
-        match stream.poll_write(cx, src.remaining()) {
+        match stream.poll_write(cx, src.remaining()?) {
             Poll::Ready(Ok(n)) => {
                 debug_assert!(n > 0);
                 src.mark_read(n);
@@ -353,7 +353,7 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
     }
 
     fn get_remote_address(&mut self, socket: Resource<TcpSocket>) -> SocketResult<IpSocketAddress> {
-        let sock = get_socket(self.table, &socket)?;
+        let sock = get_socket_mut(self.table, &socket)?;
         Ok(sock.remote_address()?.into())
     }
 

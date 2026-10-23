@@ -1,8 +1,8 @@
 use crate::linker::{Definition, DefinitionType};
 use crate::prelude::*;
 use crate::runtime::vm::{
-    self, Imports, ModuleRuntimeInfo, VMFuncRef, VMFunctionImport, VMGlobalImport, VMMemoryImport,
-    VMStore, VMTableImport, VMTagImport,
+    self, Imports, ModuleRuntimeInfo, UncaughtException, VMFuncRef, VMFunctionImport,
+    VMGlobalImport, VMMemoryImport, VMStore, VMTableImport, VMTagImport,
 };
 use crate::store::{
     AllocateInstanceKind, Asyncness, InstanceId, StoreInstanceId, StoreOpaque, StoreResourceLimiter,
@@ -269,11 +269,13 @@ impl Instance {
         // expressions.
         if needs_startup {
             if asyncness == Asyncness::No {
-                instance.start_raw(store)?;
+                instance.start_raw(store, UncaughtException::Propagate)?;
             } else {
                 #[cfg(feature = "async")]
                 {
-                    store.on_fiber(|store| instance.start_raw(store)).await??;
+                    store
+                        .on_fiber(|store| instance.start_raw(store, UncaughtException::Propagate))
+                        .await??;
                 }
                 #[cfg(not(feature = "async"))]
                 unreachable!();
@@ -346,7 +348,11 @@ impl Instance {
         }
     }
 
-    pub(crate) fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
+    pub(crate) fn start_raw<T>(
+        &self,
+        store: &mut StoreContextMut<'_, T>,
+        uncaught_exception: UncaughtException,
+    ) -> Result<()> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
         let store_id = store.0.id();
@@ -362,9 +368,13 @@ impl Instance {
         let caller_vmctx = instance.vmctx();
         unsafe {
             let funcref = f.vm_func_ref(store.0);
-            super::func::invoke_wasm_and_catch_traps(store, |_default_caller, vm| {
-                VMFuncRef::array_call(funcref, vm, caller_vmctx, NonNull::from(&mut []))
-            })?;
+            super::func::invoke_wasm_and_catch_traps(
+                store,
+                uncaught_exception,
+                |_default_caller, vm| {
+                    VMFuncRef::array_call(funcref, vm, caller_vmctx, NonNull::from(&mut []))
+                },
+            )?;
         }
         Ok(())
     }

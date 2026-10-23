@@ -1,0 +1,33 @@
+package foo:foo;
+
+interface store {
+  get: func(key: string) -> option<string>;
+}
+
+interface cache {
+  get: func(key: string) -> option<string>;
+}
+
+interface types {
+  resource r;
+  make: func() -> r;
+}
+
+interface consumer {
+  use types.{r};
+  take: func(x: r);
+}
+
+world mixed {
+  // A plain import followed by a labelled import of the same interface.
+  import store;
+  import a: store;
+
+  // A labelled import followed by a plain import of the same interface.
+  import b: cache;
+  import cache;
+
+  // `types` is only imported plainly through `consumer`'s `use`.
+  import consumer;
+  import c: types;
+}

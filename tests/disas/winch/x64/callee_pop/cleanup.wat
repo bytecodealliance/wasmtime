@@ -207,7 +207,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
 ;;       movl    4(%rsp), %edx
-;;       callq   0xa7a
+;;       callq   0xaa7
 ;;       addq    $8, %rsp
 ;;       movq    0x70(%rsp), %r14
 ;;       jmp     0x307

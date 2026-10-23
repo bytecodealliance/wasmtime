@@ -94,6 +94,10 @@ enum StreamEnd {
     /// Body was completely read and trailers were read. Here are the trailers.
     /// Note that `None` means that the body finished without trailers.
     Trailers(Option<http::HeaderMap>),
+
+    /// The body finished with an error. `future-trailers` reports it as well,
+    /// so a guest that only reads the trailers still sees the failure.
+    Error(Arc<Error>),
 }
 
 /// The concrete type behind the `wasi:io/streams.input-stream` resource returned
@@ -102,7 +106,7 @@ enum StreamEnd {
 pub struct HostIncomingBodyStream {
     state: IncomingBodyStreamState,
     buffer: Bytes,
-    error: Option<Error>,
+    error: Option<Arc<Error>>,
 }
 
 impl HostIncomingBodyStream {
@@ -136,8 +140,17 @@ impl HostIncomingBodyStream {
             // Destroy the body to terminate the stream while enqueueing the
             // error to get returned from the next call to `read`.
             Some(Err(e)) => {
+                // Also tell `future-trailers`. Both paths report the real
+                // error, so it's shared rather than replaced by an error-code.
+                let tx = match mem::replace(&mut self.state, IncomingBodyStreamState::Closed) {
+                    IncomingBodyStreamState::Open { tx, .. } => Some(tx),
+                    IncomingBodyStreamState::Closed => None,
+                };
+                let e = Arc::new(e);
+                if let Some(tx) = tx {
+                    let _ = tx.send(StreamEnd::Error(Arc::clone(&e)));
+                }
                 self.error = Some(e);
-                self.state = IncomingBodyStreamState::Closed;
             }
 
             // No more frames are going to be received again, so drop the `body`
@@ -256,7 +269,7 @@ pub enum HostFutureTrailers {
     ///
     /// Note that `Ok(None)` means that there were no trailers for this request
     /// while `Ok(Some(_))` means that trailers were found in the request.
-    Done(Result<Option<http::HeaderMap>, Error>),
+    Done(Result<Option<http::HeaderMap>, Arc<Error>>),
 
     /// Trailers have been consumed by `future-trailers.get`.
     Consumed,
@@ -284,6 +297,12 @@ impl Pollable for HostFutureTrailers {
                 // were reached. It's up to us now to complete the body.
                 Ok(StreamEnd::Remaining(b)) => body.body = IncomingBodyState::Start(b),
 
+                // The body itself errored out, so report that through this
+                // future as its contract requires.
+                Ok(StreamEnd::Error(e)) => {
+                    *self = HostFutureTrailers::Done(Err(e));
+                }
+
                 // This means there were no trailers present.
                 Ok(StreamEnd::Trailers(None)) | Err(_) => {
                     *self = HostFutureTrailers::Done(Ok(None));
@@ -305,7 +324,7 @@ impl Pollable for HostFutureTrailers {
         let result = loop {
             match hyper_body.frame().await {
                 None => break Ok(None),
-                Some(Err(e)) => break Err(e),
+                Some(Err(e)) => break Err(Arc::new(e)),
                 Some(Ok(frame)) => {
                     // If this frame is a data frame ignore it as we're only
                     // interested in trailers.
@@ -413,8 +432,11 @@ impl HostOutgoingBody {
             }
         }
 
-        // always add 1 buffer here because one empty slot is required
-        let (body_sender, body_receiver) = mpsc::channel(buffer_chunks + 1);
+        // always add 1 buffer here because one empty slot is required; the
+        // extra slot is part of the clamp since `mpsc::channel` panics above
+        // the semaphore's permit limit.
+        let capacity = channel_capacity(buffer_chunks.saturating_add(1));
+        let (body_sender, body_receiver) = mpsc::channel(capacity);
         let (finish_sender, finish_receiver) = oneshot::channel();
         let body_impl = BodyImpl {
             body_receiver,
@@ -513,6 +535,12 @@ impl StreamContext {
     }
 }
 
+/// Clamp a requested outgoing body channel capacity into the range that
+/// `tokio::sync::mpsc::channel` accepts (it panics outside of it).
+fn channel_capacity(requested: usize) -> usize {
+    requested.clamp(1, tokio::sync::Semaphore::MAX_PERMITS)
+}
+
 /// Provides a [`HostOutputStream`] impl from a [`tokio::sync::mpsc::Sender`].
 #[derive(Debug)]
 struct BodyWriteStream {
@@ -545,6 +573,9 @@ impl BodyWriteStream {
 impl OutputStream for BodyWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let len = bytes.len();
+        if len > self.write_budget {
+            return Err(StreamError::Trap(format_err!("write exceeded budget")));
+        }
         match self.writer.try_send(bytes) {
             // If the message was sent then it's queued up now in hyper to get
             // received.
@@ -608,5 +639,27 @@ impl Pollable for BodyWriteStream {
         // the channel or it's already closed then this will return immediately.
         // If the channel is full this will block until capacity opens up.
         let _ = self.writer.reserve().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::channel_capacity;
+
+    /// `mpsc::channel` panics above `Semaphore::MAX_PERMITS` and at zero, so the
+    /// capacity handed to it must always be clamped - including for the huge
+    /// values an embedder or `-Shttp-outgoing-body-buffer-chunks` can supply.
+    #[test]
+    fn outgoing_body_channel_capacity_is_always_accepted() {
+        let max = tokio::sync::Semaphore::MAX_PERMITS;
+        for requested in [0, 1, 1024, max, max + 1, usize::MAX] {
+            let capacity = channel_capacity(requested);
+            assert!(
+                capacity >= 1 && capacity <= max,
+                "capacity {capacity} out of range"
+            );
+            // Not panicking is the point: that is what the clamp buys us.
+            let _ = tokio::sync::mpsc::channel::<u8>(capacity);
+        }
     }
 }

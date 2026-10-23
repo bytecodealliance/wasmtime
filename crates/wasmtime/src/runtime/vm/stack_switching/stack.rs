@@ -77,6 +77,13 @@ impl VMContinuationStack {
         self.0.range()
     }
 
+    /// Returns the usable stack range to report to AddressSanitizer. Unlike
+    /// [`Self::range`], this excludes any inaccessible guard region.
+    #[cfg(all(feature = "stack-switching", asan))]
+    pub(crate) fn asan_range(&self) -> Option<Range<usize>> {
+        self.0.asan_range()
+    }
+
     /// Returns the instruction pointer stored in the Fiber's ControlContext.
     pub fn control_context_instruction_pointer(&self) -> usize {
         self.0.control_context_instruction_pointer()

@@ -35,6 +35,14 @@ pub extern "C" fn wasmtime_config_wasm_component_model_canonical_names_set(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_wasm_component_model_accessors_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_component_model_accessors(enable);
+}
+
+#[unsafe(no_mangle)]
 #[cfg(feature = "component-model-async")]
 pub extern "C" fn wasmtime_config_wasm_component_model_async_set(
     c: &mut wasm_config_t,
@@ -153,7 +161,7 @@ pub unsafe extern "C" fn wasmtime_component_get_export_index(
     name: *const u8,
     name_len: usize,
 ) -> Option<Box<wasmtime_component_export_index_t>> {
-    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return None;
     };

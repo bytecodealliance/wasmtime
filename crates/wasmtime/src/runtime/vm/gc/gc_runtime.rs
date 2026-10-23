@@ -235,9 +235,15 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     // Struct, array, and general GC object methods
 
     /// Get the header of the object that `gc_ref` points to.
+    ///
+    /// Implementations may assert that the header's kind is valid, so
+    /// allocation paths that have not written the header yet must reach for the
+    /// raw object data instead of these accessors.
     fn header(&self, gc_ref: &VMGcRef) -> Result<&VMGcHeader>;
 
     /// Get the header of the object that `gc_ref` points to.
+    ///
+    /// See `header` for the restriction on uninitialized objects.
     fn header_mut(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcHeader>;
 
     /// Get the size (in bytes) of the object referenced by `gc_ref`.
@@ -462,7 +468,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// # Errors
     ///
     /// Returns an error on out of bounds or if the `gc_ref` is an `i31ref`.
-    #[inline]
+    #[inline(always)]
     fn index<T>(&self, gc_ref: &TypedGcRef<T>) -> Result<&T>
     where
         Self: Sized,
@@ -489,7 +495,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// # Errors
     ///
     /// Returns an error on out of bounds or if the `gc_ref` is an `i31ref`.
-    #[inline]
+    #[inline(always)]
     fn index_mut<T>(&mut self, gc_ref: &TypedGcRef<T>) -> Result<&mut T>
     where
         Self: Sized,

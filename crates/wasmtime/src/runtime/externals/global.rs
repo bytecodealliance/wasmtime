@@ -6,7 +6,6 @@ use crate::{
     store::{AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque},
     trampoline::generate_global_export,
 };
-use core::ptr;
 use core::ptr::NonNull;
 use wasmtime_environ::DefinedGlobalIndex;
 
@@ -154,16 +153,18 @@ impl Global {
         unsafe {
             let definition = self.definition(store).as_ref();
             match self._ty(&store).content() {
-                ValType::I32 => Val::from(*definition.as_i32()),
-                ValType::I64 => Val::from(*definition.as_i64()),
-                ValType::F32 => Val::F32(*definition.as_u32()),
-                ValType::F64 => Val::F64(*definition.as_u64()),
+                ValType::I32 => Val::from(definition.get_i32()),
+                ValType::I64 => Val::from(definition.get_i64()),
+                ValType::F32 => Val::F32(definition.get_f32_bits()),
+                ValType::F64 => Val::F64(definition.get_f64_bits()),
                 ValType::V128 => Val::V128(definition.get_u128().into()),
                 ValType::Ref(ref_ty) => {
                     let reference: Ref = match ref_ty.heap_type() {
-                        HeapType::Func | HeapType::ConcreteFunc(_) => {
-                            Func::_from_raw(store, definition.as_func_ref().cast()).into()
-                        }
+                        HeapType::Func | HeapType::ConcreteFunc(_) => Ref::Func(
+                            definition
+                                .get_func_ref()
+                                .map(|f| Func::from_vm_func_ref(store.id(), f)),
+                        ),
 
                         HeapType::NoFunc => Ref::Func(None),
 
@@ -258,14 +259,13 @@ impl Global {
         unsafe {
             let definition = self.definition(&store).as_mut();
             match val {
-                Val::I32(i) => *definition.as_i32_mut() = *i,
-                Val::I64(i) => *definition.as_i64_mut() = *i,
-                Val::F32(f) => *definition.as_u32_mut() = *f,
-                Val::F64(f) => *definition.as_u64_mut() = *f,
+                Val::I32(i) => definition.set_i32(*i),
+                Val::I64(i) => definition.set_i64(*i),
+                Val::F32(f) => definition.set_f32_bits(*f),
+                Val::F64(f) => definition.set_f64_bits(*f),
                 Val::V128(i) => definition.set_u128((*i).into()),
                 Val::FuncRef(f) => {
-                    *definition.as_func_ref_mut() =
-                        f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&store).as_ptr().cast());
+                    definition.set_func_ref(f.map(|f| f.vm_func_ref(&store)));
                 }
                 Val::ExternRef(e) => {
                     let new = match e {

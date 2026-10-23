@@ -1,6 +1,6 @@
 ;; Rewrites for `band`, `bnot`, `bor`, `bxor`
 
-;; Match or create an all-zero bit pattern for all bitwise types.
+;; all_zero(ty) --> 0
 (decl all_zero_etor (Type) TypeAndInstructionData)
 (extern extractor all_zero_etor all_zero_etor)
 (decl f16_zero () Ieee16)
@@ -17,12 +17,12 @@
 (rule 4 (all_zero $F128) (f128const $F128 (zero_constant $F128)))
 (rule 5 (all_zero (ty_vector ty)) (vconst ty (zero_constant ty)))
 
-;; x | 0 == x | x == x.
+;; x | 0 == x | x --> x
 (rule bor_x_zero (simplify (bor ty x (all_zero ty))) (subsume x))
 (rule bor_zero_x (simplify (bor ty (all_zero ty) x)) (subsume x))
 (rule (simplify (bor ty x x)) (subsume x))
 
-;; x ^ 0 == x.
+;; x ^ 0 --> x
 (rule bxor_x_zero (simplify (bxor ty x (all_zero ty))) (subsume x))
 (rule bxor_zero_x (simplify (bxor ty (all_zero ty) x)) (subsume x))
 
@@ -41,11 +41,11 @@
 (rule (simplify (band ty x (iconst_s ty -1)))
       (subsume x))
 
-;; x & 0 == 0; 0 & x == 0.
+;; x & 0 --> 0
 (rule (simplify (band ty x zero @ (all_zero ty))) (subsume zero))
 (rule (simplify (band ty zero @ (all_zero ty) x)) (subsume zero))
 
-;; x & not(x) == 0; not(x) & x == 0.
+;; x & ~x --> 0
 (rule (simplify (band ty x (bnot ty x))) (subsume (all_zero ty)))
 (rule (simplify (band ty (bnot ty x) x)) (subsume (all_zero ty)))
 
@@ -240,7 +240,7 @@
   (bxor ty (band ty z x) (band ty z y)))
 	(band ty z (bxor ty x y)))
 
-; (x & y) | ~(x ^ y) => ~(x ^ y)
+;; (x & y) | ~(x ^ y) --> ~(x ^ y)
 (rule (simplify (bor ty (band ty x y) (bnot ty (bxor ty x y)))) (bnot ty (bxor ty x y)))
 (rule (simplify (bor ty (bnot ty (bxor ty x y)) (band ty x y))) (bnot ty (bxor ty x y)))
 (rule (simplify (bor ty (band ty x y) (bnot ty (bxor ty y x)))) (bnot ty (bxor ty x y)))
@@ -739,7 +739,7 @@
 (rule (simplify (eq rty (bnot cty y) (band cty (bnot cty y) x))) (eq rty (bor cty y x) (iconst_s cty -1)))
 (rule (simplify (eq rty (bnot cty y) (band cty x (bnot cty y)))) (eq rty (bor cty y x) (iconst_s cty -1)))
 
-;; (~x & y) & x == (x & ~y) & y == 0.
+;; (~x & y) & x --> 0
 (rule (simplify (band ty (band ty (bnot ty x) y) x))
       (subsume (all_zero ty)))
 (rule (simplify (band ty (band ty x (bnot ty y)) y))
@@ -749,7 +749,7 @@
 (rule (simplify (band ty x (band ty y (bnot ty x))))
       (subsume (all_zero ty)))
 
-;; ~(x | y) & x == ~(x | y) & y == 0.
+;; ~(x | y) & x --> 0
 (rule (simplify (band ty (bnot ty (bor ty x y)) x))
       (subsume (all_zero ty)))
 (rule (simplify (band ty (bnot ty (bor ty x y)) y))
@@ -759,7 +759,7 @@
 (rule (simplify (band ty x (bnot ty (bor ty y x))))
       (subsume (all_zero ty)))
 
-;; x >=_u (x & y), and (x & y) <=_u x --> true
+;; x >=u (x & y) --> true
 (rule (simplify (uge rty x (band ty x y))) (cmp_true rty))
 (rule (simplify (uge rty x (band ty y x))) (cmp_true rty))
 (rule (simplify (ule rty (band ty x y) x)) (cmp_true rty))
@@ -769,7 +769,7 @@
 (rule (simplify (ult rty x (band ty x y))) (subsume (all_zero rty)))
 (rule (simplify (ult rty x (band ty y x))) (subsume (all_zero rty)))
 
-;; (x | y) >=_u x, and x <=_u (x | y) --> true
+;; (x | y) >=u x --> true
 (rule (simplify (uge rty (bor ty x y) x)) (cmp_true rty))
 (rule (simplify (uge rty (bor ty y x) x)) (cmp_true rty))
 (rule (simplify (ule rty x (bor ty x y))) (cmp_true rty))
@@ -791,16 +791,16 @@
 ;; popcnt(bitrev(x)) == popcnt(x)
 (rule (simplify (popcnt ty (bitrev ty x))) (popcnt ty x))
 
-;; (x ^ y) ^ (x ^ z) --> y ^ z.
+;; (x ^ y) ^ (x ^ z) --> y ^ z
 (rule (simplify (bxor ty (bxor ty x y) (bxor ty x z))) (subsume (bxor ty y z)))
 (rule (simplify (bxor ty (bxor ty x y) (bxor ty z x))) (subsume (bxor ty y z)))
 (rule (simplify (bxor ty (bxor ty y x) (bxor ty x z))) (subsume (bxor ty y z)))
 (rule (simplify (bxor ty (bxor ty y x) (bxor ty z x))) (subsume (bxor ty y z)))
 
-;; (-x) & 1 --> x & 1.
+;; (-x) & 1 --> x & 1
 (rule (simplify (band ty (ineg ty x) (iconst_u ty 1))) (band ty x (iconst_u ty 1)))
 
-;; (x & y) & (x | z) --> x & y.
+;; (x & y) & (x | z) --> x & y
 (rule (simplify (band ty (band ty x y) (bor ty x z))) (subsume (band ty x y)))
 (rule (simplify (band ty (bor ty x z) (band ty x y))) (subsume (band ty x y)))
 (rule (simplify (band ty (band ty x y) (bor ty z x))) (subsume (band ty x y)))
@@ -810,7 +810,7 @@
 (rule (simplify (band ty (band ty y x) (bor ty z x))) (subsume (band ty x y)))
 (rule (simplify (band ty (bor ty z x) (band ty y x))) (subsume (band ty x y)))
 
-;; (x & y) | (x | z) --> x | z.
+;; (x & y) | (x | z) --> x | z
 (rule (simplify (bor ty (band ty x y) (bor ty x z))) (subsume (bor ty x z)))
 (rule (simplify (bor ty (bor ty x z) (band ty x y))) (subsume (bor ty x z)))
 (rule (simplify (bor ty (band ty x y) (bor ty z x))) (subsume (bor ty x z)))
@@ -820,14 +820,29 @@
 (rule (simplify (bor ty (band ty y x) (bor ty z x))) (subsume (bor ty x z)))
 (rule (simplify (bor ty (bor ty z x) (band ty y x))) (subsume (bor ty x z)))
 
-;; (x & y) | (x ^ y) --> x | y.
+;; (x & y) | (x ^ y) --> x | y
 (rule (simplify (bor ty (band ty x y) (bxor ty x y))) (bor ty x y))
 (rule (simplify (bor ty (bxor ty x y) (band ty x y))) (bor ty x y))
 (rule (simplify (bor ty (band ty x y) (bxor ty y x))) (bor ty x y))
 (rule (simplify (bor ty (bxor ty y x) (band ty x y))) (bor ty x y))
 
-;; ~((~x) - y) --> x + y.
+;; ~((~x) - y) --> x + y
 (rule (simplify (bnot ty (isub ty (bnot ty x) y))) (iadd ty x y))
 
-;; ~((~x) >>s y) --> x >>s y.
+;; ~((~x) >>s y) --> x >>s y
 (rule (simplify (bnot ty (sshr ty (bnot ty x) y))) (sshr ty x y))
+
+;; ~x & (x | y) --> ~x & y
+(rule (simplify (band ty (bnot ty x) (bor ty x y))) (band ty (bnot ty x) y))
+(rule (simplify (band ty (bnot ty x) (bor ty y x))) (band ty (bnot ty x) y))
+(rule (simplify (band ty (bor ty x y) (bnot ty x))) (band ty (bnot ty x) y))
+(rule (simplify (band ty (bor ty x y) (bnot ty y))) (band ty (bnot ty y) x))
+
+;; ~x ^ C --> x ^ ~C
+(rule (simplify (bxor (fits_in_64 (ty_int ty)) (bnot ty x) (iconst ty y))) (bxor ty x (iconst ty (imm64_not ty y))))
+
+;; ~(x & y) & (x | y) --> x ^ y
+(rule (simplify (band ty (bnot ty (band ty x y)) (bor ty x y))) (bxor ty x y))
+
+;; ~(x & y) | x --> -1
+(rule (simplify (bor (ty_int_vec128 ty) (bnot ty (band ty x y)) x)) (subsume (iconst_s ty -1)))

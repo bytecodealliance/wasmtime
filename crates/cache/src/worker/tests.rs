@@ -723,6 +723,86 @@ fn test_on_update_cleanup_self_lock() {
     }
 }
 
+// `value * percent` can overflow `u64` for values a user is allowed to put in
+// the config, so the threshold is computed by a helper that must stay exact.
+#[test]
+fn test_percent_of() {
+    let values = [
+        0,
+        1,
+        99,
+        100,
+        101,
+        u64::MAX / 70,
+        u64::MAX / 70 + 1,
+        u64::MAX / 100,
+        u64::MAX - 1,
+        u64::MAX,
+    ];
+    for value in values {
+        for percent in [0, 1, 50, 70, 99, 100] {
+            let expected = (u128::from(value) * u128::from(percent) / 100) as u64;
+            assert_eq!(
+                percent_of(value, percent),
+                expected,
+                "value: {value}, percent: {percent}"
+            );
+        }
+    }
+
+    // sanity check of the case that used to panic
+    assert_eq!(percent_of(u64::MAX, 70), 12_912_720_851_596_686_130);
+}
+
+// Soft limits are plain u64 values and the config validation does not bound
+// them, so u64::MAX is a legal setting. Computing the deletion threshold must
+// not overflow for it.
+#[test]
+fn test_on_update_cleanup_max_soft_limits() {
+    let (_tempdir, cache_dir, config_path) = test_prolog();
+    let cache_config = load_config!(
+        config_path,
+        "[cache]\n\
+         directory = '{cache_dir}'\n\
+         worker-event-queue-size = '16'\n\
+         file-count-soft-limit = '18446744073709551615'\n\
+         files-total-size-soft-limit = '18446744073709551615'\n\
+         file-count-limit-percent-if-deleting = '70%'\n\
+         files-total-size-limit-percent-if-deleting = '70%'",
+        cache_dir
+    );
+
+    let mods_files_dir = cache_dir.join("target-triple").join("compiler-version");
+    fs::create_dir_all(&mods_files_dir).expect("Failed to create directories");
+    let mod_file = mods_files_dir.join("some-mod");
+    let stats_file = mods_files_dir.join("some-mod.stats");
+    create_file_with_mtime(
+        &mod_file,
+        "some mod content",
+        "past",
+        &Duration::from_secs(10),
+    );
+    create_file_with_mtime(&stats_file, "", "past", &Duration::from_secs(10));
+    // unrecognized files are removed regardless of the limits
+    let trash_file = cache_dir.join("trash-file");
+    create_file_with_mtime(&trash_file, "", "past", &Duration::from_secs(0));
+
+    // call the task synchronously, so that a panic fails this test instead of
+    // silently killing a worker thread
+    let (_tx, rx) = sync_channel(1);
+    let worker_thread = WorkerThread {
+        receiver: rx,
+        cache_config: cache_config.clone(),
+        stats: Arc::new((Mutex::new(WorkerStats::default()), Condvar::new())),
+    };
+    worker_thread.handle_on_cache_update(mod_file.clone());
+
+    // the soft limits are effectively infinite: no cache entry may be deleted
+    assert!(mod_file.exists());
+    assert!(stats_file.exists());
+    assert!(!trash_file.exists());
+}
+
 fn create_file_with_mtime(filename: &Path, contents: &str, offset_sign: &str, offset: &Duration) {
     fs::write(filename, contents).expect("Failed to create a file");
     let mtime = match offset_sign {

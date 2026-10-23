@@ -197,6 +197,7 @@ impl FrameStateSlotBuilder {
 /// - `num_slot_descriptors`: u32
 /// - `num_progpoints`: u32
 /// - `num_breakpoints`: u32
+/// - `num_funcs`: u32
 /// - `frame_descriptor_pool_length`: u32
 /// - `progpoint_descriptor_pool_length`: u32
 /// - `breakpoint_patch_pool_length`: u32
@@ -218,6 +219,8 @@ impl FrameStateSlotBuilder {
 ///    - end of breakpoint patch data in pool: u32
 ///      (find the start by end of previous; patches are in the
 ///      pool in order and this saves storing redundant start/end values)
+/// - `num_funcs` times:
+///    - function start offset in text: u32 (sorted order)
 /// - frame descriptors (format described above; `frame_descriptor_pool_length` bytes)
 /// - progpoint descriptors (`progpoint_descriptor_pool_length` bytes)
 ///   - each descriptor: sequence of frames
@@ -245,6 +248,9 @@ pub struct FrameTableBuilder {
     breakpoint_patch_data_ends: Vec<U32<LittleEndian>>,
 
     breakpoint_patch_data: Vec<u8>,
+
+    /// Start offsets of every function in the text section.
+    func_starts: Vec<U32<LittleEndian>>,
 }
 
 impl FrameTableBuilder {
@@ -271,6 +277,21 @@ impl FrameTableBuilder {
             .push(U32::new(LittleEndian, end));
 
         index
+    }
+
+    /// Record the start of a function in the text section.
+    ///
+    /// This must be called for every function in the text section
+    /// (whether or not it has any program points), in ascending
+    /// order of offset, so that program-point lookups do not fall
+    /// through into a preceding function's metadata.
+    pub fn add_func_start(&mut self, native_pc: u32) {
+        debug_assert!(
+            self.func_starts
+                .last()
+                .map_or(true, |last| last.get(LittleEndian) <= native_pc)
+        );
+        self.func_starts.push(U32::new(LittleEndian, native_pc));
     }
 
     /// Add one program point.
@@ -330,7 +351,7 @@ impl FrameTableBuilder {
             .push(U32::new(LittleEndian, end));
     }
 
-    /// Serialize the framd-table data section, taking a closure to
+    /// Serialize the frame-table data section, taking a closure to
     /// consume slices.
     pub fn serialize<F: FnMut(&[u8])>(&mut self, mut f: F) {
         // Pad `frame_descriptor_data` to a multiple of 4 bytes so
@@ -345,6 +366,8 @@ impl FrameTableBuilder {
         f(&num_prog_points.to_le_bytes());
         let num_breakpoints = u32::try_from(self.breakpoint_pcs.len()).unwrap();
         f(&num_breakpoints.to_le_bytes());
+        let num_funcs = u32::try_from(self.func_starts.len()).unwrap();
+        f(&num_funcs.to_le_bytes());
 
         let frame_descriptor_pool_length = u32::try_from(self.frame_descriptor_data.len()).unwrap();
         f(&frame_descriptor_pool_length.to_le_bytes());
@@ -361,6 +384,7 @@ impl FrameTableBuilder {
         f(object::bytes_of_slice(&self.breakpoint_pcs));
         f(object::bytes_of_slice(&self.breakpoint_patch_offsets));
         f(object::bytes_of_slice(&self.breakpoint_patch_data_ends));
+        f(object::bytes_of_slice(&self.func_starts));
         f(&self.frame_descriptor_data);
         f(object::bytes_of_slice(&self.progpoint_descriptor_data));
         f(&self.breakpoint_patch_data);

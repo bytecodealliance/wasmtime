@@ -2,7 +2,8 @@
 //! which are serialized with `bincode` into output ELF files.
 
 use crate::{
-    CompiledFunctionsTable, CompiledModuleInfo, PrimaryMap, StaticModuleIndex, WasmChecksum,
+    CompiledFunctionsTable, CompiledModuleInfo, StaticModuleIndex, WasmChecksum,
+    collections::TryPrimaryMap,
     component::{Component, ComponentTypes, TypeComponentIndex},
 };
 use serde_derive::{Deserialize, Serialize};
@@ -19,7 +20,7 @@ pub struct ComponentArtifacts {
     /// Type information for this component and all contained modules.
     pub types: ComponentTypes,
     /// Serialized metadata about all included core wasm modules.
-    pub static_modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
+    pub static_modules: TryPrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
     /// A checksum of the source Wasm binary from which the component was compiled.
     pub checksum: WasmChecksum,
 }

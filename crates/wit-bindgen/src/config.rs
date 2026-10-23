@@ -77,7 +77,13 @@ impl FunctionConfig {
             FunctionKind::Freestanding
             | FunctionKind::Method(_)
             | FunctionKind::Static(_)
-            | FunctionKind::Constructor(_) => {}
+            | FunctionKind::Constructor(_)
+            | FunctionKind::Getter
+            | FunctionKind::Setter
+            | FunctionKind::MethodGetter(_)
+            | FunctionKind::MethodSetter(_)
+            | FunctionKind::StaticGetter(_)
+            | FunctionKind::StaticSetter(_) => {}
 
             FunctionKind::AsyncFreestanding
             | FunctionKind::AsyncMethod(_)

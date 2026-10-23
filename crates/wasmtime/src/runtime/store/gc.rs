@@ -13,8 +13,8 @@ use crate::vm::{
     SendSyncPtr, StoreGcHostAllocTypes, TraceInfo, VMGcRef,
 };
 use crate::{
-    Engine, ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, ThrownException,
-    bail,
+    Engine, ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, Tag,
+    ThrownException, bail,
 };
 use core::fmt;
 use core::mem::ManuallyDrop;
@@ -585,7 +585,15 @@ impl StoreOpaque {
         // later. This method is primarily called right now to determine if
         // there's a handler for an exception, and by returning `None` here this
         // turns into just any old embedder error.
-        pending_exnref.into_exnref_unchecked().tag(&mut store).ok()
+        let (instance, index) = pending_exnref
+            .into_exnref_unchecked()
+            .tag(&mut store)
+            .ok()?;
+
+        // Validate the heap-derived indices: handler lookup only compares them
+        // against live tags, so an unvalidated pair can match the wrong
+        // handler, which then decodes the payload at the wrong types.
+        Some(Tag::from_raw_indices(&store, instance, index)?.to_raw_indices())
     }
 
     /// Get an owned rooted reference to the pending exception,
@@ -846,11 +854,15 @@ impl StoreOpaque {
                 return;
             };
             let gc_ref_data = gc_ref_data.as_ptr();
+            let data = payloads
+                .data
+                .expect("payload GC metadata requires an allocated payload buffer")
+                .as_ptr();
 
             for index in 0..usize::try_from(payloads.length).unwrap() {
                 let marker = unsafe { gc_ref_data.add(index).read() };
                 if marker == wasmtime_environ::CONTINUATION_PAYLOAD_GC_REF {
-                    let slot = unsafe { payloads.data.cast::<ValRaw>().add(index).cast::<u32>() };
+                    let slot = unsafe { data.cast::<ValRaw>().add(index).cast::<u32>() };
                     unsafe {
                         StoreOpaque::trace_wasm_stack_slot(gc_roots_list, slot);
                     }

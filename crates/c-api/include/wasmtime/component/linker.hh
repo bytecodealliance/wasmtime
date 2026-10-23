@@ -181,6 +181,24 @@ class Linker {
     return std::monostate();
   }
 
+  /**
+   * \brief Defines all unknown imports of `component` as functions which
+   * return default values.
+   *
+   * An import whose results have no default, such as a `future`, is defined
+   * as a trapping function instead.
+   */
+  Result<std::monostate>
+  define_unknown_imports_as_default_values(Store::Context cx,
+                                           const Component &component) {
+    auto err =
+        wasmtime_component_linker_define_unknown_imports_as_default_values(
+            ptr.get(), cx.capi(), component.capi());
+    if (err)
+      return Error(err);
+    return std::monostate();
+  }
+
   /// Configures whether shadowing previous names is allowed or not.
   ///
   /// By default shadowing is not allowed.

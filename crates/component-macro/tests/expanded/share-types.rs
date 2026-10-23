@@ -199,8 +199,11 @@ pub mod foo {
                 #[component(name = "method")]
                 pub method: wasmtime::component::__internal::String,
             }
-            impl core::fmt::Debug for Request {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Request {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("Request").field("method", &self.method).finish()
                 }
             }
@@ -217,8 +220,11 @@ pub mod foo {
                 #[component(name = "body")]
                 pub body: wasmtime::component::__internal::String,
             }
-            impl core::fmt::Debug for Response {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Response {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("Response").field("body", &self.body).finish()
                 }
             }

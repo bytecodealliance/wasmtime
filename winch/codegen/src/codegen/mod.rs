@@ -438,6 +438,7 @@ where
                     fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                         self.0.$visit($($($arg.clone()),*)?)?;
                         let op = Operator::$op $({ $($arg: $arg.clone()),* })?;
+                        check_impl_limits(&op)?;
                         if self.1.visit(&op) {
                             self.1.before_visit_op(&op, self.2)?;
                             let res = self.1.$visit($($($arg),*)?)?;
@@ -449,6 +450,17 @@ where
                     }
                 )*
             };
+        }
+
+        /// Check implementation limits that are not (yet) enforced by
+        /// validation. This is done regardless of reachability.
+        fn check_impl_limits(op: &Operator) -> Result<()> {
+            if let Operator::BrTable { targets } = op {
+                if targets.len() > wasmtime_cranelift::MAX_BR_TABLE_TARGETS {
+                    bail!(CodeGenError::br_table_too_large(targets.len()));
+                }
+            }
+            Ok(())
         }
 
         fn visit_op_when_unreachable(op: &Operator) -> bool {
@@ -622,6 +634,29 @@ where
         self.masm
             .epilogue(self.context.frame.locals_size, stack_args_size)?;
         self.masm.end_source_loc()?;
+        Ok(())
+    }
+
+    /// Emits a select, using the declared result type for typed selects.
+    pub fn emit_select(&mut self, ty: Option<WasmValType>) -> Result<()> {
+        let cond = self.context.pop_to_reg(self.masm, None)?;
+        let val2 = self.context.pop_to_reg(self.masm, None)?;
+        let val1 = self.context.pop_to_reg(self.masm, None)?;
+        let ty = ty.unwrap_or(val1.ty);
+        self.masm.cmp(cond.reg, RegImm::i32(0), OperandSize::S32)?;
+        // Conditionally move val1 to val2 if the comparison is not zero.
+        self.masm.cmov(
+            writable!(val2.into()),
+            val1.into(),
+            IntCmpKind::Ne,
+            ty.try_into()?,
+        )?;
+        // A null reference can have an integer shadow type. The selected value
+        // must retain the declared reference type so stack maps cover it.
+        self.context.stack.push(TypedReg::new(ty, val2.reg).into());
+        self.context.free_reg(val1.reg);
+        self.context.free_reg(cond);
+
         Ok(())
     }
 
@@ -1196,8 +1231,6 @@ where
             .can_elide_bounds_check(&memory_tunables, self.env.page_size_log2);
 
         let addr = if offset_with_access_size > heap.memory.maximum_byte_size().unwrap_or(u64::MAX)
-            || (!self.tunables.memory_may_move
-                && offset_with_access_size > self.tunables.memory_reservation)
         {
             // Detect at compile time if the access is out of bounds.
             // Doing so will put the compiler in an unreachable code state,
@@ -2358,7 +2391,10 @@ where
         if !self.context.reachable {
             // `self.fuel_consumed` must be correctly flushed to memory when
             // entering an unreachable state.
-            ensure!(self.fuel_consumed == 0, CodeGenError::illegal_fuel_state())
+            ensure!(self.fuel_consumed == 0, CodeGenError::illegal_fuel_state());
+            // Control operators are still visited to track nesting and restore
+            // reachability at `else` or `end`, but those visits must not charge fuel.
+            return Ok(());
         }
 
         // Generally, most instructions require 1 fuel unit.

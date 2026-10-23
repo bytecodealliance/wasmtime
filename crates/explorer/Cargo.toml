@@ -19,5 +19,9 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 target-lexicon = { workspace = true, features = ['std'] }
 wasmprinter = { workspace = true }
-wasmtime = { workspace = true, features = ["anyhow", "cranelift", "runtime"] }
+wasmtime = { workspace = true, features = ["anyhow", "component-model", "cranelift", "runtime"] }
 wasmtime-environ = { workspace = true, features = ["anyhow"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+wat = { workspace = true }

@@ -117,12 +117,15 @@ pub(crate) mod store;
 pub mod types;
 mod values;
 pub use self::component::{Component, ComponentExportIndex, ExportLookup};
+#[cfg(feature = "task-group-hook")]
+pub use self::concurrent::TaskGroupHook;
+pub use self::concurrent::TaskGroupId;
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
     Access, Accessor, AccessorTask, AsAccessor, Destination, DirectDestination, DirectSource,
     ErrorContext, FuncCallConcurrent, FutureAny, FutureConsumer, FutureProducer, FutureReader,
-    GuardedFutureReader, GuardedStreamReader, GuestTaskId, JoinHandle, ReadBuffer, Source,
-    StreamAny, StreamConsumer, StreamProducer, StreamReader, StreamResult, TypedFuncCallConcurrent,
+    GuardedFutureReader, GuardedStreamReader, JoinHandle, ReadBuffer, Source, StreamAny,
+    StreamConsumer, StreamProducer, StreamReader, StreamResult, TypedFuncCallConcurrent,
     VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
 pub use self::func::{
@@ -163,6 +166,7 @@ pub mod __internal {
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
     pub use alloc::boxed::Box;
+    pub use alloc::collections::BTreeMap;
     pub use alloc::string::String;
     pub use alloc::vec::Vec;
     pub use core::cell::RefCell;
@@ -448,11 +452,12 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // interfaces, used together with the component model's
 ///     // `(implements "...")` annotation.
 ///     //
-///     // For each interface listed here an extra `Host` trait is generated
-///     // under a top-level `named_imports` module (mirroring the interface's
-///     // normal module path) whose methods each take an additional first
-///     // argument: a reference to the host-chosen "id" type given as the value
-///     // (here `MyHandlerId`). Alongside the trait a reflection-based
+///     // Each key must name an interface that the world imports. For each
+///     // one an extra `Host` trait is generated under a top-level
+///     // `named_imports` module (mirroring the interface's normal module
+///     // path) whose methods each take an additional first argument: the
+///     // host-chosen "id" type given as the value (here `MyHandlerId`),
+///     // passed by value. Alongside the trait a reflection-based
 ///     // `add_to_linker` is generated:
 ///     //
 ///     // ```ignore
@@ -464,15 +469,27 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // ) -> Result<()>;
 ///     // ```
 ///     //
-///     // This inspects `component`'s imports, and for each one annotated with
-///     // `(implements "wasi:http/handler")` calls `lookup` with the import's
-///     // name to obtain an id. That id is then cloned into each linker closure
-///     // and passed as the first argument to every method call, letting a
-///     // single `Host` implementation distinguish between multiple imports
-///     // of the same interface.
+///     // This inspects `component`'s imports, and for each one whose
+///     // `(implements "...")` annotation matches `wasi:http/handler` calls
+///     // `lookup` with the import's name to obtain an id. Matching uses
+///     // `ComponentExtern::is_implements`, so semver-compatible versions also
+///     // match. The id is then cloned for each call and passed as the first
+///     // argument to every method, letting a single `Host` implementation
+///     // distinguish between multiple imports of the same interface. To bind a
+///     // single import instead, the generated `add_to_linker_instance` takes a
+///     // `LinkerInstance`, such as `linker.instance("my-handler")?`, and the
+///     // id to use for it.
 ///     //
-///     // The id type must be `Clone + Send + Sync + 'static`. Interfaces that
-///     // define a resource are not supported here and cause a compile error.
+///     // The id type must be `Clone + Send + Sync + 'static`.
+///     //
+///     // As with `with`, a key without a version applies to every version of
+///     // the interface imported by the world, and a key with a version takes
+///     // precedence over one without.
+///     //
+///     // Without this option the host can only load components whose
+///     // imports match the shape of the world given to `bindgen!`. With it,
+///     // the host can also load components which import the listed
+///     // interfaces under any names of their choosing.
 ///     named_imports: {
 ///         "wasi:http/handler": MyHandlerId,
 ///     },
@@ -485,6 +502,12 @@ pub(crate) use self::store::ComponentStoreData;
 ///         serde::Deserialize,
 ///         serde::Serialize,
 ///     ],
+///
+///     // The Rust type to use for WIT `map<K, V>` types: `BTreeMap`,
+///     // `std::collections::HashMap`, or `indexmap::IndexMap`.
+///     //
+///     // By default this is `BTreeMap`.
+///     map_type: std::collections::HashMap,
 ///
 ///     // An niche configuration option to require that the `T` in `Store<T>`
 ///     // is always `Send` in the generated bindings. Typically not needed

@@ -30,7 +30,7 @@ use std::sync::{
 use std::task::{Context, Poll};
 use std::time::Instant;
 use tokio::sync::Notify;
-use wasmtime::component::{Accessor, GuestTaskId, Resource, TypedFuncCallConcurrent};
+use wasmtime::component::{Accessor, Resource, TaskGroupId, TypedFuncCallConcurrent};
 #[cfg(feature = "p2")]
 use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, Result, Store, StoreContextMut, format_err};
@@ -184,8 +184,9 @@ pub trait WorkerState: 'static + Send + Sync {
     /// Notification that a request has been accepted by the worker.
     ///
     /// This method can be used to record anything within `store`, if necessary.
-    /// The `task` corresponding to the component-model-level async task about
-    /// to be created is additionally passed here.
+    /// If the `task-group-hook` feature is enabled, the task group
+    /// corresponding to the component-model-level async task about to be
+    /// created is additionally passed here.
     ///
     /// If the future returned by this function resolves before the guest has
     /// produced a response, the request will be considered "expired" and the
@@ -217,7 +218,7 @@ pub trait WorkerState: 'static + Send + Sync {
         &self,
         store: StoreContextMut<'_, Self::StoreData>,
         data: Self::RequestData,
-        task: GuestTaskId,
+        task_group: TaskGroupId,
     ) -> Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>;
 
     /// Dispose of the store belonging to the now-exited worker.
@@ -229,6 +230,12 @@ pub trait WorkerState: 'static + Send + Sync {
     /// If the store is being dropped due to an error (e.g. a guest trap or a
     /// host panic) `result` will be `Err(_)`; otherwise it will be `Ok(())`.
     fn drop(&self, store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>);
+
+    /// Poll the specified future representing the event loop for the store to
+    /// which the worker belongs.
+    fn poll<T>(&self, future: Pin<&mut impl Future<Output = T>>, cx: &mut Context) -> Poll<T> {
+        future.poll(cx)
+    }
 }
 
 /// Represents the combination of a store and instance with which to handle
@@ -508,7 +515,7 @@ where
                             let expiration = dropper.state.on_request_start(
                                 store.as_context_mut(),
                                 request_data,
-                                prepared.task(),
+                                prepared.group(),
                             );
                             Ok((prepared, expiration))
                         }
@@ -695,7 +702,7 @@ where
             );
 
             future::poll_fn(|cx| {
-                let poll = future.as_mut().poll(cx);
+                let poll = dropper.state.poll(future.as_mut(), cx);
                 if poll.is_pending() {
                     // If the future returns `Pending`, that's either because it's
                     // idle (in which case it can definitely accept a new request) or
@@ -730,7 +737,7 @@ where
                     // before, poll the future one more time so it can ask for
                     // another request if appropriate.
                     if !accept_concurrent.swap(true, Relaxed) {
-                        return future.as_mut().poll(cx);
+                        return dropper.state.poll(future.as_mut(), cx);
                     }
                 }
 
@@ -861,6 +868,9 @@ where
     /// - [`ExpirationError`] if the request expired before it produced a
     /// response.  See [`WorkerState::on_request_start`] for details.
     ///
+    /// - [`ErrorResponse`](crate::ErrorResponse) if the request could not be
+    /// converted into a guest request.
+    ///
     /// - [`TrapOrPanicError`] if the worker responsible for handling the
     /// request trapped or panicked before it produced a response.  This may be
     /// used when a trap occurs but cannot be traced to a specific request,
@@ -948,7 +958,7 @@ where
 }
 
 /// Representation of a "prepared" call for a guest, used to extract the
-/// `GuestTaskId` before actually executing any handlers.
+/// `TaskGroupId` before actually executing any handlers.
 ///
 /// Right now this is a bit gross since it has to type out a bunch of types by
 /// hand.
@@ -994,10 +1004,43 @@ impl<'a, T: Send> Prepared<'a, T> {
         match proxy {
             #[cfg(feature = "p3")]
             Proxy::P3(guest) => {
-                let (request, body) = request.into_parts();
-                let request = http::Request::from_parts(request, body);
+                use http::header::HOST;
+                use http::uri::Authority;
+
+                let (parts, body) = request.into_parts();
+                let http::request::Parts {
+                    method,
+                    uri,
+                    headers: request_headers,
+                    ..
+                } = parts;
+                let http::uri::Parts {
+                    authority,
+                    path_and_query,
+                    ..
+                } = uri.into_parts();
+                // HTTP/1.1 requires an authority in the request target or the
+                // `Host` header (RFC 9112 section 3.2.2), so fall back to the latter.
+                let authority = match authority {
+                    Some(authority) => Some(authority),
+                    None => request_headers
+                        .get(HOST)
+                        .and_then(|host| host.to_str().ok())
+                        .and_then(|host| host.parse::<Authority>().ok()),
+                };
                 let hooks = view(store.data_mut()).hooks;
-                let (request, request_io_result) = p3::Request::from_http(hooks, request);
+                let headers = crate::FieldMap::new_immutable(hooks, request_headers);
+                // `serve` speaks plaintext HTTP, so that is the scheme of every
+                // request, whatever scheme its request target names (as in p2).
+                let (request, request_io_result) = p3::Request::new(
+                    method,
+                    Some(http::uri::Scheme::HTTP),
+                    authority,
+                    path_and_query,
+                    headers,
+                    None,
+                    body,
+                );
                 let request = view(store.data_mut()).table.push(request)?;
 
                 Ok(Prepared::P3 {
@@ -1019,8 +1062,22 @@ impl<'a, T: Send> Prepared<'a, T> {
                 // producing a response.
                 let tx = Arc::new(Mutex::new(Some(tx)));
 
-                let request =
-                    view(store.data_mut()).new_incoming_request(p2_types::Scheme::Http, request)?;
+                let request = match view(store.data_mut())
+                    .new_incoming_request(p2_types::Scheme::Http, request)
+                {
+                    Ok(request) => request,
+                    Err(e) => {
+                        // The request never reached the guest, so there is no
+                        // `response-outparam` to report the failure with, and
+                        // `tx` would otherwise be dropped along with the error.
+                        if let Some(tx) = tx.lock().unwrap().take() {
+                            _ = tx.send(Err(e));
+                        }
+                        wasmtime::bail!(
+                            "request was rejected before it could be turned into a guest request"
+                        );
+                    }
+                };
 
                 let out = view(store.data_mut()).new_response_outparam_from_callback({
                     let tx = tx.clone();
@@ -1043,12 +1100,12 @@ impl<'a, T: Send> Prepared<'a, T> {
         }
     }
 
-    fn task(&self) -> GuestTaskId {
+    fn group(&self) -> TaskGroupId {
         match self {
             #[cfg(feature = "p3")]
-            Prepared::P3 { call, .. } => call.task(),
+            Prepared::P3 { call, .. } => call.group(),
             #[cfg(feature = "p2")]
-            Prepared::P2 { call, .. } => call.task(),
+            Prepared::P2 { call, .. } => call.group(),
         }
     }
 

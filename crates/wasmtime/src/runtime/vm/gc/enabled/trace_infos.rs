@@ -7,6 +7,7 @@
 use crate::hash_map::{Entry, HashMap};
 use crate::module::RegisteredModuleId;
 use crate::vm::{GcStoreTraceState, NopHasher, TraceInfo};
+use crate::{bail_bug, prelude::*};
 use wasmtime_environ::{ModuleInternedTypeIndex, VMSharedTypeIndex};
 
 #[derive(Clone, Copy)]
@@ -35,14 +36,16 @@ impl TraceInfos {
         self.map.clear();
     }
 
-    /// Lookup trace information for `ty`, panicking if it can't be found.
+    /// Lookup trace information for `ty`.
     pub fn trace_info<'a>(
         &mut self,
         ty: &VMSharedTypeIndex,
         state: &'a GcStoreTraceState<'_>,
-    ) -> &'a TraceInfo {
-        self.trace_info_(ty, state)
-            .unwrap_or_else(|| panic!("failed to find trace information for {ty:?}"))
+    ) -> Result<&'a TraceInfo> {
+        match self.trace_info_(ty, state) {
+            Some(info) => Ok(info),
+            None => bail_bug!("failed to find trace information for {ty:?}"),
+        }
     }
 
     fn trace_info_<'a>(

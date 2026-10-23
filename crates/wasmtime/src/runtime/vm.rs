@@ -109,9 +109,7 @@ pub use crate::runtime::vm::instance::{
     PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
 };
 pub use crate::runtime::vm::interpreter::*;
-pub use crate::runtime::vm::memory::{
-    Memory, MemoryBase, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
-};
+pub use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator, SharedMemory};
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::provenance::*;
 pub use crate::runtime::vm::stack_switching::*;
@@ -174,10 +172,12 @@ cfg_select! {
     has_virtual_memory => {
         pub use crate::runtime::vm::byte_count::*;
         pub use crate::runtime::vm::mmap::{Mmap, MmapOffset};
-        pub use self::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
+        pub use self::cow::{MemoryImage, ModuleMemoryImages};
+        #[cfg(feature = "pooling-allocator")]
+        pub use self::cow::MemoryImageSlot;
     }
     _ => {
-        pub use self::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
+        pub use self::cow_disabled::{MemoryImage, ModuleMemoryImages};
     }
 }
 

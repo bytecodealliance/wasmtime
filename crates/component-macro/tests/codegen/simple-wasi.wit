@@ -2,6 +2,7 @@ package foo:foo;
 
 interface wasi-filesystem {
   record descriptor-stat {
+    a: u32,
   }
 
   enum errno { e }
@@ -14,6 +15,7 @@ interface wasi-filesystem {
 
 interface wall-clock {
   record wall-clock {
+    a: u32,
   }
 }
 

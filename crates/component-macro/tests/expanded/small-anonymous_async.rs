@@ -215,8 +215,11 @@ pub mod foo {
                     }
                 }
             }
-            impl core::fmt::Debug for Error {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Error {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("Error")
                         .field("code", &(*self as i32))
                         .field("name", &self.name())
@@ -224,12 +227,15 @@ pub mod foo {
                         .finish()
                 }
             }
-            impl core::fmt::Display for Error {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Display for Error {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     write!(f, "{} (error {})", self.name(), * self as i32)
                 }
             }
-            impl core::error::Error for Error {}
+            impl ::core::error::Error for Error {}
             const _: () = {
                 assert!(1 == < Error as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Error as wasmtime::component::ComponentType >::ALIGN32);
@@ -330,11 +336,11 @@ pub mod exports {
                         }
                     }
                 }
-                impl core::fmt::Debug for Error {
+                impl ::core::fmt::Debug for Error {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         f.debug_struct("Error")
                             .field("code", &(*self as i32))
                             .field("name", &self.name())
@@ -342,15 +348,15 @@ pub mod exports {
                             .finish()
                     }
                 }
-                impl core::fmt::Display for Error {
+                impl ::core::fmt::Display for Error {
                     fn fmt(
                         &self,
-                        f: &mut core::fmt::Formatter<'_>,
-                    ) -> core::fmt::Result {
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
                         write!(f, "{} (error {})", self.name(), * self as i32)
                     }
                 }
-                impl core::error::Error for Error {}
+                impl ::core::error::Error for Error {}
                 const _: () = {
                     assert!(
                         1 == < Error as wasmtime::component::ComponentType >::SIZE32

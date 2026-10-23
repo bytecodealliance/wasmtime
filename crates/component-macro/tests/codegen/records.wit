@@ -4,7 +4,9 @@ interface records {
   tuple-arg: func(x: tuple<char, u32>);
   tuple-result: func() -> tuple<char, u32>;
 
-  record empty {}
+  record empty {
+    a: u32,
+  }
 
   empty-arg: func(x: empty);
   empty-result: func() -> empty;

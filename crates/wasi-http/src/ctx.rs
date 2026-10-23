@@ -7,6 +7,7 @@ use bytes::Bytes;
 use http::{HeaderName, uri::Scheme};
 use http_body_util::combinators::UnsyncBoxBody;
 use std::marker;
+use std::sync::{Arc, LazyLock};
 use wasmtime::component::{HasData, ResourceTable};
 use wasmtime_wasi::{NamedId, WasiCtxNamedView};
 
@@ -156,6 +157,11 @@ impl Default for WasiHttpCtx {
 /// Convenience type definition for the bodies used in this crate.
 pub type WasiBody = UnsyncBoxBody<Bytes, Error>;
 
+/// A cloneable predicate deciding whether a header name is forbidden. This
+/// predicate needs to be executed in tasks which do not have access to the
+/// store.
+pub type ForbiddenHeaderFilter = Arc<dyn Fn(&HeaderName) -> bool + Send + Sync>;
+
 /// A trait which provides hooks into internal WASI HTTP operations.
 ///
 /// Note that when using this type if state is needed to implement the methods
@@ -198,16 +204,28 @@ pub type WasiBody = UnsyncBoxBody<Bytes, Error>;
 /// struct MyHooks;
 ///
 /// impl WasiHttpHooks for MyHooks {
-///     fn is_forbidden_header(&mut self, name: &http::HeaderName) -> bool {
-///         *name == http::header::AUTHORIZATION ||
-///             wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS.contains(name)
+///     fn forbidden_header_filter(&mut self) -> wasmtime_wasi_http::ForbiddenHeaderFilter {
+///         std::sync::Arc::new(|name| {
+///             *name == http::header::AUTHORIZATION ||
+///                 wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS.contains(name)
+///         })
 ///     }
 /// }
 /// ```
 pub trait WasiHttpHooks: Send {
-    /// Whether a given header should be considered forbidden and not allowed.
-    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
-        DEFAULT_FORBIDDEN_HEADERS.contains(name)
+    /// Returns a predicate deciding whether a given header should be
+    /// considered forbidden and not allowed.
+    ///
+    /// The predicate applies to header and trailer fields crossing the guest
+    /// boundary in either direction. It may be retained and invoked after the
+    /// store has been dropped, e.g. for trailers of a host body forwarded by a
+    /// guest, so it is obtained as a value rather than called on `self`.
+    ///
+    /// The default forbids [`DEFAULT_FORBIDDEN_HEADERS`].
+    fn forbidden_header_filter(&mut self) -> ForbiddenHeaderFilter {
+        static DEFAULT: LazyLock<ForbiddenHeaderFilter> =
+            LazyLock::new(|| Arc::new(|name| DEFAULT_FORBIDDEN_HEADERS.contains(name)));
+        DEFAULT.clone()
     }
 
     /// Whether a given scheme should be considered supported.
@@ -326,17 +344,58 @@ pub trait WasiHttpHooks: Send {
     }
 
     /// Optional hook to configure the error code for connect I/O errors.
+    ///
+    /// The default distinguishes refused, unreachable, timed out, and terminated
+    /// connections. Unrecognized errors become `connection-refused`.
     #[cfg(feature = "p2")]
     fn p2_error_from_connect(&mut self, err: &std::io::Error) -> p2::ErrorCode {
         tracing::warn!("connect error: {err:?}");
-        p2::ErrorCode::ConnectionRefused
+        use std::io::ErrorKind;
+        match err.kind() {
+            ErrorKind::ConnectionRefused => p2::ErrorCode::ConnectionRefused,
+            ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable | ErrorKind::NetworkDown => {
+                p2::ErrorCode::DestinationUnavailable
+            }
+            ErrorKind::TimedOut => p2::ErrorCode::ConnectionTimeout,
+            ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted => {
+                p2::ErrorCode::ConnectionTerminated
+            }
+            _ if is_address_family_unsupported(err) => p2::ErrorCode::DestinationUnavailable,
+            _ => p2::ErrorCode::ConnectionRefused,
+        }
     }
 
     /// Optional hook to configure the error code for TLS I/O errors.
+    ///
+    /// The default distinguishes terminated connections and, with the
+    /// `default-send-request` feature, rustls certificate errors and received
+    /// alerts. Other errors become `TLS-protocol-error`.
     #[cfg(feature = "p2")]
     fn p2_error_from_tls(&mut self, err: &std::io::Error) -> p2::ErrorCode {
         tracing::warn!("tls error: {err:?}");
-        p2::ErrorCode::TlsProtocolError
+        #[cfg(feature = "default-send-request")]
+        if let Some(err) = err
+            .get_ref()
+            .and_then(|err| err.downcast_ref::<rustls::Error>())
+        {
+            return match err {
+                rustls::Error::InvalidCertificate(_) => p2::ErrorCode::TlsCertificateError,
+                rustls::Error::AlertReceived(alert) => {
+                    p2::ErrorCode::TlsAlertReceived(p2::TlsAlertReceivedPayload {
+                        alert_id: Some(u8::from(*alert)),
+                        alert_message: None,
+                    })
+                }
+                _ => p2::ErrorCode::TlsProtocolError,
+            };
+        }
+        match err.kind() {
+            std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::BrokenPipe
+            | std::io::ErrorKind::UnexpectedEof => p2::ErrorCode::ConnectionTerminated,
+            _ => p2::ErrorCode::TlsProtocolError,
+        }
     }
 
     /// Optional hook to configure the error code for DNS errors.
@@ -347,6 +406,14 @@ pub trait WasiHttpHooks: Send {
             rcode: Some("invalid dns name".to_string()),
             info_code: None,
         })
+    }
+
+    /// Number of distinct write calls to the outgoing body's output-stream
+    /// that the implementation will buffer.
+    /// Default: 1.
+    #[cfg(feature = "p3")]
+    fn p3_outgoing_body_buffer_chunks(&mut self) -> usize {
+        crate::p3::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS
     }
 
     /// Maximum number of bytes the implementation will copy out of the guest in
@@ -364,17 +431,58 @@ pub trait WasiHttpHooks: Send {
     }
 
     /// Optional hook to configure the error code for connect I/O errors.
+    ///
+    /// The default distinguishes refused, unreachable, timed out, and terminated
+    /// connections. Unrecognized errors become `connection-refused`.
     #[cfg(feature = "p3")]
     fn p3_error_from_connect(&mut self, err: &std::io::Error) -> p3::ErrorCode {
         tracing::warn!("connect error: {err:?}");
-        p3::ErrorCode::ConnectionRefused
+        use std::io::ErrorKind;
+        match err.kind() {
+            ErrorKind::ConnectionRefused => p3::ErrorCode::ConnectionRefused,
+            ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable | ErrorKind::NetworkDown => {
+                p3::ErrorCode::DestinationUnavailable
+            }
+            ErrorKind::TimedOut => p3::ErrorCode::ConnectionTimeout,
+            ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted => {
+                p3::ErrorCode::ConnectionTerminated
+            }
+            _ if is_address_family_unsupported(err) => p3::ErrorCode::DestinationUnavailable,
+            _ => p3::ErrorCode::ConnectionRefused,
+        }
     }
 
     /// Optional hook to configure the error code for TLS I/O errors.
+    ///
+    /// The default distinguishes terminated connections and, with the
+    /// `default-send-request` feature, rustls certificate errors and received
+    /// alerts. Other errors become `TLS-protocol-error`.
     #[cfg(feature = "p3")]
     fn p3_error_from_tls(&mut self, err: &std::io::Error) -> p3::ErrorCode {
         tracing::warn!("tls error: {err:?}");
-        p3::ErrorCode::TlsProtocolError
+        #[cfg(feature = "default-send-request")]
+        if let Some(err) = err
+            .get_ref()
+            .and_then(|err| err.downcast_ref::<rustls::Error>())
+        {
+            return match err {
+                rustls::Error::InvalidCertificate(_) => p3::ErrorCode::TlsCertificateError,
+                rustls::Error::AlertReceived(alert) => {
+                    p3::ErrorCode::TlsAlertReceived(p3::TlsAlertReceivedPayload {
+                        alert_id: Some(u8::from(*alert)),
+                        alert_message: None,
+                    })
+                }
+                _ => p3::ErrorCode::TlsProtocolError,
+            };
+        }
+        match err.kind() {
+            std::io::ErrorKind::ConnectionReset
+            | std::io::ErrorKind::ConnectionAborted
+            | std::io::ErrorKind::BrokenPipe
+            | std::io::ErrorKind::UnexpectedEof => p3::ErrorCode::ConnectionTerminated,
+            _ => p3::ErrorCode::TlsProtocolError,
+        }
     }
 
     /// Optional hook to configure the error code for DNS errors.
@@ -386,6 +494,13 @@ pub trait WasiHttpHooks: Send {
             info_code: None,
         })
     }
+}
+
+// EAFNOSUPPORT has no corresponding stable ErrorKind.
+#[cfg(any(feature = "p2", feature = "p3"))]
+fn is_address_family_unsupported(err: &std::io::Error) -> bool {
+    use rustix::io::Errno;
+    Errno::from_io_error(err) == Some(Errno::AFNOSUPPORT)
 }
 
 /// Returns a value suitable for the `WasiHttpCtxView::hooks` field which has
@@ -555,9 +670,11 @@ pub trait WasiHttpNamedView: Send + 'static {
     /// embedder-allocated id is then passed back here when the corresponding
     /// imported function is invoked.
     ///
-    /// Note that the [`ResourceTable`] referenced in the returned
-    /// [`WasiHttpCtxView`] need not be unique. It's ok to use the same
-    /// [`ResourceTable`] for all imports. This is not a guest-visible
-    /// abstraction and just helps the host allocate and manage state.
+    /// It's strongly recommended, though not always required, that the
+    /// [`ResourceTable`] in the returned [`WasiHttpCtxView`] is the same table
+    /// that the default context, [`WasiHttpView::http`], uses. Resources
+    /// created through a named import can be used through interfaces bound to
+    /// the default context (and vice versa), and with separate tables those
+    /// lookups fail or find another context's resources.
     fn http(&mut self, id: NamedId) -> WasiHttpCtxView<'_>;
 }

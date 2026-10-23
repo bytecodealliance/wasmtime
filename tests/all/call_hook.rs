@@ -552,7 +552,7 @@ async fn basic_async_hook() -> Result<(), Error> {
     impl CallHookHandler<State> for HandlerR {
         async fn handle_call_event(
             &self,
-            ctx: StoreContextMut<'_, State>,
+            ctx: StoreHookState<'_, State>,
             ch: CallHook,
         ) -> Result<()> {
             sync_call_hook(ctx, ch)
@@ -628,7 +628,7 @@ async fn timeout_async_hook() -> Result<(), Error> {
     impl CallHookHandler<State> for HandlerR {
         async fn handle_call_event(
             &self,
-            mut ctx: StoreContextMut<'_, State>,
+            mut ctx: StoreHookState<'_, State>,
             ch: CallHook,
         ) -> Result<()> {
             let obj = ctx.data_mut();
@@ -707,7 +707,7 @@ async fn drop_suspended_async_hook() -> Result<(), Error> {
     impl CallHookHandler<u32> for Handler {
         async fn handle_call_event(
             &self,
-            mut ctx: StoreContextMut<'_, u32>,
+            mut ctx: StoreHookState<'_, u32>,
             _ch: CallHook,
         ) -> Result<()> {
             let state = ctx.data_mut();
@@ -894,7 +894,7 @@ impl State {
     }
 }
 
-pub fn sync_call_hook(mut ctx: StoreContextMut<'_, State>, transition: CallHook) -> Result<()> {
+pub fn sync_call_hook(mut ctx: StoreHookState<'_, State>, transition: CallHook) -> Result<()> {
     ctx.data_mut().call_hook(transition)
 }
 

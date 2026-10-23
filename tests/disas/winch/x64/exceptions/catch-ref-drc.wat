@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = "-W exceptions -C collector=drc"
+;;! flags = "-W exceptions,gc-support -C collector=drc"
 
 ;; A `catch_ref` landing pad preserves the exception reference while the DRC
 ;; read barrier loads an `externref` payload.

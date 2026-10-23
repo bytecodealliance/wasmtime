@@ -469,6 +469,9 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
         // all in fuzzgen just yet.
         Opcode::StackSwitch => return false,
 
+        // Not supported at this time.
+        Opcode::InterruptPoll => return false,
+
         _ => {}
     }
 
@@ -497,7 +500,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Cls, &[I128], &[I128]),
                 // TODO
                 (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4897
                 // https://github.com/bytecodealliance/wasmtime/issues/4899
                 (
                     Opcode::FcvtToUint
@@ -505,7 +507,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                         | Opcode::FcvtToSint
                         | Opcode::FcvtToSintSat,
                     &[F32 | F64],
-                    &[I8 | I16 | I128]
+                    &[I128]
                 ),
                 (Opcode::FcvtToUint | Opcode::FcvtToSint, &[F32X4], &[I32X4]),
                 (

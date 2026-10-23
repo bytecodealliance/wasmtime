@@ -8,6 +8,7 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+  artifact-metadata: write
 
 jobs:
   publish:
@@ -15,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.repository == 'bytecodealliance/wasmtime'
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - uses: ./.github/actions/fetch-run-id
     - run: |
         gh run download ${COMMIT_RUN_ID}
@@ -32,11 +33,11 @@ jobs:
     - if: github.ref == 'refs/heads/main'
       uses: actions/configure-pages@v5
     - if: github.ref == 'refs/heads/main'
-      uses: actions/upload-pages-artifact@v3
+      uses: actions/upload-pages-artifact@v5
       with:
         path: "./gh-pages/gh-pages"
 
-    - uses: actions/attest-build-provenance@v1
+    - uses: actions/attest@v4
       with:
         subject-path: 'dist/*'
 

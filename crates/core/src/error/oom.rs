@@ -57,7 +57,7 @@ use core::{fmt, mem, ptr::NonNull};
 /// | &emsp;`wasmtime::Func::call`                      | Yes                             |
 /// | &emsp;Wasm execution                              | Yes                             |
 /// | &emsp;Garbage collector and related APIs          | Not yet                         |
-/// | &emsp;Component Model concurrency/async APIs      | Not yet                         |
+/// | &emsp;Component Model with `concurrency_support`  | Not yet                         |
 /// | &emsp;Other instantiation and execution APIs...   | Yes                             |
 /// | **WASI Implementations and Host APIs**            | **Depends**                     |
 /// | &emsp;`wasmtime_wasi`                             | No                              |

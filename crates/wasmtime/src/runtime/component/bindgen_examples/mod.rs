@@ -450,7 +450,9 @@ pub mod _5_all_world_export_kinds;
 ///   example to [`GuestLogger`] here.
 /// * Resource-related methods all take a [`ResourceAny`] as an argument or
 ///   a return value.
-/// * The [`ResourceAny`] must be explicitly dropped.
+/// * The WIT signature determines ownership. A `logger` parameter transfers
+///   ownership, while `borrow<logger>` borrows the resource for one call.
+/// * The host must explicitly drop each owned [`ResourceAny`] it retains.
 ///
 /// [`ResourceAny`]: crate::component::ResourceAny
 /// [`Guest`]: _6_exported_resources::exports::example::exported_resources::logging::Guest
@@ -479,6 +481,21 @@ pub mod _5_all_world_export_kinds;
 ///     let guest = bindings.example_exported_resources_logging();
 ///     let logger = guest.logger();
 ///
+///     // Free interface functions are methods on `guest`. A function that
+///     // returns a WIT `logger` gives the host an owned `ResourceAny`.
+///     let returned_logger = guest.call_get_default_logger(&mut store)?;
+///
+///     // Both `logger` and `borrow<logger>` parameters are `ResourceAny` in
+///     // Rust, so the WIT signature determines ownership. `inspect-logger`
+///     // takes `borrow<logger>`, so the host keeps ownership after this call.
+///     let max_level = guest.call_inspect_logger(&mut store, returned_logger)?;
+///     logger.call_log(&mut store, returned_logger, max_level, "hello!")?;
+///
+///     // The host must either drop an owned resource or transfer it back to
+///     // the guest. This also applies to resources nested in records,
+///     // variants, lists, and other values.
+///     returned_logger.resource_drop(&mut store)?;
+///
 ///     // Resource methods are all attached to `logger` and take the
 ///     // `ResourceAny` parameter explicitly.
 ///     let my_logger = logger.call_constructor(&mut store, Level::Warn)?;
@@ -487,9 +504,10 @@ pub mod _5_all_world_export_kinds;
 ///
 ///     logger.call_log(&mut store, my_logger, Level::Debug, "hello!")?;
 ///
-///     // The `ResourceAny` type has no destructor but when the host is done
-///     // with it it needs to invoke the guest-level destructor.
-///     my_logger.resource_drop(&mut store)?;
+///     // `take-logger` takes an owned WIT `logger`, so this call transfers
+///     // ownership to the guest. `ResourceAny` is `Copy`, but the host must
+///     // not drop or reuse `my_logger` afterwards.
+///     guest.call_take_logger(&mut store, my_logger)?;
 ///
 ///     Ok(())
 /// }

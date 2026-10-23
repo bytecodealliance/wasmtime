@@ -261,48 +261,6 @@ pub mod foo {
                 assert!(4 == < Flag32 as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Flag32 as wasmtime::component::ComponentType >::ALIGN32);
             };
-            wasmtime::component::flags!(
-                Flag64 { #[component(name = "b0")] const B0; #[component(name = "b1")]
-                const B1; #[component(name = "b2")] const B2; #[component(name = "b3")]
-                const B3; #[component(name = "b4")] const B4; #[component(name = "b5")]
-                const B5; #[component(name = "b6")] const B6; #[component(name = "b7")]
-                const B7; #[component(name = "b8")] const B8; #[component(name = "b9")]
-                const B9; #[component(name = "b10")] const B10; #[component(name =
-                "b11")] const B11; #[component(name = "b12")] const B12; #[component(name
-                = "b13")] const B13; #[component(name = "b14")] const B14;
-                #[component(name = "b15")] const B15; #[component(name = "b16")] const
-                B16; #[component(name = "b17")] const B17; #[component(name = "b18")]
-                const B18; #[component(name = "b19")] const B19; #[component(name =
-                "b20")] const B20; #[component(name = "b21")] const B21; #[component(name
-                = "b22")] const B22; #[component(name = "b23")] const B23;
-                #[component(name = "b24")] const B24; #[component(name = "b25")] const
-                B25; #[component(name = "b26")] const B26; #[component(name = "b27")]
-                const B27; #[component(name = "b28")] const B28; #[component(name =
-                "b29")] const B29; #[component(name = "b30")] const B30; #[component(name
-                = "b31")] const B31; #[component(name = "b32")] const B32;
-                #[component(name = "b33")] const B33; #[component(name = "b34")] const
-                B34; #[component(name = "b35")] const B35; #[component(name = "b36")]
-                const B36; #[component(name = "b37")] const B37; #[component(name =
-                "b38")] const B38; #[component(name = "b39")] const B39; #[component(name
-                = "b40")] const B40; #[component(name = "b41")] const B41;
-                #[component(name = "b42")] const B42; #[component(name = "b43")] const
-                B43; #[component(name = "b44")] const B44; #[component(name = "b45")]
-                const B45; #[component(name = "b46")] const B46; #[component(name =
-                "b47")] const B47; #[component(name = "b48")] const B48; #[component(name
-                = "b49")] const B49; #[component(name = "b50")] const B50;
-                #[component(name = "b51")] const B51; #[component(name = "b52")] const
-                B52; #[component(name = "b53")] const B53; #[component(name = "b54")]
-                const B54; #[component(name = "b55")] const B55; #[component(name =
-                "b56")] const B56; #[component(name = "b57")] const B57; #[component(name
-                = "b58")] const B58; #[component(name = "b59")] const B59;
-                #[component(name = "b60")] const B60; #[component(name = "b61")] const
-                B61; #[component(name = "b62")] const B62; #[component(name = "b63")]
-                const B63; }
-            );
-            const _: () = {
-                assert!(8 == < Flag64 as wasmtime::component::ComponentType >::SIZE32);
-                assert!(4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32);
-            };
             pub trait HostWithStore<T>: wasmtime::component::HasData + Send {}
             impl<H: ?Sized, T> HostWithStore<T> for H
             where
@@ -333,10 +291,6 @@ pub mod foo {
                     &mut self,
                     x: Flag32,
                 ) -> impl ::core::future::Future<Output = Flag32> + Send;
-                fn roundtrip_flag64(
-                    &mut self,
-                    x: Flag64,
-                ) -> impl ::core::future::Future<Output = Flag64> + Send;
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 fn roundtrip_flag1(
@@ -374,12 +328,6 @@ pub mod foo {
                     x: Flag32,
                 ) -> impl ::core::future::Future<Output = Flag32> + Send {
                     async move { Host::roundtrip_flag32(*self, x).await }
-                }
-                fn roundtrip_flag64(
-                    &mut self,
-                    x: Flag64,
-                ) -> impl ::core::future::Future<Output = Flag64> + Send {
-                    async move { Host::roundtrip_flag64(*self, x).await }
                 }
             }
             pub fn add_to_linker_instance<T, D>(
@@ -565,35 +513,6 @@ pub mod foo {
                         )
                     },
                 )?;
-                inst.func_wrap_async(
-                    "roundtrip-flag64",
-                    move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
-                        (arg0,): (Flag64,)|
-                    {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen import", module =
-                            "flegs", function = "roundtrip-flag64",
-                        );
-                        wasmtime::component::__internal::Box::new(
-                            async move {
-                                tracing::event!(
-                                    tracing::Level::TRACE, x = tracing::field::debug(& arg0),
-                                    "call"
-                                );
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = Host::roundtrip_flag64(host, arg0).await;
-                                tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
-                                );
-                                Ok((r,))
-                            }
-                                .instrument(span),
-                        )
-                    },
-                )?;
                 Ok(())
             }
             pub fn add_to_linker<T, D>(
@@ -718,55 +637,6 @@ pub mod exports {
                         4 == < Flag32 as wasmtime::component::ComponentType >::ALIGN32
                     );
                 };
-                wasmtime::component::flags!(
-                    Flag64 { #[component(name = "b0")] const B0; #[component(name =
-                    "b1")] const B1; #[component(name = "b2")] const B2; #[component(name
-                    = "b3")] const B3; #[component(name = "b4")] const B4;
-                    #[component(name = "b5")] const B5; #[component(name = "b6")] const
-                    B6; #[component(name = "b7")] const B7; #[component(name = "b8")]
-                    const B8; #[component(name = "b9")] const B9; #[component(name =
-                    "b10")] const B10; #[component(name = "b11")] const B11;
-                    #[component(name = "b12")] const B12; #[component(name = "b13")]
-                    const B13; #[component(name = "b14")] const B14; #[component(name =
-                    "b15")] const B15; #[component(name = "b16")] const B16;
-                    #[component(name = "b17")] const B17; #[component(name = "b18")]
-                    const B18; #[component(name = "b19")] const B19; #[component(name =
-                    "b20")] const B20; #[component(name = "b21")] const B21;
-                    #[component(name = "b22")] const B22; #[component(name = "b23")]
-                    const B23; #[component(name = "b24")] const B24; #[component(name =
-                    "b25")] const B25; #[component(name = "b26")] const B26;
-                    #[component(name = "b27")] const B27; #[component(name = "b28")]
-                    const B28; #[component(name = "b29")] const B29; #[component(name =
-                    "b30")] const B30; #[component(name = "b31")] const B31;
-                    #[component(name = "b32")] const B32; #[component(name = "b33")]
-                    const B33; #[component(name = "b34")] const B34; #[component(name =
-                    "b35")] const B35; #[component(name = "b36")] const B36;
-                    #[component(name = "b37")] const B37; #[component(name = "b38")]
-                    const B38; #[component(name = "b39")] const B39; #[component(name =
-                    "b40")] const B40; #[component(name = "b41")] const B41;
-                    #[component(name = "b42")] const B42; #[component(name = "b43")]
-                    const B43; #[component(name = "b44")] const B44; #[component(name =
-                    "b45")] const B45; #[component(name = "b46")] const B46;
-                    #[component(name = "b47")] const B47; #[component(name = "b48")]
-                    const B48; #[component(name = "b49")] const B49; #[component(name =
-                    "b50")] const B50; #[component(name = "b51")] const B51;
-                    #[component(name = "b52")] const B52; #[component(name = "b53")]
-                    const B53; #[component(name = "b54")] const B54; #[component(name =
-                    "b55")] const B55; #[component(name = "b56")] const B56;
-                    #[component(name = "b57")] const B57; #[component(name = "b58")]
-                    const B58; #[component(name = "b59")] const B59; #[component(name =
-                    "b60")] const B60; #[component(name = "b61")] const B61;
-                    #[component(name = "b62")] const B62; #[component(name = "b63")]
-                    const B63; }
-                );
-                const _: () = {
-                    assert!(
-                        8 == < Flag64 as wasmtime::component::ComponentType >::SIZE32
-                    );
-                    assert!(
-                        4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32
-                    );
-                };
                 #[derive(Clone)]
                 pub struct Guest {
                     roundtrip_flag1: wasmtime::component::Func,
@@ -775,7 +645,6 @@ pub mod exports {
                     roundtrip_flag8: wasmtime::component::Func,
                     roundtrip_flag16: wasmtime::component::Func,
                     roundtrip_flag32: wasmtime::component::Func,
-                    roundtrip_flag64: wasmtime::component::Func,
                 }
                 #[derive(Clone)]
                 pub struct GuestIndices {
@@ -785,7 +654,6 @@ pub mod exports {
                     roundtrip_flag8: wasmtime::component::ComponentExportIndex,
                     roundtrip_flag16: wasmtime::component::ComponentExportIndex,
                     roundtrip_flag32: wasmtime::component::ComponentExportIndex,
-                    roundtrip_flag64: wasmtime::component::ComponentExportIndex,
                 }
                 impl GuestIndices {
                     /// Constructor for [`GuestIndices`] which takes a
@@ -812,7 +680,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     wasmtime::format_err!(
                                         "instance export `foo:foo/flegs` does \
-                              not have export `{name}`"
+                            not have export `{name}`"
                                     )
                                 })
                         };
@@ -823,7 +691,6 @@ pub mod exports {
                         let roundtrip_flag8 = lookup("roundtrip-flag8")?;
                         let roundtrip_flag16 = lookup("roundtrip-flag16")?;
                         let roundtrip_flag32 = lookup("roundtrip-flag32")?;
-                        let roundtrip_flag64 = lookup("roundtrip-flag64")?;
                         Ok(GuestIndices {
                             roundtrip_flag1,
                             roundtrip_flag2,
@@ -831,7 +698,6 @@ pub mod exports {
                             roundtrip_flag8,
                             roundtrip_flag16,
                             roundtrip_flag32,
-                            roundtrip_flag64,
                         })
                     }
                     pub fn load(
@@ -880,12 +746,6 @@ pub mod exports {
                                 (Flag32,),
                             >(&mut store, &self.roundtrip_flag32)?
                             .func();
-                        let roundtrip_flag64 = *_instance
-                            .get_typed_func::<
-                                (Flag64,),
-                                (Flag64,),
-                            >(&mut store, &self.roundtrip_flag64)?
-                            .func();
                         Ok(Guest {
                             roundtrip_flag1,
                             roundtrip_flag2,
@@ -893,7 +753,6 @@ pub mod exports {
                             roundtrip_flag8,
                             roundtrip_flag16,
                             roundtrip_flag32,
-                            roundtrip_flag64,
                         })
                     }
                 }
@@ -1072,36 +931,6 @@ pub mod exports {
                             "foo:foo/flegs", function = "roundtrip-flag32",
                         );
                         let callee = self.func_roundtrip_flag32();
-                        let (ret0,) = callee
-                            .call_async(store.as_context_mut(), (arg0,))
-                            .instrument(span.clone())
-                            .await?;
-                        Ok(ret0)
-                    }
-                    pub fn func_roundtrip_flag64(
-                        &self,
-                    ) -> wasmtime::component::TypedFunc<(Flag64,), (Flag64,)> {
-                        unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag64,),
-                                (Flag64,),
-                            >::new_unchecked(self.roundtrip_flag64)
-                        }
-                    }
-                    pub async fn call_roundtrip_flag64<S: wasmtime::AsContextMut>(
-                        &self,
-                        mut store: S,
-                        arg0: Flag64,
-                    ) -> wasmtime::Result<Flag64>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen export", module =
-                            "foo:foo/flegs", function = "roundtrip-flag64",
-                        );
-                        let callee = self.func_roundtrip_flag64();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())

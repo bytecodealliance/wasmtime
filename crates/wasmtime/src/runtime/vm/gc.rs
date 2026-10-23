@@ -26,6 +26,7 @@ pub use gc_runtime::*;
 pub use host_data::*;
 pub use i31::*;
 
+use crate::bail_bug;
 use crate::hash_map::HashMap;
 use crate::module::ModuleRegistry;
 use crate::prelude::*;
@@ -161,7 +162,10 @@ impl GcStore {
     /// Get the kind of the given GC reference.
     pub fn kind(&self, gc_ref: &VMGcRef) -> Result<VMGcKind> {
         debug_assert!(!gc_ref.is_i31());
-        Ok(self.header(gc_ref)?.kind())
+        match self.header(gc_ref)?.kind() {
+            Some(kind) => Ok(kind),
+            None => bail_bug!("invalid `VMGcKind`"),
+        }
     }
 
     /// Get the header of the given GC reference.

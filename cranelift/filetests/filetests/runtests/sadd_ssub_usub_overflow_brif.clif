@@ -1,0 +1,313 @@
+test interpret
+test run
+target x86_64
+
+;; These tests execute the folded lowerings of `usub_overflow`,
+;; `sadd_overflow` and `ssub_overflow` where the flags output is consumed
+;; by a `brif` instead of being materialized as a bool.
+
+function %usubof_brif_i64(i64, i64) -> i64, i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = usub_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %usubof_brif_i64(1, 0) == [1, 0]
+; run: %usubof_brif_i64(0, 1) == [-1, 1]
+; run: %usubof_brif_i64(0x80000000_00000000, 0x7FFFFFFF_FFFFFFFF) == [1, 0]
+; run: %usubof_brif_i64(0x7FFFFFFF_FFFFFFFF, 0x80000000_00000000) == [-1, 1]
+; run: %usubof_brif_i64(-1, -1) == [0, 0]
+; run: %usubof_brif_i64(0, -1) == [1, 1]
+
+function %usubof_brif_i32(i32, i32) -> i32, i8 {
+block0(v0: i32, v1: i32):
+  v2, v3 = usub_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %usubof_brif_i32(1, 0) == [1, 0]
+; run: %usubof_brif_i32(0, 1) == [-1, 1]
+; run: %usubof_brif_i32(0x80000000, 0x7FFFFFFF) == [1, 0]
+; run: %usubof_brif_i32(0x7FFFFFFF, 0x80000000) == [-1, 1]
+; run: %usubof_brif_i32(-1, -1) == [0, 0]
+; run: %usubof_brif_i32(0, -1) == [1, 1]
+
+function %usubof_brif_i16(i16, i16) -> i16, i8 {
+block0(v0: i16, v1: i16):
+  v2, v3 = usub_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %usubof_brif_i16(1, 0) == [1, 0]
+; run: %usubof_brif_i16(0, 1) == [-1, 1]
+; run: %usubof_brif_i16(0x8000, 0x7FFF) == [1, 0]
+; run: %usubof_brif_i16(0x7FFF, 0x8000) == [-1, 1]
+; run: %usubof_brif_i16(-1, -1) == [0, 0]
+; run: %usubof_brif_i16(0, -1) == [1, 1]
+
+function %usubof_brif_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+  v2, v3 = usub_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %usubof_brif_i8(1, 0) == [1, 0]
+; run: %usubof_brif_i8(0, 1) == [-1, 1]
+; run: %usubof_brif_i8(0x80, 0x7F) == [1, 0]
+; run: %usubof_brif_i8(0x7F, 0x80) == [-1, 1]
+; run: %usubof_brif_i8(-1, -1) == [0, 0]
+; run: %usubof_brif_i8(0, -1) == [1, 1]
+
+function %saddof_brif_i64(i64, i64) -> i64, i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = sadd_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %saddof_brif_i64(0, 1) == [1, 0]
+; run: %saddof_brif_i64(0x7FFFFFFF_FFFFFFFF, 1) == [0x80000000_00000000, 1]
+; run: %saddof_brif_i64(0x80000000_00000000, -1) == [0x7FFFFFFF_FFFFFFFF, 1]
+; run: %saddof_brif_i64(-1, -1) == [-2, 0]
+; run: %saddof_brif_i64(0x7FFFFFFF_FFFFFFFF, 0x80000000_00000000) == [-1, 0]
+; run: %saddof_brif_i64(0x80000000_00000000, 0x80000000_00000000) == [0, 1]
+
+function %saddof_brif_i32(i32, i32) -> i32, i8 {
+block0(v0: i32, v1: i32):
+  v2, v3 = sadd_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %saddof_brif_i32(0, 1) == [1, 0]
+; run: %saddof_brif_i32(0x7FFFFFFF, 1) == [0x80000000, 1]
+; run: %saddof_brif_i32(0x80000000, -1) == [0x7FFFFFFF, 1]
+; run: %saddof_brif_i32(-1, -1) == [-2, 0]
+; run: %saddof_brif_i32(0x7FFFFFFF, 0x80000000) == [-1, 0]
+; run: %saddof_brif_i32(0x80000000, 0x80000000) == [0, 1]
+
+function %saddof_brif_i16(i16, i16) -> i16, i8 {
+block0(v0: i16, v1: i16):
+  v2, v3 = sadd_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %saddof_brif_i16(0, 1) == [1, 0]
+; run: %saddof_brif_i16(0x7FFF, 1) == [0x8000, 1]
+; run: %saddof_brif_i16(0x8000, -1) == [0x7FFF, 1]
+; run: %saddof_brif_i16(-1, -1) == [-2, 0]
+; run: %saddof_brif_i16(0x7FFF, 0x8000) == [-1, 0]
+; run: %saddof_brif_i16(0x8000, 0x8000) == [0, 1]
+
+function %saddof_brif_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+  v2, v3 = sadd_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %saddof_brif_i8(0, 1) == [1, 0]
+; run: %saddof_brif_i8(0x7F, 1) == [0x80, 1]
+; run: %saddof_brif_i8(0x80, -1) == [0x7F, 1]
+; run: %saddof_brif_i8(-1, -1) == [-2, 0]
+; run: %saddof_brif_i8(0x7F, 0x80) == [-1, 0]
+; run: %saddof_brif_i8(0x80, 0x80) == [0, 1]
+
+function %ssubof_brif_i64(i64, i64) -> i64, i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = ssub_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %ssubof_brif_i64(1, 0) == [1, 0]
+; run: %ssubof_brif_i64(0x80000000_00000000, 1) == [0x7FFFFFFF_FFFFFFFF, 1]
+; run: %ssubof_brif_i64(0x7FFFFFFF_FFFFFFFF, -1) == [0x80000000_00000000, 1]
+; run: %ssubof_brif_i64(-1, 0x7FFFFFFF_FFFFFFFF) == [0x80000000_00000000, 0]
+; run: %ssubof_brif_i64(-1, -1) == [0, 0]
+; run: %ssubof_brif_i64(0, 0x80000000_00000000) == [0x80000000_00000000, 1]
+
+function %ssubof_brif_i32(i32, i32) -> i32, i8 {
+block0(v0: i32, v1: i32):
+  v2, v3 = ssub_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %ssubof_brif_i32(1, 0) == [1, 0]
+; run: %ssubof_brif_i32(0x80000000, 1) == [0x7FFFFFFF, 1]
+; run: %ssubof_brif_i32(0x7FFFFFFF, -1) == [0x80000000, 1]
+; run: %ssubof_brif_i32(-1, 0x7FFFFFFF) == [0x80000000, 0]
+; run: %ssubof_brif_i32(-1, -1) == [0, 0]
+; run: %ssubof_brif_i32(0, 0x80000000) == [0x80000000, 1]
+
+function %ssubof_brif_i16(i16, i16) -> i16, i8 {
+block0(v0: i16, v1: i16):
+  v2, v3 = ssub_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %ssubof_brif_i16(1, 0) == [1, 0]
+; run: %ssubof_brif_i16(0x8000, 1) == [0x7FFF, 1]
+; run: %ssubof_brif_i16(0x7FFF, -1) == [0x8000, 1]
+; run: %ssubof_brif_i16(-1, 0x7FFF) == [0x8000, 0]
+; run: %ssubof_brif_i16(-1, -1) == [0, 0]
+; run: %ssubof_brif_i16(0, 0x8000) == [0x8000, 1]
+
+function %ssubof_brif_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+  v2, v3 = ssub_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v2, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v2, v5
+}
+
+; run: %ssubof_brif_i8(1, 0) == [1, 0]
+; run: %ssubof_brif_i8(0x80, 1) == [0x7F, 1]
+; run: %ssubof_brif_i8(0x7F, -1) == [0x80, 1]
+; run: %ssubof_brif_i8(-1, 0x7F) == [0x80, 0]
+; run: %ssubof_brif_i8(-1, -1) == [0, 0]
+; run: %ssubof_brif_i8(0, 0x80) == [0x80, 1]
+
+function %usubof_brif_and_materialized_i64(i64, i64) -> i8, i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = usub_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v3, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v3, v5
+}
+
+; run: %usubof_brif_and_materialized_i64(1, 0) == [0, 0]
+; run: %usubof_brif_and_materialized_i64(0, 1) == [1, 1]
+; run: %usubof_brif_and_materialized_i64(0x80000000_00000000, 0x7FFFFFFF_FFFFFFFF) == [0, 0]
+
+function %saddof_brif_and_materialized_i64(i64, i64) -> i8, i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = sadd_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v3, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v3, v5
+}
+
+; run: %saddof_brif_and_materialized_i64(0, 1) == [0, 0]
+; run: %saddof_brif_and_materialized_i64(0x7FFFFFFF_FFFFFFFF, 1) == [1, 1]
+; run: %saddof_brif_and_materialized_i64(0x80000000_00000000, -1) == [1, 1]
+
+function %ssubof_brif_and_materialized_i64(i64, i64) -> i8, i8 {
+block0(v0: i64, v1: i64):
+  v2, v3 = ssub_overflow v0, v1
+  brif v3, block1, block2
+
+block1:
+  v4 = iconst.i8 1
+  return v3, v4
+
+block2:
+  v5 = iconst.i8 0
+  return v3, v5
+}
+
+; run: %ssubof_brif_and_materialized_i64(1, 0) == [0, 0]
+; run: %ssubof_brif_and_materialized_i64(0x80000000_00000000, 1) == [1, 1]
+; run: %ssubof_brif_and_materialized_i64(0x7FFFFFFF_FFFFFFFF, -1) == [1, 1]

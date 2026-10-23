@@ -233,7 +233,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         table: compilation_artifacts.table,
         ty,
         types,
-        static_modules: compilation_artifacts.modules,
+        static_modules: compilation_artifacts.modules.into(),
         checksum: WasmChecksum::from_binary(binary, tunables.recording),
     };
     object.serialize_info(&artifacts);

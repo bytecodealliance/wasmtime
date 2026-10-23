@@ -181,6 +181,24 @@ fn try_table_unreachable_fallthrough_with_multi_value_results(config: &mut Confi
 
 #[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
+fn try_table_after_return(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (func (export "f")
+                (return)
+                (try_table (catch_all 0))))"#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    f.call(&mut store, ())?;
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
 fn dynamic_tags(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());

@@ -63,35 +63,39 @@ pub async fn default_send_request(
         .and_then(|r| r.between_bytes_timeout)
         .unwrap_or(Duration::from_secs(600));
 
-    let stream = match tokio::time::timeout(connect_timeout, TcpStream::connect(&authority)).await {
-        Ok(stream) => stream.map_err(Error::Connect)?,
-        Err(..) => return Err(Error::ConnectionTimeout),
-    };
-    let stream = if use_tls {
-        // derived from https://github.com/rustls/rustls/blob/main/examples/src/bin/simpleclient.rs
-        let root_cert_store = rustls::RootCertStore {
-            roots: webpki_roots::TLS_SERVER_ROOTS.into(),
-        };
-        let config = rustls::ClientConfig::builder()
-            .with_root_certificates(root_cert_store)
-            .with_no_client_auth();
-        let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
-        let domain = tls_server_name(&authority)?;
-        let stream = connector
-            .connect(domain, stream)
+    // `connect_timeout` covers everything up to a usable connection: the TCP
+    // connect, the TLS handshake, and the HTTP handshake.
+    let connect = async {
+        let stream = TcpStream::connect(&authority)
             .await
-            .map_err(Error::Tls)?;
-        stream.boxed()
-    } else {
-        stream.boxed()
-    };
-    let (mut sender, conn) = tokio::time::timeout(
-        connect_timeout,
+            .map_err(Error::Connect)?;
+        let stream = if use_tls {
+            // derived from https://github.com/rustls/rustls/blob/main/examples/src/bin/simpleclient.rs
+            let root_cert_store = rustls::RootCertStore {
+                roots: webpki_roots::TLS_SERVER_ROOTS.into(),
+            };
+            let config = rustls::ClientConfig::builder()
+                .with_root_certificates(root_cert_store)
+                .with_no_client_auth();
+            let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
+            let domain = tls_server_name(&authority)?;
+            let stream = connector
+                .connect(domain, stream)
+                .await
+                .map_err(Error::Tls)?;
+            stream.boxed()
+        } else {
+            stream.boxed()
+        };
         // TODO: we should plumb the builder through the http context, and use it here
-        hyper::client::conn::http1::Builder::new().handshake(crate::io::TokioIo::new(stream)),
-    )
-    .await
-    .map_err(|_| Error::ConnectionTimeout)??;
+        hyper::client::conn::http1::Builder::new()
+            .handshake(crate::io::TokioIo::new(stream))
+            .await
+            .map_err(Error::from)
+    };
+    let (mut sender, conn) = tokio::time::timeout(connect_timeout, connect)
+        .await
+        .map_err(|_| Error::ConnectionTimeout)??;
 
     // at this point, the request contains the scheme and the authority, but
     // the http packet should only include those if addressing a proxy, so
@@ -155,6 +159,13 @@ pub async fn default_send_request(
             .await
             .map_err(|_| Error::ConnectionReadTimeout)?
             .map_err(Error::from)?;
+        // Tokio panics on an `interval` with a zero duration, so clamp it to a
+        // 1ns timeout which is sort of effectively zero anyway.
+        let between_bytes_timeout = if between_bytes_timeout == Duration::ZERO {
+            Duration::new(0, 1)
+        } else {
+            between_bytes_timeout
+        };
         let mut timeout = tokio::time::interval(between_bytes_timeout);
         timeout.reset();
         Ok(res.map(|incoming| IncomingResponseBody { incoming, timeout }))

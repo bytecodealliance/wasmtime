@@ -10,6 +10,10 @@ license = "Apache-2.0 WITH LLVM-exception"
 [lints]
 workspace = true
 
+[features]
+# Build the Rust test programs optimized.
+release-artifacts = []
+
 [dependencies]
 wasmtime = { workspace = true, features = ['incremental-cache', 'cranelift', 'component-model'] }
 

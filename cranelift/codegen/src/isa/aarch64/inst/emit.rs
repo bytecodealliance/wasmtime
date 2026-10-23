@@ -630,6 +630,32 @@ fn enc_ldaxr(ty: Type, rt: Writable<Reg>, rn: Reg) -> u32 {
         | machreg_to_gpr(rt.to_reg())
 }
 
+fn enc_ldaxp(ty: Type, rt: Writable<Reg>, rt2: Writable<Reg>, rn: Reg) -> u32 {
+    let sz = match ty {
+        I64 => 0b1,
+        I32 => 0b0,
+        _ => unreachable!(),
+    };
+    0b10_0010000_1_1_11111_1_00000_00000_00000
+        | (sz << 30)
+        | (machreg_to_gpr(rt2.to_reg()) << 10)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt.to_reg())
+}
+
+fn enc_ldxp(ty: Type, rt: Writable<Reg>, rt2: Writable<Reg>, rn: Reg) -> u32 {
+    let sz = match ty {
+        I64 => 0b1,
+        I32 => 0b0,
+        _ => unreachable!(),
+    };
+    0b10_0010000_1_1_11111_0_00000_00000_00000
+        | (sz << 30)
+        | (machreg_to_gpr(rt2.to_reg()) << 10)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt.to_reg())
+}
+
 fn enc_stlxr(ty: Type, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
     let sz = match ty {
         I64 => 0b11,
@@ -641,6 +667,34 @@ fn enc_stlxr(ty: Type, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
     0b00_001000_000_00000_1_11111_00000_00000
         | (sz << 30)
         | (machreg_to_gpr(rs.to_reg()) << 16)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt)
+}
+
+fn enc_stlxp(ty: Type, rs: Writable<Reg>, rt: Reg, rt2: Reg, rn: Reg) -> u32 {
+    let sz = match ty {
+        I64 => 0b1,
+        I32 => 0b0,
+        _ => unreachable!(),
+    };
+    0b10_0010000_0_1_00000_1_00000_00000_00000
+        | (sz << 30)
+        | (machreg_to_gpr(rs.to_reg()) << 16)
+        | (machreg_to_gpr(rt2) << 10)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt)
+}
+
+fn enc_stxp(ty: Type, rs: Writable<Reg>, rt: Reg, rt2: Reg, rn: Reg) -> u32 {
+    let sz = match ty {
+        I64 => 0b1,
+        I32 => 0b0,
+        _ => unreachable!(),
+    };
+    0b10_0010000_0_1_00000_0_00000_00000_00000
+        | (sz << 30)
+        | (machreg_to_gpr(rs.to_reg()) << 16)
+        | (machreg_to_gpr(rt2) << 10)
         | (machreg_to_gpr(rn) << 5)
         | machreg_to_gpr(rt)
 }
@@ -1662,6 +1716,188 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
             }
+            &Inst::AtomicRMW128Loop { op, flags, .. } => {
+                /* Emit this:
+                     again:
+                      ldaxp       x27, x23, [x25]
+                      op          x28, x21, x27, x23, x26, x22 // op is adds,subc,and,orr,eor
+                      stlxp       w24, x28, [x25]
+                      cbnz        x24, again
+
+                   Operand conventions:
+                      IN:  x25 (addr), x26 (low bytes of op), x22 (high bytes of op)
+                      OUT: x27 (low bytes of old value), x23 (high bytes of old value), x24 (trashed), x28 (trashed), x21 (trashed)
+
+                   It is unfortunate that, per the ARM documentation, x28 cannot be used for
+                   both the store-data and success-flag operands of stlxr.  This causes the
+                   instruction's behaviour to be "CONSTRAINED UNPREDICTABLE", so we use x24
+                   instead for the success-flag.
+                */
+                // TODO: We should not hardcode registers here, a better idea would be to
+                // pass some scratch registers in the AtomicRMWLoop pseudo-instruction, and use those
+                let xzr = zero_reg();
+                let x21 = xreg(21);
+                let x22 = xreg(22);
+                let x23 = xreg(23);
+                let x24 = xreg(24);
+                let x25 = xreg(25);
+                let x26 = xreg(26);
+                let x27 = xreg(27);
+                let x28 = xreg(28);
+                let x21wr = writable_xreg(21);
+                let x23wr = writable_xreg(23);
+                let x24wr = writable_xreg(24);
+                let x27wr = writable_xreg(27);
+                let x28wr = writable_xreg(28);
+                let again_label = sink.get_label();
+
+                // again:
+                sink.bind_label(again_label, &mut state.ctrl_plane);
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                sink.put4(enc_ldaxp(I64, x27wr, x23wr, x25)); // ldaxp x27, x23, [x25]
+
+                match op {
+                    AtomicRMWLoopOp::Xchg => {} // do nothing
+                    AtomicRMWLoopOp::Smax
+                    | AtomicRMWLoopOp::Umax
+                    | AtomicRMWLoopOp::Smin
+                    | AtomicRMWLoopOp::Umin => {
+                        // cmp x27, x26
+                        // sbcs xzr, x23, x22
+                        // csel.op x21, x22, x23
+                        // csel.op x28, x26, x27
+
+                        let cond = match op {
+                            AtomicRMWLoopOp::Smax => Cond::Lt,
+                            AtomicRMWLoopOp::Umax => Cond::Lo,
+                            AtomicRMWLoopOp::Smin => Cond::Ge,
+                            AtomicRMWLoopOp::Umin => Cond::Hs,
+                            _ => unreachable!(),
+                        };
+
+                        Inst::AluRRR {
+                            alu_op: ALUOp::SubS,
+                            size: OperandSize::Size64,
+                            rd: writable_zero_reg(),
+                            rn: x27,
+                            rm: x26,
+                        }
+                        .emit(sink, emit_info, state);
+
+                        Inst::AluRRR {
+                            alu_op: ALUOp::SbcS,
+                            size: OperandSize::Size64,
+                            rd: writable_zero_reg(),
+                            rn: x23,
+                            rm: x22,
+                        }
+                        .emit(sink, emit_info, state);
+
+                        Inst::CSel {
+                            cond,
+                            rd: x21wr,
+                            rn: x22,
+                            rm: x23,
+                        }
+                        .emit(sink, emit_info, state);
+
+                        Inst::CSel {
+                            cond,
+                            rd: x28wr,
+                            rn: x26,
+                            rm: x27,
+                        }
+                        .emit(sink, emit_info, state);
+                    }
+                    _ => {
+                        let (op_lo, op_hi) = match op {
+                            // adds x28, x27, x26
+                            // adc x21, x23, x22
+                            AtomicRMWLoopOp::Add => (ALUOp::AddS, ALUOp::Adc),
+                            // subs x28, x27, x26
+                            // sbc x21, x23, x22
+                            AtomicRMWLoopOp::Sub => (ALUOp::SubS, ALUOp::Sbc),
+                            // and x28, x27, x26
+                            // and x21, x23, x22
+                            AtomicRMWLoopOp::And | AtomicRMWLoopOp::Nand => {
+                                (ALUOp::And, ALUOp::And)
+                            }
+                            // orr x28, x27, x26
+                            // orr x21, x23, x22
+                            AtomicRMWLoopOp::Orr => (ALUOp::Orr, ALUOp::Orr),
+                            // eor x28, x27, x26
+                            // eor x21, x23, x22
+                            AtomicRMWLoopOp::Eor => (ALUOp::Eor, ALUOp::Eor),
+                            _ => unreachable!(),
+                        };
+
+                        Inst::AluRRR {
+                            alu_op: op_lo,
+                            size: OperandSize::Size64,
+                            rd: x28wr,
+                            rn: x27,
+                            rm: x26,
+                        }
+                        .emit(sink, emit_info, state);
+
+                        Inst::AluRRR {
+                            alu_op: op_hi,
+                            size: OperandSize::Size64,
+                            rd: x21wr,
+                            rn: x23,
+                            rm: x22,
+                        }
+                        .emit(sink, emit_info, state);
+
+                        if op == AtomicRMWLoopOp::Nand {
+                            // mvn x28, x28
+                            // mvn x21, x21
+
+                            Inst::AluRRR {
+                                alu_op: ALUOp::OrrNot,
+                                size: OperandSize::Size64,
+                                rd: x28wr,
+                                rn: xzr,
+                                rm: x28,
+                            }
+                            .emit(sink, emit_info, state);
+
+                            Inst::AluRRR {
+                                alu_op: ALUOp::OrrNot,
+                                size: OperandSize::Size64,
+                                rd: x21wr,
+                                rn: xzr,
+                                rm: x21,
+                            }
+                            .emit(sink, emit_info, state);
+                        }
+                    }
+                }
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                if op == AtomicRMWLoopOp::Xchg {
+                    sink.put4(enc_stlxp(I64, x24wr, x26, x22, x25)); // stlxp w24, x26, x22, [x25]
+                } else {
+                    sink.put4(enc_stlxp(I64, x24wr, x28, x21, x25)); // stlxp w24, x28, x21, [x25]
+                }
+
+                // cbnz w24, again
+                // Note, we're actually testing x24, and relying on the default zero-high-half
+                // rule in the assignment that `stlxp` does.
+                let br_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(again_label),
+                    CondBrKind::NotZero(x24, OperandSize::Size64),
+                ));
+                sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
+            }
             &Inst::AtomicCAS {
                 rd,
                 rs,
@@ -1713,7 +1949,7 @@ impl MachInstEmit for Inst {
                 /* Emit this:
                     again:
                      ldaxr{,b,h} x/w27, [x25]
-                     cmp         x27, x/w26 uxt{b,h}
+                     cmp         x/w27, x/w26 uxt{b,h}
                      b.ne        out
                      stlxr{,b,h} w24, x/w28, [x25]
                      cbnz        x24, again
@@ -1744,14 +1980,20 @@ impl MachInstEmit for Inst {
                 // ldaxr x27, [x25]
                 sink.put4(enc_ldaxr(ty, x27wr, x25));
 
-                // The top 32-bits are zero-extended by the ldaxr so we don't
-                // have to use UXTW, just the x-form of the register.
-                let (bit21, extend_op) = match ty {
-                    I8 => (0b1, 0b000000),
-                    I16 => (0b1, 0b001000),
-                    _ => (0b0, 0b000000),
+                // The top 32-bits are zero-extended by the ldaxr so for I64
+                // we don't have to use UXTW, just the x-form of the
+                // register. I8/I16 use UXTB/UXTH to only compare their
+                // respective widths, and I32 uses the w-form of the
+                // register (`sf` cleared) to only compare the low 32 bits,
+                // since the expected value may have garbage in its upper
+                // 32 bits (e.g. left behind by an `ireduce`).
+                let (sf, bit21, extend_op) = match ty {
+                    I8 => (0b1, 0b1, 0b000000),
+                    I16 => (0b1, 0b1, 0b001000),
+                    I32 => (0b0, 0b0, 0b000000),
+                    _ => (0b1, 0b0, 0b000000),
                 };
-                let bits_31_21 = 0b111_01011_000 | bit21;
+                let bits_31_21 = (sf << 10) | 0b011_01011_000 | bit21;
                 // cmp x27, x26 (== subs xzr, x27, x26)
                 sink.put4(enc_arith_rrr(bits_31_21, extend_op, xzrwr, x27, x26));
 
@@ -1782,6 +2024,132 @@ impl MachInstEmit for Inst {
                 // out:
                 sink.bind_label(out_label, &mut state.ctrl_plane);
             }
+            &Inst::AtomicCAS128Loop { flags, .. } => {
+                /* Emit this:
+                    again:
+                     ldaxp       x27, x21, [x25]
+                     cmp         x27, x26
+                     b.ne        keep
+                     cmp         x21, x23
+                     b.ne        keep
+                     stlxp       w24, x28, x22, [x25]
+                     cbnz        w24, again
+                     b           out
+                    keep:
+                     stlxp       w24, x27, x21, [x25]
+                     cbnz        w24, again
+                    out:
+
+                  Operand conventions:
+                     IN:  x25 (addr), x26 (low bytes of expected value), x23 (high bytes of expected value), x28 (low bytes of replacement value), x22 (high bytes of replacement value)
+                     OUT: x27 (low bytes of old value), x21 (high bytes of old value), x24 (trashed)
+                */
+                let x21 = xreg(21);
+                let x22 = xreg(22);
+                let x23 = xreg(23);
+                let x24 = xreg(24);
+                let x25 = xreg(25);
+                let x26 = xreg(26);
+                let x27 = xreg(27);
+                let x28 = xreg(28);
+                let xzrwr = writable_zero_reg();
+                let x21wr = writable_xreg(21);
+                let x24wr = writable_xreg(24);
+                let x27wr = writable_xreg(27);
+                let again_label = sink.get_label();
+                let keep_label = sink.get_label();
+                let out_label = sink.get_label();
+
+                // again:
+                sink.bind_label(again_label, &mut state.ctrl_plane);
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                // ldaxp x27, x21, [x25]
+                sink.put4(enc_ldaxp(I64, x27wr, x21wr, x25));
+
+                // cmp x27, x26
+                Inst::AluRRR {
+                    alu_op: ALUOp::SubS,
+                    size: OperandSize::Size64,
+                    rd: xzrwr,
+                    rn: x27,
+                    rm: x26,
+                }
+                .emit(sink, emit_info, state);
+
+                // b.ne keep
+                let br_keep_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(keep_label),
+                    CondBrKind::Cond(Cond::Ne),
+                ));
+                sink.use_label_at_offset(br_keep_offset, keep_label, LabelUse::Branch19);
+
+                // cmp x21, x23
+                Inst::AluRRR {
+                    alu_op: ALUOp::SubS,
+                    size: OperandSize::Size64,
+                    rd: xzrwr,
+                    rn: x21,
+                    rm: x23,
+                }
+                .emit(sink, emit_info, state);
+
+                // b.ne keep
+                let br_keep_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(keep_label),
+                    CondBrKind::Cond(Cond::Ne),
+                ));
+                sink.use_label_at_offset(br_keep_offset, keep_label, LabelUse::Branch19);
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                // stlxp w24, x28, x22, [x25]
+                sink.put4(enc_stlxp(I64, x24wr, x28, x22, x25));
+
+                // cbnz w24, again
+                let br_again_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(again_label),
+                    CondBrKind::NotZero(x24, OperandSize::Size64),
+                ));
+                sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
+
+                // b out
+                let b_out_offset = sink.cur_offset();
+                sink.put4(enc_jump26(
+                    0b000101,
+                    BranchTarget::Label(out_label).as_offset26_or_zero(),
+                ));
+                sink.use_label_at_offset(b_out_offset, out_label, LabelUse::Branch26);
+
+                // keep:
+                sink.bind_label(keep_label, &mut state.ctrl_plane);
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                // stlxp w24, x27, x21, [x25]
+                sink.put4(enc_stlxp(I64, x24wr, x27, x21, x25));
+
+                // cbnz w24, again
+                let br_again_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(again_label),
+                    CondBrKind::NotZero(x24, OperandSize::Size64),
+                ));
+                sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
+
+                // out:
+                sink.bind_label(out_label, &mut state.ctrl_plane);
+            }
             &Inst::LoadAcquire {
                 access_ty,
                 rt,
@@ -1794,6 +2162,40 @@ impl MachInstEmit for Inst {
 
                 sink.put4(enc_ldar(access_ty, rt, rn));
             }
+            &Inst::LoadAcquire128 {
+                rt1,
+                rt2,
+                rn,
+                scratch,
+                flags,
+            } => {
+                let again_label = sink.get_label();
+
+                // again:
+                sink.bind_label(again_label, &mut state.ctrl_plane);
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                // ldaxp rt1, rt2, [rn]
+                sink.put4(enc_ldaxp(I64, rt1, rt2, rn));
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                // stxp scratch, rt1, rt2, [rn]
+                sink.put4(enc_stxp(I64, scratch, rt1.to_reg(), rt2.to_reg(), rn));
+
+                // cbnz scratch, again.
+                let br_again_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(again_label),
+                    CondBrKind::NotZero(scratch.to_reg(), OperandSize::Size64),
+                ));
+                sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
+            }
             &Inst::StoreRelease {
                 access_ty,
                 rt,
@@ -1805,6 +2207,40 @@ impl MachInstEmit for Inst {
                 }
 
                 sink.put4(enc_stlr(access_ty, rt, rn));
+            }
+            &Inst::StoreRelease128 {
+                rt1,
+                rt2,
+                rn,
+                scratch,
+                flags,
+            } => {
+                let again_label = sink.get_label();
+
+                // again:
+                sink.bind_label(again_label, &mut state.ctrl_plane);
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                // ldxp xzr, scratch, [rn]
+                sink.put4(enc_ldxp(I64, writable_zero_reg(), scratch, rn));
+
+                if let Some(trap_code) = flags.trap_code() {
+                    sink.add_trap(trap_code);
+                }
+
+                // stlxp scratch, rt1, rt2, [rn]
+                sink.put4(enc_stlxp(I64, scratch, rt1, rt2, rn));
+
+                // cbnz scratch, again.
+                let br_again_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(again_label),
+                    CondBrKind::NotZero(scratch.to_reg(), OperandSize::Size64),
+                ));
+                sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
             }
             &Inst::Fence {} => {
                 sink.put4(enc_dmb_ish()); // dmb ish
@@ -1853,6 +2289,10 @@ impl MachInstEmit for Inst {
                     FPUOp1::Abs => 0b000_11110_00_1_000001_10000,
                     FPUOp1::Neg => 0b000_11110_00_1_000010_10000,
                     FPUOp1::Sqrt => 0b000_11110_00_1_000011_10000,
+                    FPUOp1::Cvt16To32 => {
+                        debug_assert_eq!(size, ScalarSize::Size16);
+                        0b000_11110_11_1_000100_10000
+                    }
                     FPUOp1::Cvt32To64 => {
                         debug_assert_eq!(size, ScalarSize::Size32);
                         0b000_11110_00_1_000101_10000
@@ -3249,25 +3689,28 @@ impl MachInstEmit for Inst {
                 // emission time, because we cannot allow the regalloc to insert spills/reloads in
                 // the middle; we depend on hardcoded PC-rel addressing below.
 
-                // Branch to default when condition code from prior comparison indicates.
-                let br =
-                    enc_conditional_br(BranchTarget::Label(default), CondBrKind::Cond(Cond::Hs));
-
-                // No need to inform the sink's branch folding logic about this branch, because it
-                // will not be merged with any other branch, flipped, or elided (it is not preceded
-                // or succeeded by any other branch). Just emit it with the label use.
-                let default_br_offset = sink.cur_offset();
-                sink.use_label_at_offset(default_br_offset, default, LabelUse::Branch19);
-                sink.put4(br);
-
-                // Overwrite the index with a zero when the above
-                // branch misspeculates (Spectre mitigation). Save the
-                // resulting index in rtmp2.
+                // The default target is stored as the last entry in the
+                // jump table (at index `targets.len()`), and we clamp the
+                // index to that entry when it is out of bounds. This avoids
+                // any conditional branch to the default target: such a
+                // branch would have limited range, and the inline jump
+                // table that follows it can be arbitrarily large.
+                //
+                // The flags are set by a prior comparison of `ridx` against
+                // `targets.len()`; "lo" (unsigned less-than) means in-bounds.
+                let default_index = u64::try_from(targets.len()).unwrap();
+                for inst in Inst::load_constant(rtmp2, default_index) {
+                    inst.emit(sink, emit_info, state);
+                }
+                // Clamp the index: in-bounds indices are kept, and
+                // out-of-bounds indices select the default entry. This is
+                // also the Spectre mitigation, since there is no
+                // conditional branch to mispredict.
                 let inst = Inst::CSel {
                     rd: rtmp2,
-                    cond: Cond::Hs,
-                    rn: zero_reg(),
-                    rm: ridx,
+                    cond: Cond::Lo,
+                    rn: ridx,
+                    rm: rtmp2.to_reg(),
                 };
                 inst.emit(sink, emit_info, state);
                 // Prevent any data value speculation if spectre mitigations are
@@ -3308,9 +3751,10 @@ impl MachInstEmit for Inst {
                     targets: vec![],
                 };
                 inst.emit(sink, emit_info, state);
-                // Emit jump table (table of 32-bit offsets).
+                // Emit jump table (table of 32-bit offsets), with the
+                // default target as the final entry.
                 let jt_off = sink.cur_offset();
-                for &target in targets.iter() {
+                for &target in targets.iter().chain(core::iter::once(&default)) {
                     let word_off = sink.cur_offset();
                     // off_into_table is an addend here embedded in the label to be later patched
                     // at the end of codegen. The offset is initially relative to this jump table
@@ -3707,6 +4151,31 @@ impl MachInstEmit for Inst {
                 }
                 .emit(sink, emit_info, state);
                 sink.bind_label(loop_end, &mut state.ctrl_plane);
+            }
+
+            &Inst::InterruptPoll {
+                dst,
+                load_ptr,
+                trap_code,
+                ..
+            } => {
+                // Record the address of the load in the trap table so a signal
+                // handler can later distinguish whether a segfault is its
+                // fault.
+                sink.add_trap(trap_code);
+
+                // Emit `ldr dst, [load_ptr]`. Reuse the `dst` address as the
+                // destination of the dead load, since we are clobbering it
+                // anyway.
+                Inst::ULoad64 {
+                    rd: dst,
+                    mem: AMode::UnsignedOffset {
+                        rn: load_ptr,
+                        uimm12: UImm12Scaled::zero(I64),
+                    },
+                    flags: MemFlagsData::trusted(),
+                }
+                .emit(sink, emit_info, state);
             }
         }
 

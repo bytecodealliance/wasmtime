@@ -170,6 +170,13 @@ pub trait OutputStream: Pollable {
     ///
     /// Note that this method does not block.
     ///
+    /// Additionally note that this method controls the allowed allocation size
+    /// of other methods. For example `write_zeroes` will allow up to the
+    /// allowance of `check_write` and will allocate that many zeroes currently.
+    /// This should not be an overly-large value as otherwise guests will be
+    /// able to force the host to perform such an allocation. This number is
+    /// typicall ~64k for WASI streams at this time.
+    ///
     /// # Errors
     ///
     /// Returns an [`StreamError`] if:

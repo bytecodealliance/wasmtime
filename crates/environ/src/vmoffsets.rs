@@ -48,7 +48,6 @@ macro_rules! define_vm_type_offsets {
     (@size ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@size ($p:expr) AtomicUsize) => { u32::from($p) };
     (@size ($p:expr) usize) => { u32::from($p) };
-    (@size ($p:expr) * mut $g:ty) => { u32::from($p) };
     (@size ($p:expr) i64) => { 8u32 };
     (@size ($p:expr) u64) => { 8u32 };
     (@size ($p:expr) u32) => { 4u32 };
@@ -56,7 +55,6 @@ macro_rules! define_vm_type_offsets {
     // back down into four bytes.
     (@size ($p:expr) NonZeroU32) => { 4u32 };
     (@size ($p:expr) Option < VMGcRef >) => { 4u32 };
-    (@size ($p:expr) [u8; 16]) => { 16u32 };
     (@size ($p:expr) [u32; $n:expr]) => { 4u32 * u32::try_from($n).unwrap() };
     (@size ($p:expr) VMSharedTypeIndex) => { u32::from(($p).size_of_vmshared_type_index()) };
     (@size ($p:expr) DefinedTableIndex) => { 4u32 };
@@ -72,6 +70,9 @@ macro_rules! define_vm_type_offsets {
     (@size ($p:expr) VMStackLimits) => { u32::from(($p).vm_stack_limits().size()) };
     (@size ($p:expr) VMHostArray) => { u32::from(($p).vm_host_array().size()) };
     (@size ($p:expr) VMPayloads) => { u32::from(($p).vm_payloads().size()) };
+    (@size ($p:expr) VMAsanStackSupport) => {
+        u32::from(($p).vm_asan_stack_support().size())
+    };
     (@size ($p:expr) VMCommonStackInformation) => {
         u32::from(($p).vm_common_stack_information().size())
     };
@@ -100,13 +101,11 @@ macro_rules! define_vm_type_offsets {
     (@align ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@align ($p:expr) AtomicUsize) => { u32::from($p) };
     (@align ($p:expr) usize) => { u32::from($p) };
-    (@align ($p:expr) * mut $g:ty) => { u32::from($p) };
     (@align ($p:expr) i64) => { 8u32 };
     (@align ($p:expr) u64) => { 8u32 };
     (@align ($p:expr) u32) => { 4u32 };
     (@align ($p:expr) NonZeroU32) => { 4u32 };
     (@align ($p:expr) Option < VMGcRef >) => { 4u32 };
-    (@align ($p:expr) [u8; 16]) => { 16u32 };
     (@align ($p:expr) [u32; $n:expr]) => { 4u32 };
     (@align ($p:expr) VMSharedTypeIndex) => { u32::from(($p).align_of_vmshared_type_index()) };
     (@align ($p:expr) DefinedTableIndex) => { 4u32 };
@@ -119,6 +118,9 @@ macro_rules! define_vm_type_offsets {
     (@align ($p:expr) VMStackLimits) => { u32::from(($p).vm_stack_limits().align()) };
     (@align ($p:expr) VMHostArray) => { u32::from(($p).vm_host_array().align()) };
     (@align ($p:expr) VMPayloads) => { u32::from(($p).vm_payloads().align()) };
+    (@align ($p:expr) VMAsanStackSupport) => {
+        u32::from(($p).vm_asan_stack_support().align())
+    };
     (@align ($p:expr) VMCommonStackInformation) => {
         u32::from(($p).vm_common_stack_information().align())
     };
@@ -533,7 +535,7 @@ pub trait PtrSize {
     /// This is the size of the largest value type (i.e. a V128).
     #[inline]
     fn maximum_value_size(&self) -> u8 {
-        self.vm_global_definition().size()
+        16
     }
 
     /// Return the size of `*mut VMMemoryDefinition`.
@@ -901,7 +903,7 @@ pub const VM_ARRAY_CALL_HOST_FUNC_MAGIC: u32 = u32::from_le_bytes(*b"ACHF");
 
 #[cfg(test)]
 mod tests {
-    use crate::vmoffsets::align;
+    use crate::vmoffsets::{VMOffsets, VMOffsetsFields, align};
 
     #[test]
     fn alignment() {
@@ -912,6 +914,34 @@ mod tests {
         assert!(is_aligned(align(32, 16)));
         assert!(is_aligned(align(33, 16)));
         assert!(is_aligned(align(31, 16)));
+    }
+
+    #[test]
+    fn pointer_fields_aligned_after_tags() {
+        for ptr in [4u8, 8] {
+            for num_defined_tags in 0..4 {
+                let offsets = VMOffsets::from(VMOffsetsFields {
+                    ptr,
+                    num_imported_functions: 0,
+                    num_imported_tables: 0,
+                    num_imported_memories: 0,
+                    num_imported_globals: 0,
+                    num_imported_tags: 0,
+                    num_defined_tables: 0,
+                    num_defined_memories: 0,
+                    num_owned_memories: 0,
+                    num_defined_globals: 0,
+                    num_defined_tags,
+                    num_escaped_funcs: 1,
+                    num_runtime_data: 1,
+                    has_startup_func: true,
+                });
+                let ptr = u32::from(ptr);
+                assert_eq!(offsets.func_refs % ptr, 0);
+                assert_eq!(offsets.startup_func_ref % ptr, 0);
+                assert_eq!(offsets.runtime_data_bases % ptr, 0);
+            }
+        }
     }
 }
 

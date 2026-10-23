@@ -253,7 +253,7 @@ typedef uint8_t wasmtime_update_deadline_kind_t;
  */
 WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(
     wasmtime_store_t *store,
-    wasmtime_error_t *(*func)(wasmtime_context_t *context, void *data,
+    wasmtime_error_t *(*func)(const wasmtime_context_t *context, void *data,
                               uint64_t *epoch_deadline_delta,
                               wasmtime_update_deadline_kind_t *update_kind),
     void *data, void (*finalizer)(void *));

@@ -285,6 +285,55 @@ fn trailing_slash() {
 }
 
 #[test]
+fn remove_dir_trailing_slash() {
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+
+    // A trailing slash after a directory names the directory itself.
+    check!(h::create_dir(&start, "dir"));
+    check!(p::remove_dir(&start, Path::new("dir/")));
+    check!(h::create_dir(&start, "dir"));
+    check!(p::remove_dir(&start, Path::new("dir//")));
+    check!(h::create_dir(&start, "dir"));
+    check!(h::create_dir(&start, "dir/sub"));
+    check!(p::remove_dir(&start, Path::new("dir/sub/")));
+
+    // A trailing slash-dot still resolves through `open_parent`, which can't
+    // remove the directory it opened.
+    assert!(p::remove_dir(&start, Path::new("dir/.")).is_err());
+    check!(p::remove_dir(&start, Path::new("dir")));
+
+    // A file with a trailing slash still isn't a directory.
+    check!(h::create(&start, "file"));
+    assert!(p::remove_dir(&start, Path::new("file/")).is_err());
+}
+
+#[test]
+fn remove_dir_trailing_slash_symlink() {
+    if !symlink_supported() {
+        return;
+    }
+
+    let tmpdir = tmpdir();
+    let start = h::dir_of(&tmpdir);
+    check!(h::create_dir(&start, "dir"));
+    check!(h::create(&start, "file"));
+    check!(h::symlink_dir(&start, "dir", "dir_link"));
+    check!(h::symlink_file(&start, "file", "file_link"));
+    check!(h::symlink_dir(&start, "missing", "dangling"));
+    check!(h::symlink_dir(&start, "..", "up"));
+
+    // Like Linux, the symlink isn't followed, whatever it points to, and both
+    // it and its target stay in place.
+    for path in ["dir_link/", "file_link/", "dangling/", "up/"] {
+        let err = p::remove_dir(&start, Path::new(path)).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotADirectory, "{path}");
+    }
+    check!(h::symlink_metadata(&start, "dir_link"));
+    check!(h::metadata(&start, "dir"));
+}
+
+#[test]
 fn trailing_slash_in_dir() {
     let tmpdir = tmpdir();
     let start = h::dir_of(&tmpdir);
@@ -1379,5 +1428,18 @@ fn trailing_slash_requires_a_directory() {
     assert!(p::stat(&start, "file/".as_ref(), p::FollowSymlinks::No).is_err());
     if !cfg!(windows) {
         assert!(p::stat(&start, "file/.".as_ref(), p::FollowSymlinks::No).is_err());
+    }
+
+    if symlink_supported() {
+        check!(h::symlink_dir(&start, "dir", "sym_dir"));
+        check!(h::symlink_file(&start, "file", "sym_file"));
+
+        let stat_sym = check!(p::stat(&start, "sym_dir".as_ref(), p::FollowSymlinks::No));
+        assert!(stat_sym.file_type().is_symlink());
+
+        let stat_sym_dir = check!(p::stat(&start, "sym_dir/".as_ref(), p::FollowSymlinks::No));
+        assert!(stat_sym_dir.file_type().is_dir());
+
+        assert!(p::stat(&start, "sym_file/".as_ref(), p::FollowSymlinks::No).is_err());
     }
 }

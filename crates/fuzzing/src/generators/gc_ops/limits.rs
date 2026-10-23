@@ -23,18 +23,25 @@ pub const MAX_INLINE_CONSTRUCTION: u32 = 8;
 /// Limits controlling the structure of a generated Wasm module.
 #[derive(Clone, Debug, Serialize, Deserialize, mutatis::Mutate)]
 pub struct GcOpsLimits {
+    /// Number of `externref` parameters of `run`.
     #[mutatis(default_mutate)]
     pub(crate) num_params: u32,
+    /// Number of `externref` globals.
     #[mutatis(default_mutate)]
     pub(crate) num_globals: u32,
+    /// Number of elements in every table.
     #[mutatis(default_mutate)]
     pub(crate) table_size: u32,
+    /// Maximum number of rec groups.
     #[mutatis(default_mutate)]
     pub(crate) max_rec_groups: u32,
+    /// Maximum number of concrete types.
     #[mutatis(default_mutate)]
     pub(crate) max_types: u32,
+    /// Maximum number of fields per struct type.
     #[mutatis(default_mutate)]
     pub(crate) max_fields: u32,
+    /// Length of every array created by `ArrayNew` and `ArrayNewDefault`.
     #[mutatis(default_mutate)]
     pub(crate) array_length: u32,
 }
@@ -55,7 +62,7 @@ impl Default for GcOpsLimits {
 
 impl GcOpsLimits {
     /// Fixup the limits to ensure they are within the valid range.
-    pub(crate) fn fixup(&mut self) {
+    pub(crate) fn fixup_limits(&mut self) {
         let Self {
             num_params,
             num_globals,

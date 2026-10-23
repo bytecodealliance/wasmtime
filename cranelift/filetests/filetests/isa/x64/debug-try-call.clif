@@ -1,0 +1,85 @@
+test compile precise-output
+target x86_64
+
+function %f0(i32) -> i32 tail {
+    ss0 = explicit_slot 64, key = 1234
+    sig0 = (i32) -> i32 tail
+    fn0 = colocated %callee sig0
+block0(v0: i32):
+<ss0, 1, 2> try_call fn0(v0), sig0, block1(ret0), [ default: block2 ]
+block1(v1: i32):
+    return v1
+block2:
+    v3 = iconst.i32 0
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x70, %rsp
+;   movq %rbx, 0x40(%rsp)
+;   movq %r12, 0x48(%rsp)
+;   movq %r13, 0x50(%rsp)
+;   movq %r14, 0x58(%rsp)
+;   movq %r15, 0x60(%rsp)
+; block0:
+;   call    TestCase(%callee); jmp MachLabel(1); catch [default: MachLabel(2)]
+;   ; ^-- debug @ Post: [StackSlot(ss0), User(1), User(2)]
+; block1:
+;   movq 0x40(%rsp), %rbx
+;   movq 0x48(%rsp), %r12
+;   movq 0x50(%rsp), %r13
+;   movq 0x58(%rsp), %r14
+;   movq 0x60(%rsp), %r15
+;   addq $0x70, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block2:
+;   uninit  %rax
+;   xorl %eax, %eax
+;   movq 0x40(%rsp), %rbx
+;   movq 0x48(%rsp), %r12
+;   movq 0x50(%rsp), %r13
+;   movq 0x58(%rsp), %r14
+;   movq 0x60(%rsp), %r15
+;   addq $0x70, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x70, %rsp
+;   movq %rbx, 0x40(%rsp)
+;   movq %r12, 0x48(%rsp)
+;   movq %r13, 0x50(%rsp)
+;   movq %r14, 0x58(%rsp)
+;   movq %r15, 0x60(%rsp)
+; block1: ; offset 0x21
+;   callq 0x26 ; reloc_external CallPCRel4 %callee -4
+; block2: ; offset 0x26
+;   movq 0x40(%rsp), %rbx
+;   movq 0x48(%rsp), %r12
+;   movq 0x50(%rsp), %r13
+;   movq 0x58(%rsp), %r14
+;   movq 0x60(%rsp), %r15
+;   addq $0x70, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x48
+;   xorl %eax, %eax
+;   movq 0x40(%rsp), %rbx
+;   movq 0x48(%rsp), %r12
+;   movq 0x50(%rsp), %r13
+;   movq 0x58(%rsp), %r14
+;   movq 0x60(%rsp), %r15
+;   addq $0x70, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

@@ -1,0 +1,24 @@
+test interpret
+test run
+set enable_llvm_abi_extensions
+set opt_level=speed_and_size
+target aarch64
+target riscv64
+target riscv64 has_c has_zcb
+set enable_multi_ret_implicit_sret
+target s390x
+target x86_64
+
+function %select_ugt_to_umin(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = icmp ugt v0, v1
+    v3 = select v2, v1, v0
+    return v3
+}
+; run: %select_ugt_to_umin(0, 0) == 0
+; run: %select_ugt_to_umin(1, 0) == 0
+; run: %select_ugt_to_umin(0, 1) == 0
+; run: %select_ugt_to_umin(5, 9) == 5
+; run: %select_ugt_to_umin(9, 5) == 5
+; run: %select_ugt_to_umin(0x10000000000000000, 1) == 1
+; run: %select_ugt_to_umin(1, 0x10000000000000000) == 1

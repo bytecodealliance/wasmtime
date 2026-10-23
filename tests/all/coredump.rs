@@ -136,7 +136,7 @@ fn coredump_has_host_globals_and_memory() -> Result<()> {
     let mut store = Store::<()>::new(&engine, ());
     let mut linker = Linker::new(&engine);
 
-    let memory = Memory::new(&mut store, MemoryType::new(1, None))?;
+    let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
     linker.define(&mut store, "memory", "memory", memory)?;
 
     let global = Global::new(
@@ -210,7 +210,7 @@ fn multiple_globals_memories_and_instances() -> Result<()> {
     let mut store = Store::<()>::new(&engine, ());
     let mut linker = Linker::new(&engine);
 
-    let memory = Memory::new(&mut store, MemoryType::new(1, None))?;
+    let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
     linker.define(&mut store, "host", "memory", memory)?;
 
     let global = Global::new(

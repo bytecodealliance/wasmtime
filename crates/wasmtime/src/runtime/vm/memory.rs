@@ -24,7 +24,7 @@
 //!            ▼
 //! ┌─────────────────────┐
 //! │                     │
-//! │ RuntimeLinearMemory ├─────────────┬───────────────┐
+//! │    LinearMemory     ├─────────────┬───────────────┐
 //! │                     │             │               │
 //! └──────────┬──────────┘             │               │
 //!            │                        │               │
@@ -52,35 +52,34 @@
 //!   instance-local state of `Memory`. One example is that `LocalMemory::grow`
 //!   has most of the logic around memory growth.
 //!
-//! * `RuntimeLinearMemory` - this is a trait which `LocalMemory` delegates to.
-//!   This trait is intentionally relatively simple to be exposed in Wasmtime's
-//!   embedder API. This is exposed all the way through `wasmtime::Config` so
-//!   embedders can provide arbitrary implementations.
+//! * `LinearMemory` - this is the public trait which
+//!   `LocalMemory` delegates to. This is exposed all the
+//!   way through `wasmtime::Config` so embedders can provide arbitrary
+//!   implementations, and Wasmtime's own memories implement it as well.
 //!
-//! * `MmapMemory` - this is an implementation of `RuntimeLinearMemory` in terms
-//!   of the platform's mmap primitive.
+//! * `MmapMemory` - this is an implementation of `LinearMemory` in terms of
+//!   the platform's mmap primitive.
 //!
-//! * `StaticMemory` - this is an implementation of `RuntimeLinearMemory`
-//!   for the pooling allocator where the base pointer is already allocated
-//!   and contents are managed through `MemoryImageSlot`.
+//! * `StaticMemory` - this is an implementation of `LinearMemory` for the
+//!   pooling allocator where the base pointer is already allocated and
+//!   contents are managed through `MemoryImageSlot`.
 //!
 //! Other important types for memories are `MemoryImage` and `MemoryImageSlot`
-//! which manage CoW state for memories. This is implemented at the
-//! `LocalMemory` layer.
-//!
-//! FIXME: don't have both RuntimeLinearMemory and wasmtime::LinearMemory, they
-//! should be merged together.
+//! which manage CoW state for memories. Initializing a memory from a
+//! `MemoryImage` is delegated to the `LinearMemory` itself through
+//! `LinearMemory::init_from_image`, and the pooling allocator's
+//! `StaticMemory` owns a `MemoryImageSlot` which is reused across instances.
 //!
 //! FIXME: don't have both RuntimeMemoryCreator and wasmtime::MemoryCreator,
 //! they should be merged together.
 
-use crate::Engine;
 use crate::prelude::*;
 use crate::runtime::store::StoreResourceLimiter;
+use crate::runtime::vm::MemoryImage;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
-#[cfg(has_virtual_memory)]
-use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
-use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr};
+#[cfg(feature = "pooling-allocator")]
+use crate::runtime::vm::{MemoryImageSlot, MmapOffset};
+use crate::{Engine, LinearMemory};
 use alloc::sync::Arc;
 use core::{ops::Range, ptr::NonNull};
 use wasmtime_environ::{MemoryKind, MemoryTunables};
@@ -113,28 +112,29 @@ pub use shared_memory_disabled::SharedMemory;
 
 /// A memory allocator
 pub trait RuntimeMemoryCreator: Send + Sync {
-    /// Create new RuntimeLinearMemory
+    /// Create a new `LinearMemory`.
     fn new_memory(
         &self,
         ty: &wasmtime_environ::Memory,
         memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
         maximum: Option<usize>,
-    ) -> Result<Box<dyn RuntimeLinearMemory>>;
+    ) -> Result<Box<dyn LinearMemory>>;
 }
 
 /// A default memory allocator used by Wasmtime
 pub struct DefaultMemoryCreator;
 
 impl RuntimeMemoryCreator for DefaultMemoryCreator {
-    /// Create new MmapMemory
+    /// Create new LinearMemory.
+    /// Chooses [`MmapMemory`] if it is available and tunables require it, falling back to [`MallocMemory`] otherwise.
     fn new_memory(
         &self,
         ty: &wasmtime_environ::Memory,
         memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
         maximum: Option<usize>,
-    ) -> Result<Box<dyn RuntimeLinearMemory>> {
+    ) -> Result<Box<dyn LinearMemory>> {
         #[cfg(has_virtual_memory)]
         if memory_tunables.tunables().signals_based_traps
             || memory_tunables.guard_size() > 0
@@ -143,90 +143,15 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
         {
             return Ok(
                 try_new::<Box<_>>(MmapMemory::new(ty, memory_tunables, minimum, maximum)?)?
-                    as Box<dyn RuntimeLinearMemory>,
+                    as Box<dyn LinearMemory>,
             );
         }
 
         let _ = maximum;
         Ok(
             try_new::<Box<_>>(MallocMemory::new(ty, memory_tunables, minimum)?)?
-                as Box<dyn RuntimeLinearMemory>,
+                as Box<dyn LinearMemory>,
         )
-    }
-}
-
-/// A linear memory and its backing storage.
-pub trait RuntimeLinearMemory: Send + Sync {
-    /// Returns the number bytes that this linear memory can access.
-    fn byte_size(&self) -> usize;
-
-    /// Returns the maximal number of bytes the current allocation can access.
-    ///
-    /// Growth up to this value should not relocate the base pointer.
-    fn byte_capacity(&self) -> usize;
-
-    /// Grow memory to the specified amount of bytes.
-    ///
-    /// Returns an error if memory can't be grown by the specified amount
-    /// of bytes.
-    fn grow_to(&mut self, size: usize) -> Result<()>;
-
-    /// Returns a pointer to the base of this linear memory allocation.
-    ///
-    /// This is either a raw pointer, or a reference to an mmap along with an
-    /// offset within it.
-    fn base(&self) -> MemoryBase;
-
-    /// Get a `VMMemoryDefinition` for this linear memory.
-    fn vmmemory(&self) -> VMMemoryDefinition;
-
-    /// Internal method for Wasmtime when used in conjunction with CoW images.
-    /// This is used to inform the underlying memory that the size of memory has
-    /// changed.
-    ///
-    /// Note that this is hidden and panics by default as embedders using custom
-    /// memory without CoW images shouldn't have to worry about this.
-    #[doc(hidden)]
-    fn set_byte_size(&mut self, len: usize) {
-        let _ = len;
-        panic!("CoW images used with this memory and it doesn't support it");
-    }
-}
-
-/// The base pointer of a memory allocation.
-#[derive(Clone, Debug)]
-pub enum MemoryBase {
-    /// A raw pointer into memory.
-    ///
-    /// This may or may not be host-page-aligned.
-    Raw(SendSyncPtr<u8>),
-
-    /// An mmap along with an offset into it.
-    #[cfg(has_virtual_memory)]
-    Mmap(MmapOffset),
-}
-
-impl MemoryBase {
-    /// Creates a new `MemoryBase` from a raw pointer.
-    ///
-    /// The pointer must be non-null, and it must be logically `Send + Sync`.
-    pub fn new_raw(ptr: *mut u8) -> Self {
-        Self::Raw(NonNull::new(ptr).expect("pointer is non-null").into())
-    }
-
-    /// Returns the actual memory address in memory that is represented by this
-    /// base.
-    pub fn as_non_null(&self) -> NonNull<u8> {
-        match self {
-            Self::Raw(ptr) => ptr.as_non_null(),
-            #[cfg(has_virtual_memory)]
-            Self::Mmap(mmap_offset) => mmap_offset.as_non_null(),
-        }
-    }
-
-    /// Same as `as_non_null`, but different return type.
-    pub fn as_mut_ptr(&self) -> *mut u8 {
-        self.as_non_null().as_ptr()
     }
 }
 
@@ -260,26 +185,34 @@ impl Memory {
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
+    ///
+    /// The `memory_image_slot` must have been already instantiated by the pooling allocator.
     #[cfg(feature = "pooling-allocator")]
     pub async fn new_static(
         ty: &wasmtime_environ::Memory,
         memory_tunables: &MemoryTunables<'_>,
-        base: MemoryBase,
+        base: MmapOffset,
         base_capacity: usize,
-        memory_image: MemoryImageSlot,
+        memory_image_slot: MemoryImageSlot,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
-        let pooled_memory = StaticMemory::new(base, base_capacity, minimum, maximum)?;
+
+        // Assert the memory image was instantiated.
+        debug_assert!(memory_image_slot.is_dirty());
+        // The pooling allocator has already instantiated the image, so it only needs
+        // initialization if the slot holds no image.
+        let needs_init = !memory_image_slot.has_image();
+        let pooled_memory =
+            StaticMemory::new(base, base_capacity, minimum, maximum, memory_image_slot)?;
         let allocation = try_new::<Box<_>>(pooled_memory)?;
 
         // Configure some defaults a bit differently for this memory within the
-        // `LocalMemory` structure created, notably we already have
-        // `memory_image` and regardless of configuration settings this memory
-        // can't move its base pointer since it's a fixed allocation.
+        // `LocalMemory` structure created:
+        // - record whether the data segments still need to be copied in;
+        // - regardless of configuration settings this memory can't move its base pointer since it's a fixed allocation.
         let mut memory = LocalMemory::new(ty, memory_tunables, allocation, None)?;
-        assert!(memory.memory_image.is_none());
-        memory.memory_image = Some(memory_image);
+        memory.needs_init = needs_init;
         memory.memory_may_move = false;
 
         Ok(if ty.shared {
@@ -534,61 +467,38 @@ impl Memory {
 /// the implementation basis for a `SharedMemory` behind an `RwLock` for
 /// example.
 pub struct LocalMemory {
-    alloc: Box<dyn RuntimeLinearMemory>,
+    alloc: Box<dyn LinearMemory>,
     ty: wasmtime_environ::Memory,
+    /// True only if this memory may move its base pointer.
     memory_may_move: bool,
     memory_guard_size: usize,
     memory_reservation: usize,
 
-    /// An optional CoW mapping that provides the initial content of this
-    /// memory.
-    memory_image: Option<MemoryImageSlot>,
+    /// Whether the data segments of this memory still need to be copied into it.
+    /// The memory might be already initialized from a pooled allocator or by the particular
+    /// allocation's implementation, in which case this is false.
+    needs_init: bool,
 }
 
 impl LocalMemory {
     pub fn new(
         ty: &wasmtime_environ::Memory,
         memory_tunables: &MemoryTunables<'_>,
-        alloc: Box<dyn RuntimeLinearMemory>,
+        mut alloc: Box<dyn LinearMemory>,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<LocalMemory> {
-        // If a memory image was specified, try to create the MemoryImageSlot on
-        // top of our mmap.
-        let memory_image = match memory_image {
-            #[cfg(has_virtual_memory)]
-            Some(image) => {
-                // We currently don't support memory_image if
-                // `RuntimeLinearMemory::byte_size` is not a multiple of the host page
-                // size. See https://github.com/bytecodealliance/wasmtime/issues/9660.
-                if let Ok(byte_size) = HostAlignedByteCount::new(alloc.byte_size()) {
-                    // memory_image is CoW-based so it is expected to be backed
-                    // by an mmap.
-                    let mmap_base = match alloc.base() {
-                        MemoryBase::Mmap(offset) => offset,
-                        MemoryBase::Raw { .. } => {
-                            unreachable!("memory_image is Some only for mmap-based memories")
-                        }
-                    };
-
-                    // Memories allocated on demand are never striped with MPK
-                    // protection keys, so this slot has no key to preserve.
-                    let mut slot =
-                        MemoryImageSlot::create(mmap_base, byte_size, alloc.byte_capacity(), None);
-                    slot.instantiate(alloc.byte_size(), Some(image), ty, memory_tunables)?;
-                    Some(slot)
-                } else {
-                    None
-                }
-            }
-            #[cfg(not(has_virtual_memory))]
-            Some(_) => unreachable!(),
-            None => None,
+        // If a memory image was specified, give the allocation a chance to
+        // initialize itself from it. If it declines then the data segments
+        // are copied in as usual.
+        let initialized = match memory_image {
+            Some(image) => alloc.init_from_image(&crate::MemoryImage::new(image.clone()))?,
+            None => false,
         };
         Ok(LocalMemory {
             ty: *ty,
             alloc,
             memory_may_move: ty.memory_may_move(memory_tunables),
-            memory_image,
+            needs_init: !initialized,
             memory_guard_size: memory_tunables.guard_size().try_into().unwrap(),
             memory_reservation: memory_tunables.reservation().try_into().unwrap(),
         })
@@ -660,7 +570,7 @@ impl LocalMemory {
 
         // Save the original base pointer to assert the invariant that growth up
         // to the byte capacity never relocates the base pointer.
-        let base_ptr_before = self.alloc.base().as_mut_ptr();
+        let base_ptr_before = self.alloc.as_ptr();
         let required_to_not_move_memory = new_byte_size <= self.alloc.byte_capacity();
 
         let result = (|| -> Result<()> {
@@ -677,30 +587,6 @@ impl LocalMemory {
                 bail!("Memory maximum size exceeded");
             }
 
-            // If we have a CoW image overlay then let it manage accessible
-            // bytes. Once the heap limit is modified inform the underlying
-            // allocation that the size has changed.
-            //
-            // If the growth is going beyond the size of the heap image then
-            // discard it. This should only happen for `MmapMemory` where
-            // `no_clear_on_drop` is set so the destructor doesn't do anything.
-            // For now be maximally sure about this by asserting that memory can
-            // indeed move and that we're on unix. If this wants to run
-            // somewhere else like Windows or with other allocations this may
-            // need adjusting.
-            if let Some(image) = &mut self.memory_image {
-                if new_byte_size <= self.alloc.byte_capacity() {
-                    image.set_heap_limit(new_byte_size)?;
-                    self.alloc.set_byte_size(new_byte_size);
-                    return Ok(());
-                }
-                assert!(cfg!(unix));
-                assert!(self.memory_may_move);
-                self.memory_image = None;
-            }
-
-            // And failing all that fall back to the underlying allocation to
-            // grow it.
             self.alloc.grow_to(new_byte_size)
         })();
 
@@ -709,7 +595,11 @@ impl LocalMemory {
                 // On successful growth double-check that the base pointer
                 // didn't move if it shouldn't have.
                 if required_to_not_move_memory {
-                    assert_eq!(base_ptr_before, self.alloc.base().as_mut_ptr());
+                    assert_eq!(
+                        base_ptr_before,
+                        self.alloc.as_ptr(),
+                        "linear memory moved on grow when it must not have"
+                    );
                 }
 
                 Ok(Some((old_byte_size, new_byte_size)))
@@ -727,8 +617,14 @@ impl LocalMemory {
         }
     }
 
+    /// Return the bounds of the memory (base, byte_size) for consumption by WebAssembly code in a
+    /// repr(C) struct.
     pub fn vmmemory(&self) -> VMMemoryDefinition {
-        self.alloc.vmmemory()
+        let base = NonNull::new(self.alloc.as_ptr()).expect("linear memory base is non-null");
+        VMMemoryDefinition {
+            base: base.into(),
+            current_length: self.alloc.byte_size().into(),
+        }
     }
 
     pub fn byte_size(&self) -> usize {
@@ -736,14 +632,11 @@ impl LocalMemory {
     }
 
     pub fn needs_init(&self) -> bool {
-        match &self.memory_image {
-            Some(image) => !image.has_image(),
-            None => true,
-        }
+        self.needs_init
     }
 
     pub fn wasm_accessible(&self) -> Range<usize> {
-        let base = self.alloc.base().as_mut_ptr() as usize;
+        let base = self.alloc.as_ptr() as usize;
         // From the base add:
         //
         // * max(capacity, reservation) -- all memory is guaranteed to have at
@@ -758,9 +651,16 @@ impl LocalMemory {
         base..end
     }
 
+    /// Assume the inner allocation is a [`StaticMemory`] created for a pooling allocator and unwrap
+    /// the inner [`MemoryImageSlot`].
+    /// This function panics if this memory was not created from a [`StaticMemory`] allocation.
     #[cfg(feature = "pooling-allocator")]
     pub fn unwrap_static_image(self) -> MemoryImageSlot {
-        self.memory_image.unwrap()
+        let alloc: Box<dyn core::any::Any> = self.alloc;
+        alloc
+            .downcast::<StaticMemory>()
+            .unwrap_or_else(|_| panic!("expected a pooling allocator memory"))
+            .into_image_slot()
     }
 }
 

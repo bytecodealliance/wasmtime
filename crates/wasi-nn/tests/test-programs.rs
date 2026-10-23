@@ -83,6 +83,7 @@ fn check_test_program(name: &str) -> (fn() -> Result<()>, IgnoreCheck) {
         "nn_witx_image_classification_onnx" => {
             (nn_witx_image_classification_onnx, IgnoreCheck::for_onnx())
         }
+        "nn_witx_invalid_input_onnx" => (nn_witx_invalid_input_onnx, IgnoreCheck::for_onnx()),
         "nn_witx_image_classification_winml_named" => (
             nn_witx_image_classification_winml_named,
             IgnoreCheck::for_winml(),
@@ -103,6 +104,7 @@ fn check_test_program(name: &str) -> (fn() -> Result<()>, IgnoreCheck) {
         "nn_wit_image_classification_onnx" => {
             (nn_wit_image_classification_onnx, IgnoreCheck::for_onnx())
         }
+        "nn_wit_invalid_input_onnx" => (nn_wit_invalid_input_onnx, IgnoreCheck::for_onnx()),
         "nn_wit_image_classification_winml_named" => (
             nn_wit_image_classification_winml_named,
             IgnoreCheck::for_winml(),
@@ -137,6 +139,17 @@ fn nn_witx_image_classification_onnx() -> Result<()> {
 }
 #[cfg(not(feature = "onnx"))]
 fn nn_witx_image_classification_onnx() -> Result<()> {
+    wasmtime::bail!("this test requires the `onnx` feature")
+}
+
+#[cfg(feature = "onnx")]
+fn nn_witx_invalid_input_onnx() -> Result<()> {
+    check::onnx::are_artifacts_available()?;
+    let backend = Backend::from(backend::onnx::OnnxBackend::default());
+    exec::witx::run(NN_WITX_INVALID_INPUT_ONNX, backend, false)
+}
+#[cfg(not(feature = "onnx"))]
+fn nn_witx_invalid_input_onnx() -> Result<()> {
     wasmtime::bail!("this test requires the `onnx` feature")
 }
 
@@ -193,6 +206,17 @@ fn nn_wit_image_classification_onnx() -> Result<()> {
 }
 #[cfg(not(feature = "onnx"))]
 fn nn_wit_image_classification_onnx() -> Result<()> {
+    wasmtime::bail!("this test requires the `onnx` feature")
+}
+
+#[cfg(feature = "onnx")]
+fn nn_wit_invalid_input_onnx() -> Result<()> {
+    check::onnx::are_artifacts_available()?;
+    let backend = Backend::from(backend::onnx::OnnxBackend::default());
+    exec::wit::run(NN_WIT_INVALID_INPUT_ONNX_COMPONENT, backend, false)
+}
+#[cfg(not(feature = "onnx"))]
+fn nn_wit_invalid_input_onnx() -> Result<()> {
     wasmtime::bail!("this test requires the `onnx` feature")
 }
 

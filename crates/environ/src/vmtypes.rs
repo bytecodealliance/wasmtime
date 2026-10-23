@@ -89,18 +89,6 @@ macro_rules! for_each_vm_type {
                 pub current_elements: usize,
             }
 
-            /// The storage for a WebAssembly global defined within the instance.
-            ///
-            /// TODO: Pack the globals more densely, rather than using the same size
-            /// for every type.
-            #[derive(Debug)]
-            #[repr(C, align(16))]
-            #[snake_name = vm_global_definition]
-            pub struct VMGlobalDefinition {
-                /// The raw storage for a global's value.
-                storage: [u8; 16],
-            }
-
             /// A WebAssembly tag defined within the instance.
             #[derive(Debug)]
             #[repr(C)]
@@ -599,7 +587,7 @@ macro_rules! for_each_vm_type {
 
                 /// The buffer itself, which lives on the continuation's stack
                 /// rather than in this object.
-                pub data: *mut u8,
+                pub data: Option<VmPtr<u8>>,
             }
 
             /// Payload values exchanged with a continuation and the metadata
@@ -615,6 +603,28 @@ macro_rules! for_each_vm_type {
                 /// One marker byte per buffer slot, indicating whether that
                 /// slot contains a GC reference, or `None` when no slots do.
                 pub gc_ref_data: Option<VmPtr<u8>>,
+            }
+
+            /// AddressSanitizer bookkeeping associated with a stack.
+            #[derive(Debug, Clone, Default)]
+            #[repr(C)]
+            #[snake_name = vm_asan_stack_support]
+            pub struct VMAsanStackSupport {
+                /// Bottom of the usable stack range reported to ASan,
+                /// or `None` until ASan discovers an initial stack's
+                /// bounds. Technically only needed by the runtime,
+                /// but we are using `VmPtr` here to avoid introducing
+                /// macro rules for `*mut u8` just for the sake of ASan
+                /// builds.
+                pub stack_bottom: Option<VmPtr<u8>>,
+
+                /// Size of the usable stack range reported to ASan.
+                pub stack_size: usize,
+
+                /// The stack whose bounds ASan will report when the next
+                /// stack-switch handshake is completed on this stack.
+                /// `None` when no handshake is pending.
+                pub pending_source_csi: Option<VmPtr<VMCommonStackInformation>>,
             }
 
             /// The information saved for every stack, whether it is a
@@ -637,6 +647,10 @@ macro_rules! for_each_vm_type {
 
                 /// The index within `handlers` of the first `switch` handler.
                 pub first_switch_handler_index: u32,
+
+                /// AddressSanitizer bookkeeping for this stack.
+                #[aggregate]
+                pub asan: VMAsanStackSupport,
             }
 
             /// A continuation.
@@ -652,12 +666,12 @@ macro_rules! for_each_vm_type {
                 #[aggregate]
                 pub parent_chain: VMStackChain,
 
-                /// The end of this continuation's parent chain, used only while
-                /// it is `Suspended` or `Fresh`.
-                pub last_ancestor: *mut VMContRef,
-
                 /// Revision counter.
                 pub revision: usize,
+
+                /// The end of this continuation's parent chain while it is
+                /// `Suspended` or `Fresh`, and `None` while it is running.
+                pub last_ancestor: Option<VmPtr<VMContRef>>,
 
                 /// The stack this continuation runs on.
                 #[aggregate]

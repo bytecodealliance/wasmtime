@@ -487,6 +487,29 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 collector.reg_fixed_def(scratch2, xreg(28));
             }
         }
+        Inst::AtomicRMW128Loop {
+            op,
+            addr,
+            operand_lo,
+            operand_hi,
+            oldval_lo,
+            oldval_hi,
+            scratch1,
+            scratch2,
+            scratch3,
+            ..
+        } => {
+            collector.reg_fixed_use(addr, xreg(25));
+            collector.reg_fixed_use(operand_lo, xreg(26));
+            collector.reg_fixed_use(operand_hi, xreg(22));
+            collector.reg_fixed_def(oldval_lo, xreg(27));
+            collector.reg_fixed_def(oldval_hi, xreg(23));
+            collector.reg_fixed_def(scratch1, xreg(24));
+            if *op != AtomicRMWLoopOp::Xchg {
+                collector.reg_fixed_def(scratch2, xreg(28));
+                collector.reg_fixed_def(scratch3, xreg(21));
+            }
+        }
         Inst::AtomicRMW { rs, rt, rn, .. } => {
             collector.reg_use(rs);
             collector.reg_def(rt);
@@ -533,13 +556,59 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_fixed_def(oldval, xreg(27));
             collector.reg_fixed_def(scratch, xreg(24));
         }
+        Inst::AtomicCAS128Loop {
+            addr,
+            expected_lo,
+            expected_hi,
+            replacement_lo,
+            replacement_hi,
+            oldval_lo,
+            oldval_hi,
+            scratch,
+            ..
+        } => {
+            collector.reg_fixed_use(addr, xreg(25));
+            collector.reg_fixed_use(expected_lo, xreg(26));
+            collector.reg_fixed_use(expected_hi, xreg(23));
+            collector.reg_fixed_use(replacement_lo, xreg(28));
+            collector.reg_fixed_use(replacement_hi, xreg(22));
+            collector.reg_fixed_def(oldval_lo, xreg(27));
+            collector.reg_fixed_def(oldval_hi, xreg(21));
+            collector.reg_fixed_def(scratch, xreg(24));
+        }
         Inst::LoadAcquire { rt, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_def(rt);
         }
+        Inst::LoadAcquire128 {
+            rt1,
+            rt2,
+            rn,
+            scratch,
+            ..
+        } => {
+            collector.reg_use(rn);
+            // These registers are written to in a retry loop so their register
+            // assignment can't reuse `rn`, thus they are early-defs.
+            collector.reg_early_def(rt1);
+            collector.reg_early_def(rt2);
+            collector.reg_early_def(scratch);
+        }
         Inst::StoreRelease { rt, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_use(rt);
+        }
+        Inst::StoreRelease128 {
+            rt1,
+            rt2,
+            rn,
+            scratch,
+            ..
+        } => {
+            collector.reg_use(rn);
+            collector.reg_use(rt1);
+            collector.reg_use(rt2);
+            collector.reg_early_def(scratch);
         }
         Inst::Fence {} | Inst::Csdb {} => {}
         Inst::FpuMove32 { rd, rn } => {
@@ -967,6 +1036,32 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::StackProbeLoop { start, end, .. } => {
             collector.reg_early_def(start);
             collector.reg_use(end);
+        }
+        Inst::InterruptPoll {
+            dst,
+            load_ptr,
+            context,
+            trap_code: _,
+            next_load_ptr,
+        } => {
+            // `load_ptr` is an input param. It is pinned to x10 so an update of
+            // `next_load_ptr` updates this as well. x10 is chosen because it is
+            // a caller-saved scratch reg with no special role.
+            collector.reg_fixed_use(load_ptr, regs::xreg(10));
+            // Demand `context` (the vmctx) go into x0.
+            collector.reg_fixed_use(context, regs::xreg(0));
+            // Reserve x9 as scratch space. x9 is caller saved and has no
+            // special role.
+            //
+            // Define it, so we can use it as the destination of the dead load
+            // rather than consuming another arbitrary reg.
+            collector.reg_fixed_def(dst, regs::xreg(9));
+            // `next_load_ptr` is pinned so embedders know where to write to
+            // fill it. It takes on the value of `load_ptr` unless a signal
+            // handler invoked at the load overwrites it. We constrain
+            // `next_load_ptr` and `load_ptr` to the same register so this
+            // dataflow happens without a move.
+            collector.reg_fixed_def(next_load_ptr, regs::xreg(10));
         }
     }
 }
@@ -1653,6 +1748,43 @@ impl Inst {
                     scratch2,
                 )
             }
+            &Inst::AtomicRMW128Loop {
+                op,
+                addr,
+                operand_lo,
+                operand_hi,
+                oldval_lo,
+                oldval_hi,
+                scratch1,
+                scratch2,
+                scratch3,
+                ..
+            } => {
+                let op = match op {
+                    AtomicRMWLoopOp::Add => "add",
+                    AtomicRMWLoopOp::Sub => "sub",
+                    AtomicRMWLoopOp::Eor => "eor",
+                    AtomicRMWLoopOp::Orr => "orr",
+                    AtomicRMWLoopOp::And => "and",
+                    AtomicRMWLoopOp::Nand => "nand",
+                    AtomicRMWLoopOp::Smin => "smin",
+                    AtomicRMWLoopOp::Smax => "smax",
+                    AtomicRMWLoopOp::Umin => "umin",
+                    AtomicRMWLoopOp::Umax => "umax",
+                    AtomicRMWLoopOp::Xchg => "xchg",
+                };
+                let addr = pretty_print_ireg(addr, OperandSize::Size64);
+                let operand_lo = pretty_print_ireg(operand_lo, OperandSize::Size64);
+                let operand_hi = pretty_print_ireg(operand_hi, OperandSize::Size64);
+                let oldval_lo = pretty_print_ireg(oldval_lo.to_reg(), OperandSize::Size64);
+                let oldval_hi = pretty_print_ireg(oldval_hi.to_reg(), OperandSize::Size64);
+                let scratch1 = pretty_print_ireg(scratch1.to_reg(), OperandSize::Size64);
+                let scratch2 = pretty_print_ireg(scratch2.to_reg(), OperandSize::Size64);
+                let scratch3 = pretty_print_ireg(scratch3.to_reg(), OperandSize::Size64);
+                format!(
+                    "atomic_rmw_128_loop_{op} addr={addr} operand_lo={operand_lo} operand_hi={operand_hi} oldval_lo={oldval_lo} oldval_hi={oldval_hi} scratch1={scratch1} scratch2={scratch2} scratch3={scratch3}",
+                )
+            }
             &Inst::AtomicCAS {
                 rd, rs, rt, rn, ty, ..
             } => {
@@ -1716,6 +1848,29 @@ impl Inst {
                     scratch,
                 )
             }
+            &Inst::AtomicCAS128Loop {
+                addr,
+                expected_lo,
+                expected_hi,
+                replacement_lo,
+                replacement_hi,
+                oldval_lo,
+                oldval_hi,
+                scratch,
+                ..
+            } => {
+                let addr = pretty_print_ireg(addr, OperandSize::Size64);
+                let expected_lo = pretty_print_ireg(expected_lo, OperandSize::Size64);
+                let expected_hi = pretty_print_ireg(expected_hi, OperandSize::Size64);
+                let replacement_lo = pretty_print_ireg(replacement_lo, OperandSize::Size64);
+                let replacement_hi = pretty_print_ireg(replacement_hi, OperandSize::Size64);
+                let oldval_lo = pretty_print_ireg(oldval_lo.to_reg(), OperandSize::Size64);
+                let oldval_hi = pretty_print_ireg(oldval_hi.to_reg(), OperandSize::Size64);
+                let scratch = pretty_print_ireg(scratch.to_reg(), OperandSize::Size64);
+                format!(
+                    "atomic_cas_128_loop addr={addr}, expected_lo={expected_lo}, expected_hi={expected_hi}, replacement_lo={replacement_lo}, replacement_hi={replacement_hi}, oldval_lo={oldval_lo}, oldval_hi={oldval_hi}, scratch={scratch}",
+                )
+            }
             &Inst::LoadAcquire {
                 access_ty, rt, rn, ..
             } => {
@@ -1731,6 +1886,19 @@ impl Inst {
                 let rt = pretty_print_ireg(rt.to_reg(), size);
                 format!("{op} {rt}, [{rn}]")
             }
+            &Inst::LoadAcquire128 {
+                rt1,
+                rt2,
+                rn,
+                scratch,
+                ..
+            } => {
+                let rt1 = pretty_print_ireg(rt1.to_reg(), OperandSize::Size64);
+                let rt2 = pretty_print_ireg(rt2.to_reg(), OperandSize::Size64);
+                let rn = pretty_print_ireg(rn, OperandSize::Size64);
+                let scratch = pretty_print_ireg(scratch.to_reg(), OperandSize::Size64);
+                format!("load_acquire_128 {rt1}, {rt2}, [{rn}], scratch={scratch}")
+            }
             &Inst::StoreRelease {
                 access_ty, rt, rn, ..
             } => {
@@ -1745,6 +1913,19 @@ impl Inst {
                 let rn = pretty_print_ireg(rn, OperandSize::Size64);
                 let rt = pretty_print_ireg(rt, size);
                 format!("{op} {rt}, [{rn}]")
+            }
+            &Inst::StoreRelease128 {
+                rt1,
+                rt2,
+                rn,
+                scratch,
+                ..
+            } => {
+                let rt1 = pretty_print_ireg(rt1, OperandSize::Size64);
+                let rt2 = pretty_print_ireg(rt2, OperandSize::Size64);
+                let rn = pretty_print_ireg(rn, OperandSize::Size64);
+                let scratch = pretty_print_ireg(scratch.to_reg(), OperandSize::Size64);
+                format!("store_release_128 {rt1}, {rt2}, [{rn}], scratch={scratch}")
             }
             &Inst::Fence {} => {
                 format!("dmb ish")
@@ -1787,11 +1968,11 @@ impl Inst {
                     FPUOp1::Abs => "fabs",
                     FPUOp1::Neg => "fneg",
                     FPUOp1::Sqrt => "fsqrt",
-                    FPUOp1::Cvt32To64 | FPUOp1::Cvt64To32 => "fcvt",
+                    FPUOp1::Cvt16To32 | FPUOp1::Cvt32To64 | FPUOp1::Cvt64To32 => "fcvt",
                 };
                 let dst_size = match fpu_op {
                     FPUOp1::Cvt32To64 => ScalarSize::Size64,
-                    FPUOp1::Cvt64To32 => ScalarSize::Size32,
+                    FPUOp1::Cvt16To32 | FPUOp1::Cvt64To32 => ScalarSize::Size32,
                     _ => size,
                 };
                 let rd = pretty_print_vreg_scalar(rd.to_reg(), dst_size);
@@ -2850,29 +3031,17 @@ impl Inst {
                 let rtmp1 = pretty_print_reg(rtmp1.to_reg());
                 let rtmp2 = pretty_print_reg(rtmp2.to_reg());
                 let default_target = BranchTarget::Label(default).pretty_print(0);
+                let num_targets = targets.len();
                 format!(
-                    concat!(
-                        "b.hs {} ; ",
-                        "csel {}, xzr, {}, hs ; ",
-                        "csdb ; ",
-                        "adr {}, pc+16 ; ",
-                        "ldrsw {}, [{}, {}, uxtw #2] ; ",
-                        "add {}, {}, {} ; ",
-                        "br {} ; ",
-                        "jt_entries {:?}"
-                    ),
-                    default_target,
-                    rtmp2,
-                    ridx,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    targets
+                    "mov {rtmp2}, #{num_targets} ; \
+                     csel {rtmp2}, {ridx}, {rtmp2}, lo ; \
+                     csdb ; \
+                     adr {rtmp1}, pc+16 ; \
+                     ldrsw {rtmp2}, [{rtmp1}, {rtmp2}, uxtw #2] ; \
+                     add {rtmp1}, {rtmp1}, {rtmp2} ; \
+                     br {rtmp1} ; \
+                     jt_entries {targets:?} ; \
+                     default {default_target}"
                 )
             }
             &Inst::LoadExtNameGot { rd, ref name } => {
@@ -3014,6 +3183,21 @@ impl Inst {
                 let step = step.pretty_print(0);
                 format!("stack_probe_loop {start}, {end}, {step}")
             }
+            &Inst::InterruptPoll {
+                dst,
+                load_ptr,
+                context,
+                trap_code,
+                next_load_ptr,
+            } => {
+                let dst = pretty_print_reg(dst.to_reg());
+                let load_ptr = pretty_print_reg(load_ptr);
+                let context = pretty_print_reg(context);
+                let next_load_ptr = pretty_print_reg(next_load_ptr.to_reg());
+                format!(
+                    "{next_load_ptr} = interrupt_poll load_ptr={load_ptr}, context={context}, scratch={dst} #trap={trap_code}"
+                )
+            }
         }
     }
 }
@@ -3081,8 +3265,8 @@ impl MachInstLabelUse for LabelUse {
     /// Perform the patch.
     fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
         let pc_rel = (label_offset as i64) - (use_offset as i64);
-        debug_assert!(pc_rel <= self.max_pos_range() as i64);
-        debug_assert!(pc_rel >= -(self.max_neg_range() as i64));
+        assert!(pc_rel <= self.max_pos_range() as i64);
+        assert!(pc_rel >= -(self.max_neg_range() as i64));
         let pc_rel = pc_rel as u32;
         let insn_word = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
         let mask = match self {
@@ -3203,14 +3387,10 @@ impl MachInstLabelUse for LabelUse {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn inst_size_test() {
-        // This test will help with unintentionally growing the size
-        // of the Inst enum.
-        assert_eq!(32, core::mem::size_of::<Inst>());
-    }
+#[test]
+#[cfg(target_pointer_width = "64")]
+fn inst_size_test() {
+    // This test will help with unintentionally growing the size
+    // of the Inst enum.
+    assert_eq!(48, core::mem::size_of::<Inst>());
 }

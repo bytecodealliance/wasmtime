@@ -73,6 +73,7 @@
 //! [ARM Community - Caches and Self-Modifying Code]: https://community.arm.com/arm-community-blogs/b/architectures-and-processors-blog/posts/caches-and-self-modifying-code
 
 use std::ffi::c_void;
+use wasmtime_core::error::Result;
 
 cfg_select! {
     target_os = "windows" => {
@@ -97,7 +98,7 @@ cfg_select! {
 /// after all calls to [clear_cache].
 ///
 /// If the architecture does not require a pipeline flush, this function does nothing.
-pub fn pipeline_flush_mt() -> imp::Result<()> {
+pub fn pipeline_flush_mt() -> Result<()> {
     imp::pipeline_flush_mt()
 }
 
@@ -109,6 +110,6 @@ pub fn pipeline_flush_mt() -> imp::Result<()> {
 ///
 /// It is necessary to call [pipeline_flush_mt] after this function if you are running in a multi-threaded
 /// environment.
-pub unsafe fn clear_cache(ptr: *const c_void, len: usize) -> imp::Result<()> {
+pub unsafe fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
     imp::clear_cache(ptr, len)
 }

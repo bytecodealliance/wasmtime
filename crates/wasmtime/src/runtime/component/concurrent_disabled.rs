@@ -8,6 +8,13 @@ use core::convert::Infallible;
 use core::mem::MaybeUninit;
 use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 
+/// Represents a "task group" containing the "root" task of a host->guest call,
+/// plus any subtasks transitively created by that task.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct TaskGroupId;
+
+pub(crate) type EnteredHostTask = ();
+
 fn should_have_failed_validation<T>(what: &str) -> Result<T> {
     // This should be unreachable; if we trap here, it indicates a
     // bug in Wasmtime rather than in the guest.

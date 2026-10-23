@@ -9,9 +9,14 @@ struct Component;
 test_programs::p3::export!(Component);
 
 fn bytes(offset: &mut usize, len: usize) -> Vec<u8> {
+    const PATTERN_LEN: usize = 251;
+    let pattern: [u8; PATTERN_LEN] = core::array::from_fn(|i| i as u8);
     let mut buf = Vec::with_capacity(len);
-    for i in 0..len {
-        buf.push(((*offset + i) % 251) as u8);
+    let mut start = *offset % PATTERN_LEN;
+    while buf.len() < len {
+        let n = (PATTERN_LEN - start).min(len - buf.len());
+        buf.extend_from_slice(&pattern[start..][..n]);
+        start = 0;
     }
     *offset += len;
     buf

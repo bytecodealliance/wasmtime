@@ -213,7 +213,7 @@ unsafe fn handler_thread() {
         let kret = unsafe {
             mach_msg(
                 &mut request.body.Head,
-                MACH_RCV_MSG | MACH_RCV_INTERRUPT,
+                MACH_RCV_MSG,
                 0,
                 mem::size_of_val(&request) as u32,
                 WASMTIME_PORT,
@@ -461,7 +461,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 unsafe extern "C" fn unwind(pc: usize, fp: usize, fault1: usize, fault2: usize, trap: u8) -> ! {
     let handler = tls::with(|state| {
         let state = state.unwrap();
-        let regs = TrapRegisters { pc, fp };
+        let regs = TrapRegisters { pc, fp, lr: None };
         let faulting_addr = match fault1 {
             0 => None,
             _ => Some(fault2),

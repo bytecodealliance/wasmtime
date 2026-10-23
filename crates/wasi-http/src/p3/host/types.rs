@@ -311,11 +311,12 @@ impl HostRequest for WasiHttpCtxView<'_> {
         path_with_query: Option<String>,
     ) -> wasmtime::Result<Result<(), ()>> {
         let req = get_request_mut(self.table, &req)?;
+
         let Some(path_with_query) = path_with_query else {
             req.path_with_query = None;
             return Ok(Ok(()));
         };
-        let Ok(path_with_query) = path_with_query.try_into() else {
+        let Some(path_with_query) = crate::parse_path_with_query(&path_with_query) else {
             return Ok(Err(()));
         };
         req.path_with_query = Some(path_with_query);
@@ -384,7 +385,10 @@ impl HostRequest for WasiHttpCtxView<'_> {
 
     fn get_headers(&mut self, req: Resource<Request>) -> wasmtime::Result<Resource<Headers>> {
         let Request { headers, .. } = get_request(self.table, &req)?;
-        push_fields(self.table, headers.clone())
+        // `get-headers` promises immutable headers; that includes requests built with `Request::new`.
+        let mut headers = headers.clone();
+        headers.set_immutable();
+        push_fields(self.table, headers)
     }
 }
 
@@ -559,7 +563,10 @@ impl HostResponse for WasiHttpCtxView<'_> {
 
     fn get_headers(&mut self, res: Resource<Response>) -> wasmtime::Result<Resource<Headers>> {
         let Response { headers, .. } = get_response(self.table, &res)?;
-        push_fields(self.table, headers.clone())
+        // The response side makes the same promise as the request side.
+        let mut headers = headers.clone();
+        headers.set_immutable();
+        push_fields(self.table, headers)
     }
 }
 

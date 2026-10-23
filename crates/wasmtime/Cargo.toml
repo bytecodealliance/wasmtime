@@ -53,6 +53,7 @@ bumpalo = { workspace = true }
 fxprof-processed-profile = { version = "0.8.1", optional = true }
 gimli = { workspace = true, optional = true }
 addr2line = { workspace = true, optional = true }
+indexmap = { workspace = true, optional = true }
 semver = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
 bitflags = { workspace = true }
@@ -233,6 +234,7 @@ component-model = [
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
   "dep:semver",
+  "dep:indexmap",
 ]
 
 wmemcheck = [
@@ -372,7 +374,7 @@ wit-parser = ["dep:wit-parser", "component-model", "std"]
 # For platforms that Wasmtime does not have support for Wasmtime will disable
 # the use of virtual memory by default, for example allocating linear memories
 # with `malloc` instead. This feature can be used, for these platforms, to
-# instead use a C API defined in `wasmtime-platform.h` instead.
+# instead use a C API defined in `wasmtime-platform.h`.
 #
 # For some more information see
 # https://docs.wasmtime.dev/stability-platform-support.html#support-for-no_std
@@ -431,3 +433,8 @@ rr = [
   "component-model",
   "wasmtime-environ/rr"
 ]
+
+# Enable support for the `Store::task_group_hook` function which registers a
+# hook to be notified when host->guest task "groups" are created, entered,
+# exited, and disposed of.
+task-group-hook = [ "component-model", "component-model-async" ]

@@ -1,6 +1,6 @@
 ;;! target = "aarch64"
 ;;! test = "winch"
-;;! flags = "-Ccollector=drc"
+;;! flags = "-Wgc-support -Ccollector=drc"
 
 (module
   (global $g (mut externref) (ref.null extern))

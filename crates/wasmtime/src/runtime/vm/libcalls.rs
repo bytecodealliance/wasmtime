@@ -362,6 +362,7 @@ fn passive_elem_segment_drop(
 }
 
 // Implementation of `memory.copy`.
+#[inline]
 unsafe fn memory_copy(
     _store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -375,6 +376,7 @@ unsafe fn memory_copy(
     unsafe { src.copy_to(dst, len) }
 }
 
+#[inline]
 unsafe fn memory_fill(
     _store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -425,6 +427,7 @@ fn table_get_lazy_init_func_ref(
 
 /// Drop a GC reference.
 #[cfg(feature = "gc-drc")]
+#[inline]
 fn drop_gc_ref(store: &mut dyn VMStore, _instance: InstanceId, gc_ref: u32) {
     log::trace!("libcalls::drop_gc_ref({gc_ref:#x})");
     let gc_ref = VMGcRef::from_raw_u32(gc_ref).expect("non-null VMGcRef");
@@ -436,6 +439,7 @@ fn drop_gc_ref(store: &mut dyn VMStore, _instance: InstanceId, gc_ref: u32) {
 
 /// Force a DRC GC cycle.
 #[cfg(feature = "gc-drc")]
+#[inline]
 fn force_gc(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
     let store = store.store_opaque_mut();
     block_on!(store, async |store, asyncness| {
@@ -447,6 +451,7 @@ fn force_gc(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
 
 /// Grow the GC heap.
 #[cfg(feature = "gc-null")]
+#[inline]
 fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u64) -> Result<()> {
     let orig_len = u64::try_from(
         store
@@ -490,6 +495,7 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
 ///
 /// The Wasm code is responsible for initializing the object.
 #[cfg(any(feature = "gc-drc", feature = "gc-copying"))]
+#[inline]
 fn gc_alloc_raw(
     store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -502,7 +508,11 @@ fn gc_alloc_raw(
     use core::alloc::Layout;
     use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 
-    let kind = VMGcKind::from_high_bits_of_u32(kind_and_reserved);
+    // NB: unlike most `VMGcKind`s, this one is a constant baked into compiled
+    // code by our own code generator, not a value out of the GC heap.
+    let Some(kind) = VMGcKind::from_high_bits_of_u32(kind_and_reserved) else {
+        bail_bug!("compiler emitted an invalid `VMGcKind`")
+    };
     log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})");
 
     let shared_type_index = VMSharedTypeIndex::from_u32(shared_type_index);
@@ -546,6 +556,7 @@ fn gc_alloc_raw(
 //
 // This libcall may not GC.
 #[cfg(feature = "gc")]
+#[inline]
 unsafe fn intern_func_ref_for_gc_heap(
     store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -574,6 +585,7 @@ unsafe fn intern_func_ref_for_gc_heap(
 //
 // This libcall may not GC.
 #[cfg(feature = "gc")]
+#[inline]
 fn get_interned_func_ref(
     store: &mut dyn VMStore,
     instance: InstanceId,
@@ -586,7 +598,10 @@ fn get_interned_func_ref(
 
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
 
-    let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
+    let func_ref_id = match FuncRefTableId::from_raw(func_ref_id) {
+        Some(id) => id,
+        None => bail_bug!("bad FuncRefTableId"),
+    };
     let module_interned_type_index = ModuleInternedTypeIndex::from_bits(module_interned_type_index);
 
     let func_ref = if module_interned_type_index.is_reserved_value() {
@@ -656,6 +671,7 @@ unsafe fn get_interned_contref(
 }
 
 #[cfg(feature = "gc")]
+#[inline]
 fn is_subtype(
     store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -1181,6 +1197,33 @@ fn cont_new(
         gc_refs != 0,
     )?;
     Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
+}
+
+#[cfg(feature = "stack-switching")]
+unsafe fn asan_start_switch_fiber(
+    _store: &mut dyn VMStore,
+    _instance: InstanceId,
+    fake_stack_save: *mut u8,
+    source_csi: *mut u8,
+    target_csi: *mut u8,
+) {
+    unsafe {
+        crate::vm::stack_switching::asan::start_switch_fiber(
+            fake_stack_save,
+            source_csi,
+            target_csi,
+        )
+    }
+}
+
+#[cfg(feature = "stack-switching")]
+unsafe fn asan_finish_switch_fiber(
+    _store: &mut dyn VMStore,
+    _instance: InstanceId,
+    fake_stack: *mut u8,
+    current_csi: *mut u8,
+) {
+    unsafe { crate::vm::stack_switching::asan::finish_switch_fiber(fake_stack, current_csi) }
 }
 
 #[cfg(feature = "gc")]

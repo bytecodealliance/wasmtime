@@ -1,0 +1,85 @@
+test compile precise-output
+target x86_64
+
+function %fcmp_eq_f32x4_load(f32x4, i64) -> i32x4 {
+block0(v0: f32x4, v1: i64):
+    v2 = load.f32x4 v1+1
+    v3 = fcmp eq v0, v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu 1(%rdi), %xmm3
+;   cmpeqps %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu 1(%rdi), %xmm3 ; trap: heap_oob
+;   cmpeqps %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fcmp_lt_f64x2_load(f64x2, i64) -> i64x2 {
+block0(v0: f64x2, v1: i64):
+    v2 = load.f64x2 v1+1
+    v3 = fcmp lt v0, v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu 1(%rdi), %xmm3
+;   cmpltpd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu 1(%rdi), %xmm3 ; trap: heap_oob
+;   cmpltpd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fcmp_eq_f32x4_load_aligned(f32x4, i64) -> i32x4 {
+block0(v0: f32x4, v1: i64):
+    v2 = load.f32x4 aligned v1
+    v3 = fcmp eq v0, v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   cmpeqps (%rdi), %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpeqps (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

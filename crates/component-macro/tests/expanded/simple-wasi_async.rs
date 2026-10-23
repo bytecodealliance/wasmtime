@@ -189,18 +189,24 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(record)]
             #[derive(Clone, Copy)]
-            pub struct DescriptorStat {}
-            impl core::fmt::Debug for DescriptorStat {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_struct("DescriptorStat").finish()
+            pub struct DescriptorStat {
+                #[component(name = "a")]
+                pub a: u32,
+            }
+            impl ::core::fmt::Debug for DescriptorStat {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("DescriptorStat").field("a", &self.a).finish()
                 }
             }
             const _: () = {
                 assert!(
-                    0 == < DescriptorStat as wasmtime::component::ComponentType >::SIZE32
+                    4 == < DescriptorStat as wasmtime::component::ComponentType >::SIZE32
                 );
                 assert!(
-                    1 == < DescriptorStat as wasmtime::component::ComponentType
+                    4 == < DescriptorStat as wasmtime::component::ComponentType
                     >::ALIGN32
                 );
             };
@@ -226,8 +232,11 @@ pub mod foo {
                     }
                 }
             }
-            impl core::fmt::Debug for Errno {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Debug for Errno {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     f.debug_struct("Errno")
                         .field("code", &(*self as i32))
                         .field("name", &self.name())
@@ -235,12 +244,15 @@ pub mod foo {
                         .finish()
                 }
             }
-            impl core::fmt::Display for Errno {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::core::fmt::Display for Errno {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
                     write!(f, "{} (error {})", self.name(), * self as i32)
                 }
             }
-            impl core::error::Error for Errno {}
+            impl ::core::error::Error for Errno {}
             const _: () = {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
@@ -327,18 +339,24 @@ pub mod foo {
             #[derive(wasmtime::component::Lower)]
             #[component(record)]
             #[derive(Clone, Copy)]
-            pub struct WallClock {}
-            impl core::fmt::Debug for WallClock {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_struct("WallClock").finish()
+            pub struct WallClock {
+                #[component(name = "a")]
+                pub a: u32,
+            }
+            impl ::core::fmt::Debug for WallClock {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("WallClock").field("a", &self.a).finish()
                 }
             }
             const _: () = {
                 assert!(
-                    0 == < WallClock as wasmtime::component::ComponentType >::SIZE32
+                    4 == < WallClock as wasmtime::component::ComponentType >::SIZE32
                 );
                 assert!(
-                    1 == < WallClock as wasmtime::component::ComponentType >::ALIGN32
+                    4 == < WallClock as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
             pub trait HostWithStore<T>: wasmtime::component::HasData {}

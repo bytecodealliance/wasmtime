@@ -229,6 +229,8 @@ macro_rules! for_each_vmctx_type {
                         tags[num_defined_tags; DefinedTagIndex]: VMTagDefinition
                     }
 
+                    align { ptr }
+
                     array {
                         #[aggregate]
                         func_refs[num_escaped_funcs; FuncRefIndex]: VMFuncRef
@@ -380,6 +382,11 @@ macro_rules! vmctx_field_size {
     // `for_each_vm_type!`.
     (($p:expr) VMLowering) => {
         2u32 * u32::from($p)
+    };
+    // `VMGlobalDefinition` is a union of the representations of every type a
+    // global can have, the largest being `v128`.
+    (($p:expr) VMGlobalDefinition) => {
+        16u32
     };
     // Anything else names one of the `VM*` types, and so has an
     // `offsets::VMFoo` generated for it by `for_each_vm_type!`. Deferring to

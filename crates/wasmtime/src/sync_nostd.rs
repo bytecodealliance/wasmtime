@@ -135,6 +135,65 @@ impl Drop for OnceLockGuard<'_> {
 }
 
 #[derive(Debug)]
+pub struct Mutex<T> {
+    val: UnsafeCell<T>,
+    lock: raw::Mutex,
+}
+
+unsafe impl<T: Send> Send for Mutex<T> {}
+unsafe impl<T: Send> Sync for Mutex<T> {}
+
+impl<T> Mutex<T> {
+    pub const fn new(val: T) -> Mutex<T> {
+        Mutex {
+            val: UnsafeCell::new(val),
+            lock: raw::Mutex::new(),
+        }
+    }
+
+    pub fn lock(&self) -> impl DerefMut<Target = T> + '_ {
+        self.lock.lock();
+        MutexGuard { lock: self }
+    }
+}
+
+impl<T: Default> Default for Mutex<T> {
+    fn default() -> Mutex<T> {
+        Mutex::new(T::default())
+    }
+}
+
+struct MutexGuard<'a, T> {
+    lock: &'a Mutex<T>,
+}
+
+impl<T> Deref for MutexGuard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        // SAFETY: We hold the lock
+        unsafe { &*self.lock.val.get() }
+    }
+}
+
+impl<T> DerefMut for MutexGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        // SAFETY: We hold the lock
+        unsafe { &mut *self.lock.val.get() }
+    }
+}
+
+impl<T> Drop for MutexGuard<'_, T> {
+    fn drop(&mut self) {
+        // SAFETY: This type represents the lock being held, so it's safe to
+        // perform the unlock here at the end.
+        unsafe {
+            self.lock.lock.unlock();
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct RwLock<T> {
     val: UnsafeCell<T>,
     lock: raw::RwLock,
@@ -419,6 +478,14 @@ mod tests {
         let lock = OnceLock::new();
         assert_eq!(lock.get_or_try_init(|| Err(())), Err(()));
         assert_eq!(*lock.get_or_init(|| 1), 1);
+    }
+
+    #[test]
+    fn smoke_mutex() {
+        let lock = Mutex::new(1);
+        assert_eq!(*lock.lock(), 1);
+        *lock.lock() = 2;
+        assert_eq!(*lock.lock(), 2);
     }
 
     #[test]

@@ -243,7 +243,7 @@
 ;; function u2:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 13 ""
+;;     region2 = 75 ""
 ;;     region3 = 215 ""
 ;;     region4 = 105 ""
 ;;     region5 = 61 ""
@@ -265,7 +265,7 @@
 ;; function u2:1(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 44 ""
+;;     region2 = 57 ""
 ;;     region3 = 87 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
@@ -284,7 +284,7 @@
 ;; function u2:2(i64 vmctx, i64) -> i64 tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 21 ""
+;;     region2 = 13 ""
 ;;     region3 = 93 ""
 ;;     region4 = 211 ""
 ;;     region5 = 99 ""
@@ -325,7 +325,7 @@
 ;; function u3:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 13 ""
+;;     region2 = 75 ""
 ;;     region3 = 215 ""
 ;;     region4 = 105 ""
 ;;     region5 = 61 ""
@@ -347,7 +347,7 @@
 ;; function u3:1(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 44 ""
+;;     region2 = 57 ""
 ;;     region3 = 87 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
@@ -366,7 +366,7 @@
 ;; function u3:2(i64 vmctx, i64) -> i64 tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 21 ""
+;;     region2 = 13 ""
 ;;     region3 = 93 ""
 ;;     region4 = 211 ""
 ;;     region5 = 99 ""

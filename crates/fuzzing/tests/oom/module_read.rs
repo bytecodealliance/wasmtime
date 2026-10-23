@@ -5,17 +5,10 @@ use wasmtime_fuzzing::oom::OomTest;
 
 #[test]
 fn module_name() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(&engine, r#"(module $my_module (func (export "f")))"#)?.serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(&engine, r#"(module $my_module (func (export "f")))"#)?;
 
     OomTest::new().test(|| {
         let _name = module.name();
@@ -25,21 +18,13 @@ fn module_name() -> Result<()> {
 
 #[test]
 fn module_imports() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(
-            &engine,
-            r#"(module (import "mod" "func" (func)) (func (export "f")))"#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(
+        &engine,
+        r#"(module (import "mod" "func" (func)) (func (export "f")))"#,
+    )?;
 
     OomTest::new().test(|| {
         let count = module.imports().count();
@@ -50,21 +35,13 @@ fn module_imports() -> Result<()> {
 
 #[test]
 fn module_exports() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(
-            &engine,
-            r#"(module (func (export "f")) (memory (export "m") 1))"#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(
+        &engine,
+        r#"(module (func (export "f")) (memory (export "m") 1))"#,
+    )?;
 
     OomTest::new().test(|| {
         let count = module.exports().count();
@@ -75,17 +52,10 @@ fn module_exports() -> Result<()> {
 
 #[test]
 fn module_get_export() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(&engine, r#"(module (func (export "f")))"#)?.serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(&engine, r#"(module (func (export "f")))"#)?;
 
     OomTest::new().test(|| {
         let export = module.get_export("f");
@@ -98,17 +68,10 @@ fn module_get_export() -> Result<()> {
 
 #[test]
 fn module_engine() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(&engine, "(module)")?.serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(&engine, "(module)")?;
 
     OomTest::new().test(|| {
         let _engine = module.engine();

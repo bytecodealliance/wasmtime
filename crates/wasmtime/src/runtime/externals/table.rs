@@ -77,7 +77,7 @@ impl Table {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
-    /// let ty = TableType::new(RefType::FUNCREF, 2, None);
+    /// let ty = TableType::new(RefType::FUNCREF, 2, None)?;
     /// let table = Table::new(&mut store, ty, Ref::Func(None))?;
     ///
     /// let module = Module::new(
@@ -134,6 +134,7 @@ impl Table {
     ) -> Result<Table> {
         init.ensure_matches_ty(store, ty.element())
             .context("type mismatch: value does not match table element type")?;
+        store.bump_table_count()?;
         let table = generate_table_export(store, limiter, &ty).await?;
 
         // Tables are always allocated as all zeroes, so skip the fill below if
@@ -430,22 +431,26 @@ impl Table {
                  destination table's element type",
             )?;
 
+        let mut copy_elem = |src: u64, dst: u64| -> Result<()> {
+            let scope = store.enter_gc_lifo_scope();
+            let result = match src_table.get(&mut *store, src) {
+                Some(val) => dst_table.set(&mut *store, dst, val),
+                None => Err(Trap::TableOutOfBounds.into()),
+            };
+            store.exit_gc_lifo_scope(scope);
+            result
+        };
+
         // Do a forwards or backwards copy depending on the indices involved to
         // ensure that elements that are part of the copy aren't accidentally
         // clobbered.
         if dst_index < src_index {
             for (src, dst) in src_range.zip(dst_range) {
-                let val = src_table
-                    .get(&mut *store, src)
-                    .ok_or(Trap::TableOutOfBounds)?;
-                dst_table.set(&mut *store, dst, val)?;
+                copy_elem(src, dst)?;
             }
         } else {
             for (src, dst) in src_range.rev().zip(dst_range.rev()) {
-                let val = src_table
-                    .get(&mut *store, src)
-                    .ok_or(Trap::TableOutOfBounds)?;
-                dst_table.set(&mut *store, dst, val)?;
+                copy_elem(src, dst)?;
             }
         }
         Ok(())

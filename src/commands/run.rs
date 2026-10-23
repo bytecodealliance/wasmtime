@@ -131,7 +131,7 @@ impl RunCommand {
             };
             self.run.common.debug.debugger = Some("<built-in gdbstub>".into());
             self.run.common.debug.arg.push(addr);
-            Some(gdbstub_component_artifact::GDBSTUB_COMPONENT)
+            Some(gdbstub_component_artifact::gdbstub()?)
         } else {
             None
         };
@@ -593,7 +593,7 @@ impl RunCommand {
         path: &str,
         interval: std::time::Duration,
     ) -> Result<Box<dyn FnOnce(&mut Store<Host>) + Send>> {
-        use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut, UpdateDeadline};
+        use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreHookState, UpdateDeadline};
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
         store.data_mut().guest_profiler = match main_target {
@@ -613,7 +613,7 @@ impl RunCommand {
         };
 
         fn sample(
-            mut store: StoreContextMut<Host>,
+            mut store: StoreHookState<Host>,
             f: impl FnOnce(&mut GuestProfiler, StoreContext<Host>),
         ) {
             let mut profiler = store.data_mut().guest_profiler.take().unwrap();
@@ -703,7 +703,13 @@ impl RunCommand {
                         main_target.unwrap_core(),
                     )?;
                 }
-                _ => bail!("cannot use `--default-values-unknown-imports` with components"),
+                #[cfg(feature = "component-model")]
+                CliLinker::Component(linker) => {
+                    linker.define_unknown_imports_as_default_values(
+                        &mut *store,
+                        main_target.unwrap_component(),
+                    )?;
+                }
             }
         }
 
@@ -1116,7 +1122,8 @@ impl RunCommand {
             .to_str()
             .unwrap_or_else(|| "unknown");
 
-        if let Err(coredump_err) = write_core_dump(store, &err, &source_name, coredump_path) {
+        if let Err(coredump_err) = super::write_core_dump(store, &err, &source_name, coredump_path)
+        {
             eprintln!("warning: coredump failed to generate: {coredump_err}");
             err
         } else {
@@ -1148,12 +1155,8 @@ impl RunCommand {
                         }
                         // If preview2 was explicitly requested, always use it.
                         // Otherwise use it so long as threads are disabled.
-                        //
-                        // Note that for now `p0` is currently
-                        // default-enabled but this may turn into
-                        // default-disabled in the future.
                         (Some(true), _) | (None, Some(false) | None) => {
-                            if self.run.common.wasi.preview0 != Some(false) {
+                            if self.run.common.wasi.preview0 == Some(true) {
                                 wasmtime_wasi::p0::add_to_linker_async(linker, |t| t.wasip1_ctx())?;
                             }
                             wasmtime_wasi::p1::add_to_linker_async(linker, |t| t.wasip1_ctx())?;
@@ -1291,6 +1294,11 @@ impl RunCommand {
                 }
                 let http = self.run.wasi_http_ctx()?;
                 store.data_mut().wasi_http = Some(http);
+                // The hooks carry the `--http-outgoing-body-*` limits, so they
+                // have to be taken from the CLI options as well: `Host` is
+                // built with `Host::default()`, which leaves the default hooks
+                // in place.
+                store.data_mut().wasi_http_hooks = self.run.wasi_http_hooks();
             }
         }
 
@@ -1425,28 +1433,4 @@ impl wasmtime_wasi_tls::WasiTlsView for Host {
             ctx: self.wasi_tls.as_mut().unwrap(),
         }
     }
-}
-
-#[cfg(feature = "coredump")]
-fn write_core_dump(
-    store: &mut Store<Host>,
-    err: &wasmtime::Error,
-    name: &str,
-    path: &str,
-) -> Result<()> {
-    use std::fs::File;
-    use std::io::Write;
-
-    let core_dump = err
-        .downcast_ref::<wasmtime::WasmCoreDump>()
-        .expect("should have been configured to capture core dumps");
-
-    let core_dump = core_dump.serialize(store, name);
-
-    let mut core_dump_file =
-        File::create(path).with_context(|| format!("failed to create file at `{path}`"))?;
-    core_dump_file
-        .write_all(&core_dump)
-        .with_context(|| format!("failed to write core dump file at `{path}`"))?;
-    Ok(())
 }

@@ -1,9 +1,53 @@
 test compile precise-output
+set enable_multi_ret_implicit_sret
 target s390x
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; ATOMIC_CAS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %atomic_cas_i128(i128, i128, i64) -> i128 {
+block0(v0: i128, v1: i128, v2: i64):
+  v3 = atomic_cas.i128 v2, v0, v1
+  return v3
+}
+
+; VCode:
+;   stmg %r6, %r15, 48(%r15)
+; block0:
+;   lgr %r6, %r5
+;   lgr %r14, %r2
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   lgdr %r2, %f1
+;   vlgvg %r3, %v1, 1
+;   lgdr %r4, %f3
+;   vlgvg %r5, %v3, 1
+;   cdsg %r2, %r4, 0(%r6)
+;   vlvgp %v18, %r2, %r3
+;   lgr %r2, %r14
+;   vst %v18, 0(%r2)
+;   lmg %r6, %r15, 48(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r6, %r15, 0x30(%r15)
+; block1: ; offset 0x6
+;   lgr %r6, %r5
+;   lgr %r14, %r2
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   lgdr %r2, %f1
+;   vlgvg %r3, %v1, 1
+;   lgdr %r4, %f3
+;   vlgvg %r5, %v3, 1
+;   cdsg %r2, %r4, 0(%r6) ; trap: heap_oob
+;   vlvgp %v18, %r2, %r3
+;   lgr %r2, %r14
+;   vst %v18, 0(%r2)
+;   lmg %r6, %r15, 0x30(%r15)
+;   br %r14
 
 function %atomic_cas_i64(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):

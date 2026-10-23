@@ -864,6 +864,37 @@ fn read_link_absolute() {
     );
 }
 
+/// Paths which resolve outside of `start` are refused, regardless of whether
+/// what they name exists or is a symlink.
+#[test]
+fn read_link_escape() {
+    let tmpdir = tmpdir();
+    let root = h::dir_of(&tmpdir);
+    check!(h::create_dir(&root, "sandbox"));
+    check!(h::create_dir(&root, "sandbox/sub"));
+    check!(h::create(&root, "secret"));
+    let start = check!(p::open(&root, Path::new("sandbox"), &p::dir_options()));
+
+    let mut paths = vec![
+        PathBuf::from("../secret"),
+        PathBuf::from("../nope"),
+        PathBuf::from("sub/../../secret"),
+        tmpdir.path().join("secret"),
+        tmpdir.path().join("nope"),
+    ];
+    if got_symlink_permission(&root) {
+        check!(h::symlink_file(&root, &"secret", &"link"));
+        paths.push(PathBuf::from("../link"));
+        paths.push(tmpdir.path().join("link"));
+    }
+    for path in paths {
+        error_contains!(
+            p::read_link(&start, &path),
+            "a path led outside of the filesystem"
+        );
+    }
+}
+
 #[test]
 fn links_work() {
     let tmpdir = tmpdir();

@@ -37,7 +37,7 @@ impl VMGcRef {
         }
 
         match gc_heap.header(&self) {
-            Ok(header) => header.kind() == VMGcKind::ExternRef,
+            Ok(header) => header.kind() == Some(VMGcKind::ExternRef),
             Err(_) => false,
         }
     }

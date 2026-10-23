@@ -14,16 +14,21 @@ use serde_derive::{Deserialize, Serialize};
 pub enum CallConv {
     /// Best performance, not ABI-stable.
     Fast,
-    /// Supports tail calls, not ABI-stable except for exception
-    /// payload registers.
+    /// Supports tail calls, not ABI-stable except as stated here.
     ///
-    /// On exception resume, a caller to a `tail`-convention function
-    /// assumes that the exception payload values are in the following
-    /// registers (per platform):
+    /// On exception resume, a caller to a `tail`-convention function assumes
+    /// that the exception payload values are in the following registers (per
+    /// platform):
     /// - x86-64: rax, rdx
     /// - aarch64: x0, x1
     /// - riscv64: a0, a1
     /// - pulley{32,64}: x0, x1
+    ///
+    /// The `interrupt_poll` instruction uses registers as follows:
+    /// - x86-64: `context` in rdi, `load_ptr` and `next_load_ptr` in r11,
+    ///   scratch in r10
+    /// - aarch64: `context` in x0, `load_ptr` and `next_load_ptr` in x10,
+    ///   scratch in x9
     //
     // Currently, this is basically sys-v except that callees pop stack
     // arguments, rather than callers. Expected to change even more in the

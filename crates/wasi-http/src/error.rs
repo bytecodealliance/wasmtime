@@ -265,3 +265,29 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+/// A response that should be returned to the client when a request cannot be
+/// turned into a guest request.
+#[derive(Debug)]
+pub struct ErrorResponse {
+    status: http::StatusCode,
+}
+
+#[expect(missing_docs, reason = "self-explanatory")]
+impl ErrorResponse {
+    pub fn new(status: http::StatusCode) -> Self {
+        Self { status }
+    }
+
+    pub fn status(&self) -> http::StatusCode {
+        self.status
+    }
+}
+
+impl fmt::Display for ErrorResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "error response: {}", self.status)
+    }
+}
+
+impl std::error::Error for ErrorResponse {}

@@ -1,5 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
+;;! flags = "-W threads"
 
 (module 
   (import "env" "memory" (memory 1 1 shared))

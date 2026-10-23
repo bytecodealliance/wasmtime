@@ -1,0 +1,53 @@
+test interpret
+
+function %fcvt_from_sint(i32) -> f16 {
+block0(v0: i32):
+    v1 = fcvt_from_sint.f16 v0
+    return v1
+}
+; run: %fcvt_from_sint(0) == 0x0.0
+; run: %fcvt_from_sint(1) == 0x1.000p0
+; run: %fcvt_from_sint(-1) == -0x1.000p0
+; run: %fcvt_from_sint(2048) == 0x1.000p11
+
+function %fcvt_to_sint(f16) -> i32 {
+block0(v0: f16):
+    v1 = fcvt_to_sint.i32 v0
+    return v1
+}
+; run: %fcvt_to_sint(0x1.000p0) == 1
+; run: %fcvt_to_sint(-0x1.000p0) == -1
+; run: %fcvt_to_sint(0x1.000p11) == 2048
+
+function %fcmp_ne(f16, f16) -> i8 {
+block0(v0: f16, v1: f16):
+    v2 = fcmp ne v0, v1
+    return v2
+}
+; run: %fcmp_ne(0x1.000p0, 0x1.000p0) == 0
+; run: %fcmp_ne(0x1.000p0, 0x2.000p0) == 1
+; run: %fcmp_ne(NaN:0x1, NaN:0x1) == 1
+
+function %fcmp_unord(f16, f16) -> i8 {
+block0(v0: f16, v1: f16):
+    v2 = fcmp uno v0, v1
+    return v2
+}
+; run: %fcmp_unord(NaN:0x1, 0x1.000p0) == 1
+; run: %fcmp_unord(0x1.000p0, 0x2.000p0) == 0
+
+function %fmin(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+    v2 = fmin v0, v1
+    return v2
+}
+; run: %fmin(0x1.000p0, 0x2.000p0) == 0x1.000p0
+; run: %fmin(0x1.000p0, 0x1.000p0) == 0x1.000p0
+
+function %fmax(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+    v2 = fmax v0, v1
+    return v2
+}
+; run: %fmax(0x1.000p0, 0x2.000p0) == 0x2.000p0
+; run: %fmax(-0x0.0, 0x0.0) == 0x0.0

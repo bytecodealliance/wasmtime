@@ -1,5 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
+;;! flags = "-W threads"
 
 (module
   (memory 1)

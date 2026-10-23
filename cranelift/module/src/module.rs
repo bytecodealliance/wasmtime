@@ -275,6 +275,10 @@ pub enum ModuleError {
     /// different signature than declared previously
     IncompatibleSignature(String, ir::Signature, ir::Signature),
 
+    /// Indicates a data object was declared as TLS but previously
+    /// declared as not TLS or vice versa.
+    IncompatibleDataTls(String, bool, bool),
+
     /// Indicates an identifier was defined more than once
     DuplicateDefinition(String),
 
@@ -316,6 +320,7 @@ impl core::error::Error for ModuleError {
             Self::Undeclared { .. }
             | Self::IncompatibleDeclaration { .. }
             | Self::IncompatibleSignature { .. }
+            | Self::IncompatibleDataTls { .. }
             | Self::DuplicateDefinition { .. }
             | Self::InvalidImportDefinition { .. } => None,
             Self::Compilation(source) => Some(source),
@@ -340,6 +345,12 @@ impl std::fmt::Display for ModuleError {
                 write!(
                     f,
                     "Function {name} signature {new_sig:?} is incompatible with previous declaration {prev_sig:?}",
+                )
+            }
+            Self::IncompatibleDataTls(name, prev_tls, new_tls) => {
+                write!(
+                    f,
+                    "Data object {name} TLS {new_tls:?} is incompatible with previous declaration TLS {prev_tls:?}",
                 )
             }
             Self::DuplicateDefinition(name) => {
@@ -407,13 +418,17 @@ impl DataDeclaration {
         }
     }
 
-    fn merge(&mut self, linkage: Linkage, writable: bool, tls: bool) {
+    fn merge(&mut self, linkage: Linkage, writable: bool, tls: bool) -> Result<(), ModuleError> {
         self.linkage = Linkage::merge(self.linkage, linkage);
         self.writable = self.writable || writable;
-        assert_eq!(
-            self.tls, tls,
-            "Can't change TLS data object to normal or in the opposite way",
-        );
+        if self.tls != tls {
+            return Err(ModuleError::IncompatibleDataTls(
+                self.name.clone().unwrap(),
+                self.tls,
+                tls,
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -789,7 +804,7 @@ impl ModuleDeclarations {
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Data(id) => {
                     let existing = &mut self.data_objects[id];
-                    existing.merge(linkage, writable, tls);
+                    existing.merge(linkage, writable, tls)?;
                     Ok((id, existing.linkage))
                 }
 

@@ -8,7 +8,7 @@
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
 ;;     region2 = 235 ""
-;;     region3 = 18 ""
+;;     region3 = 6 ""
 ;;     region4 = 109 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8

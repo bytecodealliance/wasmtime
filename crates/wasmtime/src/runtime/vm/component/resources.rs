@@ -20,7 +20,7 @@
 //! about ABI details can be found in lifting/lowering throughout Wasmtime,
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
-use super::{HandleTable, InstanceState, RemovedResource};
+use super::{HandleCounter, HandleTable, InstanceState, RemovedResource};
 use crate::bail_bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
@@ -68,6 +68,10 @@ pub struct ResourceTables<'a> {
     /// that this is a heterogeneous table instead of only containing a single
     /// type.
     pub host_table: &'a mut HandleTable,
+
+    /// The store-wide live-handle counter, charged by every insertion into and
+    /// removal from any of the tables above.
+    pub handle_counter: &'a mut HandleCounter,
 
     /// Task information about calls actively in use to track information such
     /// as borrow counts.
@@ -192,7 +196,7 @@ impl TypedResourceIndex {
 /// State related to borrows for a specific call.
 #[derive(Default)]
 pub struct CallContext {
-    lenders: Vec<TypedResourceIndex>,
+    lenders: TryVec<TypedResourceIndex>,
     borrow_count: u32,
 }
 
@@ -204,39 +208,47 @@ impl CallContext {
 }
 
 impl ResourceTables<'_> {
-    fn table_for_resource(&mut self, resource: &TypedResource) -> &mut HandleTable {
-        match resource {
-            TypedResource::Host(_) => self.host_table,
+    fn table_for_resource(
+        &mut self,
+        resource: &TypedResource,
+    ) -> (&mut HandleTable, &mut HandleCounter) {
+        let table = match resource {
+            TypedResource::Host(_) => &mut *self.host_table,
             TypedResource::Component { ty, .. } => {
                 let (states, types) = self.guest.as_mut().unwrap();
                 states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
-        }
+        };
+        (table, &mut *self.handle_counter)
     }
 
-    fn table_for_index(&mut self, index: &TypedResourceIndex) -> &mut HandleTable {
-        match index {
-            TypedResourceIndex::Host(_) => self.host_table,
+    fn table_for_index(
+        &mut self,
+        index: &TypedResourceIndex,
+    ) -> (&mut HandleTable, &mut HandleCounter) {
+        let table = match index {
+            TypedResourceIndex::Host(_) => &mut *self.host_table,
             TypedResourceIndex::Component { ty, .. } => {
                 let (states, types) = self.guest.as_mut().unwrap();
                 states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
-        }
+        };
+        (table, &mut *self.handle_counter)
     }
 
     /// Implementation of the `resource.new` canonical intrinsic.
     ///
     /// Note that this is the same as `resource_lower_own`.
     pub fn resource_new(&mut self, resource: TypedResource) -> Result<u32> {
-        self.table_for_resource(&resource)
-            .resource_own_insert(resource)
+        let (table, counter) = self.table_for_resource(&resource);
+        table.resource_own_insert(counter, resource)
     }
 
     /// Implementation of the `resource.rep` canonical intrinsic.
     ///
     /// This one's one of the simpler ones: "just get the rep please"
     pub fn resource_rep(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        self.table_for_index(&index).resource_rep(index)
+        self.table_for_index(&index).0.resource_rep(index)
     }
 
     /// Implementation of the `resource.drop` canonical intrinsic minus the
@@ -246,14 +258,15 @@ impl ResourceTables<'_> {
     /// the specified table. This operation can fail if:
     ///
     /// * The index is invalid.
-    /// * The index points to an `own` resource which has active borrows.
+    /// * The index points to a resource which has been lent out.
     /// * The index's type is mismatched with the entry in the table's type.
     ///
     /// Otherwise this will return `Some(rep)` if the destructor for `rep` needs
     /// to run. If `None` is returned then that means a `borrow` handle was
     /// removed and no destructor is necessary.
     pub fn resource_drop(&mut self, index: TypedResourceIndex) -> Result<Option<u32>> {
-        match self.table_for_index(&index).remove_resource(index)? {
+        let (table, counter) = self.table_for_index(&index);
+        match table.remove_resource(counter, index)? {
             RemovedResource::Own { rep } => Ok(Some(rep)),
             RemovedResource::Borrow { scope } => {
                 self.task_state.call_context(scope)?.borrow_count -= 1;
@@ -272,8 +285,8 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lower_own` function.
     pub fn resource_lower_own(&mut self, resource: TypedResource) -> Result<u32> {
-        self.table_for_resource(&resource)
-            .resource_own_insert(resource)
+        let (table, counter) = self.table_for_resource(&resource);
+        table.resource_own_insert(counter, resource)
     }
 
     /// Attempts to remove an "own" handle from the specified table and its
@@ -285,7 +298,8 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lift_own` function.
     pub fn resource_lift_own(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        match self.table_for_index(&index).remove_resource(index)? {
+        let (table, counter) = self.table_for_index(&index);
+        match table.remove_resource(counter, index)? {
             RemovedResource::Own { rep } => Ok(rep),
             RemovedResource::Borrow { .. } => bail!("cannot lift own resource from a borrow"),
         }
@@ -306,32 +320,53 @@ impl ResourceTables<'_> {
     /// Unlike [`Self::materialize_current_scope`], this does not materialize a
     /// deferred host task.
     fn current_scope(&mut self) -> Result<&mut CallContext> {
-        match self.current_scope {
-            Some(CurrentScope::Id(id)) => self.task_state.call_context(id),
+        let id = match self.current_scope {
+            Some(CurrentScope::Id(id)) => id,
             Some(CurrentScope::DeferredHost) => {
-                match self.task_state.deferred_host_call_context() {
-                    Some(cx) => Ok(cx),
-                    None => bail_bug!("deferred host scope has no call context"),
+                // With a deferred host task the `CallContext` for this task
+                // could be stored in one of two locations. The primary location
+                // is `task_state.deferred_host_call_context()` but that stops
+                // being used once the host task is actually materialized. On
+                // materialization this over here isn't updated necessarily, so
+                // this'll only lazily pick up when the host task is actually
+                // materialized. In such a situation that's detected here and
+                // `self.current_scope` is mutated to match.
+                //
+                // NB: this should use `if let` when rustc is smarter about
+                // borrows.
+                if self.task_state.deferred_host_call_context().is_some() {
+                    return Ok(self.task_state.deferred_host_call_context().unwrap());
                 }
+                let id = self.task_state.materialize_current_scope()?;
+                self.current_scope = Some(CurrentScope::Id(id));
+                id
             }
             None => bail_bug!("no current scope"),
-        }
+        };
+        self.task_state.call_context(id)
     }
 
     /// Extracts the underlying resource representation by lifting a "borrow"
     /// from the tables.
     ///
-    /// This primarily employs dynamic tracking when a borrow is created from an
-    /// "own" handle to ensure that the "own" handle isn't dropped while the
-    /// borrow is active and additionally that when the current call scope
-    /// returns the lend operation is undone.
+    /// This primarily employs dynamic tracking when a borrow is created from
+    /// either an "own" or a "borrow" handle to ensure that the lending handle
+    /// isn't dropped while the borrow is active and additionally that when the
+    /// current call scope returns the lend operation is undone.
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        let (rep, is_own) = self.table_for_index(&index).resource_lend(index)?;
-        if is_own {
-            self.current_scope()?.lenders.push(index);
-        }
+        // FIXME: the logic here applies to all resources, both own and borrow,
+        // although tracking `borrow` here isn't always necessary for sync
+        // tasks. Ideally the `lenders.push` would be skipped for sync tasks but
+        // that requires a bit more plumbing and also appropriately tracking the
+        // `lend_count` and such. For now this treats own/borrow the same way.
+        //
+        // Space for the lender is reserved first so that recording it can't
+        // fail after the lend.
+        self.current_scope()?.lenders.reserve(1)?;
+        let rep = self.table_for_index(&index).0.resource_lend(index)?;
+        self.current_scope()?.lenders.push(index)?;
         Ok(rep)
     }
 
@@ -351,8 +386,8 @@ impl ResourceTables<'_> {
         let scope = self.materialize_current_scope()?;
         let cx = self.task_state.call_context(scope)?;
         cx.borrow_count = cx.borrow_count.checked_add(1).unwrap();
-        self.table_for_resource(&resource)
-            .resource_borrow_insert(resource, scope)
+        let (table, counter) = self.table_for_resource(&resource);
+        table.resource_borrow_insert(counter, resource, scope)
     }
 
     /// Validates that the current scope can be exited.
@@ -371,6 +406,7 @@ impl ResourceTables<'_> {
             // due to the dynamic tracking of borrows and such employed for
             // resources.
             self.table_for_index(&lender)
+                .0
                 .resource_undo_lend(lender)
                 .unwrap();
         }

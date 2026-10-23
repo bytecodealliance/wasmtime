@@ -7,21 +7,22 @@ use pin_project_lite::pin_project;
 use std::convert::Infallible;
 use std::ffi::OsString;
 use std::net::SocketAddr;
-use std::net::TcpListener as StdTcpListener;
+use std::num::NonZeroUsize;
+
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{
     path::PathBuf,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
-use tokio::io::{self, AsyncWrite};
-use tokio::net::TcpListener;
-use tokio::sync::{Notify, Semaphore};
-use wasmtime::component::{Component, GuestTaskId, Linker};
+use tokio::io::{self, AsyncRead, AsyncWrite};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Semaphore;
+use wasmtime::component::{Component, Linker, TaskGroupId};
 use wasmtime::error::Context as _;
 use wasmtime::{
     AsContextMut as _, Engine, Result, Store, StoreContextMut, StoreLimits, UpdateDeadline, bail,
@@ -29,12 +30,12 @@ use wasmtime::{
 use wasmtime_cli_flags::opt::WasmtimeOptionValue;
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::WasiHttpCtx;
 use wasmtime_wasi_http::handler::{
     HandlerState, Instance, Prepared, Proxy, ProxyHandler, ProxyPre, ShouldAccept,
     WorkerExpiration, WorkerState, WorkerStatus,
 };
 use wasmtime_wasi_http::io::TokioIo;
+use wasmtime_wasi_http::{ErrorResponse, WasiHttpCtx};
 
 #[cfg(feature = "debug")]
 use crate::commands::run::RunCommand;
@@ -92,10 +93,10 @@ impl wasmtime_wasi_http::WasiHttpView for Host {
     }
 }
 
-const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
+const DEFAULT_ADDRS: &[std::net::SocketAddr] = &[std::net::SocketAddr::new(
     std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
     8080,
-);
+)];
 
 fn parse_duration(s: &str) -> Result<Duration, String> {
     Duration::parse(Some(s)).map_err(|e| e.to_string())
@@ -107,14 +108,17 @@ pub struct ServeCommand {
     #[command(flatten)]
     run: RunCommon,
 
-    /// Socket address for the web server to bind to.
-    #[arg(long , value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR)]
-    addr: SocketAddr,
+    /// Socket addresses for the web server to bind to.
+    ///
+    /// Defaults to `0.0.0.0:8080`.
+    #[arg(long, value_name = "SOCKADDR", conflicts_with = "systemd_listenfd")]
+    addr: Vec<SocketAddr>,
 
     /// Socket address where, when connected to, will initiate a graceful
     /// shutdown.
     ///
-    /// Note that graceful shutdown is also supported on ctrl-c.
+    /// Note that graceful shutdown is also supported on ctrl-c and, on Unix,
+    /// SIGTERM.
     #[arg(long, value_name = "SOCKADDR")]
     shutdown_addr: Option<SocketAddr>,
 
@@ -157,6 +161,17 @@ pub struct ServeCommand {
     #[arg(long, default_value = "1s", value_parser = parse_duration)]
     idle_instance_timeout: Duration,
 
+    /// Optional maximum idle time before exiting the process.
+    ///
+    /// If no connection is open for this interval after the first connection has been received, the
+    /// process gracefully shuts down. This is mainly useful when starting `wasmtime serve` via
+    /// socket activation, as a system manager can restart the process when the next request comes
+    /// in.
+    ///
+    /// This accepts the same syntax as `--idle-instance-timeout`.
+    #[arg(long, value_parser = parse_duration)]
+    idle_process_timeout: Option<Duration>,
+
     /// Replace or add a request header before forwarding it to the component.
     ///
     /// The argument must have the form `name: value`. May be specified more
@@ -167,28 +182,36 @@ pub struct ServeCommand {
 
     /// Maximum number of concurrent requests that can be processed at any one
     /// point in time.
-    #[arg(long)]
-    max_concurrent_requests: Option<usize>,
+    #[arg(long, value_parser = parse_concurrency_limit)]
+    max_concurrent_requests: Option<NonZeroUsize>,
     /// Maximum number of concurrent connections that can be held at any one
     /// point in time.
-    #[arg(long)]
-    max_concurrent_connections: Option<usize>,
+    #[arg(long, value_parser = parse_concurrency_limit)]
+    max_concurrent_connections: Option<NonZeroUsize>,
+
+    #[arg(skip)]
+    inherited_sockets: InheritedSockets,
+}
+
+/// Both limits are handed to a semaphore, which panics above its permit limit.
+fn parse_concurrency_limit(s: &str) -> Result<NonZeroUsize, String> {
+    let n: NonZeroUsize = s
+        .parse()
+        .map_err(|e: std::num::ParseIntError| e.to_string())?;
+    if n.get() > Semaphore::MAX_PERMITS {
+        return Err(format!("maximum is {}", Semaphore::MAX_PERMITS));
+    }
+    Ok(n)
 }
 
 impl ServeCommand {
     /// Start a server to run the given wasi-http proxy component
     pub fn execute(mut self) -> Result<()> {
-        let inherited_socket = if self.systemd_listenfd {
-            Some(
-                unsafe {
-                    // Safety: Called early before any other file descriptors are opened.
-                    Self::inherit_socket()
-                }
-                .with_context(|| "Failed to resolve inherited sockets")?,
-            )
-        } else {
-            None
-        };
+        if self.systemd_listenfd {
+            // SAFETY: Called early before any other file descriptors are opened.
+            unsafe { self.inherited_sockets.inherit_sockets() }
+                .with_context(|| "Failed to resolve inherited sockets")?;
+        }
 
         self.run.common.init_logging()?;
 
@@ -220,7 +243,7 @@ impl ServeCommand {
             .enable_io()
             .build()?;
 
-        runtime.block_on(self.serve(inherited_socket))?;
+        runtime.block_on(self.serve())?;
 
         Ok(())
     }
@@ -261,7 +284,7 @@ impl ServeCommand {
             };
             self.run.common.debug.debugger = Some("<built-in gdbstub>".into());
             self.run.common.debug.arg.push(addr);
-            Some(gdbstub_component_artifact::GDBSTUB_COMPONENT)
+            Some(gdbstub_component_artifact::gdbstub()?)
         } else {
             None
         };
@@ -331,7 +354,6 @@ impl ServeCommand {
         mut debug_run: RunCommand,
         linker: Linker<Host>,
         component: Component,
-        inherited_socket: Option<StdTcpListener>,
     ) -> Result<()> {
         let mut debuggee_store = self.new_store(linker.engine(), None)?;
 
@@ -365,14 +387,7 @@ impl ServeCommand {
                 &debug_component,
                 &mut debug_linker,
                 debuggee_store,
-                move |store| {
-                    Box::pin(self.serve_maybe_debug(
-                        linker,
-                        component,
-                        Some(store),
-                        inherited_socket,
-                    ))
-                },
+                move |store| Box::pin(self.serve_maybe_debug(linker, component, Some(store))),
             )
             .await
     }
@@ -557,7 +572,7 @@ impl ServeCommand {
         Ok(())
     }
 
-    async fn serve(mut self, inherited_socket: Option<StdTcpListener>) -> Result<()> {
+    async fn serve(mut self) -> Result<()> {
         #[cfg(feature = "debug")]
         let debug_run = self.debugger_setup()?;
 
@@ -594,20 +609,18 @@ impl ServeCommand {
         #[cfg(feature = "debug")]
         if let Some(debug_run) = debug_run {
             return self
-                .serve_under_debugger(debug_run, linker, component, inherited_socket)
+                .serve_under_debugger(debug_run, linker, component)
                 .await;
         }
 
-        self.serve_maybe_debug(linker, component, None, inherited_socket)
-            .await
+        self.serve_maybe_debug(linker, component, None).await
     }
 
     async fn serve_maybe_debug(
-        self,
+        mut self,
         linker: Linker<Host>,
         component: Component,
-        mut debuggee_store: Option<&mut Store<Host>>,
-        inherited_socket: Option<StdTcpListener>,
+        debuggee_store: Option<&mut Store<Host>>,
     ) -> Result<()> {
         let engine = linker.engine();
         let request_headers = RequestHeaders::parse(&self.headers)?;
@@ -621,16 +634,29 @@ impl ServeCommand {
         let instance = ProxyPre::P2(wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance)?);
 
         // Spawn background task(s) waiting for graceful shutdown signals. This
-        // always listens for ctrl-c but additionally can listen for a TCP
-        // connection to the specified address.
+        // always listens for ctrl-c (and SIGTERM on Unix) but additionally can
+        // listen for a TCP connection to the specified address.
         let shutdown = Arc::new(GracefulShutdown::default());
         tokio::task::spawn({
             let shutdown = shutdown.clone();
             async move {
-                tokio::signal::ctrl_c().await.unwrap();
-                shutdown.requested.notify_one();
+                wait_for_shutdown_signal().await;
+                shutdown.request_shutdown();
             }
         });
+        if let Some(timeout) = self.idle_process_timeout {
+            let shutdown = shutdown.clone();
+            let idle = shutdown.wait_idle_connections(timeout);
+            tokio::task::spawn(async move {
+                tokio::select! {
+                    _ = shutdown.requested() => {}
+                    _ = idle => {
+                        eprintln!("No connections for {timeout:?}, shutting down");
+                        shutdown.request_shutdown();
+                    }
+                }
+            });
+        }
         if let Some(addr) = self.shutdown_addr {
             let listener = tokio::net::TcpListener::bind(addr).await?;
             eprintln!(
@@ -640,37 +666,46 @@ impl ServeCommand {
             let shutdown = shutdown.clone();
             tokio::task::spawn(async move {
                 let _ = listener.accept().await;
-                shutdown.requested.notify_one();
+                shutdown.request_shutdown();
             });
         }
 
-        let listener = match inherited_socket {
-            Some(listener) => {
+        let servers = match self.inherited_sockets.take()? {
+            Some(listeners) => {
+                assert!(!listeners.is_empty());
                 eprintln!("Serving HTTP on inherited socket");
                 log::info!("Listening on inherited socket");
-
-                TcpListener::from_std(listener)?
+                listeners
             }
             None => {
-                let socket = match &self.addr {
-                    SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
-                    SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
+                let addrs = if self.addr.is_empty() {
+                    DEFAULT_ADDRS.to_vec()
+                } else {
+                    self.addr.clone()
                 };
-                // Conditionally enable `SO_REUSEADDR` depending on the current
-                // platform. On Unix we want this to be able to rebind an address in
-                // the `TIME_WAIT` state which can happen then a server is killed with
-                // active TCP connections and then restarted. On Windows though if
-                // `SO_REUSEADDR` is specified then it enables multiple applications to
-                // bind the port at the same time which is not something we want. Hence
-                // this is conditionally set based on the platform (and deviates from
-                // Tokio's default from always-on).
-                socket.set_reuseaddr(!cfg!(windows))?;
-                socket.bind(self.addr)?;
-                let listener = socket.listen(100)?;
+                let mut servers = vec![];
+                for addr in &addrs {
+                    let socket = match addr {
+                        SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
+                        SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
+                    };
+                    // Conditionally enable `SO_REUSEADDR` depending on the current
+                    // platform. On Unix we want this to be able to rebind an address in
+                    // the `TIME_WAIT` state which can happen then a server is killed with
+                    // active TCP connections and then restarted. On Windows though if
+                    // `SO_REUSEADDR` is specified then it enables multiple applications to
+                    // bind the port at the same time which is not something we want. Hence
+                    // this is conditionally set based on the platform (and deviates from
+                    // Tokio's default from always-on).
+                    socket.set_reuseaddr(!cfg!(windows))?;
+                    socket.bind(*addr)?;
+                    let listener = socket.listen(100)?;
 
-                eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
-                log::info!("Listening on {}", self.addr);
-                listener
+                    eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
+                    log::info!("Listening on {addr}");
+                    servers.push(SocketServer::Tcp(listener));
+                }
+                servers
             }
         };
 
@@ -702,9 +737,11 @@ impl ServeCommand {
 
         let max_concurrent_connections = self
             .max_concurrent_connections
+            .map(|n| n.get())
             .unwrap_or(if debuggee_store.is_some() { 1 } else { 1000 });
         let max_concurrent_requests = self
             .max_concurrent_requests
+            .map(|n| n.get())
             .unwrap_or(if debuggee_store.is_some() { 1 } else { 1000 });
         if debuggee_store.is_some() && max_concurrent_connections != 1 {
             bail!("cannot have more than 1 max concurrent connections with a debugger");
@@ -712,13 +749,30 @@ impl ServeCommand {
         if debuggee_store.is_some() && max_concurrent_requests != 1 {
             bail!("cannot have more than 1 max concurrent requests with a debugger");
         }
+        if debuggee_store.is_some() && servers.len() != 1 {
+            bail!("Cannot listen on more than one socket with a debugger");
+        }
 
         let sem_connections = Arc::new(Semaphore::new(max_concurrent_connections));
+
+        // `--profile=guest` starts a new profiler for every instance, so the
+        // component's modules are prepared for profiling once, up front.
+        #[cfg(feature = "profiling")]
+        let guest_profiler_modules = match &self.run.profile {
+            Some(Profile::Guest { .. }) => Some(wasmtime::GuestProfilerModules::new_component(
+                engine,
+                &component,
+                std::iter::empty(),
+            )?),
+            _ => None,
+        };
 
         let handler = ProxyHandler::new(HostHandlerState {
             sem_requests: Semaphore::new(max_concurrent_requests),
             cmd: self,
             component,
+            #[cfg(feature = "profiling")]
+            guest_profiler_modules,
             request_headers,
             max_instance_reuse_count,
             max_instance_concurrent_reuse_count,
@@ -727,52 +781,52 @@ impl ServeCommand {
             next_request_id: AtomicU64::default(),
             // Give one shutdown guard to this handler which will track the
             // full lifetime of any instances spawned.
-            _shutdown_guard: Box::new(shutdown.clone().increment()),
+            _shutdown_guard: Box::new(shutdown.clone().increment(false)),
         });
 
-        loop {
-            // Wait for a socket, but also "race" against shutdown to break out
-            // of this loop. Once the graceful shutdown signal is received then
-            // this loop exits immediately.
-            let (connection_permit, stream) = tokio::select! {
-                _ = shutdown.requested.notified() => break,
-                v = async {
-                    let permit = sem_connections.clone().acquire_owned().await?;
-                    let (stream, _) = listener.accept().await?;
-                    wasmtime::error::Ok((permit, stream))
-                } => v?,
-            };
+        // If any listener fails then a shutdown is requested to bring down all
+        // the other listeners as well, but the drain below still happens to
+        // gracefully finish in-flight requests. The first error seen is then
+        // returned at the end.
+        let result = if debuggee_store.is_some() {
+            debug_assert_eq!(servers.len(), 1);
+            let server = servers.into_iter().next().unwrap();
+            Self::serve_on_listener(
+                server,
+                shutdown.clone(),
+                sem_connections,
+                handler.clone(),
+                debuggee_store,
+            )
+            .await
+        } else {
+            let mut listener_tasks = tokio::task::JoinSet::new();
 
-            // The Nagle algorithm can impose a significant latency penalty
-            // (e.g. 40ms on Linux) on guests which write small, intermittent
-            // response body chunks (e.g. SSE streams).  Here we disable that
-            // algorithm and rely on the guest to buffer if appropriate to avoid
-            // TCP fragmentation.
-            stream.set_nodelay(true)?;
+            for server in servers {
+                listener_tasks.spawn(Self::serve_on_listener(
+                    server,
+                    shutdown.clone(),
+                    sem_connections.clone(),
+                    handler.clone(),
+                    None,
+                ));
+            }
 
-            // In addition to the shutdown guard given to the handler above,
-            // also give one to the tokio tasks doing HTTP I/O as well to ensure
-            // it keeps them alive too.
-            let shutdown_guard = shutdown.clone().increment();
-
-            // When debugging, handle the client synchronously since
-            // concurrent requests can't be served. Otherwise though spawn a
-            // task to handle this client.
-            match &mut debuggee_store {
-                Some(store) => handle_client(stream, &handler, Some(store)).await,
-                None => {
-                    let handler = handler.clone();
-                    tokio::task::spawn(async move {
-                        handle_client(stream, &handler, None).await;
-                        drop(shutdown_guard);
-                        drop(connection_permit);
-                    });
+            let mut result = Ok(());
+            while let Some(task_result) = listener_tasks.join_next().await {
+                let task_result = task_result
+                    .map_err(wasmtime::Error::from)
+                    .and_then(|result| result);
+                if let Err(e) = task_result {
+                    eprintln!("listener error: {e:?}");
+                    shutdown.request_shutdown();
+                    if result.is_ok() {
+                        result = Err(e);
+                    }
                 }
             }
-        }
-
-        // Don't allow any further requests to get picked up.
-        handler.state().sem_requests.close();
+            result
+        };
 
         drop(handler);
 
@@ -780,103 +834,59 @@ impl ServeCommand {
         // connections but there may still be outstanding connections
         // processing in child tasks. If there are wait for those to complete
         // before shutting down completely. Also enable short-circuiting this
-        // wait with a second ctrl-c signal.
-        if shutdown.close() {
-            return Ok(());
-        }
-        eprintln!("Waiting for child tasks to exit, ctrl-c again to quit sooner...");
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {}
-            _ = shutdown.complete.notified() => {}
+        // wait with a second ctrl-c (or SIGTERM) signal.
+        if let Some(wait_for_remaining) = shutdown.close() {
+            eprintln!("Waiting for child tasks to exit, ctrl-c again to quit sooner...");
+            tokio::select! {
+                _ = wait_for_shutdown_signal() => {}
+                _ = wait_for_remaining => {}
+            }
         }
 
-        Ok(())
+        result
     }
 
-    /// Takes ownership of file descriptors this process has inherited from a parent process like a
-    /// service manager.
-    ///
-    /// These are looked up with the [protocol from systemd](https://www.freedesktop.org/software/systemd/man/latest/sd_listen_fds.html#Notes).
-    /// This is used to implement socket activation for `wasmtime serve`.
-    ///
-    /// ## Safety
-    ///
-    /// This function takes ownership of raw file descriptors and must be called before any other
-    /// file descriptors are opened.
-    #[cfg(unix)]
-    unsafe fn inherit_socket() -> Result<StdTcpListener> {
-        use rustix::fs::{FileType, fstat};
-        use rustix::net::{AddressFamily, SocketType, getsockname, sockopt::socket_type};
-        use std::os::fd::{FromRawFd, OwnedFd, RawFd};
-        use std::{env, process};
-        use wasmtime::format_err;
-
-        // The logic here is taken from https://github.com/systemd/systemd/blob/main/src/libsystemd/sd-daemon/sd-daemon.c.
-        if !env::var("LISTEN_PID")
-            .ok()
-            .and_then(|pid| pid.parse().ok())
-            .is_some_and(|pid: u32| pid == process::id())
-        {
-            bail!("Missing or mismatched LISTEN_PID environment variable");
-        }
-
-        let Some(num_fds) = env::var("LISTEN_FDS")
-            .ok()
-            .and_then(|fds| fds.parse().ok())
-            .take_if(|e| *e >= 1)
-        else {
-            bail!("Missing or invalid LISTEN_FDS environment variable");
-        };
-
-        let first_fd: RawFd = 3;
-        let Some(last_fd) = first_fd.checked_add(num_fds) else {
-            bail!("Invalid amount of file descriptors in LISTEN_FDS");
-        };
-
-        let mut first_tcp_socket = None;
-        // We want to take ownership of all file descriptors here, but only use the first socket to
-        // listen on it.
-        for fd in first_fd..last_fd {
-            let fd = unsafe {
-                // Safety: We're calling this first in Self::execute(), before any other file
-                // descriptors part from stdin, stdout and stderr are opened.
-                OwnedFd::from_raw_fd(fd)
+    async fn serve_on_listener(
+        server: SocketServer,
+        shutdown: Arc<GracefulShutdown>,
+        sem_connections: Arc<Semaphore>,
+        handler: ProxyHandler<HostHandlerState>,
+        mut debuggee_store: Option<&mut Store<Host>>,
+    ) -> Result<()> {
+        loop {
+            // Wait for a socket, but also "race" against shutdown to break out
+            // of this loop. Once the graceful shutdown signal is received then
+            // this loop exits immediately.
+            let (connection_permit, stream) = tokio::select! {
+                _ = shutdown.requested() => break Ok(()),
+                v = async {
+                    let permit = sem_connections.clone().acquire_owned().await?;
+                    let stream = server.accept().await?;
+                    wasmtime::error::Ok((permit, stream))
+                } => v?,
             };
 
-            // Set the close-on-exec flag, matching libsystemd.
-            #[cfg(any(target_vendor = "apple", target_os = "linux", target_os = "android"))]
-            rustix::io::ioctl_fioclex(&fd)?;
+            // In addition to the shutdown guard given to the handler above,
+            // also give one to the tokio tasks doing HTTP I/O as well to ensure
+            // it keeps them alive too.
+            let shutdown_guard = shutdown.clone().increment(true);
 
-            // Check if this file descriptor is a TCP socket.
-            let stat = fstat(&fd)?;
-            if !FileType::from_raw_mode(stat.st_mode).is_socket() {
-                continue;
+            // When debugging, handle the client synchronously since
+            // concurrent requests can't be served. Otherwise though spawn a
+            // task to handle this client.
+            match &mut debuggee_store {
+                Some(store) => handle_client(stream, &handler, &shutdown, Some(store)).await,
+                None => {
+                    let handler = handler.clone();
+                    let shutdown = shutdown.clone();
+                    tokio::task::spawn(async move {
+                        handle_client(stream, &handler, &shutdown, None).await;
+                        drop(shutdown_guard);
+                        drop(connection_permit);
+                    });
+                }
             }
-
-            let address_family = getsockname(&fd)?.address_family();
-            if address_family != AddressFamily::INET && address_family != AddressFamily::INET6 {
-                continue;
-            }
-
-            if socket_type(&fd)? != SocketType::STREAM {
-                continue;
-            }
-
-            if !first_tcp_socket.is_none() {
-                bail!("Inherited multiple TCP sockets, which is unsupported.")
-            }
-
-            let listener = StdTcpListener::from(fd);
-            listener.set_nonblocking(true)?;
-            first_tcp_socket = Some(listener);
         }
-
-        first_tcp_socket.ok_or_else(|| format_err!("No TCP socket inherited"))
-    }
-
-    #[cfg(not(unix))]
-    unsafe fn inherit_socket() -> Result<StdTcpListener> {
-        bail!("The --listenfd option is not available on Windows")
     }
 }
 
@@ -923,6 +933,10 @@ struct HostWorkerState {
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
     request_timeout: Duration,
+    #[cfg(feature = "coredump")]
+    coredump: Option<String>,
+    #[cfg(feature = "coredump")]
+    coredump_name: String,
 }
 
 impl WorkerState for HostWorkerState {
@@ -943,7 +957,7 @@ impl WorkerState for HostWorkerState {
         &self,
         _store: StoreContextMut<Host>,
         request_id: u64,
-        _task_id: GuestTaskId,
+        _task_group: TaskGroupId,
     ) -> Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>> {
         log::info!(
             "Instance {} handling request {request_id}",
@@ -956,6 +970,8 @@ impl WorkerState for HostWorkerState {
     fn drop(&self, mut store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>) {
         if let Err(error) = result {
             eprintln!("worker failed: {error:?}");
+            #[cfg(feature = "coredump")]
+            write_serve_coredump(self, &mut store, &error);
         }
 
         if let Some(write_profile) = store.data_mut().write_profile.take() {
@@ -966,9 +982,27 @@ impl WorkerState for HostWorkerState {
     }
 }
 
+#[cfg(feature = "coredump")]
+fn write_serve_coredump(state: &HostWorkerState, store: &mut Store<Host>, error: &wasmtime::Error) {
+    let Some(path) = &state.coredump else {
+        return;
+    };
+    if error.downcast_ref::<wasmtime::WasmCoreDump>().is_none() {
+        return;
+    }
+    match super::write_core_dump(store, error, &state.coredump_name, path) {
+        Ok(()) => eprintln!("core dumped at {path}"),
+        Err(coredump_err) => eprintln!("warning: coredump failed to generate: {coredump_err}"),
+    }
+}
+
 struct HostHandlerState {
     cmd: ServeCommand,
     component: Component,
+    /// The component's modules prepared for `--profile=guest`, shared by every
+    /// instance's profiler; `None` when guest profiling is disabled.
+    #[cfg(feature = "profiling")]
+    guest_profiler_modules: Option<wasmtime::GuestProfilerModules>,
     request_headers: RequestHeaders,
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
@@ -981,7 +1015,7 @@ struct HostHandlerState {
 
 impl HostHandlerState {
     async fn instantiate_into(&self, store: &mut Store<Host>) -> Result<Proxy> {
-        let write_profile = setup_epoch_handler(&self.cmd, &mut *store, self.component.clone())?;
+        let write_profile = setup_epoch_handler(self, &mut *store)?;
         store.data_mut().write_profile = Some(write_profile);
         self.instance.instantiate_async(&mut *store).await
     }
@@ -1015,58 +1049,161 @@ impl HandlerState for HostHandlerState {
                 max_instance_concurrent_reuse_count: self.max_instance_concurrent_reuse_count,
                 instance_id,
                 request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
+                #[cfg(feature = "coredump")]
+                coredump: self.cmd.run.common.debug.coredump.clone(),
+                #[cfg(feature = "coredump")]
+                coredump_name: self.cmd.component.to_str().unwrap_or("unknown").to_string(),
             },
         })
     }
 }
 
-/// Helper structure to manage graceful shutdown int he accept loop above.
-#[derive(Default)]
-struct GracefulShutdown {
-    /// Async notification that shutdown has been requested.
-    requested: Notify,
-    /// Async notification that shutdown has completed, signaled when
-    /// `notify_when_done` is `true` and `active_tasks` reaches 0.
-    complete: Notify,
-    /// Internal state related to what's in progress when shutdown is requested.
-    state: Mutex<GracefulShutdownState>,
+use shutdown::GracefulShutdown;
+
+/// Waits for ctrl-c or, on Unix, SIGTERM (as sent by systemd and docker).
+async fn wait_for_shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut sigterm = signal(SignalKind::terminate()).unwrap();
+        tokio::select! {
+            r = tokio::signal::ctrl_c() => r.unwrap(),
+            _ = sigterm.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    tokio::signal::ctrl_c().await.unwrap();
 }
 
-#[derive(Default)]
-struct GracefulShutdownState {
-    active_tasks: u32,
-    notify_when_done: bool,
-}
+mod shutdown {
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+    use tokio::sync::{Notify, watch};
 
-impl GracefulShutdown {
-    /// Increments the number of active tasks and returns a guard indicating
-    fn increment(self: Arc<Self>) -> impl Drop + Send + Sync {
-        struct Guard(Arc<GracefulShutdown>);
+    /// Helper structure to manage graceful shutdown int he accept loop above.
+    #[derive(Default)]
+    pub struct GracefulShutdown {
+        /// Async notification that shutdown has been requested.
+        requested: Notify,
+        /// Async notification that shutdown has completed, signaled when
+        /// `notify_when_done` is `true` and `active_tasks` reaches 0.
+        complete: Notify,
+        /// Internal state related to what's in progress when shutdown is requested.
+        state: Mutex<GracefulShutdownState>,
+        /// Current connections, used for [super::ServeCommand::idle_process_timeout].
+        open_connections: watch::Sender<u32>,
+    }
 
-        let mut state = self.state.lock().unwrap();
-        assert!(!state.notify_when_done);
-        state.active_tasks += 1;
-        drop(state);
+    #[derive(Default)]
+    struct GracefulShutdownState {
+        shutdown_requested: bool,
+        active_tasks: u32,
+        notify_when_done: bool,
+    }
 
-        return Guard(self);
+    impl GracefulShutdown {
+        /// Increments the number of active tasks and returns a guard which,
+        /// when dropped, will signal that the task is no longer active.
+        ///
+        /// Live `increment` return values prevent the `close` return value from
+        /// resolving, for example.
+        ///
+        /// When `for_connection` is enabled, this also tracks the guard in
+        /// [Self::open_connections].
+        pub fn increment(self: Arc<Self>, for_connection: bool) -> impl Drop + Send + Sync {
+            struct Guard {
+                state: Arc<GracefulShutdown>,
+                for_connection: bool,
+            }
 
-        impl Drop for Guard {
-            fn drop(&mut self) {
-                let mut state = self.0.state.lock().unwrap();
-                state.active_tasks -= 1;
-                if state.notify_when_done && state.active_tasks == 0 {
-                    self.0.complete.notify_one();
+            let mut state = self.state.lock().unwrap();
+            assert!(!state.notify_when_done);
+            state.active_tasks += 1;
+            if for_connection {
+                self.open_connections.send_modify(|n| *n += 1);
+            }
+
+            drop(state);
+
+            return Guard {
+                state: self,
+                for_connection,
+            };
+
+            impl Drop for Guard {
+                fn drop(&mut self) {
+                    let shutdown = &self.state;
+
+                    let mut state = shutdown.state.lock().unwrap();
+                    state.active_tasks -= 1;
+                    if self.for_connection {
+                        shutdown.open_connections.send_modify(|n| *n -= 1);
+                    }
+
+                    if state.notify_when_done && state.active_tasks == 0 {
+                        self.state.complete.notify_one();
+                    }
                 }
             }
         }
-    }
 
-    /// Flags this state as done spawning tasks and returns whether there are no
-    /// more child tasks remaining.
-    fn close(&self) -> bool {
-        let mut state = self.state.lock().unwrap();
-        state.notify_when_done = true;
-        state.active_tasks == 0
+        /// Returns a future which resolves once no connections have been open for `timeout`.
+        pub fn wait_idle_connections(
+            &self,
+            timeout: Duration,
+        ) -> impl Future<Output = ()> + Send + use<> {
+            let mut connections = self.open_connections.subscribe();
+            async move {
+                // Start the idle timer after the first connection.
+                connections.changed().await.unwrap();
+                loop {
+                    connections.wait_for(|n| *n == 0).await.unwrap();
+                    tokio::select! {
+                        _ = tokio::time::sleep(timeout) => return,
+                        _ = connections.changed() => {
+                            // New connection was opened, reset the idle timer.
+                        }
+                    }
+                }
+            }
+        }
+
+        /// Flags this state as done spawning tasks and returns a future which
+        /// will resolve when all active tasks have completed, if any.
+        pub fn close(&self) -> Option<impl Future<Output = ()> + '_> {
+            let mut state = self.state.lock().unwrap();
+            state.notify_when_done = true;
+            if state.active_tasks == 0 {
+                None
+            } else {
+                Some(self.complete.notified())
+            }
+        }
+
+        /// Initiate a graceful shutdown request.
+        ///
+        /// This will cause futures returned by `.requested` to resolve and will
+        /// cause all future calls to `requested` to immediately resolve.
+        pub fn request_shutdown(&self) {
+            self.state.lock().unwrap().shutdown_requested = true;
+            self.requested.notify_waiters();
+        }
+
+        /// Wait for a graceful shutdown request to be received.
+        ///
+        /// This will return a future that resolves immediately if a shutdown
+        /// has already been requested, or otherwise the future will wait for
+        /// such a shutdown request to happen.
+        pub fn requested(&self) -> impl Future<Output = ()> + '_ {
+            let state = self.state.lock().unwrap();
+            let requested = state.shutdown_requested;
+            let notified = self.requested.notified();
+            async move {
+                if !requested {
+                    notified.await;
+                }
+            }
+        }
     }
 }
 
@@ -1109,15 +1246,18 @@ impl Drop for EpochThread {
 
 type WriteProfile = Box<dyn FnOnce(StoreContextMut<Host>) + Send>;
 
-fn setup_epoch_handler(
-    cmd: &ServeCommand,
-    store: &mut Store<Host>,
-    component: Component,
-) -> Result<WriteProfile> {
+fn setup_epoch_handler(state: &HostHandlerState, store: &mut Store<Host>) -> Result<WriteProfile> {
+    let cmd = &state.cmd;
     // Profiling Enabled
     if let Some(Profile::Guest { interval, path }) = &cmd.run.profile {
         #[cfg(feature = "profiling")]
-        return setup_guest_profiler(store, path.clone(), *interval, component.clone());
+        {
+            let modules = state
+                .guest_profiler_modules
+                .as_ref()
+                .expect("modules are prepared when guest profiling is enabled");
+            return setup_guest_profiler(store, path.clone(), *interval, modules);
+        }
         #[cfg(not(feature = "profiling"))]
         {
             let _ = (path, interval);
@@ -1139,22 +1279,20 @@ fn setup_guest_profiler(
     store: &mut Store<Host>,
     path: String,
     interval: Duration,
-    component: Component,
+    modules: &wasmtime::GuestProfilerModules,
 ) -> Result<WriteProfile> {
     use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut};
 
     let module_name = "<main>";
 
-    store.data_mut().guest_profiler = Some(Arc::new(GuestProfiler::new_component(
-        store.engine(),
+    store.data_mut().guest_profiler = Some(Arc::new(GuestProfiler::new_with_modules(
         module_name,
         interval,
-        component,
-        std::iter::empty(),
-    )?));
+        modules,
+    )));
 
     fn sample(
-        mut store: StoreContextMut<Host>,
+        mut store: wasmtime::StoreHookState<Host>,
         f: impl FnOnce(&mut GuestProfiler, StoreContext<Host>),
     ) {
         let mut profiler = store.data_mut().guest_profiler.take().unwrap();
@@ -1202,8 +1340,9 @@ fn setup_guest_profiler(
 type Request = hyper::Request<hyper::body::Incoming>;
 
 async fn handle_client(
-    client: tokio::net::TcpStream,
+    client: impl AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
     handler: &ProxyHandler<HostHandlerState>,
+    shutdown: &GracefulShutdown,
     debuggee_store: Option<&mut Store<Host>>,
 ) {
     // Hyper's `service_fn` takes an `Fn` closure, so to bridge the need to
@@ -1212,49 +1351,63 @@ async fn handle_client(
     // `Send`.
     let lock = &debuggee_store.map(tokio::sync::Mutex::new);
 
-    if let Err(e) = http1::Builder::new()
-        .keep_alive(true)
-        .serve_connection(
-            TokioIo::new(client),
-            hyper::service::service_fn(move |req| async move {
-                let mut debuggee_store = match &lock {
-                    Some(store) => Some(store.lock().await),
-                    None => None,
-                };
-                let debuggee_store = debuggee_store.as_mut().map(|s| &mut ***s);
-                match handle_request(handler, debuggee_store, req).await {
-                    Ok(r) => Ok::<_, Infallible>(r),
-                    Err(e) => {
-                        eprintln!("error: {e:?}");
-                        let error_html = "\
+    let conn = http1::Builder::new().keep_alive(true).serve_connection(
+        TokioIo::new(client),
+        hyper::service::service_fn(move |req| async move {
+            let mut debuggee_store = match &lock {
+                Some(store) => Some(store.lock().await),
+                None => None,
+            };
+            let debuggee_store = debuggee_store.as_mut().map(|s| &mut ***s);
+            match handle_request(handler, debuggee_store, req).await {
+                Ok(r) => Ok::<_, Infallible>(r),
+                Err(e) => {
+                    eprintln!("error: {e:?}");
+                    let status = e
+                        .downcast_ref::<ErrorResponse>()
+                        .map(|e| e.status())
+                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                    let error_html = format!(
+                        "\
 <!doctype html>
 <html>
 <head>
-    <title>500 Internal Server Error</title>
+    <title>{status}</title>
 </head>
 <body>
     <center>
-        <h1>500 Internal Server Error</h1>
+        <h1>{status}</h1>
         <hr>
         wasmtime
     </center>
 </body>
-</html>";
-                        Ok(Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                            .header("Content-Type", "text/html; charset=UTF-8")
-                            .body(
-                                Full::new(bytes::Bytes::from(error_html))
-                                    .map_err(|_| unreachable!())
-                                    .boxed_unsync(),
-                            )
-                            .unwrap())
-                    }
+</html>"
+                    );
+                    Ok(Response::builder()
+                        .status(status)
+                        .header("Content-Type", "text/html; charset=UTF-8")
+                        .body(
+                            Full::new(bytes::Bytes::from(error_html))
+                                .map_err(|_| unreachable!())
+                                .boxed_unsync(),
+                        )
+                        .unwrap())
                 }
-            }),
-        )
-        .await
-    {
+            }
+        }),
+    );
+    let mut conn = std::pin::pin!(conn);
+
+    // Use hyper's built-in support for graceful shutdown whenever the server
+    // here gets a shutdown request.
+    let result = tokio::select! {
+        result = conn.as_mut() => result,
+        _ = shutdown.requested() => {
+            conn.as_mut().graceful_shutdown();
+            conn.await
+        }
+    };
+    if let Err(e) = result {
         eprintln!("error: {e:?}");
     }
 }
@@ -1454,7 +1607,7 @@ impl wasmtime_wasi::p2::OutputStream for LogStream {
     }
 
     fn check_write(&mut self) -> StreamResult<usize> {
-        Ok(1024 * 1024)
+        Ok(64 * 1024)
     }
 }
 
@@ -1476,6 +1629,79 @@ impl AsyncWrite for LogStream {
     }
     fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
+    }
+}
+
+enum SocketServer {
+    Tcp(TcpListener),
+    #[allow(dead_code, reason = "not used on all platforms")]
+    Platform(PlatformListener),
+}
+
+impl SocketServer {
+    async fn accept(&self) -> Result<ClientSocket> {
+        Ok(match self {
+            SocketServer::Tcp(listener) => {
+                let (stream, _) = listener.accept().await?;
+                // The Nagle algorithm can impose a significant latency penalty
+                // (e.g. 40ms on Linux) on guests which write small, intermittent
+                // response body chunks (e.g. SSE streams).  Here we disable that
+                // algorithm and rely on the guest to buffer if appropriate to avoid
+                // TCP fragmentation.
+                stream.set_nodelay(true)?;
+
+                ClientSocket::Tcp(stream)
+            }
+            SocketServer::Platform(listener) => {
+                let (stream, _) = listener.accept().await?;
+                ClientSocket::Platform(stream)
+            }
+        })
+    }
+}
+
+enum ClientSocket {
+    Tcp(TcpStream),
+    Platform(PlatformStream),
+}
+
+impl AsyncRead for ClientSocket {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut io::ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        match &mut *self {
+            ClientSocket::Tcp(stream) => Pin::new(stream).poll_read(cx, buf),
+            ClientSocket::Platform(stream) => Pin::new(stream).poll_read(cx, buf),
+        }
+    }
+}
+
+impl AsyncWrite for ClientSocket {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        match &mut *self {
+            ClientSocket::Tcp(stream) => Pin::new(stream).poll_write(cx, buf),
+            ClientSocket::Platform(stream) => Pin::new(stream).poll_write(cx, buf),
+        }
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match &mut *self {
+            ClientSocket::Tcp(stream) => Pin::new(stream).poll_flush(cx),
+            ClientSocket::Platform(stream) => Pin::new(stream).poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        match &mut *self {
+            ClientSocket::Tcp(stream) => Pin::new(stream).poll_shutdown(cx),
+            ClientSocket::Platform(stream) => Pin::new(stream).poll_shutdown(cx),
+        }
     }
 }
 
@@ -1510,10 +1736,176 @@ fn use_pooling_allocator_by_default() -> Result<Option<bool>> {
     let mut store = Store::new(&engine, ());
     // NB: the maximum size is in wasm pages to take out the 16-bits of wasm
     // page size here from the maximum size.
-    let ty = MemoryType::new64(0, Some(1 << (BITS_TO_TEST - 16)));
+    let ty = MemoryType::new64(0, Some(1 << (BITS_TO_TEST - 16)))?;
     if Memory::new(&mut store, ty).is_ok() {
         Ok(Some(true))
     } else {
         Ok(None)
+    }
+}
+
+#[cfg(unix)]
+use unix::*;
+#[cfg(unix)]
+mod unix {
+    use super::SocketServer;
+    use rustix::fs::{FileType, fstat};
+    use rustix::net::{AddressFamily, SocketType, getsockname, sockopt::socket_type};
+    use std::mem::ManuallyDrop;
+    use std::net::TcpListener;
+    use std::os::fd::{FromRawFd, OwnedFd, RawFd};
+    use std::os::unix::net::UnixListener;
+    use std::{env, process};
+    use wasmtime::{Result, bail};
+
+    pub use tokio::net::UnixListener as PlatformListener;
+    pub use tokio::net::UnixStream as PlatformStream;
+
+    #[derive(Default)]
+    pub struct InheritedSockets {
+        sockets: Vec<InheritedSocket>,
+    }
+
+    enum InheritedSocket {
+        Tcp(TcpListener),
+        Unix(UnixListener),
+    }
+
+    impl InheritedSockets {
+        /// Takes ownership of file descriptors this process has inherited from a parent process like a
+        /// service manager.
+        ///
+        /// These are looked up with the [protocol from systemd](https://www.freedesktop.org/software/systemd/man/latest/sd_listen_fds.html#Notes).
+        /// This is used to implement socket activation for `wasmtime serve`.
+        ///
+        /// ## Safety
+        ///
+        /// This function takes ownership of raw file descriptors and must be called before any other
+        /// file descriptors are opened.
+        pub unsafe fn inherit_sockets(&mut self) -> Result<()> {
+            // The logic here is taken from https://github.com/systemd/systemd/blob/main/src/libsystemd/sd-daemon/sd-daemon.c.
+            if !env::var("LISTEN_PID")
+                .ok()
+                .and_then(|pid| pid.parse().ok())
+                .is_some_and(|pid: u32| pid == process::id())
+            {
+                bail!("Missing or mismatched LISTEN_PID environment variable");
+            }
+
+            let Some(num_fds) = env::var("LISTEN_FDS")
+                .ok()
+                .and_then(|fds| fds.parse().ok())
+                .take_if(|e| *e >= 1)
+            else {
+                bail!("Missing or invalid LISTEN_FDS environment variable");
+            };
+
+            let first_fd: RawFd = 3;
+            let Some(last_fd) = first_fd.checked_add(num_fds) else {
+                bail!("Invalid amount of file descriptors in LISTEN_FDS");
+            };
+
+            // We want to take ownership of all file descriptors here, but only use the first socket to
+            // listen on it.
+            for fd in first_fd..last_fd {
+                // SAFETY: CLI configuration has indicated that `fd` is probably
+                // owned by us, but we're also not entirely sure of that yet.
+                // The `OwnedFd` is wrapped in `ManuallyDrop` to avoid dropping
+                // it while it's tested below.
+                let mut fd = ManuallyDrop::new(unsafe { OwnedFd::from_raw_fd(fd) });
+
+                // Set the close-on-exec flag, matching libsystemd.
+                #[cfg(any(target_vendor = "apple", target_os = "linux", target_os = "android"))]
+                rustix::io::ioctl_fioclex(&*fd)?;
+
+                // Check if this file descriptor is a TCP socket.
+                let stat = fstat(&*fd)?;
+                if !FileType::from_raw_mode(stat.st_mode).is_socket() {
+                    continue;
+                }
+
+                if socket_type(&*fd)? != SocketType::STREAM {
+                    continue;
+                }
+
+                // SAFETY: we've done all the checks we can to determine that
+                // `fd` is indeed valid. This function's own unsafe contract
+                // means that we're running very early on in the program, so at
+                // this point it by all means should be safe to take this fd. If
+                // it's not then that's a bug of the CLI configuration
+                // effectively.
+                let fd = unsafe { ManuallyDrop::take(&mut fd) };
+
+                let address_family = getsockname(&fd)?.address_family();
+                let this_listener = if address_family == AddressFamily::INET
+                    || address_family == AddressFamily::INET6
+                {
+                    let listener = TcpListener::from(fd);
+                    listener.set_nonblocking(true)?;
+                    InheritedSocket::Tcp(listener)
+                } else if address_family == AddressFamily::UNIX {
+                    let listener = UnixListener::from(fd);
+                    listener.set_nonblocking(true)?;
+                    InheritedSocket::Unix(listener)
+                } else {
+                    continue;
+                };
+                self.sockets.push(this_listener);
+            }
+
+            if self.sockets.is_empty() {
+                bail!("No socket inherited")
+            }
+
+            Ok(())
+        }
+
+        pub fn take(&mut self) -> Result<Option<Vec<SocketServer>>> {
+            if self.sockets.is_empty() {
+                return Ok(None);
+            }
+            self.sockets
+                .drain(..)
+                .map(|socket| match socket {
+                    InheritedSocket::Tcp(listener) => Ok(SocketServer::Tcp(
+                        tokio::net::TcpListener::from_std(listener)?,
+                    )),
+                    InheritedSocket::Unix(listener) => Ok(SocketServer::Platform(
+                        tokio::net::UnixListener::from_std(listener)?,
+                    )),
+                })
+                .collect::<Result<Vec<_>>>()
+                .map(Some)
+        }
+    }
+}
+
+#[cfg(not(unix))]
+use not_unix::*;
+#[cfg(not(unix))]
+mod not_unix {
+    use super::SocketServer;
+    use wasmtime::{Result, bail};
+
+    pub use tokio::io::Empty as PlatformStream;
+
+    #[derive(Default)]
+    pub struct InheritedSockets;
+
+    impl InheritedSockets {
+        pub unsafe fn inherit_sockets(&mut self) -> Result<()> {
+            bail!("The --listenfd option is not available on this platform")
+        }
+        pub fn take(&mut self) -> Result<Option<Vec<SocketServer>>> {
+            Ok(None)
+        }
+    }
+
+    pub enum PlatformListener {}
+
+    impl PlatformListener {
+        pub async fn accept(&self) -> Result<(PlatformStream, ())> {
+            match *self {}
+        }
     }
 }

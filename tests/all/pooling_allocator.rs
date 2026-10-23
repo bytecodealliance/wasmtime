@@ -506,7 +506,7 @@ fn multi_memory_with_imported_memories() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
 
-    let m1 = Memory::new(&mut store, MemoryType::new(0, None))?;
+    let m1 = Memory::new(&mut store, MemoryType::new(0, None)?)?;
     let instance = Instance::new(&mut store, &module, &[m1.into()])?;
 
     let m2 = instance.get_memory(&mut store, "m2").unwrap();
@@ -665,6 +665,14 @@ fn instance_too_large() -> Result<()> {
             e.assert_contains("instance state management");
         }
     }
+
+    // A maximum near `usize::MAX` shouldn't overflow when rounded up.
+    let mut pool = crate::small_pool_config();
+    pool.max_core_instance_size(usize::MAX);
+    let mut config = Config::new();
+    config.allocation_strategy(pool);
+    let engine = Engine::new(&config)?;
+    Module::new(&engine, "(module)")?;
 
     Ok(())
 }

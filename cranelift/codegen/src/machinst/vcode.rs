@@ -835,19 +835,11 @@ impl<I: VCodeInst> VCode<I> {
             }
             assert_eq!(buffer.cur_offset(), new_offset);
 
-            let do_emit = |inst: &I,
-                           disasm: &mut String,
-                           buffer: &mut MachBuffer<I>,
-                           state: &mut I::State| {
-                if want_disasm && !inst.is_args() {
-                    let mut s = state.clone();
-                    writeln!(disasm, "  {}", inst.pretty_print_inst(&mut s)).unwrap();
-                }
-                inst.emit(buffer, &self.emit_info, state);
-                // The buffer maintains its deadline invariant per-`MachInst`:
-                // after each instruction, ensure that the worst-case end of
-                // any island the buffer might emit lies before the soonest
-                // deadline, even after the next instruction.
+            // The buffer maintains its deadline invariant per-`MachInst`:
+            // after each instruction, ensure that the worst-case end of any
+            // island the buffer might emit lies before the soonest deadline,
+            // even after the next instruction.
+            let emit_island_if_needed = |buffer: &mut MachBuffer<I>, state: &mut I::State| {
                 let lookahead = I::worst_case_size() + I::worst_case_island_growth();
                 if buffer.island_needed(lookahead) {
                     let jump_around = buffer.get_label();
@@ -855,6 +847,23 @@ impl<I: VCodeInst> VCode<I> {
                     buffer.emit_island(0, state.ctrl_plane_mut());
                     buffer.bind_label(jump_around, state.ctrl_plane_mut());
                 }
+            };
+            let emit_inst = |inst: &I,
+                             disasm: &mut String,
+                             buffer: &mut MachBuffer<I>,
+                             state: &mut I::State| {
+                if want_disasm && !inst.is_args() {
+                    let mut s = state.clone();
+                    writeln!(disasm, "  {}", inst.pretty_print_inst(&mut s)).unwrap();
+                }
+                inst.emit(buffer, &self.emit_info, state);
+            };
+            let do_emit = |inst: &I,
+                           disasm: &mut String,
+                           buffer: &mut MachBuffer<I>,
+                           state: &mut I::State| {
+                emit_inst(inst, disasm, buffer, state);
+                emit_island_if_needed(buffer, state);
             };
 
             // Is this the first block? Emit the prologue directly if so.
@@ -1029,16 +1038,19 @@ impl<I: VCodeInst> VCode<I> {
                             log::trace!("emitting: {:?}", self.insts[iix.index()]);
 
                             // Emit the instruction!
-                            do_emit(
+                            emit_inst(
                                 &self.insts[iix.index()],
                                 &mut disasm,
                                 &mut buffer,
                                 &mut state,
                             );
 
+                            // Place post-position tags at the instruction's
+                            // end, before any island that follows it.
                             if debug_tag_pos == MachDebugTagPos::Post {
                                 place_debug_tags(&self, debug_tag_pos, &mut buffer);
                             }
+                            emit_island_if_needed(&mut buffer, &mut state);
 
                             if let Some(stack_map_disasm) = stack_map_disasm {
                                 disasm.push_str(&stack_map_disasm);

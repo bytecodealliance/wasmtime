@@ -228,7 +228,7 @@ impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
         Ok(())
     }
     fn check_write(&mut self) -> Result<usize, StreamError> {
-        Ok(usize::MAX)
+        Ok(64 * 1024)
     }
 }
 

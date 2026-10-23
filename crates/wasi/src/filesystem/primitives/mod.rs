@@ -8,6 +8,7 @@
 #![allow(clippy::useless_conversion, reason = "typedefs are platform-specific")]
 
 use std::path::{Component, Path, PathBuf};
+use std::time::SystemTime;
 use std::{fs, io};
 
 mod file_type;
@@ -44,6 +45,27 @@ pub(crate) use sys::open_ambient_dir;
 pub(crate) use sys::read_dir;
 pub(crate) use sys::set_times;
 pub(crate) use sys::set_times_nofollow;
+
+/// Set the timestamps of the file or directory that `fd` itself refers to.
+pub(crate) fn set_times_on_fd(
+    fd: &fs::File,
+    atime: Option<SystemTime>,
+    mtime: Option<SystemTime>,
+) -> io::Result<()> {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if sys::set_times_fast(fd, atime, mtime)? {
+        return Ok(());
+    }
+
+    let mut times = fs::FileTimes::new();
+    if let Some(atime) = atime {
+        times = times.set_accessed(atime);
+    }
+    if let Some(mtime) = mtime {
+        times = times.set_modified(mtime);
+    }
+    fd.set_times(times)
+}
 
 pub(crate) fn open(start: &fs::File, path: &Path, options: &OpenOptions) -> io::Result<fs::File> {
     #[cfg(any(
@@ -222,26 +244,42 @@ pub(crate) fn rename(
     // it as equivalent to a trailing slash-dot, so strip any trailing slashes
     // for the purposes of `open_parent`.
     //
-    // And on Unix, remember whether the source started with a slash so that we
-    // can still fail if it is and the source is a regular file.
-    #[cfg(unix)]
-    let old_starts_with_slash = path_has_trailing_slash(old_path);
+    // And remember whether either path ended with a slash so that we can still
+    // fail if the source isn't a directory.
+    let requires_dir = path_has_trailing_slash(old_path) || path_has_trailing_slash(new_path);
     let old_path = strip_dir_suffix(old_path);
     let new_path = strip_dir_suffix(new_path);
 
     let (old_dir, old_basename) = open_parent(old_start, &old_path)?;
     let (new_dir, new_basename) = open_parent(new_start, &new_path)?;
 
-    // On Unix, re-append a slash if needed.
-    #[cfg(unix)]
-    let concat;
-    #[cfg(unix)]
-    let old_basename = if old_starts_with_slash {
-        concat = append_dir_suffix(old_basename.to_owned().into());
+    // A trailing slash on either path requires the source to be a directory.
+    //
+    // On Linux, re-append a slash to the source and let the kernel check that
+    // atomically with the rename. Linux never follows a symlink named with a
+    // trailing slash in `renameat` and fails with `ENOTDIR` instead.
+    #[cfg(target_os = "linux")]
+    let mut concat;
+    #[cfg(target_os = "linux")]
+    let old_basename = if requires_dir {
+        concat = old_basename.to_owned();
+        concat.push("/");
         concat.as_os_str()
     } else {
         old_basename
     };
+
+    // Elsewhere, such as on macOS and FreeBSD, `renameat` follows a symlink
+    // named with a trailing slash. Check without following symlinks and rename
+    // by the plain names instead, so such a symlink is never followed out of
+    // `old_start`. The check isn't atomic with the rename, but whatever
+    // replaces the source in between is still renamed by its plain name.
+    #[cfg(not(target_os = "linux"))]
+    if requires_dir
+        && !stat_unchecked(&old_dir, Path::new(old_basename), FollowSymlinks::No)?.is_dir()
+    {
+        return Err(errors::is_not_directory());
+    }
 
     rename_unchecked(
         &old_dir,
@@ -271,9 +309,29 @@ pub(crate) fn remove_file(start: &fs::File, path: &Path) -> io::Result<()> {
 }
 
 pub(crate) fn remove_dir(start: &fs::File, path: &Path) -> io::Result<()> {
+    // FreeBSD's kernel removes a symlink's target for `link/`, so leave
+    // trailing slashes to the checks below.
     #[cfg(target_os = "freebsd")]
-    if sys::remove_dir_fast(start, path)? {
+    if !path_has_trailing_slash(path) && sys::remove_dir_fast(start, path)? {
         return Ok(());
+    }
+
+    // As with `create_dir`, a trailing slash after a directory names the
+    // directory itself rather than acting like a trailing slash-dot, so remove
+    // it by its plain name. Other paths with a trailing slash still resolve
+    // through `open_parent` below.
+    if path_has_trailing_slash(path) {
+        let stripped = strip_dir_suffix(path);
+        if let Ok((dir, basename)) = open_parent(MaybeOwnedFile::borrowed(start), &stripped) {
+            let basename = Path::new(basename);
+            match stat_unchecked(&dir, basename, FollowSymlinks::No) {
+                Ok(m) if m.is_dir() => return remove_dir_unchecked(&dir, basename),
+                // Like Linux, fail on a symlink without following it, so its
+                // target is never touched.
+                Ok(m) if m.file_type().is_symlink() => return Err(errors::is_not_directory()),
+                _ => {}
+            }
+        }
     }
 
     let start = MaybeOwnedFile::borrowed(start);

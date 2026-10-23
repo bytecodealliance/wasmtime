@@ -55,11 +55,8 @@ pub extern "C" fn wasm_tabletype_new(
     limits: &wasm_limits_t,
 ) -> Option<Box<wasm_tabletype_t>> {
     let ty = (*ty).as_ref()?.clone();
-    Some(Box::new(wasm_tabletype_t::new(TableType::new(
-        ty,
-        limits.min,
-        limits.max(),
-    ))))
+    let ty = TableType::new(ty, limits.min, limits.max()).ok()?;
+    Some(Box::new(wasm_tabletype_t::new(ty)))
 }
 
 #[unsafe(no_mangle)]

@@ -71,7 +71,7 @@
 ;; function u0:3(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 21 ""
+;;     region2 = 13 ""
 ;;     region3 = 93 ""
 ;;     region4 = 211 ""
 ;;     region5 = 99 ""
@@ -212,7 +212,7 @@
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
 ;;     region2 = 93 ""
-;;     region3 = 21 ""
+;;     region3 = 13 ""
 ;;     region4 = 211 ""
 ;;     region5 = 99 ""
 ;;     gv0 = vmctx

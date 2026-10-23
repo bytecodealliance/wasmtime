@@ -23,6 +23,24 @@ impl ModuleMemoryImages {
 #[derive(Debug, PartialEq)]
 pub enum MemoryImage {}
 
+impl MemoryImage {
+    pub(crate) fn linear_memory_offset(&self) -> usize {
+        match *self {}
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        match *self {}
+    }
+
+    pub(crate) fn data(&self) -> &[u8] {
+        match *self {}
+    }
+
+    pub(crate) unsafe fn map_at_ptr(&self, _base: *mut u8) -> Result<()> {
+        match *self {}
+    }
+}
+
 impl ModuleMemoryImages {
     pub fn new(
         _engine: &Engine,
@@ -30,18 +48,5 @@ impl ModuleMemoryImages {
         _source: &Arc<impl ModuleMemoryImageSource>,
     ) -> Result<Option<ModuleMemoryImages>> {
         Ok(None)
-    }
-}
-
-#[derive(Debug)]
-pub enum MemoryImageSlot {}
-
-impl MemoryImageSlot {
-    pub(crate) fn set_heap_limit(&mut self, _size_bytes: usize) -> Result<()> {
-        match *self {}
-    }
-
-    pub(crate) fn has_image(&self) -> bool {
-        match *self {}
     }
 }

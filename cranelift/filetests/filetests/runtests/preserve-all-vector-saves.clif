@@ -1,0 +1,168 @@
+; A `preserve_all` callee that clobbers every vector register must preserve
+; the caller's float and vector values, including all 16 bytes of each
+; vector register.
+test run
+target x86_64
+target aarch64
+target pulley64
+target pulley64be
+
+function %callee(i64) preserve_all {
+block0(v0: i64):
+    v10 = iconst.i64 1
+    v100 = splat.i64x2 v10
+    v11 = iconst.i64 2
+    v101 = splat.i64x2 v11
+    v12 = iconst.i64 3
+    v102 = splat.i64x2 v12
+    v13 = iconst.i64 4
+    v103 = splat.i64x2 v13
+    v14 = iconst.i64 5
+    v104 = splat.i64x2 v14
+    v15 = iconst.i64 6
+    v105 = splat.i64x2 v15
+    v16 = iconst.i64 7
+    v106 = splat.i64x2 v16
+    v17 = iconst.i64 8
+    v107 = splat.i64x2 v17
+    v18 = iconst.i64 9
+    v108 = splat.i64x2 v18
+    v19 = iconst.i64 10
+    v109 = splat.i64x2 v19
+    v20 = iconst.i64 11
+    v110 = splat.i64x2 v20
+    v21 = iconst.i64 12
+    v111 = splat.i64x2 v21
+    v22 = iconst.i64 13
+    v112 = splat.i64x2 v22
+    v23 = iconst.i64 14
+    v113 = splat.i64x2 v23
+    v24 = iconst.i64 15
+    v114 = splat.i64x2 v24
+    v25 = iconst.i64 16
+    v115 = splat.i64x2 v25
+    v26 = iconst.i64 17
+    v116 = splat.i64x2 v26
+    v27 = iconst.i64 18
+    v117 = splat.i64x2 v27
+    v28 = iconst.i64 19
+    v118 = splat.i64x2 v28
+    v29 = iconst.i64 20
+    v119 = splat.i64x2 v29
+    v30 = iconst.i64 21
+    v120 = splat.i64x2 v30
+    v31 = iconst.i64 22
+    v121 = splat.i64x2 v31
+    v32 = iconst.i64 23
+    v122 = splat.i64x2 v32
+    v33 = iconst.i64 24
+    v123 = splat.i64x2 v33
+    v34 = iconst.i64 25
+    v124 = splat.i64x2 v34
+    v35 = iconst.i64 26
+    v125 = splat.i64x2 v35
+    v36 = iconst.i64 27
+    v126 = splat.i64x2 v36
+    v37 = iconst.i64 28
+    v127 = splat.i64x2 v37
+    v38 = iconst.i64 29
+    v128 = splat.i64x2 v38
+    v39 = iconst.i64 30
+    v129 = splat.i64x2 v39
+    v40 = iconst.i64 31
+    v130 = splat.i64x2 v40
+    v41 = iconst.i64 32
+    v131 = splat.i64x2 v41
+    v201 = iadd v100, v101
+    v202 = iadd v201, v102
+    v203 = iadd v202, v103
+    v204 = iadd v203, v104
+    v205 = iadd v204, v105
+    v206 = iadd v205, v106
+    v207 = iadd v206, v107
+    v208 = iadd v207, v108
+    v209 = iadd v208, v109
+    v210 = iadd v209, v110
+    v211 = iadd v210, v111
+    v212 = iadd v211, v112
+    v213 = iadd v212, v113
+    v214 = iadd v213, v114
+    v215 = iadd v214, v115
+    v216 = iadd v215, v116
+    v217 = iadd v216, v117
+    v218 = iadd v217, v118
+    v219 = iadd v218, v119
+    v220 = iadd v219, v120
+    v221 = iadd v220, v121
+    v222 = iadd v221, v122
+    v223 = iadd v222, v123
+    v224 = iadd v223, v124
+    v225 = iadd v224, v125
+    v226 = iadd v225, v126
+    v227 = iadd v226, v127
+    v228 = iadd v227, v128
+    v229 = iadd v228, v129
+    v230 = iadd v229, v130
+    v231 = iadd v230, v131
+    v300 = extractlane v231, 0
+    store notrap aligned v300, v0
+    return
+}
+
+function %caller(i64, f64) -> f64 {
+    ss0 = explicit_slot 16
+    fn0 = colocated %callee(i64) preserve_all
+block0(v0: i64, v1: f64):
+    v2 = stack_addr.i64 ss0
+    v10 = f64const 0x1.0
+    v20 = fadd v1, v10
+    v11 = f64const 0x2.0
+    v21 = fadd v1, v11
+    v12 = f64const 0x3.0
+    v22 = fadd v1, v12
+    v13 = f64const 0x4.0
+    v23 = fadd v1, v13
+    v14 = f64const 0x5.0
+    v24 = fadd v1, v14
+    v15 = f64const 0x6.0
+    v25 = fadd v1, v15
+    v16 = f64const 0x7.0
+    v26 = fadd v1, v16
+    v17 = f64const 0x8.0
+    v27 = fadd v1, v17
+    v30 = scalar_to_vector.f64x2 v20
+    v40 = splat.f64x2 v20
+    v31 = scalar_to_vector.f64x2 v21
+    v41 = splat.f64x2 v21
+    v32 = scalar_to_vector.f64x2 v22
+    v42 = splat.f64x2 v22
+    v33 = scalar_to_vector.f64x2 v23
+    v43 = splat.f64x2 v23
+    v34 = scalar_to_vector.f64x2 v24
+    v44 = splat.f64x2 v24
+    v35 = scalar_to_vector.f64x2 v25
+    v45 = splat.f64x2 v25
+    v36 = scalar_to_vector.f64x2 v26
+    v46 = splat.f64x2 v26
+    v37 = scalar_to_vector.f64x2 v27
+    v47 = splat.f64x2 v27
+    call fn0(v2)
+    v50 = fadd v20, v21
+    v51 = fadd v50, v22
+    v52 = fadd v51, v23
+    v53 = fadd v52, v24
+    v54 = fadd v53, v25
+    v55 = fadd v54, v26
+    v56 = fadd v55, v27
+    v60 = fadd v40, v41
+    v61 = fadd v60, v42
+    v62 = fadd v61, v43
+    v63 = fadd v62, v44
+    v64 = fadd v63, v45
+    v65 = fadd v64, v46
+    v66 = fadd v65, v47
+    v70 = extractlane v66, 0
+    v71 = fadd v56, v70
+    return v71
+}
+; run: %caller(0, 0x1.0) == 0x58.0

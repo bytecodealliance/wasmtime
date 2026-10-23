@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = "-W exceptions -C collector=copying"
+;;! flags = "-W exceptions,gc-support -C collector=copying"
 
 ;; A function reference is interned before it is stored in the exception.
 (module

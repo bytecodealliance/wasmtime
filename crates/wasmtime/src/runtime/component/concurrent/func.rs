@@ -1,5 +1,4 @@
-use crate::component::concurrent::TaskId;
-use crate::component::concurrent::{self, GuestTaskId, PreparedCall};
+use crate::component::concurrent::{self, PreparedCall, TaskGroupId, TaskId};
 use crate::component::func::LowerContext;
 use crate::component::{AsAccessor, ComponentNamedList, Func, Lift, Lower, TypedFunc, Val};
 use crate::prelude::*;
@@ -13,7 +12,7 @@ use wasmtime_environ::component::{InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESUL
 /// Returned from [`Func::start_call_concurrent`] to represent a
 /// pending-but-not-yet-resolved call into wasm.
 pub struct FuncCallConcurrent<'a, T> {
-    call: concurrent::StagedCall<Vec<Val>>,
+    pub(crate) call: concurrent::StagedCall<Vec<Val>>,
     results: &'a mut [Val],
     _marker: marker::PhantomData<fn(T)>,
 }
@@ -134,6 +133,21 @@ impl Func {
         params: &'a [Val],
         results: &'a mut [Val],
     ) -> Result<FuncCallConcurrent<'a, T>> {
+        let result = self.do_start_call_concurrent(&mut store, params, results);
+
+        if result.is_err() {
+            store.as_context_mut().0.set_trapped();
+        }
+
+        result
+    }
+
+    fn do_start_call_concurrent<'a, T: Send + 'static>(
+        self,
+        mut store: impl AsContextMut<Data = T>,
+        params: &'a [Val],
+        results: &'a mut [Val],
+    ) -> Result<FuncCallConcurrent<'a, T>> {
         self.check_params_results(store.as_context_mut(), params, results)?;
         let prepared = self.prepare_call_dynamic(store.as_context_mut(), params.to_vec())?;
         let call = concurrent::StagedCall::new(store.as_context_mut(), prepared)?;
@@ -146,7 +160,7 @@ impl Func {
 
     /// Completes a call that was initiated via
     /// [`Func::start_call_concurrent`].
-    pub async fn finish_call_concurrent<T: Send>(
+    pub async fn finish_call_concurrent<T: Send + 'static>(
         self,
         accessor: impl AsAccessor<Data = T>,
         call: FuncCallConcurrent<'_, T>,
@@ -171,7 +185,7 @@ impl Func {
         params: Vec<Val>,
     ) -> Result<PreparedCall<Vec<Val>>> {
         let store = store.as_context_mut();
-        let (options, flags, ty, raw_options) = self.abi_info(store.0);
+        let (options, _, ty, raw_options) = self.abi_info(store.0);
         let async_ = raw_options.async_;
         let instance = self.instance();
 
@@ -179,9 +193,8 @@ impl Func {
             store,
             self,
             MAX_FLAT_PARAMS,
-            false,
             move |store, params_out| {
-                Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
+                Func::with_lower_context(instance, store, options, ty, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
                 })
             },
@@ -200,20 +213,10 @@ impl Func {
     }
 }
 
-impl<T> FuncCallConcurrent<'_, T> {
-    /// Returns the task that this invocation corresponds to.
-    ///
-    /// This can be later correlated with [`StoreContextMut::async_call_stack`]
-    /// for example.
-    pub fn task(&self) -> GuestTaskId {
-        self.call.task()
-    }
-}
-
 /// Returned from [`TypedFunc::start_call_concurrent`] to represent a
 /// pending-but-not-yet-resolved call into wasm.
 pub struct TypedFuncCallConcurrent<T, P, R> {
-    call: concurrent::StagedCall<R>,
+    pub(crate) call: concurrent::StagedCall<R>,
     _marker: marker::PhantomData<fn(T, P)>,
 }
 
@@ -231,8 +234,10 @@ where
         Return: 'static,
     {
         let mut store = store.as_context_mut();
+        // See `Func::call_async` for why this is checked up front.
+        store.0.check_event_loop_not_running()?;
         let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
-        let prepared = self.prepare_call(store.as_context_mut(), true, move |cx, ty, dst| {
+        let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
             // SAFETY: The goal here is to get `Params`, a non-`'static`
             // value, to live long enough to the lowering of the
             // parameters. We're guaranteed that `Params` lives in the
@@ -245,12 +250,12 @@ where
             // of rustc and the signature of `prepare_call`.
             //
             // Note the use of `SignalOnDrop` in the code that follows
-            // this closure, which ensures that the task will be removed
-            // from the concurrent state to which it belongs when the
-            // containing `Future` is dropped, so long as the parameters
-            // have not yet been lowered. Since this closure is removed from
-            // the task after the parameters are lowered, it will never be called
-            // after the containing `Future` is dropped.
+            // this closure, which removes this closure from its task when
+            // the containing `Future` is dropped, so long as the parameters
+            // have not yet been lowered (see `TaskId::host_future_dropped`).
+            // Since this closure is also removed from the task when the
+            // parameters are lowered, it will never be called after the
+            // containing `Future` is dropped.
             let params = unsafe { ptr.cast::<Params>().as_ref() };
             Self::lower_args(cx, ty, dst, params)
         })?;
@@ -266,16 +271,18 @@ where
             }
         }
 
-        let mut wrapper = SignalOnDrop {
-            store,
-            task: prepared.task_id(),
-        };
+        // This will increment the task's refcount, and the
+        // `TaskId::host_future_dropped` function called from
+        // `SignalOnDrop::drop` wiil decrement it.
+        let task = prepared.acquire_task_id(store.0)?;
+
+        let mut wrapper = SignalOnDrop { store, task };
 
         let result = concurrent::StagedCall::new(wrapper.store.as_context_mut(), prepared)?;
         wrapper
             .store
             .as_context_mut()
-            .run_concurrent_trap_on_idle(async |_| Ok(result.await?))
+            .run_concurrent_trap_on_idle(async |_| result.await)
             .await?
     }
 
@@ -378,7 +385,7 @@ where
             "cannot use `call_concurrent` Config::concurrency_support disabled",
         );
 
-        let prepared = self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
+        let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
             Self::lower_args(cx, ty, dst, &params)
         })?;
         let call = concurrent::StagedCall::new(store, prepared)?;
@@ -400,8 +407,8 @@ where
         Params: 'static,
         Return: 'static,
     {
-        // This is intentionally part of the public API but not used yet.
-        // This'll likely want to be used in future refactorings.
+        // Intentionally not used today, but left here for future API
+        // compatibility with using this.
         let _ = accessor;
         call.call.await
     }
@@ -413,7 +420,6 @@ where
     fn prepare_call<T>(
         self,
         store: StoreContextMut<'_, T>,
-        host_future_present: bool,
         lower: impl FnOnce(
             &mut LowerContext<T>,
             InterfaceType,
@@ -434,7 +440,7 @@ where
         } else {
             1
         };
-        let (options, flags, ty, raw_options) = self.func().abi_info(store.0);
+        let (options, _, ty, raw_options) = self.func().abi_info(store.0);
         let instance = self.func().instance();
         let max_results = if raw_options.async_ {
             MAX_FLAT_PARAMS
@@ -446,9 +452,8 @@ where
             store,
             *self.func(),
             param_count,
-            host_future_present,
             move |store, params_out| {
-                Func::with_lower_context(instance, store, options, flags, ty, |cx, ty| {
+                Func::with_lower_context(instance, store, options, ty, |cx, ty| {
                     lower(cx, ty, params_out)
                 })
             },
@@ -486,12 +491,22 @@ where
     }
 }
 
-impl<T, P, R> TypedFuncCallConcurrent<T, P, R> {
-    /// Returns the task that this invocation corresponds to.
+impl<T> FuncCallConcurrent<'_, T> {
+    /// Returns the task group that this invocation corresponds to.
     ///
-    /// This can be later correlated with [`StoreContextMut::async_call_stack`]
-    /// for example.
-    pub fn task(&self) -> GuestTaskId {
-        self.call.task()
+    /// This can be later correlated with calls to `TaskGroupHook` if the
+    /// `task-group-hook` feature is enabled.
+    pub fn group(&self) -> TaskGroupId {
+        self.call.group
+    }
+}
+
+impl<T, P, R> TypedFuncCallConcurrent<T, P, R> {
+    /// Returns the task group that this invocation corresponds to.
+    ///
+    /// This can be later correlated with calls to `TaskGroupHook` if the
+    /// `task-group-hook` feature is enabled.
+    pub fn group(&self) -> TaskGroupId {
+        self.call.group
     }
 }

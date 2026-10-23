@@ -943,7 +943,7 @@ mod tests {
     }
 
     #[test]
-    fn srem_trap() {
+    fn srem_min_by_neg_one_is_zero() {
         let code = "function %test() -> i64 {
         block0:
             v0 = iconst.i64 0x8000_0000_0000_0000
@@ -956,12 +956,9 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
+        let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(
-            trap,
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::INTEGER_OVERFLOW))
-        );
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I64(0)]));
     }
 
     #[test]

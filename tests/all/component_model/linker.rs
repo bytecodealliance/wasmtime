@@ -1,6 +1,6 @@
 use wasmtime::Result;
 use wasmtime::component::types::ComponentItem;
-use wasmtime::component::{Component, Linker, ResourceType};
+use wasmtime::component::{Component, Linker, ResourceType, Val};
 use wasmtime::{Config, Engine, Module, Store};
 
 #[test]
@@ -167,6 +167,47 @@ fn linker_defines_unknown_imports_as_traps() -> Result<()> {
     Ok(())
 }
 
+/// Resource aliases must follow the real resource regardless of registration order.
+#[test]
+fn linker_defines_unknown_imports_as_traps_with_resource_aliases() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "types" (instance $types
+                (export "r" (type (sub resource)))
+            ))
+            (alias export $types "r" (type $r))
+            (import "uses" (instance
+                (alias outer 1 $r (type $r))
+                (export "r" (type (eq $r)))
+            ))
+        )"#,
+    )?;
+
+    for stub_first in [false, true] {
+        let mut linker = Linker::<()>::new(&engine);
+        linker.allow_shadowing(stub_first);
+
+        if stub_first {
+            linker.define_unknown_imports_as_traps(&component)?;
+        }
+
+        linker
+            .instance("types")?
+            .resource("r", ResourceType::host::<u32>(), |_, _| Ok(()))?;
+
+        if !stub_first {
+            linker.define_unknown_imports_as_traps(&component)?;
+        }
+
+        let mut store = Store::new(&engine, ());
+        linker.instantiate(&mut store, &component)?;
+    }
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn linker_defines_unknown_async_imports_as_traps() -> Result<()> {
     // `define_unknown_imports_as_traps` used to always stub with `func_new`,
@@ -208,6 +249,82 @@ fn linker_fails_to_define_unknown_core_module_imports_as_traps() -> Result<()> {
         )"#,
     )?;
     assert!(linker.define_unknown_imports_as_traps(&component).is_err());
+
+    Ok(())
+}
+
+/// A default `own` handle takes the resource type of the instance it flows
+/// into, which is only possible for a host-defined type: a guest owns the
+/// representation of its own resources, so one cannot be synthesized.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_default_value_resource_types() -> Result<()> {
+    const COMPONENT: &str = r#"(component
+        (import "types" (instance $t (export "r" (type (sub resource)))))
+        (alias export $t "r" (type $r))
+        (import "f" (func $fn (result (own $r))))
+
+        (core func $lowered (canon lower (func $fn)))
+        (core module $m
+            (import "" "f" (func $f (result i32)))
+            (func (export "run") (result i32) call $f)
+        )
+        (core instance $i (instantiate $m
+            (with "" (instance (export "f" (func $lowered))))))
+        (func (export "run") (result (own $r))
+            (canon lift (core func $i "run")))
+    )"#;
+
+    let engine = Engine::default();
+    let component = Component::new(&engine, COMPONENT)?;
+    let mut store = Store::new(&engine, ());
+
+    // A host-defined resource: the handle comes back with the linker's type,
+    // not one of the stub's choosing.
+    let host_ty = ResourceType::host::<u32>();
+    let mut linker = Linker::<()>::new(&engine);
+    linker
+        .instance("types")?
+        .resource("r", host_ty, |_, _| Ok(()))?;
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+    let mut results = [Val::Bool(false)];
+    run.call(&mut store, &[], &mut results)?;
+    let Val::Resource(resource) = results[0] else {
+        panic!("expected a resource");
+    };
+    assert_eq!(resource.ty(), host_ty);
+
+    // A guest-defined resource, taken from a live instance of a component
+    // which defines one. Instantiating still works; only the call fails.
+    let producer = Component::new(
+        &engine,
+        r#"(component
+            (core module $m (func (export "dtor") (param i32)))
+            (core instance $mi (instantiate $m))
+            (type $r (resource (rep i32) (dtor (core func $mi "dtor"))))
+            (export "r" (type $r))
+        )"#,
+    )?;
+    let producer = Linker::<()>::new(&engine).instantiate(&mut store, &producer)?;
+    let guest_ty = producer.get_resource(&mut store, "r").unwrap();
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker
+        .instance("types")?
+        .resource("r", guest_ty, |_, _| Ok(()))?;
+    linker.define_unknown_imports_as_default_values(&mut store, &component)?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+    let err = run.call(&mut store, &[], &mut results).unwrap_err();
+    let err = format!("{err:?}");
+    assert!(
+        err.contains("cannot synthesize a resource of a non-host-defined type"),
+        "unexpected error: {err}"
+    );
 
     Ok(())
 }

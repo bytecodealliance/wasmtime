@@ -1,6 +1,8 @@
 #![cfg(arc_try_new)]
 
-use wasmtime::{Config, Engine, Func, FuncType, Linker, Module, Result, Store, Val, ValType};
+use wasmtime::{
+    Config, Engine, Func, FuncType, Instance, Linker, Module, Result, Store, Val, ValType,
+};
 use wasmtime_fuzzing::oom::OomTest;
 
 #[test]
@@ -36,22 +38,39 @@ fn func_new_with_type() -> Result<()> {
 }
 
 #[test]
-fn func_call() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(
-            &engine,
-            r#"(module (func (export "id") (param i32) (result i32) (local.get 0)))"#,
-        )?
-        .serialize()?
-    };
+fn func_new_with_type_then_instantiate() -> Result<()> {
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(&engine, "(module)")?;
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .alloc_succeeds_after_oom(true)
+        .test(|| {
+            let mut store = Store::try_new(&engine, ())?;
+            let ty = FuncType::try_new(&engine, [ValType::I32], [ValType::I32])?;
+            let func = Func::try_new(&mut store, ty, |_caller, params, results| {
+                results[0] = params[0].clone();
+                Ok(())
+            });
+            // Whether or not creating the function hit OOM, the store must
+            // still be usable afterwards.
+            Instance::new(&mut store, &module, &[])?;
+            func?;
+            Ok(())
+        })
+}
+
+#[test]
+fn func_call() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module (func (export "id") (param i32) (result i32) (local.get 0)))"#,
+    )?;
     let linker = Linker::<()>::new(&engine);
     let instance_pre = linker.instantiate_pre(&module)?;
 
@@ -68,21 +87,13 @@ fn func_call() -> Result<()> {
 
 #[tokio::test]
 async fn func_call_async() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(
-            &engine,
-            r#"(module (func (export "id") (param i32) (result i32) (local.get 0)))"#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(
+        &engine,
+        r#"(module (func (export "id") (param i32) (result i32) (local.get 0)))"#,
+    )?;
     let linker = Linker::<()>::new(&engine);
     let instance_pre = linker.instantiate_pre(&module)?;
 
@@ -102,21 +113,13 @@ async fn func_call_async() -> Result<()> {
 
 #[tokio::test]
 async fn typed_func_call_async() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(
-            &engine,
-            r#"(module (func (export "id") (param i32) (result i32) (local.get 0)))"#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(
+        &engine,
+        r#"(module (func (export "id") (param i32) (result i32) (local.get 0)))"#,
+    )?;
     let linker = Linker::<()>::new(&engine);
     let instance_pre = linker.instantiate_pre(&module)?;
 
@@ -134,21 +137,13 @@ async fn typed_func_call_async() -> Result<()> {
 
 #[test]
 fn func_typed() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        let engine = Engine::new(&config)?;
-        Module::new(
-            &engine,
-            r#"(module (func (export "id") (param i32) (result i32) (local.get 0)))"#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(
+        &engine,
+        r#"(module (func (export "id") (param i32) (result i32) (local.get 0)))"#,
+    )?;
     let linker = Linker::<()>::new(&engine);
     let instance_pre = linker.instantiate_pre(&module)?;
 

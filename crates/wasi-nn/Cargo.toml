@@ -57,7 +57,7 @@ walkdir = { workspace = true }
 libtest-mimic = { workspace = true }
 test-programs-artifacts = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["p1"] }
-wasmtime = { workspace = true, features = ["cranelift"] }
+wasmtime = { workspace = true, features = ["cranelift", "wat"] }
 tracing-subscriber = { workspace = true }
 
 [features]

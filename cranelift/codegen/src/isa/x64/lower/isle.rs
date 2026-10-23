@@ -1509,6 +1509,24 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
+    fn shuffle_lhs_only(&mut self, mask: &VecMask) -> Option<VecMask> {
+        if mask.iter().all(|&b| b < 16) {
+            Some(mask.clone())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn shuffle_rhs_only(&mut self, mask: &VecMask) -> Option<VecMask> {
+        if mask.iter().all(|&b| (16..32).contains(&b)) {
+            Some(mask.clone())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn perm_from_mask_with_zeros(
         &mut self,
         mask: &VecMask,

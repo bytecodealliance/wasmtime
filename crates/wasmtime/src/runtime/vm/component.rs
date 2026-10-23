@@ -15,7 +15,7 @@ use crate::runtime::component::{ComponentInstanceId, RuntimeInstance};
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::{
-    HostResult, SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition,
+    HostResult, SendSyncPtr, UncaughtException, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition,
     VMMemoryDefinition, VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableImport, VMWasmCallFunction,
     ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
 };
@@ -42,7 +42,7 @@ mod handle_table;
 mod libcalls;
 mod resources;
 
-pub use self::handle_table::{HandleTable, RemovedResource};
+pub use self::handle_table::{HandleCounter, HandleTable, RemovedResource};
 #[cfg(feature = "component-model-async")]
 pub use self::handle_table::{ThreadHandleTable, TransmitLocalState, Waitable};
 pub use self::resources::{
@@ -249,6 +249,7 @@ impl ComponentInstance {
     /// mutable reference at this time to the instance from `vmctx`. Note that
     /// it must be also safe to borrow the store mutably, meaning it can't
     /// already be in use elsewhere.
+    #[inline]
     pub unsafe fn enter_host_from_wasm<R>(
         vmctx: NonNull<VMComponentContext>,
         f: impl FnOnce(&mut dyn VMStore, Instance) -> R,
@@ -269,7 +270,7 @@ impl ComponentInstance {
         let store = unsafe { &mut *reference.store.0.as_ptr() };
 
         let instance = Instance::from_wasmtime(store, reference.id);
-        catch_unwind_and_record_trap(store, |store| f(store, instance))
+        catch_unwind_and_record_trap(store, UncaughtException::Trap, |store| f(store, instance))
     }
 
     /// Returns the `InstanceId` associated with the `vmctx` provided.
@@ -708,7 +709,7 @@ impl ComponentInstance {
             // SAFETY: this is a valid initialization of all globals which are
             // 32-bit values. The `may_leave` flag starts out `true`.
             unsafe {
-                *def.as_i32_mut() = 1;
+                def.set_i32(1);
                 self.instance_flags(i).as_raw().write(def);
             }
         }
@@ -1050,13 +1051,13 @@ impl InstanceFlags {
 
     #[inline]
     pub unsafe fn may_leave(&self) -> bool {
-        unsafe { *self.as_raw().as_ref().as_i32() != 0 }
+        unsafe { self.as_raw().as_ref().get_i32() != 0 }
     }
 
     #[inline]
     pub unsafe fn set_may_leave(&mut self, val: bool) {
         unsafe {
-            *self.as_raw().as_mut().as_i32_mut() = val as i32;
+            self.as_raw().as_mut().set_i32(val as i32);
         }
     }
 

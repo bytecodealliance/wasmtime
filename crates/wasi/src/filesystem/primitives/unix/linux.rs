@@ -28,11 +28,7 @@ pub(crate) fn open_fast(
     path: &Path,
     options: &OpenOptions,
 ) -> io::Result<Option<fs::File>> {
-    // On regular Linux, attempt to use `openat2` to accelerate sandboxed
-    // lookups. On Android, the [seccomp policy] prevents us from even
-    // detecting whether `openat2` is supported, so don't even try.
-    //
-    // [seccomp policy]: https://android-developers.googleblog.com/2017/07/seccomp-filter-in-android-o.html
+    // Attempt to use `openat2` to accelerate sandboxed lookups.
     let result = open_beneath(start, path, options);
 
     // If we got anything other than a `ENOSYS` error, that's our result.
@@ -51,6 +47,22 @@ fn open_beneath(start: &fs::File, path: &Path, options: &OpenOptions) -> io::Res
     if INVALID.load(Relaxed) {
         // `openat2` is permanently unavailable.
         return Err(rustix::io::Errno::NOSYS.into());
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        // On Android before API level 37, `openat2` calls result in `SYS_SECCOMP`
+        // due to the [seccomp policy] and cause crash, so don't even try.
+        //
+        // [seccomp policy]: https://android-developers.googleblog.com/2017/07/seccomp-filter-in-android-o.html
+        static CHECKED: AtomicBool = AtomicBool::new(false);
+        if !CHECKED.load(Relaxed) {
+            if android_device_api_level().is_none_or(|level| level < 37) {
+                INVALID.store(true, Relaxed);
+                return Err(rustix::io::Errno::NOSYS.into());
+            }
+            CHECKED.store(true, Relaxed);
+        }
     }
 
     let oflags = compute_oflags(options)?;
@@ -117,6 +129,29 @@ fn open_beneath(start: &fs::File, path: &Path, options: &OpenOptions) -> io::Res
     })
 }
 
+#[cfg(target_os = "android")]
+fn android_device_api_level() -> Option<u32> {
+    // `android_get_device_api_level` is defined in [`<android/api-level.h>`] and
+    // is available in Bionic libc starting from API level 29. We use `dlsym`
+    // instead of linking directly since we don't know if the function is available
+    // at runtime and [`linkage` Rust feature] is not stable yet.
+    //
+    // [`<android/api-level.h>`]: https://android.googlesource.com/platform/bionic/+/main/libc/include/android/api-level.h
+    // [`linkage` Rust feature] https://github.com/rust-lang/rust/issues/29603
+    let symbol =
+        unsafe { libc::dlsym(libc::RTLD_DEFAULT, c"android_get_device_api_level".as_ptr()) };
+    if symbol.is_null() {
+        return None;
+    }
+
+    let get_api_level: unsafe extern "C" fn() -> libc::c_int =
+        unsafe { std::mem::transmute(symbol) };
+
+    // `android_get_device_api_level` may return -1 on failure, but `u32::try_from`
+    // handles this case
+    u32::try_from(unsafe { get_api_level() }).ok()
+}
+
 // In theory we could optimize `link` using `openat2` with `O_PATH` and
 // `linkat` with `AT_EMPTY_PATH`, however that requires `CAP_DAC_READ_SEARCH`,
 // so it isn't very widely applicable.
@@ -172,6 +207,25 @@ pub(crate) fn stat_fast(
             _ => Err(err),
         },
     }
+}
+
+/// Set the timestamps of the file or directory that `fd` itself refers to.
+///
+/// `futimens` fails with `EBADF` when `fd` was opened with `O_PATH`, which is
+/// how preopened directories are held open (see `dir_utils::target_o_path`).
+/// An empty path with `AT_EMPTY_PATH` acts on `fd` itself and is allowed for
+/// `O_PATH` descriptors.
+pub(crate) fn set_times_fast(
+    fd: &fs::File,
+    atime: Option<SystemTime>,
+    mtime: Option<SystemTime>,
+) -> io::Result<bool> {
+    let times = Timestamps {
+        last_access: to_timespec(atime)?,
+        last_modification: to_timespec(mtime)?,
+    };
+    utimensat(fd, "", &times, AtFlags::EMPTY_PATH)?;
+    Ok(true)
 }
 
 pub(crate) fn set_times_fallback(

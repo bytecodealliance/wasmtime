@@ -578,26 +578,25 @@ impl Descriptor {
         atim: Option<SystemTime>,
         mtim: Option<SystemTime>,
     ) -> Result<(), ErrorCode> {
-        let mut times = std::fs::FileTimes::new();
-        if let Some(atim) = atim {
-            times = times.set_accessed(atim);
-        }
-        if let Some(mtim) = mtim {
-            times = times.set_modified(mtim);
-        }
         match self {
             Self::File(f) => {
                 if f.perms.write_not_permitted() {
                     return Err(ErrorCode::NotPermitted);
                 }
-                f.run_blocking(move |f| f.set_times(times)).await?;
+                f.run_blocking(move |f| {
+                    crate::filesystem::primitives::set_times_on_fd(f, atim, mtim)
+                })
+                .await?;
                 Ok(())
             }
             Self::Dir(d) => {
                 if d.perms.write_not_permitted() {
                     return Err(ErrorCode::NotPermitted);
                 }
-                d.run_blocking(move |d| d.set_times(times)).await?;
+                d.run_blocking(move |d| {
+                    crate::filesystem::primitives::set_times_on_fd(d, atim, mtim)
+                })
+                .await?;
                 Ok(())
             }
         }
@@ -1310,9 +1309,11 @@ pub trait WasiFilesystemNamedView: Send + 'static {
     /// embedder-allocated id is then passed back here when the corresponding
     /// imported function is invoked.
     ///
-    /// Note that the [`ResourceTable`] referenced in the returned
-    /// [`WasiFilesystemCtxView`] need not be unique. It's ok to use the same
-    /// [`ResourceTable`] for all imports. This is not a guest-visible
-    /// abstraction and just helps the host allocate and manage state.
+    /// It's strongly recommended, though not always required, that the
+    /// [`ResourceTable`] in the returned [`WasiFilesystemCtxView`] is the same
+    /// table that the default context, [`WasiFilesystemView::filesystem`],
+    /// uses. Resources created through a named import can be used through
+    /// interfaces bound to the default context (and vice versa), and with
+    /// separate tables those lookups fail or find another context's resources.
     fn filesystem(&mut self, id: NamedId) -> WasiFilesystemCtxView<'_>;
 }
