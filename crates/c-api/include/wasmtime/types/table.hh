@@ -6,6 +6,7 @@
 #define WASMTIME_TYPES_TABLE_HH
 
 #include <optional>
+#include <wasmtime/table.h>
 #include <wasmtime/types/val.hh>
 
 namespace wasmtime {
@@ -37,16 +38,19 @@ public:
     Ref(const TableType &ty) : Ref(ty.ptr.get()) {}
 
     /// Returns the minimum size of this table type, in elements.
-    uint32_t min() const { return wasm_tabletype_limits(ptr)->min; }
+    uint64_t min() const { return wasmtime_tabletype_minimum(ptr); }
 
     /// Returns the maximum size of this table type, in elements, if present.
-    std::optional<uint32_t> max() const {
-      const auto *limits = wasm_tabletype_limits(ptr);
-      if (limits->max == wasm_limits_max_default) {
-        return std::nullopt;
+    std::optional<uint64_t> max() const {
+      uint64_t max = 0;
+      if (wasmtime_tabletype_maximum(ptr, &max)) {
+        return max;
       }
-      return limits->max;
+      return std::nullopt;
     }
+
+    /// Returns whether or not this is a 64-bit table type.
+    bool is_64() const { return wasmtime_tabletype_is64(ptr); }
 
     /// Returns the type of value that is stored in this table.
     ValType::Ref element() const { return wasm_tabletype_element(ptr); }

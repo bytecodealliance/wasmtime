@@ -140,7 +140,9 @@ async fn invoke_c_async_callback<'a>(
         &mut trap,
         &mut continuation,
     );
-    continuation.await;
+    if trap.is_none() {
+        continuation.await;
+    }
 
     if let Some(trap) = trap {
         return Err(trap.error);

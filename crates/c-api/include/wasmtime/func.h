@@ -176,7 +176,9 @@ wasmtime_func_type(const wasmtime_context_t *store,
  *    wasn't written to and `trap` will have `NULL` written to it. This state
  *    means that programmer error happened when calling the function, for
  *    example when the size of the arguments/results was wrong, the types of the
- *    arguments were wrong, or arguments may come from the wrong store.
+ *    arguments were wrong, or a `funcref` argument came from the wrong store.
+ *    Note that GC reference arguments (`externref`, `anyref` and `exnref`)
+ *    from the wrong store abort the process instead (see #wasmtime_val_t).
  * 2. The trap pointer is filled in. This means the returned error is `NULL` and
  *    `results` was not written to. This state means that the function was
  *    executing but hit a wasm trap while executing.
