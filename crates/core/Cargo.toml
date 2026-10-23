@@ -15,6 +15,9 @@ hashbrown = { workspace = true, features = ["default-hasher"] }
 libm = { workspace = true }
 serde = { workspace = true, optional = true }
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+libc = { workspace = true }
+
 [lints]
 workspace = true
 
