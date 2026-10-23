@@ -65,7 +65,13 @@ pub fn mem_finalize(
                 };
                 (smallvec![], mem)
             } else {
-                let tmp = writable_spilltmp_reg();
+                // The stack-limit chain may use x16 as its base. Do not
+                // overwrite that base while materializing a large offset.
+                let tmp = if basereg == spilltmp_reg() {
+                    writable_tmp2_reg()
+                } else {
+                    writable_spilltmp_reg()
+                };
                 (
                     Inst::load_constant(tmp, off as u64),
                     AMode::RegExtended {
