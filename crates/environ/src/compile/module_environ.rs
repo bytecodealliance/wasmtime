@@ -1552,6 +1552,23 @@ impl ModuleTranslation<'_> {
     pub fn finalize_table_init(&mut self, tunables: &Tunables, types: &mut ModuleTypesBuilder) {
         if tunables.table_lazy_init {
             self.try_func_table_init();
+            // try_func_table_init removes a prefix, so capture segment positions
+            // only afterwards to match startup translation. General expressions
+            // retain their existing eager evaluation and ordering.
+            self.module.deferred_table_segments = self
+                .table_initialization
+                .segments
+                .iter()
+                .map(|segment| match &segment.elements {
+                    TableSegmentElements::Functions(indices)
+                        if self.module.is_imported_table(segment.table_index) =>
+                    {
+                        indices.iter().copied().try_collect().panic_on_oom()
+                    }
+                    _ => TryVec::new(),
+                })
+                .try_collect()
+                .panic_on_oom();
         }
 
         // If any table has a non-null initializers, or if there's any active

@@ -983,7 +983,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.module.tables[index]
     }
 
-    /// Cast the value to I64 and sign extend if necessary.
+    /// Cast the value to I64 and zero extend if necessary.
     ///
     /// Returns the value casted to I64.
     fn cast_index_to_i64(
@@ -6100,8 +6100,14 @@ impl FuncEnvironment<'_> {
                 }
             }
         }
-        for segment in self.translation.table_initialization.segments.iter() {
-            self.module_initialize_table_with_segment(builder, segment)?;
+        for (segment_index, segment) in self
+            .translation
+            .table_initialization
+            .segments
+            .iter()
+            .enumerate()
+        {
+            self.module_initialize_table_with_segment(builder, segment, segment_index)?;
         }
         match &self.translation.memory_init {
             MemoryInit::Unprocessed(_) => unreachable!(),
@@ -6237,12 +6243,13 @@ impl FuncEnvironment<'_> {
     ///
     /// Note that this isn't done for "precomputed" tables which won't have
     /// initializers present. Additionally note that this doesn't use
-    /// `table.init` because the element segment won't actually be present
-    /// anywhere at runtime.
+    /// `table.init` because active segments are unavailable to that instruction.
+    /// Eligible function-index lists are retained separately for lazy reads.
     fn module_initialize_table_with_segment(
         &mut self,
         builder: &mut FunctionBuilder,
         segment: &TableSegment,
+        segment_index: usize,
     ) -> WasmResult<()> {
         let offset = self.translate_const_expr(builder, &segment.offset)?;
         let segment_len = builder.ins().iconst(
@@ -6266,6 +6273,31 @@ impl FuncEnvironment<'_> {
             .variable()
             .table_init_per_element;
         let fuel = self.pre_translate_bulk_op(builder, segment_len, cost);
+
+        if self.tunables.table_lazy_init
+            && self.module.is_imported_table(segment.table_index)
+            && matches!(segment.elements, TableSegmentElements::Functions(_))
+        {
+            // Preserve bounds checks and element fuel charges at the original
+            // initialization boundary; defer only construction of VMFuncRefs.
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let table = builder
+                .ins()
+                .iconst(I32, i64::from(segment.table_index.as_u32()));
+            let segment_id = builder
+                .ins()
+                .iconst(I32, i64::from(u32::try_from(segment_index).unwrap()));
+            let offset = self.cast_index_to_i64(
+                &mut builder.cursor(),
+                offset,
+                self.module.tables[segment.table_index].idx_type,
+            );
+            let libcall = self.builtin_functions.table_init_func_segment(builder.func);
+            builder
+                .ins()
+                .call(libcall, &[vmctx, table, segment_id, offset]);
+            return self.post_translate_bulk_op(builder, fuel);
+        }
 
         // Re-use the `table.set` translation for making this a simple function
         // to define. That re-executes the bounds check which is a bit

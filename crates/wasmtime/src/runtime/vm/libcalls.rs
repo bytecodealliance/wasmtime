@@ -122,7 +122,7 @@ pub mod raw {
                 ) $(-> libcall!(@ty $result))? {
                     $(#[cfg($attr)])?
                     unsafe {
-                        Instance::enter_host_from_wasm(vmctx, |store, instance| {
+                        Instance::enter_host_from_wasm(vmctx, libcall!(@call_hooks $name), |store, instance| {
                             super::$name(store, instance, $($pname),*)
                         })
                     }
@@ -148,6 +148,11 @@ pub mod raw {
                 };
             )*
         };
+
+        // Active segments previously used infallible ref_func calls without
+        // host transitions. Deferred initialization must retain that behavior.
+        (@call_hooks table_init_func_segment) => (false);
+        (@call_hooks $name:ident) => (true);
 
         (@ty u32) => (u32);
         (@ty u64) => (u64);
@@ -403,6 +408,22 @@ fn ref_func(store: &mut dyn VMStore, instance: InstanceId, func_index: u32) -> N
         .get_func_ref(registry, FuncIndex::from_u32(func_index))
         .expect("ref_func: funcref should always be available for given func index")
         .cast()
+}
+
+fn table_init_func_segment(
+    store: &mut dyn VMStore,
+    instance: InstanceId,
+    table_index: u32,
+    segment: u32,
+    offset: u64,
+) -> Result<()> {
+    let (instance, registry) = store.instance_and_module_registry_mut(instance);
+    instance.initialize_deferred_func_segment(
+        registry,
+        TableIndex::from_u32(table_index),
+        segment,
+        offset,
+    )
 }
 
 // Returns a table entry after lazily initializing it.

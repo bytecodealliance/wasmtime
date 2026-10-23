@@ -530,7 +530,7 @@ impl InterpreterRef<'_> {
                 // SAFETY: `caller` is valid and its store is not otherwise
                 // borrowed, per this function's contract.
                 unsafe {
-                    Instance::enter_host_from_wasm(caller, |store, _instance| {
+                    Instance::enter_host_from_wasm(caller, true, |store, _instance| {
                         trap = store
                             .store_opaque()
                             .modules()
