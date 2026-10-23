@@ -1,5 +1,84 @@
 use super::*;
 use crate::ToWasmtimeResult as _;
+use wasm_compose::graph::{CompositionGraph, EncodeOptions, ExportIndex, ImportIndex, InstanceId};
+
+/// Returns the instance imports of `component`, in declaration order.
+fn instance_imports<'c>(
+    component: &'c wasm_compose::graph::Component<'_>,
+) -> impl Iterator<Item = (ImportIndex, &'c str)> {
+    component.imports().filter_map(|(index, name, ty)| {
+        matches!(ty, wasmparser::ComponentTypeRef::Instance(_)).then_some((index, name))
+    })
+}
+
+/// Composes `main_wasm` with the compile-time builtins it imports.
+///
+/// Each imported builtin is instantiated once and satisfies every instance
+/// import named after it, including other builtins' imports. Other imports,
+/// such as the unsafe intrinsics, remain imports, merged by name.
+fn compose(
+    main_wasm: &[u8],
+    builtins: &HashMap<Cow<'_, str>, Cow<'_, [u8]>>,
+    features: wasmparser::WasmFeatures,
+) -> Result<Vec<u8>> {
+    let mut validator = wasmparser::Validator::new_with_features(features);
+    let mut graph = CompositionGraph::new();
+
+    let main = wasm_compose::graph::Component::from_bytes(&mut validator, "main", main_wasm)
+        .to_wasmtime_result()?;
+    let main_imports: Vec<String> = instance_imports(&main)
+        .map(|(_, name)| name.to_owned())
+        .collect();
+    let main = graph.add_component(main).to_wasmtime_result()?;
+    let main = graph.instantiate(main).to_wasmtime_result()?;
+
+    // Instantiate in import order, so the output doesn't depend on hash map
+    // order.
+    let mut instances: Vec<(&str, InstanceId)> = Vec::new();
+    for name in &main_imports {
+        let Some((name, bytes)) = builtins.get_key_value(name.as_str()) else {
+            continue;
+        };
+
+        // Graph labels must be unique and valid but aren't encoded, so number
+        // them rather than reuse import names, which could clash with `main`.
+        let label = format!("builtin{}", instances.len());
+
+        // wasm-compose's errors use the label, so name the builtin here.
+        let component = wasm_compose::graph::Component::from_bytes(&mut validator, label, &**bytes)
+            .to_wasmtime_result()
+            .with_context(|| format!("invalid compile-time builtin `{name}`"))?;
+        let component = graph.add_component(component).to_wasmtime_result()?;
+
+        instances.push((name, graph.instantiate(component).to_wasmtime_result()?));
+    }
+
+    // Collect the connections first, since connecting needs the graph
+    // mutably.
+    let mut connections: Vec<(InstanceId, InstanceId, ImportIndex)> = Vec::new();
+    for target in core::iter::once(main).chain(instances.iter().map(|&(_, instance)| instance)) {
+        let (_, component) = graph.get_component_of_instance(target).unwrap();
+        for (import, name) in instance_imports(component) {
+            if let Some(&(_, source)) = instances.iter().find(|&&(builtin, _)| builtin == name) {
+                connections.push((source, target, import));
+            }
+        }
+    }
+
+    for (source, target, import) in connections {
+        graph
+            .connect(source, None::<ExportIndex>, target, import)
+            .to_wasmtime_result()?;
+    }
+
+    graph
+        .encode(EncodeOptions {
+            define_components: true,
+            export: Some(main),
+            validate: false,
+        })
+        .to_wasmtime_result()
+}
 
 impl<'a> CodeBuilder<'a> {
     pub(crate) fn get_compile_time_builtins(&self) -> &HashMap<Cow<'a, str>, Cow<'a, [u8]>> {
@@ -15,48 +94,22 @@ impl<'a> CodeBuilder<'a> {
         }
 
         let imports = self.check_imports_for_compile_time_builtins(&main_wasm)?;
-        if imports.is_empty() {
+        let builtins = self.get_compile_time_builtins();
+
+        // Nothing to compose if the main Wasm imports none of the builtins.
+        if !imports.iter().any(|import| builtins.contains_key(*import)) {
             drop(imports);
             return Ok(main_wasm.into());
         }
 
-        let tempdir = tempfile::TempDir::new().context("failed to create a temporary directory")?;
-        let deps = tempdir.path().join("_deps");
-        std::fs::create_dir(&deps)
-            .with_context(|| format!("failed to create directory: {}", deps.display()))?;
-
-        let main_wasm_path = tempdir.path().join("_main.wasm");
-        std::fs::write(&main_wasm_path, &main_wasm)
-            .with_context(|| format!("failed to write to file: {}", main_wasm_path.display()))?;
-
-        let mut config = wasm_compose::config::Config::default();
-        for (name, bytes) in self.get_compile_time_builtins() {
-            let name: &str = &*name;
-            if !imports.contains(&name) {
-                continue;
-            }
-
-            let mut path = deps.join(Path::new(name));
-            path.set_extension("wasm");
-
-            std::fs::write(&path, &bytes)
-                .with_context(|| format!("failed to write to file: {}", path.display()))?;
-
-            config
-                .dependencies
-                .insert(name.to_string(), wasm_compose::config::Dependency { path });
-        }
-
-        let composer = wasm_compose::composer::ComponentComposer::new(&main_wasm_path, &config);
-        let composed = composer.compose().to_wasmtime_result()?;
-        Ok(composed.into())
+        Ok(compose(main_wasm, builtins, self.engine.features())?.into())
     }
 
     /// Check that the main Wasm doesn't import unsafe intrinsics, keeping the
     /// TCB to just the compile-time builtins' implementation.
     ///
-    /// Returns the Wasm's top-level instance imports for `wasm-compose`
-    /// configuration.
+    /// Returns the Wasm's top-level instance imports, so that composition can
+    /// be skipped when none of them is a compile-time builtin.
     fn check_imports_for_compile_time_builtins<'b>(
         &self,
         main_wasm: &'b [u8],

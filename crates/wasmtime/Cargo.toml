@@ -36,7 +36,6 @@ wasm-encoder = { workspace = true, optional = true }
 wasm-wave = { workspace = true, optional = true }
 wasm-compose = { workspace = true, optional = true }
 wit-parser = { workspace = true, optional = true }
-tempfile = { workspace = true, optional = true }
 libc = { workspace = true }
 log = { workspace = true }
 wat = { workspace = true, optional = true }
@@ -426,7 +425,7 @@ debug = [
 ]
 
 # Enables support for defining compile-time builtins.
-compile-time-builtins = ['anyhow', 'dep:wasm-compose', 'dep:tempfile']
+compile-time-builtins = ['anyhow', 'dep:wasm-compose']
 
 # Enable support for the common base infrastructure of record/replay
 rr = [
