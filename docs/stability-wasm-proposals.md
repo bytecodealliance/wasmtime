@@ -128,13 +128,13 @@ implementations within Wasmtime.
 |  Proposal                 | Emoji | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
 |---------------------------|-------|---------|-------|----------|--------|-----|--------|
 | async                     | 🔀    | ✅      | ✅    | ✅       | ✅     | ✅  | 🚧[^c1]|
+| implements                | 🏷️     | ✅      | ✅    | ✅       | ❌[^c3]| ✅  | ✅     |
 
 **Off-by-default proposals**
 
 |  Proposal                 | Emoji | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
 |---------------------------|-------|---------|-------|----------|--------|-----|--------|
 | map                       | 🗺️     | ✅      | ✅    | ✅       | ✅     | ✅  | ✅     |
-| implements                | 🏷️     | ✅      | ✅    | ✅       | ❌     | ✅  | ✅     |
 | more async options [^c2]  | 🚝    | ❌      | ✅    | ❌       | ❌     | ✅  | ✅     |
 | stackful async [^c2]      | 🚟    | ❌      | ✅    | ❌       | ❌     | ✅  | ✅     |
 | threading                 | 🧵    | ❌      | ✅    | ❌       | ❌     | ✅  | ❌     |
@@ -149,6 +149,9 @@ implementations within Wasmtime.
 [^c1]: Tracked in [#13705](https://github.com/bytecodealliance/wasmtime/issues/13705)
 [^c2]: These features were sliced out of the original async proposal for the
     component model but the implementation remains in Wasmtime.
+[^c3]: The `implements` and `external-id` attributes are metadata that don't
+    affect type checking, compilation or execution, so they're covered by
+    tests rather than fuzzing.
 
 
 
