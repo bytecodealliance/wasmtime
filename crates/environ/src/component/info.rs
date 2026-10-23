@@ -223,6 +223,15 @@ impl Component {
     pub fn resource_index(&self, idx: DefinedResourceIndex) -> ResourceIndex {
         ResourceIndex::from_u32(self.imported_resources.len() as u32 + idx.as_u32())
     }
+
+    /// Returns the component instance which defines `idx`, or `None` if `idx`
+    /// is imported rather than defined within this component.
+    pub fn defined_resource_instance(
+        &self,
+        idx: ResourceIndex,
+    ) -> Option<RuntimeComponentInstanceIndex> {
+        Some(self.defined_resource_instances[self.defined_resource_index(idx)?])
+    }
 }
 
 /// GlobalInitializer instructions to get processed when instantiating a
@@ -1065,6 +1074,11 @@ pub enum Trampoline {
     /// Same as `ResourceTransferOwn` but for borrows.
     ResourceTransferBorrow,
 
+    /// Same as `ResourceTransferBorrow` but for a destination instance which
+    /// owns the resource and so receives its representation directly, meaning
+    /// no destination table is consulted.
+    ResourceTransferBorrowToOwner,
+
     /// An intrinsic used by FACT-generated modules to prepare a call involving
     /// an async-lowered import and/or an async-lifted export.
     PrepareCall {
@@ -1242,6 +1256,9 @@ impl Trampoline {
             ErrorContextDrop { .. } => format!("error-context-drop"),
             ResourceTransferOwn => format!("component-resource-transfer-own"),
             ResourceTransferBorrow => format!("component-resource-transfer-borrow"),
+            ResourceTransferBorrowToOwner => {
+                format!("component-resource-transfer-borrow-to-owner")
+            }
             PrepareCall { .. } => format!("component-prepare-call"),
             StartCall { .. } => format!("component-start-call"),
             FutureTransfer => format!("future-transfer"),

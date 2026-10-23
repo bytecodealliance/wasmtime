@@ -193,6 +193,16 @@ impl ComponentTypesBuilder {
         self.component_types.resource_tables.len()
     }
 
+    /// Forwards to `ComponentTypes::resource_owned_by_own_instance`.
+    pub fn resource_owned_by_own_instance(
+        &self,
+        ty: TypeResourceTableIndex,
+        defined_resource_instance: impl FnOnce(ResourceIndex) -> Option<RuntimeComponentInstanceIndex>,
+    ) -> bool {
+        self.component_types
+            .resource_owned_by_own_instance(ty, defined_resource_instance)
+    }
+
     /// Returns the number of future tables allocated so far, or the maximum
     /// `TypeFutureTableIndex`.
     pub fn num_future_tables(&self) -> usize {
