@@ -1295,7 +1295,15 @@ impl ModuleTranslation<'_> {
                 Some(top) => top,
                 None => return true,
             };
-            top > self.module.tables[segment.table_index].limits.min
+            if top > self.module.tables[segment.table_index].limits.min {
+                return true;
+            }
+            match &segment.elements {
+                TableSegmentElements::Functions(_) => false,
+                TableSegmentElements::Expressions { exprs, .. } => exprs
+                    .iter()
+                    .any(|expr| expr.ops().iter().any(|op| op.may_trap())),
+            }
         })
     }
 
