@@ -905,6 +905,8 @@ impl<'a, 'data> Translator<'a, 'data> {
                 let types = self.validator.types(0).unwrap();
                 for ty in s {
                     match ty? {
+                        // An empty rec group defines no types to intern.
+                        wasmparser::CoreType::Rec(group) if group.types().len() == 0 => {}
                         wasmparser::CoreType::Rec(group) => {
                             let id = types.core_type_at_in_component(index).unwrap_sub();
                             let group_id = types.rec_group_id_of(id);
