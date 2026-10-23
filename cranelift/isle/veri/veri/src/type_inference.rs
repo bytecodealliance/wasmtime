@@ -156,6 +156,7 @@ impl std::fmt::Display for Choice {
 pub struct Arm {
     choice: Choice,
     constraints: Vec<Constraint>,
+    rhs_constraints: Vec<Constraint>,
 }
 
 #[derive(Default, Clone)]
@@ -167,8 +168,15 @@ pub struct Branch {
 pub struct System {
     choices: Vec<Choice>,
     constraints: Vec<Constraint>,
+
     branches: Vec<Branch>,
     width_domains: Vec<(ExprId, Vec<usize>)>,
+
+    /// Constraints from the right-hand side of the rule. These are applied
+    /// only once the left-hand side type assignment has been chosen.
+    rhs_constraints: Vec<Constraint>,
+    /// Width domains of right-hand side expressions.
+    rhs_width_domains: Vec<(ExprId, Vec<usize>)>,
 }
 
 impl System {
@@ -181,6 +189,9 @@ impl System {
             let mut constraints = self.constraints.clone();
             constraints.extend(arm.constraints.iter().cloned());
 
+            let mut rhs_constraints = self.rhs_constraints.clone();
+            rhs_constraints.extend(arm.rhs_constraints.iter().cloned());
+
             let mut choices = self.choices.clone();
             // Only record the choice if there are multiple branches.
             if branch.arms.len() > 1 {
@@ -189,9 +200,11 @@ impl System {
 
             children.push(System {
                 constraints,
+                rhs_constraints,
                 choices,
                 branches: branches.clone(),
                 width_domains: self.width_domains.clone(),
+                rhs_width_domains: self.rhs_width_domains.clone(),
             })
         }
 
@@ -211,6 +224,13 @@ impl System {
         // Constraints
         println!("\tconstraints = [");
         for constraint in &self.constraints {
+            println!("\t\t{constraint}");
+        }
+        println!("\t]");
+
+        // Right-hand side constraints
+        println!("\trhs_constraints = [");
+        for constraint in &self.rhs_constraints {
             println!("\t\t{constraint}");
         }
         println!("\t]");
@@ -242,6 +262,8 @@ struct SystemBuilder<'a> {
 
     system: System,
     arm: Option<Arm>,
+    /// Constraints are currently being generated for the right-hand side.
+    rhs: bool,
 }
 
 impl<'a> SystemBuilder<'a> {
@@ -250,22 +272,26 @@ impl<'a> SystemBuilder<'a> {
             conditions,
             system: System::default(),
             arm: None,
+            rhs: false,
         }
     }
 
     fn build(mut self) -> System {
         // Expression constraints.
         for (i, expr) in self.conditions.exprs.iter().enumerate() {
+            self.rhs = self.is_rhs(ExprId(i));
             self.veri_expr(ExprId(i), expr);
         }
 
         // Assumptions.
         for a in &self.conditions.assumptions {
+            self.rhs = self.is_rhs(*a);
             self.boolean_value(*a, true);
         }
 
         // Assertions.
         for a in &self.conditions.assertions {
+            self.rhs = self.is_rhs(*a);
             self.boolean(*a);
         }
 
@@ -276,12 +302,25 @@ impl<'a> SystemBuilder<'a> {
 
         // Qualifiers.
         for qualifier in &self.conditions.qualifiers {
+            self.rhs = qualifier.rhs;
             self.qualifier(qualifier);
         }
+        self.rhs = false;
 
-        self.system.width_domains = self.conditions.width_domains.clone();
+        let (rhs, lhs): (Vec<_>, Vec<_>) = self
+            .conditions
+            .width_domains
+            .iter()
+            .cloned()
+            .partition(|(x, _)| self.is_rhs(*x));
+        self.system.width_domains = lhs;
+        self.system.rhs_width_domains = rhs;
 
         self.system
+    }
+
+    fn is_rhs(&self, x: ExprId) -> bool {
+        self.conditions.rhs_exprs.contains(&x)
     }
 
     fn veri_expr(&mut self, x: ExprId, expr: &Expr) {
@@ -513,6 +552,15 @@ impl<'a> SystemBuilder<'a> {
 
     fn call(&mut self, call: &Call) {
         if call.signatures.is_empty() {
+            // Without signatures, the contract's return value takes its type
+            // from the actual return value.
+            if let Some(contract_ret) = &call.contract_ret {
+                self.rhs = true;
+                for (c, r) in contract_ret.corresponding_scalars(&call.ret) {
+                    self.same_type(c, r);
+                }
+                self.rhs = false;
+            }
             return;
         }
 
@@ -528,12 +576,18 @@ impl<'a> SystemBuilder<'a> {
 
             // Arguments.
             assert_eq!(call.args.len(), sig.args.len());
+            self.rhs = false;
             for (a, ty) in zip(&call.args, &sig.args) {
                 self.symbolic(a, ty.clone());
             }
 
             // Return.
+            self.rhs = call.ret_rhs;
             self.symbolic(&call.ret, sig.ret.clone());
+            self.rhs = false;
+            if let Some(contract_ret) = &call.contract_ret {
+                self.symbolic(contract_ret, sig.ret.clone());
+            }
 
             // Pop branch arm.
             self.pop();
@@ -616,9 +670,11 @@ impl<'a> SystemBuilder<'a> {
     }
 
     fn constraint(&mut self, constraint: Constraint) {
-        let current = match self.arm.as_mut() {
-            Some(arm) => &mut arm.constraints,
-            None => &mut self.system.constraints,
+        let current = match (self.arm.as_mut(), self.rhs) {
+            (Some(arm), false) => &mut arm.constraints,
+            (Some(arm), true) => &mut arm.rhs_constraints,
+            (None, false) => &mut self.system.constraints,
+            (None, true) => &mut self.system.rhs_constraints,
         };
         current.push(constraint)
     }
@@ -632,6 +688,7 @@ impl<'a> SystemBuilder<'a> {
         self.arm = Some(Arm {
             choice,
             constraints: Vec::new(),
+            rhs_constraints: Vec::new(),
         });
     }
 
@@ -888,6 +945,9 @@ pub enum Status {
     Inapplicable(Conflict),
     Underconstrained,
     TypeError(Conflict),
+    /// The left-hand side type assignment is valid, but it leaves the
+    /// right-hand side ill-typed.
+    RhsTypeError(Conflict),
 }
 
 impl std::fmt::Display for Status {
@@ -897,6 +957,7 @@ impl std::fmt::Display for Status {
             Status::Inapplicable(..) => write!(f, "inapplicable"),
             Status::Underconstrained => write!(f, "underconstrained"),
             Status::TypeError(..) => write!(f, "type error"),
+            Status::RhsTypeError(..) => write!(f, "right-hand side type error"),
         }
     }
 }
@@ -938,30 +999,34 @@ impl Solver {
 
         // Done?
         if system.branches.is_empty() {
-            // Branch over the declared widths of an undetermined bit-vector.
-            let undetermined = system
-                .width_domains
-                .iter()
-                .find(|(x, _)| self.assignment.bit_vector_width(*x).is_none());
-            if let Some((x, widths)) = undetermined {
-                let x = *x;
-                let mut solutions = Vec::new();
-                for &width in widths {
-                    let mut choices = system.choices.clone();
-                    choices.push(Choice::BitVectorWidth(x, width));
-                    let mut constraints = system.constraints.clone();
-                    constraints.push(Constraint::Type {
-                        x,
-                        ty: Type::BitVector(Width::Bits(width)),
-                    });
-                    let child = System {
-                        choices,
-                        constraints,
-                        branches: Vec::new(),
-                        width_domains: system.width_domains.clone(),
-                    };
-                    solutions.extend(self.clone().solve(&child));
-                }
+            // Settle the left-hand side type assignment first, branching over
+            // the declared widths of any undetermined bit-vector.
+            if let Some(solutions) = self.branch_width(system, &system.width_domains) {
+                return solutions;
+            }
+
+            // The rule fires whenever its left-hand side matches, so the
+            // right-hand side must type-check under the assignment: a conflict
+            // here is an error in the rule, not an inapplicable type
+            // assignment.
+            if let Err(status) = self.propagate(&system.rhs_constraints) {
+                let conflict = match status {
+                    Status::Inapplicable(conflict)
+                    | Status::TypeError(conflict)
+                    | Status::RhsTypeError(conflict) => conflict,
+                    Status::Solved | Status::Underconstrained => {
+                        unreachable!("propagation only fails with a conflict")
+                    }
+                };
+                return vec![Solution {
+                    status: Status::RhsTypeError(conflict),
+                    choices: system.choices.clone(),
+                    assignment: self.assignment,
+                }];
+            }
+
+            // Then widths that only the right-hand side leaves undetermined.
+            if let Some(solutions) = self.branch_width(system, &system.rhs_width_domains) {
                 return solutions;
             }
 
@@ -985,6 +1050,39 @@ impl Solver {
         }
 
         solutions
+    }
+
+    /// Branch over the declared widths of the first undetermined bit-vector in
+    /// `domains`, if there is one.
+    fn branch_width(
+        &self,
+        system: &System,
+        domains: &[(ExprId, Vec<usize>)],
+    ) -> Option<Vec<Solution>> {
+        let (x, widths) = domains
+            .iter()
+            .find(|(x, _)| self.assignment.bit_vector_width(*x).is_none())?;
+
+        let mut solutions = Vec::new();
+        for &width in widths {
+            let mut choices = system.choices.clone();
+            choices.push(Choice::BitVectorWidth(*x, width));
+            let mut constraints = system.constraints.clone();
+            constraints.push(Constraint::Type {
+                x: *x,
+                ty: Type::BitVector(Width::Bits(width)),
+            });
+            let child = System {
+                choices,
+                constraints,
+                rhs_constraints: system.rhs_constraints.clone(),
+                branches: Vec::new(),
+                width_domains: system.width_domains.clone(),
+                rhs_width_domains: system.rhs_width_domains.clone(),
+            };
+            solutions.extend(self.clone().solve(&child));
+        }
+        Some(solutions)
     }
 
     fn propagate(&mut self, constraints: &[Constraint]) -> Result<(), Status> {

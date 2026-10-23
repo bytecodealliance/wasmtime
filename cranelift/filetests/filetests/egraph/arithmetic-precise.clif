@@ -542,9 +542,8 @@ block0(v0: i32, v1: i32):
 
 ; function %test_sgt_x_smax(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v2 = smax v0, v1
-;     v3 = icmp sgt v0, v2
-;     return v3
+;     v4 = iconst.i8 0
+;     return v4  ; v4 = 0
 ; }
 
 ;; x >_u umax(x, y) --> false
@@ -557,9 +556,8 @@ block0(v0: i32, v1: i32):
 
 ; function %test_ugt_x_umax(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v2 = umax v0, v1
-;     v3 = icmp ugt v0, v2
-;     return v3
+;     v4 = iconst.i8 0
+;     return v4  ; v4 = 0
 ; }
 
 function %udiv_shift_i32(i32, i32) -> i32 {
