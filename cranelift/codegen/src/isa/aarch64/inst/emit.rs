@@ -1575,8 +1575,8 @@ impl MachInstEmit for Inst {
                 let size = OperandSize::from_ty(ty);
                 let sign_ext = match op {
                     AtomicRMWLoopOp::Smin | AtomicRMWLoopOp::Smax => match ty {
-                        I16 => Some((ExtendOp::SXTH, 16)),
-                        I8 => Some((ExtendOp::SXTB, 8)),
+                        I16 => Some(ExtendOp::SXTH),
+                        I8 => Some(ExtendOp::SXTB),
                         _ => None,
                     },
                     _ => None,
@@ -1590,16 +1590,8 @@ impl MachInstEmit for Inst {
                     _ => None,
                 };
                 // sxt{b|h} the loaded result if necessary.
-                if sign_ext.is_some() {
-                    let (_, from_bits) = sign_ext.unwrap();
-                    Inst::Extend {
-                        rd: x27wr,
-                        rn: x27,
-                        signed: true,
-                        from_bits,
-                        to_bits: size.bits(),
-                    }
-                    .emit(sink, emit_info, state);
+                if let Some(op) = sign_ext {
+                    Inst::gen_extend(x27wr, x27, op, size).emit(sink, emit_info, state);
                 }
 
                 match op {
@@ -1641,7 +1633,7 @@ impl MachInstEmit for Inst {
                             _ => unreachable!(),
                         };
 
-                        if let Some(extendop) = sign_ext.map(|(op, _)| op).or(zero_ext) {
+                        if let Some(extendop) = sign_ext.or(zero_ext) {
                             Inst::AluRRRExtend {
                                 alu_op: ALUOp::SubS,
                                 size,
@@ -3359,57 +3351,6 @@ impl MachInstEmit for Inst {
             }
             &Inst::MovFromNZCV { rd } => {
                 sink.put4(0xd53b4200 | machreg_to_gpr(rd.to_reg()));
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed: false,
-                from_bits: 1,
-                to_bits,
-            } => {
-                assert!(to_bits <= 64);
-                // Reduce zero-extend-from-1-bit to:
-                // - and rd, rn, #1
-                // Note: This is special cased as UBFX may take more cycles
-                // than AND on smaller cores.
-                let imml = ImmLogic::maybe_from_u64(1, I32).unwrap();
-                Inst::AluRRImmLogic {
-                    alu_op: ALUOp::And,
-                    size: OperandSize::Size32,
-                    rd,
-                    rn,
-                    imml,
-                }
-                .emit(sink, emit_info, state);
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed: false,
-                from_bits: 32,
-                to_bits: 64,
-            } => {
-                let mov = Inst::Mov {
-                    size: OperandSize::Size32,
-                    rd,
-                    rm: rn,
-                };
-                mov.emit(sink, emit_info, state);
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed,
-                from_bits,
-                to_bits,
-            } => {
-                let (bfm_op, size) = if signed {
-                    (BfmOp::SBfm, OperandSize::from_bits(to_bits))
-                } else {
-                    (BfmOp::UBfm, OperandSize::Size32)
-                };
-                let opc = bfm_op.opc();
-                sink.put4(enc_bfm(opc, size, rd, rn, 0, from_bits - 1));
             }
             &Inst::BitfieldMove {
                 size,

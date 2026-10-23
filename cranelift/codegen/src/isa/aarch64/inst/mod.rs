@@ -299,6 +299,36 @@ impl Inst {
         }
     }
 
+    /// Zero- or sign-extend `from_reg` as described by `op` into a `to`-sized result.
+    pub fn gen_extend(to_reg: Writable<Reg>, from_reg: Reg, op: ExtendOp, to: OperandSize) -> Inst {
+        assert!(op.from_bits() < to.bits());
+
+        let bfm = |size, bfm_op| Inst::BitfieldMove {
+            size,
+            bfm_op,
+            rd: to_reg,
+            rn: from_reg,
+            immr: UImm6::maybe_from_u8(0).unwrap(),
+            imms: UImm6::maybe_from_u8(op.from_bits() - 1).unwrap(),
+        };
+
+        match op {
+            // A 32-bit move zeroes the upper half of the destination.
+            ExtendOp::UXTW => Inst::Mov {
+                size: OperandSize::Size32,
+                rd: to_reg,
+                rm: from_reg,
+            },
+            // 32-bit UBFM already zeroes the upper half, so it's equivalent to the
+            // 64-bit form; using it preserves the encoding emitted previously.
+            ExtendOp::UXTB | ExtendOp::UXTH => bfm(OperandSize::Size32, BfmOp::UBfm),
+            // SBFM must run at the destination width to sign-fill it.
+            ExtendOp::SXTB | ExtendOp::SXTH | ExtendOp::SXTW => bfm(to, BfmOp::SBfm),
+            // These cases are excluded by the assertion above.
+            ExtendOp::UXTX | ExtendOp::SXTX => unreachable!(),
+        }
+    }
+
     /// What type does this load or store instruction access in memory? When
     /// uimm12 encoding is used, the size of this type is the amount that
     /// immediate offsets are scaled by.
@@ -886,10 +916,6 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::MovFromNZCV { rd } => {
             collector.reg_def(rd);
-        }
-        Inst::Extend { rd, rn, .. } => {
-            collector.reg_def(rd);
-            collector.reg_use(rn);
         }
         Inst::BitfieldMove { rd, rn, .. } => {
             // The UBFM and SBFM instructions overwrite all bits in `rd`,
@@ -2781,61 +2807,34 @@ impl Inst {
                 let rd = pretty_print_reg(rd.to_reg());
                 format!("mrs {rd}, nzcv")
             }
-            &Inst::Extend {
+            // Special case when `immr == 0` so that zero- and sign-extending
+            // operations use the appropriate aliases, preserving the behavior
+            // of the old `Inst::Extend` instruction.
+            &Inst::BitfieldMove {
+                size,
+                bfm_op,
                 rd,
                 rn,
-                signed: false,
-                from_bits: 1,
-                ..
+                immr: UImm6 { imm: 0 },
+                imms,
             } => {
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size32);
-                let rn = pretty_print_ireg(rn, OperandSize::Size32);
-                format!("and {rd}, {rn}, #1")
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed: false,
-                from_bits: 32,
-                to_bits: 64,
-            } => {
-                // The case of a zero extension from 32 to 64 bits, is implemented
-                // with a "mov" to a 32-bit (W-reg) dest, because this zeroes
-                // the top 32 bits.
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size32);
-                let rn = pretty_print_ireg(rn, OperandSize::Size32);
-                format!("mov {rd}, {rn}")
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed,
-                from_bits,
-                to_bits,
-            } => {
-                assert!(from_bits <= to_bits);
-                let op = match (signed, from_bits) {
-                    (false, 8) => "uxtb",
-                    (true, 8) => "sxtb",
-                    (false, 16) => "uxth",
-                    (true, 16) => "sxth",
-                    (true, 32) => "sxtw",
-                    (true, _) => "sbfx",
-                    (false, _) => "ubfx",
+                let from_bits = imms.value() + 1;
+                let op = match (bfm_op, size, from_bits) {
+                    (BfmOp::UBfm, OperandSize::Size32, 8) => "uxtb",
+                    (BfmOp::UBfm, OperandSize::Size32, 16) => "uxth",
+                    (BfmOp::SBfm, _, 8) => "sxtb",
+                    (BfmOp::SBfm, _, 16) => "sxth",
+                    (BfmOp::SBfm, OperandSize::Size64, 32) => "sxtw",
+                    (BfmOp::UBfm, _, _) => "ubfx",
+                    (BfmOp::SBfm, _, _) => "sbfx",
                 };
                 if op == "sbfx" || op == "ubfx" {
-                    let dest_size = OperandSize::from_bits(to_bits);
-                    let rd = pretty_print_ireg(rd.to_reg(), dest_size);
-                    let rn = pretty_print_ireg(rn, dest_size);
+                    let rd = pretty_print_ireg(rd.to_reg(), size);
+                    let rn = pretty_print_ireg(rn, size);
                     format!("{op} {rd}, {rn}, #0, #{from_bits}")
                 } else {
-                    let dest_size = if signed {
-                        OperandSize::from_bits(to_bits)
-                    } else {
-                        OperandSize::Size32
-                    };
-                    let rd = pretty_print_ireg(rd.to_reg(), dest_size);
-                    let rn = pretty_print_ireg(rn, OperandSize::from_bits(from_bits));
+                    let rd = pretty_print_ireg(rd.to_reg(), size);
+                    let rn = pretty_print_ireg(rn, OperandSize::Size32);
                     format!("{op} {rd}, {rn}")
                 }
             }

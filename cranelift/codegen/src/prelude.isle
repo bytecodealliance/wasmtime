@@ -776,6 +776,7 @@
 (model I8X16 (const (struct (bits 128) (lanes 16))))
 
 (spec (i64_neg x) (provide (= result (bvneg x))))
+(spec (u8_sub x y) (provide (= result (bvsub x y))))
 (spec (u64_sub x y) (provide (= result (bvsub x y))))
 (spec (u64_shl x y)
       (match (bvult y #x00000040))
