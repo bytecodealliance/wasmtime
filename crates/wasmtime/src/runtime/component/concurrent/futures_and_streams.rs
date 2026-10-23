@@ -1,8 +1,6 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{
-    ConcurrentState, CurrentThread, QualifiedThreadId, WorkItem, tls,
-};
+use crate::component::concurrent::{ConcurrentState, CurrentThread, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
@@ -242,7 +240,6 @@ fn get_mut_by_index_from(
 fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
     mut store: StoreContextMut<U>,
     instance: Instance,
-    caller_thread: QualifiedThreadId,
     options: OptionsIndex,
     ty: TransmitIndex,
     address: usize,
@@ -251,20 +248,10 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
 ) -> Result<()> {
     let count = buffer.remaining().len().min(count);
 
-    // If lowering may call realloc in the guest, then the guest may need
-    // to access its thread context, so we need to set the current thread before lowering
-    // and restore the old one afterward.
-    let (lower, old_thread) = if T::MAY_REQUIRE_REALLOC {
-        let old_thread = store.0.set_thread(caller_thread)?;
-        (
-            &mut LowerContext::new(store.as_context_mut(), options, instance),
-            Some(old_thread),
-        )
+    let lower = &mut if T::MAY_REQUIRE_REALLOC {
+        LowerContext::new(store.as_context_mut(), options, instance)
     } else {
-        (
-            &mut LowerContext::new_without_realloc(store.as_context_mut(), options, instance),
-            None,
-        )
+        LowerContext::new_without_realloc(store.as_context_mut(), options, instance)
     };
 
     // Note that validation only happens with operations that have a payload.
@@ -279,10 +266,6 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
             .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
 
         T::linear_store_list_to_memory(lower, ty, address, &buffer.remaining()[..count])?;
-    }
-
-    if let Some(old_thread) = old_thread {
-        store.0.set_thread(old_thread)?;
     }
 
     buffer.skip(count);
@@ -2295,7 +2278,6 @@ enum ReadState {
     GuestReady {
         ty: TransmitIndex,
         caller_instance: RuntimeComponentInstanceIndex,
-        caller_thread: QualifiedThreadId,
         flat_abi: Option<FlatAbi>,
         instance: Instance,
         options: OptionsIndex,
@@ -3110,7 +3092,6 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
             handle,
             instance,
             caller_instance,
-            caller_thread,
         } => {
             let guest_offset = match guest_offset {
                 Some(i) => i,
@@ -3132,7 +3113,6 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     lower::<T, B, D>(
                         store.as_context_mut(),
                         instance,
-                        caller_thread,
                         options,
                         ty,
                         address + (T::SIZE32 * guest_offset.as_usize()),
@@ -3203,7 +3183,6 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     handle,
                     instance,
                     caller_instance,
-                    caller_thread,
                 };
 
                 crate::error::Ok(())
@@ -3390,7 +3369,6 @@ impl Instance {
         write_options: OptionsIndex,
         write_address: usize,
         read_runtime_instance: RuntimeInstance,
-        read_caller_thread: QualifiedThreadId,
         read_ty: TransmitIndex,
         read_options: OptionsIndex,
         read_address: usize,
@@ -3473,10 +3451,6 @@ impl Instance {
                     .transpose()?;
 
                 if let Some(val) = val {
-                    // Serializing the value may require calling the guest's realloc function, so we
-                    // set the guest's thread context in case realloc requires it, and restore the original
-                    // thread context after the copy is complete.
-                    let old_thread = store.set_thread(read_caller_thread)?;
                     let lower =
                         &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
                     let ptr = func::validate_inbounds_dynamic(
@@ -3489,7 +3463,6 @@ impl Instance {
                         None => bail_bug!("expected read payload type to be present"),
                     };
                     val.store(lower, *ty, ptr)?;
-                    store.set_thread(old_thread)?;
                 }
             }
             (TransmitIndex::Stream(_), TransmitIndex::Stream(_)) => {
@@ -3559,10 +3532,6 @@ impl Instance {
                     let id = TableId::<TransmitHandle>::new(rep);
                     log::trace!("copy values {values:?} for {id:?}");
 
-                    // Serializing the value may require calling the guest's realloc function, so we
-                    // set the guest's thread context in case realloc requires it, and restore the original
-                    // thread context after the copy is complete.
-                    let old_thread = store.set_thread(read_caller_thread)?;
                     let lower =
                         &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
                     let mut ptr = read_address;
@@ -3570,7 +3539,6 @@ impl Instance {
                         value.store(lower, *read_payload_ty, ptr)?;
                         ptr += usize::try_from(read_abi.size32)?;
                     }
-                    store.set_thread(old_thread)?;
                 }
             }
             _ => bail_bug!("mismatched transmit types in copy"),
@@ -3692,7 +3660,6 @@ impl Instance {
                 handle: read_handle,
                 instance: read_instance,
                 caller_instance: read_caller_instance,
-                caller_thread: read_caller_thread,
             } => {
                 if flat_abi != read_flat_abi {
                     bail_bug!("expected flat ABI calculations to be the same");
@@ -3740,7 +3707,6 @@ impl Instance {
                     options,
                     address,
                     read_instance.runtime_instance(read_caller_instance),
-                    read_caller_thread,
                     read_ty,
                     read_options,
                     read_address,
@@ -3789,7 +3755,6 @@ impl Instance {
                         handle: read_handle,
                         instance: read_instance,
                         caller_instance: read_caller_instance,
-                        caller_thread: read_caller_thread,
                     };
                 }
 
@@ -3900,7 +3865,6 @@ impl Instance {
 
         *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
-        let caller_thread = store.0.current_guest_thread()?;
         let concurrent_state = store.0.concurrent_state_mut()?;
         let transmit_id = concurrent_state.get_mut(transmit_handle)?.state;
         let transmit = concurrent_state.get_mut(transmit_id)?;
@@ -3943,7 +3907,6 @@ impl Instance {
                 handle,
                 instance: self,
                 caller_instance,
-                caller_thread,
             };
             Ok::<_, crate::Error>(())
         };
@@ -3987,7 +3950,6 @@ impl Instance {
                     write_options,
                     write_address,
                     self.runtime_instance(caller_instance),
-                    caller_thread,
                     ty,
                     options,
                     address,
