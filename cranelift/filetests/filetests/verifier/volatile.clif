@@ -1,0 +1,20 @@
+test verifier
+
+function %volatile_readonly(i64) -> i32 {
+block0(v0: i64):
+    v1 = load.i32 notrap readonly volatile v0 ; error: A `volatile` memory access cannot have the `readonly` or `can_move` MemFlag
+    return v1
+}
+
+function %volatile_can_move(i64) -> i32 {
+block0(v0: i64):
+    v1 = load.i32 notrap can_move volatile v0 ; error: A `volatile` memory access cannot have the `readonly` or `can_move` MemFlag
+    return v1
+}
+
+function %volatile_ok(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+    store volatile v1, v0
+    v2 = load.i32 notrap volatile v0
+    return v2
+}

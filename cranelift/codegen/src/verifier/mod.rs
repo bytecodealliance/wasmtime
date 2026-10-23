@@ -1870,6 +1870,16 @@ impl<'a> Verifier<'a> {
     fn immediate_constraints(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult {
         let inst_data = &self.func.dfg.insts[inst];
 
+        if let Some(flags) = inst_data.memflags_data(&self.func.dfg) {
+            if flags.volatile() && (flags.readonly() || flags.can_move()) {
+                return errors.fatal((
+                    inst,
+                    self.context(inst),
+                    "A `volatile` memory access cannot have the `readonly` or `can_move` MemFlag",
+                ));
+            }
+        }
+
         match *inst_data {
             ir::InstructionData::Store { flags, .. } => {
                 if self.func.dfg.mem_flags[flags].readonly() {

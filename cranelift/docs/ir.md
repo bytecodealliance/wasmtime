@@ -443,6 +443,11 @@ optimizations.
 | notrap   | Memory is assumed to be [accessible]. |
 | aligned  | Trapping allowed for misaligned accesses. |
 | readonly | The data at the specified address will not modified between when this function is called and exited. |
+| volatile | The access must happen exactly as written: it is never removed, merged with another access or folded into another instruction. |
+
+Unlike the other flags, `volatile` restricts optimizations rather than enabling
+them. It is meant for accesses with side effects, such as memory-mapped I/O,
+and cannot be combined with `readonly` or `can_move`.
 
 When the `accessible` flag is set, the behavior is undefined if the memory
 is not [accessible].

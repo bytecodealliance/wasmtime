@@ -1,0 +1,41 @@
+test compile precise-output
+target aarch64
+
+;; A volatile load is never folded into its user (here, a load-and-splat):
+;; each one stays a separate access of its own width.
+
+function %volatile_splat(i64) -> i32x4 {
+block0(v0: i64):
+    v1 = load.i32 notrap volatile v0
+    v2 = splat.i32x4 v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   ldr w3, [x0]
+;   dup v0.4s, w3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr w3, [x0]
+;   dup v0.4s, w3
+;   ret
+
+function %volatile_load_unused(i64) {
+block0(v0: i64):
+    v1 = load.i64 notrap volatile v0
+    return
+}
+
+; VCode:
+; block0:
+;   ldr x2, [x0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x2, [x0]
+;   ret
+

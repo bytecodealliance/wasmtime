@@ -223,6 +223,7 @@ impl MemFlagsData {
                 self.with_endianness(Endianness::Big)
             }
             "can_move" => self.with_can_move(true),
+            "volatile" => self.with_volatile(true),
 
             other => match TrapCode::from_str(other) {
                 Ok(code) => self.with_trap_code(Some(code)),
@@ -360,6 +361,32 @@ impl MemFlagsData {
         self.flags = self.flags.with_readonly(enabled);
         self
     }
+
+    /// Test if the `volatile` flag is set.
+    ///
+    /// A volatile memory operation must be performed exactly as written, as in
+    /// C's and Rust's volatile accesses (memory-mapped I/O, memory another
+    /// agent watches): it is never removed, even when its result is unused or
+    /// it stores a value already in memory; never merged with another access
+    /// (no redundant-load elimination, store-to-load forwarding or dead-store
+    /// elimination); never reordered with another volatile access; and never
+    /// folded into another instruction, so its count and width stay as
+    /// written. Accesses that are not volatile may still move around it.
+    pub const fn volatile(self) -> bool {
+        self.flags.volatile()
+    }
+
+    /// Set or clear the `volatile` flag.
+    pub fn set_volatile(&mut self, enabled: bool) {
+        *self = self.with_volatile(enabled);
+    }
+
+    /// Set or clear the `volatile` flag, returning new flags.
+    pub const fn with_volatile(mut self, enabled: bool) -> Self {
+        self.flags = self.flags.with_volatile(enabled);
+        self
+    }
+
     /// Get the trap code to report if this memory access traps.
     ///
     /// A `None` trap code indicates that this memory access does not trap.
@@ -595,6 +622,19 @@ mod tests {
             let _flags = MemFlagsData::new().with_trap_code(Some(trap));
         }
         let _flags = MemFlagsData::new().with_trap_code(None);
+    }
+
+    #[test]
+    fn volatile_roundtrip() {
+        let flags = MemFlagsData::new().with_notrap().with_volatile(true);
+        assert!(flags.volatile());
+        assert!(!MemFlagsData::new().volatile());
+        assert_eq!(alloc::format!("{flags}"), " notrap volatile");
+
+        let mut parsed = MemFlagsData::new();
+        assert_eq!(parsed.set_by_name("notrap"), Ok(true));
+        assert_eq!(parsed.set_by_name("volatile"), Ok(true));
+        assert_eq!(parsed, flags);
     }
 
     #[test]

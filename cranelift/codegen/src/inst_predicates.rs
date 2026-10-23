@@ -16,7 +16,7 @@ fn trivially_has_side_effects(opcode: Opcode) -> bool {
 
 /// Load instructions without the `notrap` flag are defined to trap when
 /// operating on inaccessible memory, so we can't treat them as side-effect-free even if the loaded
-/// value is unused.
+/// value is unused. Neither can we treat `volatile` loads so, whose access itself is the effect.
 #[inline(always)]
 fn is_load_with_defined_trapping(
     opcode: Opcode,
@@ -27,9 +27,22 @@ fn is_load_with_defined_trapping(
         return false;
     }
     match *data {
-        InstructionData::Load { flags, .. } => !dfg.mem_flags[flags].notrap(),
+        InstructionData::Load { flags, .. } => {
+            let flags = dfg.mem_flags[flags];
+            !flags.notrap() || flags.volatile()
+        }
         _ => true,
     }
+}
+
+/// Is the given instruction a `volatile` memory access?
+///
+/// Such an access must happen exactly as written: see
+/// [`ir::MemFlagsData::volatile`].
+pub fn is_volatile_access(func: &Function, inst: Inst) -> bool {
+    func.dfg.insts[inst]
+        .memflags_data(&func.dfg)
+        .is_some_and(|flags| flags.volatile())
 }
 
 /// Does the given instruction have any side-effect that would preclude it from being removed when
@@ -45,7 +58,7 @@ fn has_side_effect(func: &Function, inst: Inst) -> bool {
 /// aegraph semantics?
 ///
 /// - Trivially pure nodes (bitwise arithmetic, etc)
-/// - Loads with the `readonly`, `notrap`, and `can_move` flags set
+/// - Loads with the `readonly`, `notrap`, and `can_move` flags set (and not `volatile`)
 pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
     let is_pure_load = match func.dfg.insts[inst] {
         InstructionData::Load {
@@ -54,7 +67,7 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
             ..
         } => {
             let flags = func.dfg.mem_flags[flags];
-            flags.readonly() && flags.notrap() && flags.can_move()
+            flags.readonly() && flags.notrap() && flags.can_move() && !flags.volatile()
         }
         _ => false,
     };
