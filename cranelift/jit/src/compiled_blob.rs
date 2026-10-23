@@ -156,7 +156,13 @@ impl CompiledBlob {
             },
         ) in self.relocs.iter().enumerate()
         {
-            debug_assert!((offset as usize) < self.size);
+            // The writes below rely on the relocation lying within the definition.
+            let end = (offset as usize).checked_add(kind.patched_len() as usize);
+            assert!(
+                end.is_some_and(|end| end <= self.size),
+                "{kind:?} relocation at offset {offset} is out of bounds of a {}-byte definition",
+                self.size,
+            );
             let at = unsafe { self.ptr.offset(isize::try_from(offset).unwrap()) };
             match kind {
                 Reloc::Abs4 => {
