@@ -104,6 +104,13 @@ impl<T> SlotSizeMap<T> {
 /// values to ensure deterministic output.
 type LiveSet = HashSet<ir::Value>;
 
+#[derive(Clone, Copy)]
+enum LivenessEvent {
+    Def(ir::Value),
+    Use(ir::Inst, ir::Value),
+    Safepoint(ir::Inst),
+}
+
 /// A worklist of blocks' post-order indices that we need to process.
 #[derive(Default)]
 struct Worklist {
@@ -270,6 +277,12 @@ pub(crate) struct LivenessAnalysis {
     /// The set of values that are live across *any* safepoint in the function,
     /// i.e. the union of all the values in the `safepoints` map.
     live_across_any_safepoint: EntitySet<ir::Value>,
+
+    // Scalar instructions do not affect GC-reference liveness. Resolve aliases
+    // and retain the relevant events once, before revisiting loop blocks and
+    // recording final safepoint sets. Liveness does not otherwise mutate IR.
+    events: Vec<LivenessEvent>,
+    block_events: Vec<core::ops::Range<usize>>,
 }
 
 impl Default for LivenessAnalysis {
@@ -285,6 +298,8 @@ impl Default for LivenessAnalysis {
             currently_live: Default::default(),
             safepoints: Default::default(),
             live_across_any_safepoint: Default::default(),
+            events: Default::default(),
+            block_events: Default::default(),
         }
     }
 }
@@ -310,6 +325,8 @@ impl LivenessAnalysis {
             currently_live,
             safepoints,
             live_across_any_safepoint,
+            events,
+            block_events,
         } = self;
         dfs.clear();
         post_order.clear();
@@ -321,6 +338,8 @@ impl LivenessAnalysis {
         currently_live.clear();
         safepoints.clear();
         live_across_any_safepoint.clear();
+        events.clear();
+        block_events.clear();
     }
 
     /// Given that we've initialized `self.post_order`, reserve capacity for the
@@ -337,6 +356,8 @@ impl LivenessAnalysis {
             currently_live: _,
             safepoints: _,
             live_across_any_safepoint: _,
+            events: _,
+            block_events,
         } = self;
 
         block_to_index.resize(func.dfg.num_blocks());
@@ -346,6 +367,7 @@ impl LivenessAnalysis {
         predecessors.resize(capacity, Default::default());
         live_ins.resize(capacity, Default::default());
         live_outs.resize(capacity, Default::default());
+        block_events.reserve(capacity);
     }
 
     fn initialize_block_to_index_map(&mut self) {
@@ -376,6 +398,9 @@ impl LivenessAnalysis {
 
     /// Record the live set of needs-stack-map values at the given safepoint.
     fn record_safepoint(&mut self, func: &Function, inst: Inst) {
+        if self.currently_live.is_empty() {
+            return;
+        }
         log::trace!(
             "liveness:   found safepoint: {inst:?}: {}",
             func.dfg.display_inst(inst)
@@ -404,11 +429,70 @@ impl LivenessAnalysis {
         }
     }
 
-    /// Process all the instructions in a block in reverse order.
+    fn initialize_events(&mut self, func: &mut Function, stack_map_values: &EntitySet<ir::Value>) {
+        for &block in &self.post_order {
+            let start = self.events.len();
+            let mut option_inst = func.layout.last_inst(block);
+            while let Some(inst) = option_inst {
+                // Edge arguments are used after a try_call's safepoint. Record
+                // them first in this backwards walk so moving GC roots remain
+                // live across the call, just as in the uncached analysis.
+                for block_call in func.dfg.insts[inst]
+                    .branch_destination(&func.dfg.jump_tables, &func.dfg.exception_tables)
+                {
+                    for val in block_call
+                        .args(&func.dfg.value_lists)
+                        .filter_map(|arg| arg.as_value())
+                    {
+                        let val = func.dfg.resolve_aliases(val);
+                        if stack_map_values.contains(val) {
+                            self.events.push(LivenessEvent::Use(inst, val));
+                        }
+                    }
+                }
+                for &val in func.dfg.inst_results(inst) {
+                    if stack_map_values.contains(val) {
+                        self.events.push(LivenessEvent::Def(val));
+                    }
+                }
+                if func.dfg.insts[inst].opcode().is_safepoint() {
+                    self.events.push(LivenessEvent::Safepoint(inst));
+                }
+                for val in func.dfg.inst_args(inst) {
+                    let val = func.dfg.resolve_aliases(*val);
+                    if stack_map_values.contains(val) {
+                        self.events.push(LivenessEvent::Use(inst, val));
+                    }
+                }
+                // Exception-context roots are unsupported, including in the
+                // cached walk; the context itself is not a normal operand.
+                if let Some(et) = func.dfg.insts[inst].exception_table() {
+                    for item in func.dfg.exception_tables[et].items() {
+                        let ir::ExceptionTableItem::Context(ctx) = item else {
+                            continue;
+                        };
+                        let ctx = func.dfg.resolve_aliases(ctx);
+                        assert!(
+                            !stack_map_values.contains(ctx),
+                            "exception-table context {ctx:?} on {inst:?} must not be a needs-stack-map value"
+                        );
+                    }
+                }
+                option_inst = func.layout.prev_inst(inst);
+            }
+            for &val in func.dfg.block_params(block) {
+                if stack_map_values.contains(val) {
+                    self.events.push(LivenessEvent::Def(val));
+                }
+            }
+            self.block_events.push(start..self.events.len());
+        }
+    }
+
+    /// Apply the block's relevant instructions in reverse order.
     fn process_block(
         &mut self,
         func: &mut Function,
-        stack_map_values: &EntitySet<ir::Value>,
         block_index: usize,
         record_safepoints: RecordSafepoints,
     ) {
@@ -420,73 +504,16 @@ impl LivenessAnalysis {
         self.currently_live
             .extend(self.live_outs[block_index].iter().copied());
 
-        // Now process this block's instructions, incrementally building its
-        // live-in set inside the currently-live set.
-        let mut option_inst = func.layout.last_inst(block);
-        while let Some(inst) = option_inst {
-            // 1. Process needs-stack-map block-call args. These are
-            // uses that logically happen *after* the instruction --
-            // this matters for `try_call` in particular which is also
-            // a callsite (safepoint).
-            for block_call in func.dfg.insts[inst]
-                .branch_destination(&func.dfg.jump_tables, &func.dfg.exception_tables)
-            {
-                for val in block_call
-                    .args(&func.dfg.value_lists)
-                    .filter_map(|arg| arg.as_value())
-                {
-                    let val = func.dfg.resolve_aliases(val);
-                    if stack_map_values.contains(val) {
-                        self.process_use(func, inst, val);
+        for index in self.block_events[block_index].clone() {
+            match self.events[index] {
+                LivenessEvent::Def(val) => self.process_def(func, val),
+                LivenessEvent::Use(inst, val) => self.process_use(func, inst, val),
+                LivenessEvent::Safepoint(inst) => {
+                    if record_safepoints == RecordSafepoints::Yes {
+                        self.record_safepoint(func, inst);
                     }
                 }
             }
-
-            // 2. Process needs-stack-map defs.
-            for val in func.dfg.inst_results(inst) {
-                self.process_def(func, *val);
-            }
-
-            // 3. If this instruction is a safepoint and we've been
-            // asked to record safepoints, then do so.
-            let opcode = func.dfg.insts[inst].opcode();
-            if record_safepoints == RecordSafepoints::Yes && opcode.is_safepoint() {
-                self.record_safepoint(func, inst);
-            }
-
-            // 4. Process any other needs-stack-map uses.
-            for val in func.dfg.inst_args(inst) {
-                let val = func.dfg.resolve_aliases(*val);
-                if stack_map_values.contains(val) {
-                    self.process_use(func, inst, val);
-                }
-            }
-
-            // We do not support GC refs as exception-context values
-            // (Wasmtime uses its vmctx as the
-            // exception-context). Reject this explicitly; this slot
-            // is not handled by the analysis.
-            if let Some(et) = func.dfg.insts[inst].exception_table() {
-                for item in func.dfg.exception_tables[et].items() {
-                    let ir::ExceptionTableItem::Context(ctx) = item else {
-                        continue;
-                    };
-                    let ctx = func.dfg.resolve_aliases(ctx);
-                    assert!(
-                        !stack_map_values.contains(ctx),
-                        "exception-table context {ctx:?} on {inst:?} must not be a \
-                         needs-stack-map value"
-                    );
-                }
-            }
-
-            option_inst = func.layout.prev_inst(inst);
-        }
-
-        // After we've processed this block's instructions, remove its
-        // parameters from the live set. This is part of step (1).
-        for val in func.dfg.block_params(block) {
-            self.process_def(func, *val);
         }
     }
 
@@ -497,6 +524,7 @@ impl LivenessAnalysis {
         self.reserve_capacity(func);
         self.initialize_block_to_index_map();
         self.initialize_predecessors_map(func);
+        self.initialize_events(func, stack_map_values);
 
         // Initially enqueue all blocks for processing. We push them in reverse
         // post-order (which yields them in post-order when popped) because if
@@ -530,7 +558,7 @@ impl LivenessAnalysis {
             // Process the block to compute its live-in set, but do not record
             // safepoints yet, as we haven't yet processed loop back edges (see
             // below).
-            self.process_block(func, stack_map_values, block_index, RecordSafepoints::No);
+            self.process_block(func, block_index, RecordSafepoints::No);
 
             // The live-in set for a block is the set of values that are still
             // live after the block's instructions have been processed.
@@ -553,7 +581,7 @@ impl LivenessAnalysis {
         // each safepoint instruction in each block, backwards from the block's
         // live-out set.
         for block_index in 0..self.post_order.len() {
-            self.process_block(func, stack_map_values, block_index, RecordSafepoints::Yes);
+            self.process_block(func, block_index, RecordSafepoints::Yes);
 
             debug_assert_eq!(
                 self.currently_live, self.live_ins[block_index],
@@ -685,7 +713,9 @@ impl SafepointSpiller {
 
         self.clear();
         self.liveness.run(func, stack_map_values);
-        self.rewrite(func, pointer_type);
+        if !self.liveness.live_across_any_safepoint.is_empty() {
+            self.rewrite(func, pointer_type);
+        }
 
         log::trace!(
             "after inserting safepoint spills and reloads:\n{}",
@@ -999,6 +1029,56 @@ mod tests {
             default_call_conv: CallConv::SystemV,
             pointer_width: target_lexicon::PointerWidth::U64,
             page_size_align_log2: 12,
+        }
+    }
+
+    #[test]
+    fn dead_reference_then_live_reference_with_reused_context() {
+        let mut context = FunctionBuilderContext::new();
+        for live_after_call in [false, true, false] {
+            let mut signature = Signature::new(CallConv::SystemV);
+            signature.params.push(AbiParam::new(ir::types::I32));
+            signature.returns.push(AbiParam::new(ir::types::I32));
+            let mut func = Function::with_name_signature(
+                ir::UserFuncName::testcase("reference_lifetime"),
+                signature,
+            );
+            let mut builder = FunctionBuilder::new(&mut func, &mut context);
+            let block = builder.create_block();
+            builder.append_block_params_for_function_params(block);
+            builder.switch_to_block(block);
+            let reference = builder.block_params(block)[0];
+            builder.declare_value_needs_stack_map(reference);
+            let name = builder
+                .func
+                .declare_imported_user_function(ir::UserExternalName {
+                    namespace: 0,
+                    index: 0,
+                });
+            let mut signature = Signature::new(CallConv::SystemV);
+            signature.params.push(AbiParam::new(ir::types::I32));
+            let signature = builder.func.import_signature(signature);
+            let target = builder.import_function(ir::ExtFuncData {
+                name: ir::ExternalName::user(name),
+                signature,
+                colocated: true,
+                patchable: false,
+            });
+            let scalar = builder.ins().iconst(ir::types::I32, 0);
+            let mut scalar = scalar;
+            for _ in 0..128 {
+                scalar = builder.ins().iadd_imm_s(scalar, 1);
+            }
+            builder.ins().call(target, &[reference]);
+            builder
+                .ins()
+                .return_(&[if live_after_call { reference } else { scalar }]);
+            builder.seal_all_blocks();
+            builder.finalize(systemv_frontend_config());
+            let output = func.display().to_string();
+            assert_eq!(output.contains("stack_map=[i32 @ ss0+0]"), live_after_call);
+            assert_eq!(output.contains("store notrap aligned"), live_after_call);
+            assert_eq!(output.contains("load.i32 notrap aligned"), live_after_call);
         }
     }
 
