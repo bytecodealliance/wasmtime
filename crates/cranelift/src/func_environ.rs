@@ -110,8 +110,20 @@ impl BuiltinFunctions {
         if let Some(f) = cache {
             return *f;
         }
-        let signature = func.import_signature(self.types.wasm_signature(builtin));
-        let key = FuncKey::WasmToBuiltinTrampoline(builtin);
+        let mut signature = self.types.wasm_signature(builtin);
+        let key = if builtin == BuiltinFunctionIndex::out_of_gas()
+            || builtin == BuiltinFunctionIndex::new_epoch()
+        {
+            // Preserve live registers inside these uncommon handlers instead of
+            // making every instrumented caller accommodate their clobbers. Their
+            // updated fuel and epoch deadline are reloaded from the store.
+            signature.returns.clear();
+            signature.call_conv = CallConv::PreserveAll;
+            FuncKey::PatchableToBuiltinTrampoline(builtin)
+        } else {
+            FuncKey::WasmToBuiltinTrampoline(builtin)
+        };
+        let signature = func.import_signature(signature);
         let (namespace, index) = key.into_raw_parts();
         let name = ir::ExternalName::User(
             func.declare_imported_user_function(ir::UserExternalName { namespace, index }),
@@ -781,6 +793,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn fuel_check(&mut self, builder: &mut FunctionBuilder) {
         self.fuel_increment_var(builder);
         let out_of_gas_block = builder.create_block();
+        builder.set_cold_block(out_of_gas_block);
         let continuation_block = builder.create_block();
 
         // Note that our fuel is encoded as adding positive values to a
@@ -962,10 +975,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         let new_epoch = self.builtin_functions.new_epoch(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        // new_epoch() returns the new deadline, so we don't have to
-        // reload it.
-        let call = builder.ins().call(new_epoch, &[vmctx]);
-        let new_deadline = *builder.func.dfg.inst_results(call).first().unwrap();
+        // The preserving trampoline has no return registers. The host commits
+        // the new deadline before returning, including after an async yield.
+        builder.ins().call(new_epoch, &[vmctx]);
+        let new_deadline = self
+            .alias_regions
+            .vm_store_context()
+            .epoch_deadline()
+            .load(&mut builder.cursor(), vmstore_ctx);
         builder.def_var(self.epoch_deadline_var, new_deadline);
         builder.ins().jump(continuation_block, &[]);
         builder.seal_block(continuation_block);
