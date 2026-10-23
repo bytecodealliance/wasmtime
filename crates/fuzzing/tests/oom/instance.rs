@@ -2,7 +2,7 @@
 
 use wasmtime::{
     Config, Engine, Func, Global, GlobalType, Instance, InstanceAllocationStrategy, Linker, Module,
-    Mutability, PoolingAllocationConfig, Result, Store, Val, ValType,
+    Mutability, PoolingAllocationConfig, Result, Store, Val, ValType, WasmBacktrace,
 };
 use wasmtime_fuzzing::oom::OomTest;
 
@@ -356,6 +356,140 @@ async fn instance_new_async_reuse_engine() -> Result<()> {
                 let instance = Instance::new_async(&mut store, &cx.module, &[func.into()]).await?;
                 let g = instance.get_typed_func::<(), i32>(&mut store, "g")?;
                 assert_eq!(g.call_async(&mut store, ()).await?, 42);
+                Ok(())
+            },
+        )
+        .await
+}
+
+/// Check that an OOM partway through registering a module leaves the store's
+/// `ModuleRegistry` consistent.
+///
+/// Registration patches the `wasm_call` hole in host funcrefs created
+/// *earlier*, hence the context's host function is made before the OOM.
+#[tokio::test]
+async fn module_registry_reuse_store() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    // One per instantiation API, so each registration is a fresh insertion
+    // rather than a hit on the memoized `store_code` entry.
+    let module = |n: u32| -> Result<Module> {
+        Module::new(
+            &engine,
+            &format!(
+                r#"
+                    (module
+                        (import "host" "f" (func $f (result i32)))
+                        (func (export "call_host") (result i32)
+                            (i32.add (call $f) (i32.const {n}))
+                        )
+                        (func (export "boom") unreachable)
+                    )
+                "#
+            ),
+        )
+    };
+    let modules: [Module; 5] = std::array::from_fn(|n| module(n as u32).unwrap());
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker.func_wrap("host", "f", || 100i32)?;
+    let instance_pre = linker.instantiate_pre(&modules[1])?;
+
+    struct Context {
+        store: Store<()>,
+        host_func: Func,
+        module_linker: Linker<()>,
+    }
+
+    let make_context = || -> Result<Context> {
+        let mut store = Store::try_new(&engine, ())?;
+        let host_func = Func::try_wrap(&mut store, || 100i32)?;
+        let mut module_linker = Linker::<()>::new(&engine);
+        module_linker.func_wrap("host", "f", || 100i32)?;
+        Ok(Context {
+            store,
+            host_func,
+            module_linker,
+        })
+    };
+
+    /// Check that the imported host function is callable from wasm.
+    async fn check_instance(store: &mut Store<()>, instance: Instance, n: i32) -> Result<()> {
+        let f = instance.get_typed_func::<(), i32>(&mut *store, "call_host")?;
+        assert_eq!(f.call_async(&mut *store, ()).await?, 100 + n);
+        Ok(())
+    }
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .test_with_reuse_async(
+            async || make_context(),
+            async |cx: &mut Context| {
+                let imports = [cx.host_func.into()];
+
+                // Every API that registers code in the `ModuleRegistry`.
+                let _ = Instance::new(&mut cx.store, &modules[0], &imports)?;
+                let _ = Instance::new_async(&mut cx.store, &modules[1], &imports).await?;
+                let _ = instance_pre.instantiate(&mut cx.store)?;
+                let _ = instance_pre.instantiate_async(&mut cx.store).await?;
+                let _ = linker.instantiate(&mut cx.store, &modules[2])?;
+                let _ = linker.instantiate_async(&mut cx.store, &modules[3]).await?;
+
+                cx.module_linker
+                    .module_async(&mut cx.store, "m", &modules[4])
+                    .await?;
+
+                Ok(())
+            },
+            async |mut cx: Context| {
+                // The host function must have had its hole filled.
+                let imports = [cx.host_func.into()];
+
+                let instance = Instance::new(&mut cx.store, &modules[0], &imports)?;
+                check_instance(&mut cx.store, instance, 0).await?;
+
+                let instance = Instance::new_async(&mut cx.store, &modules[1], &imports).await?;
+                check_instance(&mut cx.store, instance, 1).await?;
+
+                let instance = instance_pre.instantiate(&mut cx.store)?;
+                check_instance(&mut cx.store, instance, 1).await?;
+
+                let instance = instance_pre.instantiate_async(&mut cx.store).await?;
+                check_instance(&mut cx.store, instance, 1).await?;
+
+                let instance = linker.instantiate(&mut cx.store, &modules[2])?;
+                check_instance(&mut cx.store, instance, 2).await?;
+
+                let instance = linker.instantiate_async(&mut cx.store, &modules[3]).await?;
+                check_instance(&mut cx.store, instance, 3).await?;
+
+                // Fresh, since the above may already have defined "m".
+                let mut module_linker = Linker::<()>::new(&engine);
+                module_linker.func_wrap("host", "f", || 100i32)?;
+                module_linker
+                    .module_async(&mut cx.store, "m", &modules[4])
+                    .await?;
+                let f = module_linker
+                    .get(&mut cx.store, "m", "call_host")
+                    .unwrap()
+                    .into_func()
+                    .unwrap()
+                    .typed::<(), i32>(&cx.store)?;
+                assert_eq!(f.call_async(&mut cx.store, ()).await?, 104);
+
+                // Frame-info lookup reads the store's registry.
+                let boom = instance.get_typed_func::<(), ()>(&mut cx.store, "boom")?;
+                let err = boom.call_async(&mut cx.store, ()).await.unwrap_err();
+                let trace = err
+                    .downcast_ref::<WasmBacktrace>()
+                    .expect("trap should have a wasm backtrace");
+                assert!(
+                    !trace.frames().is_empty(),
+                    "backtrace should have at least one frame"
+                );
+
                 Ok(())
             },
         )
