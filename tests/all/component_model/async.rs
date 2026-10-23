@@ -2807,6 +2807,33 @@ fn sync_call_async_typed() -> Result<()> {
         );
     }
 
+    // Somehow this shouldn't hit `bail-bug!` at least...
+    const WAT2: &str = r#"
+(component
+  (component $inner
+    (core module $m
+      (func (export "f") (param i32) (result i32)
+        (i32.add (local.get 0) (i32.const 3))))
+    (core instance $i (instantiate $m))
+    (func (export "f") async (param "x" u32) (result u32)
+      (canon lift (core func $i "f"))))
+  (instance $inner (instantiate $inner))
+
+  (core func $f (canon lower (func $inner "f")))
+  (core module $m
+    (import "" "f" (func $f (param i32) (result i32)))
+    (func (export "run") (param i32) (result i32) (call $f (local.get 0))))
+  (core instance $i (instantiate $m (with "" (instance (export "f" (func $f))))))
+  (func (export "run") (param "x" u32) (result u32)
+    (canon lift (core func $i "run")))
+)
+"#;
+    let component = Component::new(&engine, WAT2)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "run")?;
+    let _ = func.call(&mut store, (4,));
+
     Ok(())
 }
 
