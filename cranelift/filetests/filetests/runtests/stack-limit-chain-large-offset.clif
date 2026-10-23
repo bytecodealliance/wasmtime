@@ -1,0 +1,34 @@
+;; Regression test for https://github.com/bytecodealliance/wasmtime/issues/14946
+;; The second stack-limit load uses x16 as its base. A large negative
+;; offset must be materialized in x17 instead of overwriting x16.
+test run
+target x86_64
+target aarch64
+
+function %callee(i64 vmctx) -> i8 system_v {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0-512
+    gv2 = load.i64 notrap aligned gv1-520
+    stack_limit = gv2
+    ss0 = explicit_slot 64
+block0(v0: i64):
+    v1 = iconst.i8 1
+    return v1
+}
+
+function %main() -> i8 system_v {
+    ss0 = explicit_slot 2048
+    sig0 = (i64 vmctx) -> i8 system_v
+    fn0 = %callee sig0
+block0:
+    v0 = stack_addr.i64 ss0+1024
+    v1 = stack_addr.i64 ss0+512
+    store.i64 notrap aligned v0, v1
+    v2 = stack_addr.i64 ss0+504
+    v3 = iconst.i64 0
+    store.i64 notrap aligned v3, v2
+    v4 = call fn0(v0)
+    return v4
+}
+
+; run: %main() == 1
