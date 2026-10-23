@@ -89,8 +89,10 @@
 (component
   (import "host" (instance $host
     (export "resource1" (type $r (sub resource)))
+    (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
   ))
   (alias export $host "resource1" (type $r))
+  (alias export $host "[constructor]resource1" (func $ctor))
 
   (component $A
     (import "t" (type $t (sub resource)))
@@ -135,5 +137,31 @@
   (instance $b (instantiate $B
     (with "t" (type $r))
     (with "a" (instance $a))))
-  (export "get" (func $b "get"))
+  (alias export $b "get" (func $b-get))
+
+  ;; The host owns the resource, so this outermost component is not the owner
+  ;; either: it creates an `own` handle via the host constructor and lends it
+  ;; down the chain, which is what gets `A` and `B` actually executed.
+  (core func $ctor' (canon lower (func $ctor)))
+  (core func $b-get' (canon lower (func $b-get)))
+  (core func $drop (canon resource.drop $r))
+  (core module $m
+    (import "" "ctor" (func $ctor (param i32) (result i32)))
+    (import "" "get" (func $get (param i32) (result i32)))
+    (import "" "drop" (func $drop (param i32)))
+    (func (export "run") (param i32) (result i32)
+      (local $h i32) (local $v i32)
+      (local.set $h (call $ctor (local.get 0)))
+      (local.set $v (call $get (local.get $h)))
+      (call $drop (local.get $h))
+      (local.get $v))
+  )
+  (core instance $i (instantiate $m (with "" (instance
+    (export "ctor" (func $ctor'))
+    (export "get" (func $b-get'))
+    (export "drop" (func $drop))))))
+  (func (export "run") (param "x" u32) (result u32)
+    (canon lift (core func $i "run")))
 )
+
+(assert_return (invoke "run" (u32.const 42)) (u32.const 1001))
