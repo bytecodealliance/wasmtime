@@ -30,13 +30,13 @@ pub fn generate(
     };
 
     let wat = annotate_wat(wasm)?;
-    let wat_json = serde_json::to_string(&wat)?;
+    let wat_json = to_script_json(&wat)?;
     let asm = annotate_asm(config, &target, wasm)?;
-    let asm_json = serde_json::to_string(&asm)?;
+    let asm_json = to_script_json(&asm)?;
     let clif_json = clif_dir
         .map::<wasmtime::Result<String>, _>(|clif_dir| {
             let clif = annotate_clif(clif_dir, &asm)?;
-            Ok(serde_json::to_string(&clif)?)
+            to_script_json(&clif)
         })
         .transpose()?;
 
@@ -90,6 +90,18 @@ pub fn generate(
         "#
     )?;
     Ok(())
+}
+
+/// Serialize `value` as JSON that can be embedded in an HTML `<script>`
+/// element.
+///
+/// `serde_json` leaves `<` unescaped, so a string taken from the wasm (an
+/// export name, a data segment, a function name) containing `</script>` would
+/// otherwise end the script element early and inject markup into the generated
+/// page. The `\u003c` escape is equivalent inside a JSON string.
+fn to_script_json<T: serde::Serialize>(value: &T) -> Result<String> {
+    let json = serde_json::to_string(value)?;
+    Ok(json.replace('<', "\\u003c"))
 }
 
 #[derive(Serialize, Clone, Copy, Debug)]
@@ -392,7 +404,7 @@ fn parse_clif_filename(file_name: &str) -> Option<(u32, u32)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClifFiles, parse_clif_filename};
+    use super::{ClifFiles, generate, parse_clif_filename};
     use tempfile::tempdir;
 
     #[test]
@@ -447,5 +459,25 @@ mod tests {
         assert!(files.get(1, 0).is_some());
         assert!(files.get(1, 1).is_some());
         assert!(files.get(0, 1).is_none());
+    }
+
+    #[test]
+    fn escapes_script_closing_tags_in_embedded_json() {
+        let wasm = wat::parse_str(
+            r#"(module
+                (func (export "</script><script>alert(1)</script>"))
+                (data "</SCRIPT><img src=x onerror=alert(2)>")
+            )"#,
+        )
+        .unwrap();
+        let mut html = Vec::new();
+        generate(&wasmtime::Config::new(), None, None, &wasm, &mut html).unwrap();
+        let html = String::from_utf8(html).unwrap();
+
+        // Only the page's own two `</script>` tags may appear; the names from
+        // the module must not be able to end the script element early.
+        assert_eq!(html.matches("</script").count(), 2, "{html}");
+        assert!(!html.contains("</SCRIPT"), "{html}");
+        assert!(html.contains(r"\u003c/script>"), "{html}");
     }
 }
