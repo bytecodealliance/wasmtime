@@ -21,6 +21,11 @@ pub fn is_supported() -> bool {
 ///   virtual machines whose hypervisor reports `PKU` but doesn't enable it.
 ///
 /// This is consistent between Intel and AMD CPUs.
+/// Sources:
+/// - Intel SDM Volume 1, Chapter 21, Section 21.3, Table 21-20
+///   (PDF at https://cdrdv2.intel.com/v1/dl/getContent/671436).
+/// - AMD64 Architecture Programmer's Manual, Volume 3, Appendix E, section E.3.6
+///   (PDF at https://docs.amd.com/api/khub/documents/BqEoC2FadIAgbrUdEzDJIg/content).
 #[cfg(target_arch = "x86_64")]
 fn cpuid_pku_enabled() -> bool {
     use core::arch::x86_64::{__cpuid, __cpuid_count};
