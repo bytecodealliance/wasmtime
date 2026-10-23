@@ -291,3 +291,88 @@ fn linker_alias_module() -> Result<()> {
         Ok(())
     })
 }
+
+/// Check that an OOM partway through pushing host functions leaves the
+/// store's `FuncRefs` arena consistent.
+///
+/// The `Linker` getters look like reads but mutate the store, and a funcref
+/// whose `wasm_call` hole never gets filled only shows up when wasm calls it.
+#[tokio::test]
+async fn func_refs_reuse_store() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "mod" "func" (func $f (result i32)))
+                (func (export "_start") (result i32) (call $f))
+            )
+        "#,
+    )?;
+
+    let mut linker = Linker::<()>::new(&engine);
+    linker.func_wrap("mod", "func", || 42i32)?;
+    let instance_pre = linker.instantiate_pre(&module)?;
+    let import = module.imports().next().unwrap();
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .test_with_reuse_async(
+            async || Store::try_new(&engine, ()),
+            async |store: &mut Store<()>| {
+                // Every API that pushes into the `FuncRefs` arena.
+                let _ = Func::try_wrap(&mut *store, || 42i32)?;
+                let _ = linker.get(&mut *store, "mod", "func")?;
+                let _ = linker.try_get_by_import(&mut *store, &import)?;
+                let _ = instance_pre.instantiate(&mut *store)?;
+                let _ = instance_pre.instantiate_async(&mut *store).await?;
+                Ok(())
+            },
+            async |mut store: Store<()>| {
+                // Every funcref must be callable from wasm.
+                let func = Func::try_wrap(&mut store, || 42i32)?;
+                let instance = Instance::new(&mut store, &module, &[func.into()])?;
+                let start = instance.get_typed_func::<(), i32>(&mut store, "_start")?;
+                assert_eq!(start.call(&mut store, ())?, 42);
+
+                let got = linker
+                    .get(&mut store, "mod", "func")
+                    .unwrap()
+                    .into_func()
+                    .unwrap();
+                let instance = Instance::new(&mut store, &module, &[got.into()])?;
+                let start = instance.get_typed_func::<(), i32>(&mut store, "_start")?;
+                assert_eq!(start.call(&mut store, ())?, 42);
+
+                let by_import = linker
+                    .try_get_by_import(&mut store, &import)?
+                    .expect("import should be satisfied")
+                    .into_func()
+                    .unwrap();
+                assert_eq!(
+                    by_import.typed::<(), i32>(&store)?.call(&mut store, ())?,
+                    42
+                );
+
+                let instance = instance_pre.instantiate(&mut store)?;
+                let start = instance.get_typed_func::<(), i32>(&mut store, "_start")?;
+                assert_eq!(start.call(&mut store, ())?, 42);
+
+                let instance = instance_pre.instantiate_async(&mut store).await?;
+                let start = instance.get_typed_func::<(), i32>(&mut store, "_start")?;
+                assert_eq!(start.call_async(&mut store, ()).await?, 42);
+
+                // `get_default` reads the arena too, via `get`.
+                let mut linker = Linker::<()>::new(&engine);
+                linker.instance(&mut store, "inst", instance)?;
+                let default = linker.get_default(&mut store, "inst")?;
+                assert_eq!(default.typed::<(), i32>(&store)?.call(&mut store, ())?, 42);
+
+                Ok(())
+            },
+        )
+        .await
+}
