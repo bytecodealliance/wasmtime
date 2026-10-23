@@ -181,6 +181,16 @@ impl Test {
         let mut opts = wasmtime_cli_flags::CommonOptions::try_parse_from(&flags)?;
         opts.codegen.cranelift_debug_verifier = Some(true);
 
+        // Wasm SIMD is enabled by default but riscv64 needs `has_v` for it,
+        // which isn't set here. Tests that want SIMD enable it with flags.
+        if config.target.starts_with("riscv64")
+            && opts.wasm.simd.is_none()
+            && opts.wasm.relaxed_simd.is_none()
+        {
+            opts.wasm.simd = Some(false);
+            opts.wasm.relaxed_simd = Some(false);
+        }
+
         Ok(Test {
             path: path.to_path_buf(),
             config,
