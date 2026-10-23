@@ -53,7 +53,7 @@ fn main() {
         // doesn't look like a GC-related test.
         if let Some(ks) = &gc_keywords {
             if !ks.iter().any(|kw| name.contains(kw)) {
-                return;
+                continue;
             }
         }
 
