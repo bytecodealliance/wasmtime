@@ -15,9 +15,11 @@ hashbrown = { workspace = true, features = ["default-hasher"] }
 libm = { workspace = true }
 serde = { workspace = true, optional = true }
 
+[dev-dependencies]
+libtest-mimic = { workspace = true }
+
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 libc = { workspace = true }
-libtest-mimic = { workspace = true }
 
 [lints]
 workspace = true

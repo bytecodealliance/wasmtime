@@ -7,12 +7,10 @@
 //! actually allowed.
 //!
 //! On miri we cannot spawn a subprocess at all.
-#![cfg(not(miri))]
 
 use libtest_mimic::{Arguments, Failed, Trial};
 use std::arch::asm;
-use std::io;
-use std::os::unix::process::ExitStatusExt;
+use std::process::ExitStatus;
 use std::process::{Command, exit};
 
 /// Set in the child process to make it run the probe instead of the test.
@@ -22,6 +20,11 @@ const PROBE_ENV_VAR: &str = "WASMTIME_TEST_MPK_PROBE";
 const EXIT_PKEY_ALLOC_FAILED: i32 = 2;
 const EXIT_PKEY_FREE_FAILED: i32 = 3;
 
+// Skip the test on miri, still needs an empty main.
+#[cfg(miri)]
+fn main() {}
+
+#[cfg(not(miri))]
 fn main() {
     // We are the child that is supposed to perform the probe.
     if std::env::var_os(PROBE_ENV_VAR).is_some() {
@@ -38,7 +41,7 @@ fn main() {
                 .expect("failed to spawn the probe process");
             let usable = if output.status.success() {
                 true
-            } else if output.status.signal() == Some(libc::SIGILL) {
+            } else if is_illegal_instruction(&output.status) {
                 false
             } else {
                 return Err(Failed::from(format!(
@@ -50,11 +53,12 @@ fn main() {
                 )));
             };
 
-            if wasmtime_internal_core::mpk::is_supported() != usable {
-                Err(Failed::from(
+            let is_supported = wasmtime_internal_core::mpk::is_supported();
+            if is_supported != usable {
+                Err(Failed::from(format!(
                     "`mpk::is_supported()` disagrees with whether protection keys can \
-         actually be used on this host",
-                ))
+         actually be used on this host: is_supported() = {is_supported}, usable = {usable}",
+                )))
             } else {
                 Ok(())
             }
@@ -63,10 +67,23 @@ fn main() {
     .exit();
 }
 
+#[cfg(unix)]
+fn is_illegal_instruction(status: &ExitStatus) -> bool {
+    use std::os::unix::process::ExitStatusExt;
+    status.signal() == Some(libc::SIGILL)
+}
+
+#[cfg(windows)]
+fn is_illegal_instruction(status: &ExitStatus) -> bool {
+    // STATUS_ILLEGAL_INSTRUCTION
+    status.code().map(|c| c as u32) == Some(0xC000001D)
+}
+
 /// Checks `RDPKRU`, `WRPKRU`, and tries to allocate and free a pkey.
 /// Exits the process with 0 if everything worked, raises `SIGILL` otherwise.
-#[cfg(all(unix))]
+#[cfg(target_os = "linux")]
 fn probe() -> ! {
+    use std::io;
     // No crate offers rdpkru or wrpkru as a Rust function (neither rustix nor libc), so we need to
     // rawdog asm.
     let pkru: u32;
@@ -89,7 +106,7 @@ fn probe() -> ! {
         exit(EXIT_PKEY_ALLOC_FAILED);
     }
     // SAFETY: frees the key just allocated, which nothing uses.
-    let ret = unsafe { libc::syscall(libc::SYS_pkey_free, key as usize, 0) };
+    let ret = unsafe { libc::syscall(libc::SYS_pkey_free, key as usize) };
     if ret != 0 {
         eprintln!("pkey_free failed: {}", io::Error::last_os_error());
         exit(EXIT_PKEY_FREE_FAILED);
@@ -99,7 +116,7 @@ fn probe() -> ! {
 
 /// On non-unix platforms the pkey_alloc syscall doesn't exist, so we can't compile the above.
 /// However, rdpkru and wrpkru should kill us with SIGILL, since these OSs don't enable PKU at all.
-#[cfg(not(unix))]
+#[cfg(not(target_os = "linux"))]
 fn probe() -> ! {
     let pkru: u32;
     // SAFETY: reading PKRU has no side effects; if protection keys are not
