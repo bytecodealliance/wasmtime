@@ -2574,7 +2574,7 @@
 (decl writable_link_reg () WritableReg)
 (extern constructor writable_link_reg writable_link_reg)
 
-(spec (writable_zero_reg) (provide (= result #x00000000)))
+(spec (writable_zero_reg) (provide (= (zero_ext (widthof result) #b0) result)))
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
 
@@ -3963,7 +3963,7 @@
 ;; must use a possibly-shifted value, xcheck, to overflow as expected.
 (attr trap_if_div_overflow (veri chain))
 (decl trap_if_div_overflow (Type Reg Reg Reg) Reg)
-(rule (trap_if_div_overflow ty xcheck x y)
+(rule trap_if_div_overflow (trap_if_div_overflow ty xcheck x y)
       (let (
           ;; Check RHS is -1.
           (_ Unit (emit (MInst.AluRRImm12 (ALUOp.AddS) (operand_size ty) (writable_zero_reg) y (u8_into_imm12 1))))
@@ -6023,6 +6023,10 @@
 (attr usub_overflow (tag TODO))
 (attr vhigh_bits (tag TODO))
 (attr with_flags (tag TODO))
+;; Emits a sequence of flag-setting and flag-consuming instructions without
+;; threading the flags between them (the specs do not model that yet), so the
+;; trap on signed division overflow cannot be verified.
+(attr rule trap_if_div_overflow (tag TODO))
 (attr get_exception_handler_address (tag TODO))
 (attr lo_reg (tag TODO))
 (attr produces_flags_ignore (tag TODO))
