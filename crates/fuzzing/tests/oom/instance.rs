@@ -296,3 +296,68 @@ fn table_element_segment_init() -> Result<()> {
         Ok(())
     })
 }
+
+#[tokio::test]
+async fn instance_new_async_reuse_engine() -> Result<()> {
+    // A module with an imported function, an exported function, and a rec
+    // group with more than one type in it, so that building the context
+    // registers several types in the engine's type registry.
+    let module_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        let engine = Engine::new(&config)?;
+        Module::new(
+            &engine,
+            r#"
+                (module
+                    (rec
+                        (type $a (func (param (ref null $b)) (result i32)))
+                        (type $b (func (param (ref null $a))))
+                    )
+                    (import "" "f" (func))
+                    (func (export "g") (result i32)
+                        (call 0)
+                        (i32.const 42)
+                    )
+                )
+            "#,
+        )?
+        .serialize()?
+    };
+
+    /// A fresh engine and module for each iteration of the OOM test.
+    struct Context {
+        engine: Engine,
+        module: Module,
+    }
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .test_with_reuse_async(
+            async || {
+                let mut config = Config::new();
+                config.enable_compiler(false);
+                config.concurrency_support(false);
+                let engine = Engine::new(&config)?;
+                let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+                Ok(Context { engine, module })
+            },
+            async |cx: &mut Context| {
+                let mut store = Store::try_new(&cx.engine, ())?;
+                let func = Func::try_wrap(&mut store, || {})?;
+                let _ = Instance::new_async(&mut store, &cx.module, &[func.into()]).await?;
+                Ok(())
+            },
+            async |cx: Context| {
+                // Whether or not we hit an OOM above, we must still be able to
+                // instantiate the module and call into it.
+                let mut store = Store::try_new(&cx.engine, ())?;
+                let func = Func::try_wrap(&mut store, || {})?;
+                let instance = Instance::new_async(&mut store, &cx.module, &[func.into()]).await?;
+                let g = instance.get_typed_func::<(), i32>(&mut store, "g")?;
+                assert_eq!(g.call_async(&mut store, ()).await?, 42);
+                Ok(())
+            },
+        )
+        .await
+}
