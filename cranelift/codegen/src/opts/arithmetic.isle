@@ -696,3 +696,35 @@
                       (isub ty (iconst ty x) y)
                       (iadd ty z (iconst ty p))))
       (iadd ty (isub ty z y) (iconst ty (imm64_add ty p x))))
+
+;; -(x & y) + x --> x & ~y
+(rule (simplify (iadd ty (ineg ty (band ty x y)) x)) (band ty x (bnot ty y)))
+(rule (simplify (iadd ty (ineg ty (band ty x y)) y)) (band ty y (bnot ty x)))
+(rule (simplify (iadd ty x (ineg ty (band ty x y)))) (band ty x (bnot ty y)))
+(rule (simplify (iadd ty x (ineg ty (band ty y x)))) (band ty x (bnot ty y)))
+
+;; (~x & y) + (~y & x) --> y ^ x
+(rule (simplify (iadd ty (band ty (bnot ty x) y) (band ty (bnot ty y) x))) (bxor ty y x))
+(rule (simplify (iadd ty (band ty (bnot ty x) y) (band ty x (bnot ty y)))) (bxor ty y x))
+(rule (simplify (iadd ty (band ty x (bnot ty y)) (band ty (bnot ty x) y))) (bxor ty x y))
+(rule (simplify (iadd ty (band ty x (bnot ty y)) (band ty y (bnot ty x)))) (bxor ty x y))
+
+;; max(~x, ~y) --> ~min(x, y)
+(rule (simplify (smax ty (bnot ty x) (bnot ty y))) (bnot ty (smin ty x y)))
+(rule (simplify (umax ty (bnot ty x) (bnot ty y))) (bnot ty (umin ty x y)))
+
+;; min(~x, ~y) --> ~max(x, y)
+(rule (simplify (smin ty (bnot ty x) (bnot ty y))) (bnot ty (smax ty x y)))
+(rule (simplify (umin ty (bnot ty x) (bnot ty y))) (bnot ty (umax ty x y)))
+
+;; (-x) - (~x) --> 1
+(rule (simplify (isub ty (ineg ty x) (bnot ty x))) (iconst_u ty 1))
+
+;; ~x + C --> (C - 1) - x
+(rule (simplify (iadd (fits_in_64 ty) (bnot ty x) (iconst ty y))) (isub ty (iconst ty (imm64_sub ty y (imm64 1))) x))
+
+;; (x | C) - C --> x & ~C
+(rule (simplify (isub (fits_in_64 ty) (bor ty x (iconst ty y)) (iconst ty y))) (band ty x (iconst ty (imm64_not ty y))))
+
+;; (x << 1) * C --> x * (2 * C)
+(rule (simplify (imul (fits_in_64 ty) (ishl ty x (iconst_u ty 1)) (iconst ty y))) (imul ty x (iconst ty (imm64_mul ty y (imm64 2)))))
