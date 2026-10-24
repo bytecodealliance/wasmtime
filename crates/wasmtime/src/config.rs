@@ -1395,7 +1395,9 @@ impl Config {
     /// and enables the `map<k, v>` type in WIT and the component binary
     /// format.
     ///
-    /// This is `false` by default.
+    /// The default value for this option is whether the `component-model`
+    /// crate feature of Wasmtime is enabled or not. By default this crate
+    /// feature is enabled.
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_map(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_MAP, enable);
@@ -2644,6 +2646,7 @@ impl Config {
             WasmFeatures::COMPONENT_MODEL,
             cfg!(feature = "component-model"),
         );
+        features.set(WasmFeatures::CM_MAP, cfg!(feature = "component-model"));
         features.set(
             WasmFeatures::CM_ASYNC,
             self.tunables
