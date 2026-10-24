@@ -157,6 +157,7 @@ where
     pub(crate) alias_analysis: &'opt mut AliasAnalysis<'analysis>,
     pub(crate) alias_analysis_state: &'opt mut MemoryState,
     pub(crate) branch_to_trap_analysis: &'opt mut BranchToTrapAnalysis,
+    pub(crate) zero_tested_remainders: &'opt FxHashSet<Value>,
     ctrl_plane: &'opt mut ControlPlane,
     // Held locally during optimization of one node (recursively):
     pub(crate) rewrite_depth: usize,
@@ -831,6 +832,60 @@ impl<'a> EgraphPass<'a> {
         log::trace!("stats: {:#?}", self.stats);
     }
 
+    /// Find remainders whose result is only observed by equality tests against zero.
+    fn zero_tested_remainders(&self) -> FxHashSet<Value> {
+        use crate::ir::{Opcode, condcodes::IntCC};
+
+        let mut remainders = FxHashSet::default();
+        for block in self.func.layout.blocks() {
+            for inst in self.func.layout.block_insts(block) {
+                if matches!(
+                    self.func.dfg.insts[inst].opcode(),
+                    Opcode::Urem | Opcode::Srem
+                ) {
+                    remainders.insert(self.func.dfg.first_result(inst));
+                }
+            }
+        }
+        if remainders.is_empty() {
+            return remainders;
+        }
+        for block in self.func.layout.blocks() {
+            for inst in self.func.layout.block_insts(block) {
+                let zero_test = match self.func.dfg.insts[inst] {
+                    InstructionData::IntCompare {
+                        cond: IntCC::Equal | IntCC::NotEqual,
+                        args,
+                        ..
+                    } => {
+                        let is_zero = |value| match self.func.dfg.value_def(value) {
+                            ValueDef::Result(def, _) => matches!(
+                                self.func.dfg.insts[def],
+                                InstructionData::UnaryImm { opcode: Opcode::Iconst, imm } if imm.bits() == 0
+                            ),
+                            _ => false,
+                        };
+                        if is_zero(args[0]) {
+                            Some(self.func.dfg.resolve_aliases(args[1]))
+                        } else if is_zero(args[1]) {
+                            Some(self.func.dfg.resolve_aliases(args[0]))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+                for arg in self.func.dfg.inst_values(inst) {
+                    let arg = self.func.dfg.resolve_aliases(arg);
+                    if Some(arg) != zero_test {
+                        remainders.remove(&arg);
+                    }
+                }
+            }
+        }
+        remainders
+    }
+
     /// Remove pure nodes from the `Layout` of the function, ensuring
     /// that only the "side-effect skeleton" remains, and also
     /// optimize the pure nodes. This is the first step of
@@ -854,6 +909,10 @@ impl<'a> EgraphPass<'a> {
     /// Returns whether we may have modified the CFG (i.e. rewrote a
     /// terminator).
     fn remove_pure_and_optimize(&mut self) -> bool {
+        // A remainder used only by zero tests can be replaced with a 0/1
+        // non-divisibility flag. Record uses before forward rewriting hides
+        // the consumers from the remainder's skeleton rule.
+        let zero_tested_remainders = self.zero_tested_remainders();
         let mut cursor = FuncCursor::new(self.func);
 
         // Set to `true` if any skeleton simplification rewrites a terminator and
@@ -995,6 +1054,7 @@ impl<'a> EgraphPass<'a> {
                     alias_analysis: self.alias_analysis,
                     alias_analysis_state: &mut alias_analysis_state,
                     branch_to_trap_analysis: &mut self.branch_to_trap_analysis,
+                    zero_tested_remainders: &zero_tested_remainders,
                     ctrl_plane: self.ctrl_plane,
                     optimized_values: Default::default(),
                     optimized_insts: Default::default(),
