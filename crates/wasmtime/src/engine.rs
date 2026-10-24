@@ -408,6 +408,32 @@ impl Engine {
         if !cfg!(has_native_signals) && self.tunables().signals_based_traps {
             return Err("signals-based-traps disabled at compile time -- cannot be enabled".into());
         }
+
+        // MMU interruption requires:
+        // - Native signals
+        // - An x86_64 or aarch64 Linux host
+        // - Signals based traps
+        // - Async support
+        if self.tunables().mmu_interruption {
+            use target_lexicon::{Architecture, OperatingSystem};
+
+            if !matches!(
+                host.architecture,
+                Architecture::X86_64 | Architecture::X86_64h | Architecture::Aarch64(_)
+            ) || host.operating_system != OperatingSystem::Linux
+            {
+                return Err(
+                    "MMU interruption is supported only on x86_64 and aarch64 Linux".into(),
+                );
+            }
+
+            // It's possible runtime support for MMU interruption wasn't
+            // compiled in, e.g. if async or native signals were off.
+            if !cfg!(has_mmu_interruption) {
+                return Err("MMU interruption runtime support was not compiled in due to lack of async, native signals, etc.".into());
+            }
+        }
+
         if !cfg!(has_virtual_memory) && self.tunables().memory_init_cow {
             return Err("virtual memory disabled at compile time -- cannot enable CoW".into());
         }

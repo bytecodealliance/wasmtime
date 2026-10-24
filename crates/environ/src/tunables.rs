@@ -99,6 +99,9 @@ define_tunables! {
         /// Whether or not we use epoch-based interruption.
         pub epoch_interruption: bool,
 
+        /// Whether to generate the polling code to support MMU interruption.
+        pub mmu_interruption: bool,
+
         /// Whether or not linear memories are allowed to be reallocated after
         /// initial allocation at runtime.
         pub memory_may_move: bool,
@@ -271,6 +274,7 @@ impl Tunables {
             consume_fuel: false,
             operator_cost: OperatorCostStrategy::Default,
             epoch_interruption: false,
+            mmu_interruption: false,
             memory_may_move: true,
             guard_before_linear_memory: true,
             table_lazy_init: true,

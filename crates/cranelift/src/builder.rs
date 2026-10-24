@@ -12,7 +12,7 @@ use std::fmt;
 use std::path;
 use std::sync::Arc;
 use target_lexicon::Triple;
-use wasmtime_environ::error::Result;
+use wasmtime_environ::error::{Result, bail};
 use wasmtime_environ::{CacheStore, CompilerBuilder, Setting, Tunables};
 
 struct Builder {
@@ -108,6 +108,18 @@ impl CompilerBuilder for Builder {
     }
 
     fn set_tunables(&mut self, tunables: Tunables) -> Result<()> {
+        let triple = self.inner.triple();
+        if tunables.mmu_interruption
+            && (!matches!(
+                triple.architecture,
+                target_lexicon::Architecture::X86_64
+                    | target_lexicon::Architecture::X86_64h
+                    | target_lexicon::Architecture::Aarch64(_)
+            ) || triple.operating_system != target_lexicon::OperatingSystem::Linux)
+        {
+            bail!("MMU interruption is supported only on x86_64 and aarch64 Linux, not `{triple}`");
+        }
+
         self.tunables = Some(tunables);
         Ok(())
     }

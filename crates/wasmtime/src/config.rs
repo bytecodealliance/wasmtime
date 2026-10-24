@@ -672,7 +672,7 @@ impl Config {
     /// compiled form of the Wasm code so that it maintains a precise
     /// instruction count, frequently checking this count against the
     /// remaining fuel. If one does not need this precise count or
-    /// deterministic interruptions, and only needs a periodic
+    /// deterministic interruptions and needs only a periodic
     /// interrupt of some form, then It would be better to have a more
     /// lightweight mechanism.
     ///
@@ -787,6 +787,84 @@ impl Config {
     /// - [`Store::epoch_deadline_async_yield_and_update`](crate::Store::epoch_deadline_async_yield_and_update)
     pub fn epoch_interruption(&mut self, enable: bool) -> &mut Self {
         self.tunables.epoch_interruption = Some(enable);
+        self
+    }
+
+    /// XXX: MMU interruption is not yet fully landed; this config flag, not yet
+    /// plumbed through to the CLI, serves as a feature flag that keeps its
+    /// landed portions from kicking in.
+    ///
+    /// Enables MMU-based interruption, a lower-overhead alternative to
+    /// [`Config::epoch_interruption`]. It uses memory-protection faults instead
+    /// of epoch deadline comparisons to prod a running Wasm guest to yield.
+    ///
+    /// # How it works
+    ///
+    /// Cranelift emits, at each loop backedge and function prologue, a load
+    /// from a per-store "interrupt page". To trigger an interruption, the
+    /// embedder marks that page as inaccessible; the resulting SIGSEGV is
+    /// caught by Wasmtime's signal handler, which distinguishes an
+    /// interrupt-check load from an actual crash by consulting a record of each
+    /// such load in the trap table. The signal handler then causes the active
+    /// fiber to yield.
+    ///
+    /// # Compared to `epoch_interruption`
+    ///
+    /// - Faster. Whereas epoch interruption needs to compare, branch, and keep
+    ///   a deadline register coherent, MMU interruption does only a single
+    ///   (dead) load from a per-store memory page. In the no-interruption case,
+    ///   the load completes successfully, and overhead (versus doing nothing)
+    ///   is 2.8% on the SpiderMonkey Sightglass benchmark, compared to 14.4%
+    ///   for epoch interruption. Factoring in interruptions, the SpiderMonkey
+    ///   Markdown-parsing workload, when run under `wasmtime serve`, shows a
+    ///   12% boost in throughput over epoch interruption and a 19% reduction in
+    ///   p50 latency.
+    /// - Also non-deterministic. The same guidance in
+    ///   [`Config::epoch_interruption`] about fuel vs. epochs applies here.
+    /// - Equally fine-grained. Checks for MMU interruption happen at the same
+    ///   points in the compiled Wasm as checks for epoch interruption.
+    /// - Less flexible. Unlike epochs, there is, as of yet, no configurable
+    ///   per-store interrupt behavior. When triggered, interruption always
+    ///   causes the running fiber to yield; the `Store::epoch_deadline_*`
+    ///   callbacks are not consulted.
+    ///
+    /// # Triggering an interruption
+    ///
+    /// Interruptions are triggered from outside the Wasm guest code by an
+    /// [`MmuInterrupter`](crate::MmuInterrupter), which hands each running
+    /// [`Store`] an interrupt page and protects it when that store is due to
+    /// yield. The [`Engine`] owns a single interrupter, shared by all its
+    /// stores. You must provide this interrupter using
+    /// [`Config::with_mmu_interrupter`] before running code.
+    /// [`TimingWheelInterrupter`](crate::TimingWheelInterrupter) is a good
+    /// default implementation; like the epoch counter, it does nothing until
+    /// you tick it.
+    ///
+    /// # Requirements
+    ///
+    /// - **Async.** Since MMU interruption always causes the fiber to yield,
+    ///   wasmtime must be built with the `async` feature. Configuring an engine
+    ///   with `mmu_interruption()` puts every [`Store`] derived from it into
+    ///   async mode automatically.
+    /// - **Cranelift.** Winch does not support it.
+    /// - **Linux on x86_64 or aarch64 target.** Cross-compilation from other
+    ///   hosts is fine.
+    /// - **Native signals**, because we depend on a signal handler.
+    /// - **Signals-based traps**, because signal-handler installation (in
+    ///   [`Engine::new()`]) is currently gated on this. It should be possible
+    ///   to remove this dependency, but the use cases are few, and threading
+    ///   the value of `signals_based_traps` into the signal handler may be
+    ///   nontrivial.
+    ///
+    /// # Errors
+    ///
+    /// Some requirements are validated after config time: some when an
+    /// [`Engine`] is instantiated (which calls [`Config::validate`] herein) and
+    /// others when code is loaded into the engine. Nothing panics; errors are
+    /// reported via return values.
+    #[doc(hidden)]
+    pub fn mmu_interruption(&mut self, enable: bool) -> &mut Self {
+        self.tunables.mmu_interruption = Some(enable);
         self
     }
 
@@ -2887,6 +2965,14 @@ impl Config {
             );
         }
 
+        if tunables.mmu_interruption {
+            // Only with signals-based traps can MMU interruption's signal
+            // handler be installed (at engine creation time).
+            ensure!(
+                tunables.signals_based_traps,
+                "MMU interruption requires signals-based traps"
+            );
+        }
         // Concurrency support is required for some component model features.
         let requires_concurrency = WasmFeatures::CM_ASYNC
             | WasmFeatures::CM_MORE_ASYNC_BUILTINS
@@ -5167,6 +5253,12 @@ impl Engine {
     /// Returns the configured [`Config::epoch_interruption`] value.
     pub fn get_epoch_interruption(&self) -> bool {
         self.tunables().epoch_interruption
+    }
+
+    /// Returns the configured [`Config::mmu_interruption`] value.
+    #[doc(hidden)]
+    pub fn get_mmu_interruption(&self) -> bool {
+        self.tunables().mmu_interruption
     }
 
     /// Returns the configured [`Config::consume_fuel`] value.
