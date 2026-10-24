@@ -179,6 +179,50 @@ impl<'a> Solver<'a> {
         Ok(())
     }
 
+    /// Check whether the left-hand side of the rule can match at all under this
+    /// type assignment, ignoring the right-hand side.
+    ///
+    /// The assignment need only type the left-hand side expressions.
+    pub fn check_lhs_feasibility(&mut self) -> Result<Applicability> {
+        let rhs = self.conditions.rhs_dependent_exprs();
+
+        // Encode left-hand side expressions.
+        for (i, expr) in self.conditions.exprs.iter().enumerate() {
+            let x = ExprId(i);
+            if rhs.contains(&x) {
+                continue;
+            }
+            self.declare_expr(x)?;
+            if !expr.is_variable() {
+                self.assign_expr(x, expr)?;
+            }
+        }
+
+        // Check left-hand side assumptions, together with the typing facts of
+        // the term's contract.
+        self.smt.push()?;
+        let assumptions: Vec<ExprId> = self
+            .conditions
+            .assumptions
+            .iter()
+            .chain(&self.conditions.contract_facts)
+            .copied()
+            .filter(|a| !rhs.contains(a))
+            .collect();
+        let assumptions = self.all(&assumptions);
+        self.smt.assert(assumptions)?;
+
+        let verdict = match self.check()? {
+            Response::Sat => Applicability::Applicable,
+            Response::Unsat => Applicability::Inapplicable,
+            Response::Unknown => Applicability::Unknown,
+        };
+
+        self.smt.pop()?;
+
+        Ok(verdict)
+    }
+
     pub fn check_assumptions_feasibility(&mut self) -> Result<Applicability> {
         // Enter solver context frame.
         self.smt.push()?;

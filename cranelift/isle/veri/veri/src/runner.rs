@@ -1292,6 +1292,54 @@ impl Runner {
                         confict.reason.clone(),
                     ));
                 }
+                type_inference::Status::RhsTypeError(conflict) => {
+                    // The type assignment is only a problem if the left-hand
+                    // side can actually match under it: value constraints on
+                    // the left-hand side may rule it out.
+                    let feasibility = if self.skip_solver {
+                        None
+                    } else {
+                        let log_dir = log_dir.join(format!("{i:03}_lhs"));
+                        Some(self.check_lhs_feasibility(
+                            &conditions,
+                            &solution.assignment,
+                            solver_backend,
+                            log_dir,
+                        ))
+                    };
+                    match feasibility {
+                        Some(Ok(Applicability::Inapplicable)) => {
+                            writeln!(output, "\t\tlhs infeasible, rhs type error ignored")?;
+                            report.failed_type_inference += 1;
+                            continue;
+                        }
+                        None => {
+                            log::debug!("Skipping solver: not checking rhs type error");
+                            report.failed_type_inference += 1;
+                            continue;
+                        }
+                        // Feasible, or feasibility could not be determined.
+                        Some(Ok(applicability)) => writeln!(
+                            output,
+                            "\t\tlhs applicability = {applicability}, rhs type error"
+                        )?,
+                        Some(Err(err)) => {
+                            log::debug!("lhs feasibility check failed: {err:#}");
+                        }
+                    }
+                    return Err(conditions.error_at_expr(
+                        &self.prog,
+                        conflict.x,
+                        format!(
+                            "right-hand side is ill-typed for a type assignment accepted by \
+                             the left-hand side [{choices}]: {reason} (e{x} = {expr})",
+                            choices = choices.join(", "),
+                            reason = conflict.reason,
+                            x = conflict.x.index(),
+                            expr = conditions.exprs[conflict.x.index()],
+                        ),
+                    ));
+                }
             }
 
             // Verify.
@@ -1341,6 +1389,44 @@ impl Runner {
         Ok(self.default_solver_backend)
     }
 
+    fn smt_context(
+        &self,
+        solver_backend: SolverBackend,
+        log_dir: &std::path::Path,
+    ) -> Result<caching::Context> {
+        let binary = solver_backend.prog();
+        let args = solver_backend.args(self.timeout);
+        let replay_file = Self::open_log_file(log_dir.to_path_buf(), "solver.smt2")?;
+        let mut smt_builder = caching::ContextBuilder::new();
+
+        smt_builder
+            .solver(binary)
+            .solver_args(&args)
+            .replay_file(Some(replay_file));
+
+        if let Some(cache) = &self.cache {
+            smt_builder.cache(cache.clone());
+        }
+
+        Ok(smt_builder.build()?)
+    }
+
+    /// Whether the left-hand side of the expansion can match under the type
+    /// assignment, ignoring its right-hand side.
+    fn check_lhs_feasibility(
+        &self,
+        conditions: &Conditions,
+        assignment: &Assignment,
+        solver_backend: SolverBackend,
+        log_dir: std::path::PathBuf,
+    ) -> Result<Applicability> {
+        let smt = self.smt_context(solver_backend, &log_dir)?;
+        let mut solver = Solver::new(smt, &self.prog, conditions, assignment)?;
+
+        solver.set_dialect(solver_backend.dialect());
+        solver.check_lhs_feasibility()
+    }
+
     #[allow(clippy::too_many_arguments, reason = "verification code")]
     fn verify_expansion_type_instantiation(
         &self,
@@ -1357,22 +1443,7 @@ impl Runner {
     ) -> Result<VerifyReport> {
         let start = time::Instant::now();
 
-        // Build the SMT context through the caching layer: commands are
-        // recorded as they are issued, queries are answered from the cache
-        // when possible, and a solver subprocess is spawned — with the
-        // recorded state played into it — only on a cache miss.
-        let binary = solver_backend.prog();
-        let args = solver_backend.args(self.timeout);
-        let replay_file = Self::open_log_file(log_dir.clone(), "solver.smt2")?;
-        let mut smt_builder = caching::ContextBuilder::new();
-        smt_builder
-            .solver(binary)
-            .solver_args(&args)
-            .replay_file(Some(replay_file));
-        if let Some(cache) = &self.cache {
-            smt_builder.cache(cache.clone());
-        }
-        let smt = smt_builder.build()?;
+        let smt = self.smt_context(solver_backend, &log_dir)?;
 
         let mut solver = Solver::new(smt, &self.prog, conditions, assignment)?;
         solver.set_dialect(solver_backend.dialect());

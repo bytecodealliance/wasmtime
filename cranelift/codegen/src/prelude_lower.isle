@@ -276,7 +276,10 @@
            (value_list_slice (value_slice_unwrap head1 (value_slice_unwrap head2 tail))))
 
 ;; Turn a `Writable<Reg>` into a `Reg` via `Writable::to_reg`.
-(spec (writable_reg_to_reg reg) (provide (= result reg)))
+;; `Reg` is modeled with 64 bits, but a temporary may be allocated with a wider
+;; type, for example a 128-bit vector register for a scalar floating-point
+;; value. Only the low bits are modeled in that case.
+(spec (writable_reg_to_reg reg) (provide (= result (conv_to (widthof result) reg))))
 (decl pure writable_reg_to_reg (WritableReg) Reg)
 (extern constructor writable_reg_to_reg writable_reg_to_reg)
 
