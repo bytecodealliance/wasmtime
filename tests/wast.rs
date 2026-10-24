@@ -159,6 +159,13 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
         cfg.memory_guard_size(small_guard);
     }
 
+    if std::env::var("WASMTIME_TEST_GC_HEAP_BYTE_PAGES").is_ok() {
+        cfg.gc_heap_page_size_log2(0)?;
+        cfg.gc_heap_reservation(0);
+        cfg.gc_heap_reservation_for_growth(0);
+        cfg.gc_heap_guard_size(0);
+    }
+
     let _pooling_lock = if config.pooling {
         // Some memory64 tests take more than 4gb of resident memory to test,
         // but we don't want to configure the pooling allocator to allow that

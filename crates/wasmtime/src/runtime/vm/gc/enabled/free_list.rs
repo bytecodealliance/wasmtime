@@ -62,6 +62,13 @@ impl FreeList {
         Some((size.checked_add(ALIGN_U32)? - 1) & !(ALIGN_U32 - 1))
     }
 
+    /// Returns by how many bytes the capacity of this free list needs to grow
+    /// so that an allocation of `alloc_size` bytes is guaranteed to succeed.
+    pub fn bytes_needed_for(alloc_size: u32) -> u64 {
+        // On top of the allocation, also consider capacity needed for alignment.
+        u64::from(alloc_size) + u64::from(ALIGN_U32)
+    }
+
     /// Get the current total capacity this free list manages.
     pub fn current_capacity(&self) -> usize {
         self.capacity
