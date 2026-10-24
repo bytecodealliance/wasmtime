@@ -2055,11 +2055,20 @@ impl StoreOpaque {
         // If this loop becomes hot in the future, however, it should be
         // possible to precompute maps about linear memories in a store and have
         // a quicker lookup.
-        let mut fault = None;
+        //
+        // A shared memory can be defined by more than one instance in a store,
+        // for example when it's imported through the single-memory instance
+        // that `SharedMemory::vmimport` creates. Each of those instances
+        // reports the same fault, so only assert that the faulting address
+        // doesn't belong to two different memories. The memory size isn't
+        // compared because a shared memory can grow concurrently.
+        let mut fault: Option<vm::WasmFault> = None;
         for (_, instance) in self.instances.iter() {
             if let Some(f) = instance.handle.get().wasm_fault(addr) {
-                assert!(fault.is_none());
-                fault = Some(f);
+                match &fault {
+                    Some(prev) => assert_eq!(prev.wasm_address, f.wasm_address),
+                    None => fault = Some(f),
+                }
             }
         }
         if fault.is_some() {
