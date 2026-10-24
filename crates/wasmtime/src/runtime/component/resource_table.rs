@@ -66,9 +66,17 @@ impl Entry {
 
 struct Tombstone;
 
-// Change this to `true` to assist with handle debugging in development if
-// necessary.
-const DELETE_WITH_TOMBSTONE: bool = false;
+trait DeleteWithTombstone {
+    const DELETE_WITH_TOMBSTONE: bool;
+}
+
+struct DefaultTombstone;
+
+impl DeleteWithTombstone for DefaultTombstone {
+    // Change this to `true` to assist with handle debugging in development if
+    // necessary.
+    const DELETE_WITH_TOMBSTONE: bool = false;
+}
 
 /// Default setting for `ResourceTable::max_capacity`, chosen to be high
 /// enough that it doesn't need changing all that often but low enough that
@@ -199,8 +207,9 @@ impl ResourceTable {
     }
 
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
-    fn free_entry(&mut self, ix: usize, debug: bool) -> TableEntry {
-        let removed_entry = if debug {
+    #[inline]
+    fn free_entry<D: DeleteWithTombstone>(&mut self, ix: usize) -> TableEntry {
+        if D::DELETE_WITH_TOMBSTONE {
             // Instead of making this entry available for reuse, we leave a
             // tombstone in debug mode.  This helps detect use-after-delete and
             // double-delete bugs.
@@ -214,7 +223,12 @@ impl ResourceTable {
                     },
                 },
             ) {
-                Entry::Occupied { entry } => entry,
+                Entry::Occupied { entry } => {
+                    if !entry.entry.is::<Tombstone>() {
+                        self.live -= 1;
+                    }
+                    entry
+                }
                 Entry::Free { .. } => unreachable!(),
             }
         } else {
@@ -230,13 +244,10 @@ impl ResourceTable {
 
             self.free_head = Some(ix);
             self.free_count += 1;
+            self.live -= 1;
 
             entry
-        };
-        if !removed_entry.entry.is::<Tombstone>() {
-            self.live -= 1;
         }
-        removed_entry
     }
 
     /// Push a new entry into the table, returning its handle. This will prefer to use free entries
@@ -369,31 +380,21 @@ impl ResourceTable {
     where
         T: Any,
     {
-        self.delete_maybe_debug(resource, DELETE_WITH_TOMBSTONE)
+        self.delete_maybe_debug::<T, DefaultTombstone>(resource)
     }
 
-    fn delete_maybe_debug<T>(
-        &mut self,
-        resource: Resource<T>,
-        debug: bool,
-    ) -> Result<T, ResourceTableError>
+    fn delete_maybe_debug<T, D>(&mut self, resource: Resource<T>) -> Result<T, ResourceTableError>
     where
         T: Any,
+        D: DeleteWithTombstone,
     {
         debug_assert!(resource.owned());
-        let entry = self.delete_entry(resource.rep(), debug)?;
-        match entry.entry.downcast() {
-            Ok(t) => Ok(*t),
-            Err(_e) => Err(ResourceTableError::WrongType),
-        }
-    }
-
-    fn delete_entry(&mut self, key: u32, debug: bool) -> Result<TableEntry, ResourceTableError> {
+        let key = resource.rep();
         if !self.occupied(key)?.children.is_empty() {
             return Err(ResourceTableError::HasChildren);
         }
-        let e = self.free_entry(key as usize, debug);
-        if let Some(parent) = e.parent {
+        let entry = self.free_entry::<D>(key as usize);
+        if let Some(parent) = entry.parent {
             // Remove deleted resource from parent's child list.
             // Parent must still be present because it can't be deleted while still having
             // children:
@@ -401,7 +402,10 @@ impl ResourceTable {
                 .expect("missing parent")
                 .remove_child(key);
         }
-        Ok(e)
+        match entry.entry.downcast() {
+            Ok(t) => Ok(*t),
+            Err(_e) => Err(ResourceTableError::WrongType),
+        }
     }
 
     /// Zip the values of the map with mutable references to table entries corresponding to each
@@ -488,15 +492,15 @@ pub fn test_free_list() {
     assert_eq!(table.len(), 2);
 
     // Deleting x should put it on the free list, so the next entry should have the same rep.
-    table.delete_maybe_debug(x, false).unwrap();
+    table.delete_maybe_debug::<_, DefaultTombstone>(x).unwrap();
     assert_eq!(table.len(), 1);
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 0);
     assert_eq!(table.len(), 2);
 
     // Deleting x and then y should yield indices 1 and then 0 for new entries.
-    table.delete_maybe_debug(x, false).unwrap();
-    table.delete_maybe_debug(y, false).unwrap();
+    table.delete_maybe_debug::<_, DefaultTombstone>(x).unwrap();
+    table.delete_maybe_debug::<_, DefaultTombstone>(y).unwrap();
 
     let y = table.push(()).unwrap();
     assert_eq!(y.rep(), 1);
@@ -581,11 +585,18 @@ fn test_len_and_delete_errors() {
 
 #[test]
 fn test_len_and_tombstones() {
+    struct DebugTombstone;
+    impl DeleteWithTombstone for DebugTombstone {
+        const DELETE_WITH_TOMBSTONE: bool = true;
+    }
+
     let mut table = ResourceTable::new();
     table.set_max_capacity(1);
     let value = table.push(1u32).unwrap();
     let rep = value.rep();
-    table.delete_maybe_debug(value, true).unwrap();
+    table
+        .delete_maybe_debug::<_, DebugTombstone>(value)
+        .unwrap();
     assert_eq!(table.len(), 0);
     assert!(table.is_empty());
     assert_eq!(table.entries.len(), 1);
@@ -594,12 +605,12 @@ fn test_len_and_tombstones() {
         Err(ResourceTableError::Full)
     ));
     assert!(matches!(
-        table.delete_maybe_debug(Resource::<u32>::new_own(rep), true),
+        table.delete_maybe_debug::<_, DebugTombstone>(Resource::<u32>::new_own(rep)),
         Err(ResourceTableError::WrongType)
     ));
     assert_eq!(table.len(), 0);
     assert!(matches!(
-        table.delete_maybe_debug(Resource::<u32>::new_own(rep), false),
+        table.delete_maybe_debug::<_, DebugTombstone>(Resource::<u32>::new_own(rep)),
         Err(ResourceTableError::WrongType)
     ));
     assert_eq!(table.len(), 0);
@@ -629,12 +640,16 @@ fn test_batch_capacity() {
         table.ensure_capacity(3),
         Err(ResourceTableError::Full)
     ));
-    table.delete_maybe_debug(first, false).unwrap();
+    table
+        .delete_maybe_debug::<_, DefaultTombstone>(first)
+        .unwrap();
     // A batch can combine free slots and new slots.
     table.ensure_capacity(3).unwrap();
     let handles = (0..3).map(|_| table.push(()).unwrap()).collect::<Vec<_>>();
     for handle in handles {
-        table.delete_maybe_debug(handle, false).unwrap();
+        table
+            .delete_maybe_debug::<_, DefaultTombstone>(handle)
+            .unwrap();
     }
     table.set_max_capacity(0);
     // Reusing slots remains valid even after lowering the maximum capacity.
