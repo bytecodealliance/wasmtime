@@ -33,7 +33,7 @@ use crate::{
 use cranelift_codegen::{
     ExceptionContextLoc, MachBufferFinalized, MachExceptionHandler, MachLabel,
     binemit::CodeOffset,
-    ir::{MemFlagsData, RelSourceLoc, SourceLoc, types},
+    ir::{MemFlagsData, RelSourceLoc, SourceLoc, UserExternalNameRef, types},
     isa::aarch64::{
         self,
         inst::{
@@ -713,6 +713,11 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         let (base, offset) = src.unwrap_offset();
         self.add_ir(dst, base, I::i64(offset), size)
+    }
+
+    fn load_func_addr(&mut self, name: UserExternalNameRef, dst: WritableReg) -> Result<()> {
+        self.asm.load_func_addr(name, dst);
+        Ok(())
     }
 
     fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {

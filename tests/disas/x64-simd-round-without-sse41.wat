@@ -18,7 +18,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u805306368:28 sig0
+;;     fn0 = colocated u805306368:27 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -51,7 +51,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u805306368:30 sig0
+;;     fn0 = colocated u805306368:29 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -84,7 +84,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u805306368:32 sig0
+;;     fn0 = colocated u805306368:31 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -117,7 +117,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
-;;     fn0 = colocated u805306368:34 sig0
+;;     fn0 = colocated u805306368:33 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -150,7 +150,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u805306368:29 sig0
+;;     fn0 = colocated u805306368:28 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -177,7 +177,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u805306368:31 sig0
+;;     fn0 = colocated u805306368:30 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -204,7 +204,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u805306368:33 sig0
+;;     fn0 = colocated u805306368:32 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
@@ -231,7 +231,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
-;;     fn0 = colocated u805306368:35 sig0
+;;     fn0 = colocated u805306368:34 sig0
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2
 ;;
