@@ -105,6 +105,30 @@ where
     }
 }
 
+/// Returns whether `caller` may inline `callee` while keeping the resulting
+/// function valid.
+///
+/// `interrupt_poll` is only valid in functions that use the `tail` calling
+/// convention (see the verifier), so inlining a callee that contains one into a
+/// function with any other convention would produce invalid CLIF.
+fn can_inline(caller: &ir::Function, callee: &ir::Function) -> bool {
+    if caller.signature.call_conv == crate::isa::CallConv::Tail {
+        return true;
+    }
+
+    !callee.layout.blocks().any(|block| {
+        callee.layout.block_insts(block).any(|inst| {
+            matches!(
+                callee.dfg.insts[inst],
+                ir::InstructionData::IntAddTrap {
+                    opcode: ir::Opcode::InterruptPoll,
+                    ..
+                }
+            )
+        })
+    })
+}
+
 /// Walk the given function, invoke the `Inline` implementation for each call
 /// instruction, and inline the callee when directed to do so.
 ///
@@ -165,6 +189,14 @@ pub(crate) fn do_inlining(
                             callee,
                             visit_callee,
                         } => {
+                            if !can_inline(&cursor.func, &callee) {
+                                trace!(
+                                    "  --> keeping call: callee contains \
+                                     `interrupt_poll` but caller does not use \
+                                     the `tail` calling convention"
+                                );
+                                continue;
+                            }
                             let last_inlined_block = inline_one(
                                 &mut allocs,
                                 cursor.func,
@@ -207,6 +239,14 @@ pub(crate) fn do_inlining(
                             callee,
                             visit_callee,
                         } => {
+                            if !can_inline(&cursor.func, &callee) {
+                                trace!(
+                                    "  --> keeping call: callee contains \
+                                     `interrupt_poll` but caller does not use \
+                                     the `tail` calling convention"
+                                );
+                                continue;
+                            }
                             let last_inlined_block = inline_one(
                                 &mut allocs,
                                 cursor.func,
@@ -234,6 +274,18 @@ pub(crate) fn do_inlining(
                 | ir::InstructionData::TryCallIndirect { .. } => {
                     // Can't inline indirect calls; need to have some earlier
                     // pass rewrite them into direct calls first, when possible.
+                }
+                ir::InstructionData::IntAddTrap {
+                    opcode: ir::Opcode::InterruptPoll,
+                    ..
+                } => {
+                    // `interrupt_poll` is classified as `is_call()` because it
+                    // "continues execution elsewhere" (see its definition), but
+                    // it is not an inlineable function call — it has no `FuncRef`
+                    // and no external callee body. When a function containing a
+                    // poll is inlined by `inline_one`, the instruction is cloned
+                    // into the caller verbatim by the generic instruction-copying
+                    // loop; no special action is needed here.
                 }
                 _ => {
                     debug_assert!(
@@ -519,7 +571,20 @@ fn inline_one(
                         call_opcode == ir::Opcode::TryCall,
                         call_exception_table.is_some()
                     );
-                    if call_opcode == ir::Opcode::TryCall {
+                    // `opcode.is_call()` also includes instructions like
+                    // `interrupt_poll` that transfer control but cannot raise
+                    // a Cranelift exception. Only the instructions that
+                    // `fixup_inlined_call_exception_tables` knows how to
+                    // rewrite need to be recorded here.
+                    if call_opcode == ir::Opcode::TryCall
+                        && matches!(
+                            opcode,
+                            ir::Opcode::Call
+                                | ir::Opcode::CallIndirect
+                                | ir::Opcode::TryCall
+                                | ir::Opcode::TryCallIndirect
+                        )
+                    {
                         allocs
                             .calls_needing_exception_table_fixup
                             .push(inlined_inst);

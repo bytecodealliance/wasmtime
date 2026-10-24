@@ -463,8 +463,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         Call {
             func_ref, ref args, ..
         } => {
-            write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool)))?;
-            write_user_stack_map_entries(w, dfg, inst)
+            write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool)))
         }
         CallIndirect {
             sig_ref, ref args, ..
@@ -476,8 +475,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 sig_ref,
                 args[0],
                 DisplayValues(&args[1..])
-            )?;
-            write_user_stack_map_entries(w, dfg, inst)
+            )
         }
         TryCall {
             func_ref,
@@ -491,8 +489,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 func_ref,
                 DisplayValues(args.as_slice(pool)),
                 exception_tables[exception].display(pool),
-            )?;
-            write_user_stack_map_entries(w, dfg, inst)
+            )
         }
         TryCallIndirect {
             ref args,
@@ -506,8 +503,7 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 args[0],
                 DisplayValues(&args[1..]),
                 exception_tables[exception].display(pool),
-            )?;
-            write_user_stack_map_entries(w, dfg, inst)
+            )
         }
         FuncAddr { func_ref, .. } => write!(w, " {func_ref}"),
         StackAddr {
@@ -533,6 +529,12 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         CondTrap { arg, code, .. } => write!(w, " {arg}, {code}"),
         ExceptionHandlerAddress { block, imm, .. } => write!(w, " {block}, {imm}"),
     }?;
+
+    // User stack maps are only valid on safepoints, but safepoints are not
+    // limited to the call instruction formats: `interrupt_poll` and
+    // `stack_switch` are also safepoints. Print maps for any instruction that
+    // has them rather than only for the call formats.
+    write_user_stack_map_entries(w, dfg, inst)?;
 
     let mut sep = "  ; ";
     for arg in dfg.inst_values(inst) {

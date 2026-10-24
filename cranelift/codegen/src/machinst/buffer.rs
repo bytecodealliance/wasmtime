@@ -1846,35 +1846,43 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
+    /// Get the PC of the most recently pushed user stack map, if any.
+    pub(crate) fn last_user_stack_map_pc(&self) -> Option<CodeOffset> {
+        self.user_stack_maps.last().map(|(pc, _, _)| *pc)
+    }
+
     /// Push a user stack map onto this buffer.
     ///
-    /// The stack map is associated with the given `return_addr` code
-    /// offset. This must be the PC for the instruction just *after* this stack
-    /// map's associated instruction. For example in the sequence `call $foo;
-    /// add r8, rax`, the `return_addr` must be the offset of the start of the
-    /// `add` instruction.
+    /// The stack map is associated with the given `pc` code offset. For a
+    /// call, this is the return address: the PC of the instruction just
+    /// *after* the call. For a resumable fault, this is the PC of the
+    /// faulting instruction itself. For a stack switch, this is the PC at
+    /// which execution resumes after the switch. In all cases, `pc` must
+    /// identify the machine state described by the map.
     ///
-    /// Stack maps must be pushed in sorted `return_addr` order.
+    /// Stack maps must be pushed in strictly increasing `pc` order. Callers
+    /// that can produce two maps for the same PC must separate them (for
+    /// example, with a nop) rather than relying on this method to merge them.
     pub fn push_user_stack_map(
         &mut self,
         emit_state: &I::State,
-        return_addr: CodeOffset,
+        pc: CodeOffset,
         mut stack_map: ir::UserStackMap,
     ) {
         let span = emit_state.frame_layout().active_size();
-        trace!("Adding user stack map @ {return_addr:#x} spanning {span} bytes: {stack_map:?}");
+        trace!("Adding user stack map @ {pc:#x} spanning {span} bytes: {stack_map:?}");
 
         debug_assert!(
             self.user_stack_maps
                 .last()
-                .map_or(true, |(prev_addr, _, _)| *prev_addr < return_addr),
+                .map_or(true, |(prev_addr, _, _)| *prev_addr < pc),
             "pushed stack maps out of order: {} is not less than {}",
             self.user_stack_maps.last().unwrap().0,
-            return_addr,
+            pc,
         );
 
         stack_map.finalize(emit_state.frame_layout().sp_to_sized_stack_slots());
-        self.user_stack_maps.push((return_addr, span, stack_map));
+        self.user_stack_maps.push((pc, span, stack_map));
     }
 
     /// Push a user stack map whose offsets are already relative to the stack
