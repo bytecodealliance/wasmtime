@@ -4929,7 +4929,9 @@ version = "51.0.0-dev"
 dependencies = [
  "anyhow",
  "hashbrown 0.17.0",
+ "libc",
  "libm",
+ "libtest-mimic",
  "serde",
 ]
 
