@@ -18,7 +18,7 @@ serde = { workspace = true, optional = true }
 [dev-dependencies]
 libtest-mimic = { workspace = true }
 
-[target.'cfg(target_os = "linux")'.dev-dependencies]
+[target.'cfg(unix)'.dev-dependencies]
 libc = { workspace = true }
 
 [lints]

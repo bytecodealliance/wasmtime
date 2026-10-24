@@ -1,30 +1,25 @@
 //! Checks that `mpk::is_supported` agrees with what the hardware and kernel
 //! actually allow.
 //!
-//! We test that `RDPKRU`/`WRPKRU` work if and only if `mpk::is_supported` returns true.
-//! The => direction is required to avoid hard to debug SIGILLs if our is_supported logic was wrong.
-//! The other direction allows us to detect if we're missing out on using MPKs in places they are
-//! actually allowed.
+//! We test that `RDPKRU`/`WRPKRU` work only if `mpk::is_supported` returns true.
+//! This is required to avoid hard to debug SIGILLs if our is_supported logic was wrong.
 //!
-//! On miri we cannot spawn a subprocess at all.
+//! On unsupported platforms we just test that is_supported is false.
+//! There are platforms where MPK is supported by hardware and the OS (32-bit x86, FreeBSD, ARM targets),
+//! but Wasmtime has no backend for that.
 
 use libtest_mimic::{Arguments, Failed, Trial};
-use std::arch::asm;
 use std::process::ExitStatus;
-use std::process::{Command, exit};
+use std::process::{exit, Command};
 
 /// Set in the child process to make it run the probe instead of the test.
 const PROBE_ENV_VAR: &str = "WASMTIME_TEST_MPK_PROBE";
 
 // Exit codes of the probe, besides success.
-const EXIT_PKEY_ALLOC_FAILED: i32 = 2;
-const EXIT_PKEY_FREE_FAILED: i32 = 3;
+pub const EXIT_PKEY_ALLOC_FAILED: i32 = 2;
+pub const EXIT_PKEY_FREE_FAILED: i32 = 3;
+pub const EXIT_MPK_NOT_SUPPORTED_BY_WASMTIME: i32 = 4;
 
-// Skip the test on miri, still needs an empty main.
-#[cfg(miri)]
-fn main() {}
-
-#[cfg(not(miri))]
 fn main() {
     // We are the child that is supposed to perform the probe.
     if std::env::var_os(PROBE_ENV_VAR).is_some() {
@@ -32,57 +27,59 @@ fn main() {
         // probe always exits, this is unreachable
     }
     // We are the test entrypoint.
-    libtest_mimic::run(
-        &Arguments::from_args(),
-        vec![Trial::test("is_supported_matches_hardware_and_os", || {
-            let output = Command::new(std::env::current_exe().unwrap())
-                .env(PROBE_ENV_VAR, "1")
-                .output()
-                .expect("failed to spawn the probe process");
-            let usable = if output.status.success() {
-                true
-            } else if is_illegal_instruction(&output.status) {
-                false
-            } else {
-                return Err(Failed::from(format!(
-                    "inconclusive probe for protection key support: {}\n\
-             stdout:\n{}\nstderr:\n{}",
-                    output.status,
-                    String::from_utf8_lossy(&output.stdout),
-                    String::from_utf8_lossy(&output.stderr),
-                )));
-            };
+    let run_test = || {
+        let output = Command::new(std::env::current_exe().unwrap())
+            .env(PROBE_ENV_VAR, "1")
+            .output()
+            .expect("failed to spawn the probe process");
+        let usable = if output.status.success() {
+            true
+        } else if is_illegal_instruction(&output.status)
+            || is_not_supported_by_wasmtime(&output.status)
+        {
+            false
+        } else {
+            return Err(Failed::from(format!(
+                "inconclusive probe for protection key support: {}\n\
+                 stdout:\n{}\nstderr:\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            )));
+        };
 
-            let is_supported = wasmtime_internal_core::mpk::is_supported();
-            if is_supported != usable {
-                Err(Failed::from(format!(
-                    "`mpk::is_supported()` disagrees with whether protection keys can \
-         actually be used on this host: is_supported() = {is_supported}, usable = {usable}",
-                )))
-            } else {
-                Ok(())
-            }
-        })],
-    )
-    .exit();
+        let is_supported = wasmtime_internal_core::mpk::is_supported();
+        if is_supported != usable {
+            Err(Failed::from(format!(
+                "`mpk::is_supported()` disagrees with whether protection keys can \
+                 actually be used on this host: is_supported() = {is_supported}, usable = {usable}",
+            )))
+        } else {
+            Ok(())
+        }
+    };
+    let trial = Trial::test("is_supported_matches_hardware_and_os", run_test)
+        // Has to be excluded on miri as we can't even spawn the subcommand there.
+        .with_ignored_flag(cfg!(miri));
+    libtest_mimic::run(&Arguments::from_args(), vec![trial]).exit();
 }
 
-#[cfg(unix)]
+fn is_not_supported_by_wasmtime(status: &ExitStatus) -> bool {
+    status
+        .code()
+        .is_some_and(|x| x == EXIT_MPK_NOT_SUPPORTED_BY_WASMTIME)
+}
+
 fn is_illegal_instruction(status: &ExitStatus) -> bool {
     use std::os::unix::process::ExitStatusExt;
     status.signal() == Some(libc::SIGILL)
 }
 
-#[cfg(windows)]
-fn is_illegal_instruction(status: &ExitStatus) -> bool {
-    // STATUS_ILLEGAL_INSTRUCTION
-    status.code().map(|c| c as u32) == Some(0xC000001D)
-}
-
 /// Checks `RDPKRU`, `WRPKRU`, and tries to allocate and free a pkey.
 /// Exits the process with 0 if everything worked, raises `SIGILL` otherwise.
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn probe() -> ! {
+    use std::arch::asm;
     use std::io;
     // No crate offers rdpkru or wrpkru as a Rust function (neither rustix nor libc), so we need to
     // rawdog asm.
@@ -114,16 +111,12 @@ fn probe() -> ! {
     exit(0)
 }
 
-/// On non-unix platforms the pkey_alloc syscall doesn't exist, so we can't compile the above.
-/// However, rdpkru and wrpkru should kill us with SIGILL, since these OSs don't enable PKU at all.
-#[cfg(not(target_os = "linux"))]
+/// Some platforms like ARM or FreeBSD support MPKs, but with different APIs that wasmtime
+/// currently does not hook into.
+/// We just return a special error on those.
+/// If wasmtime gets MPK support on those platforms, this should be updated to check the
+/// capabilities of the relevant API.
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 fn probe() -> ! {
-    let pkru: u32;
-    // SAFETY: reading PKRU has no side effects; if protection keys are not
-    // enabled this raises `SIGILL`, which is what the parent checks for.
-    unsafe {
-        asm!("rdpkru", in("ecx") 0u32, out("eax") pkru, out("edx") _,
-            options(nomem, nostack, preserves_flags));
-    }
-    exit(0)
+    exit(EXIT_MPK_NOT_SUPPORTED_BY_WASMTIME)
 }
