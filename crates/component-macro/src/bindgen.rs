@@ -10,7 +10,7 @@ use syn::{Token, braced, token};
 use wasmtime_wit_bindgen::{
     FunctionConfig, FunctionFilter, FunctionFlags, Opts, Ownership, TrappableError,
 };
-use wit_parser::{PackageId, Resolve, WorldId};
+use wit_parser::{Function, IndexMap, PackageId, Resolve, WorldId, WorldItem, WorldKey};
 
 pub struct Config {
     opts: Opts,
@@ -28,6 +28,34 @@ pub fn expand(input: &mut Config) -> Result<TokenStream> {
 
     if input.opts.stringify {
         return Ok(quote::quote!(#src));
+    }
+
+    let world = &input.resolve.worlds[input.world];
+    let sync_exports = fn_filter(&input.resolve, &world.exports, |f| !f.kind.is_async());
+    let async_imports = fn_filter(&input.resolve, &world.imports, |f| f.kind.is_async());
+    if !sync_exports.is_empty() && !async_imports.is_empty() {
+        let format_list = |names: &[String]| {
+            names
+                .iter()
+                .map(|n| format!("  - {n}\n"))
+                .collect::<String>()
+        };
+
+        return Err(Error::new(
+            Span::call_site(),
+            format!(
+                "world `{world}` mixes synchronous exports with asynchronous imports, which is not allowed\n\
+     \n\
+     synchronous exports:\n{sync_exports}\n\
+     asynchronous imports:\n{async_imports}\n\
+     \n\
+     help: synchronous exports that call asynchronous imports will trap at runtime. Either mark the \
+     listed exports `async`, or make the listed imports synchronous",
+                world = world.name,
+                sync_exports = format_list(&sync_exports),
+                async_imports = format_list(&async_imports),
+            ),
+        ));
     }
 
     // If a magical `WASMTIME_DEBUG_BINDGEN` environment variable is set then
@@ -72,6 +100,32 @@ pub fn expand(input: &mut Config) -> Result<TokenStream> {
     }
 
     Ok(contents)
+}
+
+/// Get a list of world and interface-level function names that match some predicate
+fn fn_filter(
+    resolve: &Resolve,
+    items: &IndexMap<WorldKey, WorldItem>,
+    pred: impl Fn(&Function) -> bool,
+) -> Vec<String> {
+    let mut names = vec![];
+    for (key, item) in items {
+        match item {
+            WorldItem::Function(f) if pred(f) => names.push(f.name.clone()),
+            WorldItem::Interface { id, .. } => {
+                let iface = resolve.name_world_key(key);
+                names.extend(
+                    resolve.interfaces[*id]
+                        .functions
+                        .values()
+                        .filter(|f| pred(f))
+                        .map(|f| format!("{iface}.{}", f.name)),
+                );
+            }
+            _ => {}
+        }
+    }
+    names
 }
 
 impl Parse for Config {
