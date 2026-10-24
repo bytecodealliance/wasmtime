@@ -1429,8 +1429,9 @@ impl Config {
     ///
     /// This corresponds to the 🏷️ emoji in the component model specification.
     ///
-    /// Please note that Wasmtime's support for this feature is a work in
-    /// progress.
+    /// The default value for this option is whether the `component-model`
+    /// crate feature of Wasmtime is enabled or not. By default this crate
+    /// feature is enabled.
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_implements(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_IMPLEMENTS, enable);
@@ -2642,6 +2643,10 @@ impl Config {
         // no differentiation here between compilers.
         features.set(
             WasmFeatures::COMPONENT_MODEL,
+            cfg!(feature = "component-model"),
+        );
+        features.set(
+            WasmFeatures::CM_IMPLEMENTS,
             cfg!(feature = "component-model"),
         );
         features.set(
