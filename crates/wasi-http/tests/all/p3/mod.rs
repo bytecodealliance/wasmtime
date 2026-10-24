@@ -24,8 +24,8 @@ use wasmtime_wasi_http::p3::Request;
 use wasmtime_wasi_http::p3::bindings::Service;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
 use wasmtime_wasi_http::{
-    DEFAULT_FORBIDDEN_HEADERS, Error, ForbiddenHeaderFilter, RequestOptions, WasiBody, WasiHttpCtx,
-    WasiHttpCtxView, WasiHttpHooks, WasiHttpView, default_send_request,
+    DEFAULT_FORBIDDEN_HEADERS, Error, ForbiddenHeaderFilter, Http2Config, RequestOptions, WasiBody,
+    WasiHttpCtx, WasiHttpCtxView, WasiHttpHooks, WasiHttpView, default_send_request_with_http2,
 };
 
 foreach_p3_http!(assert_test_exists);
@@ -34,6 +34,7 @@ foreach_p3_http!(assert_test_exists);
 struct TestHooks {
     request_tx: Option<oneshot::Sender<http::Request<WasiBody>>>,
     io_dropped_tx: Option<oneshot::Sender<()>>,
+    http2: Http2Config,
 }
 
 impl TestHooks {
@@ -107,10 +108,11 @@ impl WasiHttpHooks for TestHooks {
                 ))
             })
         } else {
+            let http2 = self.http2;
             Box::new(async move {
                 use http_body_util::BodyExt;
 
-                let (res, io) = default_send_request(request, options).await?;
+                let (res, io) = default_send_request_with_http2(request, options, http2).await?;
                 Ok((
                     res.map(BodyExt::boxed_unsync),
                     Box::new(io) as Box<dyn Future<Output = _> + Send>,
@@ -159,6 +161,37 @@ impl WasiHttpView for Ctx {
             hooks: &mut self.hooks,
         }
     }
+}
+
+async fn run_cli_with_hooks(path: &str, server: &Server, hooks: TestHooks) -> wasmtime::Result<()> {
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+        config.wasm_component_model_async(true);
+    });
+    let component = Component::from_file(&engine, path)?;
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: wasmtime_wasi::WasiCtx::builder()
+                .env("HTTP_SERVER", server.addr())
+                .inherit_stdio()
+                .build(),
+            ..Ctx::with_hooks(hooks)
+        },
+    );
+    let mut linker = Linker::new(&engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+        .context("failed to link `wasi:cli@0.2.x`")?;
+    wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
+    wasmtime_wasi_http::p3::add_to_linker(&mut linker)
+        .context("failed to link `wasi:http@0.3.x`")?;
+    let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+    store
+        .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
+        .await
+        .context("failed to call `wasi:cli/run#run`")?
+        .context("guest trapped")?
+        .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
 }
 
 async fn run_cli(path: &str, server: &Server) -> wasmtime::Result<()> {
@@ -279,6 +312,22 @@ async fn run_http_with_hooks<E: Into<Error> + 'static>(
             Ok(res)
         })
         .await?
+}
+
+/// A p3 request over HTTP/2 using prior knowledge: the embedder opts in via
+/// `WasiHttpHooks::http2_config`, so the connection is h2c rather than HTTP/1.1.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_http2_prior_knowledge() -> wasmtime::Result<()> {
+    let server = Server::http2(1)?;
+    let (tx, _rx) = oneshot::channel();
+    let hooks = TestHooks {
+        http2: Http2Config {
+            alpn: false,
+            prior_knowledge: true,
+        },
+        ..TestHooks::new(tx)
+    };
+    run_cli_with_hooks(P3_HTTP_OUTBOUND_REQUEST_GET_COMPONENT, &server, hooks).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
