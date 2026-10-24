@@ -1,4 +1,4 @@
-package wasi:clocks@0.3.0;
+package wasi:clocks@0.3.2;
 
 /// This interface common types used throughout wasi:clocks.
 @since(version = 0.3.0)
