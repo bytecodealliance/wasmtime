@@ -355,11 +355,11 @@ impl Table {
             Some(size) => u64::try_from(size).unwrap(),
             None => bail!("failed to grow table by `{delta}`"),
         };
-        // This should be in-bounds and well-typed, meaning that it should not
-        // fail, hence the unwrap. Note that this is required for the safety of
-        // this operation because this table's type may be non-nullable elements
-        // which means this must happen after growth.
-        self._fill(store, start, init, delta).unwrap();
+        // Note that `init` is validated above via `ensure_matches_ty`, which
+        // verifies that it matches the element type and (for GC references) has
+        // not been unrooted. Filling must occur after growth to ensure non-nullable
+        // elements are populated.
+        self._fill(store, start, init, delta)?;
         Ok(start)
     }
 
@@ -695,5 +695,26 @@ mod tests {
         fn _grow(table: &Table, store: &mut Store<()>, init: Ref) {
             _assert_send(table.grow(store, 0, init))
         }
+    }
+
+    #[test]
+    #[cfg(feature = "gc")]
+    fn grow_with_unrooted_ref_returns_err() -> Result<()> {
+        let mut config = crate::Config::new();
+        config.wasm_gc(true);
+        let engine = crate::Engine::new(&config)?;
+        let mut store = Store::new(&engine, ());
+        let ty = crate::TableType::new(crate::RefType::EXTERNREF, 2, None)?;
+        let table = Table::new(&mut store, ty, Ref::Extern(None))?;
+
+        let unrooted = {
+            let mut scope = crate::RootScope::new(&mut store);
+            ExternRef::new(&mut scope, 1u32)?
+        };
+
+        let res = table.grow(&mut store, 1, Ref::Extern(Some(unrooted)));
+        assert!(res.is_err());
+        assert_eq!(table.size(&store), 2);
+        Ok(())
     }
 }
