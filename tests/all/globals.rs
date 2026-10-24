@@ -104,6 +104,41 @@ fn v128() -> wasmtime::Result<()> {
 }
 
 #[test]
+fn get_numeric() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let new = |store: &mut Store<()>, ty: ValType, val: Val| {
+        Global::new(&mut *store, GlobalType::new(ty, Mutability::Var), val)
+    };
+    let g = new(&mut store, ValType::I32, 1i32.into())?;
+    assert_eq!(g.get_numeric(&store).and_then(|v| v.i32()), Some(1));
+    g.set(&mut store, 2i32.into())?;
+    assert_eq!(g.get_numeric(&store).and_then(|v| v.i32()), Some(2));
+    let g = new(&mut store, ValType::I64, 3i64.into())?;
+    assert_eq!(g.get_numeric(&store).and_then(|v| v.i64()), Some(3));
+    let g = new(&mut store, ValType::F32, 4f32.into())?;
+    assert_eq!(g.get_numeric(&store).and_then(|v| v.f32()), Some(4.0));
+    let g = new(&mut store, ValType::F64, 5f64.into())?;
+    assert_eq!(g.get_numeric(&store).and_then(|v| v.f64()), Some(5.0));
+    let g = new(&mut store, ValType::V128, 6u128.into())?;
+    assert_eq!(
+        g.get_numeric(&store).and_then(|v| v.v128()),
+        Some(V128::from(6))
+    );
+
+    // Reference-typed globals are not numeric.
+    let g = new(&mut store, ValType::I31REF, Val::null_any_ref())?;
+    assert!(g.get_numeric(&store).is_none());
+    let g = new(&mut store, ValType::FUNCREF, Val::null_func_ref())?;
+    assert!(g.get_numeric(&store).is_none());
+    Ok(())
+}
+
+#[test]
 fn i31ref_global_new() -> Result<()> {
     let mut config = Config::new();
     config.wasm_function_references(true);

@@ -149,15 +149,43 @@ impl Global {
         self._get(&mut store)
     }
 
+    /// Returns the current [`Val`] of this global if it has a numeric type
+    /// (`i32`, `i64`, `f32`, `f64`, or `v128`), or `None` if it holds a
+    /// reference.
+    ///
+    /// Unlike [`Global::get`] this only needs shared access to the store since
+    /// reading a numeric value never has to clone a GC reference. That makes
+    /// it usable where only an [`AsContext`] is available, for example from
+    /// epoch or call hooks.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
+    pub fn get_numeric(&self, store: impl AsContext) -> Option<Val> {
+        self._get_numeric(store.as_context().0)
+    }
+
+    fn _get_numeric(&self, store: &StoreOpaque) -> Option<Val> {
+        unsafe {
+            let definition = self.definition(store).as_ref();
+            match self._ty(store).content() {
+                ValType::I32 => Some(Val::from(definition.get_i32())),
+                ValType::I64 => Some(Val::from(definition.get_i64())),
+                ValType::F32 => Some(Val::F32(definition.get_f32_bits())),
+                ValType::F64 => Some(Val::F64(definition.get_f64_bits())),
+                ValType::V128 => Some(Val::V128(definition.get_u128().into())),
+                ValType::Ref(_) => None,
+            }
+        }
+    }
+
     pub(crate) fn _get(&self, store: &mut AutoAssertNoGc<'_>) -> Val {
         unsafe {
             let definition = self.definition(store).as_ref();
             match self._ty(&store).content() {
-                ValType::I32 => Val::from(definition.get_i32()),
-                ValType::I64 => Val::from(definition.get_i64()),
-                ValType::F32 => Val::F32(definition.get_f32_bits()),
-                ValType::F64 => Val::F64(definition.get_f64_bits()),
-                ValType::V128 => Val::V128(definition.get_u128().into()),
+                ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 | ValType::V128 => self
+                    ._get_numeric(store)
+                    .expect("numeric globals always have a numeric value"),
                 ValType::Ref(ref_ty) => {
                     let reference: Ref = match ref_ty.heap_type() {
                         HeapType::Func | HeapType::ConcreteFunc(_) => Ref::Func(
