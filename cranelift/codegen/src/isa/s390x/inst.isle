@@ -1105,7 +1105,16 @@
       (offset i64))
     ;; Reference to a TLS symbol in general-dynamic mode.
     (TlsGd
-      (name ExternalName))))
+      (name ExternalName))
+    ;; GOT-indirect reference for PIC mode (R_390_GOTENT).
+    ;; Emitted as LARL + LG; a non-zero offset is added after the GOT load.
+    (Got
+      (name ExternalName)
+      (offset i64))))
+
+;; Returns true when generating position-independent code.
+(decl pure is_pic () bool)
+(extern constructor is_pic is_pic)
 
 ;; Boxed version of SymbolReloc to save space.
 (type BoxSymbolReloc (primitive BoxSymbolReloc))

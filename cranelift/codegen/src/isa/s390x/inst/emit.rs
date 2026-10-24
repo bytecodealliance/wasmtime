@@ -72,6 +72,8 @@ macro_rules! debug_assert_valid_fp_regpair {
     };
 }
 
+/// LARL — Load Address Relative Long (RIL-b, op1=0xC0 op2=0x0).
+const OPCODE_LARL: u16 = 0xc00;
 const OPCODE_BRAS: u16 = 0xa75;
 const OPCODE_BCR: u16 = 0xa74;
 const OPCODE_LDR: u16 = 0x28;
@@ -2740,19 +2742,66 @@ impl Inst {
                 rd,
                 ref symbol_reloc,
             } => {
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 12));
-                let (reloc, name, offset) = match &**symbol_reloc {
-                    SymbolReloc::Absolute { name, offset } => (Reloc::Abs8, name, *offset),
-                    SymbolReloc::TlsGd { name } => (Reloc::S390xTlsGd64, name, 0),
-                };
-                sink.add_reloc(reloc, name, offset);
-                sink.put8(0);
-                let inst = Inst::Load64 {
-                    rd,
-                    mem: MemArg::reg(reg, MemFlagsData::trusted()),
-                };
-                inst.emit(sink, emit_info, state);
+                match &**symbol_reloc {
+                    // PIC GOT-indirect load:
+                    //   LARL  rd, sym@GOTENT   (R_390_GOTENT: PC-relative addr of GOT entry)
+                    //   LG    rd, 0(rd)        (dereference GOT entry → symbol address)
+                    //   [AGHI/AGFI rd, offset] (add non-zero static offset if present)
+                    SymbolReloc::Got { name, offset } => {
+                        let reloc_offset = sink.cur_offset() + 2;
+                        sink.add_reloc_at_offset(reloc_offset, Reloc::S390xGOTRel32Dbl, name, 2);
+                        put(sink, &enc_ril_b(OPCODE_LARL, rd.to_reg(), 0));
+                        Inst::Load64 {
+                            rd,
+                            mem: MemArg::reg(rd.to_reg(), MemFlagsData::trusted()),
+                        }
+                        .emit(sink, emit_info, state);
+                        if *offset != 0 {
+                            if let Ok(simm16) = i16::try_from(*offset) {
+                                Inst::AluRSImm16 {
+                                    alu_op: ALUOp::Add64,
+                                    rd,
+                                    ri: rd.to_reg(),
+                                    imm: simm16,
+                                }
+                                .emit(sink, emit_info, state);
+                            } else {
+                                Inst::AluRSImm32 {
+                                    alu_op: ALUOp::Add64,
+                                    rd,
+                                    ri: rd.to_reg(),
+                                    imm: i32::try_from(*offset).expect(
+                                        "PIC symbol offset too large for AGFI (must fit i32)",
+                                    ),
+                                }
+                                .emit(sink, emit_info, state);
+                            }
+                        }
+                    }
+                    // Non-PIC: BRAS over an embedded 8-byte absolute literal.
+                    SymbolReloc::Absolute { name, offset } => {
+                        let reg = writable_spilltmp_reg().to_reg();
+                        put(sink, &enc_ri_b(OPCODE_BRAS, reg, 12));
+                        sink.add_reloc(Reloc::Abs8, name, *offset);
+                        sink.put8(0);
+                        Inst::Load64 {
+                            rd,
+                            mem: MemArg::reg(reg, MemFlagsData::trusted()),
+                        }
+                        .emit(sink, emit_info, state);
+                    }
+                    SymbolReloc::TlsGd { name } => {
+                        let reg = writable_spilltmp_reg().to_reg();
+                        put(sink, &enc_ri_b(OPCODE_BRAS, reg, 12));
+                        sink.add_reloc(Reloc::S390xTlsGd64, name, 0);
+                        sink.put8(0);
+                        Inst::Load64 {
+                            rd,
+                            mem: MemArg::reg(reg, MemFlagsData::trusted()),
+                        }
+                        .emit(sink, emit_info, state);
+                    }
+                }
             }
 
             &Inst::FpuMove32 { rd, rn } => {
