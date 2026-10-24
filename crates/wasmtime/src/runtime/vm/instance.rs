@@ -319,6 +319,7 @@ impl Instance {
     #[inline]
     pub(crate) unsafe fn enter_host_from_wasm<R>(
         vmctx: NonNull<VMContext>,
+        call_hooks: bool,
         f: impl FnOnce(&mut dyn VMStore, InstanceId) -> R,
     ) -> R::Abi
     where
@@ -337,7 +338,7 @@ impl Instance {
 
         // Thread the `store` and `instance` through panic/trap infrastructure
         // back into `f`.
-        catch_unwind_and_record_trap(store, UncaughtException::Propagate, |store| {
+        catch_unwind_and_record_trap(store, UncaughtException::Propagate, call_hooks, |store| {
             f(store, instance)
         })
     }
@@ -1051,6 +1052,41 @@ impl Instance {
         self.wasm_data(range)
     }
 
+    pub(crate) fn initialize_deferred_func_segment(
+        self: Pin<&mut Self>,
+        registry: &ModuleRegistry,
+        table_index: TableIndex,
+        segment: u32,
+        start: u64,
+    ) -> Result<()> {
+        let (module, mut instance) = self.module_and_self();
+        let indices = &module.deferred_table_segments[segment as usize];
+        let source = instance.vmctx().into();
+        let deferred = {
+            let (idx, owner) = instance
+                .as_mut()
+                .defined_table_index_and_instance(table_index);
+            owner.get_defined_table(idx).defer_func_segment(
+                start,
+                indices.len() as u64,
+                source,
+                segment,
+            )?
+        };
+        if !deferred {
+            for (offset, &function) in indices.iter().enumerate() {
+                let function = instance.as_mut().get_func_ref(registry, function);
+                let (idx, owner) = instance
+                    .as_mut()
+                    .defined_table_index_and_instance(table_index);
+                owner
+                    .get_defined_table(idx)
+                    .set_func(start + offset as u64, function)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Get a table by index regardless of whether it is locally-defined
     /// or an imported, foreign table. Ensure that the given range of
     /// elements in the table is lazily initialized.  We define this
@@ -1076,6 +1112,8 @@ impl Instance {
     /// given the provided `idx`.
     ///
     /// The `range` specified is eagerly initialized for funcref tables.
+    /// Deferred segments can access sibling instances even though this table
+    /// is locally defined; callers must not hold independent instance borrows.
     pub fn get_defined_table_with_lazy_init(
         mut self: Pin<&mut Self>,
         registry: &ModuleRegistry,
@@ -1097,19 +1135,29 @@ impl Instance {
                     Err(_) => break,
                 };
 
-                // The table element `i` is uninitialized and is now being
-                // initialized. This must imply that a `precompiled` list of
-                // function indices is available for this table. The precompiled
-                // list is extracted and then it is consulted with `i` to
-                // determine the function that is going to be initialized. Note
-                // that `i` may be outside the limits of the static
-                // initialization so it's a fallible `get` instead of an index.
-                let module = self.env_module();
-                let precomputed = &module.table_initialization[idx];
-                // Panicking here helps catch bugs rather than silently truncating by accident.
-                let func_index = precomputed.get(usize::try_from(i).unwrap()).cloned();
-                let func_ref = func_index
-                    .and_then(|func_index| self.as_mut().get_func_ref(registry, func_index));
+                // An imported-table segment can replace the owner's static
+                // initializer. Resolve its contributing instance first; outside
+                // those ranges, a missing static initializer means null.
+                let index = usize::try_from(i).unwrap();
+                let deferred = self.tables[idx].1.deferred_func_segment(index);
+                let func_ref = if let Some(deferred) = deferred {
+                    // SAFETY: startup runs after Store insertion, so the source
+                    // remains alive even if a later segment or start traps.
+                    // Imports are from the same Store. sibling_vmctx_mut ties
+                    // the source borrow to our exclusive instance borrow; no
+                    // table or owner access occurs until it ends.
+                    let source = unsafe {
+                        self.as_mut()
+                            .sibling_vmctx_mut(deferred.source.as_non_null())
+                    };
+                    let function = source.env_module().deferred_table_segments
+                        [deferred.segment as usize][index - deferred.start];
+                    source.get_func_ref(registry, function)
+                } else {
+                    let precomputed = &self.env_module().table_initialization[idx];
+                    let func_index = precomputed.get(index).copied();
+                    func_index.and_then(|function| self.as_mut().get_func_ref(registry, function))
+                };
                 self.as_mut().tables_mut()[idx]
                     .1
                     .set_func(i, func_ref)

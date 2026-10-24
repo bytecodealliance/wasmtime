@@ -18,7 +18,7 @@ pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
             VMCTX_AND_MEMORY.0 != NonNull::dangling(),
             "must call `__vmctx->set()` before resolving Wasm pointers"
         );
-        Instance::enter_host_from_wasm(VMCTX_AND_MEMORY.0, |store, instance| {
+        Instance::enter_host_from_wasm(VMCTX_AND_MEMORY.0, true, |store, instance| {
             let handle = store.instance_mut(instance);
             assert!(
                 VMCTX_AND_MEMORY.1 < handle.env_module().memories.len(),

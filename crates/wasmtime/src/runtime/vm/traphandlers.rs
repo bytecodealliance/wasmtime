@@ -139,9 +139,12 @@ pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
 /// propagate the exception to their wasm caller, but component host functions
 /// and intrinsics are a component boundary which exceptions cannot cross, so
 /// there the exception is instead turned into a trap.
+/// `call_hooks` is false for internal initialization that must report traps
+/// without introducing an observable host-call boundary.
 pub fn catch_unwind_and_record_trap<R>(
     store: &mut dyn VMStore,
     uncaught_exception: UncaughtException,
+    call_hooks: bool,
     f: impl FnOnce(&mut dyn VMStore) -> R,
 ) -> R::Abi
 where
@@ -151,7 +154,7 @@ where
     // return value is always provided and if unwind information is provided
     // (e.g. `ret` is a "false"-y value) then it's recorded in TLS for the
     // unwind operation that's about to happen from Cranelift-generated code.
-    let (ret, unwind) = R::maybe_catch_unwind(store, |store| f(store));
+    let (ret, unwind) = R::maybe_catch_unwind(store, call_hooks, |store| f(store));
     if let Some(mut unwind) = unwind {
         if let UnwindReason::Trap(Ok(trap)) = &mut unwind {
             uncaught_exception.apply(&mut trap.reason);
@@ -190,6 +193,7 @@ pub trait HostResult {
     /// and initiate an unwind (currently through `raise_preexisting_trap`).
     fn maybe_catch_unwind(
         store: &mut dyn VMStore,
+        call_hooks: bool,
         f: impl FnOnce(&mut dyn VMStore) -> Self,
     ) -> (Self::Abi, Option<UnwindReason>);
 }
@@ -207,6 +211,7 @@ macro_rules! host_result_no_catch {
                 #[allow(unreachable_code, reason = "some types uninhabited on some platforms")]
                 fn maybe_catch_unwind(
                     store: &mut dyn VMStore,
+                    _call_hooks: bool,
                     f: impl FnOnce(&mut dyn VMStore) -> $t,
                 ) -> ($t, Option<UnwindReason>) {
                     (f(store), None)
@@ -234,6 +239,7 @@ impl HostResult for NonNull<u8> {
     type Abi = *mut u8;
     fn maybe_catch_unwind(
         store: &mut dyn VMStore,
+        _call_hooks: bool,
         f: impl FnOnce(&mut dyn VMStore) -> Self,
     ) -> (*mut u8, Option<UnwindReason>) {
         (f(store).as_ptr(), None)
@@ -264,8 +270,12 @@ where
 
     fn maybe_catch_unwind(
         store: &mut dyn VMStore,
+        call_hooks: bool,
         f: impl FnOnce(&mut dyn VMStore) -> Result<T, E>,
     ) -> (T::Abi, Option<UnwindReason>) {
+        #[cfg(not(feature = "call-hook"))]
+        let _ = call_hooks;
+
         // First wrap `f` in call hooks if that feature is enabled. This is used
         // as a "pretty far down in the stack" mechanism of ensuring that hooks
         // aren't forgotten.
@@ -276,23 +286,26 @@ where
         // * host functions
         // * component versions of the above
         //
-        // This specifically is NOT handling libcalls where the result can't
-        // carry a result. This should be safe as anything which doesn't return
-        // a `Result` sort of has to be simple enough to not allow recursion so
-        // it's just a brief exit from the guest to the host.
+        // Infallible libcalls do not run these hooks. Internal initialization
+        // may also opt out to preserve the same observable boundaries as eager
+        // segment writes, while still catching errors and panics.
         //
         // Also note that this only happens with the `call-hook` feature because
         // this otherwise imposes a dynamic dispatch on the `store` trait object
         // which otherwise can't be optimized away.
         #[cfg(feature = "call-hook")]
         let f = move |store: &mut dyn VMStore| {
-            store.call_hook(crate::CallHook::CallingHost)?;
+            if call_hooks {
+                store.call_hook(crate::CallHook::CallingHost)?;
+            }
 
             let res = f(store);
 
             // Note that if this returns a trap then `ret` is discarded
             // entirely.
-            store.call_hook(crate::CallHook::ReturningFromHost)?;
+            if call_hooks {
+                store.call_hook(crate::CallHook::ReturningFromHost)?;
+            }
 
             res.map_err(|e| e.into())
         };

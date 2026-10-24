@@ -321,6 +321,26 @@ fn instantiate() -> Result<(), Error> {
     assert_eq!(store.data().calls_into_wasm, 1);
     assert_eq!(store.data().calls_into_host, 0);
 
+    let table = Table::new(
+        &mut store,
+        TableType::new(RefType::FUNCREF, 1, None)?,
+        Ref::Func(None),
+    )?;
+    let m = Module::new(
+        store.engine(),
+        r#"(module
+            (import "" "" (table 1 funcref))
+            (func $f)
+            (elem (i32.const 0) func $f))"#,
+    )?;
+    // Internal segment initialization must not add a host transition, even
+    // when deferring function records requires a fallible runtime helper.
+    store.data_mut().trap_next_call_host = true;
+    Instance::new(&mut store, &m, &[table.into()])?;
+    assert!(matches!(table.get(&mut store, 0), Some(Ref::Func(Some(_)))));
+    assert_eq!(store.data().calls_into_wasm, 2);
+    assert_eq!(store.data().calls_into_host, 0);
+
     Ok(())
 }
 

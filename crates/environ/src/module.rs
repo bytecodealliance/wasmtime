@@ -96,19 +96,18 @@ pub struct TableInitialization {
     /// Initial values for tables defined within the module itself.
     ///
     /// This contains the initial values and initializers for tables defined
-    /// within a wasm, so excluding imported tables. This initializer can
-    /// represent null-initialized tables, element-initialized tables (e.g. with
-    /// the function-references proposal), or precomputed images of table
-    /// initialization. For example table initializers to a table that are all
-    /// in-bounds will get removed from `segment` and moved into
-    /// `initial_values` here.
+    /// within a wasm, so excluding imported tables. Initial values are null or
+    /// constant expressions (e.g. with the function-references proposal).
+    /// When an initial value is precomputed in [`Module::table_initialization`],
+    /// its entry here becomes [`TableInitialValue::Null`].
     pub initial_values: TryPrimaryMap<DefinedTableIndex, TableInitialValue>,
 
     /// Element segments present in the initial wasm module which are executed
     /// at instantiation time.
     ///
-    /// These element segments are iterated over during instantiation to apply
-    /// any segments that weren't already moved into `initial_values` above.
+    /// Finalization removes segments folded into [`Module::table_initialization`].
+    /// The remaining segments execute in order during startup; their positions
+    /// also index [`Module::deferred_table_segments`] when lazy init is enabled.
     pub segments: TryVec<TableSegment>,
 }
 
@@ -200,6 +199,12 @@ pub struct Module {
     /// entries. This structure is filled in if table initialization is detected
     /// to be infallible as part of [`ModuleTranslation::finalize_table_init`].
     pub table_initialization: TryPrimaryMap<DefinedTableIndex, TryVec<FuncIndex>>,
+
+    /// Shared function indices for active imported-table segments, indexed by
+    /// their position in `TableInitialization::segments` after finalization.
+    /// Ineligible segments have empty lists. Runtime bindings identify the
+    /// contributing instance, which its Store retains even if startup traps.
+    pub deferred_table_segments: TryVec<TryVec<FuncIndex>>,
 
     /// WebAssembly linear memory initializer.
     ///
@@ -335,6 +340,7 @@ impl Module {
             exports: Default::default(),
             startup: ModuleStartup::None,
             table_initialization: Default::default(),
+            deferred_table_segments: Default::default(),
             memory_initialization: Default::default(),
             passive_elements: Default::default(),
             runtime_data: Default::default(),
@@ -682,6 +688,7 @@ impl TypeTrace for Module {
             exports: _,
             startup,
             table_initialization: _,
+            deferred_table_segments: _,
             memory_initialization: _,
             passive_elements: _,
             runtime_data: _,
@@ -734,6 +741,7 @@ impl TypeTrace for Module {
             exports: _,
             startup,
             table_initialization: _,
+            deferred_table_segments: _,
             memory_initialization: _,
             passive_elements: _,
             runtime_data: _,
