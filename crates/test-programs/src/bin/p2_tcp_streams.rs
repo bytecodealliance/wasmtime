@@ -149,9 +149,28 @@ fn test_tcp_nonblocking_write_loop(net: &Network, family: IpAddressFamily) {
     });
 }
 
+/// An input stream with nothing to read should not report itself ready, not
+/// even before its first read.
+fn test_tcp_input_stream_should_not_be_ready_without_data(net: &Network, family: IpAddressFamily) {
+    setup(net, family, |server, client| {
+        // Nothing has been sent in either direction yet:
+        assert!(!client.input.subscribe().ready());
+        assert!(!server.input.subscribe().ready());
+
+        // Data arriving makes the stream ready:
+        server.output.blocking_write_util(b"Hi!").unwrap();
+        client.input.subscribe().block();
+        assert_eq!(client.input.read(10).unwrap(), b"Hi!");
+
+        // Once everything has been read the stream isn't ready anymore:
+        assert!(!client.input.subscribe().ready());
+    });
+}
+
 fn main() {
     let net = Network::default();
 
+    test_tcp_input_stream_should_not_be_ready_without_data(&net, IpAddressFamily::Ipv4);
     test_tcp_input_stream_should_be_closed_by_remote_shutdown(&net, IpAddressFamily::Ipv4);
     test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
     test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
@@ -160,6 +179,7 @@ fn main() {
     test_tcp_nonblocking_write_loop(&net, IpAddressFamily::Ipv4);
 
     if supports_ipv6() {
+        test_tcp_input_stream_should_not_be_ready_without_data(&net, IpAddressFamily::Ipv6);
         test_tcp_input_stream_should_be_closed_by_remote_shutdown(&net, IpAddressFamily::Ipv6);
         test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
         test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);

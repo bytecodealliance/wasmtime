@@ -662,7 +662,13 @@ pub(crate) struct TcpReceiveStream {
 }
 impl TcpReceiveStream {
     pub(crate) fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {
-        self.inner.poll_read_ready(cx).map(|_| ())
+        // `poll_read_ready` keeps reporting the socket as readable until a read
+        // has returned `WouldBlock`, so a connection with nothing to read yet
+        // would look ready. Peeking a byte waits for data, the end of the
+        // stream or an error instead.
+        let mut byte = [mem::MaybeUninit::uninit()];
+        let mut buf = tokio::io::ReadBuf::uninit(&mut byte);
+        self.inner.poll_peek(cx, &mut buf).map(|_| ())
     }
 
     pub(crate) fn poll_read(
