@@ -624,6 +624,9 @@ jobs:
         - target: x86_64-unknown-freebsd
           os: ubuntu-latest
           test: cargo check
+        - target: x86_64-unknown-netbsd
+          os: ubuntu-latest
+          test: cargo check
         - target: aarch64-pc-windows-msvc
           os: windows-latest
           test: cargo check

@@ -36,8 +36,15 @@ fn main() {
         _ => false,
     };
 
+    // Determine if native signals are implemented for the current platform.
+    let has_platform_signals = if supported_os {
+        windows || has_unix_signal_handler(&target_arch)
+    } else {
+        cfg!(feature = "custom-native-signals")
+    };
+
     let has_native_signals = !miri
-        && (supported_os || cfg!(feature = "custom-native-signals"))
+        && has_platform_signals
         && has_host_compiler_backend
         && !is_buggy_s390x_qemu_emulation();
     let has_virtual_memory = supported_os || cfg!(feature = "custom-virtual-memory");
@@ -89,6 +96,20 @@ fn is_buggy_s390x_qemu_emulation() -> bool {
         && std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok()
         && std::env::var("QEMU_BUILD_VERSION").is_ok()
         && std::env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "s390x"
+}
+
+// Keep in sync with the platforms in `src/runtime/vm/sys/unix/signals.rs`.
+fn has_unix_signal_handler(arch: &str) -> bool {
+    if cfg_is("target_vendor", "apple") {
+        return matches!(arch, "x86_64" | "aarch64");
+    }
+    let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
+    match (os.as_str(), arch) {
+        ("linux" | "android" | "illumos" | "freebsd" | "openbsd" | "redox", "x86_64") => true,
+        ("linux" | "android" | "freebsd", "aarch64") => true,
+        ("linux", "s390x" | "riscv64") => true,
+        _ => false,
+    }
 }
 
 fn cfg(key: &str) -> bool {
