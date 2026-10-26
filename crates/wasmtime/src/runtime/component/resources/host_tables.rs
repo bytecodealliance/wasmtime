@@ -22,7 +22,9 @@
 
 use crate::prelude::*;
 use crate::runtime::component::RuntimeInstance;
-use crate::runtime::vm::component::{ResourceTables, TypedResource, TypedResourceIndex};
+use crate::runtime::vm::component::{
+    MAX_HANDLE, ResourceTables, TypedResource, TypedResourceIndex,
+};
 use crate::runtime::vm::{SendSyncPtr, VMFuncRef};
 use crate::store::StoreOpaque;
 use core::ptr::NonNull;
@@ -77,6 +79,9 @@ pub struct TableSlot {
 /// This is morally (u32, u32) but is encoded as a 64-bit integer. The low
 /// 32-bits are the table index and the upper 32-bits are the generation
 /// counter.
+///
+/// The index can also hold a boolean tag which must be removed before looking
+/// up the index in the table (via `untagged`).
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 #[repr(transparent)]
 pub struct HostResourceIndex(u64);
@@ -93,7 +98,32 @@ impl HostResourceIndex {
     pub(super) const fn generation(&self) -> u32 {
         (self.0 >> 32) as u32
     }
+
+    /// A bit of the table index which is never set since host table indices
+    /// are less than `MAX_HANDLE`, and which holders of a `HostResourceIndex`
+    /// may therefore use to store a flag alongside it.
+    ///
+    /// Note that a tagged index which is accidentally used as-is will simply
+    /// be out-of-bounds and fail to resolve.
+    const TAG: u64 = 1 << 31;
+
+    /// Returns this index with its tag bit set to `tag`.
+    pub(crate) const fn with_tag(self, tag: bool) -> HostResourceIndex {
+        HostResourceIndex((self.0 & !Self::TAG) | if tag { Self::TAG } else { 0 })
+    }
+
+    /// Returns whether this index's tag bit is set.
+    pub(crate) const fn tag(&self) -> bool {
+        self.0 & Self::TAG != 0
+    }
+
+    /// Returns this index with its tag bit cleared.
+    pub(crate) const fn untagged(self) -> HostResourceIndex {
+        self.with_tag(false)
+    }
 }
+
+const _: () = assert!((MAX_HANDLE as u64) <= HostResourceIndex::TAG);
 
 impl<'a> HostResourceTables<'a> {
     pub fn new_host(store: &'a mut StoreOpaque) -> Result<HostResourceTables<'a>> {

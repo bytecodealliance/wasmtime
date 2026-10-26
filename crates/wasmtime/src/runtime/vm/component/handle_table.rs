@@ -7,7 +7,7 @@ use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
 /// The maximum handle value is specified in
 /// <https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md>
 /// currently and keeps the upper bits free for use in the component and ABI.
-const MAX_HANDLE: u32 = 1 << 28;
+pub const MAX_HANDLE: u32 = 1 << 28;
 
 /// Count of allocated slots across all `HandleTable`s in a store.
 ///

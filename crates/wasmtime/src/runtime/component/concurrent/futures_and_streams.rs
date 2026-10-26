@@ -1241,7 +1241,10 @@ pub trait FutureConsumer<D>: Send + 'static {
 /// end will hang indefinitely.  Consider using [`GuardedFutureReader`] to
 /// ensure that disposal happens automatically.
 pub struct FutureReader<T> {
-    idx: HostResourceIndex,
+    /// The index of this future, whose tag bit is set if this future is
+    /// statically known to have been created with items of type `T` in the
+    /// host.
+    tagged_idx: HostResourceIndex,
     _phantom: PhantomData<T>,
 }
 
@@ -1303,22 +1306,36 @@ impl<T> FutureReader<T> {
             }
         }
 
-        Ok(Self::new_(
-            store
-                .as_context_mut()
-                .new_transmit(TransmitKind::Future, Producer(producer))?,
-        ))
+        let idx = store
+            .as_context_mut()
+            .new_transmit(TransmitKind::Future, Producer(producer))?;
+        Ok(Self {
+            // It's statically known that the producer's items are of type `T`.
+            tagged_idx: idx.with_tag(true),
+            _phantom: PhantomData,
+        })
     }
 
     pub(super) fn new_(idx: HostResourceIndex) -> Self {
         Self {
-            idx,
+            tagged_idx: idx.with_tag(false),
             _phantom: PhantomData,
         }
     }
 
     pub(super) fn idx(&self) -> HostResourceIndex {
-        self.idx
+        self.tagged_idx.untagged()
+    }
+
+    fn transmit_check(&self) -> TransmitCheck
+    where
+        T: 'static,
+    {
+        if self.tagged_idx.tag() {
+            TransmitCheck::Elided
+        } else {
+            TransmitCheck::Static(TypeId::of::<T>())
+        }
     }
 
     /// Set the consumer that accepts the result of this future.
@@ -1376,7 +1393,7 @@ impl<T> FutureReader<T> {
 
         store
             .as_context_mut()
-            .set_consumer(self.idx, TransmitKind::Future, Consumer(consumer))
+            .set_consumer(self.idx(), TransmitKind::Future, Consumer(consumer))
     }
 
     /// Transfer ownership of the read end of a future from a guest to the host.
@@ -1397,7 +1414,7 @@ impl<T> FutureReader<T> {
     /// transferred (e.g. lowered into a guest), or if it does not belong to
     /// `store`.
     pub fn close(&mut self, mut store: impl AsContextMut) -> Result<()> {
-        future_close(store.as_context_mut().0, self.idx)
+        future_close(store.as_context_mut().0, self.idx())
     }
 
     /// Convenience method around [`Self::close`].
@@ -1447,7 +1464,7 @@ impl<T> FutureReader<T> {
 impl<T> fmt::Debug for FutureReader<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FutureReader")
-            .field("idx", &self.idx)
+            .field("idx", &self.idx())
             .finish()
     }
 }
@@ -1475,22 +1492,63 @@ pub(super) fn lift_index_to_future(
     }
 }
 
+/// How much type-checking is required when lowering a host-owned future or
+/// stream into a guest.
+#[derive(Copy, Clone)]
+pub(super) enum TransmitCheck {
+    /// A `{Stream,Future}Reader<T>` which is statically known to have been
+    /// created in the host by a Producer with items of type `T`. So no further
+    /// checks are needed.
+    Elided,
+    /// A `{Stream,Future}Reader<T>` with the `TypeId` of `T`. If the underlying
+    /// writer comes from a host Producer with items of type `T`, then no
+    /// further check is needed.
+    Static(TypeId),
+    /// A `{Stream,Future}Any`, which must always be checked dynamically.
+    Dynamic,
+}
+
+impl TransmitCheck {
+    fn run<U>(
+        self,
+        idx: HostResourceIndex,
+        cx: &mut LowerContext<'_, U>,
+        payload: Option<&InterfaceType>,
+    ) -> Result<()> {
+        match self {
+            TransmitCheck::Elided => Ok(()),
+            TransmitCheck::Static(ty) => typecheck_lowered_transmit(idx, cx, payload, Some(ty)),
+            TransmitCheck::Dynamic => typecheck_lowered_transmit(idx, cx, payload, None),
+        }
+    }
+}
+
 /// Checks that the host-owned read end `idx` may be lowered into a guest as a
 /// future or stream with the payload type `payload`.
 ///
-/// Note that this is technically redundant for `StreamReader<T>` where its
-/// static typecheck already verified this, but this is otherwise required in
-/// the face of the `{Stream,Future}Any` abstraction to handle various use cases
-/// of types dynamically being labeled or possibly switched.
+/// The `statically_checked` argument is the `TypeId` of `T` when lowering a
+/// `{Stream,Future}Reader<T>`, whose static typecheck has already verified `T`
+/// against `payload`. If the transmit originated on the host with items of
+/// that same `T`, then the dynamic check here would be identical to the static
+/// one and is skipped. Otherwise, such as for `{Stream,Future}Any`, for
+/// readers which originated in a guest, or for host originating readers which
+/// have had the Rust type changed by passing through a guest, a dynamic check
+/// is required.
 fn typecheck_lowered_transmit<U>(
     idx: HostResourceIndex,
     cx: &mut LowerContext<'_, U>,
     payload: Option<&InterfaceType>,
+    statically_checked: Option<TypeId>,
 ) -> Result<()> {
     let origin = cx.store.0.transmit_origin(idx)?;
+    if let TransmitOrigin::Host { item, .. } = origin
+        && statically_checked == Some(item)
+    {
+        return Ok(());
+    }
     let dst = cx.instance_type();
     let equivalent = match origin {
-        TransmitOrigin::Host { typecheck } => {
+        TransmitOrigin::Host { typecheck, .. } => {
             return typecheck(payload, &dst).context("future or stream payload types differ");
         }
         TransmitOrigin::GuestFuture(id, ty) => {
@@ -1513,11 +1571,12 @@ pub(super) fn lower_future_to_index<U>(
     idx: HostResourceIndex,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
+    check: TransmitCheck,
 ) -> Result<u32> {
     match ty {
         InterfaceType::Future(dst) => {
             let types = cx.types;
-            typecheck_lowered_transmit(idx, cx, types[types[dst].ty].payload.as_ref())?;
+            check.run(idx, cx, types[types[dst].ty].payload.as_ref())?;
             let id = cx.store.0.host_reader_take(idx)?;
             cx.instance_handle()
                 .lower_transmit_to_index(cx.store.0, TransmitIndex::Future(dst), id)
@@ -1545,14 +1604,18 @@ unsafe impl<T: ComponentType> ComponentType for FutureReader<T> {
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T: ComponentType> func::Lower for FutureReader<T> {
+unsafe impl<T: ComponentType + 'static> func::Lower for FutureReader<T> {
     fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_flat(cx, InterfaceType::U32, dst)
+        lower_future_to_index(self.idx(), cx, ty, self.transmit_check())?.linear_lower_to_flat(
+            cx,
+            InterfaceType::U32,
+            dst,
+        )
     }
 
     fn linear_lower_to_memory<U>(
@@ -1561,7 +1624,7 @@ unsafe impl<T: ComponentType> func::Lower for FutureReader<T> {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
+        lower_future_to_index(self.idx(), cx, ty, self.transmit_check())?.linear_lower_to_memory(
             cx,
             InterfaceType::U32,
             offset,
@@ -1671,7 +1734,10 @@ where
 /// indefinitely.  Consider using [`GuardedStreamReader`] to ensure that
 /// disposal happens automatically.
 pub struct StreamReader<T> {
-    idx: HostResourceIndex,
+    /// The index of this stream, whose tag bit is set if this future is
+    /// statically known to have been created with items of type `T` in the
+    /// host.
+    tagged_idx: HostResourceIndex,
     _phantom: PhantomData<T>,
 }
 
@@ -1695,22 +1761,36 @@ impl<T> StreamReader<T> {
             store.as_context().0.concurrency_support(),
             "concurrency support is not enabled",
         );
-        Ok(Self::new_(
-            store
-                .as_context_mut()
-                .new_transmit(TransmitKind::Stream, producer)?,
-        ))
+        let idx = store
+            .as_context_mut()
+            .new_transmit(TransmitKind::Stream, producer)?;
+        Ok(Self {
+            // It's statically known that the producer's items are of type `T`.
+            tagged_idx: idx.with_tag(true),
+            _phantom: PhantomData,
+        })
     }
 
     pub(super) fn new_(idx: HostResourceIndex) -> Self {
         Self {
-            idx,
+            tagged_idx: idx.with_tag(false),
             _phantom: PhantomData,
         }
     }
 
     pub(super) fn idx(&self) -> HostResourceIndex {
-        self.idx
+        self.tagged_idx.untagged()
+    }
+
+    fn transmit_check(&self) -> TransmitCheck
+    where
+        T: 'static,
+    {
+        if self.tagged_idx.tag() {
+            TransmitCheck::Elided
+        } else {
+            TransmitCheck::Static(TypeId::of::<T>())
+        }
     }
 
     /// Attempt to consume this object by converting it into the specified type.
@@ -1736,7 +1816,7 @@ impl<T> StreamReader<T> {
     /// belong to the specified `store`.
     pub fn try_into<V: 'static>(mut self, mut store: impl AsContextMut) -> Result<V, Self> {
         let store = store.as_context_mut();
-        let id = store.0.host_reader_rep(self.idx).unwrap();
+        let id = store.0.host_reader_rep(self.idx()).unwrap();
         let state = store.0.concurrent_state_mut_already_forced_current_thread();
         let id = state.get_mut(id).unwrap().state;
         if let WriteState::HostReady { try_into, .. } = &state.get_mut(id).unwrap().write {
@@ -1769,7 +1849,7 @@ impl<T> StreamReader<T> {
     {
         store
             .as_context_mut()
-            .set_consumer(self.idx, TransmitKind::Stream, consumer)
+            .set_consumer(self.idx(), TransmitKind::Stream, consumer)
     }
 
     /// Transfer ownership of the read end of a stream from a guest to the host.
@@ -1788,7 +1868,7 @@ impl<T> StreamReader<T> {
     /// transferred (e.g. lowered into a guest), or if it does not belong to
     /// `store`.
     pub fn close(&mut self, mut store: impl AsContextMut) -> Result<()> {
-        stream_close(store.as_context_mut().0, self.idx)
+        stream_close(store.as_context_mut().0, self.idx())
     }
 
     /// Convenience method around [`Self::close`].
@@ -1838,7 +1918,7 @@ impl<T> StreamReader<T> {
 impl<T> fmt::Debug for StreamReader<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StreamReader")
-            .field("idx", &self.idx)
+            .field("idx", &self.idx())
             .finish()
     }
 }
@@ -1871,11 +1951,12 @@ pub(super) fn lower_stream_to_index<U>(
     idx: HostResourceIndex,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
+    check: TransmitCheck,
 ) -> Result<u32> {
     match ty {
         InterfaceType::Stream(dst) => {
             let types = cx.types;
-            typecheck_lowered_transmit(idx, cx, types[types[dst].ty].payload.as_ref())?;
+            check.run(idx, cx, types[types[dst].ty].payload.as_ref())?;
             let id = cx.store.0.host_reader_take(idx)?;
             cx.instance_handle()
                 .lower_transmit_to_index(cx.store.0, TransmitIndex::Stream(dst), id)
@@ -1903,14 +1984,18 @@ unsafe impl<T: ComponentType> ComponentType for StreamReader<T> {
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T: ComponentType> func::Lower for StreamReader<T> {
+unsafe impl<T: ComponentType + 'static> func::Lower for StreamReader<T> {
     fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_flat(cx, InterfaceType::U32, dst)
+        lower_stream_to_index(self.idx(), cx, ty, self.transmit_check())?.linear_lower_to_flat(
+            cx,
+            InterfaceType::U32,
+            dst,
+        )
     }
 
     fn linear_lower_to_memory<U>(
@@ -1919,7 +2004,7 @@ unsafe impl<T: ComponentType> func::Lower for StreamReader<T> {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
+        lower_stream_to_index(self.idx(), cx, ty, self.transmit_check())?.linear_lower_to_memory(
             cx,
             InterfaceType::U32,
             offset,
@@ -2183,7 +2268,12 @@ struct TransmitState {
 #[derive(Copy, Clone)]
 pub(super) enum TransmitOrigin {
     Host {
-        /// Type-checks the producer's items against the guest-supplied payload.
+        /// The `TypeId` of the producer's items. If this is being lowered to a
+        /// `{Stream,Future}Reader<T>` then the `type_id` of `T` can be compared
+        /// to this value and no further checks are needed if they are equal.
+        item: TypeId,
+        /// Type-checks the producer's items against the guest-supplied payload
+        /// if `item` doesn't match.
         typecheck: fn(Option<&InterfaceType>, &InstanceType<'_>) -> Result<()>,
     },
     GuestFuture(ComponentInstanceId, TypeFutureTableIndex),
@@ -2645,12 +2735,13 @@ impl<T> StoreContextMut<'_, T> {
         producer: P,
     ) -> Result<HostResourceIndex>
     where
-        P::Item: func::Lower,
+        P::Item: func::Lower + 'static,
     {
         let token = StoreToken::new(self.as_context_mut());
         let state = self.0.concurrent_state_mut()?;
         let (_, read) = state.new_transmit(TransmitOrigin::Host {
             typecheck: types::typecheck_payload::<P::Item>,
+            item: TypeId::of::<P::Item>(),
         })?;
         let producer = Arc::new(LockedState::new((Box::pin(producer), P::Buffer::default())));
         let id = state.get_mut(read)?.state;
