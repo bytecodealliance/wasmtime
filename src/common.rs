@@ -314,16 +314,16 @@ impl RunCommon {
         })
     }
 
-    pub fn configure_wasip2(&self, builder: &mut WasiCtxBuilder) -> Result<()> {
-        // It's ok to block the current thread since we're the only thread in
-        // the program as the CLI. This helps improve the performance of some
-        // blocking operations in WASI, for example, by skipping the
-        // back-and-forth between sync and async.
-        //
-        // However, do not set this if a timeout is configured, as that would
-        // cause the timeout to be ignored if the guest does, for example,
-        // something like `sleep(FOREVER)`.
-        builder.allow_blocking_current_thread(self.common.wasm.timeout.is_none());
+    /// Configures `builder` from this command's WASI options.
+    ///
+    /// `allow_blocking_current_thread` is passed on to
+    /// [`WasiCtxBuilder::allow_blocking_current_thread`].
+    pub fn configure_wasip2(
+        &self,
+        builder: &mut WasiCtxBuilder,
+        allow_blocking_current_thread: bool,
+    ) -> Result<()> {
+        builder.allow_blocking_current_thread(allow_blocking_current_thread);
 
         if self.common.wasi.inherit_env == Some(true) {
             for (k, v) in std::env::vars_os() {
