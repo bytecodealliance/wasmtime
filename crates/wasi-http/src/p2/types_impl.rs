@@ -1448,4 +1448,51 @@ mod tests {
             );
         }
     }
+
+    /// An incoming request's `Host` header becomes its authority, so it must be
+    /// a valid `uri-host [":" port]` rather than passed through verbatim.
+    #[test]
+    fn incoming_request_host_header() {
+        use crate::p2::bindings::http::types::{HostIncomingRequest as _, Scheme};
+
+        let mut table = wasmtime::component::ResourceTable::new();
+        let mut http = WasiHttpCtx::new();
+        let hooks: &mut dyn crate::WasiHttpHooks = crate::default_hooks();
+        let mut view = WasiHttpCtxView {
+            ctx: &mut http,
+            table: &mut table,
+            hooks,
+        };
+        let request = |host: &str| {
+            hyper::Request::builder()
+                .uri("/")
+                .header(http::header::HOST, host)
+                .body(http_body_util::Empty::<bytes::Bytes>::new())
+                .unwrap()
+        };
+
+        for host in ["example.com", "example.com:8080", "[::1]:443"] {
+            let id = view
+                .new_incoming_request(Scheme::Http, request(host))
+                .unwrap();
+            assert_eq!(view.authority(id).unwrap().as_deref(), Some(host));
+        }
+
+        for host in [
+            "evil.com#.example.com",
+            "evil.com/x?.example.com",
+            "user@evil.com",
+            "example.com:abc",
+            "a b",
+        ] {
+            let r = view.new_incoming_request(Scheme::Http, request(host));
+            let err = r.expect_err(host);
+            assert_eq!(
+                err.downcast_ref::<crate::ErrorResponse>()
+                    .map(|e| e.status()),
+                Some(http::StatusCode::BAD_REQUEST),
+                "host {host:?}"
+            );
+        }
+    }
 }
