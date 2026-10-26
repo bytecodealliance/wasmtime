@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use wasmtime::component::bindgen;
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::component::{HasSelf, Resource};
+use wasmtime::component::{HasSelf, HostHeapUsage, Resource};
 use wasmtime::{Engine, Result, Store};
 use wasmtime_wasi::p2::add_to_linker_async;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
@@ -57,6 +57,7 @@ bindgen!({
     },
 });
 
+#[derive(HostHeapUsage)]
 pub struct Connection {
     pub storage: HashMap<String, String>,
 }
@@ -93,8 +94,9 @@ impl example::kv_store::kvdb::HostConnection for ComponentRunStates {
         key: String,
         value: String,
     ) -> Result<()> {
-        let connection = self.resource_table.get_mut(&resource)?;
-        connection.storage.insert(key, value);
+        self.resource_table.update(&resource, |connection| {
+            connection.storage.insert(key, value);
+        })?;
         Ok(())
     }
 
@@ -103,13 +105,16 @@ impl example::kv_store::kvdb::HostConnection for ComponentRunStates {
         resource: Resource<Connection>,
         key: String,
     ) -> Result<Option<String>> {
-        let connection = self.resource_table.get_mut(&resource)?;
-        Ok(connection.storage.remove(&key))
+        let removed = self
+            .resource_table
+            .update(&resource, |connection| connection.storage.remove(&key))?;
+        Ok(removed)
     }
 
     async fn clear(&mut self, resource: Resource<Connection>) -> Result<(), wasmtime::Error> {
-        let large_string = self.resource_table.get_mut(&resource)?;
-        large_string.storage.clear();
+        self.resource_table.update(&resource, |connection| {
+            connection.storage.clear();
+        })?;
         Ok(())
     }
 

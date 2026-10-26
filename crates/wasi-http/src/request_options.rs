@@ -1,7 +1,8 @@
 use std::time::Duration;
+use wasmtime::component::FixedHostHeapUsage;
 
 /// The concrete type behind a `wasi:http/types.request-options` resource.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, FixedHostHeapUsage)]
 pub struct RequestOptions {
     /// How long to wait for a connection to be established.
     pub connect_timeout: Option<Duration>,

@@ -2,6 +2,7 @@ use crate::poll::Pollable;
 use alloc::boxed::Box;
 use bytes::Bytes;
 use wasmtime::Result;
+use wasmtime::component::HostHeapUsage;
 
 /// `Pollable::ready()` for `InputStream` and `OutputStream` may return
 /// prematurely due to `io::ErrorKind::WouldBlock`.
@@ -15,7 +16,7 @@ const MAX_BLOCKING_ATTEMPTS: u8 = 10;
 /// Host trait for implementing the `wasi:io/streams.input-stream` resource: A
 /// bytestream which can be read from.
 #[async_trait::async_trait]
-pub trait InputStream: Pollable {
+pub trait InputStream: Pollable + HostHeapUsage {
     /// Reads up to `size` bytes, returning a buffer holding these bytes on
     /// success.
     ///
@@ -123,7 +124,7 @@ impl From<wasmtime::component::ResourceTableError> for StreamError {
 /// Host trait for implementing the `wasi:io/streams.output-stream` resource:
 /// A bytestream which can be written to.
 #[async_trait::async_trait]
-pub trait OutputStream: Pollable {
+pub trait OutputStream: Pollable + HostHeapUsage {
     /// Write bytes after obtaining a permit to write those bytes
     ///
     /// Prior to calling [`write`](Self::write) the caller must call
@@ -286,6 +287,20 @@ impl Pollable for Box<dyn OutputStream> {
 impl Pollable for Box<dyn InputStream> {
     async fn ready(&mut self) {
         (**self).ready().await
+    }
+}
+
+impl HostHeapUsage for Box<dyn InputStream> {
+    fn heap_size_of_children(&self) -> usize {
+        let inner: &dyn InputStream = &**self;
+        size_of_val(inner) + inner.heap_size_of_children()
+    }
+}
+
+impl HostHeapUsage for Box<dyn OutputStream> {
+    fn heap_size_of_children(&self) -> usize {
+        let inner: &dyn OutputStream = &**self;
+        size_of_val(inner) + inner.heap_size_of_children()
     }
 }
 

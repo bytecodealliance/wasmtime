@@ -34,6 +34,7 @@ pub use async_trait::async_trait;
 
 #[doc(no_inline)]
 pub use ::bytes;
+pub use wasmtime::component::{FixedHostHeapUsage, HostHeapUsage};
 
 use alloc::boxed::Box;
 use wasmtime::component::{HasData, ResourceTable};

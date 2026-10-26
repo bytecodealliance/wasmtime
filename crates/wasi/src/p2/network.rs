@@ -1,6 +1,7 @@
 use crate::TrappableError;
 use crate::p2::bindings::sockets::network::ErrorCode;
 use crate::p2::bindings::sockets::tcp::ShutdownType;
+use wasmtime::component::FixedHostHeapUsage;
 
 pub type SocketResult<T> = Result<T, SocketError>;
 
@@ -86,6 +87,7 @@ impl From<ShutdownType> for std::net::Shutdown {
 /// Note that in Wasmtime all permissions are checked through the `WasiCtx` and
 /// not through the `Network` resource itself. The `Network` resource is just a
 /// placeholder capability handle.
+#[derive(FixedHostHeapUsage)]
 pub struct Network {
     pub(crate) _priv: (),
 }

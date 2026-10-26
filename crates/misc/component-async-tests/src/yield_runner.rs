@@ -3,7 +3,7 @@ use futures::future;
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
 use std::task::{Poll, Waker};
-use wasmtime::component::{Accessor, Resource};
+use wasmtime::component::{Accessor, FixedHostHeapUsage, Resource};
 
 pub mod bindings {
     wasmtime::component::bindgen!({
@@ -20,6 +20,7 @@ pub mod bindings {
 pub struct Thing {
     wakers: Arc<Mutex<Option<Vec<Waker>>>>,
 }
+impl FixedHostHeapUsage for Thing {}
 
 impl bindings::local::local::continue_::Host for Ctx {
     fn set_continue(&mut self, v: bool) -> wasmtime::Result<()> {

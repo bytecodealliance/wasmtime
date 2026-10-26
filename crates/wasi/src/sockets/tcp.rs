@@ -15,6 +15,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::task::{Poll, ready};
 use std::time::Duration;
+use wasmtime::component::FixedHostHeapUsage;
 
 /// Value taken from rust std library.
 const DEFAULT_BACKLOG: u32 = 128;
@@ -985,3 +986,5 @@ mod tests {
         assert_eq!(client.remote_address().unwrap(), peer);
     }
 }
+
+impl FixedHostHeapUsage for TcpSocket {}
