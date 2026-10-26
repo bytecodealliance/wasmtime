@@ -206,8 +206,8 @@ impl Worklist {
 /// block's instructions have been processed.
 ///
 /// ```text
-/// live_in(block) = union(live_out(s) for s in successors(block))
-/// live_out(block) = live_in(block) - defs(block) + uses(block)
+/// live_out(block) = union(live_in(s) for s in successors(block))
+/// live_in(block) = live_out(block) - defs(block) + uses(block)
 /// ```
 ///
 /// Whenever we update a block's live-in set, we must reprocess all of its
@@ -232,15 +232,20 @@ impl Worklist {
 /// Furthermore, we do not differentiate between uses of a needs-stack-map value
 /// that ultimately flow into a side-effecting operation versus uses that
 /// themselves are not live. This could be tightened up in the future, but we're
-/// starting with the easiest, simplest thing. It also means that we do not need
-/// `O(all values)` space, only `O(needs-stack-map values)`. Finally, none of
-/// our mid-end optimization passes have run at this point in time yet, so there
-/// probably isn't much, if any, dead code.
+/// starting with the easiest, simplest thing. None of our mid-end optimization
+/// passes have run yet, so there probably isn't much, if any, dead code.
 ///
-/// After we've computed the live-in and -out sets for each block, we pass once
-/// more over each block, processing its instructions again. This time, we
-/// record the precise set of needs-stack-map values that are live across each
-/// safepoint instruction inside the block, which is the final output of this
+/// Before fixed-point iteration, we scan the instructions once to record
+/// per-block events for definitions and uses of needs-stack-map values and for
+/// safepoints. Block visits replay those events instead of scanning instructions.
+/// The live sets contain only needs-stack-map values, but event storage scales
+/// with the number of recorded definitions, use occurrences, and safepoints,
+/// plus one event range per reachable block. Event buffers retain their capacity
+/// when reused for later functions.
+///
+/// After we've computed the live-in and -out sets for each block, we replay each
+/// block's events once more to record the nonempty sets of needs-stack-map values
+/// that are live across its safepoints. These sets are the final output of this
 /// analysis.
 pub(crate) struct LivenessAnalysis {
     /// Reusable depth-first search state for traversing a function's blocks.
