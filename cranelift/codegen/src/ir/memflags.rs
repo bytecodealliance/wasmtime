@@ -351,14 +351,6 @@ impl MemFlagsData {
     /// for the entire function that this load is within. If the load is NOT
     /// `can_move`, then mutations may happen before this load but cannot
     /// happen after this load.
-    //
-    // TODO: ideally this (and `can_move`) are something that alias analysis
-    // would infer itself rather than relying on the CLIF generator to provide
-    // such fine-grained information about loads/stores that can otherwise be
-    // inferred. For now though that's expected to be relatively complicated so
-    // this is intended to bring benefit in the meantime, although it requires
-    // all users of this to manually verify that the memory is indeed
-    // `readonly`-compatible.
     pub const fn readonly(self) -> bool {
         self.flags.readonly()
     }
