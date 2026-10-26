@@ -446,7 +446,11 @@ wasmtime_option_group! {
         /// useful for tracking down a backtrace of what is requesting so much
         /// memory, for example.
         pub trap_on_grow_failure: Option<bool>,
-        /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
+        /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc).
+        ///
+        /// Note that when this option is not set, malicious wasm code may
+        /// cause the host process to become unresponsive to inputs including
+        /// SIGTERM.
         pub timeout: Option<Duration>,
         /// Configures support for all WebAssembly proposals implemented.
         pub all_proposals: Option<bool>,
