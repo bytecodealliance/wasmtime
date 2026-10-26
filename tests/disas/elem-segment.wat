@@ -44,20 +44,39 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
-;;     region0 = 116 ""
+;;     region0 = 130 ""
+;;     region1 = 134 ""
+;;     region2 = 44 ""
+;;     region3 = 120 ""
+;;     region4 = 100 ""
+;;     region5 = 160 ""
+;;     region6 = 116 ""
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
-;;     sig1 = (i64 vmctx, i32) -> i64 tail
+;;     sig1 = (i64 vmctx, i64) tail
+;;     sig2 = (i64 vmctx, i64, i64, i64) -> i8 system_v
+;;     sig3 = (i64 vmctx, i64, i64, i64) -> i8 system_v
+;;     sig4 = (i64 vmctx, i64, i64, i64) -> i8 system_v
 ;;     fn0 = colocated u805306368:4 sig0
-;;     fn1 = colocated u805306368:6 sig1
+;;     fn1 = colocated u0:0 sig1
+;;     fn2 = colocated u268435456:0 sig2
+;;     fn3 = colocated u268435456:0 sig3
+;;     fn4 = colocated u268435456:0 sig4
 ;;
 ;; block0(v0: i64, v1: i64):
 ;;     v2 = iconst.i32 0
 ;;     v3 = call fn0(v0, v2)  ; v2 = 0
-;;     v5 = call fn1(v0, v2)  ; v2 = 0
-;;     store notrap aligned little region0 v5, v3
-;;     v7 = call fn1(v0, v2)  ; v2 = 0
-;;     store notrap aligned little region0 v7, v3+16
-;;     v9 = call fn1(v0, v2)  ; v2 = 0
-;;     store notrap aligned little region0 v9, v3+32
+;;     v8 = iconst.i64 48
+;;     v9 = iadd v0, v8  ; v8 = 48
+;;     store notrap aligned little region6 v9, v3
+;;     store notrap aligned little region6 v9, v3+16
+;;     v17 = func_addr.i64 fn4
+;;     store notrap aligned region2 v17, v0+48
+;;     v4 = func_addr.i64 fn1
+;;     store notrap aligned region3 v4, v0+56
+;;     store notrap aligned region4 v0, v0+72
+;;     v6 = load.i64 notrap aligned readonly can_move region0 v0+40
+;;     v7 = load.i32 notrap aligned readonly can_move region1 v6
+;;     store notrap aligned region5 v7, v0+64
+;;     store notrap aligned little region6 v9, v3+32
 ;;     return
 ;; }

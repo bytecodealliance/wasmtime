@@ -24,9 +24,9 @@ use wasmparser::{
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FUNCREF_INIT_BIT, FUNCREF_MASK, GlobalIndex, IndexType, MemoryIndex,
-    MemoryKind, MemoryTunables, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType,
-    WasmValType, wasm_unsupported,
+    DataIndex, ElemIndex, FUNCREF_INIT_BIT, FUNCREF_MASK, FuncIndex, GlobalIndex, IndexType,
+    MemoryIndex, MemoryKind, MemoryTunables, PtrSize, TableIndex, Tunables, TypeIndex,
+    WasmHeapType, WasmValType, wasm_unsupported,
 };
 
 mod context;
@@ -548,6 +548,86 @@ where
         ty.is_vmgcref_type_and_not_i31()
             && self.tunables.collector
                 == Some(wasmtime_environ::Collector::DeferredReferenceCounting)
+    }
+
+    /// Emits a `ref.func` for the function `index`, pushing a pointer to its
+    /// `VMFuncRef` onto the value stack.
+    ///
+    /// This mirrors `FuncEnvironment::translate_ref_func` in Cranelift, see
+    /// there for more information.
+    pub fn emit_ref_func(&mut self, index: FuncIndex) -> Result<()> {
+        let ptr_type = self.env.ptr_type();
+        let ptr_size: OperandSize = ptr_type.try_into()?;
+        let module = &self.env.translation.module;
+        let dst = self.context.any_gpr(self.masm)?;
+
+        let Some(def_index) = module.defined_func_index(index) else {
+            // `VMFunctionImport` has the same layout as `VMFuncRef` and is
+            // fully initialized before any wasm runs.
+            let offset = self.env.vmoffsets.imported_functions().at(index);
+            self.masm.compute_addr(
+                self.masm.address_at_vmctx(offset)?,
+                writable!(dst),
+                ptr_size,
+            )?;
+            self.context.stack.push(TypedReg::new(ptr_type, dst).into());
+            return Ok(());
+        };
+
+        // Initialize the `VMFuncRef` for this defined function in place in
+        // the `vmctx`.
+        let func = &module.functions[index];
+        assert!(func.is_escaping());
+        let func_ref = self.env.vmoffsets.func_refs().at(func.func_ref);
+        let sig = func.signature.unwrap_module_type_index();
+        let sig_offset = self.env.shared_type_index_offset(sig);
+        let sig_size = OperandSize::from_bytes(self.env.vmoffsets.size_of_vmshared_type_index());
+        let type_ids = self.env.vmoffsets.ptr.vmctx().type_ids();
+        let fields = self.env.vmoffsets.ptr.vm_func_ref();
+        let array_call = func_ref + u32::from(fields.array_call());
+        let wasm_call = func_ref + u32::from(fields.wasm_call());
+        let vmctx_field = func_ref + u32::from(fields.vmctx());
+        let type_index = func_ref + u32::from(fields.type_index());
+        let array_name = self.env.name_array_to_wasm_trampoline(def_index);
+        let wasm_name = self.env.name_wasm(def_index);
+
+        self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+            masm.load_func_addr(array_name, scratch.writable())?;
+            masm.store(
+                scratch.inner().into(),
+                masm.address_at_vmctx(array_call)?,
+                ptr_size,
+            )?;
+            masm.load_func_addr(wasm_name, scratch.writable())?;
+            masm.store(
+                scratch.inner().into(),
+                masm.address_at_vmctx(wasm_call)?,
+                ptr_size,
+            )?;
+            masm.store(
+                vmctx!(M).into(),
+                masm.address_at_vmctx(vmctx_field)?,
+                ptr_size,
+            )?;
+            masm.load_ptr(masm.address_at_vmctx(type_ids.into())?, scratch.writable())?;
+            masm.load(
+                masm.address_at_reg(scratch.inner(), sig_offset)?,
+                scratch.writable(),
+                sig_size,
+            )?;
+            masm.store(
+                scratch.inner().into(),
+                masm.address_at_vmctx(type_index)?,
+                sig_size,
+            )
+        })?;
+        self.masm.compute_addr(
+            self.masm.address_at_vmctx(func_ref)?,
+            writable!(dst),
+            ptr_size,
+        )?;
+        self.context.stack.push(TypedReg::new(ptr_type, dst).into());
+        Ok(())
     }
 
     /// Emits a a series of instructions that will type check a function reference call.

@@ -37,7 +37,7 @@ use crate::{
 use cranelift_codegen::{
     ExceptionContextLoc, MachBufferFinalized, MachExceptionHandler, MachLabel,
     binemit::CodeOffset,
-    ir::{MemFlagsData, RelSourceLoc, SourceLoc},
+    ir::{MemFlagsData, RelSourceLoc, SourceLoc, UserExternalNameRef},
     isa::{
         unwind::UnwindInst,
         x64::{AtomicRmwSeqOp, args::CC, settings as x64_settings},
@@ -474,6 +474,11 @@ impl Masm for MacroAssembler {
         size: OperandSize,
     ) -> Result<()> {
         self.asm.lea(&src, dst, size);
+        Ok(())
+    }
+
+    fn load_func_addr(&mut self, name: UserExternalNameRef, dst: WritableReg) -> Result<()> {
+        self.asm.load_func_addr(name, dst);
         Ok(())
     }
 

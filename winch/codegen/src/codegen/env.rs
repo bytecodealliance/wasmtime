@@ -414,6 +414,17 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         self.intern_name(UserExternalName { namespace, index })
     }
 
+    /// Creates a name to reference the array-to-wasm trampoline of the wasm
+    /// function `index` provided.
+    pub fn name_array_to_wasm_trampoline(
+        &mut self,
+        def_func: DefinedFuncIndex,
+    ) -> UserExternalNameRef {
+        let key = FuncKey::ArrayToWasmTrampoline(self.translation.module_index(), def_func);
+        let (namespace, index) = key.into_raw_parts();
+        self.intern_name(UserExternalName { namespace, index })
+    }
+
     /// Interns `name` into a `UserExternalNameRef` and ensures that duplicate
     /// instances of `name` are given a unique name ref index.
     fn intern_name(&mut self, name: UserExternalName) -> UserExternalNameRef {

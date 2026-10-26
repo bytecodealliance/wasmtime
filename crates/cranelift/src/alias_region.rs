@@ -581,6 +581,23 @@ impl<'a, Offsets> Field<'a, Offsets> {
             .ins()
             .store(flags, value, ptr, i32::try_from(self.offset).unwrap());
     }
+
+    /// Like [`Self::store`], except removes the `readonly` flag for this region
+    /// if one would otherwise be specified.
+    ///
+    /// This is useful for `#[readonly]` fields that are initialized precisely
+    /// once before use, such as `VMFuncRef` fields.
+    pub fn store_without_readonly(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        ptr: ir::Value,
+        value: ir::Value,
+    ) {
+        let flags = self.flags_with_region(cursor.func).with_readonly(false);
+        cursor
+            .ins()
+            .store(flags, value, ptr, i32::try_from(self.offset).unwrap());
+    }
 }
 
 /// Define, for each `VM*` type, an `AliasRegions` accessor that returns a

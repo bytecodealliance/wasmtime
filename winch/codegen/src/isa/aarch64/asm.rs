@@ -1491,6 +1491,16 @@ impl Assembler {
         })
     }
 
+    /// Load the address of the function referenced by `name`, which must be
+    /// located within the same text section, into `rd`.
+    pub fn load_func_addr(&mut self, name: UserExternalNameRef, rd: WritableReg) {
+        self.emit(Inst::LoadExtNameNear {
+            rd: rd.map(Into::into),
+            name: Box::new(ExternalName::user(name)),
+            offset: 0,
+        });
+    }
+
     /// Emit an indirect call to a function whose address is
     /// stored the `callee` register.
     pub fn call_with_reg(&mut self, callee: Reg, call_conv: CallingConvention) {
