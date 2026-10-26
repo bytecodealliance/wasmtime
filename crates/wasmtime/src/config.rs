@@ -879,6 +879,13 @@ impl Config {
         self
     }
 
+    /// Whether this build of Wasmtime can run code on this host with
+    /// [`Self::mmu_interruption`] enabled.
+    #[doc(hidden)]
+    pub fn is_mmu_interruption_runtime_available() -> bool {
+        cfg!(has_mmu_interruption_runtime)
+    }
+
     /// XXX: For internal fuzzing and debugging use only!
     #[doc(hidden)]
     pub fn gc_zeal_alloc_counter(&mut self, counter: Option<NonZeroU32>) -> Result<&mut Self> {

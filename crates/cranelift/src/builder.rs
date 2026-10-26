@@ -109,6 +109,9 @@ impl CompilerBuilder for Builder {
 
     fn set_tunables(&mut self, tunables: Tunables) -> Result<()> {
         let triple = self.inner.triple();
+        // Keep this synced with `has_mmu_interruption_runtime` in
+        // `crates/wasmtime/build.rs`, which tests against similar conditions
+        // but for the host platform of wasmtime itself.
         if tunables.mmu_interruption
             && (!matches!(
                 triple.architecture,

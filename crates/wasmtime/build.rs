@@ -57,6 +57,10 @@ fn main() {
     // should compile such code is a separate matter, controlled by the
     // `mmu_interruption` engine tunable. This doesn't require cranelift to be
     // on, because we could be running precompiled cwasms.
+    //
+    // Keep this synced with `set_tunables()` in
+    // `crates/cranelift/src/builder.rs`, which tests similar conditions against
+    // the Wasm-targeting platform.
     let has_mmu_interruption_runtime = has_native_signals
         && cfg_is("target_os", "linux")
         && (target_arch == "x86_64" || target_arch == "aarch64")
