@@ -16,7 +16,7 @@ mod kw {
 }
 
 #[derive(Debug, Copy, Clone)]
-enum Style {
+pub(crate) enum Style {
     Record,
     Enum,
     Variant,
@@ -33,7 +33,7 @@ impl fmt::Display for Style {
 }
 
 #[derive(Debug, Clone)]
-enum ComponentAttr {
+pub(crate) enum ComponentAttr {
     Style(Style),
     WasmtimeCrate(syn::Path),
 }
@@ -164,7 +164,7 @@ pub fn expand(expander: &dyn Expander, input: &DeriveInput) -> Result<TokenStrea
     }
 }
 
-fn default_wasmtime_crate() -> syn::Path {
+pub(crate) fn default_wasmtime_crate() -> syn::Path {
     Ident::new("wasmtime", Span::call_site()).into()
 }
 

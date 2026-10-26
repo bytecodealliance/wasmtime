@@ -135,7 +135,9 @@ pub use self::has_data::*;
 pub use self::instance::{Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::resource_table::{ResourceTable, ResourceTableError};
-pub use self::resources::{Resource, ResourceAny, ResourceDynamic};
+pub use self::resources::{
+    FixedHostHeapField, FixedHostHeapUsage, HostHeapUsage, Resource, ResourceAny, ResourceDynamic,
+};
 pub use self::types::{ResourceType, Type};
 pub use self::values::Val;
 
@@ -847,6 +849,65 @@ pub use wasmtime_component_macro::Lower;
 /// [`BitXorAssign`]: std::ops::BitXorAssign
 /// [`Not`]: std::ops::Not
 pub use wasmtime_component_macro::flags;
+
+/// A derive macro for generating implementations of the [`HostHeapUsage`] trait.
+///
+/// Use this derive for types having fields that are heap allocated and directly
+/// part of the size of the type itself. For example, types like `String`,
+/// `Vec<T>`, or `HashMap<K, V>` all may be children of a type that are heap
+/// allocated and should be tracked. Types that do not have heap-allocated
+/// members should derive or implement [`FixedHostHeapUsage`] instead.
+///
+/// This macro can be applied to `struct` and `enum` definitions when every field
+/// implements [`HostHeapUsage`]. If a field holds a type that does not implement
+/// [`HostHeapUsage`] implement [`HostHeapUsage`] manually.
+///
+/// Attempting to use this macro on a type with fields not having
+/// [`HostHeapUsage`] implemented will result in a compilation error, so
+/// attempting its use is generally safe and a good place to start if looking
+/// to satisfy trait requirements of [`ResourceTable`] methods.
+///
+/// ## Examples
+///
+/// ```rust
+/// use wasmtime::component::HostHeapUsage;
+///
+/// #[derive(HostHeapUsage)]
+/// struct Buffer {
+///     label: String,
+///     bytes: Vec<u8>,
+/// }
+/// ```
+pub use wasmtime_component_macro::HostHeapUsage;
+
+/// A derive macro for generating implementations of the [`FixedHostHeapUsage`]
+/// trait.
+///
+/// Use this derive for type definitions whose fields are all fixed-size (not
+/// heap types like `Box<T>`, `Vec<T>`, etc.).
+///
+/// This derive cannot be used if any field owns growable heap data (such as
+/// `String`, `Vec<T>`, or `HashMap<K, V>`), in which case you should derive
+/// [`HostHeapUsage`](macro@HostHeapUsage) instead or implement the appropriate
+/// trait directly.
+///
+/// Attempting to use this macro on a type with fields not having
+/// [`FixedHostHeapUsage`] implemented will result in a compilation error, so
+/// attempting its use is generally safe and a good place to start if looking
+/// to satisfy trait requirements of [`ResourceTable`] methods.
+///
+/// ## Examples
+///
+/// ```rust
+/// use wasmtime::component::FixedHostHeapUsage;
+///
+/// #[derive(FixedHostHeapUsage)]
+/// struct Config {
+///     timeout: Option<std::time::Duration>,
+///     max_retries: u32,
+/// }
+/// ```
+pub use wasmtime_component_macro::FixedHostHeapUsage;
 
 #[cfg(any(docsrs, test, doctest))]
 pub mod bindgen_examples;
