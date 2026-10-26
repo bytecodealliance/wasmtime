@@ -624,6 +624,11 @@ jobs:
         - target: x86_64-unknown-freebsd
           os: ubuntu-latest
           test: cargo check
+        # Use `cross` for NetBSD to have a C compiler available.
+        - target: x86_64-unknown-netbsd
+          os: ubuntu-latest
+          cross: true
+          test: cross check
         - target: aarch64-pc-windows-msvc
           os: windows-latest
           test: cargo check
