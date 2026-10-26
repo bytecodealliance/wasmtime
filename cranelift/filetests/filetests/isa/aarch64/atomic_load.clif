@@ -9,14 +9,55 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   load_acquire_128 x0, x1, [x0], scratch=x4
+;   mov x5, x0
+;   load_acquire_128 x0, x1, [x5], scratch=x4
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldaxp x0, x1, [x0] ; trap: heap_oob
-;   stxp w4, x0, x1, [x0] ; trap: heap_oob
-;   cbnz x4, #0
+;   mov x5, x0
+;   ldaxp x0, x1, [x5] ; trap: heap_oob
+;   stxp w4, x0, x1, [x5] ; trap: heap_oob
+;   cbnz x4, #4
+;   ret
+
+function %atomic_load_i128_scratch(i64) -> i128 {
+    ss0 = explicit_slot 16, align = 16
+block0(v0: i64):
+    v1 = uextend.i128 v0
+    v2 = stack_addr.i64 ss0
+    store.i128 little v1, v2
+    v3 = atomic_load.i128 little v2
+    return v3
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   movz x6, #0
+;   mov x7, sp
+;   stp x0, x6, [x7]
+;   load_acquire_128 x0, x1, [x7], scratch=x8
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x6, #0
+;   mov x7, sp
+;   stp x0, x6, [x7] ; trap: heap_oob
+;   ldaxp x0, x1, [x7] ; trap: heap_oob
+;   stxp w8, x0, x1, [x7] ; trap: heap_oob
+;   cbnz x8, #0x18
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
 ;   ret
 
 function %atomic_load_i64(i64) -> i64 {

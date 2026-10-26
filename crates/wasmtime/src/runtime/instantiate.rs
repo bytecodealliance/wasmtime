@@ -24,7 +24,7 @@ pub struct CompiledModule {
     meta: Metadata,
     index: Arc<CompiledFunctionsTable>,
     /// Sorted list, by function index, of names we have for this module.
-    func_names: Vec<FunctionName>,
+    func_names: TryVec<FunctionName>,
 }
 
 impl CompiledModule {

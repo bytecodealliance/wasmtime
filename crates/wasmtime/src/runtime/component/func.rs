@@ -66,12 +66,9 @@ impl Func {
         instance: Instance,
         index: ExportIndex,
     ) -> Func {
-        let def = {
-            let vminstance = instance.id().get(store);
-            let (_ty, def, _options) = vminstance.component().export_lifted_function(index);
-            def.clone()
-        };
-        let unsafe_func_ref = match instance.lookup_vmdef(store, &def) {
+        let (component, store) = instance.component_and_store_mut(store);
+        let (_ty, def, _options) = component.export_lifted_function(index);
+        let unsafe_func_ref = match instance.lookup_vmdef(store, def) {
             Export::Function(f) => f.vm_func_ref(store),
             _ => unreachable!(),
         }
@@ -248,7 +245,7 @@ impl Func {
     /// * The `store` used requires the use of [`Func::call_async`] instead. See
     ///   [store documentation](crate#async) for more information.
     /// * The call is recursive from within e.g. a `call_async` invocation.
-    /// * If the function is async-lifted, in which case either
+    /// * If the function is async-typed or async-lifted, in which case either
     ///   [`Self::call_async`] or [`Self::call_concurrent`] must be used.
     ///
     /// See [`TypedFunc::call`] for more information in addition to
@@ -343,9 +340,9 @@ impl Func {
 
         self.check_params_results(store.as_context_mut(), params, results)?;
 
-        if self.abi_async(store.0) {
+        if self.is_async(store.0) {
             bail!(
-                "cannot synchronously call an async-lifted export; \
+                "cannot synchronously call an async function; \
                  use `call_async` or `call_concurrent` instead"
             );
         }
@@ -401,11 +398,13 @@ impl Func {
         self.unsafe_func_ref.as_non_null()
     }
 
-    pub(crate) fn abi_async(&self, store: &StoreOpaque) -> bool {
+    /// Returns whether this function is async-typed or async-lifted, either of
+    /// which means it can't be called synchronously.
+    pub(crate) fn is_async(&self, store: &StoreOpaque) -> bool {
         let instance = self.instance.id().get(store);
         let component = instance.component();
-        let (_ty, _def, options) = component.export_lifted_function(self.index);
-        component.env_component().options[options].async_
+        let (ty, _def, options) = component.export_lifted_function(self.index);
+        component.types()[ty].async_ || component.env_component().options[options].async_
     }
 
     pub(crate) fn abi_info<'a>(

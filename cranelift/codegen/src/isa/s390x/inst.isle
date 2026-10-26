@@ -225,6 +225,17 @@
       (rn Reg)
       (mem MemArg))
 
+    ;; An atomic read-modify-write operation with a memory in-/out operand,
+    ;; a register destination, and a register source implemented via an
+    ;; atomic compare-and-swap loop.
+    (AtomicRmw128Loop
+      (op AtomicRmwOp)
+      (rd WritableReg)
+      (rn Reg)
+      (scratch1 WritableRegPair)
+      (scratch2 WritableRegPair)
+      (mem MemArg))
+
     ;; A 32-bit atomic compare-and-swap operation.
     (AtomicCas32
       (rd WritableReg)
@@ -2344,6 +2355,18 @@
 (rule (atomic_rmw_impl ty op src mem)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.AtomicRmw op dst src mem))))
+        dst))
+
+;; Helper for emitting `MInst.AtomicRmw128Loop` instructions.
+(decl atomic_rmw_128_loop (AtomicRmwOp Reg MemArg) Reg)
+(rule (atomic_rmw_128_loop op src mem)
+      (let ((dst WritableReg (temp_writable_reg $I128))
+            (_ Unit (emit (MInst.AtomicRmw128Loop op
+                                                  dst
+                                                  src
+                                                  (temp_writable_regpair $I64)
+                                                  (temp_writable_regpair $I64)
+                                                  mem))))
         dst))
 
 ;; Helper for emitting `MInst.AtomicCas32` instructions.

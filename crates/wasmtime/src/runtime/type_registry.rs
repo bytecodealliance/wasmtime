@@ -179,9 +179,7 @@ impl Engine {
         for (module_ty, module_trampoline_ty) in module_types.trampoline_types() {
             let shared_ty = types[module_ty];
             let trampoline_shared_ty = registry.trampoline_type(shared_ty);
-            trampolines
-                .insert(trampoline_shared_ty, Some(module_trampoline_ty).into())
-                .expect("reserved space");
+            trampolines.insert(trampoline_shared_ty, Some(module_trampoline_ty).into())?;
         }
 
         // Finally, to ensure that no matter which API from which layer
@@ -1358,7 +1356,7 @@ impl TypeRegistryInner {
         log::trace!("    type_to_rec_group.resize({types_capacity})");
         type_to_rec_group.resize(types_capacity)?;
 
-        log::trace!("    type_to_rec_group.reserve({types_capacity})");
+        log::trace!("    drop_stack.reserve({types_capacity})");
         debug_assert!(drop_stack.is_empty());
         drop_stack.reserve(types_capacity)?;
 
@@ -1595,7 +1593,7 @@ impl TypeRegistryInner {
 
         // Okay, we are really going to unregister this entry. Enqueue it on the
         // drop stack.
-        debug_assert!(self.drop_stack.capacity() >= self.types.capacity());
+        debug_assert!(self.drop_stack.capacity() >= self.types.len());
         self.push_to_drop_stack(entry);
         self.drain_drop_stack();
     }

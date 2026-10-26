@@ -410,20 +410,6 @@ impl ExtendKind {
             _ => false,
         }
     }
-
-    pub fn from_bits(&self) -> u8 {
-        match self {
-            Self::Signed(s) => s.from_bits(),
-            Self::Unsigned(u) => u.from_bits(),
-        }
-    }
-
-    pub fn to_bits(&self) -> u8 {
-        match self {
-            Self::Signed(s) => s.to_bits(),
-            Self::Unsigned(u) => u.to_bits(),
-        }
-    }
 }
 
 /// Kinds of vector load and extends in WebAssembly. Each MacroAssembler

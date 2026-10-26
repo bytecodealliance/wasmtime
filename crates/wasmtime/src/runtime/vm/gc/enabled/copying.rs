@@ -244,7 +244,7 @@ struct CopyingHeap {
     memory: Option<crate::vm::Memory>,
 
     /// The cached `VMMemoryDefinition` for `self.memory` so that we don't have
-    /// to make indirect calls through a `dyn RuntimeLinearMemory` object.
+    /// to make indirect calls through a `dyn LinearMemory` object.
     ///
     /// Must be updated and kept in sync with `self.memory`, cleared when the
     /// memory is taken and updated when the memory is replaced.

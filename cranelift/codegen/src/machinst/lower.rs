@@ -1294,6 +1294,28 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                             }
                         }
                     }
+
+                    // Likewise forward debug tags on the CLIF branch (e.g.
+                    // a `try_call`) to the VCode call instruction(s) it was
+                    // lowered to. Skip the non-call instructions (jumps to
+                    // the normal-return block) so that tags are not
+                    // duplicated at the call's return address.
+                    let debug_tags = self.f.debug_tags.get(branch);
+                    if !debug_tags.is_empty() {
+                        let branch_end = self.vcode.vcode.num_insts();
+                        for i in branch_start..branch_end {
+                            let iix = InsnIndex::new(i);
+                            if self.vcode.vcode[iix].call_type() == crate::machinst::CallType::None
+                            {
+                                continue;
+                            }
+                            let backwards_index = BackwardsInsnIndex::new(i);
+                            log::trace!(
+                                "debug tags on {branch}; associating {debug_tags:?} with {backwards_index:?}"
+                            );
+                            self.vcode.add_debug_tags(backwards_index, debug_tags);
+                        }
+                    }
                 }
             } else {
                 // If no orig block, this must be a pure edge block;

@@ -468,7 +468,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// # Errors
     ///
     /// Returns an error on out of bounds or if the `gc_ref` is an `i31ref`.
-    #[inline]
+    #[inline(always)]
     fn index<T>(&self, gc_ref: &TypedGcRef<T>) -> Result<&T>
     where
         Self: Sized,
@@ -495,7 +495,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// # Errors
     ///
     /// Returns an error on out of bounds or if the `gc_ref` is an `i31ref`.
-    #[inline]
+    #[inline(always)]
     fn index_mut<T>(&mut self, gc_ref: &TypedGcRef<T>) -> Result<&mut T>
     where
         Self: Sized,

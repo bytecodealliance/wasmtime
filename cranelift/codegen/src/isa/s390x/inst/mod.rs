@@ -1,7 +1,7 @@
 //! This module defines s390x-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::{ExternalName, MemFlagsData, Type, types};
+use crate::ir::{AtomicRmwOp, ExternalName, MemFlagsData, Type, types};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
@@ -56,7 +56,7 @@ pub struct ReturnCallInfo<T> {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(40, core::mem::size_of::<Inst>());
+    assert_eq!(48, core::mem::size_of::<Inst>());
 }
 
 /// A register pair. Enum so it can be destructured in ISLE.
@@ -132,6 +132,7 @@ impl Inst {
             | Inst::CmpTrapRSImm16 { .. }
             | Inst::CmpTrapRUImm16 { .. }
             | Inst::AtomicRmw { .. }
+            | Inst::AtomicRmw128Loop { .. }
             | Inst::AtomicCas32 { .. }
             | Inst::AtomicCas64 { .. }
             | Inst::AtomicCas128 { .. }
@@ -584,6 +585,22 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         Inst::AtomicRmw { rd, rn, mem, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
+            memarg_operands(mem, collector);
+        }
+        Inst::AtomicRmw128Loop {
+            rd,
+            rn,
+            scratch1,
+            scratch2,
+            mem,
+            ..
+        } => {
+            collector.reg_early_def(rd);
+            collector.reg_use(rn);
+            collector.reg_fixed_early_def(&mut scratch1.hi, gpr(2));
+            collector.reg_fixed_early_def(&mut scratch1.lo, gpr(3));
+            collector.reg_fixed_early_def(&mut scratch2.hi, gpr(4));
+            collector.reg_fixed_early_def(&mut scratch2.lo, gpr(5));
             memarg_operands(mem, collector);
         }
         Inst::AtomicCas32 {
@@ -1858,6 +1875,49 @@ impl Inst {
                 );
                 let mem = mem.pretty_print_default();
                 format!("{mem_str}{op} {rd}, {rn}, {mem}")
+            }
+            &Inst::AtomicRmw128Loop {
+                op,
+                rd,
+                rn,
+                scratch1,
+                scratch2,
+                ref mem,
+            } => {
+                let op = match op {
+                    AtomicRmwOp::Add => "add",
+                    AtomicRmwOp::Sub => "sub",
+                    AtomicRmwOp::And => "and",
+                    AtomicRmwOp::Nand => "nand",
+                    AtomicRmwOp::Or => "or",
+                    AtomicRmwOp::Xor => "xor",
+                    AtomicRmwOp::Smax => "smax",
+                    AtomicRmwOp::Smin => "smin",
+                    AtomicRmwOp::Umax => "umax",
+                    AtomicRmwOp::Umin => "umin",
+                    AtomicRmwOp::Xchg => "xchg",
+                };
+
+                let rd = pretty_print_reg(rd.to_reg());
+                let rn = pretty_print_reg(rn);
+                let scratch1 = pretty_print_regpair(scratch1.to_regpair());
+                let scratch2 = pretty_print_regpair(scratch2.to_regpair());
+                let mem = mem.clone();
+                let (mem_str, mem) = mem_finalize_for_show(
+                    &mem,
+                    state,
+                    MemInstType {
+                        have_d12: false,
+                        have_d20: true,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: false,
+                    },
+                );
+                let mem = mem.pretty_print_default();
+                format!(
+                    "{mem_str}atomic_rmw_128_loop_{op} {rd}, {rn}, {mem}, scratch1={scratch1}, scratch2={scratch2}"
+                )
             }
             &Inst::AtomicCas32 {
                 rd,

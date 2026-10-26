@@ -1,17 +1,19 @@
 use crate::{
     expand::{Constrain, Expansion},
     program::Program,
-    spec::{self, Arm, Constructor, Signature, State},
+    spec::{self, Arm, Constructor, Signature, Spec, State},
     trie::{BindingType, binding_type},
+    type_inference::Assignment,
     types::{Compound, Const, Type, Variant, Width, field_name_by_index},
 };
 use anyhow::{Context, Error, Result, bail, format_err};
 use cranelift_isle::{
-    ast::Ident,
+    ast::{Ident, Lanes},
     lexer::Pos,
     sema::{self, Sym, TermId, TypeId, VariantId},
     trie_again::{Binding, BindingId, Constraint, TupleIndex},
 };
+use num_bigint::BigUint;
 use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
     iter::zip,
@@ -104,6 +106,19 @@ pub enum Expr {
     // Bitwidth.
     WidthOf(ExprId),
 
+    // Lane count.
+    LanesOf(ExprId),
+
+    // Map `body` over lanes: each binder is a (lane variable, vector) pair.
+    // `scope` is the range of expressions allocated while evaluating the body,
+    // which is every expression that can depend on a lane variable.
+    LaneMap {
+        binders: Vec<(ExprId, ExprId)>,
+        scope: std::ops::Range<usize>,
+        body: ExprId,
+        lanes: Lanes,
+    },
+
     // Floating point conversion.
     ToFP(ExprId, ExprId),
     ToFPUnsigned(ExprId, ExprId),
@@ -165,6 +180,7 @@ impl Expr {
             | Expr::Rev(x)
             | Expr::Popcnt(x)
             | Expr::WidthOf(x)
+            | Expr::LanesOf(x)
             | Expr::FPPositiveInfinity(x)
             | Expr::FPNegativeInfinity(x)
             | Expr::FPPositiveZero(x)
@@ -241,6 +257,11 @@ impl Expr {
 
             // Ternary
             Expr::Conditional(c, t, e) => vec![*c, *t, *e],
+            Expr::LaneMap { binders, body, .. } => binders
+                .iter()
+                .flat_map(|(lane, vector)| [*lane, *vector])
+                .chain([*body])
+                .collect(),
         }
     }
 }
@@ -306,6 +327,24 @@ impl std::fmt::Display for Expr {
             Expr::FPToSBV(w, x) => write!(f, "fp.to_sbv({}, {})", w.index(), x.index()),
             Expr::BV2Nat(x) => write!(f, "bv2nat({})", x.index()),
             Expr::WidthOf(x) => write!(f, "width_of({})", x.index()),
+            Expr::LanesOf(x) => write!(f, "lanes_of({})", x.index()),
+            Expr::LaneMap {
+                binders,
+                body,
+                lanes,
+                ..
+            } => {
+                let op = match lanes {
+                    Lanes::Map => "lanemap",
+                    Lanes::All => "all_lanes",
+                    Lanes::Any => "any_lanes",
+                };
+                write!(f, "{op}(")?;
+                for (lane, vector) in binders {
+                    write!(f, "{} of {}, ", lane.index(), vector.index())?;
+                }
+                write!(f, "{})", body.index())
+            }
             Expr::FPPositiveInfinity(x) => write!(f, "fp.+oo({})", x.index()),
             Expr::FPNegativeInfinity(x) => write!(f, "fp.-oo({})", x.index()),
             Expr::FPPositiveZero(x) => write!(f, "fp.+zero({})", x.index()),
@@ -775,6 +814,8 @@ pub struct Conditions {
     pub qualifiers: Vec<Qualifier>,
     pub pos: HashMap<ExprId, Pos>,
     pub width_domains: Vec<(ExprId, Vec<usize>)>,
+    /// Bit-vectors with a known lane count.
+    pub lane_counts: Vec<(ExprId, usize)>,
 }
 
 impl Conditions {
@@ -901,16 +942,43 @@ impl Conditions {
         reach
     }
 
-    pub fn print_model(&self, model: &Model, prog: &Program) -> Result<()> {
-        self.write_model(&mut std::io::stdout(), model, prog)
+    pub fn print_model(
+        &self,
+        model: &Model,
+        assignment: &Assignment,
+        prog: &Program,
+    ) -> Result<()> {
+        self.write_model(&mut std::io::stdout(), model, assignment, prog)
     }
 
     pub fn write_model(
         &self,
         out: &mut dyn std::io::Write,
         model: &Model,
+        assignment: &Assignment,
         prog: &Program,
     ) -> Result<()> {
+        // Vectors are shown lane by lane, lane 0 first, as in CLIF.
+        let show = |v: &Symbolic| -> Result<String> {
+            let value = v.eval(model)?;
+            if let (Symbolic::Scalar(x), Value::Const(Const::BitVector(width, bits))) = (v, &value)
+            {
+                let lanes = assignment.lanes_or_scalar(*x);
+                if lanes > 1 {
+                    let lane_bits = width / lanes;
+                    let mask = (BigUint::from(1u8) << lane_bits) - 1u8;
+                    let lanes = (0..lanes)
+                        .map(|i| {
+                            Const::BitVector(lane_bits, (bits >> (i * lane_bits)) & &mask)
+                                .to_string()
+                        })
+                        .collect::<Vec<_>>();
+                    return Ok(format!("[{}]", lanes.join(" ")));
+                }
+            }
+            Ok(value.to_string())
+        };
+
         // State
         for (name, value) in &self.state.0 {
             writeln!(out, "state: {name} = {}", value.eval(model)?)?;
@@ -932,11 +1000,23 @@ impl Conditions {
                 args = call
                     .args
                     .iter()
-                    .map(|a| Ok(a.eval(model)?.to_string()))
+                    .map(show)
                     .collect::<Result<Vec<_>>>()?
                     .join(", "),
-                ret = call.ret.eval(model)?
+                ret = show(&call.ret)?
             )?;
+        }
+
+        // Assertions that the model violates
+        for a in &self.assertions {
+            if model.get(a) == Some(&Const::Bool(false)) {
+                let position = self
+                    .pos
+                    .get(a)
+                    .map(|pos| pos.pretty_print_line(&prog.files))
+                    .unwrap_or_else(|| "?".to_string());
+                writeln!(out, "violated: {position}: e{x}", x = a.index())?;
+            }
         }
 
         Ok(())
@@ -1004,6 +1084,10 @@ impl Variables {
             .ok_or(format_err!("undefined variable {name}"))
     }
 
+    fn shadow(&mut self, name: String, value: Symbolic) {
+        self.0.insert(name, value);
+    }
+
     fn set(&mut self, name: String, value: Symbolic) -> Result<()> {
         match self.0.entry(name) {
             Entry::Occupied(e) => {
@@ -1031,6 +1115,7 @@ struct ConditionsBuilder<'a> {
     expr_map: HashMap<Expr, ExprId>,
     conditions: Conditions,
     position_stack: Vec<Pos>,
+    in_lane_map: bool,
 }
 
 impl<'a> ConditionsBuilder<'a> {
@@ -1049,6 +1134,7 @@ impl<'a> ConditionsBuilder<'a> {
             expr_map: HashMap::new(),
             conditions: Conditions::default(),
             position_stack: Vec::new(),
+            in_lane_map: false,
         }
     }
 
@@ -1396,19 +1482,9 @@ impl<'a> ConditionsBuilder<'a> {
             .get(&term)
             .ok_or(self.error(format!("no spec for term {term_name}",)))?;
 
-        // We are provided the arguments and return value as they appear
-        // syntactically in the term declaration and specification. However,
-        // whether these are the actual inputs and outputs of the corresponding
-        // function depends on the term kind.
         if term_spec.args.len() != args.len() {
             bail!("incorrect number of arguments for term {term_name}");
         }
-        let arguments: Vec<_> = zip(&term_spec.args, args).collect();
-        let result = (&term_spec.ret, &ret);
-        let (inputs, outputs) = match kind {
-            TermKind::Constructor => (arguments.as_slice(), std::slice::from_ref(&result)),
-            TermKind::Extractor => (std::slice::from_ref(&result), arguments.as_slice()),
-        };
 
         // Scope for spec expression evaluation. State variables are always available.
         let mut vars = self.conditions.state.clone();
@@ -1428,13 +1504,71 @@ impl<'a> ConditionsBuilder<'a> {
                 // TODO(mbm): warn when state is both conditionally and unconditionaly modified.
                 self.boolean(true)
             };
-
             // Record condition to determine when the default spec applies.
             self.state_modification_conds
                 .entry(modifies.state.0.clone())
                 .or_default()
                 .push(cond);
         }
+
+        let (requires, matches, mut provides) =
+            self.spec_clauses(term_spec, kind, args, &ret, vars)?;
+
+        // Partial function.
+        // REVIEW(mbm): pin down semantics for partial function specifications.
+        if let Domain::Partial(p) = domain {
+            // Matches describe when the function applies.
+            let all_matches = self.all(matches);
+            let eq = self.exprs_equal(p, all_matches);
+            self.conditions.assumptions.push(eq);
+
+            // Provides are conditioned on the match.
+            let all_provides = self.all(provides);
+            let provide = self.dedup_expr(Expr::Imp(all_matches, all_provides));
+            provides = vec![provide];
+        } else if !matches.is_empty() {
+            bail!("spec matches on non-partial function");
+        }
+
+        // Assert/assume depending on caller or callee.
+        match invocation {
+            Invocation::Caller => {
+                self.conditions.assertions.extend(requires);
+                self.conditions.assumptions.extend(provides);
+            }
+            Invocation::Callee => {
+                self.conditions.assumptions.extend(requires);
+                self.conditions.assertions.extend(provides);
+            }
+        }
+
+        // Record callsite. Instantiations do not constrain constructor/RHS terms.
+        let rhs = kind == TermKind::Constructor && matches!(invocation, Invocation::Caller);
+        self.record_term_instantiation(term, args.to_vec(), ret, !rhs)?;
+
+        Ok(())
+    }
+
+    /// Requires, matches and provides of a term's spec applied to the given
+    /// arguments and return value.
+    fn spec_clauses(
+        &mut self,
+        term_spec: &Spec,
+        kind: TermKind,
+        args: &[Symbolic],
+        ret: &Symbolic,
+        mut vars: Variables,
+    ) -> Result<(Vec<ExprId>, Vec<ExprId>, Vec<ExprId>)> {
+        // We are provided the arguments and return value as they appear
+        // syntactically in the term declaration and specification. However,
+        // whether these are the actual inputs and outputs of the corresponding
+        // function depends on the term kind.
+        let arguments: Vec<_> = zip(&term_spec.args, args).collect();
+        let result = (&term_spec.ret, ret);
+        let (inputs, outputs) = match kind {
+            TermKind::Constructor => (arguments.as_slice(), std::slice::from_ref(&result)),
+            TermKind::Extractor => (std::slice::from_ref(&result), arguments.as_slice()),
+        };
 
         // Inputs are available to the requires and matches clauses.
         for (name, input) in inputs {
@@ -1477,39 +1611,7 @@ impl<'a> ConditionsBuilder<'a> {
             }
         }
 
-        // Partial function.
-        // REVIEW(mbm): pin down semantics for partial function specifications.
-        if let Domain::Partial(p) = domain {
-            // Matches describe when the function applies.
-            let all_matches = self.all(matches);
-            let eq = self.exprs_equal(p, all_matches);
-            self.conditions.assumptions.push(eq);
-
-            // Provides are conditioned on the match.
-            let all_provides = self.all(provides);
-            let provide = self.dedup_expr(Expr::Imp(all_matches, all_provides));
-            provides = vec![provide];
-        } else if !matches.is_empty() {
-            bail!("spec matches on non-partial function");
-        }
-
-        // Assert/assume depending on caller or callee.
-        match invocation {
-            Invocation::Caller => {
-                self.conditions.assertions.extend(requires);
-                self.conditions.assumptions.extend(provides);
-            }
-            Invocation::Callee => {
-                self.conditions.assumptions.extend(requires);
-                self.conditions.assertions.extend(provides);
-            }
-        }
-
-        // Record callsite. Instantiations do not constrain constructor/RHS terms.
-        let rhs = kind == TermKind::Constructor && matches!(invocation, Invocation::Caller);
-        self.record_term_instantiation(term, args.to_vec(), ret, !rhs)?;
-
-        Ok(())
+        Ok((requires, matches, provides))
     }
 
     fn record_term_instantiation(
@@ -1956,6 +2058,10 @@ impl<'a> ConditionsBuilder<'a> {
 
             spec::ExprKind::Let(defs, body) => self.spec_let(defs, body, vars),
 
+            spec::ExprKind::LaneMap(binders, body, lanes) => {
+                self.spec_lane_map(binders, body, *lanes, vars)
+            }
+
             spec::ExprKind::With(decls, body) => self.spec_with(decls, body, vars),
 
             spec::ExprKind::Expand(ident, args) => self.spec_expand(ident, args, vars),
@@ -1983,6 +2089,7 @@ impl<'a> ConditionsBuilder<'a> {
             spec::ExprKind::FPToUBV(w, x) => binary_expr!(Expr::FPToUBV, w, x),
             spec::ExprKind::FPToSBV(w, x) => binary_expr!(Expr::FPToSBV, w, x),
             spec::ExprKind::WidthOf(x) => unary_expr!(Expr::WidthOf, x),
+            spec::ExprKind::LanesOf(x) => unary_expr!(Expr::LanesOf, x),
 
             spec::ExprKind::As(x, ty) => {
                 let x = self.spec_expr(x, vars)?;
@@ -2270,6 +2377,42 @@ impl<'a> ConditionsBuilder<'a> {
         self.spec_expr(body, &let_vars)
     }
 
+    /// Lane mapping: each binder names a fresh lane variable, one lane of its
+    /// bit-vector, shadowing any outer variable of that name. The body is
+    /// evaluated once over each lane.
+    fn spec_lane_map(
+        &mut self,
+        binders: &[(Ident, spec::Expr)],
+        body: &spec::Expr,
+        lanes: Lanes,
+        vars: &Variables,
+    ) -> Result<Symbolic> {
+        if self.in_lane_map {
+            bail!("lane maps cannot nest");
+        }
+        let mut lane_vars = vars.clone();
+        let mut bound = Vec::new();
+        for (name, vector) in binders {
+            let vector = self.spec_expr(vector, vars)?;
+            let vector = self.as_scalar(vector)?;
+            let lane = self.alloc_variable(Type::BitVector(Width::Unknown), name.0.clone());
+            lane_vars.shadow(name.0.clone(), Symbolic::Scalar(lane));
+            bound.push((lane, vector));
+        }
+        let start = self.conditions.exprs.len();
+        self.in_lane_map = true;
+        let body = self.spec_expr(body, &lane_vars);
+        self.in_lane_map = false;
+        let body = self.as_scalar(body?)?;
+        let scope = start..self.conditions.exprs.len();
+        Ok(self.scalar(Expr::LaneMap {
+            binders: bound,
+            scope,
+            body,
+            lanes,
+        }))
+    }
+
     fn spec_with(
         &mut self,
         decls: &[Ident],
@@ -2493,6 +2636,12 @@ impl<'a> ConditionsBuilder<'a> {
     fn alloc_value(&mut self, ty: &Compound, name: String) -> Result<Symbolic> {
         match ty {
             Compound::Primitive(ty) => Ok(Symbolic::Scalar(self.alloc_variable(ty.clone(), name))),
+            Compound::Vector { .. } => {
+                let (width, lanes) = ty.as_vector().expect("vector");
+                let x = self.alloc_variable(Type::BitVector(Width::Bits(width)), name);
+                self.conditions.lane_counts.push((x, lanes));
+                Ok(Symbolic::Scalar(x))
+            }
             Compound::Struct(fields) => Ok(Symbolic::Struct(
                 fields
                     .iter()

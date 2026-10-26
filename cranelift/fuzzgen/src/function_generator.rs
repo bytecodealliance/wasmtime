@@ -1291,7 +1291,7 @@ where
         let mut flags = MemFlagsData::new();
         // Even if we picked an aligned address, we can always generate unaligned memflags
         if aligned && bool::arbitrary(self.u)? {
-            flags.set_aligned();
+            flags.set_aligned(true);
         }
         // If the address is aligned, then we know it won't trap
         if aligned && bool::arbitrary(self.u)? {

@@ -3506,8 +3506,12 @@
 
 ;; Atomic operations that require a compare-and-swap loop.
 
+;; Operations for 128-bit types use a compare-and-swap loop not implementable in ISLE
+(rule -1 (lower (atomic_rmw $I128 (mem_flags_data flags) op addr src))
+      (atomic_rmw_128_loop op src (lower_address flags addr (zero_offset))))
+
 ;; Operations for 32/64-bit types can use a fullword compare-and-swap loop.
-(rule -1 (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags) op addr src))
+(rule -2 (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags) op addr src))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Create body of compare-and-swap loop.
@@ -3519,7 +3523,7 @@
         (casloop ib ty flags addr_reg val1)))
 
 ;; Operations for 8/16-bit types must operate on the surrounding aligned word.
-(rule -2 (lower (atomic_rmw (ty_8_or_16 ty) (mem_flags_data flags) op addr src))
+(rule -3 (lower (atomic_rmw (ty_8_or_16 ty) (mem_flags_data flags) op addr src))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Prepare access to surrounding aligned word.

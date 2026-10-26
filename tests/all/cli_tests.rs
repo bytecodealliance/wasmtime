@@ -1903,12 +1903,15 @@ mod test_programs {
         // Both limits are handed to a semaphore, so a zero leaves the server
         // listening but never serving anything.
         let component = P2_CLI_SERVE_HELLO_WORLD_COMPONENT;
+        let too_large = format!("={}", usize::MAX);
         for option in [
-            "--max-concurrent-requests=0",
-            "--max-concurrent-connections=0",
+            "--max-concurrent-requests=0".to_string(),
+            "--max-concurrent-connections=0".to_string(),
+            format!("--max-concurrent-requests{too_large}"),
+            format!("--max-concurrent-connections{too_large}"),
         ] {
             let mut cmd = super::get_wasmtime_command()?;
-            cmd.args(["serve", "-Scli", option, component])
+            cmd.args(["serve", "-Scli", option.as_str(), component])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::piped());
@@ -2246,6 +2249,39 @@ start a print 1234
         drop(stream);
 
         server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn p3_cli_serve_authority_and_scheme() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("/")
+                    .header("Host", "localhost")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+
+        // The scheme is that of the connection, not of an absolute-form
+        // request target.
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("https://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+
         Ok(())
     }
 
@@ -2906,6 +2942,47 @@ start a print 1234
     }
 
     #[cfg(unix)]
+    #[test]
+    fn serve_reject_addr_with_systemd_listenfd() -> Result<()> {
+        // `--systemd-listenfd` takes the sockets from the environment; an
+        // explicit `--addr` used to be accepted and silently ignored.
+        let mut cmd = super::get_wasmtime_command()?;
+        cmd.args([
+            "serve",
+            "-Scli",
+            "--systemd-listenfd",
+            "--addr",
+            "127.0.0.1:0",
+            P2_CLI_SERVE_HELLO_WORLD_COMPONENT,
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+        let mut child = cmd.spawn()?;
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while child.try_wait()?.is_none() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "--addr with --systemd-listenfd was accepted and the server kept running"
+            );
+            thread::sleep(Duration::from_millis(100));
+        }
+        let output = child.wait_with_output()?;
+        assert!(
+            !output.status.success(),
+            "--addr with --systemd-listenfd was accepted"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("cannot be used with")
+                && stderr.contains("--addr")
+                && stderr.contains("--systemd-listenfd"),
+            "unexpected stderr: {stderr}"
+        );
+        Ok(())
+    }
+
+    #[cfg(unix)]
     #[tokio::test]
     async fn serve_inherit() -> Result<()> {
         use std::mem::ManuallyDrop;
@@ -3460,6 +3537,139 @@ start a print 1234
         Ok(())
     }
 
+    /// The streamed body outlives `-W timeout` when `--post-return-timeout`
+    /// gives post-return work a longer limit.
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_post_return_stream() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_POST_RETURN_STREAM_COMPONENT, move |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+            cmd.arg("-Wtimeout=1s");
+            cmd.arg("--post-return-timeout=60s");
+        })?;
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+        assert_eq!(resp.body(), "123");
+
+        server.finish()?;
+        Ok(())
+    }
+
+    /// With only `-W timeout` set, the post-return timeout inherits it, so the
+    /// ~3s body stream is cut off after ~1s.
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_post_return_stream_default_timeout() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_POST_RETURN_STREAM_COMPONENT, move |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+            cmd.arg("-Wtimeout=1s");
+        })?;
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+        assert!(
+            resp.body().starts_with("1") && resp.body() != "123",
+            "expected the post-return timeout to cut off the stream; got {:?}",
+            resp.body()
+        );
+
+        let (_stdout, stderr) = server.finish()?;
+        assert!(stderr.contains("guest timed out"), "stderr: {stderr}");
+        Ok(())
+    }
+
+    /// With only `--post-return-timeout` set, post-return work that is blocked
+    /// in a filesystem call is still cut off when the deadline elapses.
+    #[cfg(unix)]
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_post_return_blocking_open() -> Result<()> {
+        use std::os::unix::ffi::OsStrExt;
+
+        let dir = tempfile::TempDir::new()?;
+        let fifo = dir.path().join("fifo");
+        let path = std::ffi::CString::new(fifo.as_os_str().as_bytes())?;
+        // SAFETY: `path` is a valid NUL-terminated string that outlives the call.
+        if unsafe { libc::mkfifo(path.as_ptr(), 0o600) } != 0 {
+            bail!("failed to create fifo: {}", io::Error::last_os_error());
+        }
+
+        let server = WasmtimeServe::new(P3_CLI_SERVE_POST_RETURN_BLOCKING_OPEN_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+            cmd.arg("--post-return-timeout=1s");
+            cmd.arg(format!("--dir={}::/", dir.path().display()));
+        })?;
+
+        let request = hyper::Request::builder()
+            .uri("http://localhost/")
+            .body(String::new())
+            .context("failed to make request")?;
+        let resp = tokio::time::timeout(Duration::from_secs(30), server.send_request(request))
+            .await
+            .context("request did not complete within 30s")??;
+        assert!(resp.status().is_success());
+        assert!(
+            resp.body().is_empty(),
+            "expected the instance to be dropped while its open was still blocked; got {:?}",
+            resp.body()
+        );
+
+        // The guest's open is still blocked on a background thread; give it a
+        // writer so the server can shut down.
+        thread::spawn(move || std::fs::OpenOptions::new().write(true).open(fifo));
+
+        let (_stdout, stderr) = server.finish()?;
+        assert!(stderr.contains("guest timed out"), "stderr: {stderr}");
+        Ok(())
+    }
+
+    #[cfg(not(unix))]
+    #[tokio::test]
+    async fn p3_cli_serve_post_return_blocking_open() -> Result<()> {
+        Ok(())
+    }
+
+    /// With only `--post-return-timeout` set, post-return work that never
+    /// yields is still cut off when the deadline elapses.
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_post_return_spin() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_POST_RETURN_SPIN_COMPONENT, move |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+            cmd.arg("--post-return-timeout=1s");
+        })?;
+        let request = hyper::Request::builder()
+            .uri("http://localhost/")
+            .body(String::new())
+            .context("failed to make request")?;
+        let resp = tokio::time::timeout(Duration::from_secs(30), server.send_request(request))
+            .await
+            .context("request did not complete within 30s")??;
+        assert!(resp.status().is_success());
+        assert!(resp.body().is_empty(), "got {:?}", resp.body());
+
+        let (_stdout, stderr) = server.finish()?;
+        assert!(stderr.contains("guest timed out"), "stderr: {stderr}");
+        Ok(())
+    }
+
     #[test]
     fn p3_cli_many_stream() -> Result<()> {
         run_wasmtime(&["run", "-Smax-resources=100", P3_CLI_MANY_STREAM_COMPONENT])?;
@@ -3469,6 +3679,26 @@ start a print 1234
     #[test]
     fn p3_cli_deny_listen() -> Result<()> {
         run_wasmtime(&["run", "-Stcp", P3_CLI_DENY_LISTEN_COMPONENT])?;
+        Ok(())
+    }
+
+    #[test]
+    fn p2_cli_stdout_write_too_much() -> Result<()> {
+        // With `-Sinherit-stdout=n` stdout is a sink, so writing past the
+        // permit reported by `check-write` has to trap.
+        let output = super::wasmtime(&[
+            "run",
+            "-Sinherit-stdout=n",
+            P2_CLI_STDOUT_WRITE_TOO_MUCH_COMPONENT,
+        ])?
+        .output()?;
+        // The stdout stream is a sink, so nothing is expected on stdout.
+        assert_eq!(output.stdout, b"");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("write exceeded budget"),
+            "bad stderr: {stderr}"
+        );
         Ok(())
     }
 

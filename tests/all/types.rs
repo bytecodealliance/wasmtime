@@ -704,6 +704,7 @@ fn func_subtyping() -> Result<()> {
         (false, "i", &i, "a", &a),
     ] {
         eprintln!("expect that `{sub_name} <: {sup_name}` is `{expected}`");
+        assert_eq!(expected, sub.matches(sup));
         let sub = HeapType::ConcreteFunc(sub.clone());
         let sup = HeapType::ConcreteFunc(sup.clone());
         let actual = sub.matches(&sup);

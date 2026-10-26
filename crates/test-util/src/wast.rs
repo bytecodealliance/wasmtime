@@ -18,7 +18,7 @@ use wasmtime_environ::prelude::*;
 pub mod limits {
     pub const MEMORY_SIZE: usize = 805 << 16;
     pub const MEMORIES: u32 = 450;
-    pub const GC_HEAP_SIZE: usize = 16 << 16;
+    pub const GC_HEAP_SIZE: usize = 2 << 20; // 2MiB
     pub const TABLES: u32 = 200;
     pub const MEMORIES_PER_MODULE: u32 = 9;
     pub const TABLES_PER_MODULE: u32 = 5;
@@ -204,6 +204,7 @@ fn spec_test_config(test: &Path) -> TestConfig {
                 || test_name.contains("unreached-valid")
                 || test_name.contains("select")
                 || test_name.contains("data")
+                || test_name.contains("cast")
             {
                 ret.gc = Some(true);
             }
@@ -224,6 +225,7 @@ fn spec_test_config(test: &Path) -> TestConfig {
                 || test_name.contains("ref")
                 || test_name.contains("instance")
                 || test_name.contains("imports")
+                || test_name.contains("cast")
             {
                 ret.exceptions = Some(true);
             }

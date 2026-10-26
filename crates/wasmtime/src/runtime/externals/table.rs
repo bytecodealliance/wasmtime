@@ -134,6 +134,7 @@ impl Table {
     ) -> Result<Table> {
         init.ensure_matches_ty(store, ty.element())
             .context("type mismatch: value does not match table element type")?;
+        store.bump_table_count()?;
         let table = generate_table_export(store, limiter, &ty).await?;
 
         // Tables are always allocated as all zeroes, so skip the fill below if
@@ -314,9 +315,10 @@ impl Table {
     /// [`Store::limiter_async`](`crate::Store::limiter_async`)).  When using an
     /// async resource limiter, use [`Table::grow_async`] instead.
     ///
-    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
-    /// memory allocation fails. See the `OutOfMemory` type's documentation for
-    /// details on Wasmtime's out-of-memory handling.
+    /// This function will handle out-of-memory conditions and report an error
+    /// in such cases, see the `OutOfMemory` type's documentation for details on
+    /// Wasmtime's out-of-memory handling. Note that the `OutOfMemory` type may
+    /// not literally be returned for detecting this condition.
     ///
     /// # Panics
     ///
@@ -368,9 +370,7 @@ impl Table {
     ///
     /// # Errors
     ///
-    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
-    /// memory allocation fails. See the `OutOfMemory` type's documentation for
-    /// details on Wasmtime's out-of-memory handling.
+    /// This function may return errors for the same reasons as [`Table::grow`].
     ///
     /// # Panics
     ///
@@ -695,5 +695,26 @@ mod tests {
         fn _grow(table: &Table, store: &mut Store<()>, init: Ref) {
             _assert_send(table.grow(store, 0, init))
         }
+    }
+
+    #[test]
+    #[cfg(feature = "gc")]
+    fn grow_with_unrooted_ref_returns_err() -> Result<()> {
+        let mut config = crate::Config::new();
+        config.wasm_gc(true);
+        let engine = crate::Engine::new(&config)?;
+        let mut store = Store::new(&engine, ());
+        let ty = crate::TableType::new(crate::RefType::EXTERNREF, 2, None)?;
+        let table = Table::new(&mut store, ty, Ref::Extern(None))?;
+
+        let unrooted = {
+            let mut scope = crate::RootScope::new(&mut store);
+            ExternRef::new(&mut scope, 1u32)?
+        };
+
+        let res = table.grow(&mut store, 1, Ref::Extern(Some(unrooted)));
+        assert!(res.is_err());
+        assert_eq!(table.size(&store), 2);
+        Ok(())
     }
 }

@@ -4664,6 +4664,12 @@ criteria = "safe-to-deploy"
 delta = "0.103.13 -> 0.103.15"
 notes = "Minor updates and feature shufflings."
 
+[[audits.rustls-webpki]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.103.15 -> 0.103.16"
+notes = "Updated with new certificates"
+
 [[audits.safetensors]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -6404,6 +6410,12 @@ criteria = "safe-to-deploy"
 delta = "0.26.1 -> 1.0.7"
 notes = "Minor changes, new certs, etc. Nothing major"
 
+[[audits.webpki-roots]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.7 -> 1.0.10"
+notes = "Only contains updated certs"
+
 [[audits.which]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -7534,7 +7546,7 @@ end = "2025-11-13"
 criteria = "safe-to-deploy"
 user-id = 6741 # Alice Ryhl (Darksonn)
 start = "2020-12-25"
-end = "2026-10-10"
+end = "2027-10-26"
 
 [[trusted.tokio-macros]]
 criteria = "safe-to-deploy"

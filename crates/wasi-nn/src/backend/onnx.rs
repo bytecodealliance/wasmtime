@@ -367,6 +367,15 @@ impl Shape {
                 tensor.ty
             ));
         }
+        let expected = byte_count(&tensor.dimensions, tensor.ty)?;
+        if tensor.data.len() != expected {
+            return Err(wasmtime::format_err!(
+                "input tensor has {} bytes of data but dimensions {:?} of type {:?} need {expected} bytes",
+                tensor.data.len(),
+                tensor.dimensions,
+                tensor.ty
+            ));
+        }
         Ok(())
     }
 }
@@ -423,9 +432,10 @@ fn to_input_value(slot: &TensorSlot) -> Result<[SessionInputValue<'_>; 1], Backe
                 })?;
                 Ok(inputs![ort_tensor])
             }
-            _ => {
-                unimplemented!("{:?} not supported by ONNX", tensor.ty);
-            }
+            _ => Err(BackendError::UnsupportedTensorType(format!(
+                "{:?}",
+                tensor.ty
+            ))),
         },
         None => {
             return Err(BackendError::BackendAccess(wasmtime::format_err!(
@@ -433,6 +443,27 @@ fn to_input_value(slot: &TensorSlot) -> Result<[SessionInputValue<'_>; 1], Backe
                 slot.shape.name
             )));
         }
+    }
+}
+
+/// Return the number of bytes in a tensor of type `ty` with the given
+/// dimensions.
+fn byte_count(dimensions: &[u32], ty: TensorType) -> wasmtime::Result<usize> {
+    dimensions
+        .iter()
+        .try_fold(bytes_per_element(ty), |count, d| {
+            count.checked_mul(usize::try_from(*d).ok()?)
+        })
+        .ok_or_else(|| wasmtime::format_err!("tensor dimensions are too large: {dimensions:?}"))
+}
+
+/// Return the size in bytes of one element of type `ty`.
+fn bytes_per_element(ty: TensorType) -> usize {
+    match ty {
+        TensorType::U8 => 1,
+        TensorType::Fp16 | TensorType::Bf16 => 2,
+        TensorType::Fp32 | TensorType::I32 => 4,
+        TensorType::Fp64 | TensorType::I64 => 8,
     }
 }
 

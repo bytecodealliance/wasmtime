@@ -142,6 +142,8 @@ typedef struct wasmtime_async_continuation_t {
  *        trap is transferred to wasmtime.
  * \param continuation_ret the returned continuation
  *        that determines when the async function has completed executing.
+ *        This doesn't need to be set if `trap_ret` is set before this
+ *        function returns.
  *
  * Only supported for async stores.
  *

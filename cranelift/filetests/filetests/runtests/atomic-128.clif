@@ -4,16 +4,23 @@ set enable_llvm_abi_extensions
 set enable_multi_ret_implicit_sret
 target x86_64 has_cmpxchg16b
 target aarch64
+target s390x
 
 function %atomic_load(i128) -> i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128):
-    v3 = stack_addr.i64 ss0
-    store.i128 notrap v0, v3
+    ; Dynamically align the slot to 16
     v1 = stack_addr.i64 ss0
-    v2 = atomic_load.i128 v1
-    return v2
+    v2 = iconst.i64 15
+    v3 = band v1, v2
+    v4 = iconst.i64 16
+    v5 = isub v4, v3
+    v6 = iadd v1, v5
+
+    store.i128 notrap v0, v6
+    v7 = atomic_load.i128 v6
+    return v7
 }
 ; run: %atomic_load(0) == 0
 ; run: %atomic_load(-1) == -1
@@ -24,15 +31,51 @@ block0(v0: i128):
 ; run: %atomic_load(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678) == 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678
 
 
-function %atomic_store(i128) -> i128 {
-    ss0 = explicit_slot 16, align=16
+; specifically testing the case where the address of what's being loaded is dead
+; after the atomic load
+function %atomic_load_dead_addr_callee(i64) -> i128 {
+block0(v0: i64):
+    v1 = atomic_load.i128 v0
+    return v1
+}
+
+function %atomic_load_dead_addr(i128) -> i128 {
+    ss0 = explicit_slot 32, align=8
+    fn0 = %atomic_load_dead_addr_callee(i64) -> i128
 
 block0(v0: i128):
+    ; Dynamically align the slot to 16
     v1 = stack_addr.i64 ss0
-    atomic_store.i128 v0, v1
-    v3 = stack_addr.i64 ss0
-    v2 = load.i128 notrap v3
-    return v2
+    v2 = iconst.i64 15
+    v3 = band v1, v2
+    v4 = iconst.i64 16
+    v5 = isub v4, v3
+    v6 = iadd v1, v5
+
+    store.i128 notrap v0, v6
+    v7 = call fn0(v6)
+    return v7
+}
+; run: %atomic_load_dead_addr(0) == 0
+; run: %atomic_load_dead_addr(0x1234) == 0x1234
+; run: %atomic_load_dead_addr(0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678) == 0xC0FFEEEE_ABCDEF01_DECAFFFF_12345678
+
+
+function %atomic_store(i128) -> i128 {
+    ss0 = explicit_slot 32, align=8
+
+block0(v0: i128):
+    ; Dynamically align the slot to 16
+    v1 = stack_addr.i64 ss0
+    v2 = iconst.i64 15
+    v3 = band v1, v2
+    v4 = iconst.i64 16
+    v5 = isub v4, v3
+    v6 = iadd v1, v5
+
+    atomic_store.i128 v0, v6
+    v7 = load.i128 notrap v6
+    return v7
 }
 ; run: %atomic_store(0) == 0
 ; run: %atomic_store(-1) == -1
@@ -44,16 +87,21 @@ block0(v0: i128):
 
 
 function %atomic_cas(i128, i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128, v2: i128):
-    v6 = stack_addr.i64 ss0
-    store.i128 notrap v0, v6
+    ; Dynamically align the slot to 16
     v3 = stack_addr.i64 ss0
-    v4 = atomic_cas.i128 v3, v1, v2
-    v7 = stack_addr.i64 ss0
-    v5 = load.i128 notrap v7
-    return v5, v4
+    v4 = iconst.i64 15
+    v5 = band v3, v4
+    v6 = iconst.i64 16
+    v7 = isub v6, v5
+    v8 = iadd v3, v7
+
+    store.i128 notrap v0, v8
+    v9 = atomic_cas.i128 v8, v1, v2
+    v10 = load.i128 notrap v8
+    return v10, v9
 }
 
 ; run: %atomic_cas(0, 0, 2) == [2, 0]
@@ -64,16 +112,21 @@ block0(v0: i128, v1: i128, v2: i128):
 
 
 function %atomic_add(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 add v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 add v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_add(0, 0) == [0, 0]
@@ -85,16 +138,21 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_sub(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 sub v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 sub v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_sub(0, 0) == [0, 0]
@@ -106,16 +164,21 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_and(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 and v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 and v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_and(0, 0) == [0, 0]
@@ -127,16 +190,21 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_nand(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 nand v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 nand v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_nand(0, 0) == [-1, 0]
@@ -148,16 +216,21 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_or(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 or v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 or v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_or(0, 0) == [0, 0]
@@ -169,16 +242,21 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_xor(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 xor v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 xor v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_xor(0, 0) == [0, 0]
@@ -190,16 +268,21 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_xchg(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 xchg v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 xchg v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_xchg(0, 0) == [0, 0]
@@ -211,16 +294,21 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_umin(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 umin v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 umin v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_umin(0, 0) == [0, 0]
@@ -234,16 +322,21 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_umax(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 umax v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 umax v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_umax(0, 0) == [0, 0]
@@ -257,16 +350,21 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_smin(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 smin v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 smin v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_smin(0, 0) == [0, 0]
@@ -280,16 +378,21 @@ block0(v0: i128, v1: i128):
 
 
 function %atomic_smax(i128, i128) -> i128, i128 {
-    ss0 = explicit_slot 16, align=16
+    ss0 = explicit_slot 32, align=8
 
 block0(v0: i128, v1: i128):
-    v5 = stack_addr.i64 ss0
-    store.i128 notrap v0, v5
+    ; Dynamically align the slot to 16
     v2 = stack_addr.i64 ss0
-    v3 = atomic_rmw.i128 smax v2, v1
-    v6 = stack_addr.i64 ss0
-    v4 = load.i128 notrap v6
-    return v4, v3
+    v3 = iconst.i64 15
+    v4 = band v2, v3
+    v5 = iconst.i64 16
+    v6 = isub v5, v4
+    v7 = iadd v2, v6
+
+    store.i128 notrap v0, v7
+    v8 = atomic_rmw.i128 smax v7, v1
+    v9 = load.i128 notrap v7
+    return v9, v8
 }
 
 ; run: %atomic_smax(0, 0) == [0, 0]

@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
+use crate::dsl::{Customization::*, Feature::*, Inst, Length::*, Location::*, TupleType::*};
+use crate::dsl::{align, evex, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -29,6 +29,8 @@ pub fn list() -> Vec<Inst> {
         inst("andw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x23]).r(), _64b | compat),
         inst("andl", fmt("RM", [rw(r32), r(rm32)]), rex(0x23).r(), _64b | compat),
         inst("andq", fmt("RM", [rw(r64), r(rm64)]), rex(0x23).w().r(), _64b),
+        // APX: NDD form of `AND`, promoted into EVEX map 4.
+        inst("andq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x21).r(), _64b & apx),
         // BMI1 andn
         inst("andnl", fmt("RVM", [w(r32a), r(r32b), r(rm32)]), vex(LZ)._0f38().w0().op(0xF2), (_64b | compat) & bmi1),
         inst("andnq", fmt("RVM", [w(r64a), r(r64b), r(rm64)]), vex(LZ)._0f38().w1().op(0xF2), _64b & bmi1),

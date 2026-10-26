@@ -2769,11 +2769,15 @@ fn sync_call_async_typed() -> Result<()> {
       (call $task.return (i32.const 42))
       (i32.const 0 (; EXIT ;)))
     (func (export "run-cb") (param i32 i32 i32) (result i32)
-      unreachable))
+      unreachable)
+    (func (export "run-sync-lifted") (result i32)
+      (i32.const 42)))
   (core instance $i (instantiate $m
     (with "" (instance (export "task.return" (func $task.return))))))
   (func (export "run") async (result u32)
     (canon lift (core func $i "run") async (callback (core func $i "run-cb"))))
+  (func (export "run-sync-lifted") async (result u32)
+    (canon lift (core func $i "run-sync-lifted")))
 )
 "#;
 
@@ -2782,26 +2786,53 @@ fn sync_call_async_typed() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    let func = instance.get_func(&mut store, "run").unwrap();
-    let mut results = [Val::U32(0)];
-    let error = func.call(&mut store, &[], &mut results).unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("cannot synchronously call an async-lifted export"),
-        "{error}"
-    );
+    for name in ["run", "run-sync-lifted"] {
+        let func = instance.get_func(&mut store, name).unwrap();
+        let mut results = [Val::U32(0)];
+        let error = func.call(&mut store, &[], &mut results).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot synchronously call an async function"),
+            "{error}"
+        );
 
-    let func = instance
-        .get_typed_func::<(), (u32,)>(&mut store, "run")
-        .unwrap();
-    let error = func.call(&mut store, ()).unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("cannot synchronously call an async-lifted export"),
-        "{error}"
-    );
+        let func = instance.get_typed_func::<(), (u32,)>(&mut store, name)?;
+        let error = func.call(&mut store, ()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot synchronously call an async function"),
+            "{error}"
+        );
+    }
+
+    // Somehow this shouldn't hit `bail-bug!` at least...
+    const WAT2: &str = r#"
+(component
+  (component $inner
+    (core module $m
+      (func (export "f") (param i32) (result i32)
+        (i32.add (local.get 0) (i32.const 3))))
+    (core instance $i (instantiate $m))
+    (func (export "f") async (param "x" u32) (result u32)
+      (canon lift (core func $i "f"))))
+  (instance $inner (instantiate $inner))
+
+  (core func $f (canon lower (func $inner "f")))
+  (core module $m
+    (import "" "f" (func $f (param i32) (result i32)))
+    (func (export "run") (param i32) (result i32) (call $f (local.get 0))))
+  (core instance $i (instantiate $m (with "" (instance (export "f" (func $f))))))
+  (func (export "run") (param "x" u32) (result u32)
+    (canon lift (core func $i "run")))
+)
+"#;
+    let component = Component::new(&engine, WAT2)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "run")?;
+    let _ = func.call(&mut store, (4,));
 
     Ok(())
 }
@@ -3740,5 +3771,81 @@ async fn resource_drop_async_dtor_yields() -> Result<()> {
     let (r,) = make.call_async(&mut store, ()).await?;
     spin.call_async(&mut store, ()).await?;
     r.resource_drop_async(&mut store).await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn max_fibers() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async_stackful(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (component $C
+                (core module $libc (memory (export "memory") 1))
+                (core instance $libc (instantiate $libc))
+                (core module $m
+                    (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+                    (import "" "waitable-set.wait" (func $waitable-set.wait (param i32 i32) (result i32)))
+                    (func (export "wait-forever")
+                        (drop (call $waitable-set.wait (call $waitable-set.new) (i32.const 0))))
+                )
+                (core func $waitable-set.new (canon waitable-set.new))
+                (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $libc "memory"))))
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "waitable-set.new" (func $waitable-set.new))
+                        (export "waitable-set.wait" (func $waitable-set.wait))
+                    ))
+                ))
+                (func (export "wait-forever") async
+                    (canon lift (core func $i "wait-forever") async))
+            )
+
+            (component $D
+                (import "c" (instance $c (export "wait-forever" (func async))))
+                (core module $libc (memory (export "memory") 1))
+                (core instance $libc (instantiate $libc))
+                (core module $m
+                    (import "" "wait-forever" (func $wait-forever (result i32)))
+                    (func (export "run") (param $n i32)
+                        (loop $l
+                            (if (local.get $n)
+                                (then
+                                    (drop (call $wait-forever))
+                                    (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+                                    (br $l)))))
+                )
+                (core func $wait-forever
+                    (canon lower (func $c "wait-forever") async (memory (core memory $libc "memory"))))
+                (core instance $i (instantiate $m
+                    (with "" (instance (export "wait-forever" (func $wait-forever))))
+                ))
+                (func (export "run") async (param "n" u32)
+                    (canon lift (core func $i "run")))
+            )
+
+            (instance $c (instantiate $C))
+            (instance $d (instantiate $D (with "c" (instance $c))))
+            (func (export "run") (alias export $d "run"))
+        )"#,
+    )?;
+    let linker = Linker::new(&engine);
+
+    let run = async |n: u32| -> Result<()> {
+        let mut store = Store::new(&engine, ());
+        store.set_max_fibers(10);
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+        let run = instance.get_typed_func::<(u32,), ()>(&mut store, "run")?;
+        store
+            .run_concurrent(async |a| run.call_concurrent(a, (n,)).await)
+            .await?
+    };
+
+    run(9).await?;
+    assert!(run(10).await.is_err());
     Ok(())
 }

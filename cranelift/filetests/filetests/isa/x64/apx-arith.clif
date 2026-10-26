@@ -1,0 +1,72 @@
+test compile precise-output
+target x86_64 has_apx
+
+function %and_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = band v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   andq %rdi, %rsi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x21, 0xfe, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+
+function %or_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = bor v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   orq %rdi, %rsi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x09, 0xfe, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+
+function %xor_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = bxor v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   xorq %rdi, %rsi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   .byte 0x62, 0xf4, 0xfc, 0x18, 0x31, 0xfe, 0x48, 0x89
+;   .byte 0xec, 0x5d, 0xc3
+

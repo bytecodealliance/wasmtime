@@ -110,6 +110,10 @@ macro_rules! foreach_builtin_component_function {
 
             resource_transfer_own(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             resource_transfer_borrow(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
+            // Same as `resource_transfer_borrow` but for when the destination
+            // instance owns the resource, in which case it receives the
+            // representation directly and no destination table is involved.
+            resource_transfer_borrow_to_owner(vmctx: vmctx, src_idx: u32, src_table: u32) -> u64;
 
             enter_sync_call(vmctx: vmctx, callee_async: u32, callee_instance: u32) -> bool;
             exit_sync_call(vmctx: vmctx) -> bool;

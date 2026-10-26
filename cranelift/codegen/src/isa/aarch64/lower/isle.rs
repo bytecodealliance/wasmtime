@@ -524,6 +524,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         UImm5::maybe_from_u8(x).unwrap()
     }
 
+    fn u8_into_uimm6(&mut self, x: u8) -> UImm6 {
+        UImm6::maybe_from_u8(x).unwrap()
+    }
+
     fn u8_into_imm12(&mut self, x: u8) -> Imm12 {
         Imm12::maybe_from_u64(x.into()).unwrap()
     }

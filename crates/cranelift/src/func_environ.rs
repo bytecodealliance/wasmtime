@@ -3426,7 +3426,9 @@ impl FuncEnvironment<'_> {
                         if global_ty.mutability || gc::gc_compiler(self)?.is_moving_collector() {
                             ir::MemFlagsData::trusted()
                         } else {
-                            ir::MemFlagsData::trusted().with_readonly().with_can_move()
+                            ir::MemFlagsData::trusted()
+                                .with_readonly(true)
+                                .with_can_move(true)
                         };
                     flags.set_alias_region(Some(region));
                     gc::gc_compiler(self)?

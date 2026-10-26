@@ -76,8 +76,22 @@
 
 ;;;; Common Term Forms ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Instructions whose spec maps over lanes with `lanemap` are instantiated at
+;; the canary vector shapes `i32x2` `(bv 32 x 2)` and `i8x4` `(bv 8 x 4)`, which
+;; fit `fits_in_64`/`fits_in_32` guards and so catch rules missing a scalar
+;; guard.
+
 (form
     bv_unary_8_to_64
+    ((args (named Type) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2)) (ret (bv 32 x 2)))
+    ((args (named Type) (bv 8 x 4)) (ret (bv 8 x 4))))
+
+(form
+    bv_unary_scalar_8_to_64
     ((args (named Type) (bv  8)) (ret (bv  8)))
     ((args (named Type) (bv 16)) (ret (bv 16)))
     ((args (named Type) (bv 32)) (ret (bv 32)))
@@ -85,6 +99,15 @@
 
 (form
     bv_binary_8_to_64
+    ((args (named Type) (bv  8) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2)))
+    ((args (named Type) (bv 8 x 4) (bv 8 x 4)) (ret (bv 8 x 4))))
+
+(form
+    bv_binary_scalar_8_to_64
     ((args (named Type) (bv  8) (bv  8)) (ret (bv  8)))
     ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
@@ -123,7 +146,9 @@
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
     ((args (named Type) (bv 32) (bv 64)) (ret (bv 32)))
     ((args (named Type) (bv 64) (bv  8)) (ret (bv 64)))
-    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2) (bv 64)) (ret (bv 32 x 2)))
+    ((args (named Type) (bv 8 x 4) (bv 64)) (ret (bv 8 x 4))))
 
 (form
     bv_shift_8_to_64_extra
@@ -139,45 +164,56 @@
     ((args (named Type) (bv  8) (bv  8) (bv  8)) (ret (bv  8)))
     ((args (named Type) (bv 16) (bv 16) (bv 16)) (ret (bv 16)))
     ((args (named Type) (bv 32) (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64) (bv 64) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2)))
+    ((args (named Type) (bv 8 x 4) (bv 8 x 4) (bv 8 x 4)) (ret (bv 8 x 4))))
 
 ;;;; CLIF Instruction Specifications ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Integer Instructions
 
 (spec (iadd ty x y)
-    (provide (= result (bvadd x y))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x) (y y)) (bvadd x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate iadd
     ((args (named Type) (bv 8) (bv 8)) (ret (bv 8)))
     ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
     ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
-    ((args (named Type) (bv 128) (bv 128)) (ret (bv 128))))
+    ((args (named Type) (bv 128) (bv 128)) (ret (bv 128)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2)))
+    ((args (named Type) (bv 8 x 4) (bv 8 x 4)) (ret (bv 8 x 4))))
 
 (spec (isub ty x y)
-    (provide (= result (bvsub x y))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x) (y y)) (bvsub x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate isub bv_binary_8_to_64)
 
 (spec (ineg ty x)
-    (provide (= result (bvneg x))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x)) (bvneg x)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate ineg bv_unary_8_to_64)
 
 (spec (iabs ty x)
-    (provide (= result (if (bvsge x (zero_ext (widthof x) #b0)) x (bvneg x)))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x)) (if (bvsge x (zero_ext (widthof x) #b0)) x (bvneg x))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate iabs bv_unary_8_to_64)
 
 (spec (imul ty x y)
-    (provide (= result (bvmul x y))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x) (y y)) (bvmul x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate imul bv_binary_8_to_64)
 
 (spec (umul_overflow ty x y)
+    (require (= (:lanes ty) 1))
     (provide
         (= (:bits ty) (widthof x))
+        (= (:lanes ty) (lanesof x))
         (= (widthof x) (widthof y))
         (let
             ((double (concat x x))
@@ -191,8 +227,10 @@
 (instantiate umul_overflow bv_binary_8_to_64_with_flag)
 
 (spec (smul_overflow ty x y)
+    (require (= (:lanes ty) 1))
     (provide
         (= (:bits ty) (widthof x))
+        (= (:lanes ty) (lanesof x))
         (= (widthof x) (widthof y))
         (let
             ((double (concat x x))
@@ -208,6 +246,8 @@
 (spec (smulhi ty x y)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
+        (all_lanes ((result result) (x x) (y y))
         (let
             (
                 (double (concat x x))
@@ -215,12 +255,14 @@
                 (xwide (sign_ext double_width x))
                 (ywide (sign_ext double_width y)))
             (with (low)
-                (= (concat result low) (bvmul xwide ywide))))))
+                (= (concat result low) (bvmul xwide ywide)))))))
 (instantiate smulhi bv_binary_8_to_64)
 
 (spec (umulhi ty x y)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
+        (all_lanes ((result result) (x x) (y y))
         (let
             (
                 (double (concat x x))
@@ -228,18 +270,21 @@
                 (xwide (zero_ext double_width x))
                 (ywide (zero_ext double_width y)))
             (with (low)
-                (= (concat result low) (bvmul xwide ywide))))))
+                (= (concat result low) (bvmul xwide ywide)))))))
 (instantiate umulhi bv_binary_8_to_64)
 
 (spec (udiv ty x y)
+    (require (= (:lanes ty) 1))
     (modifies clif_trap)
     (provide
         (= result (bvudiv x y))
         (= clif_trap (bv_is_zero! y))
-        (= (:bits ty) (widthof result))))
-(instantiate udiv bv_binary_8_to_64)
+        (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))))
+(instantiate udiv bv_binary_scalar_8_to_64)
 
 (spec (sdiv ty x y)
+    (require (= (:lanes ty) 1))
     (modifies clif_trap)
     (provide
         ; Constrain the result width in all cases
@@ -261,11 +306,13 @@
                 (not clif_trap)
                 (= result (bvsdiv x y)))))))
 
-(instantiate sdiv bv_binary_8_to_64)
+(instantiate sdiv bv_binary_scalar_8_to_64)
 (spec (urem ty x y)
+    (require (= (:lanes ty) 1))
     (modifies clif_trap)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         ; If i2 is 0, then the result is undefined.
         (if (bv_is_zero! y)
             clif_trap
@@ -273,12 +320,14 @@
             (and
                 (not clif_trap)
                 (= result (bvurem x y))))))
-(instantiate urem bv_binary_8_to_64)
+(instantiate urem bv_binary_scalar_8_to_64)
 
 (spec (srem ty x y)
+    (require (= (:lanes ty) 1))
     (modifies clif_trap)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         ; Let j1 be the signed interpretation of i1.
         ; Let j2 be the signed interpretation of i2.
         ; If i2 is 0, then the result is undefined.
@@ -288,14 +337,16 @@
             (and
                 (not clif_trap)
                 (= result (bvsrem x y))))))
-(instantiate srem bv_binary_8_to_64)
+(instantiate srem bv_binary_scalar_8_to_64)
 
 ;; "Unsigned addition of x and y, trapping if the result overflows."
 ;; "Accepts 32 or 64-bit integers, and does not support vector types."
 (spec (uadd_overflow_trap ty x y trap_code)
+    (require (= (:lanes ty) 1))
     (modifies clif_trap)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         (let
             (
                 (N (widthof x))
@@ -325,8 +376,10 @@
     (provide (= clif_trap (bv_is_zero! val))))
 
 (spec (iconst ty arg)
+    (require (= (:lanes ty) 1))
     (provide (= arg (zero_ext 64 result))
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate iconst
     ((args (named Type) (bv 64)) (ret (bv 8)))
     ((args (named Type) (bv 64)) (ret (bv 16)))
@@ -348,82 +401,99 @@
 (spec (ishl ty x y)
     (provide
         (= (:bits ty) (widthof result))
-        (= result (bvshl x (shift_amount! x y)))))
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x)) (bvshl x (shift_amount! x y))))))
 (instantiate ishl bv_shift_8_to_64)
 (instantiate ishl bv_shift_8_to_64_extra (tag slow))
 
 (spec (ushr ty x y)
     (provide
         (= (:bits ty) (widthof result))
-        (= result (bvlshr x (shift_amount! x y)))))
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x)) (bvlshr x (shift_amount! x y))))))
 (instantiate ushr bv_shift_8_to_64)
 (instantiate ushr bv_shift_8_to_64_extra (tag slow))
 
 (spec (sshr ty x y)
     (provide
         (= (:bits ty) (widthof result))
-        (= result (bvashr x (shift_amount! x y)))))
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x)) (bvashr x (shift_amount! x y))))))
 (instantiate sshr bv_shift_8_to_64)
 (instantiate sshr bv_shift_8_to_64_extra (tag slow))
 
 (spec (band ty x y)
-    (provide (= result (bvand x y))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x) (y y)) (bvand x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate band bv_binary_8_to_64)
 
 (spec (bxor ty x y)
-    (provide (= result (bvxor x y))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x) (y y)) (bvxor x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate bxor bv_binary_8_to_64)
 
 (spec (bor ty x y)
-    (provide (= result (bvor x y))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x) (y y)) (bvor x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate bor bv_binary_8_to_64)
 
 (spec (bnot ty x)
-    (provide (= result (bvnot x))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x)) (bvnot x)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate bnot bv_unary_8_to_64)
 
 ;; Rotate amounts are taken modulo the bit width, so `shift_amount!` applies
 ;; here too: masking with `bits - 1` is the same as reducing modulo `bits` for
 ;; the power-of-two widths modelled here.
 (spec (rotl ty x y)
-    (provide (= result (rotl x (shift_amount! x y)))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x)) (rotl x (shift_amount! x y))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate rotl bv_shift_8_to_64)
 (instantiate rotl bv_shift_8_to_64_extra (tag slow))
 
 (spec (rotr ty x y)
-    (provide (= result (rotr x (shift_amount! x y)))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x)) (rotr x (shift_amount! x y))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate rotr bv_shift_8_to_64)
 (instantiate rotr bv_shift_8_to_64_extra (tag slow))
 
 (spec (bitselect ty c x y)
-    (provide (= result (bvor (bvand c x) (bvand (bvnot c) y)))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((c c) (x x) (y y)) (bvor (bvand c x) (bvand (bvnot c) y))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate bitselect bv_ternary_8_to_64)
 
 (spec (cls ty x)
+    (require (= (:lanes ty) 1))
     (provide (= result (cls x))
-             (= (:bits ty) (widthof result))))
-(instantiate cls bv_unary_8_to_64)
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
+(instantiate cls bv_unary_scalar_8_to_64)
 
 (spec (clz ty x)
+    (require (= (:lanes ty) 1))
     (provide (= result (clz x))
-             (= (:bits ty) (widthof result))))
-(instantiate clz bv_unary_8_to_64)
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
+(instantiate clz bv_unary_scalar_8_to_64)
 
 (spec (ctz ty x)
+    (require (= (:lanes ty) 1))
     (provide (= result (clz (rev x)))
-             (= (:bits ty) (widthof result))))
-(instantiate ctz bv_unary_8_to_64)
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
+(instantiate ctz bv_unary_scalar_8_to_64)
 
 (spec (popcnt ty x)
-    (provide (= result (popcnt x))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x)) (popcnt x)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate popcnt bv_unary_8_to_64)
 
 ;; Reverse the byte order of `x`. There is no byte-swap primitive, so we build
@@ -446,8 +516,10 @@
     (concat (extract 55 48 x)
             (extract 63 56 x))))))
 (spec (bswap ty x)
+    (require (= (:lanes ty) 1))
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         (let ((w (conv_to 64 x)))
             (= result
                 (conv_to (widthof result)
@@ -461,9 +533,11 @@
     ((args (named Type) (bv 64)) (ret (bv 64))))
 
 (spec (ireduce ty x)
-    (require (< (:bits ty) (widthof x)))
+    (require (< (:bits ty) (widthof x))
+             (= (:lanes ty) 1))
     (provide (= result (conv_to (widthof result) x))
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate ireduce
     ((args (named Type) (bv 16)) (ret (bv  8)))
     ((args (named Type) (bv 32)) (ret (bv  8)))
@@ -483,35 +557,43 @@
     ;; (8->8, 16->16, 32->32, 64->64) are not accepted in clif.
 
 (spec (uextend ty x)
-    (require (< (widthof x) (:bits ty)))
+    (require (< (widthof x) (:bits ty))
+             (= (:lanes ty) 1))
     (provide (= result (zero_ext (widthof result) x))
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate uextend extend)
 
 (spec (sextend ty x)
-    (require (< (widthof x) (:bits ty)))
+    (require (< (widthof x) (:bits ty))
+             (= (:lanes ty) 1))
     (provide (= result (sign_ext (widthof result) x))
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate sextend extend)
 
 (spec (smin ty x y)
-    (provide (= result (if (bvsle x y) x y))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x) (y y)) (if (bvsle x y) x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate smin bv_binary_8_to_64)
 
 (spec (umin ty x y)
-    (provide (= result (if (bvule x y) x y))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x) (y y)) (if (bvule x y) x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate umin bv_binary_8_to_64)
 
 (spec (smax ty x y)
-    (provide (= result (if (bvsge x y) x y))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x) (y y)) (if (bvsge x y) x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate smax bv_binary_8_to_64)
 
 (spec (umax ty x y)
-    (provide (= result (if (bvuge x y) x y))
-             (= (:bits ty) (widthof result))))
+    (provide (= result (lanemap ((x x) (y y)) (if (bvuge x y) x y)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate umax bv_binary_8_to_64)
 
 (spec (icmp ty cc x y)
@@ -556,6 +638,7 @@
     (modifies loaded_value)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
 
         ; Activate the CLIF load effect.
         (clif_load_activate! clif_load (widthof result) p offset)
@@ -579,10 +662,12 @@
 
 ; Unsigned 8-bit load
 (spec (uload8 ty flags p offset)
+    (require (= (:lanes ty) 1))
     (modifies clif_load)
     (modifies loaded_value)
     (provide (uloadN! clif_load 8 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate uload8
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 16)))
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
@@ -590,20 +675,24 @@
 
 ; Unsigned 16-bit load
 (spec (uload16 ty flags p offset)
+    (require (= (:lanes ty) 1))
     (modifies clif_load)
     (modifies loaded_value)
     (provide (uloadN! clif_load 16 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate uload16
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
 
 ; Unsigned 32-bit load
 (spec (uload32 ty flags p offset)
+    (require (= (:lanes ty) 1))
     (modifies clif_load)
     (modifies loaded_value)
     (provide (uloadN! clif_load 32 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate uload32
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
 
@@ -618,10 +707,12 @@
 
 ; Signed 8-bit load
 (spec (sload8 ty flags p offset)
+    (require (= (:lanes ty) 1))
     (modifies clif_load)
     (modifies loaded_value)
     (provide (sloadN! clif_load 8 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate sload8
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 16)))
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
@@ -629,20 +720,24 @@
 
 ; Signed 16-bit load
 (spec (sload16 ty flags p offset)
+    (require (= (:lanes ty) 1))
     (modifies clif_load)
     (modifies loaded_value)
     (provide (sloadN! clif_load 16 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate sload16
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 32)))
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
 
 ; Signed 32-bit load
 (spec (sload32 ty flags p offset)
+    (require (= (:lanes ty) 1))
     (modifies clif_load)
     (modifies loaded_value)
     (provide (sloadN! clif_load 32 p offset loaded_value result)
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate sload32
     ((args (named Type) (named MemFlagsData) (named Value) (named Offset32)) (ret (bv 64))))
 
@@ -767,14 +862,18 @@
 
 ; f32const: single-precision floating-point constant.
 (spec (f32const ty x)
+    (require (= (:lanes ty) 1))
     (provide (= result x)
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate f32const ((args (named Type) (bv 32)) (ret (bv 32))))
 
 ; f64const: double-precision floating-point constant.
 (spec (f64const ty x)
+    (require (= (:lanes ty) 1))
     (provide (= result x)
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate f64const ((args (named Type) (bv 64)) (ret (bv 64))))
 
 ; fcmp: floating-point compare.
@@ -808,10 +907,11 @@
 (spec (fadd ty x y)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x) (y y))
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
             (if (or (fp.isNaN x) (fp.isNaN y))
                 (nans2! x y)
@@ -841,10 +941,11 @@
             (if (and (= (fp_magnitude! x) (fp_magnitude! y)) (fp_opposite_sign! x y))
                 (fp.+zero (widthof x))
             ; Else return the result of adding z1 and z2, rounded to the nearest representable value.
-                (fp.add x y))))))))))))))
+                (fp.add x y)))))))))))))))
 (instantiate fadd
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 ; fsub: floating-point subtraction.
 ;
@@ -852,10 +953,11 @@
 (spec (fsub ty x y)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x) (y y))
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
             (if (or (fp.isNaN x) (fp.isNaN y))
                 (nans2! x y)
@@ -887,10 +989,11 @@
             (if (and (= (fp_magnitude! x) (fp_magnitude! y)) (fp_equal_sign! x y))
                 (fp.+zero (widthof x))
             ; Else return the result of subtracting z2 from z1, rounded to the nearest representable value.
-                (fp.sub x y))))))))))))))
+                (fp.sub x y)))))))))))))))
 (instantiate fsub
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 ; fmul: floating-point multiplication.
 ;
@@ -898,10 +1001,11 @@
 (spec (fmul ty x y)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x) (y y))
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
             (if (or (fp.isNaN x) (fp.isNaN y))
                 (nans2! x y)
@@ -933,10 +1037,11 @@
             (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
                 (fp.-zero (widthof x))
             ; Else return the result of multiplying z1 and z2, rounded to the nearest representable value.
-                (fp.mul x y)))))))))))))))
+                (fp.mul x y))))))))))))))))
 (instantiate fmul
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 ; fdiv: floating-point division.
 ;
@@ -944,10 +1049,11 @@
 (spec (fdiv ty x y)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x) (y y))
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
             (if (or (fp.isNaN x) (fp.isNaN y))
                 (nans2! x y)
@@ -982,10 +1088,11 @@
             (if (and (fp.isZero y) (fp_opposite_sign! x y))
                 (fp.-oo (widthof x))
             ; Else return the result of dividing z1 by z2, rounded to the nearest representable value.
-                (fp.div x y)))))))))))))))
+                (fp.div x y))))))))))))))))
 (instantiate fdiv
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 
 ; fmin: floating-point minimum.
@@ -994,10 +1101,11 @@
 (spec (fmin ty x y)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x) (y y))
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
             (if (or (fp.isNaN x) (fp.isNaN y))
                 (nans2! x y)
@@ -1013,10 +1121,11 @@
             (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
                 (fp.-zero (widthof x))
             ; Else return the smaller value of z1 and z2.
-                (fp.min x y)))))))))
+                (fp.min x y))))))))))
 (instantiate fmin
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 ; fmax: floating-point minimum.
 ;
@@ -1024,10 +1133,11 @@
 (spec (fmax ty x y)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x) (y y))
             ; If either z1 or z2 is a NaN, then return an element of nans{z1,z2}.
             (if (or (fp.isNaN x) (fp.isNaN y))
                 (nans2! x y)
@@ -1043,10 +1153,11 @@
             (if (and (fp.isZero x) (fp.isZero y) (fp_opposite_sign! x y))
                 (fp.+zero (widthof x))
             ; Else return the smaller value of z1 and z2.
-                (fp.max x y)))))))))
+                (fp.max x y))))))))))
 (instantiate fmax
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 
 ; fabs: floating-point absolute value.
@@ -1055,7 +1166,8 @@
 (spec (fabs ty x)
     (provide
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x))
             ; If z is a NaN, then return z with positive sign.
             (if (fp.isNaN x)
                 (bvand x (bvnot (fp_sign_bit_set! (widthof x))))
@@ -1069,10 +1181,11 @@
             (if (fp.isPositive x)
                 x
             ; Else return z negated.
-                (fp.neg x))))))))
+                (fp.neg x)))))))))
 (instantiate fabs
     ((args (named Type) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 
 ; fneg: floating-point negation.
@@ -1081,14 +1194,16 @@
 (spec (fneg ty x)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         ; IEEE-754 negation just toggles the sign bit for every input (normal,
         ; +/-0, +/-inf, NaN), so model it directly in the bit-vector theory: this
         ; is bit-exact and avoids an fp<->bv bridge that makes queries like
         ; `fmul_fneg_fneg` intractable.
-        (= result (bvxor x (fp_sign_bit_set! (widthof x))))))
+        (= result (lanemap ((x x)) (bvxor x (fp_sign_bit_set! (widthof x)))))))
 (instantiate fneg
     ((args (named Type) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 
 ; sqrt: floating-point square root.
@@ -1097,10 +1212,11 @@
 (spec (sqrt ty x)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x))
             ; If z is a NaN, then return an element of nans{z}.
             (if (fp.isNaN x)
                 (nans1! x)
@@ -1117,10 +1233,11 @@
             (if (fp.isNegative x)
                 (nans0! (widthof x))
             ; Else return the square root of z.
-                (fp.sqrt x)))))))))
+                (fp.sqrt x))))))))))
 (instantiate sqrt
     ((args (named Type) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 ; ceil: floating-point ceiling.
 ;
@@ -1128,10 +1245,11 @@
 (spec (ceil ty x)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x))
             ; If z is a NaN, then return an element of nans{z}.
             (if (fp.isNaN x)
                 (nans1! x)
@@ -1145,10 +1263,11 @@
             (if (and (fp.lt x (fp.-zero (widthof x))) (fp.gt x (fp_minus_one! (widthof x))))
                 (fp.-zero (widthof x))
             ; Else return the smallest integral value that is not smaller than z.
-                (fp.ceil x))))))))
+                (fp.ceil x)))))))))
 (instantiate ceil
     ((args (named Type) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 ; floor: floating-point floor.
 ;
@@ -1156,10 +1275,11 @@
 (spec (floor ty x)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x))
             ; If z is a NaN, then return an element of nans{z}.
             (if (fp.isNaN x)
                 (nans1! x)
@@ -1173,10 +1293,11 @@
             (if (and (fp.gt x (fp.-zero (widthof x))) (fp.lt x (fp_one! (widthof x))))
                 (fp.+zero (widthof x))
             ; Else return the smallest integral value that is not smaller than z.
-                (fp.floor x))))))))
+                (fp.floor x)))))))))
 (instantiate floor
     ((args (named Type) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 ; trunc: floating-point truncate.
 ;
@@ -1184,10 +1305,11 @@
 (spec (trunc ty x)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x))
             ; If z is a NaN, then return an element of nans{z}.
             (if (fp.isNaN x)
                 (nans1! x)
@@ -1204,20 +1326,22 @@
             (if (and (fp.lt x (fp.-zero (widthof x))) (fp.gt x (fp_minus_one! (widthof x))))
                 (fp.-zero (widthof x))
             ; Else return the integral value with the same sign as z and the largest magnitude that is not larger than the magnitude of z.
-                (fp.trunc x)))))))))
+                (fp.trunc x))))))))))
 (instantiate trunc
     ((args (named Type) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2)) (ret (bv 32 x 2))))
 ; nearest: floating-point nearest.
 ;
 ; Specification derived from WebAssembly Specification prose (Floating Point Numerics, section 4.3.3).
 (spec (nearest ty x)
     (modifies relax_nan produces_nan)
     (provide
-        (= produces_nan (fp.isNaN result))
+        (= produces_nan (any_lanes ((result result)) (fp.isNaN result)))
         (=> produces_nan relax_nan)
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x))
             ; If z is a NaN, then return an element of nans{z}.
             (if (fp.isNaN x)
                 (nans1! x)
@@ -1234,10 +1358,11 @@
             (if (and (fp.lt x (fp.-zero (widthof x))) (fp.ge x (fp_minus_half! (widthof x))))
                 (fp.-zero (widthof x))
             ; Else return the integral value that is nearest to z; if two values are equally near, return the even one.
-                (fp.nearest x)))))))))
+                (fp.nearest x))))))))))
 (instantiate nearest
     ((args (named Type) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 ; fcopysign: floating-point copysign.
 ;
@@ -1245,21 +1370,24 @@
 (spec (fcopysign ty x y)
     (provide
         (= (:bits ty) (widthof result))
-        (= result
+        (= (:lanes ty) (lanesof result))
+        (= result (lanemap ((x x) (y y))
             ; If z1 and z2 have the same sign, then return z1.
             (if (fp_equal_sign_inc_nan! x y)
                 x
             ; Else return z1 with negated sign.
             (if (fp.isNaN x)
                 (nan_neg! x)
-                (fp.neg x))))))
+                (fp.neg x)))))))
 (instantiate fcopysign
     ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
-    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64)))
+    ((args (named Type) (bv 32 x 2) (bv 32 x 2)) (ret (bv 32 x 2))))
 
 (spec (bitcast ty flags x)
     (provide (= result x)
-             (= (:bits ty) (widthof result))))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 ; I32ReinterpretF32
 ; I64ReinterpretF64
 ; F32ReinterpretI32
@@ -1282,12 +1410,14 @@
 (spec (fcvt_from_uint ty x)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         (= result (to_fp_unsigned (widthof result) (zero_ext 64 x)))))
 (instantiate fcvt_from_uint fcvt)
 
 (spec (fcvt_from_sint ty x)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         (= result (to_fp (widthof result) (sign_ext 64 x)))))
 (instantiate fcvt_from_sint fcvt)
 
@@ -1299,9 +1429,11 @@
         (32 #x000000004f800000)
         (64 #x43f0000000000000)))
 (spec (fcvt_to_uint ty x)
+    (require (= (:lanes ty) 1))
     (modifies clif_trap)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         (let (
             (s (widthof x))
             (d (widthof result)))
@@ -1325,9 +1457,11 @@
         (32 (fp_minus_i32_min! w))
         (64 (fp_minus_i64_min! w))))
 (spec (fcvt_to_sint ty x)
+    (require (= (:lanes ty) 1))
     (modifies clif_trap)
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         (let (
             (s (widthof x))
             (d (widthof result)))
@@ -1357,11 +1491,13 @@
 
 ; Specification derived from WebAssembly Specification prose (Conversions, section 4.3.4).
 (spec (fdemote ty z)
+    (require (= (:lanes ty) 1))
     (match
         ;; Demote only can return bv-32 as written
         (= (widthof result) 32))
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         (= result
             ; If z is a canonical NaN, then return an element of nans{} (i.e., a canonical NaN of size N).
             ; Else if z is a NaN, then return an element of nans{±nan(1)} (i.e., any NaN of size N).
@@ -1386,11 +1522,13 @@
 
 ; Specification derived from WebAssembly Specification prose (Conversions, section 4.3.4).
 (spec (fpromote ty z)
+    (require (= (:lanes ty) 1))
     (match
         ;; Promote only can return bv-32 as written
         (= (widthof result) 64))
     (provide
         (= (:bits ty) (widthof result))
+        (= (:lanes ty) (lanesof result))
         (= result
             ; If z is a canonical NaN, then return an element of nans{} (i.e., a canonical NaN of size N).
             ; Else if z is a NaN, then return an element of nans{±nan(1)} (i.e., any arithmetic NaN of size N).

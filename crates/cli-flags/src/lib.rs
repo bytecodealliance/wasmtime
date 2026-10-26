@@ -529,8 +529,9 @@ wasmtime_option_group! {
         /// Component model support for fixed-length lists: this corresponds
         /// to the 🔧 emoji in the component model specification
         pub component_model_fixed_length_lists: Option<bool>,
-        /// Component model support for `(implements ...)`, corresponds to the
-        /// 🏷️ emoji in the upstream spec.
+        /// Component model support for `(implements ...)` and
+        /// `(external-id ...)`, corresponds to the 🏷️ emoji in the upstream
+        /// spec.
         pub component_model_implements: Option<bool>,
         /// Component model support for canonical names, corresponds to the
         /// 🔗 emoji in the upstream spec.
@@ -634,6 +635,8 @@ wasmtime_option_group! {
         /// resources, streams, futures) per store; allocating past it traps.
         /// (default: 100000)
         pub max_component_handles: Option<usize>,
+        /// Maximum number of simultaneously-live fibers per store.
+        pub max_fibers: Option<u32>,
         /// Maximum value, in bytes, for a wasi-random 0.2
         /// `get{,-insecure}-random-bytes` `len` parameter. Calls with a value
         /// exceeding this limit will trap.

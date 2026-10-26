@@ -513,6 +513,12 @@ impl ToSExpr for ModelType {
                 SExpr::atom("bv"),
                 SExpr::List(widths.iter().map(SExpr::atom).collect()),
             ]),
+            ModelType::BitVecLanes { lane_bits, lanes } => SExpr::List(vec![
+                SExpr::atom("bv"),
+                SExpr::atom(lane_bits),
+                SExpr::atom("x"),
+                SExpr::atom(lanes),
+            ]),
             ModelType::Struct(fields) => {
                 let mut parts = vec![SExpr::atom("struct")];
                 parts.extend(fields.iter().map(ToSExpr::to_sexpr));
@@ -572,6 +578,23 @@ impl ToSExpr for SpecExpr {
                     .collect::<Vec<_>>();
 
                 SExpr::List(vec![SExpr::atom("let"), SExpr::List(defs), body.to_sexpr()])
+            }
+            SpecExpr::LaneMap {
+                binders,
+                body,
+                reduce,
+                pos: _,
+            } => {
+                let binders = binders
+                    .iter()
+                    .map(|(name, expr)| SExpr::List(vec![name.to_sexpr(), expr.to_sexpr()]))
+                    .collect::<Vec<_>>();
+                let op = match reduce {
+                    Lanes::Map => "lanemap",
+                    Lanes::All => "all_lanes",
+                    Lanes::Any => "any_lanes",
+                };
+                SExpr::List(vec![SExpr::atom(op), SExpr::List(binders), body.to_sexpr()])
             }
             SpecExpr::With {
                 decls,
@@ -677,6 +700,7 @@ impl ToSExpr for SpecOp {
             SpecOp::ToFPUnsigned => "to_fp_unsigned",
             SpecOp::ToFPFromFP => "to_fp_from_fp",
             SpecOp::WidthOf => "widthof",
+            SpecOp::LanesOf => "lanesof",
             SpecOp::If => "if",
             SpecOp::Switch => "switch",
             SpecOp::Popcnt => "popcnt",

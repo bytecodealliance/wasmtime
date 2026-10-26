@@ -1,6 +1,11 @@
-use std::{cmp::Ordering, collections::HashSet, iter::zip};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    iter::zip,
+};
 
 use anyhow::{Context as _, Error, Result, bail};
+use cranelift_isle::ast::Lanes;
 use cranelift_isle_veri_caching::{Context, Response, SExpr, SExprData};
 use num_bigint::BigUint;
 use num_traits::Num as _;
@@ -101,6 +106,13 @@ pub struct Solver<'a> {
 
     /// Ill-typed expressions, left unconstrained.
     ill_typed: Vec<(ExprId, String)>,
+
+    /// Expressions that stand for another: the lane variables and results of
+    /// single-lane lane maps, which are their vectors and bodies.
+    alias: HashMap<ExprId, ExprId>,
+
+    /// Bindings for per-lane mappings.
+    lane_env: HashMap<ExprId, SExpr>,
 }
 
 impl Drop for Solver<'_> {
@@ -126,6 +138,8 @@ impl<'a> Solver<'a> {
             tmp_idx: 0,
             sqrt_uf_widths: HashSet::new(),
             ill_typed: Vec::new(),
+            alias: HashMap::new(),
+            lane_env: HashMap::new(),
         };
         solver.prelude()?;
         Ok(solver)
@@ -147,9 +161,15 @@ impl<'a> Solver<'a> {
     }
 
     pub fn encode(&mut self) -> Result<()> {
+        // Simplifies the scalar case of specs to just the body
+        self.resolve_single_lane_maps();
+
         // Expressions
         for (i, expr) in self.conditions.exprs.iter().enumerate() {
             let x = ExprId(i);
+            if self.alias.contains_key(&x) {
+                continue;
+            }
             self.declare_expr(x)?;
             if !expr.is_variable() {
                 self.assign_expr(x, expr)?;
@@ -462,6 +482,16 @@ impl<'a> Solver<'a> {
             Expr::FPToUBV(w, x) => self.fp_to_bv(w, x, false),
             Expr::FPToSBV(w, x) => self.fp_to_bv(w, x, true),
             Expr::WidthOf(x) => self.width_of(x),
+            Expr::LanesOf(x) => Ok(self.smt.numeral(self.assignment.lanes_or_scalar(x))),
+            Expr::LaneMap {
+                ref binders,
+                ref scope,
+                body,
+                lanes,
+            } => {
+                let (binders, scope) = (binders.clone(), scope.clone());
+                self.lane_map(&binders, scope, body, lanes)
+            }
             Expr::FPPositiveInfinity(x) => Ok(self.fp_value("+oo", x)?),
             Expr::FPNegativeInfinity(x) => Ok(self.fp_value("-oo", x)?),
             Expr::FPPositiveZero(x) => Ok(self.fp_value("+zero", x)?),
@@ -613,6 +643,97 @@ impl<'a> Solver<'a> {
 
         // Substitute known constant width.
         Ok(self.smt.numeral(width))
+    }
+
+    /// A lane map over a single lane is just its body: alias each lane
+    /// variable to its vector and the lane map to its body, so none of them is
+    /// declared and the encoding is the body written over the vectors.
+    fn resolve_single_lane_maps(&mut self) {
+        for (i, expr) in self.conditions.exprs.iter().enumerate() {
+            let Expr::LaneMap { binders, body, .. } = expr else {
+                continue;
+            };
+            if Self::lane_count(&self.assignment, binders) != 1 {
+                continue;
+            }
+            for (lane, vector) in binders {
+                self.alias.insert(*lane, *vector);
+            }
+            self.alias.insert(ExprId(i), *body);
+        }
+    }
+
+    /// Lane count of a lane map. Type inference gives every bound vector the
+    /// same count, so the first decides.
+    fn lane_count(assignment: &Assignment, binders: &[(ExprId, ExprId)]) -> usize {
+        binders
+            .first()
+            .map_or(1, |(_, vector)| assignment.lanes_or_scalar(*vector))
+    }
+
+    /// Encode a lane map over several lanes. Per lane, each lane variable is
+    /// bound to that lane of its vector and every expression in the body's
+    /// scope is freshly declared.
+    fn lane_map(
+        &mut self,
+        binders: &[(ExprId, ExprId)],
+        scope: std::ops::Range<usize>,
+        body: ExprId,
+        lanes: Lanes,
+    ) -> Result<SExpr> {
+        let conditions = self.conditions;
+        let n = Self::lane_count(&self.assignment, binders);
+        debug_assert!(n > 1, "single-lane lane maps are resolved before encoding");
+
+        let mut vectors = Vec::new();
+        for (lane, vector) in binders {
+            let width = self
+                .assignment
+                .try_bit_vector_width(*vector)
+                .context("lane map vector should be a bit-vector of known width")?;
+            vectors.push((*lane, self.expr_atom(*vector), width / n));
+        }
+
+        let mut results = Vec::new();
+        for i in 0..n {
+            self.lane_env.clear();
+            for &(lane, vector, lane_bits) in &vectors {
+                let slice = self.extract((i + 1) * lane_bits - 1, i * lane_bits, vector);
+                self.lane_env.insert(lane, slice);
+            }
+            for x in scope.clone().map(ExprId) {
+                let expr = &conditions.exprs[x.index()];
+                if matches!(expr, Expr::LaneMap { .. }) {
+                    bail!("lane maps do not nest");
+                }
+                let sort = self.type_to_sort(&self.assignment.try_assignment(x)?.ty())?;
+                let name = format!("$lane{i}_{}_{}", self.expr_name(x), self.tmp_idx);
+                self.tmp_idx += 1;
+                self.smt.declare_const(&name, sort)?;
+                let atom = self.smt.atom(name);
+                if !expr.is_variable() {
+                    let rhs = self.expr_to_smt(expr)?;
+                    self.smt.assert(self.smt.eq(atom, rhs))?;
+                }
+                self.lane_env.insert(x, atom);
+            }
+            results.push(self.expr_atom(body));
+        }
+        self.lane_env.clear();
+
+        match lanes {
+            Lanes::All => Ok(self.smt.and_many(results)),
+            Lanes::Any => Ok(self.smt.or_many(results)),
+            Lanes::Map => {
+                // `concat` puts its first argument in the high bits; lane 0 is lowest.
+                let mut results = results.into_iter().rev();
+                let mut acc = results.next().expect("at least one lane");
+                for lane in results {
+                    acc = self.smt.concat(acc, lane);
+                }
+                Ok(acc)
+            }
+        }
     }
 
     fn verification_condition(&mut self) -> Result<()> {
@@ -967,6 +1088,13 @@ impl<'a> Solver<'a> {
     fn const_from_sexpr(&self, sexpr: SExpr) -> Result<Const> {
         match self.smt.get(sexpr) {
             SExprData::Atom(a) => Self::const_from_literal(a),
+            // Negative integer: (- n).
+            SExprData::List([op, n]) if matches!(self.smt.get(*op), SExprData::Atom("-")) => {
+                match self.const_from_sexpr(*n)? {
+                    Const::Int(v) => Ok(Const::Int(-v)),
+                    c => bail!("unsupported negated smt const: {c}"),
+                }
+            }
             SExprData::List(exprs) => self.const_from_qualified_abstract_value(exprs),
             SExprData::String(s) => bail!("unsupported smt const: {s}"),
         }
@@ -1032,6 +1160,13 @@ impl<'a> Solver<'a> {
     }
 
     fn expr_atom(&self, x: ExprId) -> SExpr {
+        let mut x = x;
+        while let Some(target) = self.alias.get(&x) {
+            x = *target;
+        }
+        if let Some(atom) = self.lane_env.get(&x) {
+            return *atom;
+        }
         self.smt.atom(self.expr_name(x))
     }
 

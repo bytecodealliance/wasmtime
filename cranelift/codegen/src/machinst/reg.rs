@@ -469,6 +469,15 @@ pub trait OperandVisitorImpl: OperandVisitor {
         self.reg_fixed(reg.reg.as_mut(), rreg, OperandKind::Def, OperandPos::Late);
     }
 
+    /// Add a register "early fixed def", which ties a vreg to a particular
+    /// RealReg and logically occurs at the beginning of the instruction,
+    /// alongside all uses. Use this when the def may be written before
+    /// all uses are read; the regalloc will ensure that it does not overwrite
+    /// any uses.
+    fn reg_fixed_early_def(&mut self, reg: &mut Writable<impl AsMut<Reg>>, rreg: Reg) {
+        self.reg_fixed(reg.reg.as_mut(), rreg, OperandKind::Def, OperandPos::Early);
+    }
+
     /// Add an operand tying a virtual register to a physical register.
     fn reg_fixed(&mut self, reg: &mut Reg, rreg: Reg, kind: OperandKind, pos: OperandPos) {
         debug_assert!(reg.is_virtual());

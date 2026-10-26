@@ -6,7 +6,6 @@ use std::ffi::{CStr, c_char, c_void};
 use std::fs::File;
 use std::path::Path;
 use std::pin::Pin;
-use std::slice;
 use std::task::{Context, Poll};
 use tokio::io::{self, AsyncWrite};
 use wasmtime::Result;
@@ -69,7 +68,7 @@ pub unsafe extern "C" fn wasi_config_set_argv(
     argc: usize,
     argv: *const *const c_char,
 ) -> bool {
-    for arg in slice::from_raw_parts(argv, argc) {
+    for arg in crate::slice_from_raw_parts(argv, argc) {
         let arg = match CStr::from_ptr(*arg).to_str() {
             Ok(s) => s,
             Err(_) => return false,
@@ -91,8 +90,8 @@ pub unsafe extern "C" fn wasi_config_set_env(
     names: *const *const c_char,
     values: *const *const c_char,
 ) -> bool {
-    let names = slice::from_raw_parts(names, envc);
-    let values = slice::from_raw_parts(values, envc);
+    let names = crate::slice_from_raw_parts(names, envc);
+    let values = crate::slice_from_raw_parts(values, envc);
 
     for (k, v) in names.iter().zip(values) {
         let k = match cstr_to_str(*k) {
@@ -203,6 +202,9 @@ impl CustomOutputStream {
     }
 }
 
+/// The number of bytes `check_write` permits and `write` accepts in one call.
+const WRITE_BUDGET: usize = 64 * 1024;
+
 #[async_trait::async_trait]
 impl wasmtime_wasi::p2::Pollable for CustomOutputStream {
     async fn ready(&mut self) {}
@@ -211,6 +213,11 @@ impl wasmtime_wasi::p2::Pollable for CustomOutputStream {
 #[async_trait::async_trait]
 impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
+        if bytes.len() > WRITE_BUDGET {
+            return Err(StreamError::Trap(wasmtime::format_err!(
+                "write exceeded budget"
+            )));
+        }
         let wrote = self
             .inner
             .raw_write(&bytes)
@@ -228,7 +235,7 @@ impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
         Ok(())
     }
     fn check_write(&mut self) -> Result<usize, StreamError> {
-        Ok(64 * 1024)
+        Ok(WRITE_BUDGET)
     }
 }
 

@@ -5,6 +5,7 @@
 #ifndef WASMTIME_ENGINE_HH
 #define WASMTIME_ENGINE_HH
 
+#include <cstdlib>
 #include <memory>
 #include <wasmtime/config.hh>
 #include <wasmtime/engine.h>
@@ -28,8 +29,14 @@ class Engine {
   /// \brief Creates an engine with default compilation settings.
   Engine() : ptr(wasm_engine_new()) {}
   /// \brief Creates an engine with the specified compilation settings.
+  ///
+  /// Aborts the process if the configuration is invalid.
   explicit Engine(Config config)
-      : ptr(wasm_engine_new_with_config(config.capi_release())) {}
+      : ptr(wasm_engine_new_with_config(config.capi_release())) {
+    if (!ptr) {
+      std::abort();
+    }
+  }
 
   /// \brief Increments the current epoch which may result in interrupting
   /// currently executing WebAssembly in connected stores if the epoch is now

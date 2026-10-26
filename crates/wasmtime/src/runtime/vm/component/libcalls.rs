@@ -668,6 +668,16 @@ fn resource_transfer_borrow(
     instance.resource_transfer_borrow(store, src_idx, src_table, dst_table)
 }
 
+fn resource_transfer_borrow_to_owner(
+    store: &mut dyn VMStore,
+    instance: Instance,
+    src_idx: u32,
+    src_table: u32,
+) -> Result<u32> {
+    let src_table = TypeResourceTableIndex::from_u32(src_table);
+    instance.resource_transfer_borrow_to_owner(store, src_idx, src_table)
+}
+
 fn enter_sync_call(
     store: &mut dyn VMStore,
     instance: Instance,

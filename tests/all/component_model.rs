@@ -20,6 +20,7 @@ mod import;
 mod instance;
 mod linker;
 mod macros;
+mod map;
 mod missing_async;
 mod nested;
 mod post_return;

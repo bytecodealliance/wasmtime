@@ -304,6 +304,7 @@ fn trampoline_callable(
         Transcoder { .. }
         | ResourceTransferOwn
         | ResourceTransferBorrow
+        | ResourceTransferBorrowToOwner
         | PrepareCall { .. }
         | StartCall { .. }
         | FutureTransfer

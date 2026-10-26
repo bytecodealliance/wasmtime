@@ -236,6 +236,43 @@ fn test_limits_memory_only() -> Result<()> {
 }
 
 #[test]
+fn test_host_memory_and_table_counts() -> Result<()> {
+    let engine = Engine::default();
+    let module = Module::new(&engine, r#"(module (memory 0) (table 0 funcref))"#)?;
+
+    let mut store = Store::new(
+        &engine,
+        StoreLimitsBuilder::new().memories(2).tables(2).build(),
+    );
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
+
+    // Host-created memories and tables count against the limits...
+    Memory::new(&mut store, MemoryType::new(0, None)?)?;
+    Table::new(
+        &mut store,
+        TableType::new(RefType::FUNCREF, 0, None)?,
+        Ref::Func(None),
+    )?;
+
+    // ... together with those defined by modules ...
+    Instance::new(&mut store, &module, &[])?;
+
+    // ... so no more of either can be created.
+    assert!(Memory::new(&mut store, MemoryType::new(0, None)?).is_err());
+    assert!(
+        Table::new(
+            &mut store,
+            TableType::new(RefType::FUNCREF, 0, None)?,
+            Ref::Func(None),
+        )
+        .is_err()
+    );
+    assert!(Instance::new(&mut store, &module, &[]).is_err());
+
+    Ok(())
+}
+
+#[test]
 fn test_initial_memory_limits_exceeded() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(&engine, r#"(module (memory (export "m") 11))"#)?;

@@ -100,6 +100,13 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
         let shape = Shape::new(&dimensions)?;
         let mut new_tensor = OvTensor::new(precision, &shape)?;
         let buffer = new_tensor.get_raw_data_mut()?;
+        if buffer.len() != tensor.data.len() {
+            return Err(BackendError::BackendAccess(wasmtime::format_err!(
+                "input tensor has {} bytes of data but its dimensions and type need {} bytes",
+                tensor.data.len(),
+                buffer.len()
+            )));
+        }
         buffer.copy_from_slice(&tensor.data);
         // Assign the tensor to the request.
         match id {
@@ -128,6 +135,13 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
                     let shape = Shape::new(&dimensions)?;
                     let mut new_tensor = OvTensor::new(precision, &shape)?;
                     let buffer = new_tensor.get_raw_data_mut()?;
+                    if buffer.len() != input.tensor.data.len() {
+                        return Err(BackendError::BackendAccess(wasmtime::format_err!(
+                            "input tensor has {} bytes of data but its dimensions and type need {} bytes",
+                            input.tensor.data.len(),
+                            buffer.len()
+                        )));
+                    }
                     buffer.copy_from_slice(&input.tensor.data);
 
                     self.0.set_tensor(&input.name, &new_tensor)?;

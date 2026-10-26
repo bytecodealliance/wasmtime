@@ -4,7 +4,7 @@ use super::REALLOC_AND_FREE;
 use std::ops::Deref;
 use wasmtime::Result;
 use wasmtime::component::*;
-use wasmtime::{Config, Engine, Store, StoreContextMut, WasmBacktrace};
+use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, WasmBacktrace};
 
 #[test]
 fn can_compile() -> Result<()> {
@@ -477,6 +477,63 @@ fn reenter_during_host() -> Result<()> {
     let func = instance.get_func(&mut store, "run").unwrap();
     store.data_mut().func = Some(func);
     func.call(&mut store, &[], &mut [])?;
+
+    Ok(())
+}
+
+#[test]
+fn reenter_during_host_and_trap() -> Result<()> {
+    let component = r#"
+(component
+  (import "thunk" (func $thunk))
+  (core func $thunk_lower (canon lower (func $thunk)))
+
+  (core module $m
+    (import "host" "thunk" (func $thunk))
+
+    (func (export "run")
+      call $thunk
+      unreachable)
+    (func (export "trap")
+      unreachable)
+  )
+  (core instance $m (instantiate $m
+    (with "host" (instance (export "thunk" (func $thunk_lower))))
+  ))
+
+  (func (export "run")
+    (canon lift (core func $m "run"))
+  )
+  (func (export "trap")
+    (canon lift (core func $m "trap"))
+  )
+)
+    "#;
+
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+
+    // The host handles the reentrant call's trap and returns normally, but
+    // the store is now poisoned so the guest must not continue running.
+    let mut store = Store::new(&engine, None);
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap(
+        "thunk",
+        |mut store: StoreContextMut<'_, Option<TypedFunc<(), ()>>>, _: ()| -> Result<()> {
+            let func = store.data().unwrap();
+            assert!(func.call(&mut store, ()).is_err());
+            Ok(())
+        },
+    )?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    *store.data_mut() = Some(instance.get_typed_func::<(), ()>(&mut store, "trap")?);
+    let err = run.call(&mut store, ()).unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent),
+        "{err:?}"
+    );
 
     Ok(())
 }

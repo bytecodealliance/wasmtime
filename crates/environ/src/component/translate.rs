@@ -14,8 +14,8 @@ use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 use std::mem;
 use wasmparser::component_types::{
-    AliasableResourceId, ComponentCoreModuleTypeId, ComponentDefinedTypeId, ComponentEntityType,
-    ComponentFuncTypeId, ComponentInstanceTypeId, ComponentValType,
+    AliasableResourceId, ComponentCoreModuleTypeId, ComponentCoreTypeId, ComponentDefinedTypeId,
+    ComponentEntityType, ComponentFuncTypeId, ComponentInstanceTypeId, ComponentValType,
 };
 use wasmparser::types::Types;
 use wasmparser::{Chunk, ComponentExternName, Encoding, Parser, Payload, Validator};
@@ -353,10 +353,7 @@ enum LocalInitializer<'data> {
         HashMap<&'data str, ComponentItem>,
         ComponentInstanceTypeId,
     ),
-    ComponentSynthetic(
-        HashMap<&'data str, (ComponentItem, wasmparser::ComponentExternName<'data>)>,
-        ComponentInstanceTypeId,
-    ),
+    ComponentSynthetic(HashMap<&'data str, ComponentItem>, ComponentInstanceTypeId),
 
     // alias section
     AliasExportFunc(ModuleInstanceIndex, &'data str),
@@ -906,17 +903,21 @@ impl<'a, 'data> Translator<'a, 'data> {
                     .core_type_count_in_component();
                 self.validator.core_type_section(&s)?;
                 let types = self.validator.types(0).unwrap();
-                for ty in s {
-                    match ty? {
-                        wasmparser::CoreType::Rec(group) => {
-                            let id = types.core_type_at_in_component(index).unwrap_sub();
+                let count = types.core_type_count_in_component();
+                while index < count {
+                    match types.core_type_at_in_component(index) {
+                        // The current type index is always the first type of
+                        // its rec group, so intern the group and then skip
+                        // past the rest of its types.
+                        ComponentCoreTypeId::Sub(id) => {
                             let group_id = types.rec_group_id_of(id);
                             self.types
                                 .module_types_builder()
                                 .intern_rec_group(types, group_id)?;
-                            index += u32::try_from(group.types().len()).unwrap();
+                            index +=
+                                u32::try_from(types.rec_group_elements(group_id).len()).unwrap();
                         }
-                        wasmparser::CoreType::Module(_) => index += 1,
+                        ComponentCoreTypeId::Module(_) => index += 1,
                     }
                 }
             }
@@ -1625,7 +1626,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
             let idx = self.kind_to_item(export.kind, export.index)?;
-            map.insert(export.name.name, (idx, export.name));
+            map.insert(export.name.name, idx);
         }
 
         Ok(LocalInitializer::ComponentSynthetic(map, ty))

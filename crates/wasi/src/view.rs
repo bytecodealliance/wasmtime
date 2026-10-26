@@ -97,8 +97,8 @@ impl<T: WasiView> crate::sockets::WasiSocketsView for T {
 /// Identifier used to correlate a named import to a host-defined value.
 ///
 /// This type is a small newtype wrapper around a `usize`, its only field which
-/// is also public. Embeders define the meaning of this value and are in control
-/// of both creating this an interpreting it. Creation of [`NamedId`] happens in
+/// is also public. Embedders define the meaning of this value and are in control
+/// of both creating this and interpreting it. Creation of [`NamedId`] happens in
 /// functions like [`wasmtime_wasi::p3::add_named_to_linker`] where embedders
 /// will allocate a [`NamedId`] for all recognized named imports. Interpreting
 /// a [`NamedId`] happens later in traits such as [`WasiNamedView`] where the id
@@ -106,7 +106,7 @@ impl<T: WasiView> crate::sockets::WasiSocketsView for T {
 ///
 /// Internally the `wasmtime-wasi` crate does not inspect the internal field
 /// here nor ever create one. Embedders are solely responsible for managing this
-/// id and its conetnts.
+/// id and its contents.
 ///
 /// [`wasmtime_wasi::p3::add_named_to_linker`]: crate::p3::add_named_to_linker
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Debug)]
@@ -133,6 +133,14 @@ pub struct WasiCtxNamedView<'a, T>(pub &'a mut T);
 pub trait WasiNamedView: Send + 'static {
     /// Yields mutable access to the [`WasiCtx`] configuration used for this
     /// context.
+    ///
+    /// It's strongly recommended, though not always required, that the
+    /// [`ResourceTable`] in the returned [`WasiCtxView`] is the same table that
+    /// [`WasiView::ctx`] returns. Resources created through a named import can
+    /// be used through interfaces bound to the default context (and vice
+    /// versa), for example streams returned by a named `wasi:cli/stdout` are
+    /// used through `wasi:io/streams`, and with separate tables those lookups
+    /// fail or find another context's resources.
     fn ctx(&mut self, id: NamedId) -> WasiCtxView<'_>;
 }
 

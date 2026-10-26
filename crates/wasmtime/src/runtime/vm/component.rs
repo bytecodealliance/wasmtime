@@ -249,6 +249,7 @@ impl ComponentInstance {
     /// mutable reference at this time to the instance from `vmctx`. Note that
     /// it must be also safe to borrow the store mutably, meaning it can't
     /// already be in use elsewhere.
+    #[inline]
     pub unsafe fn enter_host_from_wasm<R>(
         vmctx: NonNull<VMComponentContext>,
         f: impl FnOnce(&mut dyn VMStore, Instance) -> R,
@@ -847,16 +848,10 @@ impl ComponentInstance {
     /// This is used when lowering borrows to skip table management and instead
     /// thread through the underlying representation directly.
     pub fn resource_owned_by_own_instance(&self, ty: TypeResourceTableIndex) -> bool {
-        let (resource_ty, resource_instance) = match self.component.types()[ty] {
-            TypeResourceTable::Concrete { ty, instance } => (ty, instance),
-            TypeResourceTable::Abstract(_) => return false,
-        };
         let component = self.component.env_component();
-        let idx = match component.defined_resource_index(resource_ty) {
-            Some(idx) => idx,
-            None => return false,
-        };
-        resource_instance == component.defined_resource_instances[idx]
+        self.component
+            .types()
+            .resource_owned_by_own_instance(ty, |idx| component.defined_resource_instance(idx))
     }
 
     /// Returns the runtime state of resources and concurrency associated with
@@ -896,10 +891,10 @@ impl ComponentInstance {
         let dtor = self.resource_destructor(resource);
         let component = self.component.env_component();
         let instance = component
-            .defined_resource_index(resource)
-            .map(|i| RuntimeInstance {
+            .defined_resource_instance(resource)
+            .map(|index| RuntimeInstance {
                 instance: self.id(),
-                index: component.defined_resource_instances[i],
+                index,
             });
         (dtor, instance)
     }

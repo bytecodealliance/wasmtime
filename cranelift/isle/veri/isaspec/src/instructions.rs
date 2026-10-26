@@ -19,15 +19,14 @@ use cranelift_codegen::{
     Reg, Writable,
     ir::{MemFlagsData, types::I8},
     isa::aarch64::inst::{
-        ALUOp, ALUOp3, AMode, ASIMDFPModImm, ASIMDMovModImm, BitOp, Cond, ExtendOp,
+        ALUOp, ALUOp3, AMode, ASIMDFPModImm, ASIMDMovModImm, BfmOp, BitOp, Cond, ExtendOp,
         FPULeftShiftImm, FPUOp1, FPUOp2, FPUOpRI, FPUOpRIMod, FPURightShiftImm, FpuRoundMode,
         FpuToIntOp, Imm12, Inst, IntToFpuOp, MoveWideConst, MoveWideOp, NZCV, OperandSize, SImm9,
-        ScalarSize, ShiftOp, ShiftOpAndAmt, ShiftOpShiftImm, UImm5, UImm12Scaled, VecALUOp,
+        ScalarSize, ShiftOp, ShiftOpAndAmt, ShiftOpShiftImm, UImm5, UImm6, UImm12Scaled, VecALUOp,
         VecLanesOp, VecMisc2, VectorSize, vreg, writable_vreg, writable_xreg, xreg,
     },
 };
 use cranelift_isle::ast::{SpecExpr, SpecOp};
-use itertools::Itertools;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::vec;
@@ -74,12 +73,16 @@ pub fn define() -> Result<Vec<FileConfig>> {
             specs: define_stores()?,
         },
         FileConfig {
+            name: "mov.isle".into(),
+            specs: vec![define_mov()],
+        },
+        FileConfig {
             name: "mov_wide.isle".into(),
             specs: vec![define_mov_wide()?],
         },
         FileConfig {
-            name: "extend.isle".into(),
-            specs: vec![define_extend()],
+            name: "bitfield_move.isle".into(),
+            specs: vec![define_bitfield_move()],
         },
         FileConfig {
             name: "conds.isle".into(),
@@ -658,6 +661,20 @@ fn is_bit_op_size_supported(bit_op: BitOp, size: OperandSize) -> bool {
     }
 }
 
+// MInst.Mov specification configuration.
+fn define_mov() -> SpecConfig {
+    let sizes = [OperandSize::Size64, OperandSize::Size32];
+    spec_config! {
+        (Mov size rd rm)
+        {
+            enumerate   (size, sizes);
+            register    (rd, write, gp, 4);
+            register    (rm, read,  gp, 5);
+            instruction ();
+        }
+    }
+}
+
 // MInst.MovWide specification configuration.
 fn define_mov_wide() -> Result<SpecConfig> {
     // MovWideOps
@@ -776,10 +793,16 @@ fn mov_wide_template(
     Ok(template)
 }
 
-fn define_extend() -> SpecConfig {
-    // Extend
-    let signed = [false, true];
-    let bits = [8u8, 16u8, 32u8, 64u8];
+// MInst.BitfieldMove specification configuration.
+//
+// Only the immediates used for zero- and sign-extension (`immr == 0`,
+// `imms` of 7, 15 or 31) are covered, matching the coverage of the former
+// `MInst.Extend` spec. Other immediates fall outside the generated `require`.
+fn define_bitfield_move() -> SpecConfig {
+    let sizes = [OperandSize::Size32, OperandSize::Size64];
+    let bfm_ops = [BfmOp::UBfm, BfmOp::SBfm];
+    let immr: u8 = 0;
+    let imms_values: [u8; 3] = [7, 15, 31];
 
     let mut mappings = Mappings::default();
     mappings.writes.insert(
@@ -792,43 +815,59 @@ fn define_extend() -> SpecConfig {
     );
 
     SpecConfig {
-        // Spec signature.
-        term: "MInst.Extend".to_string(),
-        args: ["rd", "rn", "signed", "from_bits", "to_bits"]
+        term: "MInst.BitfieldMove".to_string(),
+        args: ["size", "bfm_op", "rd", "rn", "immr", "imms"]
             .map(String::from)
             .to_vec(),
-        cases: Cases::Cases(
-            bits.iter()
-                .cartesian_product(&bits)
-                .filter(|(from_bits, to_bits)| from_bits <= to_bits && **from_bits < 64)
-                .cartesian_product(&signed)
-                .map(|((from_bits, to_bits), signed)| Case {
-                    conds: vec![
-                        spec_eq_bool(spec_var("signed".to_string()), *signed),
-                        spec_eq(
-                            spec_var("from_bits".to_string()),
-                            spec_const_bit_vector((*from_bits).into(), 8),
-                        ),
-                        spec_eq(
-                            spec_var("to_bits".to_string()),
-                            spec_const_bit_vector((*to_bits).into(), 8),
-                        ),
-                    ],
-                    cases: Cases::Instruction(InstConfig {
-                        // Instruction to generate specification from.
-                        opcodes: Opcodes::Instruction(Inst::Extend {
-                            rd: writable_xreg(4),
-                            rn: xreg(5),
-                            signed: *signed,
-                            from_bits: *from_bits,
-                            to_bits: *to_bits,
-                        }),
-                        scope: aarch64::state(),
-                        mappings: mappings.clone(),
+        cases: Cases::Match(Match {
+            on: spec_var("size".to_string()),
+            arms: sizes
+                .iter()
+                .map(|&size| Arm {
+                    variant: format!("{size:?}"),
+                    args: Vec::new(),
+                    body: Cases::Match(Match {
+                        on: spec_var("bfm_op".to_string()),
+                        arms: bfm_ops
+                            .iter()
+                            .map(|&bfm_op| Arm {
+                                variant: format!("{bfm_op:?}"),
+                                args: Vec::new(),
+                                body: Cases::Cases(
+                                    imms_values
+                                        .iter()
+                                        .map(|&imms| Case {
+                                            conds: vec![
+                                                spec_eq(
+                                                    spec_var("immr".to_string()),
+                                                    spec_const_bit_vector(immr.into(), 6),
+                                                ),
+                                                spec_eq(
+                                                    spec_var("imms".to_string()),
+                                                    spec_const_bit_vector(imms.into(), 6),
+                                                ),
+                                            ],
+                                            cases: Cases::Instruction(InstConfig {
+                                                opcodes: Opcodes::Instruction(Inst::BitfieldMove {
+                                                    size,
+                                                    bfm_op,
+                                                    rd: writable_xreg(4),
+                                                    rn: xreg(5),
+                                                    immr: UImm6::maybe_from_u8(immr).unwrap(),
+                                                    imms: UImm6::maybe_from_u8(imms).unwrap(),
+                                                }),
+                                                scope: aarch64::state(),
+                                                mappings: mappings.clone(),
+                                            }),
+                                        })
+                                        .collect(),
+                                ),
+                            })
+                            .collect(),
                     }),
                 })
                 .collect(),
-        ),
+        }),
     }
 }
 
