@@ -1257,3 +1257,41 @@ async fn p3_http_named_imports() -> Result<()> {
     )
     .await
 }
+
+/// A guest forwarding a host body it has partly read, or with its own
+/// trailers, as its response body.
+mod p3_http_forward_body {
+    use super::*;
+
+    async fn forward(mode: &str) -> Result<Bytes> {
+        let req = http::Request::builder()
+            .uri("http://localhost/")
+            .header("x-mode", mode)
+            .body(http_body_util::Full::new(Bytes::from_static(
+                b"hello world",
+            )))?;
+        let res = run_http(P3_HTTP_FORWARD_BODY_COMPONENT, req, oneshot::channel().0)
+            .await?
+            .unwrap();
+        Ok(res.into_body().to_bytes())
+    }
+
+    #[test_log::test(tokio::test(flavor = "multi_thread"))]
+    async fn read_0() -> Result<()> {
+        assert_eq!(forward("read-0").await?, "hello world");
+        Ok(())
+    }
+
+    #[test_log::test(tokio::test(flavor = "multi_thread"))]
+    async fn read_1() -> Result<()> {
+        assert_eq!(forward("read-1").await?, "ello world");
+        Ok(())
+    }
+
+    #[test_log::test(tokio::test(flavor = "multi_thread"))]
+    async fn trailers_error() -> Result<()> {
+        let res = forward("trailers-error").await;
+        assert!(res.is_err(), "{res:?}");
+        Ok(())
+    }
+}
