@@ -21,7 +21,7 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 sha2 = { workspace = true }
 toml = { workspace = true }
-zstd = { version = "0.13.0", default-features = false }
+zstd = { version = "0.14.3", default-features = false }
 wasmtime-environ = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
