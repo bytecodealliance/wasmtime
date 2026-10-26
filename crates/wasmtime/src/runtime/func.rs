@@ -2439,7 +2439,7 @@ impl HostFunc {
         // SAFETY: this is an entrypoint of wasm which requires correct type
         // ascription of `T` itself, meaning that this should be safe to call
         // both `enter_host_from_wasm` as well as `unchecked_context_mut`.
-        unsafe { vm::Instance::enter_host_from_wasm(caller_vmctx, run) }
+        unsafe { vm::Instance::enter_host_from_wasm(caller_vmctx, true, run) }
     }
     /// Analog of [`Func::new_unchecked`]
     ///

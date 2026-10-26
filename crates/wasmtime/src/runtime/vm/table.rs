@@ -5,7 +5,7 @@
 use crate::prelude::*;
 use crate::runtime::store::StoreResourceLimiter;
 use crate::runtime::vm::stack_switching::VMContObj;
-use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
+use crate::runtime::vm::vmcontext::{VMContext, VMFuncRef, VMTableDefinition};
 use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VmPtr};
 use core::alloc::Layout;
 use core::cmp;
@@ -132,6 +132,16 @@ impl From<StaticContTable> for StaticTable {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct DeferredFuncSegment {
+    pub start: usize,
+    pub end: usize,
+    // The Store owns this instance, including after failed startup. Dropping a
+    // table must never dereference the source; Store teardown has no such order.
+    pub source: VmPtr<VMContext>,
+    pub segment: u32,
+}
+
 pub struct StaticFuncTable {
     /// Where data for this table is stored. The length of this list is the
     /// maximum size of the table.
@@ -140,6 +150,7 @@ pub struct StaticFuncTable {
     size: usize,
     /// Whether elements of this table are initialized lazily.
     lazy_init: bool,
+    deferred_segments: TryVec<DeferredFuncSegment>,
 }
 
 pub struct StaticGcRefTable {
@@ -190,6 +201,7 @@ pub struct DynamicFuncTable {
     maximum: Option<usize>,
     /// Whether elements of this table are initialized lazily.
     lazy_init: bool,
+    deferred_segments: TryVec<DeferredFuncSegment>,
 }
 
 pub struct DynamicGcRefTable {
@@ -339,6 +351,7 @@ impl Table {
                 elements: unsafe { alloc_dynamic_table_elements(minimum)? },
                 maximum,
                 lazy_init: tunables.table_lazy_init,
+                deferred_segments: TryVec::new(),
             })),
             TableElementType::GcRef => Ok(Self::from(DynamicGcRefTable {
                 elements: unsafe { alloc_dynamic_table_elements(minimum)? },
@@ -388,6 +401,7 @@ impl Table {
                     data,
                     size,
                     lazy_init: tunables.table_lazy_init,
+                    deferred_segments: TryVec::new(),
                 }))
             }
             TableElementType::GcRef => {
@@ -723,6 +737,69 @@ impl Table {
         Ok(Some(old_size))
     }
 
+    /// Install a segment at its original startup boundary. The zero table
+    /// marker uses the existing lazy-read path; explicit writes produce tagged
+    /// values and therefore override this history without separate invalidation.
+    /// The source must already belong to the same Store as this table.
+    pub(super) fn defer_func_segment(
+        &mut self,
+        start: u64,
+        len: u64,
+        source: VmPtr<VMContext>,
+        segment: u32,
+    ) -> Result<bool> {
+        let Range { start, end } = self.validate_fill(start, len)?;
+        if start == end {
+            return Ok(true);
+        }
+        if !self.funcrefs().1 {
+            return Ok(false);
+        }
+        let deferred = match self {
+            Self::Dynamic(DynamicTable::Func(table)) => &mut table.deferred_segments,
+            Self::Static(StaticTable::Func(table)) => &mut table.deferred_segments,
+            _ => unreachable!(),
+        };
+        // Bound both metadata and first-access lookup. Additional segments use
+        // ordinary eager initialization, so long-lived imported tables cannot
+        // accumulate unbounded history. Nothing is changed on that path.
+        const MAX_DEFERRED_SEGMENTS: usize = 128;
+        if deferred.len() == MAX_DEFERRED_SEGMENTS {
+            return Ok(false);
+        }
+        // Metadata allocation must not introduce a new startup failure after
+        // CoW memory images have been installed. Eager VMFuncRef initialization
+        // is allocation-free, and a failed push leaves the table unchanged.
+        if deferred
+            .push(DeferredFuncSegment {
+                start,
+                end,
+                source,
+                segment,
+            })
+            .is_err()
+        {
+            return Ok(false);
+        }
+        self.funcrefs_mut().0[start..end].fill(MaybeTaggedFuncRef(None));
+        Ok(true)
+    }
+
+    pub(super) fn deferred_func_segment(&self, index: usize) -> Option<DeferredFuncSegment> {
+        let deferred = match self {
+            Self::Dynamic(DynamicTable::Func(table)) => &table.deferred_segments,
+            Self::Static(StaticTable::Func(table)) => &table.deferred_segments,
+            _ => unreachable!(),
+        };
+        // Active segments apply in declaration order. The most recent range
+        // wins, including partial overlaps with earlier contributing instances.
+        deferred
+            .iter()
+            .rev()
+            .find(|s| s.start <= index && index < s.end)
+            .copied()
+    }
+
     /// Get reference to the specified element.
     ///
     /// Returns `Ok(None)` if the element is null or uninitialized.
@@ -855,6 +932,7 @@ impl Table {
                 data,
                 size,
                 lazy_init,
+                ..
             })) => (
                 unsafe { slice::from_raw_parts(data.as_ptr().cast(), *size) },
                 *lazy_init,
@@ -878,6 +956,7 @@ impl Table {
                 data,
                 size,
                 lazy_init,
+                ..
             })) => (
                 unsafe { slice::from_raw_parts_mut(data.as_ptr().cast(), *size) },
                 *lazy_init,
@@ -985,6 +1064,7 @@ impl Default for Table {
             data: SendSyncPtr::new(NonNull::from(&mut [])),
             size: 0,
             lazy_init: false,
+            deferred_segments: TryVec::new(),
         })
     }
 }

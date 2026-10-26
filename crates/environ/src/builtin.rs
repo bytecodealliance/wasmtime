@@ -199,6 +199,9 @@ macro_rules! foreach_builtin_function {
             );
             #[cfg(feature = "stack-switching")]
             asan_finish_switch_fiber(vmctx: vmctx, fake_stack: pointer, current_csi: pointer);
+            // Apply an active function segment without eagerly materializing
+            // all of its function records. Bounds and ordering remain eager.
+            table_init_func_segment(vmctx: vmctx, table: u32, segment: u32, offset: u64) -> bool;
         }
     };
 }
