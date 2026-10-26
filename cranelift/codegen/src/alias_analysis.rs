@@ -69,6 +69,14 @@
 //!   observe every store, because the loop might never terminate and
 //!   reach the overwriting store.
 //!
+//! None of these apply to `volatile` accesses (see `MemFlagsData::volatile`),
+//! which must happen exactly as written: a volatile load is never replaced by
+//! a known value, a volatile store is never removed as idempotent or dead, and
+//! neither one provides a known value for a later access. A volatile access
+//! also never makes another store dead. Beyond that, every volatile access is
+//! a fence here, so no known value is forwarded across it, and every store
+//! before it is observed by it.
+//!
 //! Which store is the "last store" to a region is flow-sensitive, but
 //! whether a store is ever observed is *not*: it is observed if there
 //! is *any* path on which some instruction can observe it. We
@@ -81,7 +89,9 @@ use crate::{
     cursor::{Cursor, CursorPosition, FuncCursor},
     dominator_tree::DominatorTree,
     flowgraph::ControlFlowGraph,
-    inst_predicates::{inst_addr_offset_type, inst_store_data, visit_block_succs},
+    inst_predicates::{
+        inst_addr_offset_type, inst_store_data, is_volatile_access, visit_block_succs,
+    },
     ir::{
         AliasRegion, Block, Endianness, Function, Inst, Opcode, Type, Value, immediates::Offset32,
     },
@@ -335,6 +345,14 @@ fn classify(func: &Function, inst: Inst) -> InstEffect {
     let opcode = func.dfg.insts[inst].opcode();
 
     if has_memory_fence_semantics(opcode) {
+        return InstEffect::Fence;
+    }
+
+    // A volatile access must stay as written, in order with the accesses
+    // around it: treat it as a fence, which observes every earlier store (so
+    // that none of them is removed as dead across it) and forgets everything
+    // known about memory (so that nothing is forwarded across it).
+    if is_volatile_access(func, inst) {
         return InstEffect::Fence;
     }
 
@@ -1192,7 +1210,13 @@ impl<'a> AliasAnalysis<'a> {
         #[cfg(debug_assertions)]
         debug_assert_eq!(func.layout.inst_block(inst), Some(state.current_block));
 
-        let result = if let Some((address, offset, ty)) = inst_addr_offset_type(func, inst) {
+        let result = if is_volatile_access(func, inst) {
+            // A volatile access is never removed, never replaced by a known
+            // value, and never the source of one: skip straight to updating the
+            // last-store state, where it acts as a fence.
+            trace!("  --> volatile access: leaving it alone");
+            OptResult::None
+        } else if let Some((address, offset, ty)) = inst_addr_offset_type(func, inst) {
             let address = func.dfg.resolve_aliases(address);
             let opcode = func.dfg.insts[inst].opcode();
 
@@ -1220,6 +1244,9 @@ impl<'a> AliasAnalysis<'a> {
                         // atomic store) is observable by other threads, so it
                         // can never be eliminated.
                         && !has_memory_fence_semantics(func.dfg.insts[last_store].opcode())
+                        // Nor can a volatile store, which must happen exactly as
+                        // written.
+                        && !is_volatile_access(func, last_store)
                         // `last_store` must really be a store that
                         // writes exactly the bytes this store
                         // overwrites (same region, address, offset,
@@ -1571,6 +1598,12 @@ fn fully_overwrites(
     // `maybe_dead` must really be a store (this rejects the `last_fence` and merge
     // fallbacks that point at calls/fences/atomics or unrelated instructions).
     if !maybe_dead_opcode.can_store() {
+        return false;
+    }
+
+    // A volatile store is never dead, and a volatile store never makes another
+    // store dead.
+    if is_volatile_access(func, maybe_dead) || is_volatile_access(func, overwriter) {
         return false;
     }
 

@@ -223,6 +223,7 @@ impl MemFlagsData {
                 self.with_endianness(Endianness::Big)
             }
             "can_move" => self.with_can_move(true),
+            "volatile" => self.with_volatile(true),
 
             other => match TrapCode::from_str(other) {
                 Ok(code) => self.with_trap_code(Some(code)),
@@ -360,6 +361,35 @@ impl MemFlagsData {
         self.flags = self.flags.with_readonly(enabled);
         self
     }
+
+    /// Test if the `volatile` flag is set.
+    ///
+    /// A volatile memory operation must be performed exactly as written, as in
+    /// C's and Rust's volatile accesses (memory-mapped I/O, memory another
+    /// agent watches): it is never removed, even when its result is unused or
+    /// it stores a value already in memory; never merged with another access
+    /// (no redundant-load elimination, store-to-load forwarding or dead-store
+    /// elimination); and never reordered with another volatile access.
+    /// Accesses that are not volatile may still move around it.
+    ///
+    /// `volatile` is mutually exclusive with both `can_move` and `readonly`:
+    /// valid flags satisfy `!(volatile && (can_move || readonly))`, which the
+    /// verifier enforces.
+    pub const fn volatile(self) -> bool {
+        self.flags.volatile()
+    }
+
+    /// Set or clear the `volatile` flag.
+    pub fn set_volatile(&mut self, enabled: bool) {
+        *self = self.with_volatile(enabled);
+    }
+
+    /// Set or clear the `volatile` flag, returning new flags.
+    pub const fn with_volatile(mut self, enabled: bool) -> Self {
+        self.flags = self.flags.with_volatile(enabled);
+        self
+    }
+
     /// Get the trap code to report if this memory access traps.
     ///
     /// A `None` trap code indicates that this memory access does not trap.

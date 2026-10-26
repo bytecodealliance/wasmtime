@@ -1,0 +1,229 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; Volatile accesses happen exactly as written. `notrap` would let every access
+;; below be removed or merged; `volatile` must keep each one.
+
+;; Two volatile stores to the same location: the first is not a dead store.
+function %volatile_store_twice(i64) {
+block0(v0: i64):
+    v1 = iconst.i32 1
+    v2 = iconst.i32 2
+    store notrap aligned volatile v1, v0
+    store notrap aligned volatile v2, v0
+    return
+}
+
+; function %volatile_store_twice(i64) fast {
+; block0(v0: i64):
+;     v1 = iconst.i32 1
+;     store notrap aligned volatile v1, v0  ; v1 = 1
+;     v2 = iconst.i32 2
+;     store notrap aligned volatile v2, v0  ; v2 = 2
+;     return
+; }
+
+;; Two volatile loads of the same location: the second is not redundant.
+function %volatile_load_twice(i64) -> i32 {
+block0(v0: i64):
+    v1 = load.i32 notrap aligned volatile v0
+    v2 = load.i32 notrap aligned volatile v0
+    v3 = iadd v1, v2
+    return v3
+}
+
+; function %volatile_load_twice(i64) -> i32 fast {
+; block0(v0: i64):
+;     v1 = load.i32 notrap aligned volatile v0
+;     v2 = load.i32 notrap aligned volatile v0
+;     v3 = iadd v1, v2
+;     return v3
+; }
+
+;; A volatile load after a volatile store of the same location: no forwarding.
+function %volatile_store_then_load(i64) -> i32 {
+block0(v0: i64):
+    v1 = iconst.i32 7
+    store notrap aligned volatile v1, v0
+    v2 = load.i32 notrap aligned volatile v0
+    return v2
+}
+
+; function %volatile_store_then_load(i64) -> i32 fast {
+; block0(v0: i64):
+;     v1 = iconst.i32 7
+;     store notrap aligned volatile v1, v0  ; v1 = 7
+;     v2 = load.i32 notrap aligned volatile v0
+;     return v2
+; }
+
+;; Storing back what a volatile load read is not an idempotent store.
+function %volatile_idempotent_store(i64) {
+block0(v0: i64):
+    v1 = load.i32 notrap aligned volatile v0
+    store notrap aligned volatile v1, v0
+    return
+}
+
+; function %volatile_idempotent_store(i64) fast {
+; block0(v0: i64):
+;     v1 = load.i32 notrap aligned volatile v0
+;     store notrap aligned volatile v1, v0
+;     return
+; }
+
+;; Storing the same value twice with volatile stores keeps both.
+function %volatile_same_value_twice(i64, i32) {
+block0(v0: i64, v1: i32):
+    store notrap aligned volatile v1, v0
+    store notrap aligned volatile v1, v0
+    return
+}
+
+; function %volatile_same_value_twice(i64, i32) fast {
+; block0(v0: i64, v1: i32):
+;     store notrap aligned volatile v1, v0
+;     store notrap aligned volatile v1, v0
+;     return
+; }
+
+;; A volatile load whose value is unused is still performed.
+function %volatile_load_unused(i64) {
+block0(v0: i64):
+    v1 = load.i32 notrap aligned volatile v0
+    return
+}
+
+; function %volatile_load_unused(i64) fast {
+; block0(v0: i64):
+;     v1 = load.i32 notrap aligned volatile v0
+;     return
+; }
+
+;; A plain store is not dead when a volatile store overwrites it, and a plain
+;; load after a volatile store is not forwarded from it.
+function %plain_around_volatile(i64) -> i32 {
+block0(v0: i64):
+    v1 = iconst.i32 1
+    v2 = iconst.i32 2
+    store notrap aligned v1, v0
+    store notrap aligned volatile v2, v0
+    v3 = load.i32 notrap aligned v0
+    return v3
+}
+
+; function %plain_around_volatile(i64) -> i32 fast {
+; block0(v0: i64):
+;     v1 = iconst.i32 1
+;     store notrap aligned v1, v0  ; v1 = 1
+;     v2 = iconst.i32 2
+;     store notrap aligned volatile v2, v0  ; v2 = 2
+;     v3 = load.i32 notrap aligned v0
+;     return v3
+; }
+
+;; Nothing known about memory is forwarded across a volatile access.
+function %no_forwarding_across_volatile(i64, i64) -> i32 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 1
+    store notrap aligned v2, v0
+    v3 = load.i32 notrap aligned volatile v1
+    v4 = load.i32 notrap aligned v0
+    v5 = iadd v3, v4
+    return v5
+}
+
+; function %no_forwarding_across_volatile(i64, i64) -> i32 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i32 1
+;     store notrap aligned v2, v0  ; v2 = 1
+;     v3 = load.i32 notrap aligned volatile v1
+;     v4 = load.i32 notrap aligned v0
+;     v5 = iadd v3, v4
+;     return v5
+; }
+
+;; A plain store before a volatile access is observed by it and stays, even
+;; when a later plain store overwrites it.
+function %plain_store_observed_by_volatile(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 1
+    v3 = iconst.i32 2
+    store notrap aligned v2, v0
+    v4 = load.i32 notrap aligned volatile v1
+    store notrap aligned v3, v0
+    return
+}
+
+; function %plain_store_observed_by_volatile(i64, i64) fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i32 1
+;     store notrap aligned v2, v0  ; v2 = 1
+;     v4 = load.i32 notrap aligned volatile v1
+;     v3 = iconst.i32 2
+;     store notrap aligned v3, v0  ; v3 = 2
+;     return
+; }
+
+;; Volatile accesses in alias regions behave the same.
+function %volatile_in_region(i64) -> i32 {
+    region0 = 0 "mmio"
+block0(v0: i64):
+    v1 = iconst.i32 1
+    store notrap aligned volatile region0 v1, v0
+    store notrap aligned volatile region0 v1, v0
+    v2 = load.i32 notrap aligned volatile region0 v0
+    v3 = load.i32 notrap aligned volatile region0 v0
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %volatile_in_region(i64) -> i32 fast {
+;     region0 = 0 "mmio"
+;
+; block0(v0: i64):
+;     v1 = iconst.i32 1
+;     store notrap aligned volatile region0 v1, v0  ; v1 = 1
+;     store notrap aligned volatile region0 v1, v0  ; v1 = 1
+;     v2 = load.i32 notrap aligned volatile region0 v0
+;     v3 = load.i32 notrap aligned volatile region0 v0
+;     v4 = iadd v2, v3
+;     return v4
+; }
+
+;; Narrow, wide and vector volatile accesses, and extending loads.
+function %volatile_widths(i64) -> i8, i64, i128, i8x16, i32 {
+block0(v0: i64):
+    v1 = load.i8 notrap volatile v0
+    v2 = load.i8 notrap volatile v0
+    v3 = load.i64 notrap volatile v0
+    v4 = load.i64 notrap volatile v0
+    v5 = load.i128 notrap volatile v0
+    v6 = load.i128 notrap volatile v0
+    v7 = load.i8x16 notrap volatile v0
+    v8 = load.i8x16 notrap volatile v0
+    v9 = uload8.i32 notrap volatile v0
+    v10 = uload8.i32 notrap volatile v0
+    istore8 notrap volatile v9, v0
+    istore8 notrap volatile v10, v0
+    return v2, v4, v6, v8, v10
+}
+
+; function %volatile_widths(i64) -> i8, i64, i128, i8x16, i32 fast {
+; block0(v0: i64):
+;     v1 = load.i8 notrap volatile v0
+;     v2 = load.i8 notrap volatile v0
+;     v3 = load.i64 notrap volatile v0
+;     v4 = load.i64 notrap volatile v0
+;     v5 = load.i128 notrap volatile v0
+;     v6 = load.i128 notrap volatile v0
+;     v7 = load.i8x16 notrap volatile v0
+;     v8 = load.i8x16 notrap volatile v0
+;     v9 = uload8.i32 notrap volatile v0
+;     v10 = uload8.i32 notrap volatile v0
+;     istore8 notrap volatile v9, v0
+;     istore8 notrap volatile v10, v0
+;     return v2, v4, v6, v8, v10
+; }
+
