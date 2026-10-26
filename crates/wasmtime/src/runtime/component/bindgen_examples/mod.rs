@@ -530,29 +530,17 @@ pub mod _6_exported_resources;
 /// ```rust
 /// use wasmtime::{
 ///     Config, Engine, Result, Store,
-///     component::{Component, HasData, Linker},
+///     component::{bindgen, Component, HasData, Linker, ResourceTable},
 /// };
-/// use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 ///
 #[doc = include_str!("./_7_async.rs")]
 ///
-/// use crate::example::resource_async::logging::{self as bindings, Level};
+/// use self::example::resource_async::logging::{self as bindings, Level};
 ///
 /// #[derive(Default)]
-/// #[allow(unused)]
 /// struct State {
-///     ctx: WasiCtx,
 ///     // Manages the mapping of `MyLogger` structures to `Resource<MyLogger>`.
 ///     table: ResourceTable,
-/// }
-///
-/// impl WasiView for State {
-///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView {
-///             ctx: &mut self.ctx,
-///             table: &mut self.table,
-///         }
-///     }
 /// }
 ///
 /// impl HasData for State {
@@ -624,22 +612,15 @@ pub mod _6_exported_resources;
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<()> {
-///
+///     # if true { return Ok(()) }
 ///     let mut config = Config::new();
 ///     config.wasm_component_model_async(true);
 ///
 ///     let engine = Engine::new(&config)?;
 ///     let component = Component::from_file(&engine, "/path/to/component")?;
-///     let mut store = Store::new(
-///         &engine,
-///         State {
-///             ctx: WasiCtx::builder().inherit_stdio().build(),
-///             ..Default::default()
-///         },
-///     );
+///     let mut store = Store::new(&engine, State::default());
 ///
 ///     let mut linker = Linker::<State>::new(&engine);
-///     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 ///     bindings::add_to_linker::<State, State>(&mut linker, |state| state)?;
 ///
 ///     // If you try to use the `App::instantiate` method, you'll get a runtime error that
