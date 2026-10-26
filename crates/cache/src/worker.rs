@@ -437,18 +437,17 @@ impl WorkerThread {
         trace!("Trying to clean up cache");
 
         let mut cache_index = self.list_cache_contents();
-        let future_tolerance = SystemTime::now()
-            .checked_add(
-                self.cache_config
-                    .allowed_clock_drift_for_files_from_future(),
-            )
-            .expect("Brace your cache, the next Big Bang is coming (time overflow)");
+        let future_tolerance = SystemTime::now().checked_add(
+            self.cache_config
+                .allowed_clock_drift_for_files_from_future(),
+        );
+        let from_far_future = |mt: &SystemTime| future_tolerance.as_ref().is_some_and(|t| mt > t);
         cache_index.sort_unstable_by(|lhs, rhs| {
             // sort by age
             use CacheEntry::*;
             match (lhs, rhs) {
                 (Recognized { mtime: lhs_mt, .. }, Recognized { mtime: rhs_mt, .. }) => {
-                    match (*lhs_mt > future_tolerance, *rhs_mt > future_tolerance) {
+                    match (from_far_future(lhs_mt), from_far_future(rhs_mt)) {
                         // later == younger
                         (false, false) => rhs_mt.cmp(lhs_mt),
                         // files from far future are treated as oldest recognized files
