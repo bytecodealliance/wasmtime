@@ -2253,6 +2253,66 @@ start a print 1234
     }
 
     #[tokio::test]
+    async fn p2_cli_serve_invalid_host() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        // A `Host` value with a non-ASCII byte is not a valid authority, so
+        // the request is rejected before it turns into a guest request.
+        let mut stream = TcpStream::connect(server.first_addr()).await?;
+        stream
+            .write_all(b"GET / HTTP/1.1\r\nHost: \x80\r\nConnection: close\r\n\r\n")
+            .await?;
+        let mut response = Vec::new();
+        let mut buf = [0; 512];
+        while !response.ends_with(b"</html>") && response.len() < 8192 {
+            let n = tokio::time::timeout(Duration::from_secs(10), stream.read(&mut buf))
+                .await
+                .expect("timed out waiting for a response")?;
+            if n == 0 {
+                break;
+            }
+            response.extend_from_slice(&buf[..n]);
+        }
+        let response = String::from_utf8(response)?;
+        assert!(
+            response.starts_with("HTTP/1.1 400"),
+            "unexpected response: {response:?}",
+        );
+        assert!(
+            response.contains("<h1>400 Bad Request</h1>"),
+            "unexpected response: {response:?}",
+        );
+        drop(stream);
+
+        // A valid `Host` header is still served normally.
+        let mut stream = TcpStream::connect(server.first_addr()).await?;
+        stream
+            .write_all(b"GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n")
+            .await?;
+        let mut response = Vec::new();
+        while !response.ends_with(b"</html>") && response.len() < 8192 {
+            let n = tokio::time::timeout(Duration::from_secs(10), stream.read(&mut buf))
+                .await
+                .expect("timed out waiting for a response")?;
+            if n == 0 {
+                break;
+            }
+            response.extend_from_slice(&buf[..n]);
+        }
+        let response = String::from_utf8(response)?;
+        assert!(
+            response.starts_with("HTTP/1.1 200"),
+            "unexpected response: {response:?}",
+        );
+        drop(stream);
+
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn p3_cli_serve_authority_and_scheme() -> Result<()> {
         let server = WasmtimeServe::new(P3_CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
             cmd.arg("-Wcomponent-model-async");

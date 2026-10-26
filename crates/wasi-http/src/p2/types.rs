@@ -88,7 +88,15 @@ impl WasiHttpCtxView<'_> {
         let authority = match parts.uri.authority() {
             Some(authority) => authority.to_string(),
             None => match parts.headers.get(http::header::HOST) {
-                Some(host) => host.to_str()?.to_string(),
+                Some(host) => match host.to_str() {
+                    Ok(host) => host.to_string(),
+                    Err(_) => {
+                        return Err(wasmtime::Error::msg(
+                            "invalid HTTP request with a non-ASCII host header",
+                        )
+                        .context(ErrorResponse::new(http::StatusCode::BAD_REQUEST)));
+                    }
+                },
                 None => {
                     return Err(wasmtime::Error::msg(
                         "invalid HTTP request missing authority in URI and host header",
