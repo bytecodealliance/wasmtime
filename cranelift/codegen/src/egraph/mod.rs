@@ -500,8 +500,7 @@ where
         // remove it (e.g. a mergeable `readonly` load), in which case
         // the GVN entry must be updated to name the replacement value
         // rather than this instruction's (soon-removed) result.
-        let mut gvn_key = None;
-        if is_mergeable_for_egraph(self.func, inst) {
+        let gvn_key = if is_mergeable_for_egraph(self.func, inst) {
             let result = self.func.dfg.inst_results(inst).get(0).copied();
             trace!(" -> mergeable side-effecting op {}", inst);
 
@@ -548,11 +547,13 @@ where
                         self.available_block[result] = block;
                     }
                     v.insert(result);
-                    gvn_key = Some((ty, self.func.dfg.insts[inst]));
                     trace!(" -> inserts as new (no GVN)");
+                    Some((ty, self.func.dfg.insts[inst]))
                 }
             }
-        }
+        } else {
+            None
+        };
 
         // Otherwise, if a load or store, process it with the alias analysis to
         // see if we can optimize it (rewrite in terms of an earlier load or
@@ -572,6 +573,7 @@ where
                 self.available_block[result] = self.available_block[new_result];
                 if let Some(key) = gvn_key {
                     let depth = self.gvn_map.depth();
+                    debug_assert!(self.gvn_map.get(&NullCtx, &key).is_some());
                     self.gvn_map
                         .insert_with_depth(&NullCtx, key, Some(new_result), depth);
                 }
