@@ -490,6 +490,17 @@ impl CodeMemory {
             let text_addr = text.as_ptr() as usize;
             assert_eq!(text_addr & (mem.required_alignment() - 1), 0);
 
+            // Native aarch64 code uses `adrp`-based page-relative relocations
+            // within the text section which are only correct if the text
+            // section starts on a 4KiB boundary. Memory from `mmap` is always
+            // page-aligned, but custom code memory might not be.
+            if cfg!(target_arch = "aarch64") {
+                ensure!(
+                    text_addr % 4096 == 0,
+                    "text section is not 4KiB-aligned in memory"
+                );
+            }
+
             // The custom code memory handler will ensure the
             // memory is executable and also handle icache
             // coherence.

@@ -44,7 +44,7 @@
 ;;       retq
 ;;  126: movq    %rbx, %rsi
 ;;  129: movq    0x10(%rsi), %rax
-;;  12d: movq    0x148(%rax), %rax
+;;  12d: movq    0x140(%rax), %rax
 ;;  134: movq    %rbx, %rdi
 ;;  137: callq   *%rax
 ;;  139: ud2

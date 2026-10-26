@@ -1579,6 +1579,10 @@ pub(crate) trait MacroAssembler {
         _size: OperandSize,
     ) -> Result<()>;
 
+    /// Load the address of the function referenced by `name`, which must be
+    /// located within the same text section, into `dst`.
+    fn load_func_addr(&mut self, name: UserExternalNameRef, dst: WritableReg) -> Result<()>;
+
     /// Pop a value from the machine stack into the given register.
     fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()>;
 
