@@ -573,12 +573,18 @@ impl Module for ObjectModule {
 
             // A Mach-O object holds at most 255 sections, so data objects naming the same custom
             // section share one, as with LLVM (e.g. one `__mod_init_func` for every constructor).
-            let macho_key = (segment.clone(), section.clone(), kind, macho_flags.0);
             if self.object.format() == BinaryFormat::MachO
-                && let Some(&section) = self.macho_custom_sections.get(&macho_key)
+                && let Some(&section) = self.macho_custom_sections.get(&(
+                    segment.clone(),
+                    section.clone(),
+                    kind,
+                    macho_flags.0,
+                ))
             {
                 section
             } else {
+                let macho_key = (self.object.format() == BinaryFormat::MachO)
+                    .then(|| (segment.clone(), section.clone(), kind, macho_flags.0));
                 let section = self.object.add_section(segment, section, kind);
 
                 match self.object.section_flags_mut(section) {
@@ -601,8 +607,8 @@ impl Module for ObjectModule {
                     }
                 }
 
-                if self.object.format() == BinaryFormat::MachO {
-                    self.macho_custom_sections.insert(macho_key, section);
+                if let Some(key) = macho_key {
+                    self.macho_custom_sections.insert(key, section);
                 }
                 section
             }
