@@ -58,6 +58,16 @@ impl FunctionConfig {
         }
     }
 
+    /// Returns whether `func` will be generated as async, either because it's
+    /// declared `async` in WIT or because a rule/default flags it as such.
+    pub fn is_async(&self, resolve: &Resolve, ns: Option<&WorldKey>, func: &Function) -> bool {
+        // `flags` marks rules as used, so work on a clone to avoid affecting
+        // `assert_all_rules_used`.
+        self.clone()
+            .flags(resolve, ns, func)
+            .contains(FunctionFlags::ASYNC)
+    }
+
     /// Returns the set of configuration flags associated with `func`.
     ///
     /// The `name` provided should include the full name of the function
