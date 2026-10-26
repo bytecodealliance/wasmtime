@@ -735,10 +735,20 @@ pub trait StreamProducer<D>: Send + 'static {
     /// Attempt to convert the specified object into a `Box<dyn Any>` which may
     /// be downcast to the specified type.
     ///
+    /// `buffer` contains any items which this producer previously passed to
+    /// [`Destination::set_buffer`] but which have not yet been delivered to
+    /// the reader. If the implementation returns `Ok(_)`, it must ensure those
+    /// items are retained by the returned value, since they are otherwise
+    /// lost.
+    ///
     /// The implementation must ensure that, if it returns `Ok(_)`, a downcast
     /// to the specified type is guaranteed to succeed.
-    fn try_into(me: Pin<Box<Self>>, _ty: TypeId) -> Result<Box<dyn Any>, Pin<Box<Self>>> {
-        Err(me)
+    fn try_into(
+        me: Pin<Box<Self>>,
+        buffer: Self::Buffer,
+        _ty: TypeId,
+    ) -> Result<Box<dyn Any>, (Pin<Box<Self>>, Self::Buffer)> {
+        Err((me, buffer))
     }
 }
 
@@ -2826,9 +2836,9 @@ impl<T> StoreContextMut<'_, T> {
         });
         let try_into = Box::new(move |ty| {
             let (mine, buffer) = producer.try_lock().ok()?.take()?;
-            match P::try_into(mine, ty) {
+            match P::try_into(mine, buffer, ty) {
                 Ok(value) => Some(value),
-                Err(mine) => {
+                Err((mine, buffer)) => {
                     *producer.try_lock().ok()? = Some((mine, buffer));
                     None
                 }

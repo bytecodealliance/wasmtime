@@ -597,13 +597,66 @@ where
         Poll::Ready(Ok(StreamResult::Dropped))
     }
 
-    fn try_into(me: Pin<Box<Self>>, ty: TypeId) -> Result<Box<dyn Any>, Pin<Box<Self>>> {
+    fn try_into(
+        me: Pin<Box<Self>>,
+        buffer: Bytes,
+        ty: TypeId,
+    ) -> Result<Box<dyn Any>, (Pin<Box<Self>>, Bytes)> {
         if ty == TypeId::of::<Self>() {
-            let me = Pin::into_inner(me);
+            let mut me = Pin::into_inner(me);
+            if !buffer.is_empty() {
+                // Data buffered by a previous read has already been taken from
+                // `body`, so it must be yielded before the rest of `body`.
+                let body = mem::take(&mut me.body);
+                me.body = UnsyncBoxBody::new(BodyWithPrefix {
+                    prefix: Some(buffer),
+                    body,
+                });
+            }
             Ok(me)
         } else {
-            Err(me)
+            Err((me, buffer))
         }
+    }
+}
+
+/// A wrapper around [http_body::Body], which yields `prefix` before `body`
+struct BodyWithPrefix<T> {
+    prefix: Option<Bytes>,
+    body: T,
+}
+
+impl<T> http_body::Body for BodyWithPrefix<T>
+where
+    T: http_body::Body<Data = Bytes> + Unpin,
+{
+    type Data = Bytes;
+    type Error = T::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        let this = self.get_mut();
+        if let Some(prefix) = this.prefix.take() {
+            return Poll::Ready(Some(Ok(http_body::Frame::data(prefix))));
+        }
+        Pin::new(&mut this.body).poll_frame(cx)
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.prefix.is_none() && self.body.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        let n = self.prefix.as_ref().map_or(0, |p| p.len() as u64);
+        let hint = self.body.size_hint();
+        let mut res = http_body::SizeHint::new();
+        res.set_lower(hint.lower() + n);
+        if let Some(upper) = hint.upper() {
+            res.set_upper(upper + n);
+        }
+        res
     }
 }
 
