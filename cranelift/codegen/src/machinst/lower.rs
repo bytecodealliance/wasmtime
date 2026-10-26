@@ -7,7 +7,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::inst_predicates::{
-    has_lowering_side_effect, is_constant_64bit, is_volatile_access, must_lower_even_if_unused,
+    has_lowering_side_effect, is_constant_64bit, must_lower_even_if_unused,
 };
 use crate::ir::{
     ArgumentPurpose, Block, BlockArg, Constant, ConstantData, DataFlowGraph, ExternalName,
@@ -1701,15 +1701,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                         " -> side-effecting op {} for val {}: use state {:?}",
                         src_inst, val, self.value_ir_uses[val]
                     );
-                    // A volatile load is never sunk: folded into its user's
-                    // memory operand, it could change width or be read again
-                    // (e.g. by a wider vector operand), and it must happen
-                    // exactly as written.
                     if self.cur_scan_entry_color.is_some()
                         && self.value_ir_uses[val] == ValueUseState::Once
                         && self.num_outputs(src_inst) == 1
                         && src_entry_color.get() + 1 == self.cur_scan_entry_color.unwrap().get()
-                        && !is_volatile_access(self.f, src_inst)
                     {
                         InputSourceInst::UniqueUse(src_inst, 0)
                     } else {

@@ -16,7 +16,7 @@ fn trivially_has_side_effects(opcode: Opcode) -> bool {
 
 /// Load instructions without the `notrap` flag are defined to trap when
 /// operating on inaccessible memory, so we can't treat them as side-effect-free even if the loaded
-/// value is unused. Neither can we treat `volatile` loads so, whose access itself is the effect.
+/// value is unused.
 #[inline(always)]
 fn is_load_with_defined_trapping(
     opcode: Opcode,
@@ -27,10 +27,7 @@ fn is_load_with_defined_trapping(
         return false;
     }
     match *data {
-        InstructionData::Load { flags, .. } => {
-            let flags = dfg.mem_flags[flags];
-            !flags.notrap() || flags.volatile()
-        }
+        InstructionData::Load { flags, .. } => !dfg.mem_flags[flags].notrap(),
         _ => true,
     }
 }
@@ -47,18 +44,22 @@ pub fn is_volatile_access(func: &Function, inst: Inst) -> bool {
 
 /// Does the given instruction have any side-effect that would preclude it from being removed when
 /// its value is unused?
+///
+/// A `volatile` load has one: the access itself is the effect.
 #[inline(always)]
 fn has_side_effect(func: &Function, inst: Inst) -> bool {
     let data = &func.dfg.insts[inst];
     let opcode = data.opcode();
-    trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data, &func.dfg)
+    trivially_has_side_effects(opcode)
+        || is_load_with_defined_trapping(opcode, data, &func.dfg)
+        || (opcode.can_load() && is_volatile_access(func, inst))
 }
 
 /// Does the given instruction behave as a "pure" node with respect to
 /// aegraph semantics?
 ///
 /// - Trivially pure nodes (bitwise arithmetic, etc)
-/// - Loads with the `readonly`, `notrap`, and `can_move` flags set (and not `volatile`)
+/// - Loads with the `readonly`, `notrap`, and `can_move` flags set
 pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
     let is_pure_load = match func.dfg.insts[inst] {
         InstructionData::Load {
@@ -67,7 +68,10 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
             ..
         } => {
             let flags = func.dfg.mem_flags[flags];
-            flags.readonly() && flags.notrap() && flags.can_move() && !flags.volatile()
+            // `readonly` and `can_move` each imply not `volatile` (the
+            // verifier rejects the combination), so such a load is never a
+            // volatile access.
+            flags.readonly() && flags.notrap() && flags.can_move()
         }
         _ => false,
     };

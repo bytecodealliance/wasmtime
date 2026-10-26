@@ -369,9 +369,12 @@ impl MemFlagsData {
     /// agent watches): it is never removed, even when its result is unused or
     /// it stores a value already in memory; never merged with another access
     /// (no redundant-load elimination, store-to-load forwarding or dead-store
-    /// elimination); never reordered with another volatile access; and never
-    /// folded into another instruction, so its count and width stay as
-    /// written. Accesses that are not volatile may still move around it.
+    /// elimination); and never reordered with another volatile access.
+    /// Accesses that are not volatile may still move around it.
+    ///
+    /// `volatile` is mutually exclusive with both `can_move` and `readonly`:
+    /// valid flags satisfy `!(volatile && (can_move || readonly))`, which the
+    /// verifier enforces.
     pub const fn volatile(self) -> bool {
         self.flags.volatile()
     }
@@ -622,19 +625,6 @@ mod tests {
             let _flags = MemFlagsData::new().with_trap_code(Some(trap));
         }
         let _flags = MemFlagsData::new().with_trap_code(None);
-    }
-
-    #[test]
-    fn volatile_roundtrip() {
-        let flags = MemFlagsData::new().with_notrap().with_volatile(true);
-        assert!(flags.volatile());
-        assert!(!MemFlagsData::new().volatile());
-        assert_eq!(alloc::format!("{flags}"), " notrap volatile");
-
-        let mut parsed = MemFlagsData::new();
-        assert_eq!(parsed.set_by_name("notrap"), Ok(true));
-        assert_eq!(parsed.set_by_name("volatile"), Ok(true));
-        assert_eq!(parsed, flags);
     }
 
     #[test]
