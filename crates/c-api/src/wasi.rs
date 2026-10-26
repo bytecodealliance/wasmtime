@@ -202,6 +202,9 @@ impl CustomOutputStream {
     }
 }
 
+/// The number of bytes `check_write` permits and `write` accepts in one call.
+const WRITE_BUDGET: usize = 64 * 1024;
+
 #[async_trait::async_trait]
 impl wasmtime_wasi::p2::Pollable for CustomOutputStream {
     async fn ready(&mut self) {}
@@ -210,6 +213,11 @@ impl wasmtime_wasi::p2::Pollable for CustomOutputStream {
 #[async_trait::async_trait]
 impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
+        if bytes.len() > WRITE_BUDGET {
+            return Err(StreamError::Trap(wasmtime::format_err!(
+                "write exceeded budget"
+            )));
+        }
         let wrote = self
             .inner
             .raw_write(&bytes)
@@ -227,7 +235,7 @@ impl wasmtime_wasi::p2::OutputStream for CustomOutputStream {
         Ok(())
     }
     fn check_write(&mut self) -> Result<usize, StreamError> {
-        Ok(64 * 1024)
+        Ok(WRITE_BUDGET)
     }
 }
 
