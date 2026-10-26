@@ -524,6 +524,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         UImm5::maybe_from_u8(x).unwrap()
     }
 
+    fn u8_into_uimm6(&mut self, x: u8) -> UImm6 {
+        UImm6::maybe_from_u8(x).unwrap()
+    }
+
     fn u8_into_imm12(&mut self, x: u8) -> Imm12 {
         Imm12::maybe_from_u64(x.into()).unwrap()
     }
@@ -674,8 +678,8 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn targets_jt_space(&mut self, elements: &BoxVecMachLabel) -> CodeOffset {
         // calculate the number of bytes needed for the jumptable sequence:
         // 4 bytes per instruction, with 8 instructions base + the size of
-        // the jumptable more.
-        (4 * (8 + elements.len())).try_into().unwrap()
+        // the jumptable more (including the default entry).
+        (4 * (8 + elements.len() + 1)).try_into().unwrap()
     }
 
     fn min_fp_value(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {

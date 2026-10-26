@@ -32,6 +32,9 @@ use wstd::{
 #[derive(Parser)]
 struct Options {
     /// The TCP address to listen on, in `<addr>:<port>` format.
+    ///
+    /// Port 0 instructs the stub server to choose any free port (which
+    /// will be printed to stderr at startup).
     tcp_address: String,
     /// Verbose logging.
     #[clap(short = 'v')]
@@ -119,14 +122,15 @@ impl<'a> Debugger<'a> {
         let listener = TcpListener::bind(&self.options.tcp_address)
             .await
             .expect("Could not bind to TCP port");
+        // Print the actually-bound address rather than the requested
+        // one, so that binding to port 0 reports the chosen port.
+        let local_addr = listener
+            .local_addr()
+            .expect("Could not get bound TCP address");
 
+        api::print_debugger_info(&format!("Debugger listening on {local_addr}"));
         api::print_debugger_info(&format!(
-            "Debugger listening on {}",
-            self.options.tcp_address,
-        ));
-        api::print_debugger_info(&format!(
-            "In LLDB, attach with: process connect --plugin wasm connect://{}",
-            self.options.tcp_address,
+            "In LLDB, attach with: process connect --plugin wasm connect://{local_addr}",
         ));
 
         // Only accept one connection for the run; once the debugger
@@ -193,6 +197,11 @@ impl<'a> Debugger<'a> {
                         // Connection error: break.
                         break 'mainloop;
                     }
+                    // Ask the debuggee to stop; its `interrupted` event is
+                    // then reported as the stop (see `handle_event`).
+                    trace!("Ctrl-C: interrupting debuggee");
+                    self.debuggee.interrupt();
+                    self.interrupt = true;
                     stub = inner.interrupt_handled(self, None::<MultiThreadStopReason<u64>>)?;
                 }
                 GdbStubStateMachine::Disconnected(mut inner) => {
@@ -222,6 +231,8 @@ impl<'a> Debugger<'a> {
     }
 
     fn update_on_stop(&mut self) {
+        // Any stop satisfies a pending interrupt request.
+        self.interrupt = false;
         self.addr_space.update(self.debuggee).unwrap();
 
         // Cache all frame handles for the duration of this stop.

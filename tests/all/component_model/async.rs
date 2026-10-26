@@ -2421,6 +2421,144 @@ async fn host_to_host_stream_buffer_type_mismatch() -> wasmtime::Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn lower_stream_payload_type_mismatch() -> wasmtime::Result<()> {
+    // A component that echoes streams and futures of streams and futures of
+    // strings back to the caller, creates a stream of streams of strings, and
+    // accepts the same with `u32` instead of `string`.
+    const WAT: &str = r#"
+(component
+  (type $s (stream string))
+  (type $ss (stream $s))
+  (type $f (future string))
+  (type $ff (future $f))
+  (type $u (stream u32))
+  (type $su (stream $u))
+  (type $fu32 (future u32))
+  (type $fu (future $fu32))
+  (core func $stream.new (canon stream.new $ss))
+  (core module $m
+    (import "" "stream.new" (func $stream.new (result i64)))
+    (func (export "echo") (param i32) (result i32) local.get 0)
+    (func (export "new-stream") (result i32)
+      (i32.wrap_i64 (call $stream.new)))
+    (func (export "take") (param i32)))
+  (core instance $i (instantiate $m
+    (with "" (instance (export "stream.new" (func $stream.new))))))
+  (func (export "echo-stream") (param "s" $ss) (result $ss)
+    (canon lift (core func $i "echo")))
+  (func (export "echo-future") (param "f" $ff) (result $ff)
+    (canon lift (core func $i "echo")))
+  (func (export "new-stream") (result $ss)
+    (canon lift (core func $i "new-stream")))
+  (func (export "take-stream-string") (param "s" $ss)
+    (canon lift (core func $i "take")))
+  (func (export "take-stream-u32") (param "s" $su)
+    (canon lift (core func $i "take")))
+  (func (export "take-future-u32") (param "f" $fu)
+    (canon lift (core func $i "take")))
+)
+"#;
+
+    let engine = Engine::default();
+    let component = Component::new(&engine, WAT)?;
+
+    // An error while lowering parameters leaves the instance unusable, so each
+    // case below uses a new store and instance.
+    let instantiate = async || -> Result<(Store<()>, Instance)> {
+        let mut store = Store::new(&engine, ());
+        let instance = Linker::new(&engine)
+            .instantiate_async(&mut store, &component)
+            .await?;
+        Ok((store, instance))
+    };
+
+    // Created with `StreamReader<String>` items, which can't be lowered as
+    // `stream<u32>` items, even though `StreamAny` statically matches it. The
+    // host still owns the stream afterwards, so it can close it.
+    let (mut store, instance) = instantiate().await?;
+    let echo = instance
+        .get_typed_func::<(StreamReader<StreamReader<String>>,), (StreamReader<StreamAny>,)>(
+            &mut store,
+            "echo-stream",
+        )?;
+    let take = instance
+        .get_typed_func::<(&StreamReader<StreamAny>,), ()>(&mut store, "take-stream-u32")?;
+    let inner = StreamReader::new(&mut store, vec!["hello".to_string()])?;
+    let outer = StreamReader::new(&mut store, vec![inner])?;
+    let (mut outer,) = echo.call_async(&mut store, (outer,)).await?;
+    assert!(take.call_async(&mut store, (&outer,)).await.is_err());
+    outer.close(&mut store)?;
+
+    // The same through `Val`.
+    let (mut store, instance) = instantiate().await?;
+    let echo = instance
+        .get_typed_func::<(StreamReader<StreamReader<String>>,), (StreamReader<StreamAny>,)>(
+            &mut store,
+            "echo-stream",
+        )?;
+    let take = instance.get_func(&mut store, "take-stream-u32").unwrap();
+    let inner = StreamReader::new(&mut store, vec!["hello".to_string()])?;
+    let outer = StreamReader::new(&mut store, vec![inner])?;
+    let (outer,) = echo.call_async(&mut store, (outer,)).await?;
+    let outer = outer.try_into_stream_any(&mut store)?;
+    assert!(
+        take.call_async(&mut store, &[Val::Stream(outer)], &mut [])
+            .await
+            .is_err()
+    );
+
+    // The same for futures.
+    let (mut store, instance) = instantiate().await?;
+    let echo = instance
+        .get_typed_func::<(FutureReader<FutureReader<String>>,), (FutureReader<FutureAny>,)>(
+            &mut store,
+            "echo-future",
+        )?;
+    let take =
+        instance.get_typed_func::<(FutureReader<FutureAny>,), ()>(&mut store, "take-future-u32")?;
+    let inner = FutureReader::new(&mut store, async {
+        wasmtime::error::Ok("hello".to_string())
+    })?;
+    let outer = FutureReader::new(&mut store, async move { wasmtime::error::Ok(inner) })?;
+    let (outer,) = echo.call_async(&mut store, (outer,)).await?;
+    assert!(take.call_async(&mut store, (outer,)).await.is_err());
+
+    // The same for a stream created by a guest.
+    let (mut store, instance) = instantiate().await?;
+    let new =
+        instance.get_typed_func::<(), (StreamReader<StreamAny>,)>(&mut store, "new-stream")?;
+    let take =
+        instance.get_typed_func::<(StreamReader<StreamAny>,), ()>(&mut store, "take-stream-u32")?;
+    let (stream,) = new.call_async(&mut store, ()).await?;
+    assert!(take.call_async(&mut store, (stream,)).await.is_err());
+
+    // A matching payload type is still accepted.
+    let (mut store, instance) = instantiate().await?;
+    let echo = instance
+        .get_typed_func::<(StreamReader<StreamReader<String>>,), (StreamReader<StreamAny>,)>(
+            &mut store,
+            "echo-stream",
+        )?;
+    let take = instance
+        .get_typed_func::<(StreamReader<StreamAny>,), ()>(&mut store, "take-stream-string")?;
+    let inner = StreamReader::new(&mut store, vec!["hello".to_string()])?;
+    let outer = StreamReader::new(&mut store, vec![inner])?;
+    let (outer,) = echo.call_async(&mut store, (outer,)).await?;
+    take.call_async(&mut store, (outer,)).await?;
+
+    let (mut store, instance) = instantiate().await?;
+    let new =
+        instance.get_typed_func::<(), (StreamReader<StreamAny>,)>(&mut store, "new-stream")?;
+    let take = instance
+        .get_typed_func::<(StreamReader<StreamAny>,), ()>(&mut store, "take-stream-string")?;
+    let (stream,) = new.call_async(&mut store, ()).await?;
+    take.call_async(&mut store, (stream,)).await?;
+
+    Ok(())
+}
+
 /// Regression test for case which previously panicked when finishing a call
 /// which was started before an intervening, failing call.
 #[tokio::test]
@@ -2631,11 +2769,15 @@ fn sync_call_async_typed() -> Result<()> {
       (call $task.return (i32.const 42))
       (i32.const 0 (; EXIT ;)))
     (func (export "run-cb") (param i32 i32 i32) (result i32)
-      unreachable))
+      unreachable)
+    (func (export "run-sync-lifted") (result i32)
+      (i32.const 42)))
   (core instance $i (instantiate $m
     (with "" (instance (export "task.return" (func $task.return))))))
   (func (export "run") async (result u32)
     (canon lift (core func $i "run") async (callback (core func $i "run-cb"))))
+  (func (export "run-sync-lifted") async (result u32)
+    (canon lift (core func $i "run-sync-lifted")))
 )
 "#;
 
@@ -2644,26 +2786,53 @@ fn sync_call_async_typed() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    let func = instance.get_func(&mut store, "run").unwrap();
-    let mut results = [Val::U32(0)];
-    let error = func.call(&mut store, &[], &mut results).unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("cannot synchronously call an async-lifted export"),
-        "{error}"
-    );
+    for name in ["run", "run-sync-lifted"] {
+        let func = instance.get_func(&mut store, name).unwrap();
+        let mut results = [Val::U32(0)];
+        let error = func.call(&mut store, &[], &mut results).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot synchronously call an async function"),
+            "{error}"
+        );
 
-    let func = instance
-        .get_typed_func::<(), (u32,)>(&mut store, "run")
-        .unwrap();
-    let error = func.call(&mut store, ()).unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("cannot synchronously call an async-lifted export"),
-        "{error}"
-    );
+        let func = instance.get_typed_func::<(), (u32,)>(&mut store, name)?;
+        let error = func.call(&mut store, ()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot synchronously call an async function"),
+            "{error}"
+        );
+    }
+
+    // Somehow this shouldn't hit `bail-bug!` at least...
+    const WAT2: &str = r#"
+(component
+  (component $inner
+    (core module $m
+      (func (export "f") (param i32) (result i32)
+        (i32.add (local.get 0) (i32.const 3))))
+    (core instance $i (instantiate $m))
+    (func (export "f") async (param "x" u32) (result u32)
+      (canon lift (core func $i "f"))))
+  (instance $inner (instantiate $inner))
+
+  (core func $f (canon lower (func $inner "f")))
+  (core module $m
+    (import "" "f" (func $f (param i32) (result i32)))
+    (func (export "run") (param i32) (result i32) (call $f (local.get 0))))
+  (core instance $i (instantiate $m (with "" (instance (export "f" (func $f))))))
+  (func (export "run") (param "x" u32) (result u32)
+    (canon lift (core func $i "run")))
+)
+"#;
+    let component = Component::new(&engine, WAT2)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "run")?;
+    let _ = func.call(&mut store, (4,));
 
     Ok(())
 }
@@ -3291,64 +3460,49 @@ async fn task_group_hook_fails_to_enter_call_async() -> Result<()> {
     Ok(())
 }
 
-/// `call_async` from within a host function, while the event loop is already
-/// running, fails, and dropping that call's future (whose start has already
-/// been queued) doesn't panic. The dropped call fails once the event loop
-/// reaches it, here in the next call.
+/// `Func::call_async` and `TypedFunc::call_async` from within a host function,
+/// while the event loop is already running, fail without queueing the call to
+/// run later.
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn call_async_from_host_function() -> Result<()> {
     use futures::FutureExt as _;
 
-    let engine = Engine::new(Config::new().wasm_component_model_async(true))?;
+    let engine = Engine::default();
     let component = Component::new(
         &engine,
         r#"(component
             (import "host" (func $host))
-            (component $Nop
-                (core func $task.return (canon task.return))
-                (core module $m
-                    (import "" "task.return" (func $task.return))
-                    (func (export "nop") (result i32)
-                        (call $task.return)
-                        (i32.const 0 (; EXIT ;)))
-                    (func (export "cb") (param i32 i32 i32) (result i32) unreachable))
-                (core instance $i (instantiate $m
-                    (with "" (instance (export "task.return" (func $task.return))))))
-                (func (export "nop") async
-                    (canon lift (core func $i "nop") async (callback (core func $i "cb")))))
-            (instance $nop (instantiate $Nop))
             (core func $host (canon lower (func $host)))
             (core module $m
                 (import "" "host" (func $host))
-                (func (export "run") (call $host)))
+                (func (export "run") (call $host))
+                (func (export "trap") unreachable))
             (core instance $i (instantiate $m (with "" (instance (export "host" (func $host))))))
-            (export "nop" (func $nop "nop"))
             (func (export "run") (canon lift (core func $i "run")))
+            (func (export "trap") (canon lift (core func $i "trap")))
         )"#,
     )?;
-    let nop = Arc::new(Mutex::new(None::<TypedFunc<(), ()>>));
+    let trap = Arc::new(Mutex::new(None::<Func>));
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap("host", {
-        let nop = nop.clone();
+        let trap = trap.clone();
         move |mut store, ()| {
-            let nop = nop.lock().unwrap().unwrap();
-            let result = nop.call_async(&mut store, ()).now_or_never();
+            let trap = trap.lock().unwrap().unwrap();
+            let result = trap.call_async(&mut store, &[], &mut []).now_or_never();
+            assert!(matches!(result, Some(Err(_))));
+            let trap = trap.typed::<(), ()>(&store)?;
+            let result = trap.call_async(&mut store, ()).now_or_never();
             assert!(matches!(result, Some(Err(_))));
             Ok(())
         }
     })?;
     let mut store = Store::new(&engine, ());
     let instance = linker.instantiate_async(&mut store, &component).await?;
-    *nop.lock().unwrap() = Some(instance.get_typed_func::<(), ()>(&mut store, "nop")?);
+    *trap.lock().unwrap() = instance.get_func(&mut store, "trap");
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
     run.call_async(&mut store, ()).await?;
-    let nop = nop.lock().unwrap().unwrap();
-    let err = nop.call_async(&mut store, ()).await.unwrap_err();
-    assert!(
-        format!("{err:?}").contains("dropped before it started"),
-        "unexpected error: {err:?}"
-    );
+    run.call_async(&mut store, ()).await?;
     Ok(())
 }
 
@@ -3454,5 +3608,244 @@ async fn start_call_from_inline_stream_producer() -> Result<()> {
     let reader = StreamReader::new(&mut store, Producer)?;
     let (code,) = read.call_async(&mut store, (reader,)).await?;
     assert_eq!(code, 1 << 4 /* COMPLETED, 1 item */);
+    Ok(())
+}
+
+/// A nested sync `Func::call` from a `StreamConsumer` that fails because the
+/// callee needs to block doesn't hit `bail_bug!` or anything like that.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn stream_consumer_failed_nested_call_then_yield() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (component $inner
+    (core func $task.return (canon task.return (result u32)))
+    (core module $m
+      (import "" "task.return" (func $task.return (param i32)))
+      (func (export "f") (result i32)
+        (call $task.return (i32.const 0))
+        (i32.const 0 (; EXIT ;)))
+      (func (export "cb") (param i32 i32 i32) (result i32) unreachable))
+    (core instance $i (instantiate $m
+      (with "" (instance (export "task.return" (func $task.return))))))
+    (func (export "f") async (result u32)
+      (canon lift (core func $i "f") async (callback (core func $i "cb")))))
+  (instance $inner (instantiate $inner))
+
+  (core module $libc (memory (export "memory") 1))
+  (core instance $libc (instantiate $libc))
+  (type $s (stream u8))
+  (core func $stream.new (canon stream.new $s))
+  (core func $stream.write (canon stream.write $s async (memory (core memory $libc "memory"))))
+  (core func $task.return (canon task.return (result $s)))
+  (alias export $inner "f" (func $inner.f))
+  (core func $f (canon lower (func $inner.f)))
+  (core func $thread.yield (canon thread.yield))
+  (core module $m
+    (import "" "stream.new" (func $stream.new (result i64)))
+    (import "" "stream.write" (func $stream.write (param i32 i32 i32) (result i32)))
+    (import "" "task.return" (func $task.return (param i32)))
+    (import "" "f" (func $f (result i32)))
+    (import "" "thread.yield" (func $thread.yield (result i32)))
+    (func (export "write") (result i32)
+      (local $s i64)
+      (local.set $s (call $stream.new))
+      (call $task.return (i32.wrap_i64 (local.get $s)))
+      (drop (call $stream.write
+        (i32.wrap_i64 (i64.shr_u (local.get $s) (i64.const 32)))
+        (i32.const 0)
+        (i32.const 1)))
+      (i32.const 0 (; EXIT ;)))
+    (func (export "write-cb") (param i32 i32 i32) (result i32) unreachable)
+    (func (export "call-f") (result i32) (call $f))
+    (func (export "yield") (drop (call $thread.yield))))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "stream.new" (func $stream.new))
+    (export "stream.write" (func $stream.write))
+    (export "task.return" (func $task.return))
+    (export "f" (func $f))
+    (export "thread.yield" (func $thread.yield))))))
+  (func (export "write") async (result $s)
+    (canon lift (core func $i "write") async (callback (core func $i "write-cb"))))
+  (func (export "call-f") (result u32) (canon lift (core func $i "call-f")))
+  (func (export "yield") (canon lift (core func $i "yield")))
+)
+"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let write = instance.get_typed_func::<(), (StreamReader<u8>,)>(&mut store, "write")?;
+    let call_f = instance.get_typed_func::<(), (u32,)>(&mut store, "call-f")?;
+    let yield_ = instance.get_typed_func::<(), ()>(&mut store, "yield")?;
+
+    struct Consumer(TypedFunc<(), (u32,)>);
+
+    impl StreamConsumer<()> for Consumer {
+        type Item = u8;
+
+        fn poll_consume(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            mut store: StoreContextMut<()>,
+            mut source: Source<'_, u8>,
+            _: bool,
+        ) -> Poll<Result<StreamResult>> {
+            // `f` is async-lifted, so calling it requires blocking, which
+            // can't be done here.
+            assert!(self.0.call(&mut store, ()).is_err());
+            source.read(store, &mut Vec::with_capacity(1))?;
+            Poll::Ready(Ok(StreamResult::Dropped))
+        }
+    }
+
+    let err = store
+        .run_concurrent(async |store| {
+            let (reader,) = write.call_concurrent(store, ()).await?;
+            store.with(|store| reader.pipe(store, Consumer(call_f)))?;
+            yield_.call_concurrent(store, ()).await
+        })
+        .await
+        .and_then(|r| r)
+        .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::CannotEnterComponent),
+        "{err:?}"
+    );
+    Ok(())
+}
+
+/// A destructor run by `ResourceAny::resource_drop_async` can yield to another
+/// task of its instance, more than once.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn resource_drop_async_dtor_yields() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core func $thread.yield (canon thread.yield))
+  (core module $dtor
+    (import "" "thread.yield" (func $thread.yield (result i32)))
+    (func (export "dtor") (param i32)
+      (drop (call $thread.yield))
+      (drop (call $thread.yield))))
+  (core instance $dtor (instantiate $dtor
+    (with "" (instance (export "thread.yield" (func $thread.yield))))))
+  (type $r (resource (rep i32) (dtor (core func $dtor "dtor"))))
+  (core func $resource.new (canon resource.new $r))
+  (core func $task.return (canon task.return))
+  (core module $m
+    (import "" "resource.new" (func $resource.new (param i32) (result i32)))
+    (import "" "task.return" (func $task.return))
+    (func (export "make") (result i32) (call $resource.new (i32.const 42)))
+    ;; Returns right away, but its task keeps yielding forever, leaving work
+    ;; queued for this instance.
+    (func (export "spin") (result i32)
+      (call $task.return)
+      (i32.const 1 (; YIELD ;)))
+    (func (export "spin-cb") (param i32 i32 i32) (result i32)
+      (i32.const 1 (; YIELD ;))))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "resource.new" (func $resource.new))
+    (export "task.return" (func $task.return))))))
+  (export $r' "r" (type $r))
+  (func (export "make") (result (own $r')) (canon lift (core func $m "make")))
+  (func (export "spin") async
+    (canon lift (core func $m "spin") async (callback (core func $m "spin-cb"))))
+)
+"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let make = instance.get_typed_func::<(), (ResourceAny,)>(&mut store, "make")?;
+    let spin = instance.get_typed_func::<(), ()>(&mut store, "spin")?;
+    let (r,) = make.call_async(&mut store, ()).await?;
+    spin.call_async(&mut store, ()).await?;
+    r.resource_drop_async(&mut store).await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn max_fibers() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async_stackful(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (component $C
+                (core module $libc (memory (export "memory") 1))
+                (core instance $libc (instantiate $libc))
+                (core module $m
+                    (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+                    (import "" "waitable-set.wait" (func $waitable-set.wait (param i32 i32) (result i32)))
+                    (func (export "wait-forever")
+                        (drop (call $waitable-set.wait (call $waitable-set.new) (i32.const 0))))
+                )
+                (core func $waitable-set.new (canon waitable-set.new))
+                (core func $waitable-set.wait (canon waitable-set.wait (memory (core memory $libc "memory"))))
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "waitable-set.new" (func $waitable-set.new))
+                        (export "waitable-set.wait" (func $waitable-set.wait))
+                    ))
+                ))
+                (func (export "wait-forever") async
+                    (canon lift (core func $i "wait-forever") async))
+            )
+
+            (component $D
+                (import "c" (instance $c (export "wait-forever" (func async))))
+                (core module $libc (memory (export "memory") 1))
+                (core instance $libc (instantiate $libc))
+                (core module $m
+                    (import "" "wait-forever" (func $wait-forever (result i32)))
+                    (func (export "run") (param $n i32)
+                        (loop $l
+                            (if (local.get $n)
+                                (then
+                                    (drop (call $wait-forever))
+                                    (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+                                    (br $l)))))
+                )
+                (core func $wait-forever
+                    (canon lower (func $c "wait-forever") async (memory (core memory $libc "memory"))))
+                (core instance $i (instantiate $m
+                    (with "" (instance (export "wait-forever" (func $wait-forever))))
+                ))
+                (func (export "run") async (param "n" u32)
+                    (canon lift (core func $i "run")))
+            )
+
+            (instance $c (instantiate $C))
+            (instance $d (instantiate $D (with "c" (instance $c))))
+            (func (export "run") (alias export $d "run"))
+        )"#,
+    )?;
+    let linker = Linker::new(&engine);
+
+    let run = async |n: u32| -> Result<()> {
+        let mut store = Store::new(&engine, ());
+        store.set_max_fibers(10);
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+        let run = instance.get_typed_func::<(u32,), ()>(&mut store, "run")?;
+        store
+            .run_concurrent(async |a| run.call_concurrent(a, (n,)).await)
+            .await?
+    };
+
+    run(9).await?;
+    assert!(run(10).await.is_err());
     Ok(())
 }

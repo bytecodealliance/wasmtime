@@ -1,0 +1,160 @@
+test compile precise-output
+set enable_multi_ret_implicit_sret
+target s390x has_vxrs_ext3
+
+function %atomic_rmw_smin_i128(i64, i64, i128) -> i128 {
+block0(v0: i64, v1: i64, v2: i128):
+  v3 = atomic_rmw.i128 smin v1, v2
+  return v3
+}
+
+; VCode:
+;   stmg %r11, %r15, 88(%r15)
+; block0:
+;   lgr %r11, %r4
+;   lgr %r12, %r2
+;   vl %v2, 0(%r5)
+;   atomic_rmw_128_loop_smin %v5, %v2, 0(%r11), scratch1=%r2, scratch2=%r4
+;   lgr %r2, %r12
+;   vst %v5, 0(%r2)
+;   lmg %r11, %r15, 88(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r11, %r15, 0x58(%r15)
+; block1: ; offset 0x6
+;   lgr %r11, %r4
+;   lgr %r12, %r2
+;   vl %v2, 0(%r5)
+;   vl %v5, 0(%r11) ; trap: heap_oob
+;   lgdr %r2, %f5
+;   vlgvg %r3, %v5, 1
+;   vmn %v5, %v5, %v2, 4
+;   lgdr %r4, %f5
+;   vlgvg %r5, %v5, 1
+;   cdsg %r2, %r4, 0(%r11) ; trap: heap_oob
+;   vlvgp %v5, %r2, %r3
+;   jgl 0x24
+;   lgr %r2, %r12
+;   vst %v5, 0(%r2)
+;   lmg %r11, %r15, 0x58(%r15)
+;   br %r14
+
+function %atomic_rmw_smax_i128(i64, i64, i128) -> i128 {
+block0(v0: i64, v1: i64, v2: i128):
+  v3 = atomic_rmw.i128 smax v1, v2
+  return v3
+}
+
+; VCode:
+;   stmg %r11, %r15, 88(%r15)
+; block0:
+;   lgr %r11, %r4
+;   lgr %r12, %r2
+;   vl %v2, 0(%r5)
+;   atomic_rmw_128_loop_smax %v5, %v2, 0(%r11), scratch1=%r2, scratch2=%r4
+;   lgr %r2, %r12
+;   vst %v5, 0(%r2)
+;   lmg %r11, %r15, 88(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r11, %r15, 0x58(%r15)
+; block1: ; offset 0x6
+;   lgr %r11, %r4
+;   lgr %r12, %r2
+;   vl %v2, 0(%r5)
+;   vl %v5, 0(%r11) ; trap: heap_oob
+;   lgdr %r2, %f5
+;   vlgvg %r3, %v5, 1
+;   vmx %v5, %v5, %v2, 4
+;   lgdr %r4, %f5
+;   vlgvg %r5, %v5, 1
+;   cdsg %r2, %r4, 0(%r11) ; trap: heap_oob
+;   vlvgp %v5, %r2, %r3
+;   jgl 0x24
+;   lgr %r2, %r12
+;   vst %v5, 0(%r2)
+;   lmg %r11, %r15, 0x58(%r15)
+;   br %r14
+
+function %atomic_rmw_umin_i128(i64, i64, i128) -> i128 {
+block0(v0: i64, v1: i64, v2: i128):
+  v3 = atomic_rmw.i128 umin v1, v2
+  return v3
+}
+
+; VCode:
+;   stmg %r11, %r15, 88(%r15)
+; block0:
+;   lgr %r11, %r4
+;   lgr %r12, %r2
+;   vl %v2, 0(%r5)
+;   atomic_rmw_128_loop_umin %v5, %v2, 0(%r11), scratch1=%r2, scratch2=%r4
+;   lgr %r2, %r12
+;   vst %v5, 0(%r2)
+;   lmg %r11, %r15, 88(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r11, %r15, 0x58(%r15)
+; block1: ; offset 0x6
+;   lgr %r11, %r4
+;   lgr %r12, %r2
+;   vl %v2, 0(%r5)
+;   vl %v5, 0(%r11) ; trap: heap_oob
+;   lgdr %r2, %f5
+;   vlgvg %r3, %v5, 1
+;   vmnl %v5, %v5, %v2, 4
+;   lgdr %r4, %f5
+;   vlgvg %r5, %v5, 1
+;   cdsg %r2, %r4, 0(%r11) ; trap: heap_oob
+;   vlvgp %v5, %r2, %r3
+;   jgl 0x24
+;   lgr %r2, %r12
+;   vst %v5, 0(%r2)
+;   lmg %r11, %r15, 0x58(%r15)
+;   br %r14
+
+function %atomic_rmw_umax_i128(i64, i64, i128) -> i128 {
+block0(v0: i64, v1: i64, v2: i128):
+  v3 = atomic_rmw.i128 umax v1, v2
+  return v3
+}
+
+; VCode:
+;   stmg %r11, %r15, 88(%r15)
+; block0:
+;   lgr %r11, %r4
+;   lgr %r12, %r2
+;   vl %v2, 0(%r5)
+;   atomic_rmw_128_loop_umax %v5, %v2, 0(%r11), scratch1=%r2, scratch2=%r4
+;   lgr %r2, %r12
+;   vst %v5, 0(%r2)
+;   lmg %r11, %r15, 88(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r11, %r15, 0x58(%r15)
+; block1: ; offset 0x6
+;   lgr %r11, %r4
+;   lgr %r12, %r2
+;   vl %v2, 0(%r5)
+;   vl %v5, 0(%r11) ; trap: heap_oob
+;   lgdr %r2, %f5
+;   vlgvg %r3, %v5, 1
+;   vmxl %v5, %v5, %v2, 4
+;   lgdr %r4, %f5
+;   vlgvg %r5, %v5, 1
+;   cdsg %r2, %r4, 0(%r11) ; trap: heap_oob
+;   vlvgp %v5, %r2, %r3
+;   jgl 0x24
+;   lgr %r2, %r12
+;   vst %v5, 0(%r2)
+;   lmg %r11, %r15, 0x58(%r15)
+;   br %r14
+

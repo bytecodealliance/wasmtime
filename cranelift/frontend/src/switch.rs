@@ -242,7 +242,7 @@ impl Switch {
                 let new_block = bx.create_block();
                 let bigger_than_u32 =
                     bx.ins()
-                        .icmp_imm_s(IntCC::UnsignedGreaterThan, discr, u32::MAX as i64);
+                        .icmp_imm_u(IntCC::UnsignedGreaterThan, discr, u32::MAX as i64);
                 bx.ins()
                     .brif(bigger_than_u32, otherwise, &[], new_block, &[]);
                 bx.seal_block(new_block);
@@ -280,12 +280,10 @@ impl Switch {
 }
 
 fn icmp_imm_u128(bx: &mut FunctionBuilder, cond: IntCC, x: Value, y: u128) -> Value {
-    if bx.func.dfg.value_type(x) != types::I128 {
-        assert!(u64::try_from(y).is_ok());
-        bx.ins().icmp_imm_s(cond, x, y as i64)
-    } else if let Ok(index) = i64::try_from(y) {
-        bx.ins().icmp_imm_s(cond, x, index)
+    if let Ok(index) = u64::try_from(y) {
+        bx.ins().icmp_imm_u(cond, x, index.cast_signed())
     } else {
+        assert!(bx.func.dfg.value_type(x) == types::I128);
         let (lsb, msb) = (y as u64, (y >> 64) as u64);
         let lsb = bx.ins().iconst(types::I64, lsb as i64);
         let msb = bx.ins().iconst(types::I64, msb as i64);
@@ -647,7 +645,7 @@ block4:
     v0 = iconst.i64 0
     v1 = uextend.i128 v0  ; v0 = 0
     v2 = iconst.i64 0xffff_ffff
-    v3 = sextend.i128 v2  ; v2 = 0xffff_ffff
+    v3 = uextend.i128 v2  ; v2 = 0xffff_ffff
     v4 = icmp ugt v1, v3
     brif v4, block3, block4
 
@@ -686,10 +684,9 @@ block4:
     v0 = iconst.i64 0
     v1 = uextend.i128 v0  ; v0 = 0
     v2 = iconst.i64 -1
-    v3 = iconst.i64 0
-    v4 = iconcat v2, v3  ; v2 = -1, v3 = 0
-    v5 = icmp eq v1, v4
-    brif v5, block1, block4
+    v3 = uextend.i128 v2  ; v2 = -1
+    v4 = icmp eq v1, v3
+    brif v4, block1, block4
 
 block4:
     brif.i128 v1, block3, block2"

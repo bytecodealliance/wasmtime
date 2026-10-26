@@ -3308,9 +3308,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.15"
+version = "0.103.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2"
+checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -3889,9 +3889,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.51.1"
+version = "1.54.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f66bf9585cda4b724d3e78ab34b73fb2bbaba9011b9bfdf69dc836382ea13b8c"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
 dependencies = [
  "bytes",
  "libc",
@@ -4573,6 +4573,7 @@ dependencies = [
  "futures",
  "fxprof-processed-profile",
  "gimli 0.33.0",
+ "indexmap 2.14.0",
  "ittapi",
  "libc",
  "libtest-mimic",
@@ -4683,6 +4684,7 @@ dependencies = [
  "http",
  "http-body-util",
  "hyper",
+ "indexmap 2.14.0",
  "libc",
  "libtest-mimic",
  "log",
@@ -5143,6 +5145,7 @@ dependencies = [
  "bytes",
  "env_logger 0.11.5",
  "futures",
+ "libc",
  "rand 0.10.1",
  "rustix 1.1.5",
  "rustix-linux-procfs",
@@ -5178,6 +5181,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
+ "criterion",
  "env_logger 0.11.5",
  "flate2",
  "futures",
@@ -5341,9 +5345,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.7"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52f5ee44c96cf55f1b349600768e3ece3a8f26010c05265ab73f945bb1a2eb9d"
+checksum = "1c1c8e20c8a38fc7d65abfe74eb7280e4aa667e8eec8bc84996d2874810748d9"
 dependencies = [
  "rustls-pki-types",
 ]

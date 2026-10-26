@@ -61,6 +61,36 @@ TEST(Linker, finalizes_callbacks_when_name_parsing_fails) {
   wasmtime_component_linker_delete(raw);
 }
 
+TEST(Linker, empty_names) {
+  wasmtime::Engine engine;
+  Linker linker(engine);
+  linker.allow_shadowing(true);
+  auto module = wasmtime::Module::compile(engine, "(module)").unwrap();
+
+  // A default `std::string_view` is a null pointer with a zero length.
+  std::string_view empty;
+  auto root = linker.root();
+  root.add_module(empty, module).unwrap();
+  root.add_func(empty,
+                [](wasmtime::Store::Context, const FuncType &,
+                   wasmtime::Span<Val>,
+                   wasmtime::Span<Val>) -> wasmtime::Result<std::monostate> {
+                  return std::monostate();
+                })
+      .unwrap();
+  root.add_resource(empty, ResourceType(1),
+                    [](wasmtime::Store::Context,
+                       uint32_t) -> wasmtime::Result<std::monostate> {
+                      return std::monostate();
+                    })
+      .unwrap();
+  // The C++ API doesn't have async functions.
+  auto *error = wasmtime_component_linker_instance_add_func_async(
+      root.capi(), nullptr, 0, async_func_callback, nullptr, nullptr);
+  EXPECT_EQ(error, nullptr);
+  root.add_instance(empty).unwrap();
+}
+
 TEST(Linker, allow_shadowing) {
   wasmtime::Engine engine;
   Linker linker(engine);
@@ -86,5 +116,23 @@ TEST(Linker, unknown_imports_trap) {
 
   EXPECT_FALSE(linker.instantiate(store, c));
   EXPECT_TRUE(linker.define_unknown_imports_as_traps(c));
+  EXPECT_TRUE(linker.instantiate(store, c));
+}
+
+TEST(Linker, unknown_imports_default_values) {
+  wasmtime::Engine engine;
+  Linker linker(engine);
+  wasmtime::Store store(engine);
+
+  auto c = Component::compile(engine, R"(
+    (component
+      (import "a" (func (result u32)))
+    )
+  )")
+               .unwrap();
+
+  EXPECT_FALSE(linker.instantiate(store, c));
+  EXPECT_TRUE(
+      linker.define_unknown_imports_as_default_values(store.context(), c));
   EXPECT_TRUE(linker.instantiate(store, c));
 }

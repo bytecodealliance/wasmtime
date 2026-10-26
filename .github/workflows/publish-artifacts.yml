@@ -8,6 +8,7 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+  artifact-metadata: write
 
 jobs:
   publish:
@@ -36,7 +37,7 @@ jobs:
       with:
         path: "./gh-pages/gh-pages"
 
-    - uses: actions/attest-build-provenance@v1
+    - uses: actions/attest@v4
       with:
         subject-path: 'dist/*'
 

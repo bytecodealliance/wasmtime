@@ -322,6 +322,7 @@ jobs:
         cargo doc --no-deps --workspace \
           --exclude wasmtime-cli \
           --exclude test-programs \
+          --exclude test-programs-artifacts \
           --exclude cranelift-codegen-meta \
           --exclude wasmtime-wasi-nn \
           --exclude wasmtime-fuzzing \
@@ -392,6 +393,7 @@ jobs:
               -p wasmtime --no-default-features --features debug
               -p wasmtime --no-default-features --features debug,gc
               -p wasmtime --no-default-features --features runtime,cache
+              -p wasmtime --no-default-features --features runtime,pooling-allocator,custom-virtual-memory --target wasm32-wasip1
               -p wasmtime --features incremental-cache
               -p wasmtime --features profile-pulley
               -p wasmtime --all-features
@@ -553,6 +555,7 @@ jobs:
         # so MSRV doesn't apply.
         cargo check --workspace --all-targets --all-features --locked \
           --exclude test-programs \
+          --exclude test-programs-artifacts \
           --exclude wasmtime-wasi-nn \
           --exclude wasmtime-wasi-tls \
           --exclude wasmtime-fuzzing \
@@ -621,6 +624,11 @@ jobs:
         - target: x86_64-unknown-freebsd
           os: ubuntu-latest
           test: cargo check
+        # Use `cross` for NetBSD to have a C compiler available.
+        - target: x86_64-unknown-netbsd
+          os: ubuntu-latest
+          cross: true
+          test: cross check
         - target: aarch64-pc-windows-msvc
           os: windows-latest
           test: cargo check
@@ -1575,7 +1583,7 @@ jobs:
     permissions:
       issues: write
     steps:
-    - uses: actions/github-script@v8
+    - uses: actions/github-script@v9
       with:
         script: |
           github.rest.issues.create({

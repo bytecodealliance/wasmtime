@@ -437,18 +437,17 @@ impl WorkerThread {
         trace!("Trying to clean up cache");
 
         let mut cache_index = self.list_cache_contents();
-        let future_tolerance = SystemTime::now()
-            .checked_add(
-                self.cache_config
-                    .allowed_clock_drift_for_files_from_future(),
-            )
-            .expect("Brace your cache, the next Big Bang is coming (time overflow)");
+        let future_tolerance = SystemTime::now().checked_add(
+            self.cache_config
+                .allowed_clock_drift_for_files_from_future(),
+        );
+        let from_far_future = |mt: &SystemTime| future_tolerance.as_ref().is_some_and(|t| mt > t);
         cache_index.sort_unstable_by(|lhs, rhs| {
             // sort by age
             use CacheEntry::*;
             match (lhs, rhs) {
                 (Recognized { mtime: lhs_mt, .. }, Recognized { mtime: rhs_mt, .. }) => {
-                    match (*lhs_mt > future_tolerance, *rhs_mt > future_tolerance) {
+                    match (from_far_future(lhs_mt), from_far_future(rhs_mt)) {
                         // later == younger
                         (false, false) => rhs_mt.cmp(lhs_mt),
                         // files from far future are treated as oldest recognized files
@@ -476,17 +475,15 @@ impl WorkerThread {
 
         let total_size_limit = self.cache_config.files_total_size_soft_limit();
         let file_count_limit = self.cache_config.file_count_soft_limit();
-        let tsl_if_deleting = total_size_limit
-            .checked_mul(
-                self.cache_config
-                    .files_total_size_limit_percent_if_deleting() as u64,
-            )
-            .unwrap()
-            / 100;
-        let fcl_if_deleting = file_count_limit
-            .checked_mul(self.cache_config.file_count_limit_percent_if_deleting() as u64)
-            .unwrap()
-            / 100;
+        let tsl_if_deleting = percent_of(
+            total_size_limit,
+            self.cache_config
+                .files_total_size_limit_percent_if_deleting(),
+        );
+        let fcl_if_deleting = percent_of(
+            file_count_limit,
+            self.cache_config.file_count_limit_percent_if_deleting(),
+        );
 
         for (idx, item) in cache_index.iter().enumerate() {
             let size = if let CacheEntry::Recognized { size, .. } = item {
@@ -731,6 +728,19 @@ impl WorkerThread {
         enter_dir(&mut vec, self.directory(), 0, &self.cache_config);
         vec
     }
+}
+
+/// Returns `value * percent / 100`, rounded down, without overflowing.
+///
+/// Soft limits are arbitrary `u64` values (nothing bounds them in the config
+/// validation), so computing `value * percent` directly can overflow, e.g. for
+/// `u64::MAX` and `70%`. Splitting the value keeps every intermediate result
+/// within `u64`: with `value = 100 * q + r` the result is
+/// `(q * percent) + ((r * percent) / 100)`, and both terms are at most `value`
+/// because `percent` is at most 100 (see `CacheConfig::validate`).
+fn percent_of(value: u64, percent: u8) -> u64 {
+    let percent = u64::from(percent);
+    (value / 100) * percent + ((value % 100) * percent) / 100
 }
 
 fn read_stats_file(path: &Path) -> Option<ModuleCacheStatistics> {

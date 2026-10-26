@@ -1,0 +1,21 @@
+package foo:foo;
+
+interface store {
+  get: func() -> u32;
+}
+
+interface cache {
+  get: func() -> u32;
+}
+
+world w {
+  // Each labelled import has its own feature gate, independent of which
+  // label comes first.
+  import a: store;
+  @unstable(feature = experimental)
+  import b: store;
+
+  @unstable(feature = experimental)
+  import c: cache;
+  import d: cache;
+}

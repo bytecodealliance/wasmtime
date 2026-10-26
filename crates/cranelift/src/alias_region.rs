@@ -43,13 +43,8 @@ enum VmType {
     VMStoreContext,
     VMMemoryDefinition,
     VMTableDefinition,
-    // NB: these two are currently only referenced by macro-generated
+    // NB: this is currently only referenced by macro-generated
     // `AliasRegions` helpers that are not all wired up to call sites yet.
-    #[allow(
-        dead_code,
-        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
-    )]
-    VMGlobalDefinition,
     #[allow(
         dead_code,
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
@@ -471,7 +466,7 @@ impl<'a, Offsets> Field<'a, Offsets> {
     /// than being a static property of the field; this method allows callers
     /// to mark the load as `readonly` in these cases.
     pub fn readonly(mut self) -> Self {
-        self.flags.set_readonly();
+        self.flags.set_readonly(true);
         self
     }
 
@@ -487,7 +482,7 @@ impl<'a, Offsets> Field<'a, Offsets> {
     ///
     /// See the note on [`Field::readonly`].
     pub fn can_move(mut self) -> Self {
-        self.flags = self.flags.with_can_move();
+        self.flags = self.flags.with_can_move(true);
         self
     }
 
@@ -512,10 +507,8 @@ impl<'a, Offsets> Field<'a, Offsets> {
 
     /// Cast this field to the given type.
     ///
-    /// This can be used, for example, to cast a `Field` that points to a
-    /// `VMGlobalDefinition`'s storage (a `[u8; 16]` represented as
-    /// `ir::types::I8X16`) to the global's actual Wasm type's representation
-    /// (`ir::types::I32` for a Wasm `i32`).
+    /// This can be used, for example, to load a field as a narrower or
+    /// differently-typed value than its declared Cranelift type.
     pub fn cast(mut self, ty: ir::Type) -> Self {
         self.ty = ty;
         self
@@ -592,6 +585,23 @@ impl<'a, Offsets> Field<'a, Offsets> {
             .ins()
             .store(flags, value, ptr, i32::try_from(self.offset).unwrap());
     }
+
+    /// Like [`Self::store`], except removes the `readonly` flag for this region
+    /// if one would otherwise be specified.
+    ///
+    /// This is useful for `#[readonly]` fields that are initialized precisely
+    /// once before use, such as `VMFuncRef` fields.
+    pub fn store_without_readonly(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        ptr: ir::Value,
+        value: ir::Value,
+    ) {
+        let flags = self.flags_with_region(cursor.func).with_readonly(false);
+        cursor
+            .ins()
+            .store(flags, value, ptr, i32::try_from(self.offset).unwrap());
+    }
 }
 
 /// Define, for each `VM*` type, an `AliasRegions` accessor that returns a
@@ -657,7 +667,6 @@ macro_rules! define_vm_type_alias_region_helpers {
     // `VMLazyThread` is a pointer-sized bitpacked integer; see its definition in
     // `for_each_vm_type!`.
     (@field_ty $pt:expr, VMLazyThread) => { $pt };
-    (@field_ty $pt:expr, [u8; 16]) => { ir::types::I8X16 };
     (@field_ty $pt:expr, VMSharedTypeIndex) => { ir::types::I32 };
     (@field_ty $pt:expr, DefinedTableIndex) => { ir::types::I32 };
     (@field_ty $pt:expr, DefinedMemoryIndex) => { ir::types::I32 };
@@ -676,8 +685,8 @@ macro_rules! define_vm_type_alias_region_helpers {
     // `#[can_move]` markers map to the corresponding `MemFlagsData` builder
     // methods; doc comments have no effect on flags; any other attribute is a
     // compile error.
-    (@apply_attr $flags:expr, [readonly]) => { $flags.with_readonly() };
-    (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move() };
+    (@apply_attr $flags:expr, [readonly]) => { $flags.with_readonly(true) };
+    (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move(true) };
     (@apply_attr $flags:expr, [doc = $d:literal]) => { $flags };
 
     // Emit the accessor method for a single ordinary (scalar) field.
@@ -906,8 +915,8 @@ macro_rules! define_vmctx_alias_region_helpers {
     };
 
     // Apply a field attribute to its access flags.
-    (@apply_attr $flags:expr, [readonly]) => { $flags.with_readonly() };
-    (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move() };
+    (@apply_attr $flags:expr, [readonly]) => { $flags.with_readonly(true) };
+    (@apply_attr $flags:expr, [can_move]) => { $flags.with_can_move(true) };
     (@apply_attr $flags:expr, [access_as = $($t:tt)*]) => { $flags };
     (@apply_attr $flags:expr, [ptr_size_offset]) => { $flags };
     (@apply_attr $flags:expr, [pointee( $($t:tt)* )]) => { $flags };

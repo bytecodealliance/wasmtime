@@ -299,6 +299,36 @@ impl Inst {
         }
     }
 
+    /// Zero- or sign-extend `from_reg` as described by `op` into a `to`-sized result.
+    pub fn gen_extend(to_reg: Writable<Reg>, from_reg: Reg, op: ExtendOp, to: OperandSize) -> Inst {
+        assert!(op.from_bits() < to.bits());
+
+        let bfm = |size, bfm_op| Inst::BitfieldMove {
+            size,
+            bfm_op,
+            rd: to_reg,
+            rn: from_reg,
+            immr: UImm6::maybe_from_u8(0).unwrap(),
+            imms: UImm6::maybe_from_u8(op.from_bits() - 1).unwrap(),
+        };
+
+        match op {
+            // A 32-bit move zeroes the upper half of the destination.
+            ExtendOp::UXTW => Inst::Mov {
+                size: OperandSize::Size32,
+                rd: to_reg,
+                rm: from_reg,
+            },
+            // 32-bit UBFM already zeroes the upper half, so it's equivalent to the
+            // 64-bit form; using it preserves the encoding emitted previously.
+            ExtendOp::UXTB | ExtendOp::UXTH => bfm(OperandSize::Size32, BfmOp::UBfm),
+            // SBFM must run at the destination width to sign-fill it.
+            ExtendOp::SXTB | ExtendOp::SXTH | ExtendOp::SXTW => bfm(to, BfmOp::SBfm),
+            // These cases are excluded by the assertion above.
+            ExtendOp::UXTX | ExtendOp::SXTX => unreachable!(),
+        }
+    }
+
     /// What type does this load or store instruction access in memory? When
     /// uimm12 encoding is used, the size of this type is the amount that
     /// immediate offsets are scaled by.
@@ -588,9 +618,11 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             ..
         } => {
             collector.reg_use(rn);
-            collector.reg_def(rt1);
-            collector.reg_def(rt2);
-            collector.reg_def(scratch);
+            // These registers are written to in a retry loop so their register
+            // assignment can't reuse `rn`, thus they are early-defs.
+            collector.reg_early_def(rt1);
+            collector.reg_early_def(rt2);
+            collector.reg_early_def(scratch);
         }
         Inst::StoreRelease { rt, rn, .. } => {
             collector.reg_use(rn);
@@ -884,10 +916,6 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::MovFromNZCV { rd } => {
             collector.reg_def(rd);
-        }
-        Inst::Extend { rd, rn, .. } => {
-            collector.reg_def(rd);
-            collector.reg_use(rn);
         }
         Inst::BitfieldMove { rd, rn, .. } => {
             // The UBFM and SBFM instructions overwrite all bits in `rd`,
@@ -2779,61 +2807,34 @@ impl Inst {
                 let rd = pretty_print_reg(rd.to_reg());
                 format!("mrs {rd}, nzcv")
             }
-            &Inst::Extend {
+            // Special case when `immr == 0` so that zero- and sign-extending
+            // operations use the appropriate aliases, preserving the behavior
+            // of the old `Inst::Extend` instruction.
+            &Inst::BitfieldMove {
+                size,
+                bfm_op,
                 rd,
                 rn,
-                signed: false,
-                from_bits: 1,
-                ..
+                immr: UImm6 { imm: 0 },
+                imms,
             } => {
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size32);
-                let rn = pretty_print_ireg(rn, OperandSize::Size32);
-                format!("and {rd}, {rn}, #1")
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed: false,
-                from_bits: 32,
-                to_bits: 64,
-            } => {
-                // The case of a zero extension from 32 to 64 bits, is implemented
-                // with a "mov" to a 32-bit (W-reg) dest, because this zeroes
-                // the top 32 bits.
-                let rd = pretty_print_ireg(rd.to_reg(), OperandSize::Size32);
-                let rn = pretty_print_ireg(rn, OperandSize::Size32);
-                format!("mov {rd}, {rn}")
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed,
-                from_bits,
-                to_bits,
-            } => {
-                assert!(from_bits <= to_bits);
-                let op = match (signed, from_bits) {
-                    (false, 8) => "uxtb",
-                    (true, 8) => "sxtb",
-                    (false, 16) => "uxth",
-                    (true, 16) => "sxth",
-                    (true, 32) => "sxtw",
-                    (true, _) => "sbfx",
-                    (false, _) => "ubfx",
+                let from_bits = imms.value() + 1;
+                let op = match (bfm_op, size, from_bits) {
+                    (BfmOp::UBfm, OperandSize::Size32, 8) => "uxtb",
+                    (BfmOp::UBfm, OperandSize::Size32, 16) => "uxth",
+                    (BfmOp::SBfm, _, 8) => "sxtb",
+                    (BfmOp::SBfm, _, 16) => "sxth",
+                    (BfmOp::SBfm, OperandSize::Size64, 32) => "sxtw",
+                    (BfmOp::UBfm, _, _) => "ubfx",
+                    (BfmOp::SBfm, _, _) => "sbfx",
                 };
                 if op == "sbfx" || op == "ubfx" {
-                    let dest_size = OperandSize::from_bits(to_bits);
-                    let rd = pretty_print_ireg(rd.to_reg(), dest_size);
-                    let rn = pretty_print_ireg(rn, dest_size);
+                    let rd = pretty_print_ireg(rd.to_reg(), size);
+                    let rn = pretty_print_ireg(rn, size);
                     format!("{op} {rd}, {rn}, #0, #{from_bits}")
                 } else {
-                    let dest_size = if signed {
-                        OperandSize::from_bits(to_bits)
-                    } else {
-                        OperandSize::Size32
-                    };
-                    let rd = pretty_print_ireg(rd.to_reg(), dest_size);
-                    let rn = pretty_print_ireg(rn, OperandSize::from_bits(from_bits));
+                    let rd = pretty_print_ireg(rd.to_reg(), size);
+                    let rn = pretty_print_ireg(rn, OperandSize::Size32);
                     format!("{op} {rd}, {rn}")
                 }
             }
@@ -3029,29 +3030,17 @@ impl Inst {
                 let rtmp1 = pretty_print_reg(rtmp1.to_reg());
                 let rtmp2 = pretty_print_reg(rtmp2.to_reg());
                 let default_target = BranchTarget::Label(default).pretty_print(0);
+                let num_targets = targets.len();
                 format!(
-                    concat!(
-                        "b.hs {} ; ",
-                        "csel {}, xzr, {}, hs ; ",
-                        "csdb ; ",
-                        "adr {}, pc+16 ; ",
-                        "ldrsw {}, [{}, {}, uxtw #2] ; ",
-                        "add {}, {}, {} ; ",
-                        "br {} ; ",
-                        "jt_entries {:?}"
-                    ),
-                    default_target,
-                    rtmp2,
-                    ridx,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    targets
+                    "mov {rtmp2}, #{num_targets} ; \
+                     csel {rtmp2}, {ridx}, {rtmp2}, lo ; \
+                     csdb ; \
+                     adr {rtmp1}, pc+16 ; \
+                     ldrsw {rtmp2}, [{rtmp1}, {rtmp2}, uxtw #2] ; \
+                     add {rtmp1}, {rtmp1}, {rtmp2} ; \
+                     br {rtmp1} ; \
+                     jt_entries {targets:?} ; \
+                     default {default_target}"
                 )
             }
             &Inst::LoadExtNameGot { rd, ref name } => {
@@ -3236,6 +3225,16 @@ pub enum LabelUse {
     /// 32-bit PC relative constant offset (from address of constant itself),
     /// signed. Used in jump tables.
     PCRel32,
+    /// 21-bit page offset for ADRP. The immediate is the signed difference
+    /// between the 4KiB page of the label and the 4KiB page of the ADRP
+    /// instruction, with high 19 bits in bits 23:5 and low 2 bits in bits
+    /// 30:29. Equivalent to the `R_AARCH64_ADR_PREL_PG_HI21` relocation.
+    AdrpPage21,
+    /// Low 12 bits of the label's address in the 12-bit immediate of an ADD
+    /// (immediate), bits 21:10. Equivalent to the `R_AARCH64_ADD_ABS_LO12_NC`
+    /// relocation. This has the same 4KiB-alignment requirement as
+    /// `AdrpPage21`, with which it is paired.
+    AddLo12,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -3256,6 +3255,10 @@ impl MachInstLabelUse for LabelUse {
             // range.
             LabelUse::Adr21 => (1 << 20) - 1,
             LabelUse::PCRel32 => 0x7fffffff,
+            // `adrp` technically has +/-4GiB of range, but cap it to the same
+            // range as other 32-bit uses to keep offset arithmetic within
+            // `u32`.
+            LabelUse::AdrpPage21 | LabelUse::AddLo12 => 0x7fffffff,
         }
     }
 
@@ -3274,11 +3277,27 @@ impl MachInstLabelUse for LabelUse {
 
     /// Perform the patch.
     fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
-        let pc_rel = (label_offset as i64) - (use_offset as i64);
-        debug_assert!(pc_rel <= self.max_pos_range() as i64);
-        debug_assert!(pc_rel >= -(self.max_neg_range() as i64));
-        let pc_rel = pc_rel as u32;
         let insn_word = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+        match self {
+            LabelUse::AdrpPage21 => {
+                let page_delta = i64::from(label_offset >> 12) - i64::from(use_offset >> 12);
+                let imm = page_delta as u32;
+                let insn_word = (insn_word & !0x60ffffe0) | (imm & 0x1ffffc) << 3 | (imm & 3) << 29;
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn_word));
+                return;
+            }
+            LabelUse::AddLo12 => {
+                let imm12 = label_offset & 0xfff;
+                let insn_word = (insn_word & !(0xfff << 10)) | imm12 << 10;
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn_word));
+                return;
+            }
+            _ => {}
+        }
+        let pc_rel = (label_offset as i64) - (use_offset as i64);
+        assert!(pc_rel <= self.max_pos_range() as i64);
+        assert!(pc_rel >= -(self.max_neg_range() as i64));
+        let pc_rel = pc_rel as u32;
         let mask = match self {
             LabelUse::Branch14 => 0x0007ffe0, // bits 18..5 inclusive
             LabelUse::Branch19 => 0x00ffffe0, // bits 23..5 inclusive
@@ -3286,6 +3305,7 @@ impl MachInstLabelUse for LabelUse {
             LabelUse::Ldr19 => 0x00ffffe0,    // bits 23..5 inclusive
             LabelUse::Adr21 => 0x60ffffe0,    // bits 30..29, 25..5 inclusive
             LabelUse::PCRel32 => 0xffffffff,
+            LabelUse::AdrpPage21 | LabelUse::AddLo12 => unreachable!(),
         };
         let pc_rel_shifted = match self {
             LabelUse::Adr21 | LabelUse::PCRel32 => pc_rel,
@@ -3302,6 +3322,7 @@ impl MachInstLabelUse for LabelUse {
             // *high* bits (30, 29).
             LabelUse::Adr21 => (pc_rel_shifted & 0x1ffffc) << 3 | (pc_rel_shifted & 3) << 29,
             LabelUse::PCRel32 => pc_rel_shifted,
+            LabelUse::AdrpPage21 | LabelUse::AddLo12 => unreachable!(),
         };
         let is_add = match self {
             LabelUse::PCRel32 => true,
@@ -3392,6 +3413,8 @@ impl MachInstLabelUse for LabelUse {
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
         match (reloc, addend) {
             (Reloc::Arm64Call, 0) => Some(LabelUse::Branch26),
+            (Reloc::Aarch64AdrPrelPgHi21, 0) => Some(LabelUse::AdrpPage21),
+            (Reloc::Aarch64AddAbsLo12Nc, 0) => Some(LabelUse::AddLo12),
             _ => None,
         }
     }

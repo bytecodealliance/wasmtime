@@ -5,6 +5,7 @@ mod entity_set;
 mod hash_map;
 mod hash_set;
 mod index_map;
+mod index_set;
 mod primary_map;
 mod secondary_map;
 
@@ -13,6 +14,7 @@ pub use entity_set::TryEntitySet;
 pub use hash_map::TryHashMap;
 pub use hash_set::TryHashSet;
 pub use index_map::TryIndexMap;
+pub use index_set::TryIndexSet;
 pub use primary_map::TryPrimaryMap;
 pub use secondary_map::TrySecondaryMap;
 pub use wasmtime_core::{

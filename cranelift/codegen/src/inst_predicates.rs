@@ -32,13 +32,27 @@ fn is_load_with_defined_trapping(
     }
 }
 
+/// Is the given instruction a `volatile` memory access?
+///
+/// Such an access must happen exactly as written: see
+/// [`ir::MemFlagsData::volatile`].
+pub fn is_volatile_access(func: &Function, inst: Inst) -> bool {
+    func.dfg.insts[inst]
+        .memflags_data(&func.dfg)
+        .is_some_and(|flags| flags.volatile())
+}
+
 /// Does the given instruction have any side-effect that would preclude it from being removed when
 /// its value is unused?
+///
+/// A `volatile` load has one: the access itself is the effect.
 #[inline(always)]
 fn has_side_effect(func: &Function, inst: Inst) -> bool {
     let data = &func.dfg.insts[inst];
     let opcode = data.opcode();
-    trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data, &func.dfg)
+    trivially_has_side_effects(opcode)
+        || is_load_with_defined_trapping(opcode, data, &func.dfg)
+        || (opcode.can_load() && is_volatile_access(func, inst))
 }
 
 /// Does the given instruction behave as a "pure" node with respect to
@@ -54,6 +68,9 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
             ..
         } => {
             let flags = func.dfg.mem_flags[flags];
+            // `readonly` and `can_move` each imply not `volatile` (the
+            // verifier rejects the combination), so such a load is never a
+            // volatile access.
             flags.readonly() && flags.notrap() && flags.can_move()
         }
         _ => false,

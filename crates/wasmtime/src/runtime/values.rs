@@ -1039,7 +1039,10 @@ impl Ref {
             // `HeapType::Func`.
             match self {
                 Ref::Extern(None) => HeapType::NoExtern,
-                Ref::Extern(Some(_)) => HeapType::Extern,
+                Ref::Extern(Some(e)) => {
+                    e.try_gc_ref(store)?;
+                    HeapType::Extern
+                }
 
                 Ref::Func(None) => HeapType::NoFunc,
                 Ref::Func(Some(f)) => HeapType::ConcreteFunc(f.load_ty(store)),
@@ -1071,7 +1074,11 @@ impl Ref {
             return Ok(false);
         }
         Ok(match (self, ty.heap_type()) {
-            (Ref::Extern(_), HeapType::Extern) => true,
+            (Ref::Extern(Some(e)), HeapType::Extern) => {
+                e.try_gc_ref(store)?;
+                true
+            }
+            (Ref::Extern(None), HeapType::Extern) => true,
             (Ref::Extern(None), HeapType::NoExtern) => true,
             (Ref::Extern(_), _) => false,
 
@@ -1080,7 +1087,11 @@ impl Ref {
             (Ref::Func(Some(f)), HeapType::ConcreteFunc(func_ty)) => f._matches_ty(store, func_ty),
             (Ref::Func(_), _) => false,
 
-            (Ref::Any(_), HeapType::Any) => true,
+            (Ref::Any(Some(a)), HeapType::Any) => {
+                a.try_gc_ref(store)?;
+                true
+            }
+            (Ref::Any(None), HeapType::Any) => true,
             (Ref::Any(Some(a)), HeapType::I31) => a._is_i31(store)?,
             (Ref::Any(Some(a)), HeapType::Struct) => a._is_struct(store)?,
             (Ref::Any(Some(a)), HeapType::ConcreteStruct(_ty)) => match a._as_struct(store)? {
@@ -1105,7 +1116,11 @@ impl Ref {
             ) => true,
             (Ref::Any(_), _) => false,
 
-            (Ref::Exn(_), HeapType::Exn) => true,
+            (Ref::Exn(Some(e)), HeapType::Exn) => {
+                e.try_gc_ref(store)?;
+                true
+            }
+            (Ref::Exn(None), HeapType::Exn) => true,
             (Ref::Exn(None), HeapType::NoExn | HeapType::ConcreteExn(_)) => true,
             (Ref::Exn(Some(e)), HeapType::ConcreteExn(_)) => {
                 e._matches_ty(store, &ty.heap_type())?

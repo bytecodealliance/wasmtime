@@ -39,3 +39,17 @@ TEST(component, lookup_func) {
   auto f2 = instance.get_export_index(context, nullptr, "f");
   EXPECT_TRUE(f2);
 }
+
+TEST(component, lookup_empty_name) {
+  wasmtime::Engine engine;
+  wasmtime::Store store(engine);
+  auto context = store.context();
+  Component component = Component::compile(engine, "(component)").unwrap();
+
+  // A default `std::string_view` has a null data pointer.
+  EXPECT_FALSE(component.export_index(nullptr, std::string_view{}));
+
+  Linker linker(engine);
+  auto instance = linker.instantiate(context, component).unwrap();
+  EXPECT_FALSE(instance.get_export_index(context, nullptr, std::string_view{}));
+}

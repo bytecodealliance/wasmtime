@@ -1,4 +1,7 @@
-use crate::{collections::TryClone, error::OutOfMemory};
+use crate::{
+    collections::{TryClone, TryFromIterator},
+    error::OutOfMemory,
+};
 use core::{
     borrow::Borrow,
     cmp::Ordering,
@@ -121,6 +124,40 @@ where
         }
 
         deserializer.deserialize_map(Visitor(PhantomData))
+    }
+}
+
+impl<K, V> TryFromIterator<(K, V), OutOfMemory> for TryIndexMap<K, V>
+where
+    K: Hash + Eq,
+{
+    fn try_from_iter<I>(iter: I) -> Result<Self, OutOfMemory>
+    where
+        I: Iterator<Item = (K, V)>,
+    {
+        let mut map = Self::with_capacity(iter.size_hint().0)?;
+        for (k, v) in iter {
+            map.insert(k, v)?;
+        }
+        Ok(map)
+    }
+}
+
+impl<K, V, E> TryFromIterator<Result<(K, V), E>, E> for TryIndexMap<K, V>
+where
+    K: Hash + Eq,
+    E: From<OutOfMemory>,
+{
+    fn try_from_iter<I>(iter: I) -> Result<Self, E>
+    where
+        I: Iterator<Item = Result<(K, V), E>>,
+    {
+        let mut map = Self::with_capacity(iter.size_hint().0)?;
+        for item in iter {
+            let (k, v) = item?;
+            map.insert(k, v)?;
+        }
+        Ok(map)
     }
 }
 

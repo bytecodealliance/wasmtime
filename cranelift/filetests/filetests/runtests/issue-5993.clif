@@ -3,6 +3,7 @@ test run
 target riscv64
 target aarch64
 target s390x
+target x86_64
 
 function %a(f64) -> i8 {
 block0(v0: f64):

@@ -1,6 +1,6 @@
 use crate::runtime::vm::sys::DecommitBehavior;
 use rustix::fd::AsRawFd;
-use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap_anonymous, mprotect};
+use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap, mmap_anonymous, mprotect};
 use std::fs::File;
 use std::io;
 #[cfg(feature = "std")]
@@ -172,13 +172,37 @@ impl MemoryImageSource {
         Ok(Some(MemoryImageSource::Memfd(memfd)))
     }
 
-    pub(super) fn as_file(&self) -> &File {
+    fn as_file(&self) -> &File {
         match *self {
             #[cfg(feature = "std")]
             MemoryImageSource::Mmap(ref file) => file,
             #[cfg(target_os = "linux")]
             MemoryImageSource::Memfd(ref memfd) => memfd.as_file(),
         }
+    }
+
+    /// Maps `len` bytes of this image, starting at `source_offset` within the
+    /// source, copy-on-write and read/write at `base`, replacing whatever was
+    /// mapped there before.
+    ///
+    /// # Safety
+    ///
+    /// `base` must be host-page-aligned and `base..base + len` must be a
+    /// region of address space that the caller exclusively owns and that may
+    /// have its pages replaced.
+    pub unsafe fn map_at(&self, base: *mut u8, source_offset: u64, len: usize) -> io::Result<()> {
+        let ptr = unsafe {
+            mmap(
+                base.cast(),
+                len,
+                ProtFlags::READ | ProtFlags::WRITE,
+                MapFlags::PRIVATE | MapFlags::FIXED,
+                self.as_file(),
+                source_offset,
+            )?
+        };
+        assert_eq!(base, ptr.cast());
+        Ok(())
     }
 
     pub unsafe fn remap_as_zeros_at(&self, base: *mut u8, len: usize) -> io::Result<()> {

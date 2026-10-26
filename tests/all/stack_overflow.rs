@@ -181,3 +181,27 @@ fn infinite_wasm_stack_does_not_panic() -> Result<()> {
     func.call(&mut store, ())?;
     Ok(())
 }
+
+// Try to execute on some tiny stacks. This should either succeed or fail with a
+// stack overflow, nothing else.
+#[wasmtime_test]
+fn tiny_wasm_stack_traps_on_entry(config: &mut Config) -> Result<()> {
+    for size in (0..=10).map(|i| 1 << i) {
+        config.max_wasm_stack(size);
+        let engine = Engine::new(config)?;
+        let mut store = Store::new(&engine, ());
+        let module = Module::new(
+            &engine,
+            r#"(module (func (export "f") (result i32) i32.const 1))"#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let func = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+        for _ in 0..2 {
+            match func.call(&mut store, ()) {
+                Ok(n) => assert_eq!(n, 1),
+                Err(e) => assert_eq!(e.downcast_ref::<Trap>(), Some(&Trap::StackOverflow)),
+            }
+        }
+    }
+    Ok(())
+}

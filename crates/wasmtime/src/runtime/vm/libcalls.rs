@@ -65,13 +65,11 @@ use crate::runtime::vm::{self, HostResultHasUnwindSentinel, VMStore, f32x4, f64x
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::vmcontext::VMRawContObj;
 use core::convert::Infallible;
-use core::ptr::NonNull;
 #[cfg(feature = "threads")]
 use core::time::Duration;
 use wasmtime_core::math::WasmFloat;
 use wasmtime_environ::{
-    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, PassiveElemIndex, TableIndex,
-    Trap,
+    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, PassiveElemIndex, TableIndex, Trap,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -362,6 +360,7 @@ fn passive_elem_segment_drop(
 }
 
 // Implementation of `memory.copy`.
+#[inline]
 unsafe fn memory_copy(
     _store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -375,6 +374,7 @@ unsafe fn memory_copy(
     unsafe { src.copy_to(dst, len) }
 }
 
+#[inline]
 unsafe fn memory_fill(
     _store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -392,15 +392,6 @@ unsafe fn memory_fill(
         )]
         dst.write_bytes(val as u8, len);
     }
-}
-
-// Implementation of `ref.func`.
-fn ref_func(store: &mut dyn VMStore, instance: InstanceId, func_index: u32) -> NonNull<u8> {
-    let (instance, registry) = store.instance_and_module_registry_mut(instance);
-    instance
-        .get_func_ref(registry, FuncIndex::from_u32(func_index))
-        .expect("ref_func: funcref should always be available for given func index")
-        .cast()
 }
 
 // Returns a table entry after lazily initializing it.
@@ -425,6 +416,7 @@ fn table_get_lazy_init_func_ref(
 
 /// Drop a GC reference.
 #[cfg(feature = "gc-drc")]
+#[inline]
 fn drop_gc_ref(store: &mut dyn VMStore, _instance: InstanceId, gc_ref: u32) {
     log::trace!("libcalls::drop_gc_ref({gc_ref:#x})");
     let gc_ref = VMGcRef::from_raw_u32(gc_ref).expect("non-null VMGcRef");
@@ -436,6 +428,7 @@ fn drop_gc_ref(store: &mut dyn VMStore, _instance: InstanceId, gc_ref: u32) {
 
 /// Force a DRC GC cycle.
 #[cfg(feature = "gc-drc")]
+#[inline]
 fn force_gc(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
     let store = store.store_opaque_mut();
     block_on!(store, async |store, asyncness| {
@@ -447,6 +440,7 @@ fn force_gc(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
 
 /// Grow the GC heap.
 #[cfg(feature = "gc-null")]
+#[inline]
 fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u64) -> Result<()> {
     let orig_len = u64::try_from(
         store
@@ -490,6 +484,7 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
 ///
 /// The Wasm code is responsible for initializing the object.
 #[cfg(any(feature = "gc-drc", feature = "gc-copying"))]
+#[inline]
 fn gc_alloc_raw(
     store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -550,6 +545,7 @@ fn gc_alloc_raw(
 //
 // This libcall may not GC.
 #[cfg(feature = "gc")]
+#[inline]
 unsafe fn intern_func_ref_for_gc_heap(
     store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -578,6 +574,7 @@ unsafe fn intern_func_ref_for_gc_heap(
 //
 // This libcall may not GC.
 #[cfg(feature = "gc")]
+#[inline]
 fn get_interned_func_ref(
     store: &mut dyn VMStore,
     instance: InstanceId,
@@ -645,6 +642,7 @@ unsafe fn get_interned_contref(
     out_result: *mut u8,
 ) -> Result<()> {
     use crate::store::AutoAssertNoGc;
+    use core::ptr::NonNull;
 
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
     let contobj = store.unwrap_gc_store().cont_ref_table.get(contref_id)?;
@@ -663,6 +661,7 @@ unsafe fn get_interned_contref(
 }
 
 #[cfg(feature = "gc")]
+#[inline]
 fn is_subtype(
     store: &mut dyn VMStore,
     _instance: InstanceId,

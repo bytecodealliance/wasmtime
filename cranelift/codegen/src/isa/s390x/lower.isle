@@ -1996,9 +1996,12 @@
 
 ;;;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Promote a register.
-(rule (lower (fpromote dst_ty x @ (value_type src_ty)))
-      (fpromote_reg dst_ty src_ty x))
+;; Promote a register. There is no `f16` conversion, so `f16` operands are left
+;; unmatched and rejected as unsupported.
+(rule (lower (fpromote $F64 x @ (value_type $F32)))
+      (fpromote_reg $F64 $F32 x))
+(rule (lower (fpromote $F128 x @ (value_type $F64)))
+      (fpromote_reg $F128 $F64 x))
 
 (rule 1 (lower (fpromote $F128 x @ (value_type $F32)))
       (fpromote_reg $F128 $F64 (fpromote_reg $F64 $F32 x)))
@@ -2013,9 +2016,12 @@
 
 ;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Demote a register.
-(rule (lower (fdemote dst_ty x @ (value_type src_ty)))
-      (fdemote_reg dst_ty src_ty (FpuRoundMode.Current) x))
+;; Demote a register. There is no `f16` conversion, so `f16` results are left
+;; unmatched and rejected as unsupported.
+(rule (lower (fdemote $F32 x @ (value_type $F64)))
+      (fdemote_reg $F32 $F64 (FpuRoundMode.Current) x))
+(rule (lower (fdemote $F64 x @ (value_type $F128)))
+      (fdemote_reg $F64 $F128 (FpuRoundMode.Current) x))
 
 (rule 1 (lower (fdemote $F32 x @ (value_type $F128)))
       (fdemote_reg $F32 $F64 (FpuRoundMode.Current)
@@ -3500,8 +3506,12 @@
 
 ;; Atomic operations that require a compare-and-swap loop.
 
+;; Operations for 128-bit types use a compare-and-swap loop not implementable in ISLE
+(rule -1 (lower (atomic_rmw $I128 (mem_flags_data flags) op addr src))
+      (atomic_rmw_128_loop op src (lower_address flags addr (zero_offset))))
+
 ;; Operations for 32/64-bit types can use a fullword compare-and-swap loop.
-(rule -1 (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags) op addr src))
+(rule -2 (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags) op addr src))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Create body of compare-and-swap loop.
@@ -3513,7 +3523,7 @@
         (casloop ib ty flags addr_reg val1)))
 
 ;; Operations for 8/16-bit types must operate on the surrounding aligned word.
-(rule -2 (lower (atomic_rmw (ty_8_or_16 ty) (mem_flags_data flags) op addr src))
+(rule -3 (lower (atomic_rmw (ty_8_or_16 ty) (mem_flags_data flags) op addr src))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Prepare access to surrounding aligned word.
@@ -3708,6 +3718,29 @@
 
 
 ;;;; Rules for `atomic_cas` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Helper to move a 128-bit value from a VR to a RegPair of GPRs
+(decl vr_to_regpair (Reg) RegPair)
+(rule (vr_to_regpair src)
+      (let ((src_hi Reg (vec_extract_lane $I64X2 src 0 (zero_reg)))
+            (src_lo Reg (vec_extract_lane $I64X2 src 1 (zero_reg))))
+       (regpair src_hi src_lo)))
+
+;; Helper to move a 128-bit Value into a RegPair
+(decl i128_to_regpair (Value) RegPair)
+(rule (i128_to_regpair val)
+      (let ((src Reg val))
+        (vr_to_regpair src)))
+
+;; Helper to move a RegPair into a single vector register
+(decl regpair_to_vr (RegPair) Reg)
+(rule (regpair_to_vr pair)
+      (mov_to_vec128 $I64X2 (regpair_hi pair) (regpair_lo pair)))
+
+;; 128-bit big-endian atomic compare-and-swap instruction.
+(rule 3 (lower (atomic_cas $I128 (mem_flags_data flags @ (bigendian)) addr src1 src2))
+      (regpair_to_vr (atomic_cas128 (i128_to_regpair src1) (i128_to_regpair src2)
+                                    (lower_address flags addr (zero_offset)))))
 
 ;; 32/64-bit big-endian atomic compare-and-swap instruction.
 (rule 2 (lower (atomic_cas (ty_32_or_64 ty) (mem_flags_data flags @ (bigendian)) addr src1 src2))

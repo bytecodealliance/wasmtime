@@ -145,6 +145,7 @@ pulley-interpreter = { workspace = true, features = ["disas"] }
 wasm-encoder = { workspace = true }
 cranelift-native = { workspace = true }
 futures = { workspace = true }
+indexmap = { workspace = true, features = ["std"] }
 rand = { workspace = true }
 
 # Should only be used for tests that are explicitly testing `anyhow::Error` and
@@ -428,7 +429,7 @@ tempfile = "3.27.0"
 filecheck = "0.5.0"
 libc = { version = "0.2.190", default-features = true }
 file-per-thread-logger = "0.2.0"
-tokio = { version = "1.51.1", features = [ "rt", "time" ] }
+tokio = { version = "1.51.6", features = [ "rt", "time" ] }
 hyper = "1.9.0"
 http = "1.5.0"
 http-body = "1.0.1"
@@ -455,7 +456,7 @@ tokio-native-tls = "0.3.1"
 native-tls = "0.2.11"
 tokio-openssl = "0.6.5"
 openssl = "0.10.80"
-webpki-roots = "1.0.7"
+webpki-roots = "1.0.10"
 itertools = "0.14.0"
 base64 = "0.22.1"
 termcolor = "1.4.1"

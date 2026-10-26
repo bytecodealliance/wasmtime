@@ -1,5 +1,5 @@
 use wasmtime::Result;
-use wasmtime::component::types::ComponentItem;
+use wasmtime::component::types::{ComponentExtern, ComponentInstance, ComponentItem};
 use wasmtime::component::{Component, Linker, Type};
 use wasmtime::{Config, Engine, Module, Precompiled, Store};
 
@@ -250,6 +250,29 @@ fn implements_shows_up() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn implements_with_canonical_names() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_implements(true);
+    config.wasm_component_model_canonical_names(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "p" (implements "a:b/c@1") (version-suffix ".2.3") (instance))
+        )"#,
+    )?;
+
+    let ty = component.component_type();
+    let (_, p) = ty.imports(&engine).next().unwrap();
+    assert_eq!(p.implements.as_deref(), Some("a:b/c@1"));
+    assert!(p.is_implements("a:b/c@1.2.3"));
+    assert!(p.is_implements("a:b/c@1.0.0"));
+    assert!(!p.is_implements("a:b/c@2.0.0"));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn external_id_shows_up() -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_implements(true);
@@ -288,6 +311,64 @@ fn external_id_shows_up() -> Result<()> {
         let mut exports = ty.exports(&engine);
         let (_, d) = exports.next().unwrap();
         assert_eq!(d.external_id.as_deref(), Some("queue-1"));
+    };
+
+    assert_reflection(&component);
+    let bytes = component.serialize()?;
+    let component = unsafe { Component::deserialize(&engine, &bytes)? };
+    assert_reflection(&component);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn attributes_from_export_ascription() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_implements(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (instance $n)
+                (instance $b (export "n" (implements "x:y/z") (instance $n)))
+                (export "out" (instance $b) (instance
+                    (export "n" (implements "a:b/c") (external-id "asc") (instance))
+                ))
+
+                (component $c
+                    (instance $n)
+                    (instance $b (export "n" (implements "x:y/z") (instance $n)))
+                    (export "x" (instance $b) (instance
+                        (export "n" (implements "a:b/c") (external-id "asc") (instance))
+                    ))
+                )
+                (instance $c (instantiate $c))
+                (export "whole" (instance $c))
+                (export "alias" (instance $c "x"))
+            )
+        "#,
+    )?;
+
+    fn instance(item: ComponentExtern<'_>) -> ComponentInstance {
+        match item.ty {
+            ComponentItem::ComponentInstance(i) => i,
+            _ => panic!("expected an instance"),
+        }
+    }
+
+    let assert_reflection = |component: &Component| {
+        let ty = component.component_type();
+        let out = instance(ty.get_export(&engine, "out").unwrap());
+        let whole = instance(ty.get_export(&engine, "whole").unwrap());
+        let whole = instance(whole.get_export(&engine, "x").unwrap());
+        let alias = instance(ty.get_export(&engine, "alias").unwrap());
+        for i in [out, whole, alias] {
+            let n = i.get_export(&engine, "n").unwrap();
+            assert_eq!(n.implements, Some("a:b/c"));
+            assert_eq!(n.external_id, Some("asc"));
+        }
     };
 
     assert_reflection(&component);

@@ -736,9 +736,11 @@ pub trait WasiSocketsNamedView: Send + 'static {
     /// embedder-allocated id is then passed back here when the corresponding
     /// imported function is invoked.
     ///
-    /// Note that the [`ResourceTable`] referenced in the returned
-    /// [`WasiSocketsCtxView`] need not be unique. It's ok to use the same
-    /// [`ResourceTable`] for all imports. This is not a guest-visible
-    /// abstraction and just helps the host allocate and manage state.
+    /// It's strongly recommended, though not always required, that the
+    /// [`ResourceTable`] in the returned [`WasiSocketsCtxView`] is the same
+    /// table that the default context, [`WasiSocketsView::sockets`], uses.
+    /// Resources created through a named import can be used through interfaces
+    /// bound to the default context (and vice versa), and with separate tables
+    /// those lookups fail or find another context's resources.
     fn sockets(&mut self, id: NamedId) -> WasiSocketsCtxView<'_>;
 }

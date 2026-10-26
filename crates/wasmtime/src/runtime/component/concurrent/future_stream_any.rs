@@ -1,15 +1,15 @@
 //! Implementation of [`FutureAny`] and [`StreamAny`].
 
 use crate::component::concurrent::futures_and_streams::{self, TransmitOrigin};
-use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
+use crate::component::func::{LiftContext, LowerContext, desc};
 use crate::component::matching::InstanceType;
 use crate::component::resources::HostResourceIndex;
-use crate::component::types::{self, FutureType, StreamType};
+use crate::component::types::{FutureType, StreamType};
 use crate::component::{
     ComponentInstanceId, ComponentType, FutureReader, Lift, Lower, StreamReader,
 };
 use crate::store::StoreOpaque;
-use crate::{AsContextMut, Result, bail, error::Context};
+use crate::{AsContextMut, Result, bail};
 use core::any::TypeId;
 use core::mem::MaybeUninit;
 use wasmtime_environ::component::{
@@ -53,27 +53,6 @@ pub struct FutureAny {
 }
 
 impl FutureAny {
-    fn lower_to_index<T>(&self, cx: &mut LowerContext<'_, T>, ty: InterfaceType) -> Result<u32> {
-        // Note that unlike `FutureReader<T>` we need to perform an extra
-        // typecheck to ensure that the dynamic type of this future matches
-        // what the guest we're lowering into expects. This couldn't happen
-        // before this point (see the `ComponentType::typecheck` implementation
-        // for this type), so do it now.
-        let future_ty = match ty {
-            InterfaceType::Future(payload) => payload,
-            _ => bad_type_info(),
-        };
-        let payload = cx.types[cx.types[future_ty].ty].payload.as_ref();
-        self.ty.typecheck_guest(
-            &cx.instance_type(),
-            payload,
-            FutureType::equivalent_payload_guest,
-        )?;
-
-        // Like `FutureReader<T>`, however, lowering "just" gets a u32.
-        futures_and_streams::lower_future_to_index(self.idx, cx, ty)
-    }
-
     /// Attempts to convert this [`FutureAny`] to a [`FutureReader<T>`]
     /// with a statically known type.
     ///
@@ -106,7 +85,7 @@ impl FutureAny {
     {
         let store = store.as_context_mut();
         let ty = match store.0.transmit_origin(reader.idx())? {
-            TransmitOrigin::Host => PayloadType::new_host::<T>(),
+            TransmitOrigin::Host { .. } => PayloadType::new_host::<T>(),
             TransmitOrigin::GuestFuture(id, ty) => PayloadType::new_guest_future(store.0, id, ty),
             TransmitOrigin::GuestStream(..) => bail!("not a future"),
         };
@@ -168,8 +147,11 @@ unsafe impl Lower for FutureAny {
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        self.lower_to_index(cx, ty)?
-            .linear_lower_to_flat(cx, InterfaceType::U32, dst)
+        futures_and_streams::lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_flat(
+            cx,
+            InterfaceType::U32,
+            dst,
+        )
     }
 
     fn linear_lower_to_memory<T>(
@@ -178,8 +160,11 @@ unsafe impl Lower for FutureAny {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        self.lower_to_index(cx, ty)?
-            .linear_lower_to_memory(cx, InterfaceType::U32, offset)
+        futures_and_streams::lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
+            cx,
+            InterfaceType::U32,
+            offset,
+        )
     }
 }
 
@@ -240,22 +225,6 @@ pub struct StreamAny {
 }
 
 impl StreamAny {
-    fn lower_to_index<T>(&self, cx: &mut LowerContext<'_, T>, ty: InterfaceType) -> Result<u32> {
-        // See comments in `FutureAny::lower_to_index` for why this is
-        // different from `StreamReader`'s implementation.
-        let stream_ty = match ty {
-            InterfaceType::Stream(payload) => payload,
-            _ => bad_type_info(),
-        };
-        let payload = cx.types[cx.types[stream_ty].ty].payload.as_ref();
-        self.ty.typecheck_guest(
-            &cx.instance_type(),
-            payload,
-            StreamType::equivalent_payload_guest,
-        )?;
-        futures_and_streams::lower_stream_to_index(self.idx, cx, ty)
-    }
-
     /// Attempts to convert this [`StreamAny`] to a [`StreamReader<T>`]
     /// with a statically known type.
     ///
@@ -288,7 +257,7 @@ impl StreamAny {
     {
         let store = store.as_context_mut();
         let ty = match store.0.transmit_origin(reader.idx())? {
-            TransmitOrigin::Host => PayloadType::new_host::<T>(),
+            TransmitOrigin::Host { .. } => PayloadType::new_host::<T>(),
             TransmitOrigin::GuestStream(id, ty) => PayloadType::new_guest_stream(store.0, id, ty),
             TransmitOrigin::GuestFuture(..) => bail!("not a stream"),
         };
@@ -348,8 +317,11 @@ unsafe impl Lower for StreamAny {
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        self.lower_to_index(cx, ty)?
-            .linear_lower_to_flat(cx, InterfaceType::U32, dst)
+        futures_and_streams::lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_flat(
+            cx,
+            InterfaceType::U32,
+            dst,
+        )
     }
 
     fn linear_lower_to_memory<T>(
@@ -358,8 +330,11 @@ unsafe impl Lower for StreamAny {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        self.lower_to_index(cx, ty)?
-            .linear_lower_to_memory(cx, InterfaceType::U32, offset)
+        futures_and_streams::lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
+            cx,
+            InterfaceType::U32,
+            offset,
+        )
     }
 }
 
@@ -383,26 +358,10 @@ unsafe impl Lift for StreamAny {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum PayloadType<T> {
     Guest(T),
-    Host {
-        id: TypeId,
-        typecheck: fn(Option<&InterfaceType>, &InstanceType<'_>) -> Result<()>,
-    },
-}
-
-impl<T: PartialEq> PartialEq for PayloadType<T> {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (PayloadType::Guest(a), PayloadType::Guest(b)) => a == b,
-            (PayloadType::Guest(_), _) => false,
-            (PayloadType::Host { id: a_id, .. }, PayloadType::Host { id: b_id, .. }) => {
-                a_id == b_id
-            }
-            (PayloadType::Host { .. }, _) => false,
-        }
-    }
+    Host(TypeId),
 }
 
 impl PayloadType<FutureType> {
@@ -434,30 +393,7 @@ impl<T> PayloadType<T> {
     where
         P: ComponentType + 'static,
     {
-        PayloadType::Host {
-            typecheck: types::typecheck_payload::<P>,
-            id: TypeId::of::<P>(),
-        }
-    }
-
-    fn typecheck_guest(
-        &self,
-        types: &InstanceType<'_>,
-        payload: Option<&InterfaceType>,
-        equivalent: fn(&T, &InstanceType<'_>, Option<&InterfaceType>) -> bool,
-    ) -> Result<()> {
-        match self {
-            Self::Guest(ty) => {
-                if equivalent(ty, types, payload) {
-                    Ok(())
-                } else {
-                    bail!("future payload types differ")
-                }
-            }
-            Self::Host { typecheck, .. } => {
-                typecheck(payload, types).context("future payload types differ")
-            }
-        }
+        PayloadType::Host(TypeId::of::<P>())
     }
 
     fn typecheck_host<P>(&self, equivalent: fn(&T) -> Result<()>) -> Result<()>
@@ -466,7 +402,7 @@ impl<T> PayloadType<T> {
     {
         match self {
             Self::Guest(ty) => equivalent(ty),
-            Self::Host { id, .. } => {
+            Self::Host(id) => {
                 if *id == TypeId::of::<P>() {
                     Ok(())
                 } else {

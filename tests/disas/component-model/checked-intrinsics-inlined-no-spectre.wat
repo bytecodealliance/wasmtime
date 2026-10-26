@@ -50,7 +50,7 @@
 ;; function u0:0(i64 vmctx, i64, i64, i64) tail {
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
-;;     region2 = 25 ""
+;;     region2 = 42 ""
 ;;     region3 = 175 ""
 ;;     region4 = 113 ""
 ;;     gv0 = vmctx

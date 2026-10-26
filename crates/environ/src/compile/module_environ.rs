@@ -1218,7 +1218,11 @@ impl ModuleTranslation<'_> {
         max_image_size_always_allowed: u64,
         types: &mut ModuleTypesBuilder,
     ) {
-        if tunables.memory_init_cow {
+        // Memory images are installed before the module's startup function
+        // runs. If a table initializer can trap, using a memory image would
+        // initialize memory even though the startup function should trap
+        // before reaching the memory initializers.
+        if tunables.memory_init_cow && !self.table_initialization_may_trap() {
             self.try_static_init(page_size, max_image_size_always_allowed);
         }
 
@@ -1271,6 +1275,37 @@ impl ModuleTranslation<'_> {
             cur += len;
             assert_eq!(idx, i);
         }
+    }
+
+    /// Returns whether an active table initializer may trap during startup.
+    ///
+    /// Memory images are installed while allocating an instance, before the
+    /// startup function executes. Therefore a memory image cannot be used when
+    /// a table initializer might trap: doing so would make the memory
+    /// observable even though execution should stop before reaching the memory
+    /// initializers.
+    fn table_initialization_may_trap(&self) -> bool {
+        self.table_initialization.segments.iter().any(|segment| {
+            let offset = match segment.offset.ops() {
+                &[ConstOp::I32Const(offset)] => u64::from(offset.cast_unsigned()),
+                &[ConstOp::I64Const(offset)] => offset.cast_unsigned(),
+                // A dynamic offset cannot be proven to be in bounds here.
+                _ => return true,
+            };
+            let top = match offset.checked_add(segment.elements.len()) {
+                Some(top) => top,
+                None => return true,
+            };
+            if top > self.module.tables[segment.table_index].limits.min {
+                return true;
+            }
+            match &segment.elements {
+                TableSegmentElements::Functions(_) => false,
+                TableSegmentElements::Expressions { exprs, .. } => exprs
+                    .iter()
+                    .any(|expr| expr.ops().iter().any(|op| op.may_trap())),
+            }
+        })
     }
 
     /// Attempts to convert segmented memory initialization into static

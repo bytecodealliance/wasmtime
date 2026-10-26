@@ -3,7 +3,8 @@
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentType;
 use crate::component::matching::InstanceType;
-use crate::{Engine, ExternType, FuncType, prelude::*};
+use crate::component::{ResourceAny, Val};
+use crate::{AsContextMut, Engine, ExternType, FuncType, StoreContextMut, prelude::*};
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Deref;
@@ -800,6 +801,19 @@ impl Type {
         }
     }
 
+    /// Retrieve the inner [`Map`] of a [`Type::Map`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Map`].
+    pub fn unwrap_map(&self) -> &Map {
+        if let Type::Map(handle) = self {
+            &handle
+        } else {
+            panic!("attempted to unwrap a {} as a map", self.desc())
+        }
+    }
+
     /// Retrieve the inner [`Record`] of a [`Type::Record`].
     ///
     /// # Panics
@@ -949,6 +963,124 @@ impl Type {
                 Type::FixedLengthList(FixedLengthList::from(*index, instance))
             }
         }
+    }
+
+    /// Construct a default value of this type, if one exists.
+    ///
+    /// Defaults are the "empty" or "zero" value of each type: zero for the
+    /// numerics, the empty `string`/`list`, `none` for `option`, `ok` for
+    /// `result`, no flags set, and the first case of a `variant` or `enum`.
+    ///
+    /// An `own` or `borrow` of a host-defined resource defaults to a fresh
+    /// handle in `store`, with an arbitrary representation and no destructor.
+    /// Nothing can be done with such a handle beyond passing it back to the
+    /// component that the resource was defined for.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an `own` or `borrow` of a guest-defined resource,
+    /// whose representation belongs to the guest and so cannot be conjured by
+    /// the host.
+    ///
+    /// Returns an error for `future`, `stream`, and `error-context`, as there
+    /// is currently no way to synthesize these without statically knowing
+    /// their payload type.
+    ///
+    /// An aggregate containing any of the above is an error for the same
+    /// reason.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error
+    /// when memory allocation fails. See the `OutOfMemory` type's
+    /// documentation for details on Wasmtime's out-of-memory handling.
+    pub fn default_value(&self, mut store: impl AsContextMut) -> Result<Val> {
+        self.default_value_impl(store.as_context_mut())
+    }
+
+    /// Recursive implementation of `default_value`.
+    fn default_value_impl<T>(&self, mut store: StoreContextMut<'_, T>) -> Result<Val> {
+        Ok(match self {
+            Type::Bool => Val::Bool(false),
+            Type::S8 => Val::S8(0),
+            Type::U8 => Val::U8(0),
+            Type::S16 => Val::S16(0),
+            Type::U16 => Val::U16(0),
+            Type::S32 => Val::S32(0),
+            Type::U32 => Val::U32(0),
+            Type::S64 => Val::S64(0),
+            Type::U64 => Val::U64(0),
+            Type::Float32 => Val::Float32(0.0),
+            Type::Float64 => Val::Float64(0.0),
+            Type::Char => Val::Char('\0'),
+            Type::String => Val::String(String::new()),
+
+            // These never visit their payload types.
+            Type::List(_) => Val::List(Vec::new()),
+            Type::Map(_) => Val::Map(Vec::new()),
+            Type::Option(_) => Val::Option(None),
+            Type::Flags(_) => Val::Flags(Vec::new()),
+
+            Type::Enum(e) => {
+                let name = e.names().next().ok_or_else(|| {
+                    format_err!("no default value exists for an `enum` with no cases")
+                })?;
+                Val::Enum(name.to_string())
+            }
+
+            Type::Record(record) => {
+                let mut fields = TryVec::with_capacity(record.fields().len())?;
+                for field in record.fields() {
+                    let val = field.ty.default_value_impl(store.as_context_mut())?;
+                    fields.push((field.name.to_string(), val))?;
+                }
+                Val::Record(fields.into())
+            }
+
+            Type::Tuple(tuple) => {
+                let mut vals = TryVec::with_capacity(tuple.types().len())?;
+                for ty in tuple.types() {
+                    vals.push(ty.default_value_impl(store.as_context_mut())?)?;
+                }
+                Val::Tuple(vals.into())
+            }
+
+            Type::Variant(variant) => {
+                let case = variant.cases().next().ok_or_else(|| {
+                    format_err!("no default value exists for a `variant` with no cases")
+                })?;
+                let payload = match &case.ty {
+                    Some(ty) => Some(Box::new(ty.default_value_impl(store.as_context_mut())?)),
+                    None => None,
+                };
+                Val::Variant(case.name.to_string(), payload)
+            }
+
+            Type::Result(result) => Val::Result(Ok(match result.ok() {
+                Some(ty) => Some(Box::new(ty.default_value_impl(store.as_context_mut())?)),
+                None => None,
+            })),
+
+            Type::FixedLengthList(list) => {
+                // Every element has the same type, so one value is cloned.
+                let element = list.ty().default_value_impl(store.as_context_mut())?;
+                let len = usize::try_from(list.len())?;
+                let mut vals = TryVec::with_capacity(len)?;
+                for _ in 0..len {
+                    vals.push(element.clone())?;
+                }
+                Val::FixedLengthList(vals.into())
+            }
+
+            // The `rep` is arbitrary and never dereferenced: there is no
+            // destructor, and the handle is opaque to everything but the
+            // component that defines the resource.
+            Type::Own(ty) | Type::Borrow(ty) => {
+                Val::Resource(ResourceAny::new_own_dynamic(*ty, 0, &mut store)?)
+            }
+
+            Type::Future(_) | Type::Stream(_) | Type::ErrorContext => {
+                bail!("no default value exists for type `{}`", self.desc())
+            }
+        })
     }
 
     fn desc(&self) -> &'static str {
@@ -1199,7 +1331,8 @@ impl<'a> ComponentExtern<'a> {
     /// returned. Failing that, this attempts to perform version-matching to see
     /// if a compatible version of this item is implemented. For example if
     /// `(implements "a:b/c@1.1.0")` is specified then this will return `true`
-    /// for `a:b/c@1.0.0` and `a:b/c@1.2.0` as well.
+    /// for `a:b/c@1.0.0` and `a:b/c@1.2.0` as well. The same goes for a
+    /// canonical name such as `(implements "a:b/c@1")`.
     pub fn is_implements(&self, name: &str) -> bool {
         let implements = match self.implements {
             Some(s) => s,
@@ -1209,10 +1342,11 @@ impl<'a> ComponentExtern<'a> {
             return true;
         }
 
-        match (alternate_lookup_key(implements), alternate_lookup_key(name)) {
-            (Some((alt_implements, _)), Some((alt_name, _))) => alt_implements == alt_name,
-            _ => false,
-        }
+        // Compare semver-compatible versions in their reduced form, for
+        // example `a:b/c@1.2.0` as `a:b/c@1`. Canonical names are already in
+        // that form, so they're compared as-is.
+        let reduced = |name| alternate_lookup_key(name).map_or(name, |(name, _)| name);
+        reduced(implements) == reduced(name)
     }
 }
 

@@ -109,13 +109,16 @@ pub struct ServeCommand {
     run: RunCommon,
 
     /// Socket addresses for the web server to bind to.
-    #[arg(long , value_name = "SOCKADDR", default_values_t = DEFAULT_ADDRS)]
+    ///
+    /// Defaults to `0.0.0.0:8080`.
+    #[arg(long, value_name = "SOCKADDR", conflicts_with = "systemd_listenfd")]
     addr: Vec<SocketAddr>,
 
     /// Socket address where, when connected to, will initiate a graceful
     /// shutdown.
     ///
-    /// Note that graceful shutdown is also supported on ctrl-c.
+    /// Note that graceful shutdown is also supported on ctrl-c and, on Unix,
+    /// SIGTERM.
     #[arg(long, value_name = "SOCKADDR")]
     shutdown_addr: Option<SocketAddr>,
 
@@ -158,6 +161,29 @@ pub struct ServeCommand {
     #[arg(long, default_value = "1s", value_parser = parse_duration)]
     idle_instance_timeout: Duration,
 
+    /// Maximum time a component instance may keep running after all of its
+    /// requests have produced responses or timed out, for example while it is
+    /// still streaming a response body or running tasks it spawned.
+    ///
+    /// The time is measured from the moment the instance's last outstanding
+    /// request produced its response or timed out, so it starts over whenever
+    /// a reused instance finishes another request. Once no requests are
+    /// outstanding, it also bounds how long the handler of a timed-out request
+    /// keeps running in the background. If it elapses, the whole instance is
+    /// dropped, which cuts off every response body it is still streaming.
+    ///
+    /// Defaults to the value of `-W timeout`, or no limit if that is not set
+    /// either. Like `-W timeout`, setting this option enables epoch
+    /// interruption and runs blocking WASI filesystem calls on background
+    /// threads, so the limit is enforced even if guest code never yields or
+    /// is blocked in a filesystem call.
+    ///
+    /// A number with no suffix or with an `s` suffix is interpreted as seconds;
+    /// other accepted suffixes include `ms` (milliseconds), `us` or `μs`
+    /// (microseconds), and `ns` (nanoseconds).
+    #[arg(long, value_parser = parse_duration)]
+    post_return_timeout: Option<Duration>,
+
     /// Optional maximum idle time before exiting the process.
     ///
     /// If no connection is open for this interval after the first connection has been received, the
@@ -179,15 +205,26 @@ pub struct ServeCommand {
 
     /// Maximum number of concurrent requests that can be processed at any one
     /// point in time.
-    #[arg(long)]
+    #[arg(long, value_parser = parse_concurrency_limit)]
     max_concurrent_requests: Option<NonZeroUsize>,
     /// Maximum number of concurrent connections that can be held at any one
     /// point in time.
-    #[arg(long)]
+    #[arg(long, value_parser = parse_concurrency_limit)]
     max_concurrent_connections: Option<NonZeroUsize>,
 
     #[arg(skip)]
     inherited_sockets: InheritedSockets,
+}
+
+/// Both limits are handed to a semaphore, which panics above its permit limit.
+fn parse_concurrency_limit(s: &str) -> Result<NonZeroUsize, String> {
+    let n: NonZeroUsize = s
+        .parse()
+        .map_err(|e: std::num::ParseIntError| e.to_string())?;
+    if n.get() > Semaphore::MAX_PERMITS {
+        return Err(format!("maximum is {}", Semaphore::MAX_PERMITS));
+    }
+    Ok(n)
 }
 
 impl ServeCommand {
@@ -380,7 +417,10 @@ impl ServeCommand {
 
     fn new_store(&self, engine: &Engine, instance_id: Option<u64>) -> Result<Store<Host>> {
         let mut builder = WasiCtxBuilder::new();
-        self.run.configure_wasip2(&mut builder)?;
+        self.run.configure_wasip2(
+            &mut builder,
+            self.run.common.wasm.timeout.is_none() && self.post_return_timeout.is_none(),
+        )?;
 
         if let Some(instance_id) = instance_id {
             builder.env("INSTANCE_ID", instance_id.to_string());
@@ -568,7 +608,7 @@ impl ServeCommand {
             .config(use_pooling_allocator_by_default().unwrap_or(None))?;
         config.wasm_component_model(true);
 
-        if self.run.common.wasm.timeout.is_some() {
+        if self.run.common.wasm.timeout.is_some() || self.post_return_timeout.is_some() {
             config.epoch_interruption(true);
         }
 
@@ -620,13 +660,13 @@ impl ServeCommand {
         let instance = ProxyPre::P2(wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance)?);
 
         // Spawn background task(s) waiting for graceful shutdown signals. This
-        // always listens for ctrl-c but additionally can listen for a TCP
-        // connection to the specified address.
+        // always listens for ctrl-c (and SIGTERM on Unix) but additionally can
+        // listen for a TCP connection to the specified address.
         let shutdown = Arc::new(GracefulShutdown::default());
         tokio::task::spawn({
             let shutdown = shutdown.clone();
             async move {
-                tokio::signal::ctrl_c().await.unwrap();
+                wait_for_shutdown_signal().await;
                 shutdown.request_shutdown();
             }
         });
@@ -664,8 +704,13 @@ impl ServeCommand {
                 listeners
             }
             None => {
+                let addrs = if self.addr.is_empty() {
+                    DEFAULT_ADDRS.to_vec()
+                } else {
+                    self.addr.clone()
+                };
                 let mut servers = vec![];
-                for addr in &self.addr {
+                for addr in &addrs {
                     let socket = match addr {
                         SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
                         SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
@@ -692,7 +737,11 @@ impl ServeCommand {
 
         let epoch_interval = if let Some(Profile::Guest { interval, .. }) = self.run.profile {
             Some(interval)
-        } else if let Some(t) = self.run.common.wasm.timeout {
+        } else if let Some(t) = [self.run.common.wasm.timeout, self.post_return_timeout]
+            .into_iter()
+            .flatten()
+            .min()
+        {
             Some(EPOCH_INTERRUPT_PERIOD.min(t))
         } else if debuggee_store.is_some() {
             Some(Duration::from_millis(1))
@@ -736,10 +785,24 @@ impl ServeCommand {
 
         let sem_connections = Arc::new(Semaphore::new(max_concurrent_connections));
 
+        // `--profile=guest` starts a new profiler for every instance, so the
+        // component's modules are prepared for profiling once, up front.
+        #[cfg(feature = "profiling")]
+        let guest_profiler_modules = match &self.run.profile {
+            Some(Profile::Guest { .. }) => Some(wasmtime::GuestProfilerModules::new_component(
+                engine,
+                &component,
+                std::iter::empty(),
+            )?),
+            _ => None,
+        };
+
         let handler = ProxyHandler::new(HostHandlerState {
             sem_requests: Semaphore::new(max_concurrent_requests),
             cmd: self,
             component,
+            #[cfg(feature = "profiling")]
+            guest_profiler_modules,
             request_headers,
             max_instance_reuse_count,
             max_instance_concurrent_reuse_count,
@@ -801,11 +864,11 @@ impl ServeCommand {
         // connections but there may still be outstanding connections
         // processing in child tasks. If there are wait for those to complete
         // before shutting down completely. Also enable short-circuiting this
-        // wait with a second ctrl-c signal.
+        // wait with a second ctrl-c (or SIGTERM) signal.
         if let Some(wait_for_remaining) = shutdown.close() {
             eprintln!("Waiting for child tasks to exit, ctrl-c again to quit sooner...");
             tokio::select! {
-                _ = tokio::signal::ctrl_c() => {}
+                _ = wait_for_shutdown_signal() => {}
                 _ = wait_for_remaining => {}
             }
         }
@@ -861,6 +924,7 @@ pin_project! {
     struct HostWorkerExpiration {
         idle_timeout: Duration,
         request_timeout: Duration,
+        post_return_timeout: Duration,
         #[pin]
         sleep: tokio::time::Sleep,
     }
@@ -877,10 +941,8 @@ impl WorkerExpiration for HostWorkerExpiration {
 
         let timeout = match status {
             WorkerStatus::Idle => *me.idle_timeout,
-            // TODO: add a dedicated `post_return_timeout` config setting
-            // instead of reusing `request_timeout` for
-            // `WorkerStatus::PostReturn` here
-            WorkerStatus::Requests | WorkerStatus::PostReturn => *me.request_timeout,
+            WorkerStatus::Requests => *me.request_timeout,
+            WorkerStatus::PostReturn => *me.post_return_timeout,
         };
 
         if let Some(deadline) = start.checked_add(timeout) {
@@ -900,6 +962,10 @@ struct HostWorkerState {
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
     request_timeout: Duration,
+    #[cfg(feature = "coredump")]
+    coredump: Option<String>,
+    #[cfg(feature = "coredump")]
+    coredump_name: String,
 }
 
 impl WorkerState for HostWorkerState {
@@ -933,6 +999,8 @@ impl WorkerState for HostWorkerState {
     fn drop(&self, mut store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>) {
         if let Err(error) = result {
             eprintln!("worker failed: {error:?}");
+            #[cfg(feature = "coredump")]
+            write_serve_coredump(self, &mut store, &error);
         }
 
         if let Some(write_profile) = store.data_mut().write_profile.take() {
@@ -943,9 +1011,27 @@ impl WorkerState for HostWorkerState {
     }
 }
 
+#[cfg(feature = "coredump")]
+fn write_serve_coredump(state: &HostWorkerState, store: &mut Store<Host>, error: &wasmtime::Error) {
+    let Some(path) = &state.coredump else {
+        return;
+    };
+    if error.downcast_ref::<wasmtime::WasmCoreDump>().is_none() {
+        return;
+    }
+    match super::write_core_dump(store, error, &state.coredump_name, path) {
+        Ok(()) => eprintln!("core dumped at {path}"),
+        Err(coredump_err) => eprintln!("warning: coredump failed to generate: {coredump_err}"),
+    }
+}
+
 struct HostHandlerState {
     cmd: ServeCommand,
     component: Component,
+    /// The component's modules prepared for `--profile=guest`, shared by every
+    /// instance's profiler; `None` when guest profiling is disabled.
+    #[cfg(feature = "profiling")]
+    guest_profiler_modules: Option<wasmtime::GuestProfilerModules>,
     request_headers: RequestHeaders,
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
@@ -958,7 +1044,7 @@ struct HostHandlerState {
 
 impl HostHandlerState {
     async fn instantiate_into(&self, store: &mut Store<Host>) -> Result<Proxy> {
-        let write_profile = setup_epoch_handler(&self.cmd, &mut *store, self.component.clone())?;
+        let write_profile = setup_epoch_handler(self, &mut *store)?;
         store.data_mut().write_profile = Some(write_profile);
         self.instance.instantiate_async(&mut *store).await
     }
@@ -978,26 +1064,50 @@ impl HandlerState for HostHandlerState {
             .new_store(self.component.engine(), Some(instance_id))?;
         let proxy = self.instantiate_into(&mut store).await?;
 
+        let request_timeout = self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX);
+        let post_return_timeout = self.cmd.post_return_timeout.unwrap_or(request_timeout);
+
         Ok(Instance {
             store,
             proxy,
             view: wasmtime_wasi_http::WasiHttpView::http,
             expiration: HostWorkerExpiration {
                 idle_timeout: self.cmd.idle_instance_timeout,
-                request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
+                request_timeout,
+                post_return_timeout,
                 sleep: tokio::time::sleep(Duration::MAX),
             },
             state: HostWorkerState {
                 max_instance_reuse_count: self.max_instance_reuse_count,
                 max_instance_concurrent_reuse_count: self.max_instance_concurrent_reuse_count,
                 instance_id,
-                request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
+                request_timeout,
+                #[cfg(feature = "coredump")]
+                coredump: self.cmd.run.common.debug.coredump.clone(),
+                #[cfg(feature = "coredump")]
+                coredump_name: self.cmd.component.to_str().unwrap_or("unknown").to_string(),
             },
         })
     }
 }
 
 use shutdown::GracefulShutdown;
+
+/// Waits for ctrl-c or, on Unix, SIGTERM (as sent by systemd and docker).
+async fn wait_for_shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut sigterm = signal(SignalKind::terminate()).unwrap();
+        tokio::select! {
+            r = tokio::signal::ctrl_c() => r.unwrap(),
+            _ = sigterm.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    tokio::signal::ctrl_c().await.unwrap();
+}
+
 mod shutdown {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -1169,15 +1279,18 @@ impl Drop for EpochThread {
 
 type WriteProfile = Box<dyn FnOnce(StoreContextMut<Host>) + Send>;
 
-fn setup_epoch_handler(
-    cmd: &ServeCommand,
-    store: &mut Store<Host>,
-    component: Component,
-) -> Result<WriteProfile> {
+fn setup_epoch_handler(state: &HostHandlerState, store: &mut Store<Host>) -> Result<WriteProfile> {
+    let cmd = &state.cmd;
     // Profiling Enabled
     if let Some(Profile::Guest { interval, path }) = &cmd.run.profile {
         #[cfg(feature = "profiling")]
-        return setup_guest_profiler(store, path.clone(), *interval, component.clone());
+        {
+            let modules = state
+                .guest_profiler_modules
+                .as_ref()
+                .expect("modules are prepared when guest profiling is enabled");
+            return setup_guest_profiler(store, path.clone(), *interval, modules);
+        }
         #[cfg(not(feature = "profiling"))]
         {
             let _ = (path, interval);
@@ -1185,8 +1298,11 @@ fn setup_epoch_handler(
         }
     }
 
-    // Profiling disabled but there's a global request timeout
-    if cmd.run.common.wasm.timeout.is_some() || cmd.run.common.debug.debugger.is_some() {
+    // Profiling disabled but there's a global request or post-return timeout
+    if cmd.run.common.wasm.timeout.is_some()
+        || cmd.post_return_timeout.is_some()
+        || cmd.run.common.debug.debugger.is_some()
+    {
         store.epoch_deadline_async_yield_and_update(1);
         store.set_epoch_deadline(1);
     }
@@ -1199,19 +1315,17 @@ fn setup_guest_profiler(
     store: &mut Store<Host>,
     path: String,
     interval: Duration,
-    component: Component,
+    modules: &wasmtime::GuestProfilerModules,
 ) -> Result<WriteProfile> {
     use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut};
 
     let module_name = "<main>";
 
-    store.data_mut().guest_profiler = Some(Arc::new(GuestProfiler::new_component(
-        store.engine(),
+    store.data_mut().guest_profiler = Some(Arc::new(GuestProfiler::new_with_modules(
         module_name,
         interval,
-        component,
-        std::iter::empty(),
-    )?));
+        modules,
+    )));
 
     fn sample(
         mut store: wasmtime::StoreHookState<Host>,

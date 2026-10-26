@@ -14,14 +14,14 @@
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
 ;;     region2 = 65 ""
-;;     region3 = 177 ""
-;;     region4 = 98 ""
+;;     region3 = 210 ""
+;;     region4 = 115 ""
 ;;     region5 = 130 ""
-;;     region6 = 6 ""
+;;     region6 = 134 ""
 ;;     region7 = 196 ""
-;;     region8 = 239 ""
-;;     region9 = 134 ""
-;;     region10 = 90 ""
+;;     region8 = 77 ""
+;;     region9 = 87 ""
+;;     region10 = 175 ""
 ;;     region11 = 147 ""
 ;;     region12 = 225 ""
 ;;     region13 = 152 ""
@@ -29,7 +29,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
-;;     fn0 = colocated u805306368:24 sig0
+;;     fn0 = colocated u805306368:23 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):

@@ -623,8 +623,8 @@ fn test_trap_encoding() {
 
 pub struct RegNameDisplay(Reg);
 
-impl std::fmt::Display for RegNameDisplay {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for RegNameDisplay {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let reg = self.0;
         match reg.to_real_reg() {
             Some(real) => {

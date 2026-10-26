@@ -391,6 +391,10 @@ static inline void __wasmtime_val_assertions() {
  * If you do not unroot the value, *even if you free the corresponding
  * Store*, there will be some memory leaked, because GC roots use a
  * separate allocation to track liveness.
+ *
+ * GC references (`externref`, `anyref` and `exnref`) cannot interoperate
+ * between #wasmtime_store_t instances. Passing one to an API of a store other
+ * than the one it was created in will abort the process.
  */
 typedef struct wasmtime_val {
   /// Discriminant of which field of #of is valid.

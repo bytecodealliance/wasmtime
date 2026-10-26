@@ -112,3 +112,32 @@ block0(v0: i64, v1: i8):
 ;     v5 -> v9
 ;     return v9
 ; }
+
+function %udiv8_dead(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 7
+    v2 = udiv v0, v1
+    v3 = iconst.i8 0
+    return v3
+}
+
+; function %udiv8_dead(i8) -> i8 fast {
+; block0(v0: i8):
+;     v3 = iconst.i8 0
+;     return v3  ; v3 = 0
+; }
+
+function %udiv16_dead(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 7
+    v2 = udiv v0, v1
+    v3 = iconst.i16 0
+    return v3
+}
+
+; function %udiv16_dead(i16) -> i16 fast {
+; block0(v0: i16):
+;     v3 = iconst.i16 0
+;     return v3  ; v3 = 0
+; }
+

@@ -870,6 +870,10 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.is_branch_protection_enabled()
     }
 
+    fn supports_wasm_simd(&self) -> bool {
+        self.isa.supports_vector_load_store(ir::types::I8X16)
+    }
+
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
         self
     }

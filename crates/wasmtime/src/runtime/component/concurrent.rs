@@ -786,20 +786,30 @@ impl GuestCall {
     /// A call will not be ready to run if either:
     ///
     /// - the (sub-)component instance to be called has already been entered and
-    /// cannot be reentered until an in-progress call completes
+    ///   cannot be reentered until an in-progress call completes, and the task
+    ///   requires the exclusive lock
     ///
     /// - the call is for a not-yet started task and the (sub-)component
-    /// instance to be called has backpressure enabled
+    ///   instance to be called has backpressure enabled
     fn is_ready(&self, store: &mut StoreOpaque) -> Result<bool> {
         let task = store.concurrent_state_mut()?.get_mut(self.thread.task)?;
         let async_typed = task.async_typed;
+        let async_lifted = task.async_lifted;
+        let has_callback = task.callback.is_some();
         let instance = task.instance;
         let state = store.instance_state(instance).concurrent_state();
 
         let ready = match &self.kind {
             GuestCallKind::DeliverEvent { .. } => !state.do_not_enter,
             GuestCallKind::StartImplicit(_) => {
-                !async_typed || !(state.do_not_enter || state.backpressure > 0)
+                if async_typed {
+                    // Sync- and callback-lifted exports need the instance's
+                    // exclusive lock to start, but stackful ones don't.
+                    let needs_exclusive = !async_lifted || has_callback;
+                    !((needs_exclusive && state.do_not_enter) || state.backpressure > 0)
+                } else {
+                    true
+                }
             }
             GuestCallKind::StartExplicit(_) => true,
         };
@@ -1155,13 +1165,7 @@ impl<T> StoreContextMut<'_, T> {
     /// Only intended for use in Wasmtime's own testing.
     #[doc(hidden)]
     pub fn concurrent_state_table_size(&mut self) -> usize {
-        self.0
-            .concurrent_state_mut()
-            .unwrap()
-            .table
-            .get_mut()
-            .iter_mut()
-            .count()
+        self.0.concurrent_state_mut().unwrap().table.get_mut().len()
     }
 
     /// Spawn a background task to run as part of this instance's event loop.
@@ -1309,13 +1313,7 @@ impl<T> StoreContextMut<'_, T> {
         trap_on_idle: bool,
     ) -> Result<R> {
         debug_assert!(self.0.concurrency_support());
-        let already_running = self
-            .0
-            .concurrent_state_mut_already_forced_current_thread()
-            .event_loop_running;
-        if already_running {
-            bail!("Recursive `StoreContextMut::run_concurrent` calls not supported")
-        }
+        self.0.check_event_loop_not_running()?;
         let token = StoreToken::new(self.as_context_mut());
 
         struct Dropper<'a, T: 'static, V> {
@@ -1813,6 +1811,16 @@ impl<T> StoreContextMut<'_, T> {
 pub type EnteredHostTask = Option<QualifiedThreadId>;
 
 impl StoreOpaque {
+    pub(crate) fn check_event_loop_not_running(&mut self) -> Result<()> {
+        if self
+            .concurrent_state_mut_already_forced_current_thread()
+            .event_loop_running
+        {
+            bail!("Recursive `StoreContextMut::run_concurrent` calls not supported")
+        }
+        Ok(())
+    }
+
     /// Returns the currently-running thread, promoting any deferred lazy guest
     /// thread into a fully-materialized `CurrentThread`. Deferred [`HostTask`]s
     /// are not materialized.
@@ -2430,6 +2438,12 @@ impl StoreOpaque {
     fn suspend(&mut self, reason: SuspendReason) -> Result<()> {
         log::trace!("suspend fiber: {reason:?}");
 
+        // We'll panic if we call `Self::with_blocking` when the fiber is being
+        // disposed, so check for that and exit ASAP if appropriate.
+        if !self.fiber_async_state_mut().can_block() {
+            return Err(format_err!("future dropped"));
+        }
+
         let state = self.concurrent_state_mut()?;
 
         // If we're yielding or waiting on behalf of a guest thread, we'll be
@@ -2476,12 +2490,6 @@ impl StoreOpaque {
             bail_bug!("suspend reason unexpectedly already set for store");
         }
         *suspend_reason = Some(reason);
-
-        // We'll panic if we call `Self::with_blocking` when the fiber is being
-        // disposed, so check for that and exit ASAP if appropriate.
-        if !self.fiber_async_state_mut().can_block() {
-            return Err(format_err!("future dropped"));
-        }
 
         // Count this thread as waiting on `waiting_set`, if any, for as long as
         // it's suspended.
@@ -2633,8 +2641,13 @@ impl StoreOpaque {
 
         // Clean up the thread within this task as it's now never going
         // to run.
+        //
+        // Note that `next_switch_item`, if any, belongs to the canceller and
+        // not this thread since this thread never ran, so it's saved and
+        // restored here to prevent `cleanup_thread` from taking it.
         assert_eq!(1, task.threads.len());
         let thread = *task.threads.iter().next().unwrap();
+        let next_switch_item = concurrent_state.save_next_switch_item()?;
         self.cleanup_thread(
             QualifiedThreadId {
                 task: guest_task,
@@ -2642,6 +2655,8 @@ impl StoreOpaque {
             },
             caller_instance,
         )?;
+        self.concurrent_state_mut()?
+            .restore_next_switch_item(next_switch_item)?;
 
         // Not yet started; cancel and remove from pending
         let pending = &mut self.instance_state(instance).concurrent_state().pending;
@@ -3500,8 +3515,15 @@ impl Instance {
         let guest_thread = store.0.current_guest_thread()?;
         let state = store.0.concurrent_state_mut()?;
 
+        // FIXME(#14950): this in theory should be a `bail_bug!`, but this can
+        // be hit through `Func::call` for example. This isn't great because it
+        // means that `Func::call` is sort of fundamentally incompatible with
+        // component-model-async...
         if !state.event_loop_running {
-            bail_bug!("Instance::start_call called without a running event loop");
+            bail!(
+                "async function started during an original synchronous \
+                 entrypoint; please use an async-style entrypoint instead"
+            );
         }
 
         let callee = SendSyncPtr::new(callee);

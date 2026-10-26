@@ -7,6 +7,7 @@ use bytes::Bytes;
 use http::{HeaderName, uri::Scheme};
 use http_body_util::combinators::UnsyncBoxBody;
 use std::marker;
+use std::sync::{Arc, LazyLock};
 use wasmtime::component::{HasData, ResourceTable};
 use wasmtime_wasi::{NamedId, WasiCtxNamedView};
 
@@ -156,6 +157,11 @@ impl Default for WasiHttpCtx {
 /// Convenience type definition for the bodies used in this crate.
 pub type WasiBody = UnsyncBoxBody<Bytes, Error>;
 
+/// A cloneable predicate deciding whether a header name is forbidden. This
+/// predicate needs to be executed in tasks which do not have access to the
+/// store.
+pub type ForbiddenHeaderFilter = Arc<dyn Fn(&HeaderName) -> bool + Send + Sync>;
+
 /// A trait which provides hooks into internal WASI HTTP operations.
 ///
 /// Note that when using this type if state is needed to implement the methods
@@ -198,16 +204,28 @@ pub type WasiBody = UnsyncBoxBody<Bytes, Error>;
 /// struct MyHooks;
 ///
 /// impl WasiHttpHooks for MyHooks {
-///     fn is_forbidden_header(&mut self, name: &http::HeaderName) -> bool {
-///         *name == http::header::AUTHORIZATION ||
-///             wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS.contains(name)
+///     fn forbidden_header_filter(&mut self) -> wasmtime_wasi_http::ForbiddenHeaderFilter {
+///         std::sync::Arc::new(|name| {
+///             *name == http::header::AUTHORIZATION ||
+///                 wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS.contains(name)
+///         })
 ///     }
 /// }
 /// ```
 pub trait WasiHttpHooks: Send {
-    /// Whether a given header should be considered forbidden and not allowed.
-    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
-        DEFAULT_FORBIDDEN_HEADERS.contains(name)
+    /// Returns a predicate deciding whether a given header should be
+    /// considered forbidden and not allowed.
+    ///
+    /// The predicate applies to header and trailer fields crossing the guest
+    /// boundary in either direction. It may be retained and invoked after the
+    /// store has been dropped, e.g. for trailers of a host body forwarded by a
+    /// guest, so it is obtained as a value rather than called on `self`.
+    ///
+    /// The default forbids [`DEFAULT_FORBIDDEN_HEADERS`].
+    fn forbidden_header_filter(&mut self) -> ForbiddenHeaderFilter {
+        static DEFAULT: LazyLock<ForbiddenHeaderFilter> =
+            LazyLock::new(|| Arc::new(|name| DEFAULT_FORBIDDEN_HEADERS.contains(name)));
+        DEFAULT.clone()
     }
 
     /// Whether a given scheme should be considered supported.
@@ -652,9 +670,11 @@ pub trait WasiHttpNamedView: Send + 'static {
     /// embedder-allocated id is then passed back here when the corresponding
     /// imported function is invoked.
     ///
-    /// Note that the [`ResourceTable`] referenced in the returned
-    /// [`WasiHttpCtxView`] need not be unique. It's ok to use the same
-    /// [`ResourceTable`] for all imports. This is not a guest-visible
-    /// abstraction and just helps the host allocate and manage state.
+    /// It's strongly recommended, though not always required, that the
+    /// [`ResourceTable`] in the returned [`WasiHttpCtxView`] is the same table
+    /// that the default context, [`WasiHttpView::http`], uses. Resources
+    /// created through a named import can be used through interfaces bound to
+    /// the default context (and vice versa), and with separate tables those
+    /// lookups fail or find another context's resources.
     fn http(&mut self, id: NamedId) -> WasiHttpCtxView<'_>;
 }

@@ -2054,8 +2054,8 @@ mod multiple_host_borrows {
         (component
             (import "r" (type $r (sub resource)))
             (import "mk" (func $mk (result (own $r))))
-            (import "two" (func $two (param "a" (borrow $r)) (param "b" (borrow $r))))
-            (import "list" (func $list (param "a" (list (borrow $r)))))
+            (import "two" (func $two async (param "a" (borrow $r)) (param "b" (borrow $r))))
+            (import "list" (func $list async (param "a" (list (borrow $r)))))
 
             (core module $libc (memory (export "memory") 1))
             (core instance $libc (instantiate $libc))
@@ -2133,11 +2133,11 @@ mod multiple_host_borrows {
         run(Kind::New).await
     }
 
-    async fn drop_val(store: &mut wasmtime::StoreContextMut<'_, ()>, val: &Val) -> Result<()> {
+    async fn drop_val(store: &wasmtime::component::Accessor<()>, val: &Val) -> Result<()> {
         match val {
             Val::Resource(r) => {
                 assert!(!r.owned());
-                r.resource_drop_async(&mut *store).await
+                r.resource_drop_concurrent(store).await
             }
             Val::List(vals) => {
                 for v in vals {
@@ -2150,9 +2150,7 @@ mod multiple_host_borrows {
     }
 
     async fn run(kind: Kind) -> Result<()> {
-        let mut config = Config::new();
-        config.wasm_component_model_async(true);
-        let engine = Engine::new(&config)?;
+        let engine = Engine::default();
         let component = Component::new(&engine, COMPONENT)?;
 
         let mut linker = Linker::<()>::new(&engine);
@@ -2162,18 +2160,18 @@ mod multiple_host_borrows {
 
         match kind {
             Kind::Wrap => {
-                root.func_wrap_async("two", |mut store, (a, b): (ResourceAny, ResourceAny)| {
-                    Box::new(async move {
-                        a.resource_drop_async(&mut store).await?;
-                        b.resource_drop_async(&mut store).await?;
+                root.func_wrap_concurrent("two", |store, (a, b): (ResourceAny, ResourceAny)| {
+                    Box::pin(async move {
+                        a.resource_drop_concurrent(store).await?;
+                        b.resource_drop_concurrent(store).await?;
                         Ok(())
                     })
                 })?;
-                root.func_wrap_async("list", |mut store, (list,): (Vec<ResourceAny>,)| {
-                    Box::new(async move {
+                root.func_wrap_concurrent("list", |store, (list,): (Vec<ResourceAny>,)| {
+                    Box::pin(async move {
                         assert_eq!(list.len(), 3);
                         for r in list {
-                            r.resource_drop_async(&mut store).await?;
+                            r.resource_drop_concurrent(store).await?;
                         }
                         Ok(())
                     })
@@ -2181,10 +2179,10 @@ mod multiple_host_borrows {
             }
             Kind::New => {
                 for name in ["two", "list"] {
-                    root.func_new_async(name, |mut store, _ty, params, _results| {
-                        Box::new(async move {
+                    root.func_new_concurrent(name, |store, _ty, params, _results| {
+                        Box::pin(async move {
                             for p in params {
-                                drop_val(&mut store, p).await?;
+                                drop_val(store, p).await?;
                             }
                             Ok(())
                         })

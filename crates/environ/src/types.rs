@@ -1791,6 +1791,12 @@ pub enum EntityIndex {
     Tag(TagIndex),
 }
 
+impl TryClone for EntityIndex {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(*self)
+    }
+}
+
 impl From<FuncIndex> for EntityIndex {
     fn from(idx: FuncIndex) -> EntityIndex {
         EntityIndex::Function(idx)
@@ -2204,6 +2210,37 @@ impl ConstOp {
             },
             ConstOp::ExternConvertAny => Operator::ExternConvertAny,
             ConstOp::AnyConvertExtern => Operator::AnyConvertExtern,
+        }
+    }
+
+    /// Returns whether this operator might trap, used to test whether a
+    /// constant expression may trap or not as a whole.
+    pub fn may_trap(&self) -> bool {
+        match self {
+            ConstOp::I32Const(_)
+            | ConstOp::I64Const(_)
+            | ConstOp::F32Const(_)
+            | ConstOp::F64Const(_)
+            | ConstOp::V128Const(_)
+            | ConstOp::GlobalGet(_)
+            | ConstOp::RefI31
+            | ConstOp::RefNull(_)
+            | ConstOp::RefFunc(_)
+            | ConstOp::I32Add
+            | ConstOp::I32Sub
+            | ConstOp::I32Mul
+            | ConstOp::I64Add
+            | ConstOp::I64Sub
+            | ConstOp::I64Mul
+            | ConstOp::ExternConvertAny
+            | ConstOp::AnyConvertExtern => false,
+
+            // GC allocations can trap due to overflow, out of resources, etc.
+            ConstOp::StructNew { .. }
+            | ConstOp::StructNewDefault { .. }
+            | ConstOp::ArrayNew { .. }
+            | ConstOp::ArrayNewDefault { .. }
+            | ConstOp::ArrayNewFixed { .. } => true,
         }
     }
 }

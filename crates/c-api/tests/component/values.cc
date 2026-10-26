@@ -12,6 +12,7 @@
 #include <variant>
 
 using namespace wasmtime::component;
+using wasmtime::Config;
 using wasmtime::Engine;
 using wasmtime::Result;
 using wasmtime::Span;
@@ -92,8 +93,9 @@ typedef Result<std::monostate> (*host_func_t)(Store::Context, const FuncType &,
                                               Span<const Val>, Span<Val>);
 
 static Context create(std::string_view type, std::string_view body,
-                      std::string_view host_params, host_func_t callback) {
-  Engine engine;
+                      std::string_view host_params, host_func_t callback,
+                      Config config = Config()) {
+  Engine engine(std::move(config));
   Linker linker(engine);
   linker.root().add_func("do", callback).unwrap();
   auto component_text = echo_component(type, body, host_params);
@@ -268,6 +270,83 @@ local.get $res
   ctx.func.post_return(ctx.context).unwrap();
 
   check(res, {4, 5, 6, 7});
+}
+
+TEST(component, value_map) {
+  using Entries =
+      std::vector<std::pair<uint32_t, std::vector<std::string_view>>>;
+
+  static const auto check = [](const Val &v, Entries data) {
+    EXPECT_TRUE(v.is_map());
+    const Map &m = v.get_map();
+    ASSERT_EQ(m.size(), data.size());
+
+    for (auto i = 0; i < data.size(); i++) {
+      const auto &entry = m.begin()[i];
+      EXPECT_TRUE(entry.key().is_u32());
+      EXPECT_EQ(entry.key().get_u32(), data[i].first);
+      EXPECT_TRUE(entry.value().is_list());
+      const List &l = entry.value().get_list();
+      ASSERT_EQ(l.size(), data[i].second.size());
+      for (auto j = 0; j < data[i].second.size(); j++) {
+        const auto &elem = l.begin()[j];
+        EXPECT_TRUE(elem.is_string());
+        EXPECT_EQ(elem.get_string(), data[i].second[j]);
+      }
+    }
+  };
+
+  static const auto make = [](Entries data) -> Val {
+    std::vector<std::pair<Val, Val>> entries;
+    for (auto &[key, value] : data) {
+      std::vector<Val> strings;
+      for (auto s : value)
+        strings.push_back(Val::string(s));
+      entries.emplace_back(Val(key), List(std::move(strings)));
+    }
+    return Map(std::move(entries));
+  };
+
+  Config config;
+  config.wasm_component_model_map(true);
+  auto ctx = create(
+      R"((map u32 (list string)))", R"(
+(param $x i32)
+(param $y i32)
+(result i32)
+(local $res i32)
+local.get $x
+local.get $y
+(call $realloc
+	(i32.const 0)
+	(i32.const 0)
+	(i32.const 4)
+	(i32.const 8))
+local.tee $res
+call $do
+local.get $res
+	  )",
+      "(param i32 i32 i32)",
+      +[](Store::Context, const FuncType &, Span<const Val> args,
+          Span<Val> rets) -> Result<std::monostate> {
+        EXPECT_EQ(args.size(), 1);
+        check(args[0], {{1, {"a", "b"}}, {2, {}}, {1, {"c"}}});
+
+        EXPECT_EQ(rets.size(), 1);
+        rets[0] = make({{3, {"x"}}, {3, {"y", "z"}}, {0, {}}});
+
+        return std::monostate();
+      },
+      std::move(config));
+
+  auto arg = make({{1, {"a", "b"}}, {2, {}}, {1, {"c"}}});
+  auto res = Val(false);
+
+  ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1))
+      .unwrap();
+  ctx.func.post_return(ctx.context).unwrap();
+
+  check(res, {{3, {"x"}}, {3, {"y", "z"}}, {0, {}}});
 }
 
 TEST(component, value_tuple) {
@@ -1090,4 +1169,63 @@ TEST(component, resources) {
   const ResourceAny &r5 = v.get_resource();
   EXPECT_TRUE(r5.owned());
   EXPECT_EQ(r5.type(), ResourceType(2));
+}
+
+TEST(component, value_invalid_char_and_string) {
+  // A surrogate isn't a valid `char`, as an argument or a host result.
+  auto ctx = create(
+      R"(char)", R"(
+(param $x i32)
+(result i32)
+local.get $x
+call $do
+	  )",
+      "(param i32) (result i32)",
+      +[](Store::Context, const FuncType &, Span<const Val>,
+          Span<Val> rets) -> Result<std::monostate> {
+        rets[0] = Val::char_(0xd800);
+        return std::monostate();
+      });
+
+  auto arg = Val::char_(0xd800);
+  auto res = Val(false);
+  EXPECT_FALSE(
+      ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1)));
+
+  arg = Val::char_('a');
+  EXPECT_FALSE(
+      ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1)));
+
+  // Strings must be valid UTF-8, as an argument or a host result.
+  ctx = create(
+      R"(string)", R"(
+(param $x i32)
+(param $y i32)
+(result i32)
+(local $res i32)
+local.get $x
+local.get $y
+(call $realloc
+	(i32.const 0)
+	(i32.const 0)
+	(i32.const 4)
+	(i32.const 8))
+local.tee $res
+call $do
+local.get $res
+	  )",
+      "(param i32 i32 i32)",
+      +[](Store::Context, const FuncType &, Span<const Val>,
+          Span<Val> rets) -> Result<std::monostate> {
+        rets[0] = Val::string("\xff\xfe");
+        return std::monostate();
+      });
+
+  arg = Val::string("\xff\xfe");
+  EXPECT_FALSE(
+      ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1)));
+
+  arg = Val::string("ok");
+  EXPECT_FALSE(
+      ctx.func.call(ctx.context, Span<const Val>(&arg, 1), Span<Val>(&res, 1)));
 }

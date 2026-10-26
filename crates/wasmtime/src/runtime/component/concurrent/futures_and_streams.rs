@@ -1,8 +1,6 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{
-    ConcurrentState, CurrentThread, QualifiedThreadId, WorkItem, tls,
-};
+use crate::component::concurrent::{ConcurrentState, CurrentThread, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
@@ -242,7 +240,6 @@ fn get_mut_by_index_from(
 fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
     mut store: StoreContextMut<U>,
     instance: Instance,
-    caller_thread: QualifiedThreadId,
     options: OptionsIndex,
     ty: TransmitIndex,
     address: usize,
@@ -251,37 +248,24 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
 ) -> Result<()> {
     let count = buffer.remaining().len().min(count);
 
-    // If lowering may call realloc in the guest, then the guest may need
-    // to access its thread context, so we need to set the current thread before lowering
-    // and restore the old one afterward.
-    let (lower, old_thread) = if T::MAY_REQUIRE_REALLOC {
-        let old_thread = store.0.set_thread(caller_thread)?;
-        (
-            &mut LowerContext::new(store.as_context_mut(), options, instance),
-            Some(old_thread),
-        )
+    let lower = &mut if T::MAY_REQUIRE_REALLOC {
+        LowerContext::new(store.as_context_mut(), options, instance)
     } else {
-        (
-            &mut LowerContext::new_without_realloc(store.as_context_mut(), options, instance),
-            None,
-        )
+        LowerContext::new_without_realloc(store.as_context_mut(), options, instance)
     };
 
-    if address % usize::try_from(T::ALIGN32)? != 0 {
-        bail!("read pointer not aligned");
-    }
-    lower
-        .as_slice_mut()
-        .get_mut(address..)
-        .and_then(|b| b.get_mut(..T::SIZE32 * count))
-        .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
+    // Note that validation only happens with operations that have a payload.
+    if let Some(ty) = ty.payload(lower.types).copied() {
+        if address % usize::try_from(T::ALIGN32)? != 0 {
+            bail!("read pointer not aligned");
+        }
+        lower
+            .as_slice_mut()
+            .get_mut(address..)
+            .and_then(|b| b.get_mut(..T::SIZE32 * count))
+            .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
 
-    if let Some(ty) = ty.payload(lower.types) {
-        T::linear_store_list_to_memory(lower, *ty, address, &buffer.remaining()[..count])?;
-    }
-
-    if let Some(old_thread) = old_thread {
-        store.0.set_thread(old_thread)?;
+        T::linear_store_list_to_memory(lower, ty, address, &buffer.remaining()[..count])?;
     }
 
     buffer.skip(count);
@@ -910,6 +894,12 @@ impl<'a, T> Source<'a, T> {
                 bail_bug!("expected WriteState::GuestReady");
             };
 
+            // Zero-length writes are exempt from bounds/alignment checks, so
+            // there's nothing to lift.
+            if guest_offset >= count {
+                return Ok(());
+            }
+
             let cx = &mut LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
             let ty = ty.payload(cx.types);
             let old_remaining = buffer.remaining_capacity();
@@ -1493,6 +1483,39 @@ pub(super) fn lift_index_to_future(
     }
 }
 
+/// Checks that the host-owned read end `idx` may be lowered into a guest as a
+/// future or stream with the payload type `payload`.
+///
+/// Note that this is technically redundant for `StreamReader<T>` where its
+/// static typecheck already verified this, but this is otherwise required in
+/// the face of the `{Stream,Future}Any` abstraction to handle various use cases
+/// of types dynamically being labeled or possibly switched.
+fn typecheck_lowered_transmit<U>(
+    idx: HostResourceIndex,
+    cx: &mut LowerContext<'_, U>,
+    payload: Option<&InterfaceType>,
+) -> Result<()> {
+    let origin = cx.store.0.transmit_origin(idx)?;
+    let dst = cx.instance_type();
+    let equivalent = match origin {
+        TransmitOrigin::Host { typecheck } => {
+            return typecheck(payload, &dst).context("future or stream payload types differ");
+        }
+        TransmitOrigin::GuestFuture(id, ty) => {
+            let src = InstanceType::new(cx.store.0.component_instance(id));
+            types::FutureType::from(src.types[ty].ty, &src).equivalent_payload_guest(&dst, payload)
+        }
+        TransmitOrigin::GuestStream(id, ty) => {
+            let src = InstanceType::new(cx.store.0.component_instance(id));
+            types::StreamType::from(src.types[ty].ty, &src).equivalent_payload_guest(&dst, payload)
+        }
+    };
+    if !equivalent {
+        bail!("future or stream payload types differ");
+    }
+    Ok(())
+}
+
 /// Transfer ownership of the read end of a future from the host to a guest.
 pub(super) fn lower_future_to_index<U>(
     idx: HostResourceIndex,
@@ -1501,6 +1524,8 @@ pub(super) fn lower_future_to_index<U>(
 ) -> Result<u32> {
     match ty {
         InterfaceType::Future(dst) => {
+            let types = cx.types;
+            typecheck_lowered_transmit(idx, cx, types[types[dst].ty].payload.as_ref())?;
             let id = cx.store.0.host_reader_take(idx)?;
             cx.instance_handle()
                 .lower_transmit_to_index(cx.store.0, TransmitIndex::Future(dst), id)
@@ -1857,6 +1882,8 @@ pub(super) fn lower_stream_to_index<U>(
 ) -> Result<u32> {
     match ty {
         InterfaceType::Stream(dst) => {
+            let types = cx.types;
+            typecheck_lowered_transmit(idx, cx, types[types[dst].ty].payload.as_ref())?;
             let id = cx.store.0.host_reader_take(idx)?;
             cx.instance_handle()
                 .lower_transmit_to_index(cx.store.0, TransmitIndex::Stream(dst), id)
@@ -2155,14 +2182,18 @@ struct TransmitState {
     read: ReadState,
     /// Whether further values may be transmitted via this stream or future.
     done: bool,
-    /// The original creator of this stream, used for type-checking with
-    /// `{Future,Stream}Any`.
+    /// The original creator of this stream or future, whose payload type is
+    /// checked against a guest's whenever the host lowers the read end into
+    /// that guest, and which `{Future,Stream}Any` use as their initial type.
     pub(super) origin: TransmitOrigin,
 }
 
 #[derive(Copy, Clone)]
 pub(super) enum TransmitOrigin {
-    Host,
+    Host {
+        /// Type-checks the producer's items against the guest-supplied payload.
+        typecheck: fn(Option<&InterfaceType>, &InstanceType<'_>) -> Result<()>,
+    },
     GuestFuture(ComponentInstanceId, TypeFutureTableIndex),
     GuestStream(ComponentInstanceId, TypeStreamTableIndex),
 }
@@ -2247,7 +2278,6 @@ enum ReadState {
     GuestReady {
         ty: TransmitIndex,
         caller_instance: RuntimeComponentInstanceIndex,
-        caller_thread: QualifiedThreadId,
         flat_abi: Option<FlatAbi>,
         instance: Instance,
         options: OptionsIndex,
@@ -2627,7 +2657,9 @@ impl<T> StoreContextMut<'_, T> {
     {
         let token = StoreToken::new(self.as_context_mut());
         let state = self.0.concurrent_state_mut()?;
-        let (_, read) = state.new_transmit(TransmitOrigin::Host)?;
+        let (_, read) = state.new_transmit(TransmitOrigin::Host {
+            typecheck: types::typecheck_payload::<P::Item>,
+        })?;
         let producer = Arc::new(LockedState::new((Box::pin(producer), P::Buffer::default())));
         let id = state.get_mut(read)?.state;
         let mut dropped = false;
@@ -3060,7 +3092,6 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
             handle,
             instance,
             caller_instance,
-            caller_thread,
         } => {
             let guest_offset = match guest_offset {
                 Some(i) => i,
@@ -3082,7 +3113,6 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     lower::<T, B, D>(
                         store.as_context_mut(),
                         instance,
-                        caller_thread,
                         options,
                         ty,
                         address + (T::SIZE32 * guest_offset.as_usize()),
@@ -3153,7 +3183,6 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                     handle,
                     instance,
                     caller_instance,
-                    caller_thread,
                 };
 
                 crate::error::Ok(())
@@ -3340,7 +3369,6 @@ impl Instance {
         write_options: OptionsIndex,
         write_address: usize,
         read_runtime_instance: RuntimeInstance,
-        read_caller_thread: QualifiedThreadId,
         read_ty: TransmitIndex,
         read_options: OptionsIndex,
         read_address: usize,
@@ -3423,10 +3451,6 @@ impl Instance {
                     .transpose()?;
 
                 if let Some(val) = val {
-                    // Serializing the value may require calling the guest's realloc function, so we
-                    // set the guest's thread context in case realloc requires it, and restore the original
-                    // thread context after the copy is complete.
-                    let old_thread = store.set_thread(read_caller_thread)?;
                     let lower =
                         &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
                     let ptr = func::validate_inbounds_dynamic(
@@ -3439,7 +3463,6 @@ impl Instance {
                         None => bail_bug!("expected read payload type to be present"),
                     };
                     val.store(lower, *ty, ptr)?;
-                    store.set_thread(old_thread)?;
                 }
             }
             (TransmitIndex::Stream(_), TransmitIndex::Stream(_)) => {
@@ -3509,10 +3532,6 @@ impl Instance {
                     let id = TableId::<TransmitHandle>::new(rep);
                     log::trace!("copy values {values:?} for {id:?}");
 
-                    // Serializing the value may require calling the guest's realloc function, so we
-                    // set the guest's thread context in case realloc requires it, and restore the original
-                    // thread context after the copy is complete.
-                    let old_thread = store.set_thread(read_caller_thread)?;
                     let lower =
                         &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
                     let mut ptr = read_address;
@@ -3520,7 +3539,6 @@ impl Instance {
                         value.store(lower, *read_payload_ty, ptr)?;
                         ptr += usize::try_from(read_abi.size32)?;
                     }
-                    store.set_thread(old_thread)?;
                 }
             }
             _ => bail_bug!("mismatched transmit types in copy"),
@@ -3642,7 +3660,6 @@ impl Instance {
                 handle: read_handle,
                 instance: read_instance,
                 caller_instance: read_caller_instance,
-                caller_thread: read_caller_thread,
             } => {
                 if flat_abi != read_flat_abi {
                     bail_bug!("expected flat ABI calculations to be the same");
@@ -3690,7 +3707,6 @@ impl Instance {
                     options,
                     address,
                     read_instance.runtime_instance(read_caller_instance),
-                    read_caller_thread,
                     read_ty,
                     read_options,
                     read_address,
@@ -3739,7 +3755,6 @@ impl Instance {
                         handle: read_handle,
                         instance: read_instance,
                         caller_instance: read_caller_instance,
-                        caller_thread: read_caller_thread,
                     };
                 }
 
@@ -3850,7 +3865,6 @@ impl Instance {
 
         *state = TransmitLocalState::Busy;
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
-        let caller_thread = store.0.current_guest_thread()?;
         let concurrent_state = store.0.concurrent_state_mut()?;
         let transmit_id = concurrent_state.get_mut(transmit_handle)?.state;
         let transmit = concurrent_state.get_mut(transmit_id)?;
@@ -3893,7 +3907,6 @@ impl Instance {
                 handle,
                 instance: self,
                 caller_instance,
-                caller_thread,
             };
             Ok::<_, crate::Error>(())
         };
@@ -3937,7 +3950,6 @@ impl Instance {
                     write_options,
                     write_address,
                     self.runtime_instance(caller_instance),
-                    caller_thread,
                     ty,
                     options,
                     address,
@@ -4929,6 +4941,9 @@ impl ConcurrentState {
         &mut self,
         origin: TransmitOrigin,
     ) -> Result<(TableId<TransmitHandle>, TableId<TransmitHandle>)> {
+        // All three entries must fit before inserting any of them so a full
+        // table does not leave an inaccessible state or handle behind.
+        self.table().ensure_capacity(3)?;
         let state_id = self.push(TransmitState::new(origin))?;
 
         let write = self.push(TransmitHandle::new(state_id))?;

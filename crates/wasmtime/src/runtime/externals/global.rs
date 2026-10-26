@@ -6,7 +6,6 @@ use crate::{
     store::{AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque},
     trampoline::generate_global_export,
 };
-use core::ptr;
 use core::ptr::NonNull;
 use wasmtime_environ::DefinedGlobalIndex;
 
@@ -150,20 +149,50 @@ impl Global {
         self._get(&mut store)
     }
 
+    /// Returns the current [`Val`] of this global if it has a numeric type
+    /// (`i32`, `i64`, `f32`, `f64`, or `v128`), or `None` if it holds a
+    /// reference.
+    ///
+    /// Unlike [`Global::get`] this only needs shared access to the store since
+    /// reading a numeric value never has to clone a GC reference. That makes
+    /// it usable where only an [`AsContext`] is available, for example from
+    /// epoch or call hooks.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
+    pub fn get_numeric(&self, store: impl AsContext) -> Option<Val> {
+        self._get_numeric(store.as_context().0)
+    }
+
+    fn _get_numeric(&self, store: &StoreOpaque) -> Option<Val> {
+        unsafe {
+            let definition = self.definition(store).as_ref();
+            match self._ty(store).content() {
+                ValType::I32 => Some(Val::from(definition.get_i32())),
+                ValType::I64 => Some(Val::from(definition.get_i64())),
+                ValType::F32 => Some(Val::F32(definition.get_f32_bits())),
+                ValType::F64 => Some(Val::F64(definition.get_f64_bits())),
+                ValType::V128 => Some(Val::V128(definition.get_u128().into())),
+                ValType::Ref(_) => None,
+            }
+        }
+    }
+
     pub(crate) fn _get(&self, store: &mut AutoAssertNoGc<'_>) -> Val {
         unsafe {
             let definition = self.definition(store).as_ref();
             match self._ty(&store).content() {
-                ValType::I32 => Val::from(*definition.as_i32()),
-                ValType::I64 => Val::from(*definition.as_i64()),
-                ValType::F32 => Val::F32(*definition.as_u32()),
-                ValType::F64 => Val::F64(*definition.as_u64()),
-                ValType::V128 => Val::V128(definition.get_u128().into()),
+                ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 | ValType::V128 => self
+                    ._get_numeric(store)
+                    .expect("numeric globals always have a numeric value"),
                 ValType::Ref(ref_ty) => {
                     let reference: Ref = match ref_ty.heap_type() {
-                        HeapType::Func | HeapType::ConcreteFunc(_) => {
-                            Func::_from_raw(store, definition.as_func_ref().cast()).into()
-                        }
+                        HeapType::Func | HeapType::ConcreteFunc(_) => Ref::Func(
+                            definition
+                                .get_func_ref()
+                                .map(|f| Func::from_vm_func_ref(store.id(), f)),
+                        ),
 
                         HeapType::NoFunc => Ref::Func(None),
 
@@ -258,14 +287,13 @@ impl Global {
         unsafe {
             let definition = self.definition(&store).as_mut();
             match val {
-                Val::I32(i) => *definition.as_i32_mut() = *i,
-                Val::I64(i) => *definition.as_i64_mut() = *i,
-                Val::F32(f) => *definition.as_u32_mut() = *f,
-                Val::F64(f) => *definition.as_u64_mut() = *f,
+                Val::I32(i) => definition.set_i32(*i),
+                Val::I64(i) => definition.set_i64(*i),
+                Val::F32(f) => definition.set_f32_bits(*f),
+                Val::F64(f) => definition.set_f64_bits(*f),
                 Val::V128(i) => definition.set_u128((*i).into()),
                 Val::FuncRef(f) => {
-                    *definition.as_func_ref_mut() =
-                        f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&store).as_ptr().cast());
+                    definition.set_func_ref(f.map(|f| f.vm_func_ref(&store)));
                 }
                 Val::ExternRef(e) => {
                     let new = match e {

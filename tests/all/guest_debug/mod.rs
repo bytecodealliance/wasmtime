@@ -1,6 +1,7 @@
 //! Integration tests for guest-debug support (gdbstub + LLDB).
 //!
-//! These tests launch `wasmtime run` with `-g <port>`, connect LLDB via
+//! These tests launch `wasmtime run` with `-g 0` (binding to an
+//! OS-assigned port, which is parsed from the startup messages), connect LLDB via
 //! the wasm remote protocol, execute debug scripts (set breakpoints,
 //! continue, step, inspect variables), and validate output.
 //!
@@ -11,7 +12,7 @@
 
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::io::{BufRead, BufReader, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpStream};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 use test_programs_artifacts::*;
@@ -30,15 +31,6 @@ fn wasmtime_binary() -> std::path::PathBuf {
     me
 }
 
-/// Find an available TCP port by binding to port 0.
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
 /// Path to the wasm-aware LLDB.
 fn lldb_path() -> String {
     std::env::var("LLDB").unwrap_or("/opt/wasi-sdk/bin/lldb".to_string())
@@ -50,23 +42,25 @@ const GDBSTUB_READY_MARKER: &str = "Debugger listening on";
 /// A running wasmtime process with a gdbstub endpoint.
 struct WasmtimeWithGdbstub {
     child: Child,
+    /// The port the gdbstub is listening on, as reported by wasmtime.
+    port: u16,
     /// Keeps the stderr pipe alive to avoid SIGPIPE on the child.
     /// Also used by serve tests to read the HTTP address.
     stderr_reader: BufReader<std::process::ChildStderr>,
 }
 
 impl WasmtimeWithGdbstub {
-    /// Spawn wasmtime and wait for stderr to contain the gdbstub
-    /// readiness marker.
-    fn spawn(
-        subcmd: &str,
-        gdbstub_port: u16,
-        extra_args: &[&str],
-        timeout: Duration,
-    ) -> Result<Self> {
+    /// Spawn wasmtime with the gdbstub listening on an OS-assigned
+    /// port, and wait for stderr to contain the gdbstub readiness
+    /// marker, from which we parse the port.
+    ///
+    /// Letting wasmtime bind to port 0 (rather than picking a free port
+    /// beforehand and passing it in) avoids a race with other processes
+    /// (e.g. concurrently-running tests) grabbing the port in between.
+    fn spawn(subcmd: &str, extra_args: &[&str], timeout: Duration) -> Result<Self> {
         let mut cmd = Command::new(wasmtime_binary());
         cmd.arg(subcmd)
-            .arg(format!("-g{gdbstub_port}"))
+            .arg("-g0")
             .args(extra_args)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -86,9 +80,18 @@ impl WasmtimeWithGdbstub {
             line.clear();
             reader.read_line(&mut line)?;
             eprintln!("wasmtime stderr: {}", line.trim_end());
-            if line.contains(GDBSTUB_READY_MARKER) {
+            if let Some(idx) = line.find(GDBSTUB_READY_MARKER) {
+                let addr = line[idx + GDBSTUB_READY_MARKER.len()..].trim();
+                let port = match addr.parse::<SocketAddr>() {
+                    Ok(addr) => addr.port(),
+                    Err(e) => {
+                        let _ = child.kill();
+                        bail!("failed to parse gdbstub address `{addr}`: {e}");
+                    }
+                };
                 return Ok(Self {
                     child,
+                    port,
                     stderr_reader: reader,
                 });
             }
@@ -173,10 +176,8 @@ fn check_output(output: &str, directives: &str) -> Result<()> {
 #[test]
 #[ignore]
 fn guest_debug_cli_fib_breakpoint() -> Result<()> {
-    let port = free_port();
     let mut wt = WasmtimeWithGdbstub::spawn(
         "run",
-        port,
         &["-Ccache=n", GUEST_DEBUG_FIB],
         Duration::from_secs(30),
     )?;
@@ -184,7 +185,7 @@ fn guest_debug_cli_fib_breakpoint() -> Result<()> {
     // Set breakpoint at the initial stop, *before* continuing.
     // This tests that modules are visible immediately.
     let output = lldb_with_gdbstub_script(
-        port,
+        wt.port,
         r#"
 b fib
 c
@@ -210,16 +211,14 @@ check: n =
 #[test]
 #[ignore]
 fn guest_debug_cli_fib_step() -> Result<()> {
-    let port = free_port();
     let mut wt = WasmtimeWithGdbstub::spawn(
         "run",
-        port,
         &["-Ccache=n", GUEST_DEBUG_FIB],
         Duration::from_secs(30),
     )?;
 
     let output = lldb_with_gdbstub_script(
-        port,
+        wt.port,
         r#"
 b fib
 c
@@ -265,16 +264,14 @@ fn guest_debug_cli_shared_memory() -> Result<()> {
         .to_str()
         .ok_or_else(|| format_err!("temporary module path is not UTF-8"))?;
 
-    let port = free_port();
     let mut wt = WasmtimeWithGdbstub::spawn(
         "run",
-        port,
         &["-Ccache=n", "-W", "threads=y,shared-memory=y", module_path],
         Duration::from_secs(30),
     )?;
 
     let output = lldb_with_gdbstub_script(
-        port,
+        wt.port,
         r#"
 continue
 memory read --size 4 --format decimal --count 1 0x0
@@ -312,16 +309,11 @@ fn guest_debug_cli_breakpoint_in_start_func() -> Result<()> {
         .to_str()
         .ok_or_else(|| format_err!("temporary module path is not UTF-8"))?;
 
-    let port = free_port();
-    let mut wt = WasmtimeWithGdbstub::spawn(
-        "run",
-        port,
-        &["-Ccache=n", module_path],
-        Duration::from_secs(30),
-    )?;
+    let mut wt =
+        WasmtimeWithGdbstub::spawn("run", &["-Ccache=n", module_path], Duration::from_secs(30))?;
 
     let output = lldb_with_gdbstub_script(
-        port,
+        wt.port,
         r#"
 b run
 c
@@ -382,11 +374,8 @@ fn parse_http_addr(line: &str) -> Result<SocketAddr> {
 #[test]
 #[ignore]
 fn guest_debug_serve_requests() -> Result<()> {
-    let gdb_port = free_port();
-
     let mut wt = WasmtimeWithGdbstub::spawn(
         "serve",
-        gdb_port,
         &[
             "-Ccache=n",
             "--addr=127.0.0.1:0",
@@ -395,6 +384,7 @@ fn guest_debug_serve_requests() -> Result<()> {
         ],
         Duration::from_secs(30),
     )?;
+    let gdb_port = wt.port;
 
     // Connect LLDB in background: just continue to start the HTTP server.
     let lldb_handle = std::thread::spawn(move || lldb_with_gdbstub_script(gdb_port, "c\n"));
@@ -439,11 +429,8 @@ check: resuming
 #[test]
 #[ignore]
 fn guest_debug_serve_breakpoint() -> Result<()> {
-    let gdb_port = free_port();
-
     let mut wt = WasmtimeWithGdbstub::spawn(
         "serve",
-        gdb_port,
         &[
             "-Ccache=n",
             "--addr=127.0.0.1:0",
@@ -452,6 +439,7 @@ fn guest_debug_serve_breakpoint() -> Result<()> {
         ],
         Duration::from_secs(30),
     )?;
+    let gdb_port = wt.port;
 
     // LLDB script: set a breakpoint on the incoming-handler Guest::handle,
     // continue to start the server, then for each request: print backtrace
@@ -518,16 +506,14 @@ check: handle
 #[test]
 #[ignore]
 fn guest_debug_cli_fib_watchpoint() -> Result<()> {
-    let port = free_port();
     let mut wt = WasmtimeWithGdbstub::spawn(
         "run",
-        port,
         &["-Ccache=n", GUEST_DEBUG_FIB],
         Duration::from_secs(30),
     )?;
 
     let output = lldb_with_gdbstub_script(
-        port,
+        wt.port,
         r#"
 b fib
 c
@@ -635,16 +621,14 @@ fn guest_debug_rsp_watchpoints() -> Result<()> {
     (i32.store8 (i32.const 32) (i32.const 1))))
 "#,
     )?;
-    let port = free_port();
     let mut wt = WasmtimeWithGdbstub::spawn(
         "run",
-        port,
         &["-Ccache=n", wat.to_str().unwrap()],
         Duration::from_secs(30),
     )?;
 
     let result = (|| -> Result<()> {
-        let mut rsp = RspClient::connect(port)?;
+        let mut rsp = RspClient::connect(wt.port)?;
         rsp.request("?")?;
         // Step to the first instruction, so that the memory exists.
         let reply = rsp.request("s")?;
@@ -683,4 +667,52 @@ fn guest_debug_rsp_watchpoints() -> Result<()> {
     wt.child.kill().ok();
     wt.child.wait()?;
     result
+}
+
+/// A long loop with no host calls, which only an interrupt can stop early.
+const SPIN_WAT: &str = r#"
+(module
+  (func (export "_start")
+    (local $i i32) (local $j i32)
+    loop
+      (local.set $j (i32.const 0))
+      loop
+        (local.set $j (i32.add (local.get $j) (i32.const 1)))
+        (br_if 0 (i32.lt_u (local.get $j) (i32.const 1000000000)))
+      end
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br_if 0 (i32.lt_u (local.get $i) (i32.const 8)))
+    end))
+"#;
+
+/// Continues `SPIN_WAT` under `wasmtime <subcmd> -g` with `args`, then
+/// interrupts it, expecting a stop rather than an exit.
+fn interrupt_spin(subcmd: &str, args: &[&str]) -> Result<()> {
+    let mut wt = WasmtimeWithGdbstub::spawn(subcmd, args, Duration::from_secs(30))?;
+    let result = (|| -> Result<()> {
+        let mut rsp = RspClient::connect(wt.port)?;
+        rsp.request("?")?;
+        rsp.send("c")?;
+        std::thread::sleep(Duration::from_millis(200));
+        rsp.tcp.write_all(&[0x03])?;
+        let reply = rsp.reply("interrupt")?;
+        assert!(
+            reply.starts_with('T') || reply.starts_with('S'),
+            "unexpected interrupt reply: {reply}"
+        );
+        Ok(())
+    })();
+    wt.child.kill().ok();
+    wt.child.wait()?;
+    result
+}
+
+/// Test that a debugger can interrupt a running program.
+#[test]
+#[ignore]
+fn guest_debug_cli_interrupt() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let wat = dir.path().join("spin.wat");
+    std::fs::write(&wat, SPIN_WAT)?;
+    interrupt_spin("run", &["-Ccache=n", wat.to_str().unwrap()])
 }

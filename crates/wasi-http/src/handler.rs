@@ -230,6 +230,12 @@ pub trait WorkerState: 'static + Send + Sync {
     /// If the store is being dropped due to an error (e.g. a guest trap or a
     /// host panic) `result` will be `Err(_)`; otherwise it will be `Ok(())`.
     fn drop(&self, store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>);
+
+    /// Poll the specified future representing the event loop for the store to
+    /// which the worker belongs.
+    fn poll<T>(&self, future: Pin<&mut impl Future<Output = T>>, cx: &mut Context) -> Poll<T> {
+        future.poll(cx)
+    }
 }
 
 /// Represents the combination of a store and instance with which to handle
@@ -696,7 +702,7 @@ where
             );
 
             future::poll_fn(|cx| {
-                let poll = future.as_mut().poll(cx);
+                let poll = dropper.state.poll(future.as_mut(), cx);
                 if poll.is_pending() {
                     // If the future returns `Pending`, that's either because it's
                     // idle (in which case it can definitely accept a new request) or
@@ -731,7 +737,7 @@ where
                     // before, poll the future one more time so it can ask for
                     // another request if appropriate.
                     if !accept_concurrent.swap(true, Relaxed) {
-                        return future.as_mut().poll(cx);
+                        return dropper.state.poll(future.as_mut(), cx);
                     }
                 }
 
@@ -998,10 +1004,43 @@ impl<'a, T: Send> Prepared<'a, T> {
         match proxy {
             #[cfg(feature = "p3")]
             Proxy::P3(guest) => {
-                let (request, body) = request.into_parts();
-                let request = http::Request::from_parts(request, body);
+                use http::header::HOST;
+                use http::uri::Authority;
+
+                let (parts, body) = request.into_parts();
+                let http::request::Parts {
+                    method,
+                    uri,
+                    headers: request_headers,
+                    ..
+                } = parts;
+                let http::uri::Parts {
+                    authority,
+                    path_and_query,
+                    ..
+                } = uri.into_parts();
+                // HTTP/1.1 requires an authority in the request target or the
+                // `Host` header (RFC 9112 section 3.2.2), so fall back to the latter.
+                let authority = match authority {
+                    Some(authority) => Some(authority),
+                    None => request_headers
+                        .get(HOST)
+                        .and_then(|host| host.to_str().ok())
+                        .and_then(|host| host.parse::<Authority>().ok()),
+                };
                 let hooks = view(store.data_mut()).hooks;
-                let (request, request_io_result) = p3::Request::from_http(hooks, request);
+                let headers = crate::FieldMap::new_immutable(hooks, request_headers);
+                // `serve` speaks plaintext HTTP, so that is the scheme of every
+                // request, whatever scheme its request target names (as in p2).
+                let (request, request_io_result) = p3::Request::new(
+                    method,
+                    Some(http::uri::Scheme::HTTP),
+                    authority,
+                    path_and_query,
+                    headers,
+                    None,
+                    body,
+                );
                 let request = view(store.data_mut()).table.push(request)?;
 
                 Ok(Prepared::P3 {

@@ -201,14 +201,6 @@
         (imm MoveWideConst)
         (size OperandSize))
 
-       ;; A sign- or zero-extend operation.
-       (Extend
-        (rd WritableReg)
-        (rn Reg)
-        (signed bool)
-        (from_bits u8)
-        (to_bits u8))
-
         ;; A bitfield move instruction, either UBFM or SBFM.
         ;; The BFM instruction is instead encoded as BitfieldMoveMod.
         (BitfieldMove
@@ -1306,7 +1298,6 @@
 
 ;; Leaves currently without specs: excluded from verification via todo.
 (attr MInst.Udf (tag TODO))
-(attr MInst.BitfieldMove (tag TODO))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -2333,6 +2324,13 @@
 (decl u8_into_uimm5 (u8) UImm5)
 (extern constructor u8_into_uimm5 u8_into_uimm5)
 
+(spec (u8_into_uimm6 n)
+      (provide (= result (extract 5 0 n)))
+      (require (bvult n #x40))
+)
+(decl u8_into_uimm6 (u8) UImm6)
+(extern constructor u8_into_uimm6 u8_into_uimm6)
+
 (spec (u8_into_imm12 n)
       (provide
             (not (:shift12 result))
@@ -2427,11 +2425,12 @@
 
 (spec (integral_ty ty)
       (provide (= result ty))
-      (match (or
-            (= (:bits result) 8)
-            (= (:bits result) 16)
-            (= (:bits result) 32)
-            (= (:bits result) 64))))
+      (match (= (:lanes result) 1)
+             (or
+                  (= (:bits result) 8)
+                  (= (:bits result) 16)
+                  (= (:bits result) 32)
+                  (= (:bits result) 64))))
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
 
@@ -3071,18 +3070,42 @@
             (_ Unit (emit (MInst.FpuMoveFromVec dst rn idx size))))
         dst))
 
-;; Helper for emitting `MInst.Extend` instructions.
+;; Helper for emitting instructions that perform zero-/sign-extension.
 (attr extend (veri chain))
 (decl extend (Reg bool u8 u8) Reg)
-(rule (extend rn signed from_bits to_bits)
+(rule extend_mov 1 (extend rn false 32 64)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.Extend dst rn signed from_bits to_bits))))
+            (_ Unit (emit (MInst.Mov (OperandSize.Size32) dst rn))))
         dst))
+(rule extend_bfm 0 (extend rn signed from_bits to_bits)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (size OperandSize (extend_bfm_size signed to_bits))
+            (bfm_op BfmOp (extend_bfm_op signed))
+            (immr UImm6 (u8_into_uimm6 0))
+            (imms UImm6 (u8_into_uimm6 (u8_sub from_bits 1)))
+            (_ Unit (emit (MInst.BitfieldMove size bfm_op dst rn immr imms))))
+        dst))
+
+;; Helper for `extend` to select the BFM operation
+(attr extend_bfm_op (veri chain))
+(decl extend_bfm_op (bool) BfmOp)
+(rule (extend_bfm_op true) (BfmOp.SBfm))
+(rule (extend_bfm_op false) (BfmOp.UBfm))
+
+;; Helper for `extend` to select the operand size
+(attr extend_bfm_size (veri chain))
+(decl extend_bfm_size (bool u8) OperandSize)
+(attr rule extend_bfm_size_64 (veri priority))
+(rule extend_bfm_size_64 1 (extend_bfm_size true 64) (OperandSize.Size64))
+(rule 0 (extend_bfm_size _ _) (OperandSize.Size32))
 
 ;; Helper for emitting `MInst.BitfieldMove` instructions.
 (attr bitfield_move (veri chain))
 (decl bitfield_move (Type BfmOp Reg UImm6 UImm6) Reg)
-(rule (bitfield_move ty bfm_op rn immr imms)
+;; TODO: `MInst.BitfieldMove`'s generated spec only covers the extend
+;; immediates, so the general `sbfm`/`ubfm` rules can't verify yet.
+(attr rule bitfield_move_inst (tag TODO))
+(rule bitfield_move_inst (bitfield_move ty bfm_op rn immr imms)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.BitfieldMove (operand_size ty) bfm_op dst rn immr imms))))
         dst))
@@ -5535,14 +5558,18 @@
 ;; Helper for emitting `MInst.JTSequence` instructions.
 ;; Emit the compound instruction that does:
 ;;
-;; b.hs default
-;; csel rB, xzr, rIndex, hs
+;; mov rB, #N            ; N = number of non-default targets
+;; csel rB, rIndex, rB, lo ; clamp out-of-bounds indices to N
 ;; csdb
 ;; adr rA, jt
 ;; ldrsw rB, [rA, rB, uxtw #2]
 ;; add rA, rA, rB
 ;; br rA
-;; [jt entries]
+;; jt: [N target entries] [default entry]
+;;
+;; The flags must be set by a comparison of `rIndex` against `N`.
+;; There is deliberately no conditional branch to the default target:
+;; its range would be limited, and the inline jump table may be large.
 ;;
 ;; This must be *one* instruction in the vcode because
 ;; we cannot allow regalloc to insert any spills/fills

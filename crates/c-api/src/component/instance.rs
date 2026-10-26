@@ -12,7 +12,7 @@ pub unsafe extern "C" fn wasmtime_component_instance_get_export_index(
     name: *const u8,
     name_len: usize,
 ) -> Option<Box<wasmtime_component_export_index_t>> {
-    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let name = unsafe { crate::slice_from_raw_parts(name, name_len) };
     let Ok(name) = std::str::from_utf8(name) else {
         return None;
     };

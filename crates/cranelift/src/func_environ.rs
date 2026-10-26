@@ -651,7 +651,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             | Operator::ReturnCall { .. }
             | Operator::ReturnCallRef { .. }
             | Operator::ReturnCallIndirect { .. }
-            | Operator::Throw { .. } | Operator::ThrowRef => {
+            | Operator::Throw { .. }
+            | Operator::ThrowRef
+            | Operator::Resume { .. }
+            | Operator::ResumeThrow { .. }
+            | Operator::ResumeThrowRef { .. }
+            | Operator::Suspend { .. }
+            | Operator::Switch { .. } => {
                 self.fuel_increment_var(builder);
                 self.fuel_save_from_var(builder);
             }
@@ -713,7 +719,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // After a function call we need to reload our fuel value since the
         // function may have changed it.
         match op {
-            Operator::Call { .. } | Operator::CallIndirect { .. } | Operator::CallRef { .. } => {
+            Operator::Call { .. }
+            | Operator::CallIndirect { .. }
+            | Operator::CallRef { .. }
+            | Operator::Resume { .. }
+            | Operator::ResumeThrow { .. }
+            | Operator::ResumeThrowRef { .. }
+            | Operator::Suspend { .. }
+            | Operator::Switch { .. } => {
                 self.fuel_load_into_var(builder);
             }
             Operator::Else => {
@@ -1680,6 +1693,7 @@ impl FuncEnvironment<'_> {
             bound,
             kind: MemoryKind::LinearMemory,
             memory,
+            imported: self.module.is_imported_memory(index),
             shadow,
         })
     }
@@ -1713,6 +1727,9 @@ impl FuncEnvironment<'_> {
             bound: VmctxLoadChain::new(smallvec![definition, len]),
             kind: MemoryKind::LinearMemory,
             memory,
+            // The shadow is as large as the memory, which may be larger than
+            // an import's declared minimum.
+            imported: self.module.is_imported_memory(index),
             shadow: None,
         })
     }
@@ -3513,12 +3530,82 @@ impl FuncEnvironment<'_> {
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         func_index: FuncIndex,
     ) -> WasmResult<ir::Value> {
-        let func_index = pos.ins().iconst(I32, func_index.as_u32() as i64);
-        let ref_func = self.builtin_functions.ref_func(&mut pos.func);
-        let vmctx = self.vmctx_val(&mut pos);
+        match self.module.defined_func_index(func_index) {
+            Some(def_index) => Ok(self.translate_ref_defined_func(&mut pos, def_index)),
+            // `VMFunctionImport` has the same layout as `VMFuncRef` and is
+            // fully initialized before any wasm runs, so a reference to an
+            // imported function is just a pointer into the `vmctx`.
+            None => {
+                let offset = self.offsets.imported_functions().at(func_index);
+                let vmctx = self.vmctx_val(&mut pos);
+                Ok(pos.ins().iadd_imm_s(vmctx, i64::from(offset)))
+            }
+        }
+    }
 
-        let call_inst = pos.ins().call(ref_func, &[vmctx, func_index]);
-        Ok(pos.func.dfg.first_result(call_inst))
+    fn translate_ref_defined_func(
+        &mut self,
+        pos: &mut FuncCursor<'_>,
+        def_index: DefinedFuncIndex,
+    ) -> ir::Value {
+        // NB: this mirrors `vm::Instance::initialize_and_return_funcref` and
+        // needs to be kept in-sync with that method.
+        let func_index = self.module.func_index(def_index);
+        let pointer_type = self.pointer_type();
+        let func = &self.module.functions[func_index];
+        assert!(func.is_escaping());
+        let func_ref_offset = self.offsets.func_refs().at(func.func_ref);
+        let sig = func.signature.unwrap_module_type_index();
+
+        let wasm_func = self.get_or_create_defined_func_ref(pos.func, def_index);
+        let wasm_call = pos.ins().func_addr(pointer_type, wasm_func);
+
+        let key = FuncKey::ArrayToWasmTrampoline(self.translation.module_index(), def_index);
+        let (namespace, index) = key.into_raw_parts();
+        let name = ir::ExternalName::User(
+            pos.func
+                .declare_imported_user_function(ir::UserExternalName { namespace, index }),
+        );
+        let signature = pos
+            .func
+            .import_signature(crate::array_call_signature(self.isa));
+        let array_func = pos.func.import_function(ir::ExtFuncData {
+            name,
+            signature,
+            colocated: true,
+            patchable: false,
+        });
+        let array_call = pos.ins().func_addr(pointer_type, array_func);
+
+        let type_index = self.module_interned_to_shared_ty(pos, sig);
+        let vmctx = self.vmctx_val(pos);
+
+        // Note that these fields by default are `#[readonly]` which would
+        // produce invalid CLIF with the default `store` method, so go out of
+        // our way to remove the `readonly` flag here for these lazily
+        // initialized fields.
+        let regions = &mut self.alias_regions;
+        regions
+            .vm_func_ref()
+            .array_call()
+            .relative_to(func_ref_offset)
+            .store_without_readonly(pos, vmctx, array_call);
+        regions
+            .vm_func_ref()
+            .wasm_call()
+            .relative_to(func_ref_offset)
+            .store_without_readonly(pos, vmctx, wasm_call);
+        regions
+            .vm_func_ref()
+            .vmctx()
+            .relative_to(func_ref_offset)
+            .store_without_readonly(pos, vmctx, vmctx);
+        regions
+            .vm_func_ref()
+            .type_index()
+            .relative_to(func_ref_offset)
+            .store_without_readonly(pos, vmctx, type_index);
+        pos.ins().iadd_imm_s(vmctx, i64::from(func_ref_offset))
     }
 
     pub(crate) fn translate_global_get(
@@ -3557,7 +3644,9 @@ impl FuncEnvironment<'_> {
                         if global_ty.mutability || gc::gc_compiler(self)?.is_moving_collector() {
                             ir::MemFlagsData::trusted()
                         } else {
-                            ir::MemFlagsData::trusted().with_readonly().with_can_move()
+                            ir::MemFlagsData::trusted()
+                                .with_readonly(true)
+                                .with_can_move(true)
                         };
                     flags.set_alias_region(Some(region));
                     gc::gc_compiler(self)?

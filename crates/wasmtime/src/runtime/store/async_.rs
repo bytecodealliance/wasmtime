@@ -4,7 +4,7 @@ use crate::fiber::{self};
 use crate::prelude::*;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMStore;
-use crate::store::{Asyncness, ResourceLimiterInner, StoreInner, StoreOpaque};
+use crate::store::{AsContextMut, Asyncness, ResourceLimiterInner, StoreInner, StoreOpaque};
 use crate::{Store, StoreContextMut, UpdateDeadline};
 
 /// An object that can take callbacks when the runtime enters or exits hostcalls.
@@ -141,9 +141,42 @@ impl<T> Store<T> {
     pub fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
         self.inner.epoch_deadline_async_yield_and_update(delta);
     }
+
+    /// Sets the maximum number of simultaneously-live fibers permitted in this
+    /// store.
+    ///
+    /// Async entrypoints in Wasmtime, such as [`Func::call_async`] will
+    /// allocate fibers to execute WebAssembly code on. Fibers are additionally
+    /// used for implementing component model async-related primitives. Fibers
+    /// represent an allocated chunk of the host process's virtual address space
+    /// for use as a temporary native stack. Due to the cost of a fiber
+    /// allocation they're limited by default per-store with the ability for
+    /// embedders to tune limits as desired.
+    ///
+    /// Attempts to exceed this limit will be met with an immediate error. For
+    /// example [`Func::call_async`] will return an error when this limit is
+    /// reached.
+    ///
+    /// The limit counts live fibers, so a fiber returns budget once it
+    /// completes. Lowering it below the current live count does not affect
+    /// existing fibers, only blocks new ones until the count falls back under
+    /// it. A limit of 0 makes every async entry point fail.
+    ///
+    /// The default value for this is 64 fibers.
+    ///
+    /// [`Engine`]: crate::Engine
+    /// [`Func::call_async`]: crate::Func::call_async
+    pub fn set_max_fibers(&mut self, limit: u32) {
+        self.as_context_mut().set_max_fibers(limit)
+    }
 }
 
 impl<'a, T> StoreContextMut<'a, T> {
+    /// See [`Store::set_max_fibers`].
+    pub fn set_max_fibers(&mut self, limit: u32) {
+        self.0.async_state.max_fibers = limit;
+    }
+
     /// Perform garbage collection of `ExternRef`s.
     ///
     /// Same as [`Store::gc`].
@@ -203,13 +236,19 @@ impl<T> StoreInner<T> {
 #[doc(hidden)]
 impl StoreOpaque {
     pub(crate) fn allocate_fiber_stack(&mut self) -> Result<wasmtime_fiber::FiberStack> {
-        if let Some(stack) = self.async_state.last_fiber_stack().take() {
-            return Ok(stack);
+        if self.async_state.live_fibers >= self.async_state.max_fibers {
+            bail!("store limit of fibers has been reached");
         }
-        self.engine().allocator().allocate_fiber_stack()
+        let stack = match self.async_state.last_fiber_stack().take() {
+            Some(stack) => stack,
+            None => self.engine().allocator().allocate_fiber_stack()?,
+        };
+        self.async_state.live_fibers += 1;
+        Ok(stack)
     }
 
     pub(crate) fn deallocate_fiber_stack(&mut self, stack: wasmtime_fiber::FiberStack) {
+        self.async_state.live_fibers -= 1;
         self.flush_fiber_stack();
         *self.async_state.last_fiber_stack() = Some(stack);
     }

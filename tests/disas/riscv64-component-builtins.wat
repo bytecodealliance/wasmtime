@@ -14,11 +14,11 @@
 ;;     region0 = 123 ""
 ;;     region1 = 85 ""
 ;;     region2 = 72 ""
-;;     region3 = 38 ""
-;;     region4 = 245 ""
-;;     region5 = 117 ""
+;;     region3 = 17 ""
+;;     region4 = 99 ""
+;;     region5 = 112 ""
 ;;     region6 = 12 ""
-;;     region7 = 184 ""
+;;     region7 = 233 ""
 ;;     sig0 = (i64 sext, i32 sext, i32 sext, i32 sext) -> i64 sext system_v
 ;;     sig1 = (i64 sext vmctx) system_v
 ;;
@@ -40,7 +40,7 @@
 ;;
 ;; block1 cold:
 ;;     v14 = load.i64 notrap aligned readonly can_move region6 v1+16
-;;     v15 = load.i64 notrap aligned readonly can_move region7 v14+328
+;;     v15 = load.i64 notrap aligned readonly can_move region7 v14+320
 ;;     call_indirect sig1, v15(v1)
 ;;     trap user1
 ;;

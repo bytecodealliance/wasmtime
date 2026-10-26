@@ -105,14 +105,7 @@ struct PytorchExecutionContext {
 /// See [PR #77](https://github.com/WebAssembly/wasi-nn/pull/77), at which point multiple named parameters for `Tensor` inputs is planned to be supported in pytorch backend.
 impl BackendExecutionContext for PytorchExecutionContext {
     fn set_input(&mut self, id: Id, input_tensor: &Tensor) -> Result<(), BackendError> {
-        let kind = input_tensor.ty.try_into()?;
-        let dimensions = input_tensor
-            .dimensions
-            .iter()
-            .map(|&dim| dim as i64)
-            .collect::<Vec<_>>();
-        let tensor = TchTensor::from_data_size(&input_tensor.data, &dimensions, kind)
-            .to_device(map_execution_target_to_string(self.target));
+        let tensor = to_tch_tensor(input_tensor, self.target)?;
         match id {
             Id::Index(i) => {
                 // Check if id_type is already set and if it matches the current id type
@@ -165,16 +158,7 @@ impl BackendExecutionContext for PytorchExecutionContext {
                 self.inputs.clear();
                 self.id_type = None;
                 for input in &inputs {
-                    let kind = input.tensor.ty.try_into()?;
-                    let dimensions = input
-                        .tensor
-                        .dimensions
-                        .iter()
-                        .map(|&dim| dim as i64)
-                        .collect::<Vec<_>>();
-
-                    let tensor = TchTensor::from_data_size(&input.tensor.data, &dimensions, kind)
-                        .to_device(map_execution_target_to_string(self.target));
+                    let tensor = to_tch_tensor(&input.tensor, self.target)?;
                     self.inputs.push(Some(tensor));
 
                     // Set ID type to Name since we're using named tensors
@@ -250,6 +234,42 @@ impl BackendExecutionContext for PytorchExecutionContext {
     }
 }
 
+/// Converts a wasi-nn [`Tensor`] into a PyTorch tensor on `target`.
+///
+/// `TchTensor::from_data_size` copies as many bytes as the dimensions and
+/// element type call for without looking at the length of the data, so check
+/// that the guest-provided data is exactly that size first.
+fn to_tch_tensor(tensor: &Tensor, target: ExecutionTarget) -> Result<TchTensor, BackendError> {
+    let kind: Kind = tensor.ty.try_into()?;
+    let expected = tensor
+        .dimensions
+        .iter()
+        .try_fold(kind.elt_size_in_bytes(), |count, &dim| {
+            count.checked_mul(usize::try_from(dim).ok()?)
+        })
+        .ok_or_else(|| {
+            BackendError::BackendAccess(wasmtime::format_err!(
+                "tensor dimensions are too large: {:?}",
+                tensor.dimensions
+            ))
+        })?;
+    if tensor.data.len() != expected {
+        return Err(BackendError::BackendAccess(wasmtime::format_err!(
+            "input tensor has {} bytes of data but dimensions {:?} of type {:?} need {expected} bytes",
+            tensor.data.len(),
+            tensor.dimensions,
+            tensor.ty
+        )));
+    }
+    let dimensions = tensor
+        .dimensions
+        .iter()
+        .map(|&dim| dim as i64)
+        .collect::<Vec<_>>();
+    Ok(TchTensor::from_data_size(&tensor.data, &dimensions, kind)
+        .to_device(map_execution_target_to_string(target)))
+}
+
 fn map_execution_target_to_string(target: ExecutionTarget) -> Device {
     match target {
         ExecutionTarget::Cpu => Device::Cpu,
@@ -311,5 +331,25 @@ impl TryFrom<Kind> for TensorType {
 impl From<TchError> for BackendError {
     fn from(e: TchError) -> Self {
         BackendError::BackendAccess(wasmtime::Error::new(e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn to_tch_tensor_checks_data_length() {
+        let exact = Tensor::new(vec![2, 3], TensorType::Fp32, vec![0; 24]);
+        assert!(to_tch_tensor(&exact, ExecutionTarget::Cpu).is_ok());
+
+        let short = Tensor::new(vec![4096], TensorType::Fp32, vec![0; 4]);
+        assert!(to_tch_tensor(&short, ExecutionTarget::Cpu).is_err());
+
+        let long = Tensor::new(vec![2], TensorType::Fp16, vec![0; 8]);
+        assert!(to_tch_tensor(&long, ExecutionTarget::Cpu).is_err());
+
+        let huge = Tensor::new(vec![u32::MAX; 4], TensorType::I64, vec![]);
+        assert!(to_tch_tensor(&huge, ExecutionTarget::Cpu).is_err());
     }
 }

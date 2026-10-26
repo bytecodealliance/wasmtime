@@ -1,0 +1,65 @@
+; There is no AArch64 lowering for `fpromote` or `fdemote` with an `f16` or
+; `f128` operand or result. Compilation must fail cleanly with an
+; unsupported-feature error rather than miscompiling.
+test compile expect-fail
+target aarch64
+
+function %fpromote_f16_f32(f16) -> f32 {
+block0(v0: f16):
+    v1 = fpromote.f32 v0
+    return v1
+}
+
+function %fpromote_f16_f64(f16) -> f64 {
+block0(v0: f16):
+    v1 = fpromote.f64 v0
+    return v1
+}
+
+function %fpromote_f16_f128(f16) -> f128 {
+block0(v0: f16):
+    v1 = fpromote.f128 v0
+    return v1
+}
+
+function %fpromote_f32_f128(f32) -> f128 {
+block0(v0: f32):
+    v1 = fpromote.f128 v0
+    return v1
+}
+
+function %fpromote_f64_f128(f64) -> f128 {
+block0(v0: f64):
+    v1 = fpromote.f128 v0
+    return v1
+}
+
+function %fdemote_f32_f16(f32) -> f16 {
+block0(v0: f32):
+    v1 = fdemote.f16 v0
+    return v1
+}
+
+function %fdemote_f64_f16(f64) -> f16 {
+block0(v0: f64):
+    v1 = fdemote.f16 v0
+    return v1
+}
+
+function %fdemote_f128_f16(f128) -> f16 {
+block0(v0: f128):
+    v1 = fdemote.f16 v0
+    return v1
+}
+
+function %fdemote_f128_f32(f128) -> f32 {
+block0(v0: f128):
+    v1 = fdemote.f32 v0
+    return v1
+}
+
+function %fdemote_f128_f64(f128) -> f64 {
+block0(v0: f128):
+    v1 = fdemote.f64 v0
+    return v1
+}

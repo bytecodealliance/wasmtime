@@ -142,12 +142,6 @@ use wasmtime_environ::{
     component::{Component, VMComponentOffsets},
 };
 
-fn round_up_to_pow2(n: usize, to: usize) -> usize {
-    debug_assert!(to > 0);
-    debug_assert!(to.is_power_of_two());
-    (n + to - 1) & !(to - 1)
-}
-
 impl PoolingAllocationConfig {
     /// Tests whether [`Self::pagemap_scan`] is available or not on the host
     /// system.
@@ -313,11 +307,11 @@ impl PoolingInstanceAllocator {
         })
     }
 
-    fn core_instance_size(&self) -> usize {
-        round_up_to_pow2(
-            self.config.limits.core_instance_size,
-            mem::align_of::<Instance>(),
-        )
+    fn max_core_instance_size(&self) -> Option<usize> {
+        self.config
+            .limits
+            .core_instance_size
+            .checked_next_multiple_of(mem::align_of::<Instance>())
     }
 
     fn validate_table_plans(&self, module: &Module) -> Result<()> {
@@ -330,7 +324,11 @@ impl PoolingInstanceAllocator {
 
     fn validate_core_instance_size(&self, offsets: &VMOffsets<HostPtr>) -> Result<()> {
         let layout = Instance::alloc_layout(offsets);
-        if layout.size() <= self.core_instance_size() {
+        let Some(max) = self.max_core_instance_size() else {
+            return Ok(());
+        };
+
+        if layout.size() <= max {
             return Ok(());
         }
 
@@ -344,9 +342,8 @@ impl PoolingInstanceAllocator {
         let mut message = format!(
             "instance allocation for this module \
              requires {} bytes which exceeds the configured maximum \
-             of {} bytes; breakdown of allocation requirement:\n\n",
+             of {max} bytes; breakdown of allocation requirement:\n\n",
             layout.size(),
-            self.core_instance_size(),
         );
 
         let mut remaining = layout.size();

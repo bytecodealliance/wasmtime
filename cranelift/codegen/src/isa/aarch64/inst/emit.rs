@@ -1575,8 +1575,8 @@ impl MachInstEmit for Inst {
                 let size = OperandSize::from_ty(ty);
                 let sign_ext = match op {
                     AtomicRMWLoopOp::Smin | AtomicRMWLoopOp::Smax => match ty {
-                        I16 => Some((ExtendOp::SXTH, 16)),
-                        I8 => Some((ExtendOp::SXTB, 8)),
+                        I16 => Some(ExtendOp::SXTH),
+                        I8 => Some(ExtendOp::SXTB),
                         _ => None,
                     },
                     _ => None,
@@ -1590,16 +1590,8 @@ impl MachInstEmit for Inst {
                     _ => None,
                 };
                 // sxt{b|h} the loaded result if necessary.
-                if sign_ext.is_some() {
-                    let (_, from_bits) = sign_ext.unwrap();
-                    Inst::Extend {
-                        rd: x27wr,
-                        rn: x27,
-                        signed: true,
-                        from_bits,
-                        to_bits: size.bits(),
-                    }
-                    .emit(sink, emit_info, state);
+                if let Some(op) = sign_ext {
+                    Inst::gen_extend(x27wr, x27, op, size).emit(sink, emit_info, state);
                 }
 
                 match op {
@@ -1641,7 +1633,7 @@ impl MachInstEmit for Inst {
                             _ => unreachable!(),
                         };
 
-                        if let Some(extendop) = sign_ext.map(|(op, _)| op).or(zero_ext) {
+                        if let Some(extendop) = sign_ext.or(zero_ext) {
                             Inst::AluRRRExtend {
                                 alu_op: ALUOp::SubS,
                                 size,
@@ -1949,7 +1941,7 @@ impl MachInstEmit for Inst {
                 /* Emit this:
                     again:
                      ldaxr{,b,h} x/w27, [x25]
-                     cmp         x27, x/w26 uxt{b,h}
+                     cmp         x/w27, x/w26 uxt{b,h}
                      b.ne        out
                      stlxr{,b,h} w24, x/w28, [x25]
                      cbnz        x24, again
@@ -1980,14 +1972,20 @@ impl MachInstEmit for Inst {
                 // ldaxr x27, [x25]
                 sink.put4(enc_ldaxr(ty, x27wr, x25));
 
-                // The top 32-bits are zero-extended by the ldaxr so we don't
-                // have to use UXTW, just the x-form of the register.
-                let (bit21, extend_op) = match ty {
-                    I8 => (0b1, 0b000000),
-                    I16 => (0b1, 0b001000),
-                    _ => (0b0, 0b000000),
+                // The top 32-bits are zero-extended by the ldaxr so for I64
+                // we don't have to use UXTW, just the x-form of the
+                // register. I8/I16 use UXTB/UXTH to only compare their
+                // respective widths, and I32 uses the w-form of the
+                // register (`sf` cleared) to only compare the low 32 bits,
+                // since the expected value may have garbage in its upper
+                // 32 bits (e.g. left behind by an `ireduce`).
+                let (sf, bit21, extend_op) = match ty {
+                    I8 => (0b1, 0b1, 0b000000),
+                    I16 => (0b1, 0b1, 0b001000),
+                    I32 => (0b0, 0b0, 0b000000),
+                    _ => (0b1, 0b0, 0b000000),
                 };
-                let bits_31_21 = 0b111_01011_000 | bit21;
+                let bits_31_21 = (sf << 10) | 0b011_01011_000 | bit21;
                 // cmp x27, x26 (== subs xzr, x27, x26)
                 sink.put4(enc_arith_rrr(bits_31_21, extend_op, xzrwr, x27, x26));
 
@@ -3354,57 +3352,6 @@ impl MachInstEmit for Inst {
             &Inst::MovFromNZCV { rd } => {
                 sink.put4(0xd53b4200 | machreg_to_gpr(rd.to_reg()));
             }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed: false,
-                from_bits: 1,
-                to_bits,
-            } => {
-                assert!(to_bits <= 64);
-                // Reduce zero-extend-from-1-bit to:
-                // - and rd, rn, #1
-                // Note: This is special cased as UBFX may take more cycles
-                // than AND on smaller cores.
-                let imml = ImmLogic::maybe_from_u64(1, I32).unwrap();
-                Inst::AluRRImmLogic {
-                    alu_op: ALUOp::And,
-                    size: OperandSize::Size32,
-                    rd,
-                    rn,
-                    imml,
-                }
-                .emit(sink, emit_info, state);
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed: false,
-                from_bits: 32,
-                to_bits: 64,
-            } => {
-                let mov = Inst::Mov {
-                    size: OperandSize::Size32,
-                    rd,
-                    rm: rn,
-                };
-                mov.emit(sink, emit_info, state);
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed,
-                from_bits,
-                to_bits,
-            } => {
-                let (bfm_op, size) = if signed {
-                    (BfmOp::SBfm, OperandSize::from_bits(to_bits))
-                } else {
-                    (BfmOp::UBfm, OperandSize::Size32)
-                };
-                let opc = bfm_op.opc();
-                sink.put4(enc_bfm(opc, size, rd, rn, 0, from_bits - 1));
-            }
             &Inst::BitfieldMove {
                 size,
                 bfm_op,
@@ -3683,25 +3630,28 @@ impl MachInstEmit for Inst {
                 // emission time, because we cannot allow the regalloc to insert spills/reloads in
                 // the middle; we depend on hardcoded PC-rel addressing below.
 
-                // Branch to default when condition code from prior comparison indicates.
-                let br =
-                    enc_conditional_br(BranchTarget::Label(default), CondBrKind::Cond(Cond::Hs));
-
-                // No need to inform the sink's branch folding logic about this branch, because it
-                // will not be merged with any other branch, flipped, or elided (it is not preceded
-                // or succeeded by any other branch). Just emit it with the label use.
-                let default_br_offset = sink.cur_offset();
-                sink.use_label_at_offset(default_br_offset, default, LabelUse::Branch19);
-                sink.put4(br);
-
-                // Overwrite the index with a zero when the above
-                // branch misspeculates (Spectre mitigation). Save the
-                // resulting index in rtmp2.
+                // The default target is stored as the last entry in the
+                // jump table (at index `targets.len()`), and we clamp the
+                // index to that entry when it is out of bounds. This avoids
+                // any conditional branch to the default target: such a
+                // branch would have limited range, and the inline jump
+                // table that follows it can be arbitrarily large.
+                //
+                // The flags are set by a prior comparison of `ridx` against
+                // `targets.len()`; "lo" (unsigned less-than) means in-bounds.
+                let default_index = u64::try_from(targets.len()).unwrap();
+                for inst in Inst::load_constant(rtmp2, default_index) {
+                    inst.emit(sink, emit_info, state);
+                }
+                // Clamp the index: in-bounds indices are kept, and
+                // out-of-bounds indices select the default entry. This is
+                // also the Spectre mitigation, since there is no
+                // conditional branch to mispredict.
                 let inst = Inst::CSel {
                     rd: rtmp2,
-                    cond: Cond::Hs,
-                    rn: zero_reg(),
-                    rm: ridx,
+                    cond: Cond::Lo,
+                    rn: ridx,
+                    rm: rtmp2.to_reg(),
                 };
                 inst.emit(sink, emit_info, state);
                 // Prevent any data value speculation if spectre mitigations are
@@ -3742,9 +3692,10 @@ impl MachInstEmit for Inst {
                     targets: vec![],
                 };
                 inst.emit(sink, emit_info, state);
-                // Emit jump table (table of 32-bit offsets).
+                // Emit jump table (table of 32-bit offsets), with the
+                // default target as the final entry.
                 let jt_off = sink.cur_offset();
-                for &target in targets.iter() {
+                for &target in targets.iter().chain(core::iter::once(&default)) {
                     let word_off = sink.cur_offset();
                     // off_into_table is an addend here embedded in the label to be later patched
                     // at the end of codegen. The offset is initially relative to this jump table

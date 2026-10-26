@@ -70,6 +70,25 @@ TEST(types, component_instance) {
   EXPECT_EQ(resource_ty, ty2.export_get(engine, "t")->type().resource());
 }
 
+TEST(types, empty_name) {
+  Engine engine;
+
+  auto component = Component::compile(engine, R"(
+(component
+  (import "x" (instance $a (export "t" (type (sub resource)))))
+  (export "x" (instance $a))
+)
+      )")
+                       .unwrap()
+                       .type();
+
+  // A default `std::string_view` has a null data pointer.
+  EXPECT_FALSE(component.import_get(engine, std::string_view{}));
+  EXPECT_FALSE(component.export_get(engine, std::string_view{}));
+  auto ty = component.import_get(engine, "x")->type().component_instance();
+  EXPECT_FALSE(ty.export_get(engine, std::string_view{}));
+}
+
 TEST(types, component_func) {
   Engine engine;
 

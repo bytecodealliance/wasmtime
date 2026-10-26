@@ -1,9 +1,10 @@
+use crate::PanicOnOom as _;
 use crate::component::*;
 use crate::error::{Result, bail};
 use crate::prelude::*;
 use crate::{
-    EngineOrModuleTypeIndex, EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, TypeConvert,
-    WasmHeapType,
+    EngineOrModuleTypeIndex, EntityType, ModuleInternedTypeIndex, ModuleTypes, ModuleTypesBuilder,
+    PrimaryMap, TypeConvert, TypeIndex, WasmHeapType, WasmparserTypeConverter,
 };
 use cranelift_entity::EntityRef;
 use std::collections::HashMap;
@@ -76,7 +77,11 @@ macro_rules! intern_and_fill_flat_types {
         if let Some(idx) = $me.$name.get(&$val) {
             *idx
         } else {
-            let idx = $me.component_types.$name.push($val.clone());
+            let idx = $me
+                .component_types
+                .$name
+                .push($val.clone_panic_on_oom())
+                .panic_on_oom();
             let mut info = TypeInformation::new();
             info.$name($me, &$val);
             let idx2 = $me.type_info.$name.push(info);
@@ -118,7 +123,7 @@ impl ComponentTypesBuilder {
 
     fn export_type_def(
         &mut self,
-        export_items: &PrimaryMap<ExportIndex, Export>,
+        export_items: &TryPrimaryMap<ExportIndex, Export>,
         idx: ExportIndex,
     ) -> TypeDef {
         match &export_items[idx] {
@@ -137,18 +142,28 @@ impl ComponentTypesBuilder {
     pub fn finish(mut self, component: &Component) -> (ComponentTypes, TypeComponentIndex) {
         let mut component_ty = TypeComponent::default();
         for (_, (name, ty)) in component.import_types.iter() {
-            component_ty.imports.insert(name.clone(), ty.clone());
+            component_ty
+                .imports
+                .insert(name.clone_panic_on_oom(), ty.clone_panic_on_oom())
+                .panic_on_oom();
         }
         for (name, (ty, data)) in component.exports.raw_iter() {
-            component_ty.exports.insert(
-                name.clone_panic_on_oom().into(),
-                ComponentExtern {
-                    data: data.clone(),
-                    ty: self.export_type_def(&component.export_items, *ty),
-                },
-            );
+            component_ty
+                .exports
+                .insert(
+                    name.clone_panic_on_oom(),
+                    ComponentExtern {
+                        data: data.clone_panic_on_oom(),
+                        ty: self.export_type_def(&component.export_items, *ty),
+                    },
+                )
+                .panic_on_oom();
         }
-        let ty = self.component_types.components.push(component_ty);
+        let ty = self
+            .component_types
+            .components
+            .push(component_ty)
+            .panic_on_oom();
 
         self.component_types.module_types = Some(self.module_types.finish());
         (self.component_types, ty)
@@ -176,6 +191,16 @@ impl ComponentTypesBuilder {
     /// `TypeResourceTableIndex`.
     pub fn num_resource_tables(&self) -> usize {
         self.component_types.resource_tables.len()
+    }
+
+    /// Forwards to `ComponentTypes::resource_owned_by_own_instance`.
+    pub fn resource_owned_by_own_instance(
+        &self,
+        ty: TypeResourceTableIndex,
+        defined_resource_instance: impl FnOnce(ResourceIndex) -> Option<RuntimeComponentInstanceIndex>,
+    ) -> bool {
+        self.component_types
+            .resource_owned_by_own_instance(ty, defined_resource_instance)
     }
 
     /// Returns the number of future tables allocated so far, or the maximum
@@ -216,7 +241,11 @@ impl ComponentTypesBuilder {
     ) -> Result<TypeFuncIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
-        let param_names = ty.params.iter().map(|(name, _)| name.to_string()).collect();
+        let param_names = ty
+            .params
+            .iter()
+            .map(|(name, _)| TryString::try_from(name.as_str()))
+            .try_collect::<TryVec<_>, _>()?;
         let params = ty
             .params
             .iter()
@@ -248,8 +277,8 @@ impl ComponentTypesBuilder {
         Ok(ComponentExtern {
             ty: self.convert_component_entity_type(types, ty.ty)?,
             data: ComponentExternData {
-                implements: ty.implements.clone(),
-                external_id: ty.external_id.clone(),
+                implements: ty.implements.clone().map(Into::into),
+                external_id: ty.external_id.clone().map(Into::into),
             },
         })
     }
@@ -316,15 +345,15 @@ impl ComponentTypesBuilder {
             self.register_abstract_component_entity_type(types, ty.ty);
             result
                 .imports
-                .insert(name.clone(), self.convert_component_item(types, ty)?);
+                .insert(name.clone().into(), self.convert_component_item(types, ty)?)?;
         }
         for (name, ty) in ty.exports.iter() {
             self.register_abstract_component_entity_type(types, ty.ty);
             result
                 .exports
-                .insert(name.clone(), self.convert_component_item(types, ty)?);
+                .insert(name.clone().into(), self.convert_component_item(types, ty)?)?;
         }
-        Ok(self.component_types.components.push(result))
+        Ok(self.component_types.components.push(result)?)
     }
 
     pub(crate) fn convert_instance(
@@ -339,9 +368,9 @@ impl ComponentTypesBuilder {
             self.register_abstract_component_entity_type(types, ty.ty);
             result
                 .exports
-                .insert(name.clone(), self.convert_component_item(types, ty)?);
+                .insert(name.clone().into(), self.convert_component_item(types, ty)?)?;
         }
-        Ok(self.component_types.component_instances.push(result))
+        Ok(self.component_types.component_instances.push(result)?)
     }
 
     fn register_abstract_component_entity_type(
@@ -371,16 +400,16 @@ impl ComponentTypesBuilder {
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
             result.imports.insert(
-                (module.clone(), field.clone()),
+                (module.clone().into(), field.clone().into()),
                 self.entity_type(types, ty)?,
-            );
+            )?;
         }
         for (name, ty) in ty.exports.iter() {
             result
                 .exports
-                .insert(name.clone(), self.entity_type(types, ty)?);
+                .insert(name.clone().into(), self.entity_type(types, ty)?)?;
         }
-        Ok(self.component_types.modules.push(result))
+        Ok(self.component_types.modules.push(result)?)
     }
 
     fn entity_type(
@@ -397,9 +426,17 @@ impl ComponentTypesBuilder {
                     .intern_type(types, *id)?
                     .into()
             }),
-            Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
+            Table(ty) => {
+                self.intern_ref_type(types, ty.element_type)?;
+                EntityType::Table(self.convert_table_type(ty)?)
+            }
             Memory(ty) => EntityType::Memory((*ty).into()),
-            Global(ty) => EntityType::Global(self.convert_global_type(ty)?),
+            Global(ty) => {
+                if let wasmparser::ValType::Ref(r) = ty.content_type {
+                    self.intern_ref_type(types, r)?;
+                }
+                EntityType::Global(self.convert_global_type(ty)?)
+            }
             Tag(id) => {
                 let func = self.module_types_builder_mut().intern_type(types, *id)?;
                 let exc = self
@@ -412,6 +449,15 @@ impl ComponentTypesBuilder {
             }
             FuncExact(_) => bail!("custom-descriptors proposal not implemented"),
         })
+    }
+
+    /// Interns the concrete type, if any, referenced by `ty` so that it can
+    /// subsequently be converted with this builder's `TypeConvert` impl.
+    fn intern_ref_type(&mut self, types: TypesRef<'_>, ty: wasmparser::RefType) -> Result<()> {
+        if let Some(id) = ty.type_index().and_then(|i| i.as_core_type_id()) {
+            self.module_types_builder_mut().intern_type(types, id)?;
+        }
+        Ok(())
     }
 
     /// Convert a wasmparser `ComponentDefinedTypeId` into Wasmtime's type representation.
@@ -505,11 +551,11 @@ impl ComponentTypesBuilder {
             .iter()
             .map(|(name, ty)| {
                 Ok(RecordField {
-                    name: name.to_string(),
+                    name: TryString::try_from(name.as_str())?,
                     ty: self.valtype(types, ty)?,
                 })
             })
-            .collect::<Result<Box<[_]>>>()?;
+            .try_collect::<TryVec<_>, Error>()?;
         let abi = CanonicalAbiInfo::record(
             fields
                 .iter()
@@ -525,14 +571,14 @@ impl ComponentTypesBuilder {
             .iter()
             .map(|(name, case)| {
                 Ok((
-                    name.to_string(),
+                    TryString::try_from(name.as_str())?,
                     match &case.ty.as_ref() {
                         Some(ty) => Some(self.valtype(types, ty)?),
                         None => None,
                     },
                 ))
             })
-            .collect::<Result<IndexMap<_, _>>>()?;
+            .try_collect::<TryIndexMap<_, _>, Error>()?;
         let (info, abi) = VariantInfo::new(
             cases
                 .iter()
@@ -557,7 +603,10 @@ impl ComponentTypesBuilder {
                 .iter()
                 .map(|ty| self.component_types.canonical_abi(ty)),
         );
-        self.add_tuple_type(TypeTuple { types, abi })
+        self.add_tuple_type(TypeTuple {
+            types: types.into(),
+            abi,
+        })
     }
 
     fn fixed_length_list_type(
@@ -586,7 +635,11 @@ impl ComponentTypesBuilder {
 
     fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
         let flags = TypeFlags {
-            names: flags.iter().map(|s| s.to_string()).collect(),
+            names: flags
+                .iter()
+                .map(|s| TryString::try_from(s.as_str()))
+                .try_collect::<TryIndexSet<_>, _>()
+                .panic_on_oom(),
             abi: CanonicalAbiInfo::flags(flags.len()),
         };
         self.add_flags_type(flags)
@@ -595,8 +648,9 @@ impl ComponentTypesBuilder {
     fn enum_type(&mut self, variants: &IndexSet<KebabString>) -> TypeEnumIndex {
         let names = variants
             .iter()
-            .map(|s| s.to_string())
-            .collect::<IndexSet<_>>();
+            .map(|s| TryString::try_from(s.as_str()))
+            .try_collect::<TryIndexSet<_>, _>()
+            .panic_on_oom();
         let (info, abi) = VariantInfo::new(names.iter().map(|_| None));
         self.add_enum_type(TypeEnum { names, abi, info })
     }
@@ -910,24 +964,36 @@ impl ComponentTypesBuilder {
 }
 
 impl TypeConvert for ComponentTypesBuilder {
-    fn lookup_heap_type(&self, _index: wasmparser::UnpackedIndex) -> WasmHeapType {
-        panic!("heap types are not supported yet")
+    fn lookup_heap_type(&self, index: wasmparser::UnpackedIndex) -> WasmHeapType {
+        self.module_type_converter().lookup_heap_type(index)
     }
 
-    fn lookup_type_index(&self, _index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
-        panic!("typed references are not supported yet")
+    fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
+        self.module_type_converter().lookup_type_index(index)
     }
 }
 
-fn intern<T, U>(map: &mut HashMap<T, U>, list: &mut PrimaryMap<U, T>, item: T) -> U
+impl ComponentTypesBuilder {
+    fn module_type_converter(
+        &self,
+    ) -> WasmparserTypeConverter<'_, impl Fn(TypeIndex) -> ModuleInternedTypeIndex> {
+        // Types at the component level are always referred to by their
+        // canonicalized `CoreTypeId`, never by a module-relative index.
+        WasmparserTypeConverter::new(&self.module_types, |_| {
+            unreachable!("component-level types don't use module type indices")
+        })
+    }
+}
+
+fn intern<T, U>(map: &mut HashMap<T, U>, list: &mut TryPrimaryMap<U, T>, item: T) -> U
 where
-    T: Hash + Clone + Eq,
+    T: Hash + TryClone + Eq,
     U: Copy + EntityRef,
 {
     if let Some(idx) = map.get(&item) {
         return *idx;
     }
-    let idx = list.push(item.clone());
+    let idx = list.push(item.clone_panic_on_oom()).panic_on_oom();
     map.insert(item, idx);
     return idx;
 }

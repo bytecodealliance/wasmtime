@@ -146,7 +146,51 @@ impl MemoryImage {
         Ok(None)
     }
 
-    unsafe fn map_at(&self, mmap_base: &MmapOffset) -> Result<()> {
+    /// Offset, in bytes, within linear memory at which this image starts.
+    pub(crate) fn linear_memory_offset(&self) -> usize {
+        self.linear_memory_offset.byte_count()
+    }
+
+    /// Length, in bytes, of this image.
+    pub(crate) fn len(&self) -> usize {
+        self.len.byte_count()
+    }
+
+    /// The bytes of this image, as stored in the module's data.
+    /// The length is exactly [`self.len`](Self::len).
+    pub(crate) fn data(&self) -> &[u8] {
+        &self.module_source.wasm_data()[self.module_source_offset..][..self.len.byte_count()]
+    }
+
+    /// Maps this image at `base + self.linear_memory_offset`.
+    ///
+    /// # Safety
+    ///
+    /// See [`crate::MemoryImage::map_at`].
+    pub(crate) unsafe fn map_at_ptr(&self, base: *mut u8) -> Result<()> {
+        if base.addr() % host_page_size() != 0 {
+            bail!("cannot map a memory image at {base:p}: not host-page-aligned");
+        }
+        if self.len.is_zero() {
+            return Ok(());
+        }
+        unsafe {
+            self.source.map_at(
+                base.add(self.linear_memory_offset.byte_count()),
+                self.source_offset,
+                self.len.byte_count(),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Maps this image into `mmap_base + self.linear_memory_offset`.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that no one else has a reference to the range
+    /// of `mmap_base` being mapped over.
+    pub(crate) unsafe fn map_at(&self, mmap_base: &MmapOffset) -> Result<()> {
         unsafe {
             mmap_base.map_image_at(
                 &self.source,
@@ -302,6 +346,10 @@ impl ModuleMemoryImages {
 /// original mappings, effectively resetting everything back to its initial
 /// state. Non-linux platforms will replace all memory below `self.accessible`
 /// with a fresh zero'd mmap, meaning that reuse is effectively not supported.
+#[cfg_attr(
+    not(feature = "pooling-allocator"),
+    expect(dead_code, reason = "only used by the pooling allocator")
+)]
 pub struct MemoryImageSlot {
     /// The mmap and offset within it that contains the linear memory for this
     /// slot.
@@ -359,6 +407,10 @@ impl fmt::Debug for MemoryImageSlot {
     }
 }
 
+#[cfg_attr(
+    not(feature = "pooling-allocator"),
+    expect(dead_code, reason = "only used by the pooling allocator")
+)]
 impl MemoryImageSlot {
     /// Create a new MemoryImageSlot. Assumes that there is an anonymous
     /// mmap backing in the given range to start.
@@ -540,7 +592,11 @@ impl MemoryImageSlot {
     ///
     /// Returns the number of bytes still resident in memory after this function
     /// has returned.
-    #[allow(dead_code, reason = "only used in some cfgs")]
+
+    #[cfg_attr(
+        not(feature = "pooling-allocator"),
+        expect(dead_code, reason = "only used by the pooling allocator")
+    )]
     pub(crate) fn clear_and_remain_ready(
         &mut self,
         pagemap: Option<&PageMap>,
@@ -556,7 +612,10 @@ impl MemoryImageSlot {
         Ok(bytes_resident)
     }
 
-    #[allow(dead_code, reason = "only used in some cfgs")]
+    #[cfg_attr(
+        not(feature = "pooling-allocator"),
+        expect(dead_code, reason = "only used by the pooling allocator")
+    )]
     unsafe fn reset_all_memory_contents(
         &mut self,
         pagemap: Option<&PageMap>,
@@ -582,7 +641,10 @@ impl MemoryImageSlot {
         }
     }
 
-    #[allow(dead_code, reason = "only used in some cfgs")]
+    #[cfg_attr(
+        not(feature = "pooling-allocator"),
+        expect(dead_code, reason = "only used by the pooling allocator")
+    )]
     unsafe fn reset_with_original_mapping(
         &mut self,
         pagemap: Option<&PageMap>,
@@ -742,7 +804,10 @@ impl MemoryImageSlot {
         self.image.is_some()
     }
 
-    #[allow(dead_code, reason = "only used in some cfgs")]
+    #[cfg_attr(
+        not(feature = "pooling-allocator"),
+        expect(dead_code, reason = "only used by the pooling allocator")
+    )]
     pub(crate) fn is_dirty(&self) -> bool {
         self.dirty
     }
@@ -772,7 +837,7 @@ impl MemoryImageSlot {
     }
 }
 
-#[cfg(all(test, target_os = "linux", not(miri)))]
+#[cfg(all(test, target_os = "linux", not(miri), feature = "pooling-allocator"))]
 mod test {
     use super::*;
     use crate::runtime::vm::mmap::{AlignedLength, Mmap};

@@ -130,8 +130,9 @@
  * This function will take ownership of the configuration specified regardless
  * of the outcome of this function. You do not need to call #wasm_config_delete
  * on the argument. The object returned is owned by the caller and will need to
- * be deleted with #wasm_engine_delete. This may return `NULL` if the engine
- * could not be allocated.
+ * be deleted with #wasm_engine_delete. This returns `NULL` if the
+ * configuration is invalid, for example if an unknown Cranelift setting was
+ * passed to #wasmtime_config_cranelift_flag_set.
  *
  * \fn void wasm_engine_delete(wasm_engine_t*);
  * \brief Deletes an engine.
@@ -298,6 +299,9 @@
  *
  * \fn wasm_valkind_t wasm_valtype_kind(const wasm_valtype_t *);
  * \brief Returns the associated kind for this value type.
+ *
+ * Aborts the process if this is a `v128` type or a reference type other than
+ * `externref` and `funcref`, which have no #wasm_valkind_t.
  */
 
 /**
@@ -526,6 +530,11 @@
  *
  * The returned #wasm_limits_t is owned by the #wasm_tabletype_t parameter, the
  * caller should not deallocate it.
+ *
+ * This function aborts the process if the table's minimum or maximum doesn't
+ * fit in 32 bits, which a 64-bit table's limits may not. For compatibility
+ * with 64-bit tables use #wasmtime_tabletype_maximum and
+ * #wasmtime_tabletype_minimum instead.
  */
 
 /**
@@ -613,8 +622,10 @@
  * The returned #wasm_limits_t is owned by the #wasm_memorytype_t parameter, the
  * caller should not deallocate it.
  *
- * For compatibility with memory64 it's recommended to use
- * #wasmtime_memorytype_maximum or #wasmtime_memorytype_minimum instead.
+ * This function aborts the process if the memory's minimum or maximum doesn't
+ * fit in 32 bits, which a 64-bit memory's limits may not. For compatibility
+ * with memory64 use #wasmtime_memorytype_maximum and
+ * #wasmtime_memorytype_minimum instead.
  */
 
 /**
@@ -1060,6 +1071,13 @@
  * Also note that this is an owned value, notably the `ref` field. The
  * #wasm_val_delete function does not delete the memory holding the #wasm_val_t
  * itself, but only the memory pointed to by #wasm_val_t.
+ *
+ * Wasmtime only supports `i32`, `i64`, `f32`, `f64` and `funcref` values in
+ * #wasm_val_t. APIs that produce or consume a #wasm_val_t, such as
+ * #wasm_func_call, #wasm_global_get and host functions created with
+ * #wasm_func_new, abort the process when they encounter any other kind of
+ * value, such as a `v128` or `externref`. Use the `wasmtime_*` APIs and
+ * #wasmtime_val_t for those.
  *
  * \var wasm_val_t::kind
  * \brief The kind of this value, or which of the fields in the `of` payload
@@ -1562,6 +1580,9 @@
  * The returned #wasm_func_t is expected to be deleted by the caller. This
  * function does not take ownership of its arguments.
  *
+ * Calling the function aborts the process if its parameters or results
+ * include a kind of value #wasm_val_t doesn't support (see #wasm_val_t).
+ *
  * \fn wasm_func_t *wasm_func_new_with_env(
  *    wasm_store_t *,
  *    const wasm_functype_t *type,
@@ -1611,6 +1632,9 @@
  *
  * If a trap happens during execution or some other error then a non-`NULL` trap
  * is returned. In this situation the `results` are is unmodified.
+ *
+ * Aborts the process if any argument or result is a kind of value
+ * #wasm_val_t doesn't support (see #wasm_val_t).
  *
  * Does not take ownership of `wasm_val_t` arguments. Gives ownership of
  * `wasm_val_t` results.
@@ -1673,6 +1697,9 @@
  * This function does not take ownership of any of its arguments. The caller is
  * expected to deallocate the returned value.
  *
+ * Aborts the process if the value is a kind of value #wasm_val_t doesn't
+ * support (see #wasm_val_t).
+ *
  * \fn wasm_globaltype_t *wasm_global_type(const wasm_global_t *);
  * \brief Returns the type of this global.
  *
@@ -1684,6 +1711,9 @@
  * The caller is expected to deallocate the returned #wasm_val_t. The provided
  * `out` argument is treated as uninitialized on input.
  *
+ * Aborts the process if the global's value is a kind of value #wasm_val_t
+ * doesn't support, such as a `v128` or `externref` (see #wasm_val_t).
+ *
  * \fn void wasm_global_set(wasm_global_t *, const wasm_val_t *);
  * \brief Sets the value of this global.
  *
@@ -1691,6 +1721,9 @@
  * does nothing if the global is not mutable, if the #wasm_val_t argument has
  * the wrong type, or if the provided value comes from a different store as the
  * #wasm_global_t.
+ *
+ * Aborts the process if the value is a kind of value #wasm_val_t doesn't
+ * support (see #wasm_val_t).
  *
  * This function does not take ownership of its arguments.
  */

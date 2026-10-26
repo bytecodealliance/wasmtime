@@ -2676,18 +2676,9 @@ impl FuncType {
     pub fn matches(&self, other: &FuncType) -> bool {
         assert!(self.comes_from_same_engine(other.engine()));
 
-        // Avoid matching on structure for subtyping checks when we have
-        // precisely the same type.
-        if self.type_index() == other.type_index() {
-            return true;
-        }
-
-        Self::matches_impl(
-            self.params(),
-            other.params(),
-            self.results(),
-            other.results(),
-        )
+        self.engine()
+            .signatures()
+            .is_subtype(self.type_index(), other.type_index())
     }
 
     fn matches_impl(

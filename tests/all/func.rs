@@ -1846,10 +1846,9 @@ fn wrap_supertype_result() -> wasmtime::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(function_references))]
+#[wasmtime_test(wasm_features(gc, function_references))]
 #[cfg_attr(miri, ignore)]
 fn call_wasm_passing_subtype_func_param(config: &mut Config) -> wasmtime::Result<()> {
-    config.wasm_function_references(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -1857,7 +1856,7 @@ fn call_wasm_passing_subtype_func_param(config: &mut Config) -> wasmtime::Result
         &engine,
         r#"
             (module
-                (type $ty (func (result funcref)))
+                (type $ty (sub (func (result funcref))))
                 (func (export "f") (param (ref null $ty)) (result funcref)
                     ;; Return null if the funcref is null.
                     ref.null func
@@ -1876,6 +1875,8 @@ fn call_wasm_passing_subtype_func_param(config: &mut Config) -> wasmtime::Result
 
     let instance = Instance::new(&mut store, &module, &[])?;
     let f = instance.get_func(&mut store, "f").unwrap();
+    let ty = f.ty(&store).params().next().unwrap();
+    let ty = ty.unwrap_ref().heap_type().unwrap_concrete_func();
 
     let g_ty = FuncType::new(&engine, None, Some(ValType::I32));
     let g = Func::new(&mut store, g_ty.clone(), |_caller, _params, results| {
@@ -1883,17 +1884,19 @@ fn call_wasm_passing_subtype_func_param(config: &mut Config) -> wasmtime::Result
         Ok(())
     });
 
-    // h's type is a subtype of the Wasm-defined `$ty`:
+    // h's type is declared as a subtype of the Wasm-defined `$ty`:
     //
     //     (func (result (ref null g_ty))) <: (func (result funcref))
-    let h_ty = FuncType::new(
+    let h_ty = FuncType::with_finality_and_supertype(
         &engine,
-        None,
-        Some(ValType::Ref(RefType::new(
+        Finality::Final,
+        Some(ty),
+        [],
+        [ValType::Ref(RefType::new(
             true,
             HeapType::ConcreteFunc(g_ty),
-        ))),
-    );
+        ))],
+    )?;
     let h = Func::new(&mut store, h_ty, move |_caller, _params, results| {
         results[0] = Val::FuncRef(Some(g));
         Ok(())

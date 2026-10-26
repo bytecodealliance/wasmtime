@@ -1998,6 +1998,11 @@ impl MachBufferFinalized {
         &self.traps[..]
     }
 
+    /// Get the unwind instructions and their code offsets for this code.
+    pub fn unwind_info(&self) -> &[(CodeOffset, UnwindInst)] {
+        &self.unwind_info[..]
+    }
+
     /// Get the user stack map metadata for this code.
     pub fn user_stack_maps(&self) -> &[(CodeOffset, u32, ir::UserStackMap)] {
         &self.user_stack_maps

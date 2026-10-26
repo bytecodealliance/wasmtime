@@ -49,3 +49,29 @@ pub use self::hot_blocks::*;
 mod wizer;
 #[cfg(feature = "wizer")]
 pub use self::wizer::*;
+
+#[cfg(all(
+    feature = "coredump",
+    any(feature = "run", feature = "wizer", feature = "serve")
+))]
+fn write_core_dump(
+    store: &mut impl wasmtime::AsContextMut,
+    err: &wasmtime::Error,
+    name: &str,
+    path: &str,
+) -> wasmtime::Result<()> {
+    use std::fs::File;
+    use std::io::Write;
+    use wasmtime::error::Context as _;
+
+    let core_dump = err
+        .downcast_ref::<wasmtime::WasmCoreDump>()
+        .expect("should have been configured to capture core dumps");
+    let core_dump = core_dump.serialize(store, name);
+    let mut core_dump_file =
+        File::create(path).with_context(|| format!("failed to create file at `{path}`"))?;
+    core_dump_file
+        .write_all(&core_dump)
+        .with_context(|| format!("failed to write core dump file at `{path}`"))?;
+    Ok(())
+}

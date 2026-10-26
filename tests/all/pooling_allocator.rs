@@ -666,6 +666,14 @@ fn instance_too_large() -> Result<()> {
         }
     }
 
+    // A maximum near `usize::MAX` shouldn't overflow when rounded up.
+    let mut pool = crate::small_pool_config();
+    pool.max_core_instance_size(usize::MAX);
+    let mut config = Config::new();
+    config.allocation_strategy(pool);
+    let engine = Engine::new(&config)?;
+    Module::new(&engine, "(module)")?;
+
     Ok(())
 }
 

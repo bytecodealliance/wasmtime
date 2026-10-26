@@ -703,7 +703,13 @@ impl RunCommand {
                         main_target.unwrap_core(),
                     )?;
                 }
-                _ => bail!("cannot use `--default-values-unknown-imports` with components"),
+                #[cfg(feature = "component-model")]
+                CliLinker::Component(linker) => {
+                    linker.define_unknown_imports_as_default_values(
+                        &mut *store,
+                        main_target.unwrap_component(),
+                    )?;
+                }
             }
         }
 
@@ -1116,7 +1122,8 @@ impl RunCommand {
             .to_str()
             .unwrap_or_else(|| "unknown");
 
-        if let Err(coredump_err) = write_core_dump(store, &err, &source_name, coredump_path) {
+        if let Err(coredump_err) = super::write_core_dump(store, &err, &source_name, coredump_path)
+        {
             eprintln!("warning: coredump failed to generate: {coredump_err}");
             err
         } else {
@@ -1339,7 +1346,16 @@ impl RunCommand {
         if self.run.common.wasi.inherit_stderr.unwrap_or(true) {
             builder.inherit_stderr();
         }
-        self.run.configure_wasip2(&mut builder)?;
+        // It's ok to block the current thread since we're the only thread in
+        // the program as the CLI. This helps improve the performance of some
+        // blocking operations in WASI, for example, by skipping the
+        // back-and-forth between sync and async.
+        //
+        // However, do not set this if a timeout is configured, as that would
+        // cause the timeout to be ignored if the guest does, for example,
+        // something like `sleep(FOREVER)`.
+        self.run
+            .configure_wasip2(&mut builder, self.run.common.wasm.timeout.is_none())?;
         store.data_mut().wasip1_ctx = Some(builder.build_p1());
         Ok(())
     }
@@ -1426,28 +1442,4 @@ impl wasmtime_wasi_tls::WasiTlsView for Host {
             ctx: self.wasi_tls.as_mut().unwrap(),
         }
     }
-}
-
-#[cfg(feature = "coredump")]
-fn write_core_dump(
-    store: &mut Store<Host>,
-    err: &wasmtime::Error,
-    name: &str,
-    path: &str,
-) -> Result<()> {
-    use std::fs::File;
-    use std::io::Write;
-
-    let core_dump = err
-        .downcast_ref::<wasmtime::WasmCoreDump>()
-        .expect("should have been configured to capture core dumps");
-
-    let core_dump = core_dump.serialize(store, name);
-
-    let mut core_dump_file =
-        File::create(path).with_context(|| format!("failed to create file at `{path}`"))?;
-    core_dump_file
-        .write_all(&core_dump)
-        .with_context(|| format!("failed to write core dump file at `{path}`"))?;
-    Ok(())
 }

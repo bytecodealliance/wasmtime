@@ -45,7 +45,8 @@ WASM_API_EXTERN void wasmtime_guestprofiler_delete(
  * \brief Alias to #wasmtime_guestprofiler_modules
  *
  * \struct #wasmtime_guestprofiler_modules
- * \brief Tuple of name and module for passing into #wasmtime_guestprofiler_new.
+ * \brief Tuple of name and module for passing into #wasmtime_guestprofiler_new
+ * and #wasmtime_guestprofiler_module_set_new.
  */
 typedef struct wasmtime_guestprofiler_modules {
   const wasm_name_t *name; //!< Name recorded in the profile.
@@ -75,6 +76,94 @@ WASM_API_EXTERN /* own */ wasmtime_guestprofiler_t *wasmtime_guestprofiler_new(
     const wasm_engine_t *engine, const wasm_name_t *module_name,
     uint64_t interval_nanos, const wasmtime_guestprofiler_modules_t *modules,
     size_t modules_len);
+
+/**
+ * \brief A set of modules prepared once for use by any number of profilers.
+ *
+ * Preparing a module builds its symbol table, which demangles the name of
+ * every function it defines; for modules with many functions this is most of
+ * the cost of #wasmtime_guestprofiler_new, which repeats it for every profile.
+ * Embedders that profile the same modules repeatedly can prepare them once
+ * with #wasmtime_guestprofiler_module_set_new and start each profile with
+ * #wasmtime_guestprofiler_new_with_module_set.
+ *
+ * A module set may be shared between threads, and profiles started from the
+ * same set are independent of one another.
+ *
+ * For more information see the Rust documentation at:
+ * https://docs.wasmtime.dev/api/wasmtime/struct.GuestProfilerModules.html
+ */
+typedef struct wasmtime_guestprofiler_module_set
+    wasmtime_guestprofiler_module_set_t;
+
+/**
+ * \brief Prepares a set of modules for profiling.
+ *
+ * \param engine      engine the modules were created with
+ * \param modules     modules and associated names that will appear in
+ *                    captured stack traces, pointer to the first element
+ * \param modules_len count of elements in `modules`
+ * \param out         where to write the created module set, which is owned by
+ *                    the caller, on success
+ *
+ * \return Returns #wasmtime_error_t owned by the caller in case of error,
+ * `NULL` otherwise. An error is returned if `engine` has guest debugging
+ * enabled.
+ *
+ * This function does not take ownership of `engine` or of the elements of
+ * `modules`. See the Rust documentation for guidance on which modules should
+ * not be included in `modules`.
+ *
+ * For more information see the Rust documentation at:
+ * https://docs.wasmtime.dev/api/wasmtime/struct.GuestProfilerModules.html#method.new
+ */
+WASM_API_EXTERN /* own */ wasmtime_error_t *
+wasmtime_guestprofiler_module_set_new(
+    const wasm_engine_t *engine,
+    const wasmtime_guestprofiler_modules_t *modules, size_t modules_len,
+    /* own */ wasmtime_guestprofiler_module_set_t **out);
+
+/**
+ * \brief Creates a shallow clone of the specified module set, increasing the
+ * internal reference count.
+ */
+WASM_API_EXTERN /* own */ wasmtime_guestprofiler_module_set_t *
+wasmtime_guestprofiler_module_set_clone(
+    const wasmtime_guestprofiler_module_set_t *set);
+
+/**
+ * \brief Deletes a module set.
+ *
+ * Profilers already started from the set are unaffected.
+ *
+ * \param set module set that is being deleted
+ */
+WASM_API_EXTERN void wasmtime_guestprofiler_module_set_delete(
+    /* own */ wasmtime_guestprofiler_module_set_t *set);
+
+/**
+ * \brief Begin profiling a new guest using a prepared module set.
+ *
+ * \param module_name    name recorded in the profile
+ * \param interval_nanos intended sampling interval in nanoseconds recorded in
+ *                       the profile
+ * \param modules        module set whose modules will appear in captured stack
+ *                       traces
+ *
+ * \return Created profiler that is owned by the caller.
+ *
+ * This behaves like #wasmtime_guestprofiler_new, except that the per-module
+ * preparation has already been done. This function does not take ownership of
+ * the arguments; the profiler keeps its own reference to `modules`, which may
+ * be deleted while the profiler is still in use.
+ *
+ * For more information see the Rust documentation at:
+ * https://docs.wasmtime.dev/api/wasmtime/struct.GuestProfiler.html#method.new_with_modules
+ */
+WASM_API_EXTERN /* own */ wasmtime_guestprofiler_t *
+wasmtime_guestprofiler_new_with_module_set(
+    const wasm_name_t *module_name, uint64_t interval_nanos,
+    const wasmtime_guestprofiler_module_set_t *modules);
 
 /**
  * \brief Add a sample to the profile.

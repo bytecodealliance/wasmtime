@@ -169,30 +169,20 @@ fn memory_data_mut() -> Result<()> {
 
 #[test]
 fn wasm_memory_grow_relocate() -> Result<()> {
-    let module_bytes = {
-        let mut config = Config::new();
-        config.concurrency_support(false);
-        config.memory_reservation(65536);
-        config.memory_reservation_for_growth(0);
-        let engine = Engine::new(&config)?;
-        Module::new(
-            &engine,
-            r#"(module
-                (memory (export "memory") 1)
-                (func (export "grow") (param i32) (result i32)
-                    (memory.grow (local.get 0))
-                )
-            )"#,
-        )?
-        .serialize()?
-    };
     let mut config = Config::new();
-    config.enable_compiler(false);
     config.concurrency_support(false);
     config.memory_reservation(65536);
     config.memory_reservation_for_growth(0);
     let engine = Engine::new(&config)?;
-    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (memory (export "memory") 1)
+            (func (export "grow") (param i32) (result i32)
+                (memory.grow (local.get 0))
+            )
+        )"#,
+    )?;
     let linker = Linker::<()>::new(&engine);
     let instance_pre = linker.instantiate_pre(&module)?;
 

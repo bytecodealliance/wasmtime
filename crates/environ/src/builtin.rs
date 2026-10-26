@@ -15,8 +15,6 @@ macro_rules! foreach_builtin_function {
             passive_elem_segment_base(vmctx: vmctx, elem: u32) -> pointer;
             // Guts of `elem.drop` for passive data segments.
             passive_elem_segment_drop(vmctx: vmctx, elem: u32) -> bool;
-            // Returns a value for wasm's `ref.func` instruction.
-            ref_func(vmctx: vmctx, func: u32) -> pointer;
             // Returns a table entry after lazily initializing it.
             table_get_lazy_init_func_ref(vmctx: vmctx, table: u32, index: u64) -> pointer;
             // Grows `table` by `delta` elements, returning the destination
@@ -420,7 +418,6 @@ impl BuiltinFunctionIndex {
             (@get get_interned_func_ref pointer) => (TrapSentinel::NegativeOne);
 
             // These libcalls can't trap
-            (@get ref_func pointer) => (return None);
             (@get table_get_lazy_init_func_ref pointer) => (return None);
             (@get intern_func_ref_for_gc_heap u64) => (return None);
             (@get intern_contref_for_gc_heap u64) => (return None);

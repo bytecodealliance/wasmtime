@@ -57,10 +57,6 @@ wasmtime = [
   'wasmtime/std',
   'wasmtime/runtime',
   'wasmtime/cranelift',
-  'wasmtime/cache',
-  'wasmtime/threads',
-  'wasmtime/gc',
-  'wasmtime/gc-null',
   'wasmtime/async',
   # Need wave and wit-parser features to parse init func expressions
   'wasmtime/wave',

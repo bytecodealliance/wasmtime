@@ -55,7 +55,6 @@ macro_rules! define_vm_type_offsets {
     // back down into four bytes.
     (@size ($p:expr) NonZeroU32) => { 4u32 };
     (@size ($p:expr) Option < VMGcRef >) => { 4u32 };
-    (@size ($p:expr) [u8; 16]) => { 16u32 };
     (@size ($p:expr) [u32; $n:expr]) => { 4u32 * u32::try_from($n).unwrap() };
     (@size ($p:expr) VMSharedTypeIndex) => { u32::from(($p).size_of_vmshared_type_index()) };
     (@size ($p:expr) DefinedTableIndex) => { 4u32 };
@@ -107,7 +106,6 @@ macro_rules! define_vm_type_offsets {
     (@align ($p:expr) u32) => { 4u32 };
     (@align ($p:expr) NonZeroU32) => { 4u32 };
     (@align ($p:expr) Option < VMGcRef >) => { 4u32 };
-    (@align ($p:expr) [u8; 16]) => { 16u32 };
     (@align ($p:expr) [u32; $n:expr]) => { 4u32 };
     (@align ($p:expr) VMSharedTypeIndex) => { u32::from(($p).align_of_vmshared_type_index()) };
     (@align ($p:expr) DefinedTableIndex) => { 4u32 };
@@ -542,7 +540,7 @@ pub trait PtrSize {
     /// This is the size of the largest value type (i.e. a V128).
     #[inline]
     fn maximum_value_size(&self) -> u8 {
-        self.vm_global_definition().size()
+        16
     }
 
     /// Return the size of `*mut VMMemoryDefinition`.

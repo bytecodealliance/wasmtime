@@ -1,6 +1,6 @@
 #![cfg(arc_try_new)]
 
-use wasmtime::{Config, Engine, Module, Result};
+use wasmtime::{Config, Engine, Module, Result, WasmBacktraceDetails};
 use wasmtime_fuzzing::oom::OomTest;
 
 #[test]
@@ -8,6 +8,7 @@ fn module_deserialize() -> Result<()> {
     let module_bytes = {
         let mut config = Config::new();
         config.concurrency_support(false);
+        config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
         let engine = Engine::new(&config)?;
         let module = Module::new(
             &engine,
@@ -23,9 +24,11 @@ fn module_deserialize() -> Result<()> {
                     (elem (i32.const 0) func 1)
                     (elem func 1)
 
-                    (func (export "func") (param i32) (result i32)
+                    (func $f (export "func") (param i32) (result i32)
                         (call 0 (local.get 0))
                     )
+
+                    (@custom ".debug_info" "a")
                 )
             "#,
         )?;
@@ -35,6 +38,7 @@ fn module_deserialize() -> Result<()> {
     let mut config = Config::new();
     config.enable_compiler(false);
     config.concurrency_support(false);
+    config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
     let engine = Engine::new(&config)?;
 
     OomTest::new()

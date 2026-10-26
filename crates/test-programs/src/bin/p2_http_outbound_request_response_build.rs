@@ -52,6 +52,14 @@ fn main() {
         // IPv6 addresses with and without a port should be allowed
         assert!(req.set_authority(Some("[::]:443")).is_ok());
         assert!(req.set_authority(Some("[::]")).is_ok());
+        // RFC 9110 forbids sending a userinfo subcomponent, which would
+        // otherwise end up verbatim in the `Host` header.
+        assert!(req.set_authority(Some("user@example.com")).is_err());
+        assert!(
+            req.set_authority(Some("user:pass@example.com:443"))
+                .is_err()
+        );
+        assert!(req.set_authority(Some("user@[::1]:443")).is_err());
 
         assert!(
             req.set_scheme(Some(&http_types::Scheme::Other("bad\nscheme".to_string())))

@@ -148,6 +148,7 @@ impl Parse for Config {
                     Opt::WasmtimeCrate(f) => {
                         opts.wasmtime_crate = Some(f.into_token_stream().to_string())
                     }
+                    Opt::MapType(p) => opts.map_type = Some(p.into_token_stream().to_string()),
                     Opt::Anyhow(val) => {
                         opts.anyhow = val;
                     }
@@ -262,6 +263,7 @@ mod kw {
     syn::custom_keyword!(skip_mut_forwarding_impls);
     syn::custom_keyword!(require_store_data_send);
     syn::custom_keyword!(wasmtime_crate);
+    syn::custom_keyword!(map_type);
     syn::custom_keyword!(anyhow);
     syn::custom_keyword!(include_generated_code_from_file);
     syn::custom_keyword!(include_component_type);
@@ -287,6 +289,7 @@ enum Opt {
     SkipMutForwardingImpls(bool),
     RequireStoreDataSend(bool),
     WasmtimeCrate(syn::Path),
+    MapType(syn::Path),
     Anyhow(bool),
     IncludeGeneratedCodeFromFile(bool),
     IncludeComponentType(bool),
@@ -423,6 +426,10 @@ impl Parse for Opt {
             input.parse::<kw::wasmtime_crate>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::WasmtimeCrate(input.parse()?))
+        } else if l.peek(kw::map_type) {
+            input.parse::<kw::map_type>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::MapType(input.parse()?))
         } else if l.peek(kw::anyhow) {
             input.parse::<kw::anyhow>()?;
             input.parse::<Token![:]>()?;

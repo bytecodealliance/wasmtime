@@ -69,6 +69,15 @@ impl MemoryImageSource {
         Ok(None)
     }
 
+    pub unsafe fn map_at(
+        &self,
+        _base: *mut u8,
+        _source_offset: u64,
+        _len: usize,
+    ) -> io::Result<()> {
+        match *self {}
+    }
+
     pub unsafe fn remap_as_zeros_at(&self, _base: *mut u8, _len: usize) -> io::Result<()> {
         match *self {}
     }

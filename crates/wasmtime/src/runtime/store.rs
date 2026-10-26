@@ -1526,6 +1526,15 @@ fn set_fuel(
     *injected_fuel = -(injected as i64);
 }
 
+fn bump(slot: &mut usize, max: usize, amt: usize, desc: &str) -> Result<()> {
+    let new = slot.saturating_add(amt);
+    if new > max {
+        bail!("resource limit exceeded: {desc} count too high at {new}");
+    }
+    *slot = new;
+    Ok(())
+}
+
 #[doc(hidden)]
 impl StoreOpaque {
     pub fn id(&self) -> StoreId {
@@ -1533,15 +1542,6 @@ impl StoreOpaque {
     }
 
     pub fn bump_resource_counts(&mut self, module: &Module) -> Result<()> {
-        fn bump(slot: &mut usize, max: usize, amt: usize, desc: &str) -> Result<()> {
-            let new = slot.saturating_add(amt);
-            if new > max {
-                bail!("resource limit exceeded: {desc} count too high at {new}");
-            }
-            *slot = new;
-            Ok(())
-        }
-
         let module = module.env_module();
         let memories = module.num_defined_memories();
         let tables = module.num_defined_tables();
@@ -1556,6 +1556,14 @@ impl StoreOpaque {
         bump(&mut self.table_count, self.table_limit, tables, "table")?;
 
         Ok(())
+    }
+
+    pub fn bump_memory_count(&mut self) -> Result<()> {
+        bump(&mut self.memory_count, self.memory_limit, 1, "memory")
+    }
+
+    pub fn bump_table_count(&mut self) -> Result<()> {
+        bump(&mut self.table_count, self.table_limit, 1, "table")
     }
 
     #[inline]
@@ -2047,11 +2055,20 @@ impl StoreOpaque {
         // If this loop becomes hot in the future, however, it should be
         // possible to precompute maps about linear memories in a store and have
         // a quicker lookup.
-        let mut fault = None;
+        //
+        // A shared memory can be defined by more than one instance in a store,
+        // for example when it's imported through the single-memory instance
+        // that `SharedMemory::vmimport` creates. Each of those instances
+        // reports the same fault, so only assert that the faulting address
+        // doesn't belong to two different memories. The memory size isn't
+        // compared because a shared memory can grow concurrently.
+        let mut fault: Option<vm::WasmFault> = None;
         for (_, instance) in self.instances.iter() {
             if let Some(f) = instance.handle.get().wasm_fault(addr) {
-                assert!(fault.is_none());
-                fault = Some(f);
+                match &fault {
+                    Some(prev) => assert_eq!(prev.wasm_address, f.wasm_address),
+                    None => fault = Some(f),
+                }
             }
         }
         if fault.is_some() {
