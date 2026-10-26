@@ -9,9 +9,9 @@ use crate::runtime::vm::export::{Export, ExportMemory};
 use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
 use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::{
-    VMBuiltinFunctionsArray, VMContext, VMDefinedShadowMemory, VMFuncRef, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
-    VMStoreContext, VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
+    VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
+    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStoreContext,
+    VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
     GcStore, HostResult, Imports, ModuleRuntimeInfo, SendSyncPtr, UncaughtException, VMGcRef,
@@ -1314,7 +1314,7 @@ impl Instance {
             // instances.
             unsafe {
                 let offsets = instance.runtime_info.offsets();
-                let mut ptr = instance.vmctx_plus_offset_raw::<VmPtr<VMDefinedShadowMemory>>(
+                let mut ptr = instance.vmctx_plus_offset_raw::<VmPtr<VMMemoryDefinition>>(
                     offsets.shadow_memories().begin(),
                 );
                 for i in 0..module.memories.len() {
@@ -1328,7 +1328,7 @@ impl Instance {
                                 .get_defined_memory(import.index)
                         }
                     };
-                    let shadow = memory.shadow().map(|s| s.vmshadow());
+                    let shadow = memory.shadow().map(|s| s.vmmemory_ptr());
                     ptr.write(VmPtr::from(shadow.unwrap_or(NonNull::dangling())));
                     ptr = ptr.add(1);
                 }

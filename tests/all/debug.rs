@@ -2067,7 +2067,7 @@ async fn watchpoints_report_writes_before_they_happen() -> wasmtime::Result<()> 
 #[cfg_attr(miri, ignore)]
 async fn watchpoints_on_imported_memory_follow_growth() -> wasmtime::Result<()> {
     // `$definer` defines and grows the memory, and `$importer` writes to it,
-    // so both instances must find the shadow as it is reallocated.
+    // so both instances must find the shadow as it grows.
     let (definer, mut store) = get_module_and_store(
         |_| {},
         r#"
@@ -2094,8 +2094,8 @@ async fn watchpoints_on_imported_memory_follow_growth() -> wasmtime::Result<()> 
     let grow = definer.get_typed_func::<i32, i32>(&mut store, "grow")?;
     let store8 = importer.get_typed_func::<(i32, i32), ()>(&mut store, "store")?;
 
-    // Watch a byte, then grow the memory enough that its shadow must be
-    // reallocated, and watch a byte in the new pages too.
+    // Watch a byte, then grow the memory, and watch a byte in the new pages
+    // too.
     memory.debug_watch(&mut store, 10..11, true)?;
     assert_eq!(grow.call_async(&mut store, 7).await?, 1);
     let high = 7 * 65536 + 3;
@@ -2116,5 +2116,50 @@ async fn watchpoints_on_imported_memory_follow_growth() -> wasmtime::Result<()> 
         .map(|(address, len, _, _)| (*address, *len))
         .collect::<Vec<_>>();
     assert_eq!(hits, [(10, 1), (high, 1)]);
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn watchpoints_out_of_bounds_stores_trap() -> wasmtime::Result<()> {
+    // Try both mmap- and malloc-backed memories (and so shadows).
+    let configs: [fn(&mut Config); 2] = [
+        |_| {},
+        |config| {
+            config
+                .memory_reservation(0)
+                .memory_guard_size(0)
+                .memory_init_cow(false);
+        },
+    ];
+    for configure in configs {
+        let (module, mut store) = get_module_and_store(
+            configure,
+            r#"
+    (module
+      (memory (export "memory") 1)
+      (func (export "store") (param i32)
+        (i64.store (local.get 0) (i64.const -1))))
+    "#,
+        )?;
+        let recorder = WatchRecorder::default();
+        store.set_debug_handler(recorder.clone());
+        let instance = Instance::new_async(&mut store, &module, &[]).await?;
+        let memory = instance.get_memory(&mut store, "memory").unwrap();
+        let store_i64 = instance.get_typed_func::<i32, ()>(&mut store, "store")?;
+        memory.debug_watch(&mut store, 65528..65536, true)?;
+
+        // A store that is partially or entirely out of bounds traps before
+        // checking for watchpoints.
+        for addr in [65532, 65536, 1 << 20, -1] {
+            let err = store_i64.call_async(&mut store, addr).await.unwrap_err();
+            assert_eq!(err.downcast::<Trap>()?, Trap::MemoryOutOfBounds);
+        }
+        assert!(recorder.0.lock().unwrap().is_empty());
+
+        // An in-bounds store to the same watched bytes is reported.
+        store_i64.call_async(&mut store, 65528).await?;
+        assert_eq!(recorder.0.lock().unwrap().len(), 1);
+    }
     Ok(())
 }

@@ -195,7 +195,7 @@ macro_rules! for_each_vmctx_type {
                     array {
                         #[readonly]
                         #[can_move]
-                        shadow_memories[num_shadow_memories; MemoryIndex]: VmPtr<VMDefinedShadowMemory>
+                        shadow_memories[num_shadow_memories; MemoryIndex]: VmPtr<VMMemoryDefinition>
                     }
 
                     array {

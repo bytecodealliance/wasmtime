@@ -485,23 +485,6 @@ macro_rules! for_each_vm_type {
                 pub current_thread: UnsafeCell<VMLazyThread>,
             }
 
-            /// The shadow of a linear memory, used for watchpoints when compiled
-            /// code checks it before stores (`Tunables::memory_watchpoints`).
-            ///
-            /// The shadow has one byte per byte of the memory's current size. A
-            /// nonzero byte makes compiled code call a watchpoint builtin before
-            /// writing the corresponding memory byte. The defining memory owns
-            /// this definition, and every instance using the memory, whether it
-            /// defines or imports it, points to it, so the shadow bytes can be
-            /// reallocated as the memory grows by updating `base` here.
-            #[derive(Debug)]
-            #[repr(C)]
-            #[snake_name = vm_defined_shadow_memory]
-            pub struct VMDefinedShadowMemory {
-                /// The start of the shadow bytes.
-                pub base: VmPtr<u8>,
-            }
-
             /// JIT-visible representation of the store's current thread for the component
             /// model, encoded as a single pointer-sized integer so that generated JIT code
             /// can load, store, and compare it with a handful of instructions.

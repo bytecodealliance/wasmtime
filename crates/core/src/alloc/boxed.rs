@@ -1,4 +1,4 @@
-use super::{TryClone, TryNew, TryVec, try_alloc, try_alloc_zeroed};
+use super::{TryClone, TryNew, TryVec, try_alloc};
 use crate::{alloc::str_ptr_from_slice_ptr, error::OutOfMemory};
 use core::{
     alloc::Layout,
@@ -101,34 +101,6 @@ pub fn new_uninit_boxed_slice<T>(len: usize) -> Result<Box<[MaybeUninit<T>]>, Ou
 
     // Safety: layout size is non-zero.
     let ptr = unsafe { try_alloc(layout)? };
-
-    let ptr = ptr.cast::<MaybeUninit<T>>().as_ptr();
-    let ptr = core::ptr::slice_from_raw_parts_mut(ptr, len);
-
-    // Safety: The pointer's memory block was allocated by the global allocator
-    // and holds room for `[T; len]`.
-    Ok(unsafe { Box::from_raw(ptr) })
-}
-
-/// Allocate a new `Box<[MaybeUninit<T>]>` of the given length with zeroed
-/// contents, returning `Err(OutOfMemory)` on allocation failure.
-///
-/// This is the fallible analogue of [`Box::new_zeroed_slice`]. Large
-/// allocations may be satisfied lazily by the allocator, for example with
-/// freshly mapped zero pages. If all-zero bytes are a valid `T`, the result
-/// may be converted with [`Box::assume_init`].
-pub fn new_zeroed_boxed_slice<T>(len: usize) -> Result<Box<[MaybeUninit<T>]>, OutOfMemory> {
-    let layout = Layout::array::<MaybeUninit<T>>(len)
-        .map_err(|_| OutOfMemory::new(mem::size_of::<T>().saturating_mul(len)))?;
-
-    if layout.size() == 0 {
-        // NB: no actual allocation takes place when boxing zero-sized
-        // types.
-        return Ok(Box::new_zeroed_slice(len));
-    }
-
-    // Safety: layout size is non-zero.
-    let ptr = unsafe { try_alloc_zeroed(layout)? };
 
     let ptr = ptr.cast::<MaybeUninit<T>>().as_ptr();
     let ptr = core::ptr::slice_from_raw_parts_mut(ptr, len);
@@ -557,17 +529,6 @@ mod tests {
     fn new_uninit_boxed_slice_smoke_test() {
         let slice = new_uninit_boxed_slice::<u32>(5).unwrap();
         assert_eq!(slice.len(), 5);
-    }
-
-    #[test]
-    fn new_zeroed_boxed_slice_smoke_test() {
-        let slice = new_zeroed_boxed_slice::<u32>(5).unwrap();
-        // Safety: all-zero bytes are a valid `u32`.
-        let slice = unsafe { slice.assume_init() };
-        assert_eq!(&*slice, &[0; 5]);
-
-        let empty = new_zeroed_boxed_slice::<u32>(0).unwrap();
-        assert!(empty.is_empty());
     }
 
     #[test]

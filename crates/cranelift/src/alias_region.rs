@@ -91,7 +91,6 @@ enum VmType {
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
     )]
     VMAsanStackSupport,
-    VMDefinedShadowMemory,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -197,7 +196,7 @@ enum AliasRegionKey {
     /// An access of an exception object's tag-defined word.
     GcExnTagDefined,
 
-    /// An access of the shadow bytes of a linear memory (`VMDefinedShadowMemory`).
+    /// An access of the shadow bytes of a linear memory, for watchpoints.
     ShadowMemory,
 }
 

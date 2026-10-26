@@ -12,7 +12,7 @@ mod vec;
 pub use boxed::{
     BoxedSliceFromFallibleIterError, TooFewItemsOrOom, boxed_slice_write_iter,
     new_boxed_slice_from_fallible_iter, new_boxed_slice_from_iter,
-    new_boxed_slice_from_iter_with_len, new_uninit_boxed_slice, new_zeroed_boxed_slice,
+    new_boxed_slice_from_iter_with_len, new_uninit_boxed_slice,
 };
 pub use string::TryString;
 pub use try_clone::TryClone;
@@ -35,25 +35,6 @@ unsafe fn try_alloc(layout: Layout) -> Result<NonNull<u8>, OutOfMemory> {
     // Safety: same as our safety conditions.
     debug_assert!(layout.size() > 0);
     let ptr = unsafe { std_alloc::alloc::alloc(layout) };
-
-    if let Some(ptr) = NonNull::new(ptr) {
-        Ok(ptr)
-    } else {
-        Err(OutOfMemory::new(layout.size()))
-    }
-}
-
-/// Try to allocate a zeroed block of memory that fits the given layout, or
-/// return an `OutOfMemory` error.
-///
-/// # Safety
-///
-/// Same as `alloc::alloc::alloc_zeroed`: layout must have non-zero size.
-#[inline]
-unsafe fn try_alloc_zeroed(layout: Layout) -> Result<NonNull<u8>, OutOfMemory> {
-    // Safety: same as our safety conditions.
-    debug_assert!(layout.size() > 0);
-    let ptr = unsafe { std_alloc::alloc::alloc_zeroed(layout) };
 
     if let Some(ptr) = NonNull::new(ptr) {
         Ok(ptr)

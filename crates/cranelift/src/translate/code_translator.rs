@@ -74,12 +74,12 @@
 use crate::Reachability;
 use crate::bounds_checks::{BoundsCheck, bounds_check_and_compute_addr};
 use crate::func_environ::{Extension, FuncEnvironment};
-use crate::translate::TargetEnvironment;
 use crate::translate::environ::StructFieldsVec;
 use crate::translate::stack::{ControlStackFrame, ElseData};
 use crate::translate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation, set_block_params,
 };
+use crate::translate::{HeapData, TargetEnvironment};
 use crate::trap::TranslateTrap;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
@@ -3609,7 +3609,41 @@ fn prepare_addr(
 
     let memory_index = MemoryIndex::from_u32(memarg.memory);
     let heap = environ.get_or_create_heap(builder.func, memory_index);
+    let heap = environ.heaps()[heap].clone();
+    let addr = match heap_addr(memarg, access_size, &heap, index, builder, environ) {
+        Reachability::Unreachable => return Ok(Reachability::Unreachable),
+        Reachability::Reachable(a) => a,
+    };
 
+    // Note that we don't set `is_aligned` here, even if the load instruction's
+    // alignment immediate may say it's aligned, because WebAssembly's
+    // immediate field is just a hint, while Cranelift's aligned flag needs a
+    // guarantee. WebAssembly memory accesses are always little-endian.
+    let mut flags = MemFlagsData::new();
+    flags.set_endianness(ir::Endianness::Little);
+
+    // The access occurs to a per-memory disjoint category of abstract
+    // state. This may allow alias analysis to merge redundant loads,
+    // etc. when heap accesses occur interleaved with other (table,
+    // vmctx, stack) accesses.
+    let region = environ.memory_alias_region(builder.func, memory_index);
+    flags.set_alias_region(Some(region));
+
+    Ok(Reachability::Reachable((flags, index, addr)))
+}
+
+/// Bounds checks an access of `access_size` bytes at the Wasm address `index`
+/// plus `memarg.offset` in `heap`, and computes its native address.
+///
+/// Returns `Unreachable` when the access will unconditionally trap.
+fn heap_addr(
+    memarg: &MemArg,
+    access_size: u8,
+    heap: &HeapData,
+    index: Value,
+    builder: &mut FunctionBuilder,
+    environ: &mut FuncEnvironment<'_>,
+) -> Reachability<Value> {
     // How exactly the bounds check is performed here and what it's performed
     // on is a bit tricky. Generally we want to rely on access violations (e.g.
     // segfaults) to generate traps since that means we don't have to bounds
@@ -3680,14 +3714,13 @@ fn prepare_addr(
     // offsets in `memarg` are <=2gb, which means we get the fast path of one
     // `heap_addr` instruction plus a hardcoded i32-offset in memory-related
     // instructions.
-    let heap = environ.heaps()[heap].clone();
-    let addr = match u32::try_from(memarg.offset) {
+    match u32::try_from(memarg.offset) {
         // If our offset fits within a u32, then we can place the it into the
         // offset immediate of the `heap_addr` instruction.
         Ok(offset) => bounds_check_and_compute_addr(
             builder,
             environ,
-            &heap,
+            heap,
             index,
             BoundsCheck::StaticOffset {
                 offset,
@@ -3735,7 +3768,7 @@ fn prepare_addr(
             bounds_check_and_compute_addr(
                 builder,
                 environ,
-                &heap,
+                heap,
                 adjusted_index,
                 BoundsCheck::StaticOffset {
                     offset: 0,
@@ -3744,27 +3777,7 @@ fn prepare_addr(
                 ir::TrapCode::HEAP_OUT_OF_BOUNDS,
             )
         }
-    };
-    let addr = match addr {
-        Reachability::Unreachable => return Ok(Reachability::Unreachable),
-        Reachability::Reachable(a) => a,
-    };
-
-    // Note that we don't set `is_aligned` here, even if the load instruction's
-    // alignment immediate may says it's aligned, because WebAssembly's
-    // immediate field is just a hint, while Cranelift's aligned flag needs a
-    // guarantee. WebAssembly memory accesses are always little-endian.
-    let mut flags = MemFlagsData::new();
-    flags.set_endianness(ir::Endianness::Little);
-
-    // The access occurs to a per-memory disjoint category of abstract
-    // state. This may allow alias analysis to merge redundant loads,
-    // etc. when heap accesses occur interleaved with other (table,
-    // vmctx, stack) accesses.
-    let region = environ.memory_alias_region(builder.func, memory_index);
-    flags.set_alias_region(Some(region));
-
-    Ok(Reachability::Reachable((flags, index, addr)))
+    }
 }
 
 fn align_atomic_addr(
@@ -3855,14 +3868,47 @@ fn translate_store(
     );
 
     environ.before_store(builder, mem_op_size, wasm_index, memarg.offset);
-    let memory = MemoryIndex::from_u32(memarg.memory);
-    environ.watch_store(builder, memory, flags, base, mem_op_size, val);
+    watch_store(memarg, mem_op_size, wasm_index, val, builder, environ);
 
     let flags = builder.func.dfg.mem_flags.insert(flags).unwrap();
     builder
         .ins()
         .Store(opcode, val_ty, flags, Offset32::new(0), val, base);
     Ok(())
+}
+
+/// Before a store of `value`, `size` bytes at the Wasm address `index` plus
+/// `memarg.offset`, checks the memory's shadow for watchpoints, if it has one.
+///
+/// The shadow is as large as the memory, so the shadow's bounds check passes
+/// exactly when the store's does.
+fn watch_store(
+    memarg: &MemArg,
+    size: u8,
+    index: Value,
+    value: Value,
+    builder: &mut FunctionBuilder,
+    environ: &mut FuncEnvironment<'_>,
+) {
+    let memory = MemoryIndex::from_u32(memarg.memory);
+    let heap = environ.get_or_create_heap(builder.func, memory);
+    let Some(shadow) = environ.heaps()[heap].shadow else {
+        return;
+    };
+    let shadow = environ.heaps()[shadow].clone();
+    if let Reachability::Reachable(shadow_addr) =
+        heap_addr(memarg, size, &shadow, index, builder, environ)
+    {
+        environ.watch_store(
+            builder,
+            memory,
+            shadow_addr,
+            index,
+            memarg.offset,
+            size,
+            value,
+        );
+    }
 }
 
 fn mem_op_size(opcode: ir::Opcode, ty: Type) -> u8 {
@@ -3914,7 +3960,7 @@ fn translate_atomic_rmw(
         arg2 = builder.ins().ireduce(access_ty, arg2);
     }
 
-    let (flags, _, addr) = unwrap_or_return_unreachable_state!(
+    let (flags, index, addr) = unwrap_or_return_unreachable_state!(
         environ,
         prepare_atomic_addr(
             memarg,
@@ -3924,9 +3970,8 @@ fn translate_atomic_rmw(
         )?
     );
 
-    let memory = MemoryIndex::from_u32(memarg.memory);
     let size = u8::try_from(access_ty.bytes()).unwrap();
-    environ.watch_store(builder, memory, flags, addr, size, arg2);
+    watch_store(memarg, size, index, arg2, builder, environ);
     let mut res = builder.ins().atomic_rmw(access_ty, flags, op, addr, arg2);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
@@ -3972,7 +4017,7 @@ fn translate_atomic_cas(
         replacement = builder.ins().ireduce(access_ty, replacement);
     }
 
-    let (flags, _, addr) = unwrap_or_return_unreachable_state!(
+    let (flags, index, addr) = unwrap_or_return_unreachable_state!(
         environ,
         prepare_atomic_addr(
             memarg,
@@ -3981,9 +4026,8 @@ fn translate_atomic_cas(
             environ,
         )?
     );
-    let memory = MemoryIndex::from_u32(memarg.memory);
     let size = u8::try_from(access_ty.bytes()).unwrap();
-    environ.watch_store(builder, memory, flags, addr, size, replacement);
+    watch_store(memarg, size, index, replacement, builder, environ);
     let mut res = builder.ins().atomic_cas(flags, addr, expected, replacement);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
@@ -4063,7 +4107,7 @@ fn translate_atomic_store(
         data = builder.ins().ireduce(access_ty, data);
     }
 
-    let (flags, _, addr) = unwrap_or_return_unreachable_state!(
+    let (flags, index, addr) = unwrap_or_return_unreachable_state!(
         environ,
         prepare_atomic_addr(
             memarg,
@@ -4072,9 +4116,8 @@ fn translate_atomic_store(
             environ,
         )?
     );
-    let memory = MemoryIndex::from_u32(memarg.memory);
     let size = u8::try_from(access_ty.bytes()).unwrap();
-    environ.watch_store(builder, memory, flags, addr, size, data);
+    watch_store(memarg, size, index, data, builder, environ);
     builder.ins().atomic_store(flags, data, addr);
     Ok(())
 }

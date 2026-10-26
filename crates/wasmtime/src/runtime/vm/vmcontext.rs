@@ -300,7 +300,6 @@ wasmtime_environ::for_each_vm_type!(define_vm_types);
 // individually implements `VmSafe`, which satisfies the requirements of this
 // trait.
 unsafe impl VmSafe for VMMemoryDefinition {}
-unsafe impl VmSafe for VMDefinedShadowMemory {}
 
 impl VMMemoryDefinition {
     /// Return the current length (in bytes) of the [`VMMemoryDefinition`] by

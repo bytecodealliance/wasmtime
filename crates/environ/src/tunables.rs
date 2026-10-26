@@ -152,7 +152,7 @@ define_tunables! {
         pub concurrency_support: bool,
 
         /// Whether compiled code checks a linear memory's shadow before each
-        /// store, for watchpoints (see `VMDefinedShadowMemory`).
+        /// store, for watchpoints.
         pub memory_watchpoints: bool,
 
         /// Whether recording in RR is enabled or not. This is used primarily

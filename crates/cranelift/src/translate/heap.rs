@@ -131,9 +131,9 @@ pub struct HeapData {
     /// Whether this is a linear memory or a GC heap.
     pub kind: MemoryKind,
 
-    /// The base of this linear memory's shadow bytes, when stores check them
+    /// The heap of this linear memory's shadow bytes, when stores check them
     /// for watchpoints (`Tunables::memory_watchpoints`).
-    pub shadow: Option<VmctxLoadChain>,
+    pub shadow: Option<Heap>,
 }
 
 impl HeapData {

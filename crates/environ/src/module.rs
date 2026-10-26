@@ -244,8 +244,8 @@ pub struct Module {
     pub needs_gc_heap: bool,
 
     /// Does this module's compiled code check its memories' shadows for
-    /// watchpoints (`Tunables::memory_watchpoints`), and so need a
-    /// `VMDefinedShadowMemory` pointer per memory in its `VMContext`?
+    /// watchpoints (`Tunables::memory_watchpoints`), and so need a pointer to
+    /// each memory's shadow `VMMemoryDefinition` in its `VMContext`?
     pub has_shadow_memories: bool,
 
     /// Number of functions that "escape" from this module may need to have a

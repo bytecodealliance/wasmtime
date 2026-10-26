@@ -608,8 +608,9 @@ impl LocalMemory {
             Some(_) => unreachable!(),
             None => None,
         };
-        let shadow = if memory_tunables.watchpoints() {
-            Some(ShadowMemory::new(alloc.byte_size())?)
+        // Shared memories have no shadow and cannot be watched.
+        let shadow = if memory_tunables.watchpoints() && !ty.shared {
+            Some(ShadowMemory::new(ty, memory_tunables, alloc.byte_size())?)
         } else {
             None
         };
@@ -707,6 +708,13 @@ impl LocalMemory {
                 bail!("Memory maximum size exceeded");
             }
 
+            // The shadow grows along with this memory, below.
+            if let Some(shadow) = &self.shadow {
+                if !shadow.can_grow_to(new_byte_size) {
+                    bail!("Memory maximum size exceeded");
+                }
+            }
+
             // If we have a CoW image overlay then let it manage accessible
             // bytes. Once the heap limit is modified inform the underlying
             // allocation that the size has changed.
@@ -742,7 +750,7 @@ impl LocalMemory {
                     assert_eq!(base_ptr_before, self.alloc.base().as_mut_ptr());
                 }
                 if let Some(shadow) = &mut self.shadow {
-                    shadow.resize(new_byte_size)?;
+                    shadow.grow_to(new_byte_size)?;
                 }
 
                 Ok(Some((old_byte_size, new_byte_size)))
