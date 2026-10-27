@@ -519,67 +519,119 @@ pub mod _6_exported_resources;
 /// Notable differences from [`_4_imported_resources`] are:
 /// * async functions are used
 /// * enabled async in bindgen! macro
+/// * flags configured for individual resource functions
+/// * `*_async` entry points are required, such as `instantiate_async`,
+///   awaiting `call_*` functions, and [`ResourceAny::resource_drop_async`]
 ///
-/// See [wasi_async_example](https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasip1-async/main.rs) for async function calls on a host.
+/// See [wasi_async_example](https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasip2-async/main.rs) for async function calls on a host.
+///
+/// [`ResourceAny::resource_drop_async`]: crate::component::ResourceAny::resource_drop_async
 ///
 /// ```rust
-/// use wasmtime::Result;
-/// use wasmtime::component::{bindgen, ResourceTable, Resource};
-/// use example::imported_resources::logging::{Level, Host, HostLogger};
+/// use wasmtime::{
+///     Config, Engine, Result, Store,
+///     component::{bindgen, Component, HasSelf, Linker, ResourceTable},
+/// };
 ///
 #[doc = include_str!("./_7_async.rs")]
 ///
+/// use self::example::resource_async::logging::{self as bindings, Level};
+///
 /// #[derive(Default)]
-/// struct MyState {
+/// struct State {
 ///     // Manages the mapping of `MyLogger` structures to `Resource<MyLogger>`.
 ///     table: ResourceTable,
 /// }
 ///
-/// // There are no free-functions on `interface logging`, so this is an empty
-/// // impl.
-/// impl Host for MyState {}
-///
 /// // This separate `HostLogger` trait serves to act as a namespace for just
 /// // the `logger`-related resource methods.
-/// impl HostLogger for MyState {
-///     // A `constructor` in WIT maps to a `new` function in Rust.
-///     async fn new(&mut self, max_level: Level) -> Result<Resource<MyLogger>> {
-///         let id = self.table.push(MyLogger { max_level })?;
-///         Ok(id)
-///     }
-///
-///     async fn get_max_level(&mut self, logger: Resource<MyLogger>) -> Result<Level> {
-///         debug_assert!(!logger.owned());
-///         let logger = self.table.get(&logger)?;
-///         Ok(logger.max_level)
-///     }
-///
-///     async fn set_max_level(&mut self, logger: Resource<MyLogger>, level: Level) -> Result<()> {
-///         debug_assert!(!logger.owned());
-///         let logger = self.table.get_mut(&logger)?;
-///         logger.max_level = level;
-///         Ok(())
-///     }
-///
-///     async fn log(&mut self, logger: Resource<MyLogger>, level: Level, msg: String) -> Result<()> {
-///         debug_assert!(!logger.owned());
-///         let logger = self.table.get_mut(&logger)?;
-///         if (level as u32) <= (logger.max_level as u32) {
-///             println!("{msg}");
-///         }
-///         Ok(())
-///     }
-///
-///     async fn drop(&mut self, logger: Resource<MyLogger>) -> Result<()> {
-///         debug_assert!(logger.owned());
-///         let _logger: MyLogger = self.table.delete(logger)?;
+/// impl bindings::HostLogger for State {
+///     fn drop(
+///         &mut self,
+///         rep: wasmtime::component::Resource<bindings::Logger>,
+///     ) -> wasmtime::Result<()> {
+///         self.table.delete(rep)?;
 ///         // ... custom destruction logic here if necessary, otherwise
 ///         // a `Drop for MyLogger` would also work.
 ///         Ok(())
 ///     }
+///
+///     fn get_max_level(
+///         &mut self,
+///         self_: wasmtime::component::Resource<MyLogger>,
+///     ) -> wasmtime::Result<bindings::Level> {
+///         let logger = self.table.get(&self_)?;
+///         Ok(logger.max_level)
+///     }
+///
+///     // A `constructor` in WIT maps to a `new` function in Rust.
+///     fn new(
+///         &mut self,
+///         max_level: bindings::Level,
+///     ) -> wasmtime::Result<wasmtime::component::Resource<bindings::Logger>> {
+///         let id = self.table.push(MyLogger { max_level })?;
+///         Ok(id)
+///     }
+///
+///     fn set_max_level(
+///         &mut self,
+///         self_: wasmtime::component::Resource<MyLogger>,
+///         level: bindings::Level,
+///     ) -> wasmtime::Result<()> {
+///         let logger = self.table.get_mut(&self_)?;
+///         logger.max_level = level;
+///         Ok(())
+///     }
 /// }
 ///
-/// # fn main() {}
+/// impl<T> bindings::HostLoggerWithStore<T> for HasSelf<State> {
+///     async fn log(
+///         accessor: &wasmtime::component::Accessor<T, Self>,
+///         self_: wasmtime::component::Resource<MyLogger>,
+///         level: Level,
+///         msg: String,
+///     ) -> wasmtime::Result<()> {
+///         // Do something that blocks
+///         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+///
+///         accessor.with(|mut access| {
+///             let state = access.get();
+///             let logger = state.table.get(&self_)?;
+///             if (level as u32) <= (logger.max_level as u32) {
+///                 println!("{msg}");
+///             }
+///             Ok(())
+///         })
+///     }
+/// }
+///
+/// // There are no free-functions on `interface logging`, so this is an empty
+/// // impl that satisfies the trait bounds required by the linker.
+/// impl bindings::Host for State {}
+///
+/// #[tokio::main]
+/// async fn main() -> Result<()> {
+///     # if true { return Ok(()) }
+///     let mut config = Config::new();
+///     config.wasm_component_model_async(true);
+///
+///     let engine = Engine::new(&config)?;
+///     let component = Component::from_file(&engine, "/path/to/component")?;
+///     let mut store = Store::new(&engine, State::default());
+///
+///     let mut linker = Linker::<State>::new(&engine);
+///     bindings::add_to_linker::<_, HasSelf<State>>(&mut linker, |state| state)?;
+///
+///     // If you try to use the `App::instantiate` method, you'll get a runtime error that
+///     // looks something like:
+///     // "Error: store configuration requires that `*_async` functions are used instead"
+///     let bindings = App::instantiate_async(&mut store, &component, &linker).await?;
+///     let bindings = crate::App::instantiate_async(&mut store, &component, &linker).await?;
+///     store
+///       .run_concurrent(async |accessor| bindings.call_run(&accessor).await)
+///       .await??;
+///     Ok(())
+/// }
 /// ```
 pub mod _7_async;
 

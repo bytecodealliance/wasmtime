@@ -10,7 +10,7 @@ use syn::{Token, braced, token};
 use wasmtime_wit_bindgen::{
     FunctionConfig, FunctionFilter, FunctionFlags, Opts, Ownership, TrappableError,
 };
-use wit_parser::{PackageId, Resolve, WorldId};
+use wit_parser::{Function, IndexMap, PackageId, Resolve, WorldId, WorldItem, WorldKey};
 
 pub struct Config {
     opts: Opts,
@@ -29,6 +29,8 @@ pub fn expand(input: &mut Config) -> Result<TokenStream> {
     if input.opts.stringify {
         return Ok(quote::quote!(#src));
     }
+
+    check_for_sync_exports_and_async_imports(input)?;
 
     // If a magical `WASMTIME_DEBUG_BINDGEN` environment variable is set then
     // place a formatted version of the expanded code into a file. This file
@@ -72,6 +74,67 @@ pub fn expand(input: &mut Config) -> Result<TokenStream> {
     }
 
     Ok(contents)
+}
+
+fn check_for_sync_exports_and_async_imports(input: &Config) -> Result<()> {
+    let world = &input.resolve.worlds[input.world];
+    let async_imports =
+        filter_function_names(&input.resolve, &world.imports, |f| f.kind.is_async());
+    let sync_exports =
+        filter_function_names(&input.resolve, &world.exports, |f| !f.kind.is_async());
+
+    if !sync_exports.is_empty() && !async_imports.is_empty() {
+        let format_list = |names: &[String]| {
+            names
+                .iter()
+                .map(|n| format!("  - {n}\n"))
+                .collect::<String>()
+        };
+
+        return Err(Error::new(
+            Span::call_site(),
+            format!(
+                "World `{world}` mixes synchronous exports with asynchronous imports, which is not allowed.\n\
+                \n\
+                synchronous exports:\n{sync_exports}\n\
+                asynchronous imports:\n{async_imports}\n\
+                help: This error will resolve if either all imports are non-async or all exports \
+                are async. For more details, see the async bindgen example:\n\
+                https://docs.wasmtime.dev/api/wasmtime/component/bindgen_examples/_7_async/index.html",
+                world = world.name,
+                sync_exports = format_list(&sync_exports),
+                async_imports = format_list(&async_imports),
+            ),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Get a list of world and interface-level function names that match some predicate
+fn filter_function_names(
+    resolve: &Resolve,
+    items: &IndexMap<WorldKey, WorldItem>,
+    pred: impl Fn(&Function) -> bool,
+) -> Vec<String> {
+    let mut names = vec![];
+    for (key, item) in items {
+        match item {
+            WorldItem::Function(f) if pred(f) => names.push(f.name.clone()),
+            WorldItem::Interface { id, .. } => {
+                let iface = resolve.name_world_key(key);
+                names.extend(
+                    resolve.interfaces[*id]
+                        .functions
+                        .values()
+                        .filter(|f| pred(f))
+                        .map(|f| format!("{iface}.{}", f.name)),
+                );
+            }
+            _ => {}
+        }
+    }
+    names
 }
 
 impl Parse for Config {
