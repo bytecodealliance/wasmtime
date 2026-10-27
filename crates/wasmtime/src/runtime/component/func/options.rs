@@ -445,15 +445,10 @@ impl<'a> LiftContext<'a> {
     #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state_and_instance_mut(
         &mut self,
-    ) -> (
-        &mut ConcurrentState,
-        Pin<&mut ComponentInstance>,
-        &mut HandleCounter,
-    ) {
+    ) -> (&mut ConcurrentState, Pin<&mut ComponentInstance>) {
         (
             self.task_state.concurrent_state_mut(),
             self.instance.as_mut(),
-            self.handle_counter,
         )
     }
 
