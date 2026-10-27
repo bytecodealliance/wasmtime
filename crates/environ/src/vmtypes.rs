@@ -471,6 +471,22 @@ macro_rules! for_each_vm_type {
                 ///
                 /// NB: `UnsafeCell` because JIT code writes to this field.
                 pub current_thread: UnsafeCell<VMLazyThread>,
+
+                /// Lazily-resolved resource lends recorded while a
+                /// `VMDeferredThread` was unforced.
+                #[readonly]
+                #[can_move]
+                pub lazy_lenders: VmPtr<VMResourceIndex>,
+
+                /// The capacity of `lazy_lenders`.
+                #[readonly]
+                #[can_move]
+                pub lazy_lenders_capacity: usize,
+
+                /// Number of occupied slots at the front of `lazy_lenders`.
+                ///
+                /// NB: `UnsafeCell` because JIT code writes to this field.
+                pub lazy_lenders_len: UnsafeCell<usize>,
             }
 
             /// JIT-visible representation of the store's current thread for the component
@@ -520,6 +536,23 @@ macro_rules! for_each_vm_type {
                 thread: Option<VmPtr<VMDeferredThread>>,
             }
 
+            /// JIT-visible encoding of a component-model resource handle, as stored in
+            /// the `VMStoreContext::lazy_lenders` buffer.
+            ///
+            /// This is the raw, packed version of `TypedResourceIndex` that is
+            /// exposed to Wasm code; use `VMResourceIndex::[un]pack` to
+            /// convert.
+            #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+            #[repr(transparent)]
+            #[snake_name = vm_resource_index]
+            pub struct VMResourceIndex {
+                /// Bits:      63..32    32..0
+                ///         +-------------------+
+                /// Fields: |  table  |  index  |
+                ///         +-------------------+
+                packed: u64,
+            }
+
             /// A deferred component-model thread.
             ///
             /// This is an on-stack record pushed by a fused sync-to-sync adapter's fast
@@ -537,14 +570,24 @@ macro_rules! for_each_vm_type {
             pub struct VMDeferredThread {
                 /// The previous value of `VMStoreContext::current_thread`.
                 pub parent: VMLazyThread,
+
                 /// Whether the callee is async-lifted (a deferred `enter_sync_call` arg).
                 pub callee_async: u32,
+
                 /// The callee component instance (a deferred `enter_sync_call` argument).
                 pub callee_instance: u32,
+
                 /// The caller thread's `context.{get,set}` slots, saved on entry and
                 /// restored on the fast-path exit (or recovered while forcing).
                 #[indexed]
                 pub saved_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
+
+                /// `VMStoreContext::lazy_lenders_len` as of this frame's push, so
+                /// that the lends this frame recorded are everything above it.
+                ///
+                /// Frames nest with the call stack, so that is always a contiguous
+                /// suffix by the time this frame exits.
+                pub lazy_lenders_watermark: usize,
             }
 
             /// This type is used to save (and subsequently restore) a subset of

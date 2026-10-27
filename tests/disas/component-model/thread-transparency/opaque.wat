@@ -62,7 +62,7 @@
   (export "g" (func $b "g"))
 )
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
-;;     ss0 = explicit_slot 24, align = 8
+;;     ss0 = explicit_slot 32, align = 8
 ;;     region0 = 123 ""
 ;;     region1 = 160 ""
 ;;     region2 = 42 ""
@@ -76,8 +76,10 @@
 ;;     region10 = 71 ""
 ;;     region11 = 149 ""
 ;;     region12 = 93 ""
-;;     region13 = 132 ""
-;;     region14 = 174 ""
+;;     region13 = 32 ""
+;;     region14 = 184 ""
+;;     region15 = 132 ""
+;;     region16 = 174 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -125,15 +127,17 @@
 ;;                                     v19 = load.i32 notrap aligned region11 v15+132
 ;;                                     store notrap aligned region12 v19, v14+20
 ;;                                     store notrap aligned region11 v8, v15+132  ; v8 = 0
+;;                                     v21 = load.i64 notrap aligned region13 v15+160
+;;                                     store notrap aligned region14 v21, v14+24
 ;;                                     store notrap aligned region5 v14, v15+136
-;;                                     v21 = load.i64 notrap aligned readonly can_move region3 v3+208
-;;                                     v22 = load.i32 notrap aligned region13 v21
+;;                                     v22 = load.i64 notrap aligned readonly can_move region3 v3+208
+;;                                     v23 = load.i32 notrap aligned region15 v22
 ;;                                     jump block16
 ;;
 ;;                                 block16:
-;;                                     v26 = load.i64 notrap aligned readonly can_move region2 v3+72
-;;                                     v28 = load.i64 notrap aligned readonly can_move region0 v26+8
-;;                                     v29 = load.i32 notrap aligned region9 v28+128
+;;                                     v27 = load.i64 notrap aligned readonly can_move region2 v3+72
+;;                                     v29 = load.i64 notrap aligned readonly can_move region0 v27+8
+;;                                     v30 = load.i32 notrap aligned region9 v29+128
 ;;                                     jump block17
 ;;
 ;;                                 block17:
@@ -166,6 +170,6 @@
 ;;
 ;;                                 block1:
 ;; @0120                               v2 = iconst.i32 1234
-;;                                     v46 = iadd.i32 v29, v2  ; v2 = 1234
-;; @0125                               return v46
+;;                                     v51 = iadd.i32 v30, v2  ; v2 = 1234
+;; @0125                               return v51
 ;; }

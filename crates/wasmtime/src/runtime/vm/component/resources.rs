@@ -22,8 +22,12 @@
 
 use super::{HandleCounter, HandleTable, InstanceState, RemovedResource};
 use crate::bail_bug;
+#[cfg(feature = "component-model-async")]
+use crate::bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
+#[cfg(feature = "component-model-async")]
+use crate::runtime::vm::VMResourceIndex;
 use core::error::Error;
 use core::fmt;
 use core::mem;
@@ -79,6 +83,13 @@ pub struct ResourceTables<'a> {
 
     /// The current scope, used to mutate borrows and lenders for the call.
     pub current_scope: Option<CurrentScope>,
+
+    /// The store's `lazy_lenders` buffer and its occupied length.
+    ///
+    /// `None` when the caller did not opt into lazy lends, in which case
+    /// `current_scope` is never `DeferredGuest`.
+    #[cfg(feature = "component-model-async")]
+    pub lazy_lenders: Option<(&'a mut [VMResourceIndex], &'a mut usize)>,
 }
 
 /// The resource-borrow scope associated with the current component call.
@@ -89,6 +100,9 @@ pub enum CurrentScope {
     /// A host scope whose task has not yet been materialized.
     #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
     DeferredHost,
+    /// A guest scope whose `VMDeferredThread` has not been forced.
+    #[cfg(feature = "component-model-async")]
+    DeferredGuest,
 }
 
 /// Identifier for a component call's resource-borrow scope.
@@ -205,6 +219,22 @@ impl CallContext {
     pub(crate) fn is_empty(&self) -> bool {
         self.lenders.is_empty() && self.borrow_count == 0
     }
+
+    /// Reserves room so that the matching `push_lender` calls cannot fail.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn reserve_lenders(&mut self, additional: usize) -> Result<()> {
+        self.lenders.reserve(additional)?;
+        Ok(())
+    }
+
+    /// Records `index` as lent out, in space reserved by `reserve_lenders`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn push_lender(&mut self, index: TypedResourceIndex) {
+        debug_assert!(self.lenders.capacity() - self.lenders.len() > 0);
+        self.lenders
+            .push(index)
+            .expect("space reserved by `reserve_lenders`");
+    }
 }
 
 impl ResourceTables<'_> {
@@ -309,6 +339,13 @@ impl ResourceTables<'_> {
         let id = match self.current_scope {
             Some(CurrentScope::Id(id)) => return Ok(id),
             Some(CurrentScope::DeferredHost) => self.task_state.materialize_current_scope()?,
+            // Forcing needs the whole store, so it cannot happen here. Callers
+            // needing a real `Scope` force before building these tables, so
+            // this scope never reaches them.
+            #[cfg(feature = "component-model-async")]
+            Some(CurrentScope::DeferredGuest) => {
+                bail_bug!("deferred guest scope cannot be materialized here")
+            }
             None => bail_bug!("no current scope"),
         };
         self.current_scope = Some(CurrentScope::Id(id));
@@ -341,9 +378,58 @@ impl ResourceTables<'_> {
                 self.current_scope = Some(CurrentScope::Id(id));
                 id
             }
+            // These lends live in the `lazy_lenders` buffer instead; see
+            // `reserve_lender`. Wanting a real `CallContext` means the thread
+            // must be forced first.
+            #[cfg(feature = "component-model-async")]
+            Some(CurrentScope::DeferredGuest) => {
+                bail_bug!("deferred guest scope has no call context")
+            }
             None => bail_bug!("no current scope"),
         };
         self.task_state.call_context(id)
+    }
+
+    /// Reserves room to record a lender, before the caller performs the lend,
+    /// so that `push_lender` cannot fail afterwards.
+    ///
+    /// Returns `false` if the `lazy_lenders` buffer is full, in which case the
+    /// caller must force the thread and retry against a `CallContext`.
+    fn reserve_lender(&mut self) -> Result<bool> {
+        #[cfg(feature = "component-model-async")]
+        if let Some(CurrentScope::DeferredGuest) = self.current_scope {
+            let (buf, len) = self
+                .lazy_lenders
+                .as_mut()
+                .ok_or_else(|| bug!("deferred guest scope without a lazy lenders buffer"))?;
+            return Ok(**len < buf.len());
+        }
+        self.current_scope()?.lenders.reserve(1)?;
+        Ok(true)
+    }
+
+    /// Commits a lender reserved by `reserve_lender`.
+    fn push_lender(&mut self, index: TypedResourceIndex) -> Result<()> {
+        // If we have not forced the task yet, then avoid doing so now and just
+        // push to the lazy-lenders buffer instead.
+        #[cfg(feature = "component-model-async")]
+        if let Some(CurrentScope::DeferredGuest) = self.current_scope {
+            let (buf, len) = self
+                .lazy_lenders
+                .as_mut()
+                .ok_or_else(|| bug!("deferred guest scope without a lazy lenders buffer"))?;
+
+            if **len >= buf.len() {
+                bail_bug!("should have always called `reserve_lender` first");
+            }
+
+            buf[**len] = VMResourceIndex::pack(index)?;
+            **len += 1;
+            return Ok(());
+        }
+
+        self.current_scope()?.lenders.push(index)?;
+        Ok(())
     }
 
     /// Extracts the underlying resource representation by lifting a "borrow"
@@ -355,6 +441,9 @@ impl ResourceTables<'_> {
     /// current call scope returns the lend operation is undone.
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
+    ///
+    /// Callers must either force the deferred thread, if any, first or check
+    /// for and handle `Err(LazyLendersFull)`; see its docs for details.
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
         // FIXME: the logic here applies to all resources, both own and borrow,
         // although tracking `borrow` here isn't always necessary for sync
@@ -364,9 +453,19 @@ impl ResourceTables<'_> {
         //
         // Space for the lender is reserved first so that recording it can't
         // fail after the lend.
-        self.current_scope()?.lenders.reserve(1)?;
+        if !self.reserve_lender()? {
+            // Nothing lent yet, so the caller can force the deferred task and
+            // retry.
+            #[cfg(feature = "component-model-async")]
+            return Err(LazyLendersFull.into());
+            // `reserve_lender` can only return `false` (meaning the
+            // lazy-lenders buffer is full) when the `component-model-async`
+            // feature is enabled.
+            #[cfg(not(feature = "component-model-async"))]
+            bail_bug!("`reserve_lender` only fails for lazy lends");
+        }
         let rep = self.table_for_index(&index).0.resource_lend(index)?;
-        self.current_scope()?.lenders.push(index)?;
+        self.push_lender(index)?;
         Ok(rep)
     }
 
@@ -388,6 +487,51 @@ impl ResourceTables<'_> {
         cx.borrow_count = cx.borrow_count.checked_add(1).unwrap();
         let (table, counter) = self.table_for_resource(&resource);
         table.resource_borrow_insert(counter, resource, scope)
+    }
+
+    /// Undoes the lazy lends recorded above `watermark`, truncating the buffer
+    /// back to it, for a deferred frame exiting without ever having been
+    /// forced.
+    ///
+    /// Unlike `validate_scope_exit` this needs no borrow scope, which is what
+    /// lets the frame exit without materializing a thread. There is no
+    /// `borrow_count` to check: lowering a borrow requires a materialized
+    /// scope, so such a frame has none.
+    #[cfg(feature = "component-model-async")]
+    pub fn undo_lazy_lends(&mut self, watermark: usize) -> Result<()> {
+        use smallvec::{SmallVec, ToSmallVec};
+
+        // Only an unforced deferred guest frame records into the buffer, so
+        // any other scope here means the caller mismatched the recording and
+        // undoing paths and would truncate entries belonging to someone else.
+        if !matches!(self.current_scope, Some(CurrentScope::DeferredGuest)) {
+            bail_bug!(
+                "undoing lazy lends outside a deferred guest scope: {:?}",
+                self.current_scope
+            );
+        }
+
+        let (buf, len) = self
+            .lazy_lenders
+            .as_mut()
+            .ok_or_else(|| bug!("no lazy lenders buffer to undo lends from"))?;
+        if watermark > **len {
+            bail_bug!(
+                "lazy lenders watermark {watermark} is beyond the buffer length {}",
+                **len
+            );
+        }
+
+        let lenders: SmallVec<[_; 8]> = buf[watermark..**len].to_smallvec();
+        **len = watermark;
+        for packed in lenders {
+            let lender = packed.unpack();
+            self.table_for_index(&lender)
+                .0
+                .resource_undo_lend(lender)
+                .unwrap();
+        }
+        Ok(())
     }
 
     /// Validates that the current scope can be exited.
@@ -434,3 +578,23 @@ impl fmt::Display for ResourceTypeMismatch {
 }
 
 impl Error for ResourceTypeMismatch {}
+
+/// The `lazy_lenders` buffer had no room, so the caller must force the deferred
+/// thread and retry against the newly-constructed thread's `CallContext`.
+///
+/// This is raised before anything is actually lent, so no side effects have
+/// happened yet, and it should never reach a guest: always caught in host
+/// functions instead.
+#[cfg(feature = "component-model-async")]
+#[derive(Debug)]
+pub struct LazyLendersFull;
+
+#[cfg(feature = "component-model-async")]
+impl fmt::Display for LazyLendersFull {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("lazy lenders buffer is full")
+    }
+}
+
+#[cfg(feature = "component-model-async")]
+impl Error for LazyLendersFull {}

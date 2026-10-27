@@ -518,6 +518,10 @@ impl<'a> LiftContext<'a> {
                 task_state: self.task_state,
                 guest: Some(self.instance.as_mut().instance_states()),
                 current_scope: self.current_scope,
+                // `LiftContext` computes `current_scope` up front, forcing the
+                // thread, so host lifts always have a materialized scope.
+                #[cfg(feature = "component-model-async")]
+                lazy_lenders: None,
             },
             self.host_resource_data,
         )

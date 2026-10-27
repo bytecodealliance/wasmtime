@@ -65,7 +65,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    0xc(%rsp), %esi
 ;;       movl    $0, %edx
-;;       callq   0x30e
+;;       callq   0x319
 ;;       addq    $0x10, %rsp
 ;;       movq    0x58(%rsp), %r14
 ;;       movl    %eax, %eax

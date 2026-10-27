@@ -433,6 +433,9 @@ impl Instance {
             !self.id().get(store).resource_owned_by_own_instance(dst),
             "should have used `resource.transfer-borrow-to-owner` instead",
         );
+        // No lazy-lend path here: the `resource_lower_borrow` below needs a
+        // materialized scope for its `borrow_count`, so the thread has to be
+        // forced anyway.
         let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
         tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
@@ -446,8 +449,25 @@ impl Instance {
         index: u32,
         src: TypeResourceTableIndex,
     ) -> Result<u32> {
+        let index = TypedResourceIndex::Component { ty: src, index };
+
+        // This only records a lend, so it needs no materialized scope and can
+        // leave a deferred thread alone. A full buffer is the one way that
+        // fails, and nothing has been lent yet when it does.
+        #[cfg(feature = "component-model-async")]
+        {
+            let mut tables = store.component_resource_tables_lazy_lends(Some(self))?;
+            match tables.resource_lift_borrow(index) {
+                Err(e) if e.is::<vm::component::LazyLendersFull>() => {
+                    // Fallthrough to the path below that forces the deferred
+                    // thread, at which point the lend will succeed.
+                }
+                result => return result,
+            }
+        }
+
         let mut tables = store.component_resource_tables(Some(self))?;
-        tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })
+        tables.resource_lift_borrow(index)
     }
 
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {

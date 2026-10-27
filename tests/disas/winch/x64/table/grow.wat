@@ -34,7 +34,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
 ;;       movl    (%rsp), %edx
-;;       callq   0x22f
+;;       callq   0x23a
 ;;       addq    $4, %rsp
 ;;       movq    0x24(%rsp), %r14
 ;;       movl    (%rsp), %ecx

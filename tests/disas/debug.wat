@@ -23,20 +23,20 @@
 ;;   29: movq    %rdi, (%rsp)
 ;;       nopl    (%rax, %rax)
 ;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x24, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack 
-;;       ╰─╼ breakpoint patch: wasm PC 0x24, patch bytes [232, 224, 1, 0, 0]
+;;       ╰─╼ breakpoint patch: wasm PC 0x24, patch bytes [232, 235, 1, 0, 0]
 ;;       movl    %edx, 0x10(%rsp)
 ;;       nopl    (%rax, %rax)
 ;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x26, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10
-;;       ╰─╼ breakpoint patch: wasm PC 0x26, patch bytes [232, 215, 1, 0, 0]
+;;       ╰─╼ breakpoint patch: wasm PC 0x26, patch bytes [232, 226, 1, 0, 0]
 ;;       movl    %ecx, 0x14(%rsp)
 ;;       nopl    (%rax, %rax)
 ;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x28, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10, I32 @ slot+0x14
-;;       ╰─╼ breakpoint patch: wasm PC 0x28, patch bytes [232, 206, 1, 0, 0]
+;;       ╰─╼ breakpoint patch: wasm PC 0x28, patch bytes [232, 217, 1, 0, 0]
 ;;       leal    (%rdx, %rcx), %eax
 ;;       movl    %eax, 0x10(%rsp)
 ;;       nopl    (%rax, %rax)
 ;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x29, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10
-;;       ╰─╼ breakpoint patch: wasm PC 0x29, patch bytes [232, 194, 1, 0, 0]
+;;       ╰─╼ breakpoint patch: wasm PC 0x29, patch bytes [232, 205, 1, 0, 0]
 ;;       movl    %eax, 0x10(%rsp)
 ;;       movq    0x20(%rsp), %r12
 ;;       addq    $0x30, %rsp
@@ -45,9 +45,9 @@
 ;;       retq
 ;;   62: movq    %rdi, %r12
 ;;   65: xorl    %esi, %esi
-;;   67: callq   0x1b4
+;;   67: callq   0x1bf
 ;;   6c: movq    %r12, %rdi
-;;   6f: callq   0x1e5
+;;   6f: callq   0x1f0
 ;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x23, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack 
 ;;   74: ud2
 ;;
@@ -61,7 +61,7 @@
 ;;       movq    %r14, 0x28(%rsp)
 ;;       movq    %r15, 0x30(%rsp)
 ;;       cmpq    $2, %rcx
-;;       jb      0x136
+;;       jb      0x141
 ;;   a1: movl    (%rdx), %r8d
 ;;       movl    0x10(%rdx), %ecx
 ;;       movq    %rdx, (%rsp)
@@ -91,17 +91,18 @@
 ;;       retq
 ;;  102: movq    8(%rsp), %r10
 ;;  107: movq    $1, 0x88(%r10)
-;;  112: xorl    %eax, %eax
-;;  114: movq    0x10(%rsp), %rbx
-;;  119: movq    0x18(%rsp), %r12
-;;  11e: movq    0x20(%rsp), %r13
-;;  123: movq    0x28(%rsp), %r14
-;;  128: movq    0x30(%rsp), %r15
-;;  12d: addq    $0x40, %rsp
-;;  131: movq    %rbp, %rsp
-;;  134: popq    %rbp
-;;  135: retq
-;;  136: ud2
+;;  112: movq    $0, 0xa0(%r10)
+;;  11d: xorl    %eax, %eax
+;;  11f: movq    0x10(%rsp), %rbx
+;;  124: movq    0x18(%rsp), %r12
+;;  129: movq    0x20(%rsp), %r13
+;;  12e: movq    0x28(%rsp), %r14
+;;  133: movq    0x30(%rsp), %r15
+;;  138: addq    $0x40, %rsp
+;;  13c: movq    %rbp, %rsp
+;;  13f: popq    %rbp
+;;  140: retq
+;;  141: ud2
 ;;
 ;; signatures[0]::wasm_to_array_trampoline:
 ;;       pushq   %rbp
@@ -126,19 +127,19 @@
 ;;       callq   *%rax
 ;;       addq    $1, 0x10(%r15)
 ;;       testb   %al, %al
-;;       je      0x1a2
-;;  18c: movl    (%rsp), %eax
+;;       je      0x1ad
+;;  197: movl    (%rsp), %eax
 ;;       movq    0x20(%rsp), %rbx
 ;;       movq    0x28(%rsp), %r15
 ;;       addq    $0x30, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  1a2: movq    0x10(%rbx), %rax
-;;  1a6: movq    0x140(%rax), %rax
-;;  1ad: movq    %rbx, %rdi
-;;  1b0: callq   *%rax
-;;  1b2: ud2
+;;  1ad: movq    0x10(%rbx), %rax
+;;  1b1: movq    0x140(%rax), %rax
+;;  1b8: movq    %rbx, %rdi
+;;  1bb: callq   *%rax
+;;  1bd: ud2
 ;;
 ;; wasmtime_builtin_trap:
 ;;       pushq   %rbp
@@ -215,8 +216,8 @@
 ;;       movq    0x168(%r12), %r11
 ;;       callq   *%r11
 ;;       testb   %al, %al
-;;       je      0x3e9
-;;  315: movq    (%rsp), %rax
+;;       je      0x3f4
+;;  320: movq    (%rsp), %rax
 ;;       movq    8(%rsp), %rcx
 ;;       movq    0x10(%rsp), %rdx
 ;;       movq    0x18(%rsp), %rsi
@@ -247,7 +248,7 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  3e9: movq    0x140(%r12), %rax
-;;  3f1: movq    %r13, %rdi
-;;  3f4: callq   *%rax
-;;  3f6: ud2
+;;  3f4: movq    0x140(%r12), %rax
+;;  3fc: movq    %r13, %rdi
+;;  3ff: callq   *%rax
+;;  401: ud2

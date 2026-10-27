@@ -1632,6 +1632,19 @@ impl Compiler {
                 vm_store_ctx,
                 forced,
             );
+
+            // Likewise, watermarks died with those frames, so nothing can
+            // attribute or undo the lazy lends they recorded.
+            //
+            // The lends stay counted, leaving their handles un-droppable, which
+            // is only acceptable because a trap poisons the store (see
+            // `StoreOpaque::may_enter`) so no guest can observe it.
+            let zero = builder.ins().iconst(pointer_type, 0);
+            alias_regions.vm_store_context().lazy_lenders_len().store(
+                &mut builder.cursor(),
+                vm_store_ctx,
+                zero,
+            );
         }
         let false_return = builder.ins().iconst(ir::types::I8, 0);
         builder.ins().return_(&[false_return]);
