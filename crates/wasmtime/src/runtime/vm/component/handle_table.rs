@@ -9,22 +9,24 @@ use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
 /// currently and keeps the upper bits free for use in the component and ABI.
 const MAX_HANDLE: u32 = 1 << 28;
 
-/// Live-handle count for all `HandleTable`s in a store.
+/// Count of allocated slots across all `HandleTable`s in a store.
 ///
-/// The count tracks live handles (incremented in `insert`, decremented in
-/// `remove`), since freed slots are reused.
+/// This counts slots available to get a proxy for memory allocated on the host
+/// for this table. New slots added by `insert` increment the `used` count, and
+/// then that never gets decremented for the lifetime of the store as tables are
+/// never shrunk.
 pub struct HandleCounter {
-    live: usize,
+    used: usize,
     limit: usize,
 }
 
 impl HandleCounter {
-    /// Creates a counter with no live handles and the given `limit`.
+    /// Creates a counter with no allocated slots and the given `limit`.
     pub fn new(limit: usize) -> HandleCounter {
-        HandleCounter { live: 0, limit }
+        HandleCounter { used: 0, limit }
     }
 
-    /// Returns the configured limit on simultaneously-live handles.
+    /// Returns the configured limit on allocated slots.
     pub fn limit(&self) -> usize {
         self.limit
     }
@@ -181,37 +183,35 @@ impl HandleTable {
             bail!("cannot allocate another handle: index overflow");
         }
 
-        // Also enforce the store-wide cap; `MAX_HANDLE` alone scales with the
-        // guest-controlled instance count. See `HandleCounter`.
-        if counter.live >= counter.limit {
-            bail!("cannot allocate another handle: store handle limit exceeded");
-        }
-
+        // Growing the table is charged to the store-wide cap; `MAX_HANDLE`
+        // alone scales with the guest-controlled instance count. Reusing a
+        // free slot was already charged when it was allocated. See
+        // `HandleCounter`.
         if next as usize == self.slots.len() {
+            if counter.used >= counter.limit {
+                bail!("cannot allocate another handle: store handle limit exceeded");
+            }
             self.slots.push(Slot::Free {
                 next: next.checked_add(1).unwrap(),
             })?;
+            counter.used += 1;
         }
         self.next = match mem::replace(&mut self.slots[next as usize], slot) {
             Slot::Free { next } => next,
             _ => unreachable!(),
         };
 
-        // Count the handle only once its slot is committed; pairs with the
-        // decrement in `remove`.
-        counter.live += 1;
-
         Ok(next + 1)
     }
 
-    fn remove(&mut self, counter: &mut HandleCounter, idx: u32) -> Result<()> {
+    /// Frees the slot at `idx` for reuse by a later `insert` into this table.
+    ///
+    /// The slot stays charged to the store's `HandleCounter`; see its docs.
+    fn remove(&mut self, idx: u32) -> Result<()> {
         let to_fill = Slot::Free { next: self.next };
-        // Decrement only after this `?`: `get_mut` rejects a freed slot, so a
-        // failed removal must not touch the counter.
         let slot = self.get_mut(idx)?;
         *slot = to_fill;
         self.next = idx - 1;
-        counter.live -= 1;
         Ok(())
     }
 
@@ -323,11 +323,7 @@ impl HandleTable {
     /// This can fail if `idx` doesn't point to a resource, points to a
     /// resource (own or borrow) which is currently lent out, or points to a
     /// resource of the wrong type.
-    pub fn remove_resource(
-        &mut self,
-        counter: &mut HandleCounter,
-        idx: TypedResourceIndex,
-    ) -> Result<RemovedResource> {
+    pub fn remove_resource(&mut self, idx: TypedResourceIndex) -> Result<RemovedResource> {
         let ret = match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn {
                 resource,
@@ -354,7 +350,7 @@ impl HandleTable {
             }
             _ => bail!("index {} is not a resource", idx.raw_index()),
         };
-        self.remove(counter, idx.raw_index())?;
+        self.remove(idx.raw_index())?;
         Ok(ret)
     }
 
@@ -428,7 +424,6 @@ impl HandleTable {
     /// "done" or the writable end was witnessed as being done.
     pub fn stream_remove_readable(
         &mut self,
-        counter: &mut HandleCounter,
         expected_ty: TypeStreamTableIndex,
         idx: u32,
     ) -> Result<(u32, bool)> {
@@ -450,14 +445,13 @@ impl HandleTable {
             }
             _ => bail!("handle is not a stream"),
         };
-        self.remove(counter, idx)?;
+        self.remove(idx)?;
         Ok(ret)
     }
 
     /// Removes the writable stream handle from `idx`, returning its `rep`.
     pub fn stream_remove_writable(
         &mut self,
-        counter: &mut HandleCounter,
         expected_ty: TypeStreamTableIndex,
         idx: u32,
     ) -> Result<u32> {
@@ -479,7 +473,7 @@ impl HandleTable {
             }
             _ => bail!("handle is not a stream"),
         };
-        self.remove(counter, idx)?;
+        self.remove(idx)?;
         Ok(ret)
     }
 
@@ -553,7 +547,6 @@ impl HandleTable {
     /// "done" or the writable end was witnessed as being done.
     pub fn future_remove_readable(
         &mut self,
-        counter: &mut HandleCounter,
         expected_ty: TypeFutureTableIndex,
         idx: u32,
     ) -> Result<(u32, bool)> {
@@ -575,7 +568,7 @@ impl HandleTable {
             }
             _ => bail!("handle is not a future"),
         };
-        self.remove(counter, idx)?;
+        self.remove(idx)?;
         Ok(ret)
     }
 
@@ -584,7 +577,6 @@ impl HandleTable {
     /// value or was notified that the readable end was dropped).
     pub fn future_remove_writable(
         &mut self,
-        counter: &mut HandleCounter,
         expected_ty: TypeFutureTableIndex,
         idx: u32,
     ) -> Result<(u32, bool)> {
@@ -606,7 +598,7 @@ impl HandleTable {
             }
             _ => bail!("handle is not a future"),
         };
-        self.remove(counter, idx)?;
+        self.remove(idx)?;
         Ok(ret)
     }
 
@@ -627,12 +619,12 @@ impl HandleTable {
     /// Drops the error-context pointed to by `idx`.
     ///
     /// Returns the internal `rep`.
-    pub fn error_context_drop(&mut self, counter: &mut HandleCounter, idx: u32) -> Result<u32> {
+    pub fn error_context_drop(&mut self, idx: u32) -> Result<u32> {
         let rep = match self.get_mut(idx)? {
             Slot::ErrorContext { rep } => *rep,
             _ => bail!("handle is not an error-context"),
         };
-        self.remove(counter, idx)?;
+        self.remove(idx)?;
         Ok(rep)
     }
 
@@ -657,13 +649,13 @@ impl HandleTable {
     }
 
     /// Removes the subtask set at `idx`, returning its `rep`.
-    pub fn subtask_remove(&mut self, counter: &mut HandleCounter, idx: u32) -> Result<(u32, bool)> {
+    pub fn subtask_remove(&mut self, idx: u32) -> Result<(u32, bool)> {
         let ret = match self.get_mut(idx)? {
             Slot::GuestTask { rep } => (*rep, false),
             Slot::HostTask { rep } => (*rep, true),
             _ => bail!("handle is not a subtask"),
         };
-        self.remove(counter, idx)?;
+        self.remove(idx)?;
         Ok(ret)
     }
 
@@ -681,12 +673,12 @@ impl HandleTable {
     }
 
     /// Removes the waitable set at `idx`, returning its `rep`.
-    pub fn waitable_set_remove(&mut self, counter: &mut HandleCounter, idx: u32) -> Result<u32> {
+    pub fn waitable_set_remove(&mut self, idx: u32) -> Result<u32> {
         let ret = match self.get_mut(idx)? {
             Slot::WaitableSet { rep } => *rep,
             _ => bail!("handle is not a waitable-set"),
         };
-        self.remove(counter, idx)?;
+        self.remove(idx)?;
         Ok(ret)
     }
 
@@ -726,12 +718,12 @@ impl ThreadHandleTable {
     /// Removes the guest thread pointed to by `idx`.
     ///
     /// Returns the internal `rep`.
-    pub fn guest_thread_remove(&mut self, counter: &mut HandleCounter, idx: u32) -> Result<u32> {
+    pub fn guest_thread_remove(&mut self, idx: u32) -> Result<u32> {
         let rep = match self.0.get_mut(idx)? {
             Slot::GuestThread { rep } => *rep,
             _ => bail!("handle is not a guest thread"),
         };
-        self.0.remove(counter, idx)?;
+        self.0.remove(idx)?;
         Ok(rep)
     }
 }

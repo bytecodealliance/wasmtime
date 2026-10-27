@@ -1,6 +1,8 @@
 //! Instruction predicates/properties, shared by various analyses.
 use crate::ir::immediates::Offset32;
-use crate::ir::{self, Block, DataFlowGraph, Function, Inst, InstructionData, Opcode, Type, Value};
+use crate::ir::{
+    self, Block, DataFlowGraph, Function, Inst, InstructionData, MemFlagsData, Opcode, Type, Value,
+};
 
 /// Test whether the given opcode is unsafe to even consider as side-effect-free.
 #[inline(always)]
@@ -32,13 +34,38 @@ fn is_load_with_defined_trapping(
     }
 }
 
+/// Is the given instruction a `volatile` memory access?
+///
+/// Such an access must happen exactly as written: see
+/// [`ir::MemFlagsData::volatile`].
+pub fn is_volatile_access(func: &Function, inst: Inst) -> bool {
+    func.dfg.insts[inst]
+        .memflags_data(&func.dfg)
+        .is_some_and(|flags| flags.volatile())
+}
+
 /// Does the given instruction have any side-effect that would preclude it from being removed when
 /// its value is unused?
+///
+/// A `volatile` load has one: the access itself is the effect.
 #[inline(always)]
 fn has_side_effect(func: &Function, inst: Inst) -> bool {
     let data = &func.dfg.insts[inst];
     let opcode = data.opcode();
-    trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data, &func.dfg)
+    trivially_has_side_effects(opcode)
+        || is_load_with_defined_trapping(opcode, data, &func.dfg)
+        || (opcode.can_load() && is_volatile_access(func, inst))
+}
+
+fn load_mem_flags(func: &Function, inst: Inst) -> Option<MemFlagsData> {
+    match func.dfg.insts[inst] {
+        InstructionData::Load {
+            opcode: Opcode::Load,
+            flags,
+            ..
+        } => Some(func.dfg.mem_flags[flags]),
+        _ => None,
+    }
 }
 
 /// Does the given instruction behave as a "pure" node with respect to
@@ -47,16 +74,12 @@ fn has_side_effect(func: &Function, inst: Inst) -> bool {
 /// - Trivially pure nodes (bitwise arithmetic, etc)
 /// - Loads with the `readonly`, `notrap`, and `can_move` flags set
 pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
-    let is_pure_load = match func.dfg.insts[inst] {
-        InstructionData::Load {
-            opcode: Opcode::Load,
-            flags,
-            ..
-        } => {
-            let flags = func.dfg.mem_flags[flags];
-            flags.readonly() && flags.notrap() && flags.can_move()
-        }
-        _ => false,
+    let is_pure_load = match load_mem_flags(func, inst) {
+        // `readonly` and `can_move` each imply not `volatile` (the
+        // verifier rejects the combination), so such a load is never a
+        // volatile access.
+        Some(flags) => flags.readonly() && flags.notrap() && flags.can_move(),
+        None => false,
     };
 
     // Multi-value results do not play nicely with much of the egraph
@@ -81,15 +104,34 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
 /// result.
 pub fn is_mergeable_for_egraph(func: &Function, inst: Inst) -> bool {
     let op = func.dfg.insts[inst].opcode();
+    let is_readonly_load = load_mem_flags(func, inst)
+        .map(|flags| flags.readonly())
+        .unwrap_or(false);
     // We can only merge zero- and one-result operators due to the way that GVN
     // is structured in the egraph implementation.
     func.dfg.inst_results(inst).len() <= 1
         // Loads/stores are handled by alias analysis and not
         // otherwise mergeable.
-        && !op.can_load()
+        //
+        // However, `readonly` loads *are* mergeable. Note that
+        // `is_mergeable` is checked after `is_pure`, and readonly +
+        // notrap + can_move loads are pure. Loads that are just
+        // `readonly` are not pure (we must execute them, for their
+        // potential trap side-effects, and for the same reason we
+        // cannot hoist them arbitrarily), but one `readonly` load
+        // subsuming another *is* a valid reason to make the second
+        // reuse the first's result: `readonly` promises that once we
+        // do the load, any subsequent load of the same address is
+        // always the same.
+        //
+        // We don't let that case fall back to alias analysis because
+        // its analysis is strictly more conservative: e.g. it will
+        // not permit this merging across a call, while `readonly`
+        // still promises that the value is constant across a call.
+        && (!op.can_load() || is_readonly_load)
         && !op.can_store()
         // Can only have idempotent side-effects.
-        && (!has_side_effect(func, inst) || op.side_effects_idempotent())
+        && (!has_side_effect(func, inst) || op.side_effects_idempotent() || is_readonly_load)
 }
 
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,

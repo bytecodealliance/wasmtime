@@ -22,7 +22,7 @@ use crate::component::dfg::{AdapterId, ComponentDfg, CoreDef};
 use crate::component::{
     AdapterOptions as AdapterOptionsDfg, CanonicalAbiInfo, ComponentTypesBuilder, FlatType,
     InterfaceType, RuntimeComponentInstanceIndex, StringEncoding, Transcode, TypeFuncIndex,
-    UnsafeIntrinsic,
+    TypeResourceTableIndex, UnsafeIntrinsic,
 };
 use crate::fact::transcode::Transcoder;
 use crate::prelude::*;
@@ -62,6 +62,9 @@ pub struct Module<'a> {
     /// Type information from the creator of this `Module`
     types: &'a ComponentTypesBuilder,
 
+    /// The component being adapted.
+    component: &'a ComponentDfg,
+
     /// The Wasm features enabled for validation of this module.
     features: WasmFeatures,
 
@@ -84,6 +87,7 @@ pub struct Module<'a> {
     /// Cached versions of imported trampolines for working with resources.
     imported_resource_transfer_own: Option<FuncIndex>,
     imported_resource_transfer_borrow: Option<FuncIndex>,
+    imported_resource_transfer_borrow_to_owner: Option<FuncIndex>,
 
     // Cached versions of imported trampolines for working with the async ABI.
     imported_start_calls: HashMap<(Option<FuncIndex>, Option<FuncIndex>, Vec<ValType>), FuncIndex>,
@@ -96,6 +100,11 @@ pub struct Module<'a> {
 
     imported_enter_sync_call: Option<FuncIndex>,
     imported_exit_sync_call: Option<FuncIndex>,
+    imported_hostcall_fuel: Option<FuncIndex>,
+
+    /// Whether any adapter uses the defined global holding the hostcall fuel
+    /// that's remaining for strings copied by the host.
+    hostcall_fuel_global: bool,
 
     /// Cached versions of unsafe intrinsics and where they were imported.
     imported_unsafe_intrinsics: HashMap<UnsafeIntrinsic, FuncIndex>,
@@ -270,12 +279,14 @@ impl<'a> Module<'a> {
     /// Creates an empty module.
     pub fn new(
         types: &'a ComponentTypesBuilder,
+        component: &'a ComponentDfg,
         tunables: &'a Tunables,
         features: WasmFeatures,
     ) -> Module<'a> {
         Module {
             tunables,
             types,
+            component,
             features,
             core_types: Default::default(),
             core_imports: Default::default(),
@@ -290,12 +301,15 @@ impl<'a> Module<'a> {
             helper_worklist: Vec::new(),
             imported_resource_transfer_own: None,
             imported_resource_transfer_borrow: None,
+            imported_resource_transfer_borrow_to_owner: None,
             imported_start_calls: HashMap::new(),
             imported_future_transfer: None,
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
             imported_enter_sync_call: None,
             imported_exit_sync_call: None,
+            imported_hostcall_fuel: None,
+            hostcall_fuel_global: false,
             imported_unsafe_intrinsics: HashMap::new(),
             imported_traps: HashMap::new(),
             exports: Vec::new(),
@@ -305,11 +319,11 @@ impl<'a> Module<'a> {
     /// Registers a new adapter within this adapter module.
     ///
     /// The `name` provided is the export name of the adapter from the final
-    /// module, and `adapter` indexes into `component` for all the metadata
-    /// necessary for compilation.
-    pub fn adapt(&mut self, name: &str, component: &ComponentDfg, adapter: AdapterId) {
-        let thread_transparent = component.transparent_adapters.contains(adapter);
-        let adapter = &component.adapters[adapter];
+    /// module, and `adapter` indexes into this module's component for all the
+    /// metadata necessary for compilation.
+    pub fn adapt(&mut self, name: &str, adapter: AdapterId) {
+        let thread_transparent = self.component.transparent_adapters.contains(adapter);
+        let adapter = &self.component.adapters[adapter];
 
         // Import any items required by the various canonical options
         // (memories, reallocs, etc)
@@ -689,6 +703,24 @@ impl<'a> Module<'a> {
         )
     }
 
+    /// Returns whether a borrow lowered into the resource table `ty` has its
+    /// resource owned by `ty`'s own instance.
+    fn resource_owned_by_own_instance(&self, ty: TypeResourceTableIndex) -> bool {
+        self.types
+            .resource_owned_by_own_instance(ty, |idx| self.component.defined_resource_instance(idx))
+    }
+
+    fn import_resource_transfer_borrow_to_owner(&mut self) -> FuncIndex {
+        self.import_simple(
+            "resource",
+            "transfer-borrow-to-owner",
+            &[ValType::I32, ValType::I32],
+            &[ValType::I32],
+            Import::ResourceTransferBorrowToOwner,
+            |me| &mut me.imported_resource_transfer_borrow_to_owner,
+        )
+    }
+
     fn import_enter_sync_call(&mut self) -> FuncIndex {
         self.import_simple(
             "async",
@@ -708,6 +740,17 @@ impl<'a> Module<'a> {
             &[],
             Import::ExitSyncCall,
             |me| &mut me.imported_exit_sync_call,
+        )
+    }
+
+    fn import_hostcall_fuel(&mut self) -> FuncIndex {
+        self.import_simple(
+            "runtime",
+            "hostcall-fuel",
+            &[],
+            &[ValType::I64],
+            Import::HostcallFuel,
+            |me| &mut me.imported_hostcall_fuel,
         )
     }
 
@@ -834,6 +877,14 @@ impl<'a> Module<'a> {
                     Body::RefFunc(id) => {
                         Instruction::RefFunc(id_to_index[*id].as_u32()).encode(&mut body);
                     }
+                    Body::HostcallFuelGlobalGet => {
+                        let idx = u32::try_from(self.imported_globals.len()).unwrap();
+                        Instruction::GlobalGet(idx).encode(&mut body);
+                    }
+                    Body::HostcallFuelGlobalSet => {
+                        let idx = u32::try_from(self.imported_globals.len()).unwrap();
+                        Instruction::GlobalSet(idx).encode(&mut body);
+                    }
                 }
             }
             code.raw(&body);
@@ -843,6 +894,18 @@ impl<'a> Module<'a> {
         result.section(&self.core_types.section);
         result.section(&self.core_imports);
         result.section(&funcs);
+        if self.hostcall_fuel_global {
+            let mut globals = GlobalSection::new();
+            globals.global(
+                GlobalType {
+                    val_type: ValType::I64,
+                    mutable: true,
+                    shared: false,
+                },
+                &ConstExpr::i64_const(0),
+            );
+            result.section(&globals);
+        }
         result.section(&exports);
         result.section(&code);
         result.finish()
@@ -877,6 +940,9 @@ pub enum Import {
     ResourceTransferOwn,
     /// Transfers a borrowed resource from one table to another.
     ResourceTransferBorrow,
+    /// Lifts a borrowed resource for a destination which owns the resource and
+    /// therefore receives its representation rather than a handle.
+    ResourceTransferBorrowToOwner,
     /// An intrinsic used by FACT-generated modules to begin a call involving
     /// an async-lowered import and/or an async-lifted export.
     PrepareCall {
@@ -905,6 +971,8 @@ pub enum Import {
     ErrorContextTransfer,
     /// An intrinsic for trapping the instance with a specific trap code.
     Trap(Trap),
+    /// An intrinsic returning the store's hostcall fuel.
+    HostcallFuel,
     /// An intrinsic used by FACT-generated modules to check whether an instance
     /// may be entered for a sync-to-sync call and push a task onto the stack if
     /// so.
@@ -976,28 +1044,26 @@ struct Function {
 /// Representation of a fragment of the body of a core wasm function generated
 /// for adapters.
 ///
-/// This variant comes in one of two flavors:
+/// The purpose of this representation is to handle relocations sort of. For
+/// example `Body::Call` doesn't actually know the function index being called
+/// until all adapters are generated because generating an adapter may generate
+/// imports which would shift the index space.
 ///
-/// 1. First a `Raw` variant is used to contain general instructions for the
-///    wasm function. This is populated by `Compiler::instruction` primarily.
-///
-/// 2. A `Call` instruction variant for a `FunctionId` where the final
-///    `FuncIndex` isn't known until emission time.
-///
-/// The purpose of this representation is the `Body::Call` variant. This can't
-/// be encoded as an instruction when it's generated due to not knowing the
-/// final index of the function being called. During `Module::encode`, however,
-/// all indices are known and `Body::Call` is turned into a final
-/// `Instruction::Call`.
-///
-/// One other possible representation in the future would be to encode a `Call`
-/// instruction with a 5-byte leb to fill in later, but for now this felt
-/// easier to represent. A 5-byte leb may be more efficient at compile-time if
-/// necessary, however.
+/// One other possible representation in the future would be to encode indexes
+/// with a 5-byte leb to fill in later, but for now this felt easier to
+/// represent. A 5-byte leb may be more efficient at compile-time if necessary,
+/// however.
 enum Body {
+    /// Raw wasm opcodes which aren't affected by imports.
     Raw(Vec<u8>),
+    /// A wasm `call` instruction to the specified function.
     Call(FunctionId),
+    /// A wasm `ref.func` instruction to the specified function.
     RefFunc(FunctionId),
+    /// A `global.get` of the hostcall fuel global.
+    HostcallFuelGlobalGet,
+    /// A `global.set` of the hostcall fuel global.
+    HostcallFuelGlobalSet,
 }
 
 impl Function {

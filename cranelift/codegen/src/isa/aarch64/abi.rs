@@ -336,6 +336,18 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     remaining_reg_vals -= 2;
                     continue;
                 }
+
+                // (Stage C.13) When a composite argument is passed on the
+                // stack, the NGRN is set to 8, so all later integer
+                // arguments are passed on the stack as well.
+                if args_or_rets == ArgsOrRets::Args
+                    && matches!(
+                        call_conv,
+                        isa::CallConv::SystemV | isa::CallConv::AppleAarch64
+                    )
+                {
+                    next_xreg = max_per_class_reg_vals;
+                }
             } else {
                 // Single Register parameters
                 let rc = rcs[0];
@@ -474,14 +486,20 @@ impl ABIMachineSpec for AArch64MachineDeps {
         from_bits: u8,
         to_bits: u8,
     ) -> Inst {
-        assert!(from_bits < to_bits);
-        Inst::Extend {
-            rd: to_reg,
-            rn: from_reg,
-            signed,
-            from_bits,
-            to_bits,
-        }
+        let (op, to) = match (signed, from_bits, to_bits) {
+            (false, 8, 32) => (ExtendOp::UXTB, OperandSize::Size32),
+            (false, 8, 64) => (ExtendOp::UXTB, OperandSize::Size64),
+            (false, 16, 32) => (ExtendOp::UXTH, OperandSize::Size32),
+            (false, 16, 64) => (ExtendOp::UXTH, OperandSize::Size64),
+            (false, 32, 64) => (ExtendOp::UXTW, OperandSize::Size64),
+            (true, 8, 32) => (ExtendOp::SXTB, OperandSize::Size32),
+            (true, 8, 64) => (ExtendOp::SXTB, OperandSize::Size64),
+            (true, 16, 32) => (ExtendOp::SXTH, OperandSize::Size32),
+            (true, 16, 64) => (ExtendOp::SXTH, OperandSize::Size64),
+            (true, 32, 64) => (ExtendOp::SXTW, OperandSize::Size64),
+            _ => unimplemented!("cannot extend {from_bits} to {to_bits} as signed? {signed}"),
+        };
+        Inst::gen_extend(to_reg, from_reg, op, to)
     }
 
     fn gen_args(args: Vec<ArgPair>) -> Inst {

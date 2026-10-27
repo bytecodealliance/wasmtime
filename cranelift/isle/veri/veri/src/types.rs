@@ -112,6 +112,7 @@ impl PartialOrd for Type {
 #[derive(Debug, Clone)]
 pub enum Compound {
     Primitive(Type),
+    Vector { lane_bits: usize, lanes: usize },
     Struct(Vec<Field>),
     Enum(Enum),
     // TODO(mbm): intern name identifier
@@ -296,6 +297,10 @@ impl Compound {
                 Self::Primitive(Type::BitVector(Width::Unknown))
             }
             ModelType::BitVec(Some(bits)) => Self::Primitive(Type::BitVector(Width::Bits(*bits))),
+            ModelType::BitVecLanes { lane_bits, lanes } => Self::Vector {
+                lane_bits: *lane_bits,
+                lanes: *lanes,
+            },
             ModelType::Struct(fields) => Self::Struct(
                 fields
                     .iter()
@@ -349,6 +354,14 @@ impl Compound {
         }
     }
 
+    /// Total width and lane count, if this is a vector.
+    pub fn as_vector(&self) -> Option<(usize, usize)> {
+        match self {
+            Compound::Vector { lane_bits, lanes } => Some((lane_bits * lanes, *lanes)),
+            _ => None,
+        }
+    }
+
     pub fn as_enum(&self) -> Option<&Enum> {
         match self {
             Compound::Enum(e) => Some(e),
@@ -362,7 +375,7 @@ impl Compound {
         F: FnMut(&Ident) -> Result<Compound>,
     {
         match self {
-            Compound::Primitive(_) => Ok(self.clone()),
+            Compound::Primitive(_) | Compound::Vector { .. } => Ok(self.clone()),
             Compound::Struct(fields) => Ok(Compound::Struct(
                 fields
                     .iter()
@@ -383,6 +396,7 @@ impl std::fmt::Display for Compound {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Compound::Primitive(ty) => ty.fmt(f),
+            Compound::Vector { lane_bits, lanes } => write!(f, "bv {lane_bits}x{lanes}"),
             Compound::Struct(fields) => write!(
                 f,
                 "{{{fields}}}",

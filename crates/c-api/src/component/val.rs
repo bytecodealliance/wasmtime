@@ -7,6 +7,7 @@ use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
 use std::slice;
 use wasmtime::component::{ResourceAny, ResourceDynamic, Val};
+use wasmtime::{Error, Result, format_err};
 
 crate::declare_vecs! {
     (
@@ -56,9 +57,10 @@ crate::declare_vecs! {
     )
 }
 
-impl From<&wasmtime_component_vallist_t> for Vec<Val> {
-    fn from(value: &wasmtime_component_vallist_t) -> Self {
-        value.as_slice().iter().map(Val::from).collect()
+impl TryFrom<&wasmtime_component_vallist_t> for Vec<Val> {
+    type Error = Error;
+    fn try_from(value: &wasmtime_component_vallist_t) -> Result<Self> {
+        value.as_slice().iter().map(Val::try_from).collect()
     }
 }
 
@@ -72,12 +74,13 @@ impl From<&[Val]> for wasmtime_component_vallist_t {
     }
 }
 
-impl From<&wasmtime_component_valmap_t> for Vec<(Val, Val)> {
-    fn from(value: &wasmtime_component_valmap_t) -> Self {
+impl TryFrom<&wasmtime_component_valmap_t> for Vec<(Val, Val)> {
+    type Error = Error;
+    fn try_from(value: &wasmtime_component_valmap_t) -> Result<Self> {
         value
             .as_slice()
             .iter()
-            .map(|entry| (Val::from(&entry.key), Val::from(&entry.value)))
+            .map(|entry| Ok((Val::try_from(&entry.key)?, Val::try_from(&entry.value)?)))
             .collect()
     }
 }
@@ -118,12 +121,10 @@ impl Default for wasmtime_component_valrecord_entry_t {
     }
 }
 
-impl From<&wasmtime_component_valrecord_entry_t> for (String, Val) {
-    fn from(value: &wasmtime_component_valrecord_entry_t) -> Self {
-        (
-            String::from_utf8(value.name.clone().take()).unwrap(),
-            Val::from(&value.val),
-        )
+impl TryFrom<&wasmtime_component_valrecord_entry_t> for (String, Val) {
+    type Error = Error;
+    fn try_from(value: &wasmtime_component_valrecord_entry_t) -> Result<Self> {
+        Ok((name_to_string(&value.name)?, Val::try_from(&value.val)?))
     }
 }
 
@@ -136,9 +137,10 @@ impl From<&(String, Val)> for wasmtime_component_valrecord_entry_t {
     }
 }
 
-impl From<&wasmtime_component_valrecord_t> for Vec<(String, Val)> {
-    fn from(value: &wasmtime_component_valrecord_t) -> Self {
-        value.as_slice().iter().map(Into::into).collect()
+impl TryFrom<&wasmtime_component_valrecord_t> for Vec<(String, Val)> {
+    type Error = Error;
+    fn try_from(value: &wasmtime_component_valrecord_t) -> Result<Self> {
+        value.as_slice().iter().map(TryInto::try_into).collect()
     }
 }
 
@@ -152,9 +154,10 @@ impl From<&[(String, Val)]> for wasmtime_component_valrecord_t {
     }
 }
 
-impl From<&wasmtime_component_valtuple_t> for Vec<Val> {
-    fn from(value: &wasmtime_component_valtuple_t) -> Self {
-        value.as_slice().iter().map(Val::from).collect()
+impl TryFrom<&wasmtime_component_valtuple_t> for Vec<Val> {
+    type Error = Error;
+    fn try_from(value: &wasmtime_component_valtuple_t) -> Result<Self> {
+        value.as_slice().iter().map(Val::try_from).collect()
     }
 }
 
@@ -168,15 +171,10 @@ impl From<&[Val]> for wasmtime_component_valtuple_t {
     }
 }
 
-impl From<&wasmtime_component_valflags_t> for Vec<String> {
-    fn from(value: &wasmtime_component_valflags_t) -> Self {
-        value
-            .clone()
-            .take()
-            .into_iter()
-            .map(|mut x| String::from_utf8(x.take()))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
+impl TryFrom<&wasmtime_component_valflags_t> for Vec<String> {
+    type Error = Error;
+    fn try_from(value: &wasmtime_component_valflags_t) -> Result<Self> {
+        value.as_slice().iter().map(name_to_string).collect()
     }
 }
 
@@ -208,12 +206,13 @@ impl From<(&String, &Option<Box<Val>>)> for wasmtime_component_valvariant_t {
     }
 }
 
-impl From<&wasmtime_component_valvariant_t> for (String, Option<Box<Val>>) {
-    fn from(value: &wasmtime_component_valvariant_t) -> Self {
-        (
-            String::from_utf8(value.discriminant.clone().take()).unwrap(),
-            value.val.as_ref().map(|x| Box::new(Val::from(x.as_ref()))),
-        )
+impl TryFrom<&wasmtime_component_valvariant_t> for (String, Option<Box<Val>>) {
+    type Error = Error;
+    fn try_from(value: &wasmtime_component_valvariant_t) -> Result<Self> {
+        Ok((
+            name_to_string(&value.discriminant)?,
+            option_box_try_from(&value.val)?,
+        ))
     }
 }
 
@@ -224,19 +223,24 @@ pub struct wasmtime_component_valresult_t {
     val: Option<Box<wasmtime_component_val_t>>,
 }
 
-impl From<&wasmtime_component_valresult_t> for Result<Option<Box<Val>>, Option<Box<Val>>> {
-    fn from(value: &wasmtime_component_valresult_t) -> Self {
-        let val = value.val.as_ref().map(|x| Box::new(Val::from(x.as_ref())));
+impl TryFrom<&wasmtime_component_valresult_t>
+    for core::result::Result<Option<Box<Val>>, Option<Box<Val>>>
+{
+    type Error = Error;
+    fn try_from(value: &wasmtime_component_valresult_t) -> Result<Self> {
+        let val = option_box_try_from(&value.val)?;
 
-        match value.is_ok {
+        Ok(match value.is_ok {
             true => Ok(val),
             false => Err(val),
-        }
+        })
     }
 }
 
-impl From<&Result<Option<Box<Val>>, Option<Box<Val>>>> for wasmtime_component_valresult_t {
-    fn from(value: &Result<Option<Box<Val>>, Option<Box<Val>>>) -> Self {
+impl From<&core::result::Result<Option<Box<Val>>, Option<Box<Val>>>>
+    for wasmtime_component_valresult_t
+{
+    fn from(value: &core::result::Result<Option<Box<Val>>, Option<Box<Val>>>) -> Self {
         let (Ok(x) | Err(x)) = value;
 
         Self {
@@ -287,9 +291,20 @@ impl Default for wasmtime_component_val_t {
     }
 }
 
-impl From<&wasmtime_component_val_t> for Val {
-    fn from(value: &wasmtime_component_val_t) -> Self {
-        match value {
+fn name_to_string(name: &wasm_name_t) -> Result<String> {
+    Ok(String::from_utf8(name.clone().take())?)
+}
+
+fn option_box_try_from(val: &Option<Box<wasmtime_component_val_t>>) -> Result<Option<Box<Val>>> {
+    val.as_ref()
+        .map(|x| Val::try_from(x.as_ref()).map(Box::new))
+        .transpose()
+}
+
+impl TryFrom<&wasmtime_component_val_t> for Val {
+    type Error = Error;
+    fn try_from(value: &wasmtime_component_val_t) -> Result<Self> {
+        Ok(match value {
             wasmtime_component_val_t::Bool(x) => Val::Bool(*x),
             wasmtime_component_val_t::S8(x) => Val::S8(*x),
             wasmtime_component_val_t::U8(x) => Val::U8(*x),
@@ -301,29 +316,25 @@ impl From<&wasmtime_component_val_t> for Val {
             wasmtime_component_val_t::U64(x) => Val::U64(*x),
             wasmtime_component_val_t::F32(x) => Val::Float32(*x),
             wasmtime_component_val_t::F64(x) => Val::Float64(*x),
-            wasmtime_component_val_t::Char(x) => Val::Char(char::from_u32(*x).unwrap()),
-            wasmtime_component_val_t::String(x) => {
-                Val::String(String::from_utf8(x.clone().take()).unwrap())
-            }
-            wasmtime_component_val_t::List(x) => Val::List(x.into()),
-            wasmtime_component_val_t::Record(x) => Val::Record(x.into()),
-            wasmtime_component_val_t::Tuple(x) => Val::Tuple(x.into()),
+            wasmtime_component_val_t::Char(x) => Val::Char(
+                char::from_u32(*x).ok_or_else(|| format_err!("invalid char value: {x:#x}"))?,
+            ),
+            wasmtime_component_val_t::String(x) => Val::String(name_to_string(x)?),
+            wasmtime_component_val_t::List(x) => Val::List(x.try_into()?),
+            wasmtime_component_val_t::Record(x) => Val::Record(x.try_into()?),
+            wasmtime_component_val_t::Tuple(x) => Val::Tuple(x.try_into()?),
             wasmtime_component_val_t::Variant(x) => {
-                let (a, b) = x.into();
+                let (a, b) = x.try_into()?;
                 Val::Variant(a, b)
             }
-            wasmtime_component_val_t::Enum(x) => {
-                Val::Enum(String::from_utf8(x.clone().take()).unwrap())
-            }
-            wasmtime_component_val_t::Option(x) => {
-                Val::Option(x.as_ref().map(|x| Box::new(Val::from(x.as_ref()))))
-            }
-            wasmtime_component_val_t::Result(x) => Val::Result(x.into()),
-            wasmtime_component_val_t::Flags(x) => Val::Flags(x.into()),
-            wasmtime_component_val_t::Map(x) => Val::Map(x.into()),
+            wasmtime_component_val_t::Enum(x) => Val::Enum(name_to_string(x)?),
+            wasmtime_component_val_t::Option(x) => Val::Option(option_box_try_from(x)?),
+            wasmtime_component_val_t::Result(x) => Val::Result(x.try_into()?),
+            wasmtime_component_val_t::Flags(x) => Val::Flags(x.try_into()?),
+            wasmtime_component_val_t::Map(x) => Val::Map(x.try_into()?),
             wasmtime_component_val_t::Resource(x) => Val::Resource(x.resource),
-            wasmtime_component_val_t::FixedLengthList(x) => Val::FixedLengthList(x.into()),
-        }
+            wasmtime_component_val_t::FixedLengthList(x) => Val::FixedLengthList(x.try_into()?),
+        })
     }
 }
 

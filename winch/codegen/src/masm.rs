@@ -410,20 +410,6 @@ impl ExtendKind {
             _ => false,
         }
     }
-
-    pub fn from_bits(&self) -> u8 {
-        match self {
-            Self::Signed(s) => s.from_bits(),
-            Self::Unsigned(u) => u.from_bits(),
-        }
-    }
-
-    pub fn to_bits(&self) -> u8 {
-        match self {
-            Self::Signed(s) => s.to_bits(),
-            Self::Unsigned(u) => u.to_bits(),
-        }
-    }
 }
 
 /// Kinds of vector load and extends in WebAssembly. Each MacroAssembler
@@ -1592,6 +1578,10 @@ pub(crate) trait MacroAssembler {
         _dst: WritableReg,
         _size: OperandSize,
     ) -> Result<()>;
+
+    /// Load the address of the function referenced by `name`, which must be
+    /// located within the same text section, into `dst`.
+    fn load_func_addr(&mut self, name: UserExternalNameRef, dst: WritableReg) -> Result<()>;
 
     /// Pop a value from the machine stack into the given register.
     fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()>;

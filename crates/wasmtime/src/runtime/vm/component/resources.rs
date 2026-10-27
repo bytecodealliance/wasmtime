@@ -265,8 +265,7 @@ impl ResourceTables<'_> {
     /// to run. If `None` is returned then that means a `borrow` handle was
     /// removed and no destructor is necessary.
     pub fn resource_drop(&mut self, index: TypedResourceIndex) -> Result<Option<u32>> {
-        let (table, counter) = self.table_for_index(&index);
-        match table.remove_resource(counter, index)? {
+        match self.table_for_index(&index).0.remove_resource(index)? {
             RemovedResource::Own { rep } => Ok(Some(rep)),
             RemovedResource::Borrow { scope } => {
                 self.task_state.call_context(scope)?.borrow_count -= 1;
@@ -298,8 +297,7 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lift_own` function.
     pub fn resource_lift_own(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        let (table, counter) = self.table_for_index(&index);
-        match table.remove_resource(counter, index)? {
+        match self.table_for_index(&index).0.remove_resource(index)? {
             RemovedResource::Own { rep } => Ok(rep),
             RemovedResource::Borrow { .. } => bail!("cannot lift own resource from a borrow"),
         }

@@ -501,13 +501,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
             },
         );
 
-        self.flush_code();
-        self.module.funcs[self.result]
-            .body
-            .push(Body::RefFunc(start));
-        self.module.funcs[self.result]
-            .body
-            .push(Body::RefFunc(return_));
+        self.push_body(Body::RefFunc(start));
+        self.push_body(Body::RefFunc(return_));
         self.instruction(I32Const(
             i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
         ));
@@ -820,6 +815,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .iter()
             .copied()
             .collect::<Vec<_>>();
+        self.init_hostcall_fuel(&src_tys);
         let dst_tys = self.types[adapter.lift.ty].params;
         let dst_tys = self.types[dst_tys]
             .types
@@ -908,6 +904,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .iter()
             .copied()
             .collect::<Vec<_>>();
+        self.init_hostcall_fuel(&src_tys);
         let dst_tys = self.types[adapter.lower.ty].results;
         let dst_tys = self.types[dst_tys]
             .types
@@ -1196,8 +1193,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 });
                 // Emit a `call` instruction which will get "relocated" to a
                 // function index once translation has completely finished.
-                self.flush_code();
-                self.module.funcs[self.result].body.push(Body::Call(helper));
+                self.push_body(Body::Call(helper));
 
                 // If the destination of the translation was on the stack then
                 // the types on the stack need to be optionally converted to
@@ -1696,6 +1692,51 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.free_temp_local(src_str.len);
         self.free_temp_local(dst_str.ptr);
         self.free_temp_local(dst_str.len);
+    }
+
+    /// Resets the hostcall fuel remaining for the strings in `tys` to the
+    /// store's hostcall fuel, if there are any strings.
+    ///
+    /// Strings are the only values the host copies on behalf of an adapter;
+    /// everything else is copied by the adapter's own wasm and charged as
+    /// such.
+    fn init_hostcall_fuel(&mut self, tys: &[InterfaceType]) {
+        if !tys.iter().any(|ty| self.types.ty_contains_string(ty)) {
+            return;
+        }
+        self.module.hostcall_fuel_global = true;
+        let hostcall_fuel = self.module.import_hostcall_fuel();
+        self.instruction(Call(hostcall_fuel.as_u32()));
+        self.push_body(Body::HostcallFuelGlobalSet);
+    }
+
+    /// Charges `src`'s code units at `enc`'s width against the remaining
+    /// hostcall fuel before the host copies it, trapping if there isn't
+    /// enough.
+    fn consume_hostcall_fuel(&mut self, src: &WasmString<'_>, enc: FE) {
+        self.instruction(LocalGet(src.len.idx));
+        if src.len.ty == ValType::I32 {
+            self.instruction(I64ExtendI32U);
+        }
+        if enc.width() > 1 {
+            self.instruction(I64Const(i64::from(enc.width())));
+            self.instruction(I64Mul);
+        }
+        let bytes = self.local_set_new_tmp(ValType::I64);
+
+        self.instruction(LocalGet(bytes.idx));
+        self.push_body(Body::HostcallFuelGlobalGet);
+        self.instruction(I64GtU);
+        self.instruction(If(BlockType::Empty));
+        self.trap(Trap::HostcallFuelExhausted);
+        self.instruction(End);
+
+        self.push_body(Body::HostcallFuelGlobalGet);
+        self.instruction(LocalGet(bytes.idx));
+        self.instruction(I64Sub);
+        self.push_body(Body::HostcallFuelGlobalSet);
+
+        self.free_temp_local(bytes);
     }
 
     // Corresponding function for `store_string_copy` in the spec.
@@ -2325,7 +2366,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn validate_string_length(&mut self, src: &WasmString<'_>, dst: FE) {
-        self.validate_string_length_u8(src, dst.width())
+        self.validate_string_length_u8(src, dst.width());
+        self.consume_hostcall_fuel(src, dst);
     }
 
     fn validate_string_length_u8(&mut self, s: &WasmString<'_>, dst: u8) {
@@ -3388,7 +3430,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected a `Future`"),
         };
         let transfer = self.module.import_future_transfer();
-        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+        self.translate_handle(src_ty.as_u32(), src, Some(dst_ty.as_u32()), dst, transfer);
     }
 
     fn translate_stream(
@@ -3403,7 +3445,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected a `Stream`"),
         };
         let transfer = self.module.import_stream_transfer();
-        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+        self.translate_handle(src_ty.as_u32(), src, Some(dst_ty.as_u32()), dst, transfer);
     }
 
     fn translate_error_context(
@@ -3418,7 +3460,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected an `ErrorContext`"),
         };
         let transfer = self.module.import_error_context_transfer();
-        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+        self.translate_handle(src_ty.as_u32(), src, Some(dst_ty.as_u32()), dst, transfer);
     }
 
     fn translate_own(
@@ -3433,7 +3475,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected an `Own`"),
         };
         let transfer = self.module.import_resource_transfer_own();
-        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+        self.translate_handle(src_ty.as_u32(), src, Some(dst_ty.as_u32()), dst, transfer);
     }
 
     fn translate_borrow(
@@ -3448,8 +3490,15 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected an `Borrow`"),
         };
 
-        let transfer = self.module.import_resource_transfer_borrow();
-        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+        let (transfer, dst_ty) = if self.module.resource_owned_by_own_instance(dst_ty) {
+            (self.module.import_resource_transfer_borrow_to_owner(), None)
+        } else {
+            (
+                self.module.import_resource_transfer_borrow(),
+                Some(dst_ty.as_u32()),
+            )
+        };
+        self.translate_handle(src_ty.as_u32(), src, dst_ty, dst, transfer);
     }
 
     /// Translates the index `src`, which resides in the table `src_ty`, into
@@ -3463,7 +3512,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         &mut self,
         src_ty: u32,
         src: &Source<'_>,
-        dst_ty: u32,
+        dst_ty: Option<u32>,
         dst: &Destination,
         transfer: FuncIndex,
     ) {
@@ -3474,7 +3523,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
             Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
         }
         self.instruction(I32Const(src_ty as i32));
-        self.instruction(I32Const(dst_ty as i32));
+        if let Some(dst_ty) = dst_ty {
+            self.instruction(I32Const(dst_ty as i32));
+        }
         self.instruction(Call(transfer.as_u32()));
         match dst {
             Destination::Memory(mem) => self.i32_store(mem),
@@ -3931,6 +3982,12 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.trap(Trap::UncaughtException);
         // End of the outer block; the body's results flow out.
         self.instruction(End);
+    }
+
+    /// Pushes a `Body` fragment directly to the function being created.
+    fn push_body(&mut self, body: Body) {
+        self.flush_code();
+        self.module.funcs[self.result].body.push(body);
     }
 
     /// Flushes out the current `code` instructions into the destination

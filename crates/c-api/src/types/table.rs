@@ -76,6 +76,27 @@ pub extern "C" fn wasm_tabletype_limits(tt: &wasm_tabletype_t) -> &wasm_limits_t
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_tabletype_minimum(tt: &wasm_tabletype_t) -> u64 {
+    tt.ty().ty.minimum()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_tabletype_maximum(tt: &wasm_tabletype_t, out: &mut u64) -> bool {
+    match tt.ty().ty.maximum() {
+        Some(max) => {
+            *out = max;
+            true
+        }
+        None => false,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_tabletype_is64(tt: &wasm_tabletype_t) -> bool {
+    tt.ty().ty.is_64()
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_tabletype_as_externtype(ty: &wasm_tabletype_t) -> &wasm_externtype_t {
     &ty.ext
 }

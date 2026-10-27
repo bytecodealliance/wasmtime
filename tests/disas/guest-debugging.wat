@@ -26,9 +26,9 @@
 ;;     sig0 = (i64 vmctx, i8) tail
 ;;     sig1 = (i64 vmctx) tail
 ;;     sig2 = (i64) preserve_all
-;;     fn0 = colocated u805306368:40 sig0
-;;     fn1 = colocated u805306368:41 sig1
-;;     fn2 = colocated patchable u1073741824:46 sig2
+;;     fn0 = colocated u805306368:39 sig0
+;;     fn1 = colocated u805306368:40 sig1
+;;     fn2 = colocated patchable u1073741824:45 sig2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0018                               v3 = stack_addr.i64 ss0+8

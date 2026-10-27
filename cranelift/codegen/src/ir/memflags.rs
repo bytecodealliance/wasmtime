@@ -179,7 +179,7 @@ impl MemFlagsData {
     /// Create a set of flags representing an access from a "trusted" address, meaning it's
     /// known to be aligned and non-trapping.
     pub const fn trusted() -> Self {
-        Self::new().with_notrap().with_aligned()
+        Self::new().with_notrap().with_aligned(true)
     }
 
     /// Reads the alias region that this memory operation works with.
@@ -210,8 +210,8 @@ impl MemFlagsData {
     pub fn set_by_name(&mut self, name: &str) -> Result<bool, &'static str> {
         *self = match name {
             "notrap" => self.with_trap_code(None),
-            "aligned" => self.with_aligned(),
-            "readonly" => self.with_readonly(),
+            "aligned" => self.with_aligned(true),
+            "readonly" => self.with_readonly(true),
             "little" => {
                 if self.flags.explicit_endianness() == Some(Endianness::Big) {
                     return Err("cannot set both big and little endian bits");
@@ -224,7 +224,8 @@ impl MemFlagsData {
                 }
                 self.with_endianness(Endianness::Big)
             }
-            "can_move" => self.with_can_move(),
+            "can_move" => self.with_can_move(true),
+            "volatile" => self.with_volatile(true),
 
             other => match TrapCode::from_str(other) {
                 Ok(code) => self.with_trap_code(Some(code)),
@@ -312,14 +313,14 @@ impl MemFlagsData {
         self.flags.can_move()
     }
 
-    /// Set the `can_move` flag.
-    pub const fn set_can_move(&mut self) {
-        *self = self.with_can_move();
+    /// Set or clear the `can_move` flag.
+    pub const fn set_can_move(&mut self, enabled: bool) {
+        *self = self.with_can_move(enabled);
     }
 
-    /// Set the `can_move` flag, returning new flags.
-    pub const fn with_can_move(mut self) -> Self {
-        self.flags = self.flags.with_can_move();
+    /// Set or clear the `can_move` flag, returning new flags.
+    pub const fn with_can_move(mut self, enabled: bool) -> Self {
+        self.flags = self.flags.with_can_move(enabled);
         self
     }
 
@@ -332,36 +333,70 @@ impl MemFlagsData {
         self.flags.aligned()
     }
 
-    /// Set the `aligned` flag.
-    pub fn set_aligned(&mut self) {
-        *self = self.with_aligned();
+    /// Set or clear the `aligned` flag.
+    pub fn set_aligned(&mut self, enabled: bool) {
+        *self = self.with_aligned(enabled);
     }
 
-    /// Set the `aligned` flag, returning new flags.
-    pub const fn with_aligned(mut self) -> Self {
-        self.flags = self.flags.with_aligned();
+    /// Set or clear the `aligned` flag, returning new flags.
+    pub const fn with_aligned(mut self, enabled: bool) -> Self {
+        self.flags = self.flags.with_aligned(enabled);
         self
     }
 
     /// Test if the `readonly` flag is set.
     ///
-    /// Loads with this flag have no memory dependencies.
-    /// This results in undefined behavior if the dereferenced memory is mutated at any time
-    /// between when the function is called and when it is exited.
+    /// Loads with this flag may be eliminated if a previous `readonly` load
+    /// loaded from the same location. The previous load must dominate this
+    /// load, and otherwise it does not matter what happens in between.
+    ///
+    /// Note that if this load is `can_move` then the memory must be readonly
+    /// for the entire function that this load is within. If the load is NOT
+    /// `can_move`, then mutations may happen before this load but cannot
+    /// happen after this load.
     pub const fn readonly(self) -> bool {
         self.flags.readonly()
     }
 
-    /// Set the `readonly` flag.
-    pub fn set_readonly(&mut self) {
-        *self = self.with_readonly();
+    /// Set or clear the `readonly` flag.
+    pub fn set_readonly(&mut self, enabled: bool) {
+        *self = self.with_readonly(enabled);
     }
 
-    /// Set the `readonly` flag, returning new flags.
-    pub const fn with_readonly(mut self) -> Self {
-        self.flags = self.flags.with_readonly();
+    /// Set or clear the `readonly` flag, returning new flags.
+    pub const fn with_readonly(mut self, enabled: bool) -> Self {
+        self.flags = self.flags.with_readonly(enabled);
         self
     }
+
+    /// Test if the `volatile` flag is set.
+    ///
+    /// A volatile memory operation must be performed exactly as written, as in
+    /// C's and Rust's volatile accesses (memory-mapped I/O, memory another
+    /// agent watches): it is never removed, even when its result is unused or
+    /// it stores a value already in memory; never merged with another access
+    /// (no redundant-load elimination, store-to-load forwarding or dead-store
+    /// elimination); and never reordered with another volatile access.
+    /// Accesses that are not volatile may still move around it.
+    ///
+    /// `volatile` is mutually exclusive with both `can_move` and `readonly`:
+    /// valid flags satisfy `!(volatile && (can_move || readonly))`, which the
+    /// verifier enforces.
+    pub const fn volatile(self) -> bool {
+        self.flags.volatile()
+    }
+
+    /// Set or clear the `volatile` flag.
+    pub fn set_volatile(&mut self, enabled: bool) {
+        *self = self.with_volatile(enabled);
+    }
+
+    /// Set or clear the `volatile` flag, returning new flags.
+    pub const fn with_volatile(mut self, enabled: bool) -> Self {
+        self.flags = self.flags.with_volatile(enabled);
+        self
+    }
+
     /// Get the trap code to report if this memory access traps.
     ///
     /// A `None` trap code indicates that this memory access does not trap.

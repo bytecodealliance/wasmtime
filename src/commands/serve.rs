@@ -161,6 +161,29 @@ pub struct ServeCommand {
     #[arg(long, default_value = "1s", value_parser = parse_duration)]
     idle_instance_timeout: Duration,
 
+    /// Maximum time a component instance may keep running after all of its
+    /// requests have produced responses or timed out, for example while it is
+    /// still streaming a response body or running tasks it spawned.
+    ///
+    /// The time is measured from the moment the instance's last outstanding
+    /// request produced its response or timed out, so it starts over whenever
+    /// a reused instance finishes another request. Once no requests are
+    /// outstanding, it also bounds how long the handler of a timed-out request
+    /// keeps running in the background. If it elapses, the whole instance is
+    /// dropped, which cuts off every response body it is still streaming.
+    ///
+    /// Defaults to the value of `-W timeout`, or no limit if that is not set
+    /// either. Like `-W timeout`, setting this option enables epoch
+    /// interruption and runs blocking WASI filesystem calls on background
+    /// threads, so the limit is enforced even if guest code never yields or
+    /// is blocked in a filesystem call.
+    ///
+    /// A number with no suffix or with an `s` suffix is interpreted as seconds;
+    /// other accepted suffixes include `ms` (milliseconds), `us` or `μs`
+    /// (microseconds), and `ns` (nanoseconds).
+    #[arg(long, value_parser = parse_duration)]
+    post_return_timeout: Option<Duration>,
+
     /// Optional maximum idle time before exiting the process.
     ///
     /// If no connection is open for this interval after the first connection has been received, the
@@ -394,7 +417,10 @@ impl ServeCommand {
 
     fn new_store(&self, engine: &Engine, instance_id: Option<u64>) -> Result<Store<Host>> {
         let mut builder = WasiCtxBuilder::new();
-        self.run.configure_wasip2(&mut builder)?;
+        self.run.configure_wasip2(
+            &mut builder,
+            self.run.common.wasm.timeout.is_none() && self.post_return_timeout.is_none(),
+        )?;
 
         if let Some(instance_id) = instance_id {
             builder.env("INSTANCE_ID", instance_id.to_string());
@@ -582,7 +608,7 @@ impl ServeCommand {
             .config(use_pooling_allocator_by_default().unwrap_or(None))?;
         config.wasm_component_model(true);
 
-        if self.run.common.wasm.timeout.is_some() {
+        if self.run.common.wasm.timeout.is_some() || self.post_return_timeout.is_some() {
             config.epoch_interruption(true);
         }
 
@@ -711,7 +737,11 @@ impl ServeCommand {
 
         let epoch_interval = if let Some(Profile::Guest { interval, .. }) = self.run.profile {
             Some(interval)
-        } else if let Some(t) = self.run.common.wasm.timeout {
+        } else if let Some(t) = [self.run.common.wasm.timeout, self.post_return_timeout]
+            .into_iter()
+            .flatten()
+            .min()
+        {
             Some(EPOCH_INTERRUPT_PERIOD.min(t))
         } else if debuggee_store.is_some() {
             Some(Duration::from_millis(1))
@@ -894,6 +924,7 @@ pin_project! {
     struct HostWorkerExpiration {
         idle_timeout: Duration,
         request_timeout: Duration,
+        post_return_timeout: Duration,
         #[pin]
         sleep: tokio::time::Sleep,
     }
@@ -910,10 +941,8 @@ impl WorkerExpiration for HostWorkerExpiration {
 
         let timeout = match status {
             WorkerStatus::Idle => *me.idle_timeout,
-            // TODO: add a dedicated `post_return_timeout` config setting
-            // instead of reusing `request_timeout` for
-            // `WorkerStatus::PostReturn` here
-            WorkerStatus::Requests | WorkerStatus::PostReturn => *me.request_timeout,
+            WorkerStatus::Requests => *me.request_timeout,
+            WorkerStatus::PostReturn => *me.post_return_timeout,
         };
 
         if let Some(deadline) = start.checked_add(timeout) {
@@ -1035,20 +1064,24 @@ impl HandlerState for HostHandlerState {
             .new_store(self.component.engine(), Some(instance_id))?;
         let proxy = self.instantiate_into(&mut store).await?;
 
+        let request_timeout = self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX);
+        let post_return_timeout = self.cmd.post_return_timeout.unwrap_or(request_timeout);
+
         Ok(Instance {
             store,
             proxy,
             view: wasmtime_wasi_http::WasiHttpView::http,
             expiration: HostWorkerExpiration {
                 idle_timeout: self.cmd.idle_instance_timeout,
-                request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
+                request_timeout,
+                post_return_timeout,
                 sleep: tokio::time::sleep(Duration::MAX),
             },
             state: HostWorkerState {
                 max_instance_reuse_count: self.max_instance_reuse_count,
                 max_instance_concurrent_reuse_count: self.max_instance_concurrent_reuse_count,
                 instance_id,
-                request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
+                request_timeout,
                 #[cfg(feature = "coredump")]
                 coredump: self.cmd.run.common.debug.coredump.clone(),
                 #[cfg(feature = "coredump")]
@@ -1265,8 +1298,11 @@ fn setup_epoch_handler(state: &HostHandlerState, store: &mut Store<Host>) -> Res
         }
     }
 
-    // Profiling disabled but there's a global request timeout
-    if cmd.run.common.wasm.timeout.is_some() || cmd.run.common.debug.debugger.is_some() {
+    // Profiling disabled but there's a global request or post-return timeout
+    if cmd.run.common.wasm.timeout.is_some()
+        || cmd.post_return_timeout.is_some()
+        || cmd.run.common.debug.debugger.is_some()
+    {
         store.epoch_deadline_async_yield_and_update(1);
         store.set_epoch_deadline(1);
     }

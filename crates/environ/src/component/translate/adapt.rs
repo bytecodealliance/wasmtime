@@ -205,13 +205,14 @@ impl<'data> Translator<'_, 'data> {
         for (module_id, adapter_module) in state.adapter_modules.iter() {
             let mut module = fact::Module::new(
                 self.types.types(),
+                component,
                 self.tunables,
                 *self.validator.features(),
             );
             let mut names = Vec::with_capacity(adapter_module.adapters.len());
             for adapter in adapter_module.adapters.iter() {
                 let name = format!("adapter{}", adapter.as_u32());
-                module.adapt(&name, component, *adapter);
+                module.adapt(&name, *adapter);
                 names.push(name);
             }
             let wasm = module.encode();
@@ -324,6 +325,9 @@ fn fact_import_to_core_def(
         fact::Import::ResourceTransferBorrow => {
             simple_intrinsic(dfg::Trampoline::ResourceTransferBorrow)
         }
+        fact::Import::ResourceTransferBorrowToOwner => {
+            simple_intrinsic(dfg::Trampoline::ResourceTransferBorrowToOwner)
+        }
         fact::Import::PrepareCall { memory } => simple_intrinsic(dfg::Trampoline::PrepareCall {
             memory: memory.as_ref().map(|v| dfg.memories.push(unwrap_memory(v))),
         }),
@@ -340,6 +344,7 @@ fn fact_import_to_core_def(
             simple_intrinsic(dfg::Trampoline::ErrorContextTransfer)
         }
         fact::Import::Trap(trap) => simple_intrinsic(dfg::Trampoline::Trap(*trap)),
+        fact::Import::HostcallFuel => simple_intrinsic(dfg::Trampoline::HostcallFuel),
         fact::Import::EnterSyncCall => simple_intrinsic(dfg::Trampoline::EnterSyncCall),
         fact::Import::ExitSyncCall => simple_intrinsic(dfg::Trampoline::ExitSyncCall),
         fact::Import::UnsafeIntrinsic(intrinsic) => {

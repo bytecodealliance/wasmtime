@@ -1,0 +1,26 @@
+; `lanemap` applies its body to each lane of a vector instantiation. Double
+; negation is the identity at every shape.
+
+(type Type (primitive Type))
+(model Type (type (struct (bits Int) (lanes Int))))
+
+(type Value (primitive Value))
+(model Value (type (bv (8 16))))
+
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+(instantiate test
+    ((args (bv 16)) (ret (bv 16)))
+    ((args (bv 8 x 2)) (ret (bv 8 x 2))))
+
+(decl neg (Type Value) Value)
+(extern extractor neg neg)
+(spec (neg ty x)
+    (provide (= result (lanemap ((x x)) (bvneg x)))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
+(instantiate neg
+    ((args (named Type) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 8 x 2)) (ret (bv 8 x 2))))
+
+(rule test (test (neg ty (neg ty x))) x)

@@ -193,6 +193,16 @@ impl ComponentTypesBuilder {
         self.component_types.resource_tables.len()
     }
 
+    /// Forwards to `ComponentTypes::resource_owned_by_own_instance`.
+    pub fn resource_owned_by_own_instance(
+        &self,
+        ty: TypeResourceTableIndex,
+        defined_resource_instance: impl FnOnce(ResourceIndex) -> Option<RuntimeComponentInstanceIndex>,
+    ) -> bool {
+        self.component_types
+            .resource_owned_by_own_instance(ty, defined_resource_instance)
+    }
+
     /// Returns the number of future tables allocated so far, or the maximum
     /// `TypeFutureTableIndex`.
     pub fn num_future_tables(&self) -> usize {
@@ -878,6 +888,11 @@ impl ComponentTypesBuilder {
         self.type_information(ty).handles.has_any()
     }
 
+    /// Returns whether the type specified contains a `string` within it.
+    pub fn ty_contains_string(&self, ty: &InterfaceType) -> bool {
+        self.type_information(ty).has_string
+    }
+
     /// Returns whether the signature of `ty` mentions any handle, in either its
     /// parameters or its results.
     pub fn func_contains_any_handle(&self, ty: TypeFuncIndex) -> bool {
@@ -935,7 +950,11 @@ impl ComponentTypesBuilder {
                 &INFO
             }
             InterfaceType::String => {
-                static INFO: TypeInformation = TypeInformation::string();
+                static INFO: TypeInformation = {
+                    let mut info = TypeInformation::string();
+                    info.has_string = true;
+                    info
+                };
                 &INFO
             }
 
@@ -1115,6 +1134,9 @@ struct TypeInformation {
 
     /// Which handles this type transitively contains, if any.
     handles: Handles,
+
+    /// Whether this type transitively contains a `string`.
+    has_string: bool,
 }
 
 impl TypeInformation {
@@ -1122,6 +1144,7 @@ impl TypeInformation {
         TypeInformation {
             flat: FlatTypesStorage::new(),
             handles: Handles::None,
+            has_string: false,
         }
     }
 
@@ -1148,6 +1171,7 @@ impl TypeInformation {
     fn build_record<'a>(&mut self, types: impl Iterator<Item = &'a TypeInformation>) {
         for info in types {
             self.handles = Handles::join(self.handles, info.handles);
+            self.has_string |= info.has_string;
             match info.flat.as_flat_types() {
                 Some(types) => {
                     for (t32, t64) in types.memory32.iter().zip(types.memory64) {
@@ -1189,6 +1213,7 @@ impl TypeInformation {
                 None => continue,
             };
             self.handles = Handles::join(self.handles, info.handles);
+            self.has_string |= info.has_string;
 
             // If this variant is already unrepresentable in a flat
             // representation then this can be skipped.
@@ -1254,6 +1279,7 @@ impl TypeInformation {
     fn fixed_length_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedLengthList) {
         let element_info = types.type_information(&ty.element);
         self.handles = element_info.handles;
+        self.has_string = element_info.has_string;
         match element_info.flat.as_flat_types() {
             Some(types) => {
                 'outer: for _ in 0..ty.size {
@@ -1309,6 +1335,7 @@ impl TypeInformation {
         *self = TypeInformation::string();
         let info = types.type_information(&ty.element);
         self.handles = info.handles;
+        self.has_string = info.has_string;
     }
 
     fn maps(&mut self, types: &ComponentTypesBuilder, ty: &TypeMap) {
@@ -1318,5 +1345,6 @@ impl TypeInformation {
         let key_info = types.type_information(&ty.key);
         let value_info = types.type_information(&ty.value);
         self.handles = Handles::join(key_info.handles, value_info.handles);
+        self.has_string = key_info.has_string || value_info.has_string;
     }
 }

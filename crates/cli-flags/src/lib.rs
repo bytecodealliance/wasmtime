@@ -446,7 +446,11 @@ wasmtime_option_group! {
         /// useful for tracking down a backtrace of what is requesting so much
         /// memory, for example.
         pub trap_on_grow_failure: Option<bool>,
-        /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
+        /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc).
+        ///
+        /// Note that when this option is not set, malicious wasm code may
+        /// cause the host process to become unresponsive to inputs including
+        /// SIGTERM.
         pub timeout: Option<Duration>,
         /// Configures support for all WebAssembly proposals implemented.
         pub all_proposals: Option<bool>,
@@ -631,10 +635,12 @@ wasmtime_option_group! {
         pub max_resources: Option<usize>,
         /// Fuel to use for all hostcalls to limit guest<->host data transfer.
         pub hostcall_fuel: Option<usize>,
-        /// Maximum number of simultaneously-live component-model handles (e.g.
+        /// Maximum number of component-model handle-table slots (e.g. for
         /// resources, streams, futures) per store; allocating past it traps.
         /// (default: 100000)
         pub max_component_handles: Option<usize>,
+        /// Maximum number of simultaneously-live fibers per store.
+        pub max_fibers: Option<u32>,
         /// Maximum value, in bytes, for a wasi-random 0.2
         /// `get{,-insecure}-random-bytes` `len` parameter. Calls with a value
         /// exceeding this limit will trap.

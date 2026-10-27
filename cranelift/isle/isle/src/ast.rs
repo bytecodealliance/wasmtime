@@ -181,6 +181,17 @@ pub enum AttrKind {
     Tag(Ident),
 }
 
+/// How a lane map combines the body's results over the lanes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Lanes {
+    /// `lanemap`: concatenate, lane 0 in the low bits.
+    Map,
+    /// `all_lanes`: conjoin booleans.
+    All,
+    /// `any_lanes`: disjoin booleans.
+    Any,
+}
+
 /// An expression used to specify term semantics, similar to SMT-LIB syntax.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum SpecExpr {
@@ -248,6 +259,14 @@ pub enum SpecExpr {
         body: Box<SpecExpr>,
         pos: Pos,
     },
+    /// Map the body over the lanes of bit-vectors: each binder names one lane
+    /// of its bit-vector, shadowing any outer variable of that name.
+    LaneMap {
+        binders: Vec<(Ident, SpecExpr)>,
+        body: Box<SpecExpr>,
+        reduce: Lanes,
+        pos: Pos,
+    },
     /// Inline macro definition, or lambda.
     Macro {
         /// Parameter names.
@@ -296,6 +315,7 @@ impl SpecExpr {
             | &Self::Match { pos, .. }
             | &Self::Let { pos, .. }
             | &Self::With { pos, .. }
+            | &Self::LaneMap { pos, .. }
             | &Self::Macro { pos, .. }
             | &Self::Expand { pos, .. }
             | &Self::Pair { pos, .. }
@@ -413,6 +433,7 @@ pub enum SpecOp {
     FPToUBV,
     FPToSBV,
     WidthOf,
+    LanesOf,
 
     // Control operations
     If,
@@ -494,6 +515,9 @@ pub enum ModelType {
     BitVec(Option<usize>),
     /// SMT-LIB bitvector whose width is one of the given widths.
     BitVecOneOf(Vec<usize>),
+    /// Bitvector of `lanes` lanes of `lane_bits` bits each, lowered to an SMT-LIB
+    /// bivector of size `lanes` x `lane_bits`.
+    BitVecLanes { lane_bits: usize, lanes: usize },
     /// Structured type.
     Struct(Vec<ModelField>),
     /// Same model as the named type.

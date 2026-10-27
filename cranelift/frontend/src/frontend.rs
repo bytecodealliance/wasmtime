@@ -920,7 +920,7 @@ impl<'a> FunctionBuilder<'a> {
         }
 
         if u64::from(src_align) >= access_size && u64::from(dest_align) >= access_size {
-            flags.set_aligned();
+            flags.set_aligned(true);
         }
 
         // Load all of the memory first. This is necessary in case `dest` overlaps.
@@ -1011,7 +1011,7 @@ impl<'a> FunctionBuilder<'a> {
             self.call_memset(config, buffer, ch, size);
         } else {
             if u64::from(buffer_align) >= access_size {
-                flags.set_aligned();
+                flags.set_aligned(true);
             }
 
             let ch = u64::from(ch);
@@ -1153,11 +1153,11 @@ impl<'a> FunctionBuilder<'a> {
             if let Equal | NotEqual = zero_cc {
                 let mut left_flags = flags;
                 if size == left_align.get() as u64 {
-                    left_flags.set_aligned();
+                    left_flags.set_aligned(true);
                 }
                 let mut right_flags = flags;
                 if size == right_align.get() as u64 {
-                    right_flags.set_aligned();
+                    right_flags.set_aligned(true);
                 }
                 let left_val = self.ins().load(small_type, left_flags, left, 0);
                 let right_val = self.ins().load(small_type, right_flags, right, 0);
@@ -1168,7 +1168,7 @@ impl<'a> FunctionBuilder<'a> {
                 // But for now, just handle single bytes where we don't need to worry.
 
                 let mut aligned_flags = flags;
-                aligned_flags.set_aligned();
+                aligned_flags.set_aligned(true);
                 let left_val = self.ins().load(small_type, aligned_flags, left, 0);
                 let right_val = self.ins().load(small_type, aligned_flags, right, 0);
                 return self.ins().icmp(int_cc, left_val, right_val);

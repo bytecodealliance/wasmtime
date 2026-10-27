@@ -73,6 +73,11 @@ OSes such as iOS, Android, and Illumos are supported but less well tested.
 PRs to the Wasmtime repository are welcome for new OSes for better native
 platform support of a runtime environment.
 
+On Unix platforms where Wasmtime does not support native signal handling, for
+example NetBSD, Wasmtime still builds but does not use signals to catch traps.
+Compiled code then performs explicit checks instead, the same as with
+`Config::signals_based_traps(false)`, which is slower.
+
 ## Support for `#![no_std]`
 
 The `wasmtime` crate supports being build on no\_std platforms in Rust, but

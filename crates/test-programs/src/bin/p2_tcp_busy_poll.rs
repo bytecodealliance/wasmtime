@@ -30,7 +30,8 @@ fn test_tcp_busy_poll(family: IpAddressFamily, address: IpSocketAddress) {
         let (_accepted, rx, _tx) = listener.blocking_accept().unwrap();
         let rx_ready = rx.subscribe();
         let mut counter = 0;
-        loop {
+        let mut data = Vec::new();
+        while data.len() < message.len() {
             let zero_wait = monotonic_clock::subscribe_duration(0);
             if counter > 1_000_000 {
                 panic!("socket still not ready!");
@@ -38,13 +39,13 @@ fn test_tcp_busy_poll(family: IpAddressFamily, address: IpSocketAddress) {
 
             let ready = poll::poll(&[&zero_wait, &rx_ready]);
             if ready.contains(&1) {
-                break;
+                let remaining = message.len() - data.len();
+                data.extend(rx.read(remaining.try_into().unwrap()).unwrap());
             }
             counter += 1;
         }
 
-        let data = rx.read(message.len().try_into().unwrap()).unwrap();
-        assert_eq!(data, message); // Not guaranteed to work but should work in practice.
+        assert_eq!(data, message);
     }
 }
 

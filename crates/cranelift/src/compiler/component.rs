@@ -57,6 +57,9 @@ impl From<GetLibcallFn> for HostCallee {
 
 /// How to interpret the results of a host function.
 enum HostResult {
+    /// Normal result, can't trap, just returned to wasm.
+    Normal,
+
     /// The host function returns the sentinel specified which is interpreted
     /// and translated to the real return value.
     Sentinel(TrapSentinel),
@@ -613,6 +616,14 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
+            Trampoline::ResourceTransferBorrowToOwner => {
+                self.translate_libcall(
+                    host::resource_transfer_borrow_to_owner,
+                    TrapSentinel::NegativeOne,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
             Trampoline::PrepareCall { memory } => {
                 self.translate_libcall(
                     host::prepare_call,
@@ -680,6 +691,14 @@ impl<'a> TrampolineCompiler<'a> {
                 let code = crate::env_trap_to_clif_trap(*code);
                 let (mut traps, builder) = self.traps();
                 traps.trap(builder, code);
+            }
+            Trampoline::HostcallFuel => {
+                self.translate_libcall(
+                    host::hostcall_fuel,
+                    HostResult::Normal,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
             }
             Trampoline::EnterSyncCall => {
                 self.translate_libcall(
@@ -962,6 +981,10 @@ impl<'a> TrampolineCompiler<'a> {
         let result_ty = result.map(|v| self.builder.func.dfg.value_type(v));
         let expected = self.signature.results();
         match host_result.into() {
+            HostResult::Normal => {
+                assert_eq!(expected.len(), 1);
+                self.abi_store_results(&[result.unwrap()]);
+            }
             HostResult::Sentinel(TrapSentinel::NegativeOne) => {
                 assert_eq!(expected.len(), 1);
                 let (result, result_ty) = (result.unwrap(), result_ty.unwrap());
@@ -1411,12 +1434,14 @@ impl<'a> TrampolineCompiler<'a> {
             // directly from guest wasm, so no check is needed.
             Trampoline::ResourceTransferOwn
             | Trampoline::ResourceTransferBorrow
+            | Trampoline::ResourceTransferBorrowToOwner
             | Trampoline::PrepareCall { .. }
             | Trampoline::StartCall { .. }
             | Trampoline::FutureTransfer
             | Trampoline::StreamTransfer
             | Trampoline::ErrorContextTransfer
             | Trampoline::Trap(_)
+            | Trampoline::HostcallFuel
             | Trampoline::EnterSyncCall
             | Trampoline::ExitSyncCall
             | Trampoline::Transcoder { .. } => return,

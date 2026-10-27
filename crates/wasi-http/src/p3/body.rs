@@ -461,7 +461,10 @@ impl http_body::Body for GuestBody {
             )))),
             Ok(Ok(None)) => Poll::Ready(None),
             Ok(Err(err)) => Poll::Ready(Some(Err(err.into()))),
-            Err(..) => Poll::Ready(None),
+            // The sender was dropped without a result, e.g. because the guest
+            // trapped or the store was dropped. Treat this as an incomplete
+            // body.
+            Err(..) => Poll::Ready(Some(Err(Error::HttpProtocolError))),
         }
     }
 

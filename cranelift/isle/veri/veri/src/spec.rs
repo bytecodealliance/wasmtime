@@ -1,6 +1,6 @@
 use anyhow::{Ok, Result, bail, format_err};
 use cranelift_isle::{
-    ast::{self, AttrKind, AttrTarget, Def, Ident, Model, ModelType, Modifies, SpecOp},
+    ast::{self, AttrKind, AttrTarget, Def, Ident, Lanes, Model, ModelType, Modifies, SpecOp},
     lexer::Pos,
     sema::{ReturnKind, RuleId, Sym, Term, TermEnv, TermId, TypeEnv, TypeId},
 };
@@ -50,6 +50,8 @@ pub enum ExprKind {
 
     // Get the width of a bitvector
     WidthOf(Expr),
+    // Get the number of lanes of a bitvector
+    LanesOf(Expr),
 
     // Boolean operations
     Not(Expr),
@@ -165,6 +167,9 @@ pub enum ExprKind {
     Match(Expr, Vec<Arm>),
     // Let bindings
     Let(Vec<(Ident, Expr)>, Expr),
+
+    // Lane mapping: (binders, body, reduction)
+    LaneMap(Vec<(Ident, Expr)>, Expr, Lanes),
     // With scope.
     With(Vec<Ident>, Expr),
     // Macro definition.
@@ -342,6 +347,7 @@ impl ExprKind {
                 SpecOp::Int2BV => binary_expr!(ExprKind::Int2BV, args, pos),
                 SpecOp::BV2Nat => unary_expr!(ExprKind::BV2Nat, args, pos),
                 SpecOp::WidthOf => unary_expr!(ExprKind::WidthOf, args, pos),
+                SpecOp::LanesOf => unary_expr!(ExprKind::LanesOf, args, pos),
                 SpecOp::ToFP => binary_expr!(ExprKind::ToFP, args, pos),
                 SpecOp::ToFPUnsigned => binary_expr!(ExprKind::ToFPUnsigned, args, pos),
                 SpecOp::ToFPFromFP => binary_expr!(ExprKind::ToFPFromFP, args, pos),
@@ -418,6 +424,19 @@ impl ExprKind {
                     .collect();
                 let body = expr_from_ast(body);
                 ExprKind::Let(defs, body)
+            }
+            ast::SpecExpr::LaneMap {
+                binders,
+                body,
+                reduce,
+                pos: _,
+            } => {
+                let binders = binders
+                    .iter()
+                    .map(|(ident, x)| (ident.clone(), expr_from_ast(x)))
+                    .collect();
+                let body = expr_from_ast(body);
+                ExprKind::LaneMap(binders, body, *reduce)
             }
             ast::SpecExpr::With {
                 decls,

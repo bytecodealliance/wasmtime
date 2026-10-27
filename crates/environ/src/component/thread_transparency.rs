@@ -304,12 +304,14 @@ fn trampoline_callable(
         Transcoder { .. }
         | ResourceTransferOwn
         | ResourceTransferBorrow
+        | ResourceTransferBorrowToOwner
         | PrepareCall { .. }
         | StartCall { .. }
         | FutureTransfer
         | StreamTransfer
         | ErrorContextTransfer
         | Trap(_)
+        | HostcallFuel
         | EnterSyncCall
         | ExitSyncCall => {
             unreachable!("these trampolines do not exist yet")

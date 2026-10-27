@@ -340,6 +340,24 @@ impl TypeTrace for ComponentTypes {
 }
 
 impl ComponentTypes {
+    /// Returns whether the resource that `ty` points to is owned by the very
+    /// instance that `ty` itself belongs to.
+    pub fn resource_owned_by_own_instance(
+        &self,
+        ty: TypeResourceTableIndex,
+        defined_resource_instance: impl FnOnce(ResourceIndex) -> Option<RuntimeComponentInstanceIndex>,
+    ) -> bool {
+        let (resource_ty, resource_instance) = match self[ty] {
+            TypeResourceTable::Concrete { ty, instance } => (ty, instance),
+            // Abstract tables don't exist at runtime, so there's nothing to
+            // own them.
+            TypeResourceTable::Abstract(_) => return false,
+        };
+        // An imported resource is never defined by, and so never owned by, an
+        // instance within this component.
+        defined_resource_instance(resource_ty) == Some(resource_instance)
+    }
+
     /// Returns the core wasm module types known within this component.
     pub fn module_types(&self) -> &ModuleTypes {
         self.module_types.as_ref().unwrap()

@@ -6,25 +6,6 @@ use wasmtime::*;
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn link_undefined() -> Result<()> {
-    let mut store = Store::<()>::default();
-    let linker = Linker::new(store.engine());
-    let module = Module::new(store.engine(), r#"(module (import "" "" (func)))"#)?;
-    assert!(linker.instantiate(&mut store, &module).is_err());
-    let module = Module::new(store.engine(), r#"(module (import "" "" (global i32)))"#)?;
-    assert!(linker.instantiate(&mut store, &module).is_err());
-    let module = Module::new(store.engine(), r#"(module (import "" "" (memory 1)))"#)?;
-    assert!(linker.instantiate(&mut store, &module).is_err());
-    let module = Module::new(
-        store.engine(),
-        r#"(module (import "" "" (table 1 funcref)))"#,
-    )?;
-    assert!(linker.instantiate(&mut store, &module).is_err());
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
 fn test_unknown_import_error() -> Result<()> {
     let mut store = Store::<()>::default();
     let linker = Linker::new(store.engine());

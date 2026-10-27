@@ -108,6 +108,16 @@ impl ExtendOp {
     pub fn bits(self) -> u8 {
         self as u8
     }
+
+    /// The width in bits of the value being extended.
+    pub fn from_bits(self) -> u8 {
+        match self {
+            Self::UXTB | Self::SXTB => 8,
+            Self::UXTH | Self::SXTH => 16,
+            Self::UXTW | Self::SXTW => 32,
+            Self::UXTX | Self::SXTX => 64,
+        }
+    }
 }
 
 //=============================================================================

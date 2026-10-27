@@ -129,7 +129,7 @@ where
     /// * If `store` requires using [`Self::call_async`] instead, see
     ///   [crate documentation](crate#async) for more info.
     /// * The call is recursive from within e.g. a `call_async` invocation.
-    /// * If the function is async-lifted, in which case either
+    /// * If the function is async-typed or async-lifted, in which case either
     ///   [`Self::call_async`] or [`Self::call_concurrent`] must be used.
     ///
     /// In general there are many ways that things could go wrong when copying
@@ -212,9 +212,9 @@ where
     fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
         let mut store = store.as_context_mut();
 
-        if self.func.abi_async(store.0) {
+        if self.func.is_async(store.0) {
             bail!(
-                "cannot synchronously call an async-lifted export; \
+                "cannot synchronously call an async function; \
                  use `call_async` or `call_concurrent` instead"
             );
         }

@@ -2864,6 +2864,48 @@ start a print 1234
         .await
     }
 
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_trap_mid_body() -> Result<()> {
+        cli_serve_trap_mid_body(P3_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_trap_mid_body() -> Result<()> {
+        cli_serve_trap_mid_body(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })
+        .await
+    }
+
+    /// A guest trapping while streaming a chunked response body must not
+    /// produce a response that looks complete to the client.
+    async fn cli_serve_trap_mid_body(
+        component: &str,
+        configure: impl FnOnce(&mut Command),
+    ) -> Result<()> {
+        let server = WasmtimeServe::new(component, configure)?;
+        let result = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/trap")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await;
+        assert!(
+            result.is_err(),
+            "truncated body looked complete: {result:?}"
+        );
+        let (_, stderr) = server.finish()?;
+        assert!(stderr.contains("unreachable"), "{stderr}");
+        Ok(())
+    }
+
     const CONNECTION_COUNT_MANY: usize = 20;
     const REQUESTS_PER_CONNECTION_MANY: usize = 5;
 
@@ -3537,6 +3579,139 @@ start a print 1234
         Ok(())
     }
 
+    /// The streamed body outlives `-W timeout` when `--post-return-timeout`
+    /// gives post-return work a longer limit.
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_post_return_stream() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_POST_RETURN_STREAM_COMPONENT, move |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+            cmd.arg("-Wtimeout=1s");
+            cmd.arg("--post-return-timeout=60s");
+        })?;
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+        assert_eq!(resp.body(), "123");
+
+        server.finish()?;
+        Ok(())
+    }
+
+    /// With only `-W timeout` set, the post-return timeout inherits it, so the
+    /// ~3s body stream is cut off after ~1s.
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_post_return_stream_default_timeout() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_POST_RETURN_STREAM_COMPONENT, move |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+            cmd.arg("-Wtimeout=1s");
+        })?;
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+        assert!(
+            resp.body().starts_with("1") && resp.body() != "123",
+            "expected the post-return timeout to cut off the stream; got {:?}",
+            resp.body()
+        );
+
+        let (_stdout, stderr) = server.finish()?;
+        assert!(stderr.contains("guest timed out"), "stderr: {stderr}");
+        Ok(())
+    }
+
+    /// With only `--post-return-timeout` set, post-return work that is blocked
+    /// in a filesystem call is still cut off when the deadline elapses.
+    #[cfg(unix)]
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_post_return_blocking_open() -> Result<()> {
+        use std::os::unix::ffi::OsStrExt;
+
+        let dir = tempfile::TempDir::new()?;
+        let fifo = dir.path().join("fifo");
+        let path = std::ffi::CString::new(fifo.as_os_str().as_bytes())?;
+        // SAFETY: `path` is a valid NUL-terminated string that outlives the call.
+        if unsafe { libc::mkfifo(path.as_ptr(), 0o600) } != 0 {
+            bail!("failed to create fifo: {}", io::Error::last_os_error());
+        }
+
+        let server = WasmtimeServe::new(P3_CLI_SERVE_POST_RETURN_BLOCKING_OPEN_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+            cmd.arg("--post-return-timeout=1s");
+            cmd.arg(format!("--dir={}::/", dir.path().display()));
+        })?;
+
+        let request = hyper::Request::builder()
+            .uri("http://localhost/")
+            .body(String::new())
+            .context("failed to make request")?;
+        let resp = tokio::time::timeout(Duration::from_secs(30), server.send_request(request))
+            .await
+            .context("request did not complete within 30s")??;
+        assert!(resp.status().is_success());
+        assert!(
+            resp.body().is_empty(),
+            "expected the instance to be dropped while its open was still blocked; got {:?}",
+            resp.body()
+        );
+
+        // The guest's open is still blocked on a background thread; give it a
+        // writer so the server can shut down.
+        thread::spawn(move || std::fs::OpenOptions::new().write(true).open(fifo));
+
+        let (_stdout, stderr) = server.finish()?;
+        assert!(stderr.contains("guest timed out"), "stderr: {stderr}");
+        Ok(())
+    }
+
+    #[cfg(not(unix))]
+    #[tokio::test]
+    async fn p3_cli_serve_post_return_blocking_open() -> Result<()> {
+        Ok(())
+    }
+
+    /// With only `--post-return-timeout` set, post-return work that never
+    /// yields is still cut off when the deadline elapses.
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_post_return_spin() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_POST_RETURN_SPIN_COMPONENT, move |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+            cmd.arg("--post-return-timeout=1s");
+        })?;
+        let request = hyper::Request::builder()
+            .uri("http://localhost/")
+            .body(String::new())
+            .context("failed to make request")?;
+        let resp = tokio::time::timeout(Duration::from_secs(30), server.send_request(request))
+            .await
+            .context("request did not complete within 30s")??;
+        assert!(resp.status().is_success());
+        assert!(resp.body().is_empty(), "got {:?}", resp.body());
+
+        let (_stdout, stderr) = server.finish()?;
+        assert!(stderr.contains("guest timed out"), "stderr: {stderr}");
+        Ok(())
+    }
+
     #[test]
     fn p3_cli_many_stream() -> Result<()> {
         run_wasmtime(&["run", "-Smax-resources=100", P3_CLI_MANY_STREAM_COMPONENT])?;
@@ -3546,6 +3721,26 @@ start a print 1234
     #[test]
     fn p3_cli_deny_listen() -> Result<()> {
         run_wasmtime(&["run", "-Stcp", P3_CLI_DENY_LISTEN_COMPONENT])?;
+        Ok(())
+    }
+
+    #[test]
+    fn p2_cli_stdout_write_too_much() -> Result<()> {
+        // With `-Sinherit-stdout=n` stdout is a sink, so writing past the
+        // permit reported by `check-write` has to trap.
+        let output = super::wasmtime(&[
+            "run",
+            "-Sinherit-stdout=n",
+            P2_CLI_STDOUT_WRITE_TOO_MUCH_COMPONENT,
+        ])?
+        .output()?;
+        // The stdout stream is a sink, so nothing is expected on stdout.
+        assert_eq!(output.stdout, b"");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("write exceeded budget"),
+            "bad stderr: {stderr}"
+        );
         Ok(())
     }
 

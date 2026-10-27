@@ -104,7 +104,7 @@ TEST(ExnType, Smoke) {
 
 TEST(StructType, Smoke) {
   Engine engine;
-  StructType sty(engine, {});
+  StructType sty = StructType::create(engine, {}).unwrap();
   HeapType hty(sty);
   auto struct_ty = hty.as_concrete_struct();
   ASSERT_NE(struct_ty, nullptr);
@@ -116,7 +116,8 @@ TEST(StructType, Smoke) {
   rty = RefType(false, sty);
   ValType vty(engine, rty);
 
-  sty = StructType(engine, {FieldType::mut_(StorageType::i8())});
+  sty =
+      StructType::create(engine, {FieldType::mut_(StorageType::i8())}).unwrap();
   EXPECT_EQ(sty.field(0)->is_mutable(), true);
   EXPECT_TRUE(sty.field(0)->storage_type().is_i8());
   EXPECT_FALSE(sty.field(0)->storage_type().as_valtype());

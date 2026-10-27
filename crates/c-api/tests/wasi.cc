@@ -25,3 +25,9 @@ TEST(WasiConfig, Smoke) {
     EXPECT_FALSE(store.context().set_wasi(std::move(config2)));
   }
 }
+
+TEST(WasiConfig, EmptyArgvEnv) {
+  WasiConfig config;
+  config.argv({});
+  config.env({});
+}

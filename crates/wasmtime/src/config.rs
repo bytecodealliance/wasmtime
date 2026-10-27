@@ -1127,6 +1127,11 @@ impl Config {
     /// On x86_64 platforms the base CPU feature requirement for SIMD
     /// is SSE2 for the Cranelift compiler and AVX for the Winch compiler.
     ///
+    /// On riscv64 the Cranelift compiler requires the `has_v` (or
+    /// `has_zvl128b`) setting for SIMD, which is not detected when
+    /// [`Config::target`] is used. Without it creating an [`Engine`] fails
+    /// unless this option and [`Config::wasm_relaxed_simd`] are disabled.
+    ///
     /// This is `true` by default.
     ///
     /// [proposal]: https://github.com/webassembly/simd
@@ -1154,6 +1159,10 @@ impl Config {
     /// the [`Config::relaxed_simd_deterministic`] option which will force
     /// deterministic behavior across all platforms, as classified by the
     /// specification, at the cost of performance.
+    ///
+    /// On riscv64 the Cranelift compiler requires the `has_v` (or
+    /// `has_zvl128b`) setting for relaxed SIMD. Without it creating an
+    /// [`Engine`] fails unless this option is disabled.
     ///
     /// This is `true` by default.
     ///
@@ -3199,7 +3208,24 @@ impl Config {
 
         compiler.wmemcheck(self.compiler_config_mut().wmemcheck);
 
-        Ok((self, compiler.build()?))
+        let compiler = compiler.build()?;
+
+        // SIMD support can depend on ISA flags, such as `has_v` on riscv64,
+        // which aren't known until now, so it's checked here and not in
+        // `compiler_panicking_wasm_features`.
+        if !compiler.supports_wasm_simd() {
+            let simd = WasmFeatures::SIMD | WasmFeatures::RELAXED_SIMD;
+            if let Some((name, _)) = (features & simd).iter_names().next() {
+                bail!(
+                    "the wasm_{} feature is not supported on this compiler \
+                     configuration, enable the target's vector extension or \
+                     disable both simd and relaxed-simd",
+                    name.to_lowercase()
+                );
+            }
+        }
+
+        Ok((self, compiler))
     }
 
     /// Internal setting for whether adapter modules for components will have

@@ -403,6 +403,12 @@ pub trait Compiler: Send + Sync {
     /// Get a flag indicating whether branch protection is enabled.
     fn is_branch_protection_enabled(&self) -> bool;
 
+    /// Returns whether this compiler can compile the WebAssembly `v128` type
+    /// for its target.
+    fn supports_wasm_simd(&self) -> bool {
+        true
+    }
+
     /// Returns a suitable compiler usable for component-related compilations.
     ///
     /// Note that the `ComponentCompiler` trait can also be implemented for

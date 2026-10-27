@@ -494,7 +494,13 @@ where
         // First, can we try to deduplicate? We need to keep some copy
         // of the instruction around because it's side-effecting, but
         // we may be able to reuse an earlier instance of it.
-        if is_mergeable_for_egraph(self.func, inst) {
+        //
+        // If we insert this instruction into the GVN map as a new
+        // entry, remember its key: alias analysis below may still
+        // remove it (e.g. a mergeable `readonly` load), in which case
+        // the GVN entry must be updated to name the replacement value
+        // rather than this instruction's (soon-removed) result.
+        let gvn_key = if is_mergeable_for_egraph(self.func, inst) {
             let result = self.func.dfg.inst_results(inst).get(0).copied();
             trace!(" -> mergeable side-effecting op {}", inst);
 
@@ -542,9 +548,12 @@ where
                     }
                     v.insert(result);
                     trace!(" -> inserts as new (no GVN)");
+                    Some((ty, self.func.dfg.insts[inst]))
                 }
             }
-        }
+        } else {
+            None
+        };
 
         // Otherwise, if a load or store, process it with the alias analysis to
         // see if we can optimize it (rewrite in terms of an earlier load or
@@ -562,6 +571,12 @@ where
                 );
                 self.value_to_opt_value[result] = new_result;
                 self.available_block[result] = self.available_block[new_result];
+                if let Some(key) = gvn_key {
+                    let depth = self.gvn_map.depth();
+                    debug_assert!(self.gvn_map.get(&NullCtx, &key).is_some());
+                    self.gvn_map
+                        .insert_with_depth(&NullCtx, key, Some(new_result), depth);
+                }
                 Some(SkeletonInstSimplification::Remove)
             }
             OptResult::IdempotentStore => {

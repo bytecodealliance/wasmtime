@@ -18,6 +18,32 @@ extern "C" {
 #endif
 
 /**
+ * \brief Returns the minimum size, in elements, of the specified table type.
+ *
+ * Note that this function is preferred over #wasm_tabletype_limits for
+ * compatibility with 64-bit tables.
+ */
+WASM_API_EXTERN uint64_t wasmtime_tabletype_minimum(const wasm_tabletype_t *ty);
+
+/**
+ * \brief Returns the maximum size, in elements, of the specified table type.
+ *
+ * If this table type doesn't have a maximum size listed then `false` is
+ * returned. Otherwise `true` is returned and the `max` pointer is filled in
+ * with the specified maximum size, in elements.
+ *
+ * Note that this function is preferred over #wasm_tabletype_limits for
+ * compatibility with 64-bit tables.
+ */
+WASM_API_EXTERN bool wasmtime_tabletype_maximum(const wasm_tabletype_t *ty,
+                                                uint64_t *max);
+
+/**
+ * \brief Returns whether this type of table represents a 64-bit table.
+ */
+WASM_API_EXTERN bool wasmtime_tabletype_is64(const wasm_tabletype_t *ty);
+
+/**
  * \brief Creates a new host-defined wasm table.
  *
  * \param store the store to create the table within

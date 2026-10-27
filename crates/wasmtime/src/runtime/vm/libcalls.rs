@@ -65,13 +65,11 @@ use crate::runtime::vm::{self, HostResultHasUnwindSentinel, VMStore, f32x4, f64x
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::vmcontext::VMRawContObj;
 use core::convert::Infallible;
-use core::ptr::NonNull;
 #[cfg(feature = "threads")]
 use core::time::Duration;
 use wasmtime_core::math::WasmFloat;
 use wasmtime_environ::{
-    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, PassiveElemIndex, TableIndex,
-    Trap,
+    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, PassiveElemIndex, TableIndex, Trap,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -396,15 +394,6 @@ unsafe fn memory_fill(
     }
 }
 
-// Implementation of `ref.func`.
-fn ref_func(store: &mut dyn VMStore, instance: InstanceId, func_index: u32) -> NonNull<u8> {
-    let (instance, registry) = store.instance_and_module_registry_mut(instance);
-    instance
-        .get_func_ref(registry, FuncIndex::from_u32(func_index))
-        .expect("ref_func: funcref should always be available for given func index")
-        .cast()
-}
-
 // Returns a table entry after lazily initializing it.
 fn table_get_lazy_init_func_ref(
     store: &mut dyn VMStore,
@@ -653,6 +642,7 @@ unsafe fn get_interned_contref(
     out_result: *mut u8,
 ) -> Result<()> {
     use crate::store::AutoAssertNoGc;
+    use core::ptr::NonNull;
 
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
     let contobj = store.unwrap_gc_store().cont_ref_table.get(contref_id)?;

@@ -79,6 +79,10 @@ const BIT_LITTLE_ENDIAN: u16 = 1 << 2;
 /// Load multi-byte values from memory in a big-endian format.
 const BIT_BIG_ENDIAN: u16 = 1 << 3;
 
+/// A volatile access: it happens exactly as written (once, with its own width,
+/// in order with other volatile accesses), even when its result is unused.
+const BIT_VOLATILE: u16 = 1 << 4;
+
 /// Trap code, if any, for this memory operation.
 const MASK_TRAP_CODE: u16 = ((1 << TRAP_CODE_BITS) - 1) << TRAP_CODE_OFFSET;
 const TRAP_CODE_BITS: u16 = 8;
@@ -101,7 +105,8 @@ pub struct MachMemFlags {
     // - Bit 1: readonly
     // - Bit 2: little-endian
     // - Bit 3: big-endian
-    // - Bits 4..6: unused
+    // - Bit 4: volatile
+    // - Bits 5..6: unused
     // - Bits 7..14: trap code
     // - Bit 15: can_move
     bits: u16,
@@ -115,15 +120,19 @@ impl MachMemFlags {
 
     /// Create a set of flags representing an access from a "trusted" address.
     pub const fn trusted() -> Self {
-        Self::new().with_notrap().with_aligned()
+        Self::new().with_notrap().with_aligned(true)
     }
 
     const fn read_bit(self, bit: u16) -> bool {
         self.bits & bit != 0
     }
 
-    const fn with_bit(mut self, bit: u16) -> Self {
-        self.bits |= bit;
+    const fn with_bit(mut self, bit: u16, enabled: bool) -> Self {
+        if enabled {
+            self.bits |= bit;
+        } else {
+            self.bits &= !bit;
+        }
         self
     }
 
@@ -152,8 +161,8 @@ impl MachMemFlags {
     /// Set endianness of the memory access, returning new flags.
     pub const fn with_endianness(self, endianness: Endianness) -> Self {
         let res = match endianness {
-            Endianness::Little => self.with_bit(BIT_LITTLE_ENDIAN),
-            Endianness::Big => self.with_bit(BIT_BIG_ENDIAN),
+            Endianness::Little => self.with_bit(BIT_LITTLE_ENDIAN, true),
+            Endianness::Big => self.with_bit(BIT_BIG_ENDIAN, true),
         };
         assert!(!(res.read_bit(BIT_LITTLE_ENDIAN) && res.read_bit(BIT_BIG_ENDIAN)));
         res
@@ -174,9 +183,9 @@ impl MachMemFlags {
         self.read_bit(BIT_CAN_MOVE)
     }
 
-    /// Set the `can_move` flag, returning new flags.
-    pub const fn with_can_move(self) -> Self {
-        self.with_bit(BIT_CAN_MOVE)
+    /// Set or clear the `can_move` flag, returning new flags.
+    pub const fn with_can_move(self, enabled: bool) -> Self {
+        self.with_bit(BIT_CAN_MOVE, enabled)
     }
 
     /// Test if the `aligned` flag is set.
@@ -184,9 +193,9 @@ impl MachMemFlags {
         self.read_bit(BIT_ALIGNED)
     }
 
-    /// Set the `aligned` flag, returning new flags.
-    pub const fn with_aligned(self) -> Self {
-        self.with_bit(BIT_ALIGNED)
+    /// Set or clear the `aligned` flag, returning new flags.
+    pub const fn with_aligned(self, enabled: bool) -> Self {
+        self.with_bit(BIT_ALIGNED, enabled)
     }
 
     /// Test if the `readonly` flag is set.
@@ -194,9 +203,19 @@ impl MachMemFlags {
         self.read_bit(BIT_READONLY)
     }
 
-    /// Set the `readonly` flag, returning new flags.
-    pub const fn with_readonly(self) -> Self {
-        self.with_bit(BIT_READONLY)
+    /// Set or clear the `readonly` flag, returning new flags.
+    pub const fn with_readonly(self, enabled: bool) -> Self {
+        self.with_bit(BIT_READONLY, enabled)
+    }
+
+    /// Test if the `volatile` flag is set.
+    pub const fn volatile(self) -> bool {
+        self.read_bit(BIT_VOLATILE)
+    }
+
+    /// Set or clear the `volatile` flag, returning new flags.
+    pub const fn with_volatile(self, enabled: bool) -> Self {
+        self.with_bit(BIT_VOLATILE, enabled)
     }
 
     /// Get the trap code to report if this memory access traps.
@@ -235,6 +254,9 @@ impl fmt::Display for MachMemFlags {
         }
         if self.can_move() {
             write!(f, " can_move")?;
+        }
+        if self.volatile() {
+            write!(f, " volatile")?;
         }
         if self.read_bit(BIT_BIG_ENDIAN) {
             write!(f, " big")?;

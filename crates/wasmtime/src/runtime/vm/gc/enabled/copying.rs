@@ -11,6 +11,7 @@
 //! This collector does not require any read or write barriers.
 
 use super::VMArrayRef;
+use super::is_poisoned;
 use super::trace_infos::TraceInfos;
 use crate::runtime::vm::{
     ExternRefHostDataId, GarbageCollection, GcHeap, GcHeapObject, GcProgress, GcRootsIter,
@@ -863,7 +864,7 @@ unsafe impl GcHeap for CopyingHeap {
             let start = usize::try_from(gc_ref.heap_index()?.get()).unwrap();
             let slice = &self.heap_slice()[start..][..layout.size()];
             gc_assert!(
-                slice.iter().all(|&b| b == POISON),
+                is_poisoned(slice),
                 "newly allocated GC object at index {start} is not fully poisoned; \
                  freed memory was corrupted",
             );

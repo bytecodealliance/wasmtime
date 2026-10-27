@@ -1,12 +1,15 @@
 //! Benchmark the `p3_http_proxy` test program against a host which answers
-//! every outgoing request with a fixed short response.
+//! every outgoing request with a fixed short response, and the individual
+//! `wasi:http` APIs it uses with the `p3_http_api_bench` test program.
 
 use bytes::Bytes;
 use criterion::{Criterion, criterion_group, criterion_main};
 use http_body_util::{BodyExt, Empty, Full};
-use std::time::Instant;
-use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Result, Store};
+use std::time::{Duration, Instant};
+use wasmtime::component::{Component, InstancePre, Linker, ResourceTable};
+use wasmtime::{Engine, Result, Store};
+use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
+use wasmtime_wasi::p3::bindings::CommandPre;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::p3::Request;
 use wasmtime_wasi_http::p3::bindings::{Service, ServicePre};
@@ -14,7 +17,7 @@ use wasmtime_wasi_http::{
     Error, RequestOptions, WasiBody, WasiHttpCtx, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
 };
 
-criterion_group!(benches, bench_p3_http_proxy);
+criterion_group!(benches, bench_p3_http_proxy, bench_p3_http_api);
 criterion_main!(benches);
 
 const RESPONSE_BODY: &[u8] = b"hello";
@@ -79,7 +82,8 @@ impl WasiHttpView for Ctx {
     }
 }
 
-fn bench_p3_http_proxy(c: &mut Criterion) {
+/// Compile the component at `path` and prepare it for instantiation.
+fn instance_pre(path: &str) -> InstancePre<Ctx> {
     let _ = env_logger::try_init();
 
     let engine = test_programs_artifacts::engine(|config| {
@@ -87,14 +91,31 @@ fn bench_p3_http_proxy(c: &mut Criterion) {
         // Emit symbols for profiling.
         config.profiler(wasmtime::ProfilingStrategy::PerfMap);
     });
-    let component =
-        Component::from_file(&engine, test_programs_artifacts::P3_HTTP_PROXY_COMPONENT).unwrap();
+    let component = Component::from_file(&engine, path).unwrap();
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker).unwrap();
     wasmtime_wasi::p3::add_to_linker(&mut linker).unwrap();
     wasmtime_wasi_http::p3::add_to_linker(&mut linker).unwrap();
-    let pre = ServicePre::new(linker.instantiate_pre(&component).unwrap()).unwrap();
+    linker.instantiate_pre(&component).unwrap()
+}
 
+fn new_store(engine: &Engine, wasi: WasiCtx) -> Store<Ctx> {
+    Store::new(
+        engine,
+        Ctx {
+            table: ResourceTable::default(),
+            wasi,
+            http: WasiHttpCtx::new(),
+            hooks: FixedResponseHooks,
+        },
+    )
+}
+
+fn bench_p3_http_proxy(c: &mut Criterion) {
+    let pre = ServicePre::new(instance_pre(
+        test_programs_artifacts::P3_HTTP_PROXY_COMPONENT,
+    ))
+    .unwrap();
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -105,15 +126,7 @@ fn bench_p3_http_proxy(c: &mut Criterion) {
             rt.block_on(async {
                 // Instantiate once per batch, outside of the timed region, and
                 // reuse the same instance for every request in the batch.
-                let mut store = Store::new(
-                    &engine,
-                    Ctx {
-                        table: ResourceTable::default(),
-                        wasi: WasiCtx::builder().build(),
-                        http: WasiHttpCtx::new(),
-                        hooks: FixedResponseHooks,
-                    },
-                );
+                let mut store = new_store(pre.engine(), WasiCtx::builder().build());
                 let service = pre.instantiate_async(&mut store).await.unwrap();
 
                 let start = Instant::now();
@@ -159,4 +172,39 @@ async fn proxy_one_request(store: &mut Store<Ctx>, service: &Service) -> Result<
 
     assert_eq!(body.as_ref(), RESPONSE_BODY);
     Ok(())
+}
+
+fn bench_p3_http_api(c: &mut Criterion) {
+    let pre = CommandPre::new(instance_pre(
+        test_programs_artifacts::P3_HTTP_API_BENCH_COMPONENT,
+    ))
+    .unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+
+    for api in ["request.new", "response.consume-body", "client.send"] {
+        c.bench_function(&format!("wasi-http/p3-api/{api}"), |b| {
+            b.iter_custom(|iters| rt.block_on(run_api(&pre, api, iters)).unwrap())
+        });
+    }
+}
+
+/// Run the `p3_http_api_bench` guest to call `api` `iters` times, returning
+/// the time it reports those calls took.
+async fn run_api(pre: &CommandPre<Ctx>, api: &str, iters: u64) -> Result<Duration> {
+    let stdout = MemoryOutputPipe::new(1024);
+    let wasi = WasiCtx::builder()
+        .args(&["p3_http_api_bench", api, &iters.to_string()])
+        .stdout(stdout.clone())
+        .build();
+    let mut store = new_store(pre.engine(), wasi);
+    let command = pre.instantiate_async(&mut store).await?;
+    store
+        .run_concurrent(async |store| command.wasi_cli_run().call_run(store).await)
+        .await??
+        .map_err(|()| wasmtime::format_err!("`{api}` failed"))?;
+    let elapsed = std::str::from_utf8(&stdout.contents())?.trim().parse()?;
+    Ok(Duration::from_nanos(elapsed))
 }

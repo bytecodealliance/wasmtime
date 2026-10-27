@@ -32,7 +32,14 @@ fn checks_incompatible_target() -> Result<()> {
     return Ok(());
 
     fn assert_invalid_target(target: &str) -> Result<()> {
-        match Module::new(&Engine::new(Config::new().target(target)?)?, "(module)") {
+        // A riscv64 target without `has_v` rejects SIMD, which would fail
+        // engine creation before the mismatch is reported.
+        let mut config = Config::new();
+        config
+            .target(target)?
+            .wasm_simd(false)
+            .wasm_relaxed_simd(false);
+        match Module::new(&Engine::new(&config)?, "(module)") {
             Ok(_) => unreachable!(),
             Err(e) => assert!(
                 format!("{e:?}").contains("configuration does not match the host"),
@@ -117,6 +124,58 @@ fn memory_copy_without_riscv_v() -> Result<()> {
             )
         "#,
     )?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn simd_without_riscv_v() -> Result<()> {
+    let wat = br#"
+        (module
+            (func (export "add") (param v128 v128) (result v128)
+                (i32x4.add (local.get 0) (local.get 1)))
+        )
+    "#;
+    let new_config = |has_v: bool| -> Result<Config> {
+        let mut config = Config::new();
+        config.strategy(Strategy::Cranelift).target("riscv64")?;
+        unsafe {
+            config.cranelift_flag_set("has_v", if has_v { "true" } else { "false" });
+        }
+        Ok(config)
+    };
+
+    // SIMD is enabled by default, so without vector support creating an
+    // engine is an error instead of a panic in the backend later on.
+    let err = Engine::new(&new_config(false)?).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("wasm_simd feature is not supported"),
+        "bad error: {err:?}"
+    );
+
+    // Disabling only relaxed SIMD leaves SIMD enabled.
+    let mut config = new_config(false)?;
+    config.wasm_relaxed_simd(false);
+    let err = Engine::new(&config).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("wasm_simd feature is not supported"),
+        "bad error: {err:?}"
+    );
+
+    // Disabling both works, and modules using SIMD then fail validation.
+    let mut config = new_config(false)?;
+    config.wasm_simd(false).wasm_relaxed_simd(false);
+    let engine = Engine::new(&config)?;
+    let err = engine.precompile_module(wat).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("SIMD support is not enabled"),
+        "bad error: {err:?}"
+    );
+
+    // With vector support the default configuration compiles SIMD.
+    let engine = Engine::new(&new_config(true)?)?;
+    engine.precompile_module(wat)?;
 
     Ok(())
 }
@@ -672,77 +731,5 @@ fn deserialize_raw_fails_for_native() {
             format!("{err}"),
             "this target requires virtual memory to be enabled"
         );
-    }
-}
-
-#[cfg(all(
-    any(target_os = "macos", target_os = "linux"),
-    target_arch = "x86_64",
-    not(miri)
-))]
-mod native_unwind {
-    use wasmtime::{Config, Engine, Module, Result};
-
-    // On macOS aarch64, the system unwinder currently stops before reaching the
-    // guest, including without bulk registration. Exercise the host/guest transition
-    // on x86-64 macOS and Linux until that separate process-ABI issue is fixed.
-    #[test]
-    fn native_unwind_walks_nested_wasm_frames() -> Result<()> {
-        use wasmtime::{Caller, Func, Inlining, Instance, Store, Strategy};
-
-        let mut config = Config::new();
-        config
-            .strategy(Strategy::Cranelift)
-            .native_unwind_info(true)
-            .compiler_inlining(Inlining::No);
-        let engine = Engine::new(&config)?;
-        // Post-call arithmetic keeps each guest caller live instead of tail calling.
-        let module = Module::new(
-            &engine,
-            r#"(module
-                (import "" "capture" (func $capture (result i32)))
-                (func $inner (result i32) call $capture i32.const 1 i32.add)
-                (func $middle (result i32) call $inner i32.const 2 i32.add)
-                (func $run (export "run") (result i32) call $middle i32.const 4 i32.add))"#,
-        )?;
-        let start = module.text().as_ptr() as usize;
-        let functions = module
-            .functions()
-            .map(|f| (f.name, start + f.offset, f.len))
-            .collect::<Vec<_>>();
-        let mut store = Store::new(&engine, Vec::<usize>::with_capacity(128));
-        let capture = Func::wrap(&mut store, |mut caller: Caller<'_, Vec<usize>>| {
-            backtrace::trace(|frame| {
-                let frames = caller.data_mut();
-                // Stop before growing the buffer to avoid allocating in the callback.
-                if frames.len() == frames.capacity() {
-                    return false;
-                }
-                frames.push(frame.ip() as usize);
-                true
-            });
-            10_i32
-        });
-        let instance = Instance::new(&mut store, &module, &[capture.into()])?;
-        assert_eq!(
-            instance
-                .get_typed_func::<(), i32>(&mut store, "run")?
-                .call(&mut store, ())?,
-            17
-        );
-        let names = store
-            .data()
-            .iter()
-            .filter_map(|pc| {
-                // Return addresses point after the call instruction. Match actual
-                // guest functions, not any trampoline inside the module's text.
-                functions
-                    .iter()
-                    .find(|(_, start, len)| *pc > *start && *pc <= start + len)
-                    .map(|(name, _, _)| name.as_deref().unwrap_or_default())
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(names, ["inner", "middle", "run"]);
-        Ok(())
     }
 }

@@ -1346,7 +1346,16 @@ impl RunCommand {
         if self.run.common.wasi.inherit_stderr.unwrap_or(true) {
             builder.inherit_stderr();
         }
-        self.run.configure_wasip2(&mut builder)?;
+        // It's ok to block the current thread since we're the only thread in
+        // the program as the CLI. This helps improve the performance of some
+        // blocking operations in WASI, for example, by skipping the
+        // back-and-forth between sync and async.
+        //
+        // However, do not set this if a timeout is configured, as that would
+        // cause the timeout to be ignored if the guest does, for example,
+        // something like `sleep(FOREVER)`.
+        self.run
+            .configure_wasip2(&mut builder, self.run.common.wasm.timeout.is_none())?;
         store.data_mut().wasip1_ctx = Some(builder.build_p1());
         Ok(())
     }

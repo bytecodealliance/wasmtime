@@ -1451,7 +1451,7 @@ impl Runner {
         Ok(match verification {
             Verification::Failure(model) => {
                 let mut rendered = Vec::new();
-                conditions.write_model(&mut rendered, &model, &self.prog)?;
+                conditions.write_model(&mut rendered, &model, assignment, &self.prog)?;
                 let rendered = String::from_utf8(rendered)?;
 
                 let mut notes = String::new();
