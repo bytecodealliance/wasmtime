@@ -404,7 +404,7 @@ fn parse_clif_filename(file_name: &str) -> Option<(u32, u32)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClifFiles, generate, parse_clif_filename};
+    use super::{ClifFiles, generate, parse_clif_filename, to_script_json};
     use tempfile::tempdir;
 
     #[test]
@@ -479,5 +479,14 @@ mod tests {
         assert_eq!(html.matches("</script").count(), 2, "{html}");
         assert!(!html.contains("</SCRIPT"), "{html}");
         assert!(html.contains(r"\u003c/script>"), "{html}");
+    }
+
+    #[test]
+    fn script_json_round_trips_angle_brackets() {
+        let value = vec!["</script><script>alert(1)</script>", "a < b", "<"];
+        let json = to_script_json(&value).unwrap();
+        assert!(!json.contains('<'), "{json}");
+        let decoded: Vec<String> = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, value);
     }
 }
