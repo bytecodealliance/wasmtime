@@ -292,7 +292,7 @@
 ;;       mov     x0, x9
 ;;       mov     x1, #0
 ;;       ldur    w2, [x28, #0xc]
-;;       bl      #0xd04
+;;       bl      #0xd24
 ;;  43c: add     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x68]

@@ -43,8 +43,6 @@ enum VmType {
     VMStoreContext,
     VMMemoryDefinition,
     VMTableDefinition,
-    // NB: this is currently only referenced by macro-generated
-    // `AliasRegions` helpers that are not all wired up to call sites yet.
     #[allow(
         dead_code,
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
@@ -86,6 +84,11 @@ enum VmType {
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
     )]
     VMAsanStackSupport,
+    #[allow(
+        dead_code,
+        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
+    )]
+    VMResourceIndex,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.

@@ -33,7 +33,9 @@
 ;;       fsd     fs9, 0x28(sp)
 ;;       fsd     fs10, 0x20(sp)
 ;;       fsd     fs11, 0x18(sp)
+;;       mv      a6, a0
 ;;       mv      a2, s0
+;;       mv      a0, a6
 ;;       ld      a5, 8(a0)
 ;;       sd      a2, 0x48(a5)
 ;;       mv      a3, sp
@@ -43,9 +45,9 @@
 ;;       sd      a4, 0x50(a5)
 ;;       sd      a5, 0(sp)
 ;;       auipc   ra, 0
-;;       jalr    ra, ra, -0xb4
+;;       jalr    ra, ra, -0xbc
 ;;       ├─╼ exception frame offset: SP = FP - 0xd0
-;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x130
+;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x138
 ;;       addi    a0, zero, 1
 ;;       ld      s0, 0xc8(sp)
 ;;       ld      s1, 0xc0(sp)
@@ -75,9 +77,10 @@
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
 ;;       ret
-;;       addi    a0, zero, 1
+;;       addi    a1, zero, 1
 ;;       ld      a5, 0(sp)
-;;       sd      a0, 0x88(a5)
+;;       sd      a1, 0x88(a5)
+;;       sd      zero, 0xa0(a5)
 ;;       mv      a0, zero
 ;;       ld      s0, 0xc8(sp)
 ;;       ld      s1, 0xc0(sp)

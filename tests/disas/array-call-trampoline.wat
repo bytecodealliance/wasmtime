@@ -15,6 +15,7 @@
 ;;     region3 = 243 ""
 ;;     region4 = 209 ""
 ;;     region5 = 68 ""
+;;     region6 = 32 ""
 ;;     sig0 = (i64 vmctx, i64, i32, i64) -> i32, i64 tail
 ;;     fn0 = colocated u0:0 sig0
 ;;
@@ -45,6 +46,8 @@
 ;; block3:
 ;;     v15 = iconst.i64 1
 ;;     store notrap aligned region5 v15, v8+136  ; v15 = 1
-;;     v16 = iconst.i8 0
-;;     return v16  ; v16 = 0
+;;     v16 = iconst.i64 0
+;;     store notrap aligned region6 v16, v8+160  ; v16 = 0
+;;     v17 = iconst.i8 0
+;;     return v17  ; v17 = 0
 ;; }

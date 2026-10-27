@@ -41,6 +41,7 @@
 ;;       br      %r14
 ;;       lg      %r5, 0xa0(%r15)
 ;;       mvghi   0x88(%r5), 1
+;;       mvghi   0xa0(%r5), 0
 ;;       lhi     %r2, 0
 ;;       ld      %f8, 0xa8(%r15)
 ;;       ld      %f9, 0xb0(%r15)

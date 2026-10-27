@@ -36,13 +36,14 @@
 ;;       retq
 ;;   77: movq    (%rsp), %r8
 ;;   7b: movq    $1, 0x88(%r8)
-;;   86: xorl    %eax, %eax
-;;   88: movq    0x10(%rsp), %rbx
-;;   8d: movq    0x18(%rsp), %r12
-;;   92: movq    0x20(%rsp), %r13
-;;   97: movq    0x28(%rsp), %r14
-;;   9c: movq    0x30(%rsp), %r15
-;;   a1: addq    $0x40, %rsp
-;;   a5: movq    %rbp, %rsp
-;;   a8: popq    %rbp
-;;   a9: retq
+;;   86: movq    $0, 0xa0(%r8)
+;;   91: xorl    %eax, %eax
+;;   93: movq    0x10(%rsp), %rbx
+;;   98: movq    0x18(%rsp), %r12
+;;   9d: movq    0x20(%rsp), %r13
+;;   a2: movq    0x28(%rsp), %r14
+;;   a7: movq    0x30(%rsp), %r15
+;;   ac: addq    $0x40, %rsp
+;;   b0: movq    %rbp, %rsp
+;;   b3: popq    %rbp
+;;   b4: retq

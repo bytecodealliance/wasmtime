@@ -12,6 +12,7 @@
 ;;     region2 = 243 ""
 ;;     region3 = 209 ""
 ;;     region4 = 68 ""
+;;     region5 = 32 ""
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     fn0 = colocated u2415919104:0 sig0
 ;;
@@ -29,14 +30,16 @@
 ;;     try_call fn0(v0, v1), sig0, block2, [ default: block3 ]
 ;;
 ;; block2:
-;;     v13 = iconst.i8 1
-;;     return v13  ; v13 = 1
+;;     v14 = iconst.i8 1
+;;     return v14  ; v14 = 1
 ;;
 ;; block3:
 ;;     v11 = iconst.i64 1
 ;;     store notrap aligned region4 v11, v6+136  ; v11 = 1
-;;     v12 = iconst.i8 0
-;;     return v12  ; v12 = 0
+;;     v4 = iconst.i64 0
+;;     store notrap aligned region5 v4, v6+160  ; v4 = 0
+;;     v13 = iconst.i8 0
+;;     return v13  ; v13 = 0
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
