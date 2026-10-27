@@ -1023,10 +1023,24 @@ impl<'a, T: Send> Prepared<'a, T> {
                 // `Host` header (RFC 9112 section 3.2.2), so fall back to the latter.
                 let authority = match authority {
                     Some(authority) => Some(authority),
-                    None => request_headers
-                        .get(HOST)
-                        .and_then(|host| host.to_str().ok())
-                        .and_then(|host| host.parse::<Authority>().ok()),
+                    None => match request_headers.get(HOST) {
+                        Some(host) => host
+                            .to_str()
+                            .ok()
+                            .and_then(|host| host.parse::<Authority>().ok()),
+                        None => {
+                            // The request never reached the guest, so report the
+                            // failure through `tx` like the p2 path does.
+                            let e = wasmtime::Error::msg(
+                                "invalid HTTP request missing authority in URI and host header",
+                            )
+                            .context(crate::ErrorResponse::new(http::StatusCode::BAD_REQUEST));
+                            _ = tx.send(Err(e));
+                            wasmtime::bail!(
+                                "request was rejected before it could be turned into a guest request"
+                            );
+                        }
+                    },
                 };
                 let hooks = view(store.data_mut()).hooks;
                 let headers = crate::FieldMap::new_immutable(hooks, request_headers);

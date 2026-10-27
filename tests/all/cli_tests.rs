@@ -2253,6 +2253,34 @@ start a print 1234
     }
 
     #[tokio::test]
+    async fn p3_cli_serve_missing_authority() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })?;
+
+        // Write this by hand: no authority and no `Host`, plus `Connection:
+        // close` so one timed read ends at EOF.
+        let mut stream = TcpStream::connect(server.first_addr()).await?;
+        stream
+            .write_all(b"GET / HTTP/1.1\r\nConnection: close\r\n\r\n")
+            .await?;
+        let mut response = Vec::new();
+        tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut response))
+            .await
+            .expect("timed out waiting for a response")?;
+        let response = String::from_utf8(response)?;
+        assert!(
+            response.starts_with("HTTP/1.1 400"),
+            "unexpected response: {response:?}",
+        );
+        drop(stream);
+
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn p3_cli_serve_authority_and_scheme() -> Result<()> {
         let server = WasmtimeServe::new(P3_CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
             cmd.arg("-Wcomponent-model-async");
