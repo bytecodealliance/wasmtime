@@ -482,6 +482,7 @@ pub enum Trampoline {
     StreamTransfer,
     ErrorContextTransfer,
     Trap(Trap),
+    HostcallFuel,
     EnterSyncCall,
     ExitSyncCall,
     ThreadIndex {
@@ -1204,6 +1205,7 @@ impl LinearizeDfg<'_> {
             Trampoline::StreamTransfer => info::Trampoline::StreamTransfer,
             Trampoline::ErrorContextTransfer => info::Trampoline::ErrorContextTransfer,
             Trampoline::Trap(trap) => info::Trampoline::Trap(*trap),
+            Trampoline::HostcallFuel => info::Trampoline::HostcallFuel,
             Trampoline::EnterSyncCall => info::Trampoline::EnterSyncCall,
             Trampoline::ExitSyncCall => info::Trampoline::ExitSyncCall,
             Trampoline::ThreadIndex { instance } => info::Trampoline::ThreadIndex {
