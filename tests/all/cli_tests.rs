@@ -2864,6 +2864,48 @@ start a print 1234
         .await
     }
 
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_trap_mid_body() -> Result<()> {
+        cli_serve_trap_mid_body(P3_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_trap_mid_body() -> Result<()> {
+        cli_serve_trap_mid_body(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })
+        .await
+    }
+
+    /// A guest trapping while streaming a chunked response body must not
+    /// produce a response that looks complete to the client.
+    async fn cli_serve_trap_mid_body(
+        component: &str,
+        configure: impl FnOnce(&mut Command),
+    ) -> Result<()> {
+        let server = WasmtimeServe::new(component, configure)?;
+        let result = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/trap")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await;
+        assert!(
+            result.is_err(),
+            "truncated body looked complete: {result:?}"
+        );
+        let (_, stderr) = server.finish()?;
+        assert!(stderr.contains("unreachable"), "{stderr}");
+        Ok(())
+    }
+
     const CONNECTION_COUNT_MANY: usize = 20;
     const REQUESTS_PER_CONNECTION_MANY: usize = 5;
 

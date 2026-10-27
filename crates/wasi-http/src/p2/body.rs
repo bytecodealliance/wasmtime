@@ -422,7 +422,12 @@ impl HostOutgoingBody {
                                         Poll::Ready(Some(Err(Error::HttpProtocolError)))
                                     }
                                 },
-                                Poll::Ready(Err(RecvError { .. })) => Poll::Ready(None),
+                                // The sender was dropped without a result, e.g. because the guest
+                                // trapped or the store was dropped. Treat this as an incomplete
+                                // body.
+                                Poll::Ready(Err(RecvError { .. })) => {
+                                    Poll::Ready(Some(Err(Error::HttpProtocolError)))
+                                }
                             }
                         } else {
                             Poll::Ready(None)
