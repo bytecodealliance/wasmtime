@@ -93,7 +93,8 @@ use crate::{
         inst_addr_offset_type, inst_store_data, is_volatile_access, visit_block_succs,
     },
     ir::{
-        AliasRegion, Block, Endianness, Function, Inst, Opcode, Type, Value, immediates::Offset32,
+        AliasRegion, Block, Endianness, Function, Inst, MemFlagsData, Opcode, Type, Value,
+        immediates::Offset32,
     },
     post_dominator_tree::PostDominatorTree,
     trace,
@@ -131,24 +132,29 @@ enum AliasRegionsObserved {
 }
 
 /// Which alias region(s) can an instruction observe?
-fn alias_regions_observed(func: &Function, inst: Inst, opcode: Opcode) -> AliasRegionsObserved {
+///
+/// `memflags` must be the instruction's memflags, if it has any.
+fn alias_regions_observed(
+    func: &Function,
+    inst: Inst,
+    opcode: Opcode,
+    memflags: Option<MemFlagsData>,
+) -> AliasRegionsObserved {
     debug_assert_eq!(func.dfg.insts[inst].opcode(), opcode);
+    debug_assert_eq!(func.dfg.insts[inst].memflags_data(&func.dfg), memflags);
     if opcode.is_return()
         || opcode.is_call()
         || opcode.can_trap()
         // NB: the `opcode.can_trap()` check above only covers explicitly
         // trapping instructions (like `trap` and `trapz`), not loads/stores
         // that can implicitly trap; we check those via their memflags.
-        || func.dfg.insts[inst]
-            .memflags_data(&func.dfg)
-            .and_then(|flags| flags.trap_code())
-            .is_some()
+        || memflags.and_then(|flags| flags.trap_code()).is_some()
     {
         return AliasRegionsObserved::All;
     }
 
     if opcode.can_load() {
-        if let Some(region) = func.dfg.insts[inst].alias_region(&func.dfg) {
+        if let Some(region) = memflags.and_then(|flags| flags.alias_region()) {
             AliasRegionsObserved::Just(region)
         } else {
             AliasRegionsObserved::Other
@@ -348,14 +354,6 @@ fn classify(func: &Function, inst: Inst) -> InstEffect {
         return InstEffect::Fence;
     }
 
-    // A volatile access must stay as written, in order with the accesses
-    // around it: treat it as a fence, which observes every earlier store (so
-    // that none of them is removed as dead across it) and forgets everything
-    // known about memory (so that nothing is forwarded across it).
-    if is_volatile_access(func, inst) {
-        return InstEffect::Fence;
-    }
-
     // Explicitly trapping instructions (`trap`, `trapz`, `udiv`,
     // `uadd_overflow_trap`, etc... but not loads/stores that can implicitly
     // trap): allow store-to-load forwarding across these instructions, but do
@@ -366,29 +364,46 @@ fn classify(func: &Function, inst: Inst) -> InstEffect {
         return InstEffect::Trap;
     }
 
+    // A volatile access must stay as written, in order with the accesses
+    // around it: treat it as a fence, which observes every earlier store (so
+    // that none of them is removed as dead across it) and forgets everything
+    // known about memory (so that nothing is forwarded across it). Only loads
+    // and stores can be volatile, so rather than looking up every
+    // instruction's memflags up here, we check for it below, where we already
+    // look them up.
+
     // Store instructions: update the last-store information for this
     // instruction's alias region, or, if it has no alias region, treat it as a
     // fence.
     if opcode.can_store() {
         // A store with no memflags, and therefore no alias region, may alias
         // any region, so treat it like a fence. Ditto for a store whose
-        // memflags name no alias region.
+        // memflags name no alias region, and for a volatile store.
         let Some(memflags) = func.dfg.insts[inst].memflags() else {
             return InstEffect::Fence;
         };
-        let Some(region) = func.dfg.mem_flags[memflags].alias_region() else {
+        let memflags = func.dfg.mem_flags[memflags];
+        if memflags.volatile() {
+            return InstEffect::Fence;
+        }
+        let Some(region) = memflags.alias_region() else {
             return InstEffect::Fence;
         };
 
         return InstEffect::Store {
             region,
-            can_trap: func.dfg.mem_flags[memflags].trap_code().is_some(),
+            can_trap: memflags.trap_code().is_some(),
         };
     }
 
-    // Everything else: determine which, if any, alias regions this instruction
-    // observes.
-    InstEffect::Observes(alias_regions_observed(func, inst, opcode))
+    // Everything else, loads included. Look up the memflags once: a volatile
+    // load is a fence too, and otherwise they tell us which, if any, alias
+    // regions this instruction observes.
+    let memflags = func.dfg.insts[inst].memflags_data(&func.dfg);
+    if memflags.is_some_and(|flags| flags.volatile()) {
+        return InstEffect::Fence;
+    }
+    InstEffect::Observes(alias_regions_observed(func, inst, opcode, memflags))
 }
 
 impl LastStores {
