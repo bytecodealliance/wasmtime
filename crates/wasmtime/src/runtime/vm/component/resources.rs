@@ -297,7 +297,8 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        let (rep, is_own) = self.table_for_index(&index).0.resource_lend(index)?;
+        let (table, counter) = self.table_for_index(&index);
+        let (rep, is_own) = table.resource_lend(counter, index)?;
         if is_own {
             let current = self.current_scope_id()?;
             self.task_state.call_context(current)?.lenders.push(index);
@@ -340,10 +341,8 @@ impl ResourceTables<'_> {
             // Note the panics here which should never get triggered in theory
             // due to the dynamic tracking of borrows and such employed for
             // resources.
-            self.table_for_index(&lender)
-                .0
-                .resource_undo_lend(lender)
-                .unwrap();
+            let (table, counter) = self.table_for_index(&lender);
+            table.resource_undo_lend(counter, lender).unwrap();
         }
         Ok(())
     }
