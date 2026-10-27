@@ -798,6 +798,8 @@ pub struct AliasAnalysis<'a> {
 
     /// Reusable set of regions written along the paths being searched.
     clobbers_scratch: FxHashSet<AliasRegion>,
+    pending_scratch: SmallVec<[Block; 8]>,
+    visited_scratch: FxHashSet<Block>,
 }
 
 /// One block's scope on the dominator-tree path currently being walked.
@@ -858,6 +860,8 @@ impl<'a> AliasAnalysis<'a> {
             next_extent: 0,
             block_clobbers,
             clobbers_scratch: FxHashSet::default(),
+            pending_scratch: SmallVec::new(),
+            visited_scratch: FxHashSet::default(),
         };
 
         analysis.compute_block_input_states(func);
@@ -1117,10 +1121,13 @@ impl<'a> AliasAnalysis<'a> {
         block: Block,
         dominator: Block,
         clobbers: &mut FxHashSet<AliasRegion>,
+        pending: &mut SmallVec<[Block; 8]>,
+        visited: &mut FxHashSet<Block>,
     ) -> bool {
         debug_assert!(clobbers.is_empty());
-        let mut pending: SmallVec<[Block; 8]> = cfg.pred_iter(block).map(|p| p.block).collect();
-        let mut visited = FxHashSet::default();
+        debug_assert!(pending.is_empty());
+        debug_assert!(visited.is_empty());
+        pending.extend(cfg.pred_iter(block).map(|p| p.block));
         while let Some(pred) = pending.pop() {
             if pred == dominator || !self.block_input.contains_key(&pred) || !visited.insert(pred) {
                 continue;
@@ -1147,7 +1154,11 @@ impl<'a> AliasAnalysis<'a> {
     ) -> SecondaryMap<AliasRegion, u32> {
         let mut region_extents = SecondaryMap::with_default(extent);
         let mut clobbers = core::mem::take(&mut self.clobbers_scratch);
+        let mut pending = core::mem::take(&mut self.pending_scratch);
+        let mut visited = core::mem::take(&mut self.visited_scratch);
         clobbers.clear();
+        pending.clear();
+        visited.clear();
         if let Some(parent) = self.scopes.last() {
             let parent_stores = parent.exit_state.as_ref().expect("finished parent scope");
             // The parent's and join's fence states must match.
@@ -1159,7 +1170,14 @@ impl<'a> AliasAnalysis<'a> {
                         .regions
                         .iter()
                         .any(|(_, slot)| *slot == LastStore::Unknown))
-                && self.clobbers_since(cfg, block, parent.block, &mut clobbers)
+                && self.clobbers_since(
+                    cfg,
+                    block,
+                    parent.block,
+                    &mut clobbers,
+                    &mut pending,
+                    &mut visited,
+                )
             {
                 region_extents = parent.region_extents.clone();
                 for &region in &clobbers {
@@ -1181,6 +1199,8 @@ impl<'a> AliasAnalysis<'a> {
             }
         }
         self.clobbers_scratch = clobbers;
+        self.pending_scratch = pending;
+        self.visited_scratch = visited;
         region_extents
     }
 
