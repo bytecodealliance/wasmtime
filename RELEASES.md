@@ -1,3 +1,16 @@
+## 50.0.1
+
+Unreleased.
+
+### Fixed
+
+* wasi-sockets: UDP `connect` only required the address to be permitted for
+  sending *or* receiving, allowing guests to send datagrams to addresses denied
+  for `UdpSend`.
+  [GHSA-hmmr-87qq-258j](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hmmr-87qq-258j)
+
+--------------------------------------------------------------------------------
+
 ## 50.0.0
 
 Released 2026-10-20.
