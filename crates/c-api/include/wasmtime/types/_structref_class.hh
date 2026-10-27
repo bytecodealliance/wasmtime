@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 #include <wasmtime/engine.hh>
+#include <wasmtime/error.hh>
 #include <wasmtime/types/_val_class.hh>
 #include <wasmtime/types/structref.h>
 
@@ -147,14 +148,17 @@ class StructType {
 #undef wasmtime_struct_type_clone
 
   /// Create a new struct type with the given fields.
-  StructType(const Engine &engine, const std::vector<FieldType> &fields)
-      : ptr(wasmtime_struct_type_new(
-            engine.capi(),
-            reinterpret_cast<const wasmtime_field_type_t *>(fields.data()),
-            fields.size()))
-
-  {
+  static Result<StructType> create(const Engine &engine,
+                                   const std::vector<FieldType> &fields) {
     static_assert(sizeof(FieldType) == sizeof(wasmtime_field_type_t));
+    wasmtime_struct_type_t *result = nullptr;
+    auto error = wasmtime_struct_type_new(
+        engine.capi(),
+        reinterpret_cast<const wasmtime_field_type_t *>(fields.data()),
+        fields.size(), &result);
+    if (error)
+      return Error(error);
+    return StructType(result);
   }
 
   size_t num_fields() const {

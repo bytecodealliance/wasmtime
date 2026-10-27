@@ -1,4 +1,4 @@
-use crate::wasm_valtype_t;
+use crate::{wasm_valtype_t, wasmtime_error_t};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use wasmtime::{FieldType, Mutability, StorageType, StructType};
 
@@ -106,11 +106,13 @@ pub extern "C" fn wasmtime_struct_type_new(
     engine: &crate::wasm_engine_t,
     fields: *const wasmtime_field_type_t,
     nfields: usize,
-) -> Box<wasmtime_struct_type_t> {
+    out: &mut MaybeUninit<Box<wasmtime_struct_type_t>>,
+) -> Option<Box<wasmtime_error_t>> {
     let fields = unsafe { crate::slice_from_raw_parts(fields, nfields) };
     let field_types: Vec<FieldType> = fields.iter().map(|f| f.to_wasmtime()).collect();
-    let ty = StructType::new(&engine.engine, field_types).expect("failed to create struct type");
-    Box::new(wasmtime_struct_type_t { ty })
+    crate::handle_result(StructType::new(&engine.engine, field_types), |ty| {
+        out.write(Box::new(wasmtime_struct_type_t { ty }));
+    })
 }
 
 #[unsafe(no_mangle)]
