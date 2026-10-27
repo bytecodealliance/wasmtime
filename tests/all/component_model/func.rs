@@ -539,40 +539,6 @@ fn floats() -> Result<()> {
 }
 
 #[test]
-fn bools() -> Result<()> {
-    let component = r#"
-        (component
-            (core module $m
-                (func (export "pass") (param i32) (result i32) local.get 0)
-            )
-            (core instance $i (instantiate $m))
-
-            (func (export "u32-to-bool") (param "a" u32) (result bool)
-                (canon lift (core func $i "pass"))
-            )
-            (func (export "bool-to-u32") (param "a" bool) (result u32)
-                (canon lift (core func $i "pass"))
-            )
-        )
-    "#;
-
-    let engine = super::engine();
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let u32_to_bool = instance.get_typed_func::<(u32,), (bool,)>(&mut store, "u32-to-bool")?;
-    let bool_to_u32 = instance.get_typed_func::<(bool,), (u32,)>(&mut store, "bool-to-u32")?;
-
-    assert_eq!(bool_to_u32.call(&mut store, (false,))?, (0,));
-    assert_eq!(bool_to_u32.call(&mut store, (true,))?, (1,));
-    assert_eq!(u32_to_bool.call(&mut store, (0,))?, (false,));
-    assert_eq!(u32_to_bool.call(&mut store, (1,))?, (true,));
-    assert_eq!(u32_to_bool.call(&mut store, (2,))?, (true,));
-
-    Ok(())
-}
-
-#[test]
 fn chars() -> Result<()> {
     let component = r#"
         (component

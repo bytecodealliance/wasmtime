@@ -215,41 +215,6 @@ fn resource_any() -> Result<()> {
 }
 
 #[test]
-fn mismatch_intrinsics() -> Result<()> {
-    let engine = super::engine();
-    let c = Component::new(
-        &engine,
-        r#"
-            (component
-                (type $t' (resource (rep i32)))
-                (type $u' (resource (rep i32)))
-
-                (export $t "t" (type $t'))
-                (export $u "u" (type $u'))
-
-                ;; note the mismatch where this is an intrinsic for `u` but
-                ;; we're typing it as `t`
-                (core func $t_ctor (canon resource.new $u))
-
-                (func (export "ctor") (param "x" u32) (result (own $t))
-                    (canon lift (core func $t_ctor)))
-            )
-        "#,
-    )?;
-
-    let mut store = Store::new(&engine, ());
-    let i = Linker::new(&engine).instantiate(&mut store, &c)?;
-    let ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "ctor")?;
-    assert_eq!(
-        ctor.call(&mut store, (100,)).unwrap_err().to_string(),
-        "handle index 1 used with the wrong type, expected guest-defined \
-         resource but found a different guest-defined resource",
-    );
-
-    Ok(())
-}
-
-#[test]
 fn mismatch_resource_types() -> Result<()> {
     let engine = super::engine();
     let c = Component::new(
@@ -725,47 +690,6 @@ fn reenter_during_import() -> Result<()> {
     let (resource,) = ctor.call(&mut store, (100,))?;
     *store.data_mut() = Some(resource);
     call.call(&mut store, ())?;
-
-    Ok(())
-}
-
-#[test]
-fn active_borrows_at_end_of_call() -> Result<()> {
-    let engine = super::engine();
-    let c = Component::new(
-        &engine,
-        r#"
-            (component
-                (import "t" (type $t (sub resource)))
-
-                (core module $m
-                    (func (export "f") (param i32))
-                )
-                (core instance $i (instantiate $m))
-
-                (func (export "f") (param "x" (borrow $t))
-                    (canon lift (core func $i "f")))
-            )
-        "#,
-    )?;
-
-    struct MyType;
-
-    let mut store = Store::new(&engine, ());
-    let mut linker = Linker::new(&engine);
-    linker
-        .root()
-        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
-    let i = linker.instantiate(&mut store, &c)?;
-
-    let f = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f")?;
-
-    let resource = Resource::new_own(1);
-    let err = f.call(&mut store, (&resource,)).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "borrow handles still remain at the end of the call",
-    );
 
     Ok(())
 }

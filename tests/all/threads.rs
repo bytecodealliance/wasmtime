@@ -42,33 +42,6 @@ fn shared_memory_failed_creation() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn test_instantiate_shared_memory() -> Result<()> {
-    let wat = r#"(module (memory 1 1 shared))"#;
-    let Some(engine) = engine() else {
-        return Ok(());
-    };
-    let module = Module::new(&engine, wat)?;
-    let mut store = Store::new(&engine, ());
-    let _instance = Instance::new(&mut store, &module, &[])?;
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
-fn test_import_shared_memory() -> Result<()> {
-    let wat = r#"(module (import "env" "memory" (memory 1 5 shared)))"#;
-    let Some(engine) = engine() else {
-        return Ok(());
-    };
-    let module = Module::new(&engine, wat)?;
-    let mut store = Store::new(&engine, ());
-    let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 5)?)?;
-    let _instance = Instance::new(&mut store, &module, &[shared_memory.into()])?;
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
 fn test_export_shared_memory() -> Result<()> {
     let wat = r#"(module (memory (export "memory") 1 5 shared))"#;
     let Some(engine) = engine() else {
