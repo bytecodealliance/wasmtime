@@ -2897,7 +2897,10 @@ start a print 1234
                     .context("failed to make request")?,
             )
             .await;
-        assert!(result.is_err(), "truncated body looked complete: {result:?}");
+        assert!(
+            result.is_err(),
+            "truncated body looked complete: {result:?}"
+        );
         let (_, stderr) = server.finish()?;
         assert!(stderr.contains("unreachable"), "{stderr}");
         Ok(())
