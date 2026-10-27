@@ -4,9 +4,15 @@
 mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
+#[cfg(feature = "component-model")]
+use crate::bug;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
+#[cfg(feature = "component-model")]
+use crate::vm::component::ResourceTypeMismatch;
+#[cfg(feature = "component-model")]
+use crate::vm::component::TypedResourceIndex;
 use crate::vm::stack_switching::{VMContinuationStack, VMStackChain, VMStackState};
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -18,6 +24,8 @@ use core::num::NonZeroU32;
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(feature = "component-model")]
+use wasmtime_environ::component::TypeResourceTableIndex;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
     DefinedTagIndex, NUM_COMPONENT_CONTEXT_SLOTS, VMCONTEXT_MAGIC, VMSharedTypeIndex,
@@ -369,6 +377,7 @@ macro_rules! define_vm_types {
             $(
                 $(#[doc = $vdoc:literal])*
                 #[snake_name = $vsnake:ident]
+                $(#[$vattr:meta])*
                 $Variant:ident {
                     $(
                         $(#[doc = $fdoc:literal])*
@@ -395,6 +404,7 @@ macro_rules! define_vm_types {
                 $svis enum $Name {
                     $(
                         $(#[doc = $vdoc])*
+                        $(#[$vattr])*
                         $Variant {
                             $(
                                 $(#[doc = $fdoc])*
@@ -1095,6 +1105,240 @@ mod test_vm_cont_ref {
     fn revision_is_eight_aligned() {
         assert_eq!(4u8.vm_cont_ref().revision() % 8, 0);
         assert_eq!(8u8.vm_cont_ref().revision() % 8, 0);
+    }
+}
+
+#[cfg(feature = "component-model")]
+// SAFETY: `VMTypedResource` is generated with `#[repr(C)]` and holds only
+// `u32`s.
+unsafe impl VmSafe for VMTypedResource {}
+
+#[cfg(feature = "component-model")]
+impl VMTypedResource {
+    /// A resource defined by the host.
+    pub(crate) fn host(rep: u32) -> VMTypedResource {
+        VMTypedResource { ty: 0, rep }
+    }
+
+    /// A resource of type `ty` defined within a component.
+    pub(crate) fn component(ty: TypeResourceTableIndex, rep: u32) -> Result<VMTypedResource> {
+        let ty = ty
+            .as_u32()
+            .checked_add(1)
+            .ok_or_else(|| bug!("type index too large to fit in `VMTypedResource`"))?;
+        Ok(VMTypedResource { ty, rep })
+    }
+
+    /// This resource's `TypeResourceTableIndex`, or `None` if it is a host
+    /// resource.
+    pub(crate) fn component_ty(&self) -> Option<TypeResourceTableIndex> {
+        match self.ty {
+            0 => None,
+            ty => Some(TypeResourceTableIndex::from_u32(ty - 1)),
+        }
+    }
+
+    /// This resource's "rep", if it is being accessed with a matching type.
+    ///
+    /// A host resource may only be accessed as a host resource, and a
+    /// component-defined resource only as the same component-defined type that
+    /// it was created with; anything else is the guest using a handle it does
+    /// not have permission to.
+    pub(crate) fn rep(&self, access_ty: &TypedResourceIndex) -> Result<u32> {
+        match (self.component_ty(), access_ty) {
+            (None, TypedResourceIndex::Host(_)) => Ok(self.rep),
+            (None, expected) => bail!(ResourceTypeMismatch {
+                expected: *expected,
+                found: "host resource",
+            }),
+            (Some(ty), TypedResourceIndex::Component { ty: expected, .. }) => {
+                if ty == *expected {
+                    Ok(self.rep)
+                } else {
+                    bail!(ResourceTypeMismatch {
+                        expected: *access_ty,
+                        found: "a different guest-defined resource",
+                    })
+                }
+            }
+            (Some(_), expected) => bail!(ResourceTypeMismatch {
+                expected: *expected,
+                found: "guest-defined resource",
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "component-model")]
+// SAFETY: `VMScope` is generated with `#[repr(C)]` and holds only `u32`s.
+unsafe impl VmSafe for VMScope {}
+
+#[cfg(feature = "component-model")]
+impl VMScope {
+    /// The `kind` of a non-concurrent or concurrent guest-task scope.
+    const KIND_ID: u32 = 0;
+
+    /// The `kind` of a concurrent host-task scope.
+    const KIND_HOST_ID: u32 = 1;
+
+    /// A non-concurrent scope, or a concurrent guest-task scope.
+    pub(crate) fn id(id: u32) -> VMScope {
+        VMScope {
+            kind: Self::KIND_ID,
+            id,
+        }
+    }
+
+    /// A concurrent host-task scope.
+    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
+    pub(crate) fn host_id(id: u32) -> VMScope {
+        VMScope {
+            kind: Self::KIND_HOST_ID,
+            id,
+        }
+    }
+
+    /// Which kind of scope this is, and its identifier.
+    pub(crate) fn kind(&self) -> VMScopeKind {
+        match self.kind {
+            Self::KIND_ID => VMScopeKind::Id(self.id),
+            Self::KIND_HOST_ID => VMScopeKind::HostId(self.id),
+            kind => unreachable!("invalid `VMScope` kind {kind}"),
+        }
+    }
+}
+
+/// The result of matching on a [`VMScope`].
+#[cfg(feature = "component-model")]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum VMScopeKind {
+    /// A non-concurrent scope or a concurrent guest-task scope.
+    Id(u32),
+    /// A concurrent host-task scope.
+    HostId(u32),
+}
+
+#[cfg(feature = "component-model")]
+// SAFETY: `VMTransmitLocalState` is generated with `#[repr(C)]` and holds only
+// `u32`s.
+unsafe impl VmSafe for VMTransmitLocalState {}
+
+#[cfg(feature = "component-model")]
+impl VMTransmitLocalState {
+    /// The `kind` of the write end of a stream or future.
+    const KIND_WRITE: u32 = 0;
+
+    /// The `kind` of the read end of a stream or future.
+    const KIND_READ: u32 = 1;
+
+    /// The `kind` of an end with a read or write in progress.
+    const KIND_BUSY: u32 = 2;
+
+    /// The `kind` of an end whose in-progress read or write is being cancelled.
+    const KIND_CANCELLING: u32 = 3;
+
+    /// The write end of a stream or future.
+    pub fn write(done: bool) -> VMTransmitLocalState {
+        VMTransmitLocalState {
+            kind: Self::KIND_WRITE,
+            done: done.into(),
+        }
+    }
+
+    /// The read end of a stream or future.
+    pub fn read(done: bool) -> VMTransmitLocalState {
+        VMTransmitLocalState {
+            kind: Self::KIND_READ,
+            done: done.into(),
+        }
+    }
+
+    /// A read or write is in progress.
+    pub fn busy() -> VMTransmitLocalState {
+        VMTransmitLocalState {
+            kind: Self::KIND_BUSY,
+            done: 0,
+        }
+    }
+
+    /// A read or write is in progress and an asynchronous cancellation of it
+    /// has been requested but has not yet completed.
+    pub fn cancelling() -> VMTransmitLocalState {
+        VMTransmitLocalState {
+            kind: Self::KIND_CANCELLING,
+            done: 0,
+        }
+    }
+
+    /// Which kind of state this is, along with its `done` flag where that is
+    /// meaningful.
+    pub fn kind(&self) -> VMTransmitLocalStateKind {
+        match self.kind {
+            Self::KIND_WRITE => VMTransmitLocalStateKind::Write {
+                done: self.done != 0,
+            },
+            Self::KIND_READ => VMTransmitLocalStateKind::Read {
+                done: self.done != 0,
+            },
+            Self::KIND_BUSY => VMTransmitLocalStateKind::Busy,
+            Self::KIND_CANCELLING => VMTransmitLocalStateKind::Cancelling,
+            kind => unreachable!("invalid `VMTransmitLocalState` kind {kind}"),
+        }
+    }
+}
+
+/// The result of matching on a [`VMTransmitLocalState`].
+#[cfg(feature = "component-model")]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum VMTransmitLocalStateKind {
+    /// The write end of the stream or future.
+    Write {
+        /// Whether the component instance has been notified that the stream or
+        /// future is "done" (i.e. the other end has dropped, or, in the case of
+        /// a future, a value has been transmitted).
+        done: bool,
+    },
+    /// The read end of the stream or future.
+    Read {
+        /// Whether the component instance has been notified that the stream or
+        /// future is "done" (i.e. the other end has dropped, or, in the case of
+        /// a future, a value has been transmitted).
+        done: bool,
+    },
+    /// A read or write is in progress.
+    Busy,
+    /// A read or write is in progress and an asynchronous cancellation of it
+    /// has been requested but has not yet completed.
+    Cancelling,
+}
+
+#[cfg(feature = "component-model")]
+// SAFETY: `VMHandleTableSlot` is generated with `#[repr(C, u32)]` and every
+// variant holds only `u32`s and `VmSafe` structs of them.
+unsafe impl VmSafe for VMHandleTableSlot {}
+
+#[cfg(all(test, feature = "component-model"))]
+mod test_vm_handle_table_slot {
+    use wasmtime_environ::PtrSize;
+
+    /// A lent resource's `lend_count` must sit at the same offset whether the
+    /// handle is an `own` or a `borrow`, because compiled code adjusts it
+    /// without first branching on the slot's tag.
+    ///
+    /// A field inserted ahead of `lend_count` in only one of the two variants
+    /// would silently break that, which is what this guards against.
+    ///
+    /// Every field offset here is itself checked against the real Rust layout
+    /// by the generated `test_vm_type_layouts::vm_handle_table_slot`.
+    #[test]
+    fn lend_count_offset_is_variant_agnostic() {
+        for ptr in [4u8, 8] {
+            let slot = ptr.vm_handle_table_slot();
+            assert_eq!(
+                slot.resource_own().lend_count(),
+                slot.resource_borrow().lend_count(),
+            );
+        }
     }
 }
 

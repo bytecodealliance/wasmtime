@@ -47,10 +47,9 @@ mod resources;
 
 pub use self::handle_table::{HandleCounter, HandleTable, RemovedResource};
 #[cfg(feature = "component-model-async")]
-pub use self::handle_table::{ThreadHandleTable, TransmitLocalState, Waitable};
-pub use self::resources::{
-    CallContext, CurrentScope, ResourceTables, Scope, TypedResource, TypedResourceIndex,
-};
+pub use self::handle_table::{ThreadHandleTable, Waitable};
+pub(crate) use self::resources::ResourceTypeMismatch;
+pub use self::resources::{CallContext, CurrentScope, ResourceTables, TypedResourceIndex};
 
 impl VMResourceIndex {
     /// The `ty` of a host resource, which is otherwise never a valid

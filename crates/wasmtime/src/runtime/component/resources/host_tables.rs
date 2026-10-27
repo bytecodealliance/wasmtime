@@ -22,7 +22,8 @@
 
 use crate::prelude::*;
 use crate::runtime::component::RuntimeInstance;
-use crate::runtime::vm::component::{ResourceTables, TypedResource, TypedResourceIndex};
+use crate::runtime::vm::VMTypedResource;
+use crate::runtime::vm::component::{ResourceTables, TypedResourceIndex};
 use crate::runtime::vm::{SendSyncPtr, VMFuncRef};
 use crate::store::StoreOpaque;
 use core::ptr::NonNull;
@@ -151,7 +152,7 @@ impl<'a> HostResourceTables<'a> {
         dtor: Option<NonNull<VMFuncRef>>,
         instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
-        let idx = self.tables.resource_lower_own(TypedResource::Host(rep))?;
+        let idx = self.tables.resource_lower_own(VMTypedResource::host(rep))?;
         self.new_host_index(idx, dtor, instance)
     }
 
@@ -159,7 +160,7 @@ impl<'a> HostResourceTables<'a> {
     pub fn host_resource_lower_borrow(&mut self, rep: u32) -> Result<HostResourceIndex> {
         let idx = self
             .tables
-            .resource_lower_borrow(TypedResource::Host(rep))?;
+            .resource_lower_borrow(VMTypedResource::host(rep))?;
         self.new_host_index(idx, None, None)
     }
 
@@ -276,7 +277,7 @@ impl<'a> HostResourceTables<'a> {
         ty: TypeResourceTableIndex,
     ) -> Result<u32> {
         self.tables
-            .resource_lower_own(TypedResource::Component { ty, rep })
+            .resource_lower_own(VMTypedResource::component(ty, rep)?)
     }
 
     /// Lowers a `borrow` resource into the guest, converting the `rep`
@@ -294,7 +295,7 @@ impl<'a> HostResourceTables<'a> {
         ty: TypeResourceTableIndex,
     ) -> Result<u32> {
         self.tables
-            .resource_lower_borrow(TypedResource::Component { ty, rep })
+            .resource_lower_borrow(VMTypedResource::component(ty, rep)?)
     }
 
     /// Lifts an `own` resource from the `idx` specified from the table `ty`.

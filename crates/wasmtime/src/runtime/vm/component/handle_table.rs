@@ -1,5 +1,8 @@
-use super::{Scope, TypedResource, TypedResourceIndex};
+use super::TypedResourceIndex;
 use crate::prelude::TryVec;
+use crate::vm::{
+    VMHandleTableSlot, VMScope, VMTransmitLocalState, VMTransmitLocalStateKind, VMTypedResource,
+};
 use crate::{Result, bail};
 use core::mem;
 use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
@@ -54,37 +57,12 @@ impl HandleCounter {
     }
 }
 
-/// Represents the state of a stream or future handle from the perspective of a
-/// given component instance.
-#[derive(Debug, Eq, PartialEq)]
-pub enum TransmitLocalState {
-    /// The write end of the stream or future.
-    Write {
-        /// Whether the component instance has been notified that the stream or
-        /// future is "done" (i.e. the other end has dropped, or, in the case of
-        /// a future, a value has been transmitted).
-        done: bool,
-    },
-    /// The read end of the stream or future.
-    Read {
-        /// Whether the component instance has been notified that the stream or
-        /// future is "done" (i.e. the other end has dropped, or, in the case of
-        /// a future, a value has been transmitted).
-        done: bool,
-    },
-    /// A read or write is in progress.
-    Busy,
-    /// A read or write is in progress and an asynchronous cancellation of it
-    /// has been requested but has not yet completed.
-    Cancelling,
-}
-
 /// Return value from [`HandleTable::remove_resource`].
 pub enum RemovedResource {
     /// An `own` resource was removed with the specified `rep`
     Own { rep: u32 },
     /// A `borrow` resource was removed originally created within `scope`.
-    Borrow { scope: Scope },
+    Borrow { scope: VMScope },
 }
 
 /// Different kinds of waitables returned by [`HandleTable::waitable_rep`].
@@ -94,79 +72,9 @@ pub enum Waitable {
     Stream,
 }
 
-#[derive(Debug)]
-enum Slot {
-    Free {
-        next: u32,
-    },
-
-    /// Represents an owned resource handle with the listed representation.
-    ///
-    /// The `lend_count` tracks how many times this has been lent out as a
-    /// `borrow` and if nonzero this can't be removed.
-    ResourceOwn {
-        resource: TypedResource,
-        lend_count: u32,
-    },
-
-    /// Represents a borrowed resource handle connected to the `scope`
-    /// provided.
-    ///
-    /// The `rep` is listed and dropping this borrow will decrement the borrow
-    /// count of the `scope`.
-    ///
-    /// Like `ResourceOwn` the `lend_count` tracks how many times this borrow
-    /// has been lent out to other calls, and if nonzero this can't be removed.
-    ResourceBorrow {
-        resource: TypedResource,
-        scope: Scope,
-        lend_count: u32,
-    },
-
-    /// Represents a host task handle.
-    HostTask {
-        rep: u32,
-    },
-
-    /// Represents a guest task handle.
-    GuestTask {
-        rep: u32,
-    },
-
-    /// Represents a guest thread handle.
-    #[cfg(feature = "component-model-async")]
-    GuestThread {
-        rep: u32,
-    },
-
-    /// Represents a stream handle.
-    Stream {
-        ty: TypeStreamTableIndex,
-        rep: u32,
-        state: TransmitLocalState,
-    },
-
-    /// Represents a future handle.
-    Future {
-        ty: TypeFutureTableIndex,
-        rep: u32,
-        state: TransmitLocalState,
-    },
-
-    /// Represents a waitable-set handle.
-    WaitableSet {
-        rep: u32,
-    },
-
-    /// Represents an error-context handle.
-    ErrorContext {
-        rep: u32,
-    },
-}
-
 pub struct HandleTable {
     next: u32,
-    slots: TryVec<Slot>,
+    slots: TryVec<VMHandleTableSlot>,
 }
 
 impl Default for HandleTable {
@@ -183,10 +91,10 @@ impl HandleTable {
     pub fn is_empty(&self) -> bool {
         self.slots
             .iter()
-            .all(|slot| matches!(slot, Slot::Free { .. }))
+            .all(|slot| matches!(slot, VMHandleTableSlot::Free { .. }))
     }
 
-    fn insert(&mut self, counter: &mut HandleCounter, slot: Slot) -> Result<u32> {
+    fn insert(&mut self, counter: &mut HandleCounter, slot: VMHandleTableSlot) -> Result<u32> {
         let next = self.next;
 
         // The component model reserves index 0 as never allocatable so add one
@@ -208,13 +116,13 @@ impl HandleTable {
             if counter.used >= counter.limit {
                 bail!("cannot allocate another handle: store handle limit exceeded");
             }
-            self.slots.push(Slot::Free {
+            self.slots.push(VMHandleTableSlot::Free {
                 next: next.checked_add(1).unwrap(),
             })?;
             counter.used += 1;
         }
         self.next = match mem::replace(&mut self.slots[next as usize], slot) {
-            Slot::Free { next } => next,
+            VMHandleTableSlot::Free { next } => next,
             _ => unreachable!(),
         };
 
@@ -225,7 +133,7 @@ impl HandleTable {
     ///
     /// The slot stays charged to the store's `HandleCounter`; see its docs.
     fn remove(&mut self, idx: u32) -> Result<()> {
-        let to_fill = Slot::Free { next: self.next };
+        let to_fill = VMHandleTableSlot::Free { next: self.next };
         let slot = self.get_mut(idx)?;
         *slot = to_fill;
         self.next = idx - 1;
@@ -239,12 +147,12 @@ impl HandleTable {
         usize::try_from(idx).ok()
     }
 
-    fn get_mut(&mut self, idx: u32) -> Result<&mut Slot> {
+    fn get_mut(&mut self, idx: u32) -> Result<&mut VMHandleTableSlot> {
         let slot = self
             .handle_index_to_table_index(idx)
             .and_then(|i| self.slots.get_mut(i));
         match slot {
-            None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
+            None | Some(VMHandleTableSlot::Free { .. }) => bail!("unknown handle index {idx}"),
             Some(slot) => Ok(slot),
         }
     }
@@ -254,11 +162,11 @@ impl HandleTable {
     pub fn resource_own_insert(
         &mut self,
         counter: &mut HandleCounter,
-        resource: TypedResource,
+        resource: VMTypedResource,
     ) -> Result<u32> {
         self.insert(
             counter,
-            Slot::ResourceOwn {
+            VMHandleTableSlot::ResourceOwn {
                 resource,
                 lend_count: 0,
             },
@@ -271,12 +179,12 @@ impl HandleTable {
     pub fn resource_borrow_insert(
         &mut self,
         counter: &mut HandleCounter,
-        resource: TypedResource,
-        scope: Scope,
+        resource: VMTypedResource,
+        scope: VMScope,
     ) -> Result<u32> {
         self.insert(
             counter,
-            Slot::ResourceBorrow {
+            VMHandleTableSlot::ResourceBorrow {
                 resource,
                 scope,
                 lend_count: 0,
@@ -290,9 +198,8 @@ impl HandleTable {
     /// resource of the appropriate type.
     pub fn resource_rep(&mut self, idx: TypedResourceIndex) -> Result<u32> {
         match self.get_mut(idx.raw_index())? {
-            Slot::ResourceOwn { resource, .. } | Slot::ResourceBorrow { resource, .. } => {
-                resource.rep(&idx)
-            }
+            VMHandleTableSlot::ResourceOwn { resource, .. }
+            | VMHandleTableSlot::ResourceBorrow { resource, .. } => resource.rep(&idx),
             _ => bail!("index is not a resource"),
         }
     }
@@ -331,11 +238,11 @@ impl HandleTable {
         counter: Option<&mut HandleCounter>,
     ) -> Result<u32> {
         match self.get_mut(idx.raw_index())? {
-            Slot::ResourceOwn {
+            VMHandleTableSlot::ResourceOwn {
                 resource,
                 lend_count,
             }
-            | Slot::ResourceBorrow {
+            | VMHandleTableSlot::ResourceBorrow {
                 resource,
                 lend_count,
                 ..
@@ -364,7 +271,8 @@ impl HandleTable {
         idx: TypedResourceIndex,
     ) -> Result<()> {
         match self.get_mut(idx.raw_index())? {
-            Slot::ResourceOwn { lend_count, .. } | Slot::ResourceBorrow { lend_count, .. } => {
+            VMHandleTableSlot::ResourceOwn { lend_count, .. }
+            | VMHandleTableSlot::ResourceBorrow { lend_count, .. } => {
                 *lend_count -= 1;
                 counter.used -= 1;
                 Ok(())
@@ -380,7 +288,7 @@ impl HandleTable {
     /// resource of the wrong type.
     pub fn remove_resource(&mut self, idx: TypedResourceIndex) -> Result<RemovedResource> {
         let ret = match self.get_mut(idx.raw_index())? {
-            Slot::ResourceOwn {
+            VMHandleTableSlot::ResourceOwn {
                 resource,
                 lend_count,
             } => {
@@ -391,7 +299,7 @@ impl HandleTable {
                     rep: resource.rep(&idx)?,
                 }
             }
-            Slot::ResourceBorrow {
+            VMHandleTableSlot::ResourceBorrow {
                 resource,
                 scope,
                 lend_count,
@@ -421,10 +329,10 @@ impl HandleTable {
     ) -> Result<u32> {
         self.insert(
             counter,
-            Slot::Stream {
+            VMHandleTableSlot::Stream {
                 rep,
-                ty,
-                state: TransmitLocalState::Read { done: false },
+                ty: ty.as_u32(),
+                state: VMTransmitLocalState::read(false),
             },
         )
     }
@@ -441,10 +349,10 @@ impl HandleTable {
     ) -> Result<u32> {
         self.insert(
             counter,
-            Slot::Stream {
+            VMHandleTableSlot::Stream {
                 rep,
-                ty,
-                state: TransmitLocalState::Write { done: false },
+                ty: ty.as_u32(),
+                state: VMTransmitLocalState::write(false),
             },
         )
     }
@@ -458,10 +366,10 @@ impl HandleTable {
         &mut self,
         expected_ty: TypeStreamTableIndex,
         idx: u32,
-    ) -> Result<(u32, &mut TransmitLocalState)> {
+    ) -> Result<(u32, &mut VMTransmitLocalState)> {
         match self.get_mut(idx)? {
-            Slot::Stream { rep, ty, state } => {
-                if *ty != expected_ty {
+            VMHandleTableSlot::Stream { rep, ty, state } => {
+                if *ty != expected_ty.as_u32() {
                     bail!("handle is a stream of a different type");
                 }
                 Ok((*rep, state))
@@ -483,16 +391,16 @@ impl HandleTable {
         idx: u32,
     ) -> Result<(u32, bool)> {
         let ret = match self.get_mut(idx)? {
-            Slot::Stream { rep, ty, state } => {
-                if *ty != expected_ty {
+            VMHandleTableSlot::Stream { rep, ty, state } => {
+                if *ty != expected_ty.as_u32() {
                     bail!("handle is a stream of a different type");
                 }
-                let is_done = match state {
-                    TransmitLocalState::Read { done } => *done,
-                    TransmitLocalState::Write { .. } => {
+                let is_done = match state.kind() {
+                    VMTransmitLocalStateKind::Read { done } => done,
+                    VMTransmitLocalStateKind::Write { .. } => {
                         bail!("handle is not a readable end of a stream")
                     }
-                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                    VMTransmitLocalStateKind::Busy | VMTransmitLocalStateKind::Cancelling => {
                         bail!("cannot remove busy stream")
                     }
                 };
@@ -511,16 +419,16 @@ impl HandleTable {
         idx: u32,
     ) -> Result<u32> {
         let ret = match self.get_mut(idx)? {
-            Slot::Stream { rep, ty, state } => {
-                if *ty != expected_ty {
+            VMHandleTableSlot::Stream { rep, ty, state } => {
+                if *ty != expected_ty.as_u32() {
                     bail!("handle is a stream of a different type");
                 }
-                match state {
-                    TransmitLocalState::Write { .. } => {}
-                    TransmitLocalState::Read { .. } => {
+                match state.kind() {
+                    VMTransmitLocalStateKind::Write { .. } => {}
+                    VMTransmitLocalStateKind::Read { .. } => {
                         bail!("passed read end to `stream.drop-writable`")
                     }
-                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                    VMTransmitLocalStateKind::Busy | VMTransmitLocalStateKind::Cancelling => {
                         bail!("cannot drop busy stream")
                     }
                 }
@@ -544,10 +452,10 @@ impl HandleTable {
     ) -> Result<u32> {
         self.insert(
             counter,
-            Slot::Future {
+            VMHandleTableSlot::Future {
                 rep,
-                ty,
-                state: TransmitLocalState::Read { done: false },
+                ty: ty.as_u32(),
+                state: VMTransmitLocalState::read(false),
             },
         )
     }
@@ -564,10 +472,10 @@ impl HandleTable {
     ) -> Result<u32> {
         self.insert(
             counter,
-            Slot::Future {
+            VMHandleTableSlot::Future {
                 rep,
-                ty,
-                state: TransmitLocalState::Write { done: false },
+                ty: ty.as_u32(),
+                state: VMTransmitLocalState::write(false),
             },
         )
     }
@@ -581,10 +489,10 @@ impl HandleTable {
         &mut self,
         expected_ty: TypeFutureTableIndex,
         idx: u32,
-    ) -> Result<(u32, &mut TransmitLocalState)> {
+    ) -> Result<(u32, &mut VMTransmitLocalState)> {
         match self.get_mut(idx)? {
-            Slot::Future { rep, ty, state } => {
-                if *ty != expected_ty {
+            VMHandleTableSlot::Future { rep, ty, state } => {
+                if *ty != expected_ty.as_u32() {
                     bail!("handle is a future of a different type");
                 }
                 Ok((*rep, state))
@@ -606,16 +514,16 @@ impl HandleTable {
         idx: u32,
     ) -> Result<(u32, bool)> {
         let ret = match self.get_mut(idx)? {
-            Slot::Future { rep, ty, state } => {
-                if *ty != expected_ty {
+            VMHandleTableSlot::Future { rep, ty, state } => {
+                if *ty != expected_ty.as_u32() {
                     bail!("handle is a future of a different type");
                 }
-                let is_done = match state {
-                    TransmitLocalState::Read { done } => *done,
-                    TransmitLocalState::Write { .. } => {
+                let is_done = match state.kind() {
+                    VMTransmitLocalStateKind::Read { done } => done,
+                    VMTransmitLocalStateKind::Write { .. } => {
                         bail!("handle is not a readable end of a future")
                     }
-                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                    VMTransmitLocalStateKind::Busy | VMTransmitLocalStateKind::Cancelling => {
                         bail!("cannot remove busy future")
                     }
                 };
@@ -636,16 +544,16 @@ impl HandleTable {
         idx: u32,
     ) -> Result<(u32, bool)> {
         let ret = match self.get_mut(idx)? {
-            Slot::Future { rep, ty, state } => {
-                if *ty != expected_ty {
+            VMHandleTableSlot::Future { rep, ty, state } => {
+                if *ty != expected_ty.as_u32() {
                     bail!("handle is a future of a different type");
                 }
-                let is_done = match state {
-                    TransmitLocalState::Write { done } => *done,
-                    TransmitLocalState::Read { .. } => {
+                let is_done = match state.kind() {
+                    VMTransmitLocalStateKind::Write { done } => done,
+                    VMTransmitLocalStateKind::Read { .. } => {
                         bail!("passed read end to `future.drop-writable`")
                     }
-                    TransmitLocalState::Busy | TransmitLocalState::Cancelling => {
+                    VMTransmitLocalStateKind::Busy | VMTransmitLocalStateKind::Cancelling => {
                         bail!("cannot drop busy future")
                     }
                 };
@@ -660,13 +568,13 @@ impl HandleTable {
     /// Inserts the error-context `rep` into this table, returning the index it
     /// now resides at.
     pub fn error_context_insert(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
-        self.insert(counter, Slot::ErrorContext { rep })
+        self.insert(counter, VMHandleTableSlot::ErrorContext { rep })
     }
 
     /// Returns the `rep` of an error-context pointed to by `idx`.
     pub fn error_context_rep(&mut self, idx: u32) -> Result<u32> {
         match self.get_mut(idx)? {
-            Slot::ErrorContext { rep } => Ok(*rep),
+            VMHandleTableSlot::ErrorContext { rep } => Ok(*rep),
             _ => bail!("handle is not an error-context"),
         }
     }
@@ -676,7 +584,7 @@ impl HandleTable {
     /// Returns the internal `rep`.
     pub fn error_context_drop(&mut self, idx: u32) -> Result<u32> {
         let rep = match self.get_mut(idx)? {
-            Slot::ErrorContext { rep } => *rep,
+            VMHandleTableSlot::ErrorContext { rep } => *rep,
             _ => bail!("handle is not an error-context"),
         };
         self.remove(idx)?;
@@ -685,20 +593,20 @@ impl HandleTable {
 
     /// Inserts `rep` as a guest subtask into this table.
     pub fn subtask_insert_guest(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
-        self.insert(counter, Slot::GuestTask { rep })
+        self.insert(counter, VMHandleTableSlot::GuestTask { rep })
     }
 
     /// Inserts `rep` as a host subtask into this table.
     pub fn subtask_insert_host(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
-        self.insert(counter, Slot::HostTask { rep })
+        self.insert(counter, VMHandleTableSlot::HostTask { rep })
     }
 
     /// Returns the `rep` of the subtask at `idx` as well as if it's a host
     /// task or not.
     pub fn subtask_rep(&mut self, idx: u32) -> Result<(u32, bool)> {
         match self.get_mut(idx)? {
-            Slot::GuestTask { rep } => Ok((*rep, false)),
-            Slot::HostTask { rep } => Ok((*rep, true)),
+            VMHandleTableSlot::GuestTask { rep } => Ok((*rep, false)),
+            VMHandleTableSlot::HostTask { rep } => Ok((*rep, true)),
             _ => bail!("handle is not a subtask"),
         }
     }
@@ -706,8 +614,8 @@ impl HandleTable {
     /// Removes the subtask set at `idx`, returning its `rep`.
     pub fn subtask_remove(&mut self, idx: u32) -> Result<(u32, bool)> {
         let ret = match self.get_mut(idx)? {
-            Slot::GuestTask { rep } => (*rep, false),
-            Slot::HostTask { rep } => (*rep, true),
+            VMHandleTableSlot::GuestTask { rep } => (*rep, false),
+            VMHandleTableSlot::HostTask { rep } => (*rep, true),
             _ => bail!("handle is not a subtask"),
         };
         self.remove(idx)?;
@@ -716,13 +624,13 @@ impl HandleTable {
 
     /// Inserts `rep` as a waitable set into this table.
     pub fn waitable_set_insert(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
-        self.insert(counter, Slot::WaitableSet { rep })
+        self.insert(counter, VMHandleTableSlot::WaitableSet { rep })
     }
 
     /// Returns the `rep` of an waitable-set pointed to by `idx`.
     pub fn waitable_set_rep(&mut self, idx: u32) -> Result<u32> {
         match self.get_mut(idx)? {
-            Slot::WaitableSet { rep, .. } => Ok(*rep),
+            VMHandleTableSlot::WaitableSet { rep, .. } => Ok(*rep),
             _ => bail!("handle is not an waitable-set"),
         }
     }
@@ -730,7 +638,7 @@ impl HandleTable {
     /// Removes the waitable set at `idx`, returning its `rep`.
     pub fn waitable_set_remove(&mut self, idx: u32) -> Result<u32> {
         let ret = match self.get_mut(idx)? {
-            Slot::WaitableSet { rep } => *rep,
+            VMHandleTableSlot::WaitableSet { rep } => *rep,
             _ => bail!("handle is not a waitable-set"),
         };
         self.remove(idx)?;
@@ -741,10 +649,12 @@ impl HandleTable {
     /// kind of waitable it is.
     pub fn waitable_rep(&mut self, idx: u32) -> Result<(u32, Waitable)> {
         match self.get_mut(idx)? {
-            Slot::GuestTask { rep } => Ok((*rep, Waitable::Subtask { is_host: false })),
-            Slot::HostTask { rep } => Ok((*rep, Waitable::Subtask { is_host: true })),
-            Slot::Future { rep, .. } => Ok((*rep, Waitable::Future)),
-            Slot::Stream { rep, .. } => Ok((*rep, Waitable::Stream)),
+            VMHandleTableSlot::GuestTask { rep } => {
+                Ok((*rep, Waitable::Subtask { is_host: false }))
+            }
+            VMHandleTableSlot::HostTask { rep } => Ok((*rep, Waitable::Subtask { is_host: true })),
+            VMHandleTableSlot::Future { rep, .. } => Ok((*rep, Waitable::Future)),
+            VMHandleTableSlot::Stream { rep, .. } => Ok((*rep, Waitable::Stream)),
             _ => bail!("handle is not a waitable"),
         }
     }
@@ -759,13 +669,14 @@ impl ThreadHandleTable {
     /// Inserts the guest thread `rep` into this table, returning the index it
     /// now resides at.
     pub fn guest_thread_insert(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
-        self.0.insert(counter, Slot::GuestThread { rep })
+        self.0
+            .insert(counter, VMHandleTableSlot::GuestThread { rep })
     }
 
     /// Returns the `rep` of a guest thread pointed to by `idx`.
     pub fn guest_thread_rep(&mut self, idx: u32) -> Result<u32> {
         match self.0.get_mut(idx)? {
-            Slot::GuestThread { rep } => Ok(*rep),
+            VMHandleTableSlot::GuestThread { rep } => Ok(*rep),
             _ => bail!("handle is not a guest thread"),
         }
     }
@@ -775,7 +686,7 @@ impl ThreadHandleTable {
     /// Returns the internal `rep`.
     pub fn guest_thread_remove(&mut self, idx: u32) -> Result<u32> {
         let rep = match self.0.get_mut(idx)? {
-            Slot::GuestThread { rep } => *rep,
+            VMHandleTableSlot::GuestThread { rep } => *rep,
             _ => bail!("handle is not a guest thread"),
         };
         self.0.remove(idx)?;

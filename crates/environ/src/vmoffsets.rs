@@ -96,6 +96,11 @@ macro_rules! define_vm_type_offsets {
         u32::from(($p).vm_common_stack_information().size())
     };
     (@size ($p:expr) VMGcHeader) => { u32::from(($p).vm_gc_header().size()) };
+    (@size ($p:expr) VMTypedResource) => { u32::from(($p).vm_typed_resource().size()) };
+    (@size ($p:expr) VMScope) => { u32::from(($p).vm_scope().size()) };
+    (@size ($p:expr) VMTransmitLocalState) => {
+        u32::from(($p).vm_transmit_local_state().size())
+    };
     // `VMStackChain` is a `repr(usize, C)` enum, and is not itself defined by
     // `for_each_vm_type!`.
     (@size ($p:expr) VMStackChain) => { u32::from(($p).size_of_vmstack_chain()) };
@@ -146,6 +151,11 @@ macro_rules! define_vm_type_offsets {
         u32::from(($p).vm_common_stack_information().align())
     };
     (@align ($p:expr) VMGcHeader) => { u32::from(($p).vm_gc_header().align()) };
+    (@align ($p:expr) VMTypedResource) => { u32::from(($p).vm_typed_resource().align()) };
+    (@align ($p:expr) VMScope) => { u32::from(($p).vm_scope().align()) };
+    (@align ($p:expr) VMTransmitLocalState) => {
+        u32::from(($p).vm_transmit_local_state().align())
+    };
     (@align ($p:expr) VMStackChain) => { u32::from($p) };
     (@align ($p:expr) VMStackState) => { 4u32 };
     (@align ($p:expr) VMContinuationStack) => { u32::from($p) };
@@ -281,6 +291,7 @@ macro_rules! define_vm_type_offsets {
     (@enum_variants $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
         $(#[doc = $vdoc:literal])*
         #[snake_name = $vsnake:ident]
+        $(#[$vattr:meta])*
         $Variant:ident { $($vbody:tt)* } = $disc:literal ,
         $($rest:tt)*
     ) => {

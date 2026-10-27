@@ -13,8 +13,9 @@ use crate::component::{
 use crate::prelude::*;
 use crate::store::{StoreOpaque, StoreToken};
 use crate::try_mutex::{TryMutex, TryMutexGuard};
-use crate::vm::component::{ComponentInstance, HandleCounter, HandleTable, TransmitLocalState};
+use crate::vm::component::{ComponentInstance, HandleCounter, HandleTable};
 use crate::vm::{AlwaysMut, VMStore};
+use crate::vm::{VMTransmitLocalState, VMTransmitLocalStateKind};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use crate::{
     Error, Result, Trap, bail, bail_bug, ensure,
@@ -230,7 +231,7 @@ fn get_mut_by_index_from(
     handle_table: &mut HandleTable,
     ty: TransmitIndex,
     index: u32,
-) -> Result<(u32, &mut TransmitLocalState)> {
+) -> Result<(u32, &mut VMTransmitLocalState)> {
     match ty {
         TransmitIndex::Stream(ty) => handle_table.stream_rep(ty, index),
         TransmitIndex::Future(ty) => handle_table.future_rep(ty, index),
@@ -3608,11 +3609,11 @@ impl Instance {
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
         let async_ = self.options(store.0, options).async_;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
-        let TransmitLocalState::Write { done } = *state else {
+        let VMTransmitLocalStateKind::Write { done } = state.kind() else {
             bail!(Trap::ConcurrentFutureStreamOp);
         };
 
-        *state = TransmitLocalState::Busy;
+        *state = VMTransmitLocalState::busy();
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
         let concurrent_state = store.0.concurrent_state_mut()?;
         let transmit_id = concurrent_state.get_mut(transmit_handle)?.state;
@@ -3837,9 +3838,7 @@ impl Instance {
 
         if result != ReturnCode::Blocked {
             *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
-                TransmitLocalState::Write {
-                    done: matches!(result, ReturnCode::Dropped(_)),
-                };
+                VMTransmitLocalState::write(matches!(result, ReturnCode::Dropped(_)));
         }
 
         log::trace!(
@@ -3867,11 +3866,11 @@ impl Instance {
         self.check_bounds(store.0, options, ty, address, count.as_usize())?;
         let async_ = self.options(store.0, options).async_;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
-        let TransmitLocalState::Read { done } = *state else {
+        let VMTransmitLocalStateKind::Read { done } = state.kind() else {
             bail!(Trap::ConcurrentFutureStreamOp);
         };
 
-        *state = TransmitLocalState::Busy;
+        *state = VMTransmitLocalState::busy();
         let transmit_handle = TableId::<TransmitHandle>::new(rep);
         let concurrent_state = store.0.concurrent_state_mut()?;
         let transmit_id = concurrent_state.get_mut(transmit_handle)?.state;
@@ -4083,12 +4082,10 @@ impl Instance {
 
         if result != ReturnCode::Blocked {
             *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
-                TransmitLocalState::Read {
-                    done: matches!(
-                        (result, ty),
-                        (ReturnCode::Dropped(_), TransmitIndex::Stream(_))
-                    ),
-                };
+                VMTransmitLocalState::read(matches!(
+                    (result, ty),
+                    (ReturnCode::Dropped(_), TransmitIndex::Stream(_))
+                ));
         }
 
         log::trace!(
@@ -4302,27 +4299,27 @@ impl Instance {
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?;
         let id = TableId::<TransmitHandle>::new(rep);
         log::trace!("guest cancel write {id:?} (handle {writer})");
-        match state {
-            TransmitLocalState::Write { .. } => {
+        match state.kind() {
+            VMTransmitLocalStateKind::Write { .. } => {
                 bail!("stream or future write cancelled when no write is pending")
             }
-            TransmitLocalState::Read { .. } => {
+            VMTransmitLocalStateKind::Read { .. } => {
                 bail!("passed read end to `{{stream|future}}.cancel-write`")
             }
-            TransmitLocalState::Cancelling => {
+            VMTransmitLocalStateKind::Cancelling => {
                 bail!("stream or future write cancelled when a cancellation is already pending")
             }
-            TransmitLocalState::Busy => {}
+            VMTransmitLocalStateKind::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
         let code = self.cancel_write(store, caller, transmit_id, async_)?;
         let state =
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?.1;
-        if let TransmitLocalState::Busy = state {
+        if let VMTransmitLocalStateKind::Busy = state.kind() {
             *state = if matches!(code, ReturnCode::Blocked) {
-                TransmitLocalState::Cancelling
+                VMTransmitLocalState::cancelling()
             } else {
-                TransmitLocalState::Write { done: false }
+                VMTransmitLocalState::write(false)
             };
         }
         Ok(code)
@@ -4341,27 +4338,27 @@ impl Instance {
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?;
         let id = TableId::<TransmitHandle>::new(rep);
         log::trace!("guest cancel read {id:?} (handle {reader})");
-        match state {
-            TransmitLocalState::Read { .. } => {
+        match state.kind() {
+            VMTransmitLocalStateKind::Read { .. } => {
                 bail!("stream or future read cancelled when no read is pending")
             }
-            TransmitLocalState::Write { .. } => {
+            VMTransmitLocalStateKind::Write { .. } => {
                 bail!("passed write end to `{{stream|future}}.cancel-read`")
             }
-            TransmitLocalState::Cancelling => {
+            VMTransmitLocalStateKind::Cancelling => {
                 bail!("stream or future read cancelled when a cancellation is already pending")
             }
-            TransmitLocalState::Busy => {}
+            VMTransmitLocalStateKind::Busy => {}
         }
         let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
         let code = self.cancel_read(store, caller, transmit_id, async_)?;
         let state =
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?.1;
-        if let TransmitLocalState::Busy = state {
+        if let VMTransmitLocalStateKind::Busy = state.kind() {
             *state = if matches!(code, ReturnCode::Blocked) {
-                TransmitLocalState::Cancelling
+                VMTransmitLocalState::cancelling()
             } else {
-                TransmitLocalState::Read { done: false }
+                VMTransmitLocalState::read(false)
             };
         }
         Ok(code)
@@ -4823,7 +4820,7 @@ impl ComponentInstance {
         self: Pin<&mut Self>,
         ty: TransmitIndex,
         index: u32,
-    ) -> Result<(u32, &mut TransmitLocalState)> {
+    ) -> Result<(u32, &mut VMTransmitLocalState)> {
         get_mut_by_index_from(self.table_for_transmit(ty), ty, index)
     }
 }
@@ -5055,18 +5052,16 @@ impl Waitable {
             bail_bug!("unexpected rep mismatch");
         }
         if !matches!(
-            *state,
-            TransmitLocalState::Busy | TransmitLocalState::Cancelling
+            state.kind(),
+            VMTransmitLocalStateKind::Busy | VMTransmitLocalStateKind::Cancelling
         ) {
             bail_bug!("expected state to be busy or cancelling");
         }
         let done = matches!(code, ReturnCode::Dropped(_));
         *state = match event {
-            Event::FutureRead { .. } | Event::StreamRead { .. } => {
-                TransmitLocalState::Read { done }
-            }
+            Event::FutureRead { .. } | Event::StreamRead { .. } => VMTransmitLocalState::read(done),
             Event::FutureWrite { .. } | Event::StreamWrite { .. } => {
-                TransmitLocalState::Write { done }
+                VMTransmitLocalState::write(done)
             }
             _ => bail_bug!("unexpected event for stream"),
         };
