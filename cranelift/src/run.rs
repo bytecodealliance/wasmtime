@@ -8,7 +8,7 @@ use cranelift_filetests::TestFileCompiler;
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::{Details, IsaSpec, ParseOptions, parse_run_command, parse_test};
 use std::path::{Path, PathBuf};
-use target_lexicon::{HOST, Triple};
+use target_lexicon::{Architecture, HOST, Triple};
 
 /// Execute clif code and verify with test expressions
 #[derive(Parser)]
@@ -113,8 +113,10 @@ fn create_target_isa(isa_spec: &IsaSpec) -> Result<OwnedTargetIsa> {
             Ok(builder.finish(flags.clone())?)
         }
         IsaSpec::Some(ref isas) => {
+            // Keep host feature detection. Only the shared flags come from the
+            // file, and RISC-V 64-bit variants are interchangeable.
             for isa in isas {
-                if isa.triple().architecture == HOST.architecture {
+                if architectures_compatible(HOST.architecture, isa.triple().architecture) {
                     return Ok(builder.finish(isa.flags().clone())?);
                 }
             }
@@ -125,9 +127,41 @@ fn create_target_isa(isa_spec: &IsaSpec) -> Result<OwnedTargetIsa> {
     }
 }
 
+/// Architectures `clif-util run` can execute on this host.
+///
+/// Identical architectures match. `riscv64` and `riscv64gc` (and the other
+/// 64-bit RISC-V variants) match each other. Unrelated architectures do not.
+pub(crate) fn architectures_compatible(host: Architecture, requested: Architecture) -> bool {
+    host == requested
+        || matches!(
+            (host, requested),
+            (Architecture::Riscv64(_), Architecture::Riscv64(_))
+        )
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn riscv64_architecture_variants_are_compatible() {
+        use target_lexicon::{Riscv32Architecture, Riscv64Architecture};
+
+        let riscv64 = Architecture::Riscv64(Riscv64Architecture::Riscv64);
+        let riscv64gc = Architecture::Riscv64(Riscv64Architecture::Riscv64gc);
+        let riscv32 = Architecture::Riscv32(Riscv32Architecture::Riscv32);
+        let x64 = Architecture::X86_64;
+
+        assert!(architectures_compatible(riscv64, riscv64gc));
+        assert!(architectures_compatible(riscv64gc, riscv64));
+        assert!(architectures_compatible(riscv64, riscv64));
+        assert!(architectures_compatible(riscv64gc, riscv64gc));
+        assert!(architectures_compatible(x64, x64));
+        assert!(!architectures_compatible(riscv64, x64));
+        assert!(!architectures_compatible(x64, riscv64gc));
+        assert!(!architectures_compatible(riscv64, riscv32));
+        assert!(!architectures_compatible(riscv32, riscv64gc));
+    }
 
     #[test]
     fn nop() {
