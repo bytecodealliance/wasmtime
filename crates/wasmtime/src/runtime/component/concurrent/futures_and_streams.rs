@@ -3474,7 +3474,13 @@ impl Instance {
                     Some(ty) => ty,
                     None => bail_bug!("expected read payload type to be present"),
                 };
-                if flat_abi.is_some() {
+                let lift =
+                    &mut LiftContext::new(store.store_opaque_mut(), write_options, write_instance)?;
+                if let Some(abi) = flat_abi {
+                    // The host copies these bytes itself rather than wasm, so
+                    // charge them against hostcall fuel.
+                    lift.consume_fuel_array(count, usize::try_from(abi.size)?)?;
+
                     // Fast path memcpy for "flat" (i.e. no pointers or handles) payloads:
                     let store_opaque = store.store_opaque_mut();
 
@@ -3514,8 +3520,6 @@ impl Instance {
                         }
                     }
                 } else {
-                    let store_opaque = store.store_opaque_mut();
-                    let lift = &mut LiftContext::new(store_opaque, write_options, write_instance)?;
                     let bytes = &lift.memory()[write_address..][..write_length_in_bytes];
                     lift.consume_fuel_array(count, size_of::<Val>())?;
 

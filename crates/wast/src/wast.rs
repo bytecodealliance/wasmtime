@@ -271,6 +271,12 @@ impl WastContext {
                 store.as_context_mut().gc(None)?;
                 Ok(())
             })?;
+            i.func_wrap("set-hostcall-fuel", |mut store, (fuel,): (u64,)| {
+                store
+                    .as_context_mut()
+                    .set_hostcall_fuel(usize::try_from(fuel).unwrap_or(usize::MAX));
+                Ok(())
+            })?;
         }
         Ok(())
     }

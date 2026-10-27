@@ -159,6 +159,9 @@ enum wasmtime_trap_code_enum {
   /// `task.return` or `task.cancel` was called by a task which was not
   /// created by an `async`-lifted export.
   WASMTIME_TRAP_CODE_TASK_RETURN_OR_CANCEL_SYNC_LIFTED = 54,
+  /// More data was copied between the host and the guest, or between two
+  /// guests, than the store's hostcall fuel allows.
+  WASMTIME_TRAP_CODE_HOSTCALL_FUEL_EXHAUSTED = 55,
 };
 
 /**

@@ -12,6 +12,21 @@
 ;; should happen but eventually `realloc` will fail-fast before any real
 ;; transcoding. Memory growth is assumed to be VM-based and thus quite fast.
 (component definition $A
+  ;; These strings are far larger than the default hostcall fuel allows, so
+  ;; raise it to the maximum while instantiating.
+  (import "wasmtime" (instance $wasmtime
+    (export "set-hostcall-fuel" (func (param "fuel" u64)))
+  ))
+  (core func $set-hostcall-fuel (canon lower (func $wasmtime "set-hostcall-fuel")))
+  (core module $max-hostcall-fuel
+    (import "" "set-hostcall-fuel" (func $set-hostcall-fuel (param i64)))
+    (func $start (call $set-hostcall-fuel (i64.const -1)))
+    (start $start)
+  )
+  (core instance (instantiate $max-hostcall-fuel
+    (with "" (instance (export "set-hostcall-fuel" (func $set-hostcall-fuel))))
+  ))
+
   (component $A
     (core module $m
       (memory (export "m") 1)

@@ -118,6 +118,9 @@ macro_rules! foreach_builtin_component_function {
             enter_sync_call(vmctx: vmctx, callee_async: u32, callee_instance: u32) -> bool;
             exit_sync_call(vmctx: vmctx) -> bool;
 
+            // Returns the store's hostcall fuel.
+            hostcall_fuel(vmctx: vmctx) -> u64;
+
             #[cfg(feature = "component-model-async")]
             backpressure_modify(vmctx: vmctx, caller_instance: u32, increment: u8) -> bool;
             #[cfg(feature = "component-model-async")]

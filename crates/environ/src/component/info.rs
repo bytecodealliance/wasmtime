@@ -1133,6 +1133,10 @@ pub enum Trampoline {
     /// code.
     Trap(Trap),
 
+    /// An intrinsic used by FACT-generated modules to get the store's hostcall
+    /// fuel, which limits how many bytes of strings the host copies.
+    HostcallFuel,
+
     /// An intrinsic used by FACT-generated modules to push a task onto the
     /// stack for a sync-to-sync, guest-to-guest call.
     EnterSyncCall,
@@ -1265,6 +1269,7 @@ impl Trampoline {
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
             Trap(trap) => format!("trap-{}", *trap as u8),
+            HostcallFuel => format!("hostcall-fuel"),
             EnterSyncCall => format!("enter-sync-call"),
             ExitSyncCall => format!("exit-sync-call"),
             ThreadIndex { .. } => format!("thread-index"),

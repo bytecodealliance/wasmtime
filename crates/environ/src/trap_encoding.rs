@@ -299,6 +299,10 @@ generate_trap_type! {
         /// created by an `async`-lifted export.
         TaskReturnOrCancelSyncLifted = "`task.return` or `task.cancel` called by a task which was not lifted with `async`",
 
+        /// More data was copied between the host and the guest, or between
+        /// two guests, than the store's hostcall fuel allows.
+        HostcallFuelExhausted = "too much data is being copied between the host and the guest: fuel allocated for hostcalls has been exhausted",
+
         // if adding a variant here be sure to update `trap.rs` and `trap.h` as
         // mentioned above
     }

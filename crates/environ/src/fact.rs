@@ -100,6 +100,11 @@ pub struct Module<'a> {
 
     imported_enter_sync_call: Option<FuncIndex>,
     imported_exit_sync_call: Option<FuncIndex>,
+    imported_hostcall_fuel: Option<FuncIndex>,
+
+    /// Whether any adapter uses the defined global holding the hostcall fuel
+    /// that's remaining for strings copied by the host.
+    hostcall_fuel_global: bool,
 
     /// Cached versions of unsafe intrinsics and where they were imported.
     imported_unsafe_intrinsics: HashMap<UnsafeIntrinsic, FuncIndex>,
@@ -303,6 +308,8 @@ impl<'a> Module<'a> {
             imported_error_context_transfer: None,
             imported_enter_sync_call: None,
             imported_exit_sync_call: None,
+            imported_hostcall_fuel: None,
+            hostcall_fuel_global: false,
             imported_unsafe_intrinsics: HashMap::new(),
             imported_traps: HashMap::new(),
             exports: Vec::new(),
@@ -736,6 +743,17 @@ impl<'a> Module<'a> {
         )
     }
 
+    fn import_hostcall_fuel(&mut self) -> FuncIndex {
+        self.import_simple(
+            "runtime",
+            "hostcall-fuel",
+            &[],
+            &[ValType::I64],
+            Import::HostcallFuel,
+            |me| &mut me.imported_hostcall_fuel,
+        )
+    }
+
     /// Imports the `context.get` intrinsic for the `slot`th context slot.
     fn import_context_get(&mut self, slot: usize) -> FuncIndex {
         let intrinsic = match slot {
@@ -859,6 +877,14 @@ impl<'a> Module<'a> {
                     Body::RefFunc(id) => {
                         Instruction::RefFunc(id_to_index[*id].as_u32()).encode(&mut body);
                     }
+                    Body::HostcallFuelGlobalGet => {
+                        let idx = u32::try_from(self.imported_globals.len()).unwrap();
+                        Instruction::GlobalGet(idx).encode(&mut body);
+                    }
+                    Body::HostcallFuelGlobalSet => {
+                        let idx = u32::try_from(self.imported_globals.len()).unwrap();
+                        Instruction::GlobalSet(idx).encode(&mut body);
+                    }
                 }
             }
             code.raw(&body);
@@ -868,6 +894,18 @@ impl<'a> Module<'a> {
         result.section(&self.core_types.section);
         result.section(&self.core_imports);
         result.section(&funcs);
+        if self.hostcall_fuel_global {
+            let mut globals = GlobalSection::new();
+            globals.global(
+                GlobalType {
+                    val_type: ValType::I64,
+                    mutable: true,
+                    shared: false,
+                },
+                &ConstExpr::i64_const(0),
+            );
+            result.section(&globals);
+        }
         result.section(&exports);
         result.section(&code);
         result.finish()
@@ -933,6 +971,8 @@ pub enum Import {
     ErrorContextTransfer,
     /// An intrinsic for trapping the instance with a specific trap code.
     Trap(Trap),
+    /// An intrinsic returning the store's hostcall fuel.
+    HostcallFuel,
     /// An intrinsic used by FACT-generated modules to check whether an instance
     /// may be entered for a sync-to-sync call and push a task onto the stack if
     /// so.
@@ -1004,28 +1044,26 @@ struct Function {
 /// Representation of a fragment of the body of a core wasm function generated
 /// for adapters.
 ///
-/// This variant comes in one of two flavors:
+/// The purpose of this representation is to handle relocations sort of. For
+/// example `Body::Call` doesn't actually know the function index being called
+/// until all adapters are generated because generating an adapter may generate
+/// imports which would shift the index space.
 ///
-/// 1. First a `Raw` variant is used to contain general instructions for the
-///    wasm function. This is populated by `Compiler::instruction` primarily.
-///
-/// 2. A `Call` instruction variant for a `FunctionId` where the final
-///    `FuncIndex` isn't known until emission time.
-///
-/// The purpose of this representation is the `Body::Call` variant. This can't
-/// be encoded as an instruction when it's generated due to not knowing the
-/// final index of the function being called. During `Module::encode`, however,
-/// all indices are known and `Body::Call` is turned into a final
-/// `Instruction::Call`.
-///
-/// One other possible representation in the future would be to encode a `Call`
-/// instruction with a 5-byte leb to fill in later, but for now this felt
-/// easier to represent. A 5-byte leb may be more efficient at compile-time if
-/// necessary, however.
+/// One other possible representation in the future would be to encode indexes
+/// with a 5-byte leb to fill in later, but for now this felt easier to
+/// represent. A 5-byte leb may be more efficient at compile-time if necessary,
+/// however.
 enum Body {
+    /// Raw wasm opcodes which aren't affected by imports.
     Raw(Vec<u8>),
+    /// A wasm `call` instruction to the specified function.
     Call(FunctionId),
+    /// A wasm `ref.func` instruction to the specified function.
     RefFunc(FunctionId),
+    /// A `global.get` of the hostcall fuel global.
+    HostcallFuelGlobalGet,
+    /// A `global.set` of the hostcall fuel global.
+    HostcallFuelGlobalSet,
 }
 
 impl Function {
