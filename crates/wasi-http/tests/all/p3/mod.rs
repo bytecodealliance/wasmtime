@@ -1288,6 +1288,9 @@ mod p3_http_forward_body {
         Ok(())
     }
 
+    /// Enable when https://github.com/bytecodealliance/wasmtime/issues/15026
+    /// has been fixed.
+    #[ignore]
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn trailers_error() -> Result<()> {
         let res = forward("trailers-error").await;
