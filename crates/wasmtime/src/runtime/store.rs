@@ -719,7 +719,7 @@ impl<T> Store<T> {
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
     pub fn try_new(engine: &Engine, data: T) -> Result<Self> {
-        let store_data = StoreData::new(engine);
+        let store_data = StoreData::new(engine)?;
         log::trace!("creating new store {:?}", store_data.id());
 
         let pkey = engine.allocator().next_available_pkey();

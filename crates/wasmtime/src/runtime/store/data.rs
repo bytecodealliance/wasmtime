@@ -1,4 +1,5 @@
 use crate::module::ModuleRegistry;
+use crate::prelude::*;
 use crate::runtime::vm::{self, VMStore};
 use crate::store::StoreOpaque;
 use crate::{Engine, StoreContext, StoreContextMut};
@@ -21,14 +22,14 @@ pub struct StoreData {
 }
 
 impl StoreData {
-    pub fn new(engine: &Engine) -> StoreData {
+    pub fn new(engine: &Engine) -> Result<StoreData> {
         #[cfg(not(feature = "component-model"))]
         let _ = engine;
-        StoreData {
+        Ok(StoreData {
             id: StoreId::allocate(),
             #[cfg(feature = "component-model")]
-            components: crate::component::ComponentStoreData::new(engine),
-        }
+            components: crate::component::ComponentStoreData::new(engine)?,
+        })
     }
 
     pub fn id(&self) -> StoreId {

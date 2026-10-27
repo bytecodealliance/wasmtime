@@ -111,8 +111,8 @@ pub struct RuntimeInstance {
 }
 
 impl ComponentStoreData {
-    pub fn new(engine: &Engine) -> ComponentStoreData {
-        ComponentStoreData {
+    pub fn new(engine: &Engine) -> Result<ComponentStoreData> {
+        Ok(ComponentStoreData {
             instances: Default::default(),
             component_trapped: false,
             has_components: false,
@@ -137,8 +137,8 @@ impl ComponentStoreData {
             },
             hostcall_fuel: DEFAULT_HOSTCALL_FUEL,
             #[cfg(feature = "component-model-async")]
-            lazy_lenders: Box::new([VMResourceIndex::EMPTY; LAZY_LENDERS_CAPACITY]),
-        }
+            lazy_lenders: try_new::<Box<_>>([VMResourceIndex::EMPTY; LAZY_LENDERS_CAPACITY])?,
+        })
     }
 
     /// The `lazy_lenders` buffer and its capacity, to publish into the store's
