@@ -161,9 +161,8 @@ block0(v0: i32):
     return v3
 }
 
-; check: v5 = iconst.i32 0
-; check: v6 = isub v5, v0
-; check: return v6
+; check: v4 = ineg v0
+; check: return v4
 
 function %ineg_not_plus_one_reverse(i32) -> i32 {
 block0(v0: i32):
@@ -173,9 +172,8 @@ block0(v0: i32):
     return v3
 }
 
-; check: v6 = iconst.i32 0
-; check: v7 = isub v6, v0
-; check: return v7
+; check: v5 = ineg v0
+; check: return v5
 
 function %ineg_not_minus_neg_1(i32) -> i32 {
 block0(v0: i32):
@@ -185,9 +183,8 @@ block0(v0: i32):
     return v3
 }
 
-; check: v7 = iconst.i32 0
-; check: v8 = isub v7, v0
-; check: return v8
+; check: v6 = ineg v0
+; check: return v6
 
 function %ineg_not_sub_one(i32) -> i32 {
 block0(v0: i32):
