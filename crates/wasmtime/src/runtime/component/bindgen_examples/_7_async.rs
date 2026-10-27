@@ -21,7 +21,9 @@ interface logging {
 
 world app {
     import logging;
-    export run: func();
+    /// Because `logging.logger.log` is async, `run` must also be async; otherwise,
+    /// a trap will occur at runtime if `run` calls `log` and it blocks.
+    export run: async func();
 }
 "#,
 
@@ -38,23 +40,6 @@ world app {
         // are no longer covered by e.g. `default: trappable`, and must be flagged
         // individually.
         default: trappable,
-    },
-
-    exports: {
-        // This will make the generated `call_run` function (see below) return a future.
-        //
-        // You may have noticed that the `run` export in the above WIT doesn't have the
-        // `async` keyword, so why does it need to be `.await`ed? Some guest languages
-        // don't ["color"](https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/)
-        // their functions, so a component's implementation of the `run` function
-        // export could call the async `log` function, which might block. From the
-        // component's perspective, everything still executes synchronously; making the
-        // export async just allows the host to suspend the guest until the future
-        // returned by `log` completes, rather than blocking the thread.
-        //
-        // If you wanted flag an individual world-level function, the syntax would be
-        // `"run": async,`.
-        default: async,
     },
 
     with: {

@@ -530,7 +530,7 @@ pub mod _6_exported_resources;
 /// ```rust
 /// use wasmtime::{
 ///     Config, Engine, Result, Store,
-///     component::{bindgen, Component, HasData, Linker, ResourceTable},
+///     component::{bindgen, Component, HasSelf, Linker, ResourceTable},
 /// };
 ///
 #[doc = include_str!("./_7_async.rs")]
@@ -541,10 +541,6 @@ pub mod _6_exported_resources;
 /// struct State {
 ///     // Manages the mapping of `MyLogger` structures to `Resource<MyLogger>`.
 ///     table: ResourceTable,
-/// }
-///
-/// impl HasData for State {
-///     type Data<'a> = &'a mut Self;
 /// }
 ///
 /// // This separate `HostLogger` trait serves to act as a namespace for just
@@ -588,13 +584,16 @@ pub mod _6_exported_resources;
 ///     }
 /// }
 ///
-/// impl<T> bindings::HostLoggerWithStore<T> for State {
+/// impl<T> bindings::HostLoggerWithStore<T> for HasSelf<State> {
 ///     async fn log(
 ///         accessor: &wasmtime::component::Accessor<T, Self>,
 ///         self_: wasmtime::component::Resource<MyLogger>,
 ///         level: Level,
 ///         msg: String,
 ///     ) -> wasmtime::Result<()> {
+///         // Do something that blocks
+///         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+///
 ///         accessor.with(|mut access| {
 ///             let state = access.get();
 ///             let logger = state.table.get(&self_)?;
@@ -621,13 +620,16 @@ pub mod _6_exported_resources;
 ///     let mut store = Store::new(&engine, State::default());
 ///
 ///     let mut linker = Linker::<State>::new(&engine);
-///     bindings::add_to_linker::<State, State>(&mut linker, |state| state)?;
+///     bindings::add_to_linker::<_, HasSelf<State>>(&mut linker, |state| state)?;
 ///
 ///     // If you try to use the `App::instantiate` method, you'll get a runtime error that
 ///     // looks something like:
 ///     // "Error: store configuration requires that `*_async` functions are used instead"
 ///     let bindings = App::instantiate_async(&mut store, &component, &linker).await?;
-///     bindings.call_run(&mut store).await?;
+///     let bindings = crate::App::instantiate_async(&mut store, &component, &linker).await?;
+///     store
+///       .run_concurrent(async |accessor| bindings.call_run(&accessor).await)
+///       .await??;
 ///     Ok(())
 /// }
 /// ```
