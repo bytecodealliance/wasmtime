@@ -29,6 +29,18 @@ mod copying;
 #[cfg(feature = "gc-copying")]
 pub use copying::*;
 
+/// Returns whether every byte in `bytes` is [`wasmtime_environ::POISON`].
+#[cfg(any(feature = "gc-drc", feature = "gc-copying"))]
+fn is_poisoned(bytes: &[u8]) -> bool {
+    // Check `bytes` in large-ish chunks. This forces compiling down to `memcmp`
+    // in both debug mode and with sanitizers enabled (fuzzing).
+    const CHUNK: usize = 4096;
+    static POISONED: [u8; CHUNK] = [wasmtime_environ::POISON; CHUNK];
+    bytes
+        .chunks(CHUNK)
+        .all(|chunk| chunk == &POISONED[..chunk.len()])
+}
+
 /// A hasher that doesn't hash, for use in the trace-info hash map, where we are
 /// just using scalar keys and aren't overly concerned with collision-based DoS.
 #[derive(Default)]

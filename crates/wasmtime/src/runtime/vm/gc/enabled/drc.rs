@@ -46,6 +46,7 @@
 
 use super::VMArrayRef;
 use super::free_list::FreeList;
+use super::is_poisoned;
 use super::trace_infos::TraceInfos;
 use crate::hash_set::HashSet;
 use crate::runtime::vm::{
@@ -529,7 +530,7 @@ impl DrcHeap {
             let size = usize::try_from(len).unwrap();
             let slice = &self.heap_slice()[start..][..size];
             assert!(
-                slice.iter().all(|&b| b == POISON),
+                is_poisoned(slice),
                 "free block at heap index {start} (size {size}) is not fully poisoned",
             );
         }
@@ -1090,7 +1091,7 @@ unsafe impl GcHeap for DrcHeap {
             let start = usize::try_from(gc_ref.heap_index()?.get())?;
             let slice = &self.heap_slice()[start..][..layout.size()];
             gc_assert!(
-                slice.iter().all(|&b| b == POISON),
+                is_poisoned(slice),
                 "newly allocated GC object at index {start} is not fully poisoned; \
                  freed memory was corrupted",
             );
