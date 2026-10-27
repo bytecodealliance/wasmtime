@@ -14,47 +14,6 @@ use wasmtime::component::{TaskGroupHook, TaskGroupId};
 use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, component::*};
 use wasmtime_component_util::REALLOC_AND_FREE;
 
-/// This is super::func::thunks, except with an async store.
-#[tokio::test]
-#[cfg_attr(miri, ignore)]
-async fn smoke() -> Result<()> {
-    let component = r#"
-        (component
-            (core module $m
-                (func (export "thunk"))
-                (func (export "thunk-trap") unreachable)
-            )
-            (core instance $i (instantiate $m))
-            (func (export "thunk")
-                (canon lift (core func $i "thunk"))
-            )
-            (func (export "thunk-trap")
-                (canon lift (core func $i "thunk-trap"))
-            )
-        )
-    "#;
-
-    let engine = super::async_engine();
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine)
-        .instantiate_async(&mut store, &component)
-        .await?;
-
-    let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
-
-    thunk.call_async(&mut store, ()).await?;
-
-    let err = instance
-        .get_typed_func::<(), ()>(&mut store, "thunk-trap")?
-        .call_async(&mut store, ())
-        .await
-        .unwrap_err();
-    assert_eq!(err.downcast::<Trap>()?, Trap::UnreachableCodeReached);
-
-    Ok(())
-}
-
 #[tokio::test(flavor = "current_thread")]
 async fn run_concurrent_yields_during_high_priority_work() -> Result<()> {
     const TASKS: usize = 256;

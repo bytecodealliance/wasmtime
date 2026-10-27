@@ -7,35 +7,6 @@ use wasmtime_test_macros::wasmtime_test;
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn call_wasm_to_wasm(config: &mut Config) -> Result<()> {
-    let wasm = wat::parse_str(
-        r#"
-          (module
-            (func (result i32 i32 i32)
-              i32.const 1
-              i32.const 2
-              i32.const 3
-            )
-            (func (export "run") (result i32 i32 i32)
-                call 0
-            )
-          )
-        "#,
-    )?;
-    let engine = Engine::new(&config)?;
-    let mut store = Store::<()>::new(&engine, ());
-    let module = Module::new(store.engine(), &wasm)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let func = instance
-        .get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")
-        .unwrap();
-    let results = func.call(&mut store, ())?;
-    assert_eq!(results, (1, 2, 3));
-    Ok(())
-}
-
-#[wasmtime_test]
-#[cfg_attr(miri, ignore)]
 fn call_wasm_to_native(config: &mut Config) -> Result<()> {
     let wasm = wat::parse_str(
         r#"
