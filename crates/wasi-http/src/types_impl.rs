@@ -36,7 +36,7 @@ where
 /// Extract the `Content-Length` header value from a [`FieldMap`], returning `None` if it's not
 /// present. This function will return `Err` if it's not possible to parse the `Content-Length`
 /// header.
-fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
+pub(crate) fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
     let mut values = fields
         .as_ref()
         .get_all(hyper::header::CONTENT_LENGTH)

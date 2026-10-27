@@ -42,7 +42,7 @@ test-programs-artifacts = { workspace = true }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
 wasmtime = { workspace = true, features = ['cranelift'] }
-tokio = { workspace = true, features = ['macros'] }
+tokio = { workspace = true, features = ['macros', 'io-util'] }
 futures = { workspace = true, default-features = false, features = ['alloc'] }
 sha2 = "0.10.2"
 base64 = { workspace = true }

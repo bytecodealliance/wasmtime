@@ -9,6 +9,7 @@ macro_rules! assert_test_exists {
 
 mod http_server;
 mod p2;
+mod shared;
 
 mod body {
     use http_body_util::{BodyExt, Empty, Full, combinators::BoxBody};

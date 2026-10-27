@@ -97,6 +97,20 @@ fn http_outbound_request_content_length() -> Result<()> {
 }
 
 #[test_log::test]
+fn http_outbound_request_forward_duplicate_content_length() -> Result<()> {
+    // `run` blocks on its own runtime so this can't be driven by another one,
+    // but nothing here awaits anything, so a single poll completes it.
+    crate::shared::forward_duplicate_content_length(async |server| {
+        run(
+            HTTP_OUTBOUND_REQUEST_FORWARD_DUPLICATE_CONTENT_LENGTH_COMPONENT,
+            server,
+        )
+    })
+    .now_or_never()
+    .expect("future completes without awaiting")
+}
+
+#[test_log::test]
 fn http_outbound_request_missing_path_and_query() -> Result<()> {
     let server = Server::http1()?;
     run(
