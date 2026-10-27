@@ -290,8 +290,20 @@ async fn p3_http_outbound_request_response_build() -> wasmtime::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_forward_duplicate_content_length() -> wasmtime::Result<()> {
+    crate::shared::forward_duplicate_content_length(async |server| {
+        run_cli(
+            P3_HTTP_OUTBOUND_REQUEST_FORWARD_DUPLICATE_CONTENT_LENGTH_COMPONENT,
+            server,
+        )
+        .await
+    })
+    .await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_content_length() -> wasmtime::Result<()> {
-    let server = Server::http1(3)?;
+    let server = Server::http1(4)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await
 }
 
