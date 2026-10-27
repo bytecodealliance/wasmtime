@@ -8,6 +8,7 @@
 #define WASMTIME_TYPES_STRUCTREF_H
 
 #include <wasm.h>
+#include <wasmtime/error.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -85,13 +86,18 @@ typedef struct wasmtime_struct_type wasmtime_struct_type_t;
  * \param engine The engine to register the type with.
  * \param fields Pointer to an array of field type descriptors.
  * \param nfields Number of fields.
+ * \param out On success, filled in with the new struct type.
  *
- * \return Returns a new struct type, or NULL on error (e.g. invalid field
- * types).
+ * Fills in `out` on success and returns `NULL`. Otherwise returns an error
+ * (e.g. there are too many fields) and does not modify `out`.
+ *
+ * This function aborts the process if any field's type comes from an engine
+ * other than `engine`.
  */
-WASM_API_EXTERN wasmtime_struct_type_t *
+WASM_API_EXTERN wasmtime_error_t *
 wasmtime_struct_type_new(const wasm_engine_t *engine,
-                         const wasmtime_field_type_t *fields, size_t nfields);
+                         const wasmtime_field_type_t *fields, size_t nfields,
+                         wasmtime_struct_type_t **out);
 
 /**
  * \brief Clone a struct type.
