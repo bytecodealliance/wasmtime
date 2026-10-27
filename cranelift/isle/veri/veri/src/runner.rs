@@ -1295,7 +1295,10 @@ impl Runner {
                 type_inference::Status::RhsTypeError(conflict) => {
                     // The type assignment is only a problem if the left-hand
                     // side can actually match under it: value constraints on
-                    // the left-hand side may rule it out.
+                    // the left-hand side may rule it out. Type inference does
+                    // not see those, so the solver is needed to decide whether
+                    // they are satisfiable. Without it, we cannot tell, and
+                    // skip the assignment as before.
                     let feasibility = if self.skip_solver {
                         None
                     } else {

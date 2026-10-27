@@ -2573,7 +2573,9 @@
 (decl writable_link_reg () WritableReg)
 (extern constructor writable_link_reg writable_link_reg)
 
-(spec (writable_zero_reg) (provide (= (zero_ext (widthof result) #b0) result)))
+; The zero register is a write sink here: it is only used as the destination of
+; flag-setting instructions, so its value is not modeled.
+(spec (writable_zero_reg) (provide true))
 (decl writable_zero_reg () WritableReg)
 (extern constructor writable_zero_reg writable_zero_reg)
 

@@ -161,13 +161,18 @@ impl<'a> Solver<'a> {
     }
 
     pub fn encode(&mut self) -> Result<()> {
+        self.encode_exprs(&HashSet::new())
+    }
+
+    /// Declare and define the expressions, other than those in `skip`.
+    fn encode_exprs(&mut self, skip: &HashSet<ExprId>) -> Result<()> {
         // Simplifies the scalar case of specs to just the body
         self.resolve_single_lane_maps();
 
         // Expressions
         for (i, expr) in self.conditions.exprs.iter().enumerate() {
             let x = ExprId(i);
-            if self.alias.contains_key(&x) {
+            if self.alias.contains_key(&x) || skip.contains(&x) {
                 continue;
             }
             self.declare_expr(x)?;
@@ -184,19 +189,9 @@ impl<'a> Solver<'a> {
     ///
     /// The assignment need only type the left-hand side expressions.
     pub fn check_lhs_feasibility(&mut self) -> Result<Applicability> {
-        let rhs = self.conditions.rhs_dependent_exprs();
-
         // Encode left-hand side expressions.
-        for (i, expr) in self.conditions.exprs.iter().enumerate() {
-            let x = ExprId(i);
-            if rhs.contains(&x) {
-                continue;
-            }
-            self.declare_expr(x)?;
-            if !expr.is_variable() {
-                self.assign_expr(x, expr)?;
-            }
-        }
+        let rhs = self.conditions.rhs_dependent_exprs();
+        self.encode_exprs(&rhs)?;
 
         // Check left-hand side assumptions, together with the typing facts of
         // the term's contract.

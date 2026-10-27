@@ -496,33 +496,6 @@ pub enum Symbolic {
 }
 
 impl Symbolic {
-    /// Pairs of corresponding scalar expressions in two symbolic values of the
-    /// same shape.
-    pub fn corresponding_scalars(&self, other: &Symbolic) -> Vec<(ExprId, ExprId)> {
-        match (self, other) {
-            (Symbolic::Scalar(x), Symbolic::Scalar(y)) => vec![(*x, *y)],
-            (Symbolic::Struct(xs), Symbolic::Struct(ys)) => zip(xs, ys)
-                .flat_map(|(x, y)| x.value.corresponding_scalars(&y.value))
-                .collect(),
-            (Symbolic::Enum(x), Symbolic::Enum(y)) => {
-                let mut pairs = vec![(x.discriminant, y.discriminant)];
-                for (xv, yv) in zip(&x.variants, &y.variants) {
-                    pairs.extend(xv.value.corresponding_scalars(&yv.value));
-                }
-                pairs
-            }
-            (Symbolic::Option(x), Symbolic::Option(y)) => {
-                let mut pairs = vec![(x.some, y.some)];
-                pairs.extend(x.inner.corresponding_scalars(&y.inner));
-                pairs
-            }
-            (Symbolic::Tuple(xs), Symbolic::Tuple(ys)) => zip(xs, ys)
-                .flat_map(|(x, y)| x.corresponding_scalars(y))
-                .collect(),
-            _ => Vec::new(),
-        }
-    }
-
     /// Name of the symbolic value's variant, for use in diagnostics.
     fn kind(&self) -> &'static str {
         match self {
