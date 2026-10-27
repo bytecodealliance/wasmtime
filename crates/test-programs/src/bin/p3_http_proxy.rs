@@ -16,8 +16,15 @@ test_programs::p3::service::export!(Component);
 
 impl Handler for Component {
     // Forward the request body and trailers to a URL specified in a header.
+    //
+    // If `expect-transmit-error` is set, also assert that the `response.new`
+    // transmit future of the returned response reports an error, and then send
+    // a request to `http://p3-test/` to signal that the assertion has run.
     async fn handle(request: Request) -> Result<Response, ErrorCode> {
         let headers = request.get_headers().copy_all();
+        let expect_transmit_error = headers
+            .iter()
+            .any(|(k, v)| k == "expect-transmit-error" && v == b"true");
         Ok(
             if let Some(url) = headers.iter().find_map(|(k, v)| {
                 (k == "url")
@@ -42,12 +49,38 @@ impl Handler for Component {
                 outgoing_request
                     .set_authority(Some(url.authority()))
                     .unwrap();
-                client::send(outgoing_request).await?
+                let response = client::send(outgoing_request).await?;
+                if expect_transmit_error {
+                    forward_expecting_transmit_error(response)
+                } else {
+                    response
+                }
             } else {
                 bad_request()
             },
         )
     }
+}
+
+fn forward_expecting_transmit_error(upstream: Response) -> Response {
+    let (body, trailers) = Response::consume_body(upstream, wit_future::new(|| Ok(())).1);
+    let (response, transmit) = Response::new(Fields::new(), Some(body), trailers);
+    wit_bindgen::spawn_local(async move {
+        // In the background, assert that the response fails to complete.
+        let result = transmit.await;
+        assert!(
+            result.is_err(),
+            "transmitting the response should have failed, got {result:?}"
+        );
+
+        // Send a request to indicate that the assertion passed.
+        let done = Request::new(Fields::new(), None, wit_future::new(|| Ok(None)).1, None).0;
+        done.set_scheme(Some(&Scheme::Http)).unwrap();
+        done.set_authority(Some("p3-test")).unwrap();
+        done.set_path_with_query(Some("/")).unwrap();
+        client::send(done).await.unwrap();
+    });
+    response
 }
 
 fn bad_request() -> Response {

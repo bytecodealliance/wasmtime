@@ -41,6 +41,16 @@ impl Server {
     where
         F: Future<Output = Result<()>>,
     {
+        Self::new_raw(conns, move |stream| run(TokioIo::new(stream)))
+    }
+
+    fn new_raw<F>(
+        conns: usize,
+        run: impl Fn(tokio::net::TcpStream) -> F + Send + 'static,
+    ) -> Result<Self>
+    where
+        F: Future<Output = Result<()>>,
+    {
         let thread = std::thread::spawn(|| -> Result<_> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -62,7 +72,7 @@ impl Server {
                     match listener.accept().await {
                         Ok((stream, ..)) => {
                             debug!(i, "accepted connection");
-                            if let Err(err) = run(TokioIo::new(stream)).await {
+                            if let Err(err) = run(stream).await {
                                 warn!(i, ?err, "failed to serve connection");
                             }
                         }
@@ -138,6 +148,32 @@ impl Server {
             let http = builder.keep_alive(false).pipeline_flush(true);
             let conn = http.serve_connection(io, service).await;
             conn?;
+            Ok(())
+        })
+    }
+
+    /// Send response headers declaring a `content-length` of
+    /// 100000 plus only part of the body, then close the connection.
+    pub fn http1_drop_mid_body(conns: usize) -> Result<Self> {
+        debug!("initializing drop-mid-body http1 server");
+        Self::new_raw(conns, |mut stream| async move {
+            use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+            let mut request = Vec::new();
+            let mut buf = [0; 1024];
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = stream.read(&mut buf).await?;
+                if n == 0 {
+                    return Ok(());
+                }
+                request.extend_from_slice(&buf[..n]);
+            }
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 100000\r\n\r\n")
+                .await?;
+            stream.write_all(&[b'a'; 5000]).await?;
+            stream.flush().await?;
+            drop(stream);
             Ok(())
         })
     }
