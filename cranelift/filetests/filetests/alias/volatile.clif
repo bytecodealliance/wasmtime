@@ -192,6 +192,33 @@ block0(v0: i64):
 ;     return v4
 ; }
 
+;; A volatile store in an alias region is a fence too: what is known about
+;; other regions is not forwarded across it.
+function %no_forwarding_across_volatile_store_in_region(i64, i64) -> i32 {
+    region0 = 0 "heap"
+    region1 = 1 "mmio"
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 1
+    v3 = iconst.i32 2
+    store notrap aligned region0 v2, v0
+    store notrap aligned volatile region1 v3, v1
+    v4 = load.i32 notrap aligned region0 v0
+    return v4
+}
+
+; function %no_forwarding_across_volatile_store_in_region(i64, i64) -> i32 fast {
+;     region0 = 0 "heap"
+;     region1 = 1 "mmio"
+;
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i32 1
+;     store notrap aligned region0 v2, v0  ; v2 = 1
+;     v3 = iconst.i32 2
+;     store notrap aligned volatile region1 v3, v1  ; v3 = 2
+;     v4 = load.i32 notrap aligned region0 v0
+;     return v4
+; }
+
 ;; Narrow, wide and vector volatile accesses, and extending loads.
 function %volatile_widths(i64) -> i8, i64, i128, i8x16, i32 {
 block0(v0: i64):
