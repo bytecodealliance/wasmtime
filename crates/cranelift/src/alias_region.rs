@@ -658,6 +658,8 @@ macro_rules! define_vm_type_alias_region_helpers {
     (@field_ty $pt:expr, i64) => { ir::types::I64 };
     (@field_ty $pt:expr, u64) => { ir::types::I64 };
     (@field_ty $pt:expr, u32) => { ir::types::I32 };
+    (@field_ty $pt:expr, u16) => { ir::types::I16 };
+    (@field_ty $pt:expr, u8) => { ir::types::I8 };
     (@field_ty $pt:expr, NonZeroU32) => { ir::types::I32 };
     (@field_ty $pt:expr, Option < VMGcRef >) => { ir::types::I32 };
     // `VMLazyThread` is a pointer-sized bitpacked integer; see its definition in
@@ -835,19 +837,231 @@ macro_rules! define_vm_type_alias_region_helpers {
         define_vm_type_alias_region_helpers!(@munch_ty $Name $snake { $($groups)* } $fkind $fname [ $($fattr)* ] [ $($fty)* $tok ] $($rest)*);
     };
 
-    // Top-level entry: the list of `VM*` type definitions.
+    // Emit the accessor `struct` and per-field methods for one enum variant,
+    // so that `alias_regions.vm_foo().variant_a().field()` mirrors the
+    // generated offset accessors.
+    (@emit_variant $Name:ident $snake:ident $VariantAccess:ident $vsnake:ident {
+        $( { $fkind:ident $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] } )*
+    }) => {
+        #[doc = concat!(
+            "An [`AliasRegions`] accessor for the fields of the `",
+            stringify!($Name), "::", stringify!($VariantAccess), "` variant."
+        )]
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for all VM types; not all accessors are used yet"
+        )]
+        pub struct $VariantAccess<'a, Offsets> {
+            regions: &'a mut AliasRegions<Offsets>,
+        }
+
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for all VM types; not all accessors are used yet"
+        )]
+        impl<'a, Offsets> $Name<'a, Offsets> {
+            #[doc = concat!(
+                "Get an accessor for the fields of the `", stringify!($Name),
+                "::", stringify!($VariantAccess), "` variant."
+            )]
+            pub fn $vsnake(self) -> $VariantAccess<'a, Offsets> {
+                $VariantAccess { regions: self.regions }
+            }
+        }
+
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for all VM types; not all accessors are used yet"
+        )]
+        impl<'a, Offsets> $VariantAccess<'a, Offsets>
+        where
+            Offsets: GetPtrSize,
+        {
+            $(
+                define_vm_type_alias_region_helpers!(
+                    @variant_method $Name $snake $vsnake $fkind $fname
+                    [ $($fattr)* ] [ $($fty)* ]
+                );
+            )*
+        }
+    };
+
+    // As `@method` above, but the offset comes from the variant's own offsets.
+    (@variant_method $Name:ident $snake:ident $vsnake:ident plain $fname:ident
+        [ $($fattr:tt)* ] [ $($fty:tt)* ]
+    ) => {
+        #[doc = concat!(
+            "Get the [`Field`] for the `", stringify!($fname),
+            "` field of this variant of `", stringify!($Name), "`."
+        )]
+        pub fn $fname(self) -> Field<'a, Offsets> {
+            let offset = u32::from(
+                self.regions.offsets.get_ptr_size().$snake().$vsnake().$fname()
+            );
+            let flags = ir::MemFlagsData::trusted();
+            $(
+                let flags = define_vm_type_alias_region_helpers!(
+                    @apply_attr flags, $fattr
+                );
+            )*
+            let ty = define_vm_type_alias_region_helpers!(
+                @field_ty self.regions.pointer_type, $($fty)*
+            );
+            Field::new(self.regions, VmType::$Name, offset, flags, ty)
+        }
+    };
+
+    // Emit the accessor `struct` for a `#[repr(C, u32)]` enum: its `u32` tag,
+    // plus one nested accessor type per variant.
+    (@emit_enum $Name:ident $snake:ident $tag:ident {
+        $( { $VariantAccess:ident $vsnake:ident { $($vgroups:tt)* } } )*
+    }) => {
+        #[doc = concat!(
+            "An [`AliasRegions`] accessor for the tag and variants of the `",
+            stringify!($Name), "` enum."
+        )]
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for all VM types; not all accessors are used yet"
+        )]
+        pub struct $Name<'a, Offsets> {
+            regions: &'a mut AliasRegions<Offsets>,
+        }
+
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for all VM types; not all accessors are used yet"
+        )]
+        impl<Offsets> AliasRegions<Offsets> {
+            #[doc = concat!(
+                "Get an accessor for the tag and variants of a `",
+                stringify!($Name), "`."
+            )]
+            pub fn $snake(&mut self) -> $Name<'_, Offsets> {
+                $Name { regions: self }
+            }
+        }
+
+        #[allow(
+            dead_code,
+            reason = "generated uniformly for all VM types; not all accessors are used yet"
+        )]
+        impl<'a, Offsets> $Name<'a, Offsets>
+        where
+            Offsets: GetPtrSize,
+        {
+            #[doc = concat!(
+                "Get the [`Field`] for the `", stringify!($tag), "` tag of `",
+                stringify!($Name), "`."
+            )]
+            pub fn tag(self) -> Field<'a, Offsets> {
+                let offset = u32::from(
+                    self.regions.offsets.get_ptr_size().$snake().tag()
+                );
+                let flags = ir::MemFlagsData::trusted();
+                let ty = define_vm_type_alias_region_helpers!(
+                    @field_ty self.regions.pointer_type, $tag
+                );
+                Field::new(self.regions, VmType::$Name, offset, flags, ty)
+            }
+        }
+
+        $(
+            define_vm_type_alias_region_helpers!(
+                @emit_variant $Name $snake $VariantAccess $vsnake { $($vgroups)* }
+            );
+        )*
+    };
+
+    // Peel variants off an enum's body one at a time; `@munch_variant` handles
+    // each variant's own body and hands the remainder back.
+    (@munch_enum $Name:ident $snake:ident $tag:ident { $($vs:tt)* }) => {
+        define_vm_type_alias_region_helpers!(@emit_enum $Name $snake $tag { $($vs)* });
+    };
+    (@munch_enum $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $(#[doc = $vdoc:literal])*
+        #[snake_name = $vsnake:ident]
+        $Variant:ident { $($vbody:tt)* } = $disc:literal ,
+        $($rest:tt)*
+    ) => {
+        define_vm_type_alias_region_helpers!(
+            @munch_variant $Name $snake $tag { $($vs)* } $Variant $vsnake {}
+            [ $($vbody)* ] [ $($rest)* ]
+        );
+    };
+
+    // As `@munch` for a struct body, resuming `@munch_enum` on the remainder.
+    (@munch_variant $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $Variant:ident $vsnake:ident { $($g:tt)* } [] [ $($rest:tt)* ]
+    ) => {
+        define_vm_type_alias_region_helpers!(
+            @munch_enum $Name $snake $tag
+            { $($vs)* { $Variant $vsnake { $($g)* } } }
+            $($rest)*
+        );
+    };
+    // As in `@munch`, an `#[aggregate]` field gets no accessor.
+    (@munch_variant $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $Variant:ident $vsnake:ident { $($g:tt)* }
+        [ $(#[doc = $fdoc:literal])* #[aggregate] $fname:ident : $fty:ty , $($vrest:tt)* ] $rest:tt
+    ) => {
+        define_vm_type_alias_region_helpers!(
+            @munch_variant $Name $snake $tag { $($vs)* } $Variant $vsnake { $($g)* }
+            [ $($vrest)* ] $rest
+        );
+    };
+    (@munch_variant $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $Variant:ident $vsnake:ident { $($g:tt)* }
+        [ $(# $fattr:tt)* $fname:ident : $($vrest:tt)* ] $rest:tt
+    ) => {
+        define_vm_type_alias_region_helpers!(
+            @munch_variant_ty $Name $snake $tag { $($vs)* } $Variant $vsnake { $($g)* }
+            $fname [ $($fattr)* ] [] [ $($vrest)* ] $rest
+        );
+    };
+    (@munch_variant_ty $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $Variant:ident $vsnake:ident { $($g:tt)* }
+        $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] [ , $($vrest:tt)* ] $rest:tt
+    ) => {
+        define_vm_type_alias_region_helpers!(
+            @munch_variant $Name $snake $tag { $($vs)* } $Variant $vsnake
+            { $($g)* { plain $fname [ $($fattr)* ] [ $($fty)* ] } }
+            [ $($vrest)* ] $rest
+        );
+    };
+    (@munch_variant_ty $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $Variant:ident $vsnake:ident { $($g:tt)* }
+        $fname:ident [ $($fattr:tt)* ] [ $($fty:tt)* ] [ $tok:tt $($vrest:tt)* ] $rest:tt
+    ) => {
+        define_vm_type_alias_region_helpers!(
+            @munch_variant_ty $Name $snake $tag { $($vs)* } $Variant $vsnake { $($g)* }
+            $fname [ $($fattr)* ] [ $($fty)* $tok ] [ $($vrest)* ] $rest
+        );
+    };
+
+    // Dispatch on `struct` vs `enum`.
+    (@def struct $Name:ident $snake:ident $repr:tt { $($body:tt)* }) => {
+        define_vm_type_alias_region_helpers!(@munch $Name $snake {} $($body)*);
+    };
+    // See the matching arm in `define_vm_type_offsets!`.
+    (@def enum $Name:ident $snake:ident [ C, $tag:ident ] { $($body:tt)* }) => {
+        define_vm_type_alias_region_helpers!(@munch_enum $Name $snake $tag {} $($body)*);
+    };
+
+    // Top-level entry: the list of `VM*` type definitions. Each is either a
+    // `struct` or a `#[repr(C, u32)]` `enum`; `@def` dispatches on which.
     ( $(
         $(#[doc = $sdoc:literal])*
         $(#[cfg($($scfg:tt)*)])?
         $(#[derive($($d:ident),*)])?
         #[repr($($repr:tt)*)]
         #[snake_name = $snake:ident]
-        $svis:vis struct $Name:ident {
+        $svis:vis $kind:ident $Name:ident {
             $($body:tt)*
         }
     )* ) => {
         $(
-            define_vm_type_alias_region_helpers!(@munch $Name $snake {} $($body)*);
+            define_vm_type_alias_region_helpers!(@def $kind $Name $snake [$($repr)*] { $($body)* });
         )*
     };
 }

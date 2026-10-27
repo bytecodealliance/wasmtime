@@ -34,6 +34,16 @@ fn align(offset: u32, width: u32) -> u32 {
 /// Generate the [`offsets`] module: a `struct VMFoo<P: PtrSize>(P)` for each
 /// `VM*` type, with a method per field returning that field's offset, plus
 /// `size` and `align` methods.
+///
+/// A `#[repr(C, $tag)]` enum additionally gets `tag`/`tag_size`/`payload` and
+/// a nested `offsets::<snake_name>::Variant<P>` type per variant, holding that
+/// variant's fields' offsets within the enum as a whole.
+#[allow(
+    unused_macro_rules,
+    reason = "the enum arms go unused whenever no `VM*` type is an enum, and \
+              the type classifiers are written for all field types rather than \
+              only those some type happens to use"
+)]
 macro_rules! define_vm_type_offsets {
     // `UnsafeCell<T>` is `repr(transparent)`, so it has exactly `T`'s layout;
     // delegate to the inner type.
@@ -51,6 +61,8 @@ macro_rules! define_vm_type_offsets {
     (@size ($p:expr) i64) => { 8u32 };
     (@size ($p:expr) u64) => { 8u32 };
     (@size ($p:expr) u32) => { 4u32 };
+    (@size ($p:expr) u16) => { 2u32 };
+    (@size ($p:expr) u8) => { 1u32 };
     // `VMGcRef` is a `NonZeroU32` newtype, so `Option<VMGcRef>` is niche-packed
     // back down into four bytes.
     (@size ($p:expr) NonZeroU32) => { 4u32 };
@@ -104,6 +116,8 @@ macro_rules! define_vm_type_offsets {
     (@align ($p:expr) i64) => { 8u32 };
     (@align ($p:expr) u64) => { 8u32 };
     (@align ($p:expr) u32) => { 4u32 };
+    (@align ($p:expr) u16) => { 2u32 };
+    (@align ($p:expr) u8) => { 1u32 };
     (@align ($p:expr) NonZeroU32) => { 4u32 };
     (@align ($p:expr) Option < VMGcRef >) => { 4u32 };
     (@align ($p:expr) [u32; $n:expr]) => { 4u32 };
@@ -134,6 +148,13 @@ macro_rules! define_vm_type_offsets {
     (@repr_align C) => { 1u32 };
     (@repr_align transparent) => { 1u32 };
     (@repr_align C, align($n:literal)) => {{ let align: u32 = $n; align }};
+
+    // Classify a `#[repr(C, $tag)]` enum's tag type to its size in bytes, which
+    // for these types is also its alignment.
+    (@tag_size u8) => { 1u32 };
+    (@tag_size u16) => { 2u32 };
+    (@tag_size u32) => { 4u32 };
+    (@tag_size u64) => { 8u32 };
 
     // Emit a `pub fn` per field returning that field's offset, computed by
     // accumulating the aligned size of each preceding field. `$p`/`$o` are
@@ -235,14 +256,237 @@ macro_rules! define_vm_type_offsets {
         define_vm_type_offsets!(@impl_ty $Name $repr { $($groups)* } $fname [ $($fty)* $tok ] $($rest)*);
     };
 
-    // Top-level entry: the list of `VM*` type definitions.
+    // Dispatch on `struct` vs `enum`.
+    (@def struct $Name:ident $snake:ident $repr:tt { $($body:tt)* }) => {
+        define_vm_type_offsets!(@impl $Name $repr {} $($body)*);
+    };
+    // `C` guarantees the tag-plus-union layout.
+    (@def enum $Name:ident $snake:ident [ C, $tag:ident ] { $($body:tt)* }) => {
+        define_vm_type_offsets!(@enum_variants $Name $snake $tag {} $($body)*);
+    };
+
+    // Peel variants off an enum's body one at a time. Each variant's own body
+    // is split by `@enum_fields`, so the enum body's unconsumed remainder rides
+    // along in brackets until that recursion hands it back.
+    (@enum_variants $Name:ident $snake:ident $tag:ident { $($vs:tt)* }) => {
+        define_vm_type_offsets!(@enum_emit $Name $snake $tag { $($vs)* });
+    };
+    (@enum_variants $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $(#[doc = $vdoc:literal])*
+        #[snake_name = $vsnake:ident]
+        $Variant:ident { $($vbody:tt)* } = $disc:literal ,
+        $($rest:tt)*
+    ) => {
+        define_vm_type_offsets!(
+            @enum_fields $Name $snake $tag { $($vs)* }
+            $vsnake $Variant $disc {}
+            [ $($vbody)* ] [ $($rest)* ]
+        );
+    };
+
+    // As `@impl`/`@impl_ty` for a struct body, resuming `@enum_variants` on the
+    // enum body's remainder once the variant is exhausted.
+    (@enum_fields $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $vsnake:ident $Variant:ident $disc:literal { $($g:tt)* }
+        [] [ $($rest:tt)* ]
+    ) => {
+        define_vm_type_offsets!(
+            @enum_variants $Name $snake $tag
+            { $($vs)* { $vsnake $Variant $disc { $($g)* } } }
+            $($rest)*
+        );
+    };
+    (@enum_fields $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $vsnake:ident $Variant:ident $disc:literal { $($g:tt)* }
+        [ $(#[$($fattr:tt)*])* $fname:ident : $($vrest:tt)* ] $rest:tt
+    ) => {
+        define_vm_type_offsets!(
+            @enum_field_ty $Name $snake $tag { $($vs)* }
+            $vsnake $Variant $disc { $($g)* }
+            $fname [] [ $($vrest)* ] $rest
+        );
+    };
+    (@enum_field_ty $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $vsnake:ident $Variant:ident $disc:literal { $($g:tt)* }
+        $fname:ident [ $($fty:tt)* ] [ , $($vrest:tt)* ] $rest:tt
+    ) => {
+        define_vm_type_offsets!(
+            @enum_fields $Name $snake $tag { $($vs)* }
+            $vsnake $Variant $disc { $($g)* [ $fname : $($fty)* ] }
+            [ $($vrest)* ] $rest
+        );
+    };
+    (@enum_field_ty $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
+        $vsnake:ident $Variant:ident $disc:literal { $($g:tt)* }
+        $fname:ident [ $($fty:tt)* ] [ $tok:tt $($vrest:tt)* ] $rest:tt
+    ) => {
+        define_vm_type_offsets!(
+            @enum_field_ty $Name $snake $tag { $($vs)* }
+            $vsnake $Variant $disc { $($g)* }
+            $fname [ $($fty)* $tok ] [ $($vrest)* ] $rest
+        );
+    };
+
+    // Emit an enum's `offsets::VMFoo` inherent `impl`, plus a `mod $snake`
+    // holding one `$Variant<P>` offsets type per variant.
+    //
+    // The tag is at offset zero, every variant's fields start at the same
+    // payload offset (the tag's size rounded up to the enum's alignment), and
+    // within a variant the fields are laid out as a struct's are.
+    (@enum_emit $Name:ident $snake:ident $tag:ident {
+        $(
+            { $vsnake:ident $Variant:ident $disc:literal {
+                $( [ $fname:ident : $($fty:tt)* ] )*
+            } }
+        )*
+    }) => {
+        impl<P: PtrSize> $Name<P> {
+            #[doc = concat!(
+                "The offset of the `", stringify!($tag), "` tag of `",
+                stringify!($Name), "`."
+            )]
+            #[inline]
+            pub fn tag(&self) -> u8 {
+                0
+            }
+
+            #[doc = concat!(
+                "The size, in bytes, of the `", stringify!($tag), "` tag of `",
+                stringify!($Name), "`."
+            )]
+            #[inline]
+            pub fn tag_size(&self) -> u8 {
+                u8::try_from(define_vm_type_offsets!(@tag_size $tag)).unwrap()
+            }
+
+            #[doc = concat!(
+                "The offset at which every variant of `", stringify!($Name),
+                "` lays out its fields."
+            )]
+            #[inline]
+            pub fn payload(&self) -> u8 {
+                let tag_size = u32::from(self.tag_size());
+                u8::try_from(align(tag_size, u32::from(self.align()))).unwrap()
+            }
+
+            #[doc = concat!("The alignment of the `", stringify!($Name), "` type.")]
+            #[inline]
+            pub fn align(&self) -> u8 {
+                let p = self.0.size();
+                // The tag sets the floor on the enum's alignment.
+                let a: u32 = define_vm_type_offsets!(@tag_size $tag);
+                $($(
+                    let a = core::cmp::max(
+                        a,
+                        define_vm_type_offsets!(@align (p) $($fty)*),
+                    );
+                )*)*
+                let _ = p;
+                u8::try_from(a).unwrap()
+            }
+
+            #[doc = concat!("The size of the `", stringify!($Name), "` type.")]
+            #[inline]
+            pub fn size(&self) -> u8 {
+                let p = self.0.size();
+                let payload = u32::from(self.payload());
+                let s: u32 = payload;
+                $(
+                    let o: u32 = payload;
+                    $(
+                        let o = align(o, define_vm_type_offsets!(@align (p) $($fty)*));
+                        let o = o + define_vm_type_offsets!(@size (p) $($fty)*);
+                    )*
+                    let s = core::cmp::max(s, o);
+                )*
+                let s = align(s, u32::from(self.align()));
+                let _ = p;
+                u8::try_from(s).unwrap()
+            }
+
+            $(
+                #[doc = concat!(
+                    "Get the offsets of the `", stringify!($Variant),
+                    "` variant's fields."
+                )]
+                #[inline]
+                pub fn $vsnake(&self) -> $snake::$Variant<&P> {
+                    $snake::$Variant($Name(&self.0))
+                }
+            )*
+        }
+
+        #[doc = concat!(
+            "Offsets of the fields of each variant of the `", stringify!($Name),
+            "` enum."
+        )]
+        pub mod $snake {
+            use super::{$Name, PtrSize, align};
+
+            $(
+                #[doc = concat!(
+                    "Offsets of fields within the `", stringify!($Name), "::",
+                    stringify!($Variant), "` variant."
+                )]
+                pub struct $Variant<P: PtrSize>(pub $Name<P>);
+
+                impl<P: PtrSize> $Variant<P> {
+                    #[doc = concat!(
+                        "The value of the `u32` tag that identifies the `",
+                        stringify!($Variant), "` variant."
+                    )]
+                    #[inline]
+                    pub fn tag_value(&self) -> u32 {
+                        $disc
+                    }
+
+                    define_vm_type_offsets!(@vfields $Name $Variant (p, o) prefix()
+                        $( [ $fname : $($fty)* ] )*
+                    );
+                }
+            )*
+        }
+    };
+
+    // As `@fields` above, except that the running offset starts at the enum's
+    // payload offset.
+    (@vfields $Name:ident $Variant:ident ($p:ident, $o:ident) prefix( $($prefix:tt)* )) => {};
+    (@vfields $Name:ident $Variant:ident ($p:ident, $o:ident) prefix( $($prefix:tt)* )
+        [ $fname:ident : $($fty:tt)* ]
+        $($rest:tt)*
+    ) => {
+        #[doc = concat!(
+            "The offset of the `", stringify!($fname),
+            "` field of `", stringify!($Name), "::", stringify!($Variant), "`."
+        )]
+        #[inline]
+        pub fn $fname(&self) -> u8 {
+            let $p = (self.0).0.size();
+            let $o: u32 = u32::from(self.0.payload());
+            $($prefix)*
+            let $o = align($o, define_vm_type_offsets!(@align ($p) $($fty)*));
+            let _ = $p;
+            u8::try_from($o).unwrap()
+        }
+        define_vm_type_offsets!(@vfields $Name $Variant ($p, $o)
+            prefix(
+                $($prefix)*
+                let $o = align($o, define_vm_type_offsets!(@align ($p) $($fty)*));
+                let $o = $o + define_vm_type_offsets!(@size ($p) $($fty)*);
+            )
+            $($rest)*
+        );
+    };
+
+    // Top-level entry: the list of `VM*` type definitions. Each is either a
+    // `struct` or a `#[repr(C, u32)]` `enum`; `@def` dispatches on which.
     ( $(
         $(#[doc = $sdoc:literal])*
         $(#[cfg($($scfg:tt)*)])?
         $(#[derive($($d:ident),*)])?
         #[repr($($repr:tt)*)]
         #[snake_name = $snake:ident]
-        $svis:vis struct $Name:ident {
+        $svis:vis $kind:ident $Name:ident {
             $($body:tt)*
         }
     )* ) => {
@@ -250,7 +494,7 @@ macro_rules! define_vm_type_offsets {
             #[doc = concat!("Offsets of fields within the `", stringify!($Name), "` type.")]
             pub struct $Name<P: PtrSize>(pub P);
 
-            define_vm_type_offsets!(@impl $Name [$($repr)*] {} $($body)*);
+            define_vm_type_offsets!(@def $kind $Name $snake [$($repr)*] { $($body)* });
         )*
     };
 }
@@ -420,7 +664,7 @@ macro_rules! define_ptr_size_vm_type_accessors {
         $(#[derive($($d:ident),*)])?
         #[repr($($repr:tt)*)]
         #[snake_name = $snake:ident]
-        $svis:vis struct $Name:ident {
+        $svis:vis $kind:ident $Name:ident {
             $($body:tt)*
         }
     )* ) => {

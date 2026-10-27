@@ -16,7 +16,7 @@
 ///
 /// # Grammar
 ///
-/// Each type is emitted as a struct definition preceded by:
+/// Each type is either a `struct` or a `#[repr(C, _)]` `enum`, preceded by:
 ///
 /// * Doc-comment attributes (`#[doc = "..."]`).
 ///
@@ -54,6 +54,37 @@
 ///
 /// * `#[readonly]` and/or `#[can_move]`: describe how Cranelift may treat loads
 ///   and stores of that field.
+///
+/// ## Enums
+///
+/// A type may also be an `enum`, which must be `#[repr(C, $tag)]` for an
+/// integer `$tag`:
+///
+/// ```ignore
+/// #[derive(Debug)]
+/// #[repr(C, u32)]
+/// #[snake_name = vm_example]
+/// pub enum VMExample {
+///     #[snake_name = variant_a]
+///     VariantA {
+///         field: u32,
+///     } = 0,
+///
+///     #[snake_name = variant_b]
+///     VariantB {
+///         other: u64,
+///     } = 1,
+/// }
+/// ```
+///
+/// Rust lays such an enum out as a `#[repr(C)]` struct of a `$tag` tag followed
+/// by a union of the variants, which is what lets the same offset machinery
+/// describe it. The `C` is what guarantees that, so it is required.
+///
+/// Beyond a struct's rules, each variant needs an explicit discriminant (the
+/// tag values compiled code compares against), braces even when empty, and its
+/// own `#[snake_name]` for its generated accessors. Variant fields take a
+/// struct field's marker attributes but no visibility.
 #[macro_export]
 macro_rules! for_each_vm_type {
     ($mac:ident) => {
