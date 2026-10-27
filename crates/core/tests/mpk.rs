@@ -10,7 +10,7 @@
 
 use libtest_mimic::{Arguments, Failed, Trial};
 use std::process::ExitStatus;
-use std::process::{exit, Command};
+use std::process::{Command, exit};
 
 /// Set in the child process to make it run the probe instead of the test.
 const PROBE_ENV_VAR: &str = "WASMTIME_TEST_MPK_PROBE";
