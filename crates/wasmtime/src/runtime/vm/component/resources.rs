@@ -363,7 +363,8 @@ impl ResourceTables<'_> {
         // Space for the lender is reserved first so that recording it can't
         // fail after the lend.
         self.current_scope()?.lenders.reserve(1)?;
-        let rep = self.table_for_index(&index).0.resource_lend(index)?;
+        let (table, counter) = self.table_for_index(&index);
+        let rep = table.resource_lend(counter, index)?;
         self.current_scope()?.lenders.push(index)?;
         Ok(rep)
     }
@@ -403,10 +404,8 @@ impl ResourceTables<'_> {
             // Note the panics here which should never get triggered in theory
             // due to the dynamic tracking of borrows and such employed for
             // resources.
-            self.table_for_index(&lender)
-                .0
-                .resource_undo_lend(lender)
-                .unwrap();
+            let (table, counter) = self.table_for_index(&lender);
+            table.resource_undo_lend(counter, lender).unwrap();
         }
         Ok(())
     }
