@@ -1038,9 +1038,8 @@ impl<'a> Instantiator<'a> {
                 EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
             };
             let actual = unsafe { f.vm_func_ref(store).as_ref().type_index };
-            assert_eq!(
-                expected,
-                Some(actual),
+            assert!(
+                expected.is_some_and(|e| store.engine().signatures().is_subtype(actual, e)),
                 "type mismatch for import {imp_module:?} {imp_name:?}!!!\n\n\
                  expected {:#?}\n\n\
                  found {:#?}",
