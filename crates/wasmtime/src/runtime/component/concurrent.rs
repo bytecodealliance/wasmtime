@@ -2170,7 +2170,7 @@ impl StoreOpaque {
     }
 
     /// Same as `instance_state`, but also returns the store's `HandleCounter`
-    /// for inserting into or removing from the instance's handle tables.
+    /// for inserting into the instance's handle tables.
     fn instance_state_and_handle_counter(
         &mut self,
         instance: RuntimeInstance,
@@ -2572,10 +2572,9 @@ impl StoreOpaque {
         let thread_data = state.get_mut(guest_thread.thread)?;
         let sync_call_set = thread_data.sync_call_set;
         if let Some(guest_id) = thread_data.instance_rep {
-            let (state, counter) = self.instance_state_and_handle_counter(runtime_instance);
-            state
+            self.instance_state(runtime_instance)
                 .thread_handle_table()
-                .guest_thread_remove(counter, guest_id)?;
+                .guest_thread_remove(guest_id)?;
         }
         let state = self.concurrent_state_mut()?;
 
@@ -4006,9 +4005,10 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
         set: u32,
     ) -> Result<()> {
-        let (state, counter) =
-            store.instance_state_and_handle_counter(self.runtime_instance(caller_instance));
-        let rep = state.handle_table().waitable_set_remove(counter, set)?;
+        let rep = store
+            .instance_state(self.runtime_instance(caller_instance))
+            .handle_table()
+            .waitable_set_remove(set)?;
 
         log::trace!("drop waitable set {rep} (handle {set})");
 
@@ -4069,9 +4069,10 @@ impl Instance {
     ) -> Result<()> {
         self.waitable_join(store, caller_instance, task_id, 0)?;
 
-        let (state, counter) =
-            store.instance_state_and_handle_counter(self.runtime_instance(caller_instance));
-        let (rep, is_host) = state.handle_table().subtask_remove(counter, task_id)?;
+        let (rep, is_host) = store
+            .instance_state(self.runtime_instance(caller_instance))
+            .handle_table()
+            .subtask_remove(task_id)?;
 
         let concurrent_state = store.concurrent_state_mut()?;
         let waitable = if is_host {

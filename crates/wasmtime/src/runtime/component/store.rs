@@ -26,7 +26,7 @@ use crate::{
 /// host doesn't mean that it's automatically susceptible to DoS for example.
 const DEFAULT_HOSTCALL_FUEL: usize = 128 << 20;
 
-/// Default per-store cap on simultaneously-live component-model handles.
+/// Default per-store cap on component-model handle-table slots.
 ///
 /// A guest creates these directly (e.g. `resource.new`), so leaving them
 /// unbounded is a DoS vector.
@@ -568,7 +568,7 @@ impl<T> Store<T> {
         self.as_context_mut().set_hostcall_fuel(fuel)
     }
 
-    /// Returns the maximum number of simultaneously-live component-model handles
+    /// Returns the maximum number of component-model handle-table slots
     /// permitted in this store.
     ///
     /// This is either the default amount if it hasn't been configured or
@@ -579,7 +579,7 @@ impl<T> Store<T> {
         self.as_context().0.max_component_handles()
     }
 
-    /// Sets the maximum number of simultaneously-live component-model handles
+    /// Sets the maximum number of component-model handle-table slots
     /// permitted in this store.
     ///
     /// Operations such as `resource.new` let a guest allocate handles in
@@ -587,10 +587,13 @@ impl<T> Store<T> {
     /// as it likes. This store-wide limit caps that as a DoS mitigation;
     /// allocating past it traps.
     ///
-    /// The limit counts *live* handles, so dropping a handle (e.g. via
-    /// `resource.drop`) returns budget and steady-state churn is unaffected.
-    /// Lowering it below the current live count does not trap existing handles,
-    /// only blocks new allocations until the count falls back under it.
+    /// The limit counts the slots allocated in each component instance's
+    /// handle table, which is what costs host memory. Dropping a handle (e.g.
+    /// via `resource.drop`) frees its slot for the next handle allocated in
+    /// the same instance, so steady-state churn is unaffected, but tables
+    /// don't shrink: a slot freed in one instance isn't returned for other
+    /// instances to use. Lowering the limit below the current count does not
+    /// trap existing handles, only blocks tables from growing.
     ///
     /// The default value for this is 100,000 handles.
     pub fn set_max_component_handles(&mut self, limit: usize) {

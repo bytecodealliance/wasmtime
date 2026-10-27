@@ -1474,8 +1474,8 @@ pub(super) fn lift_index_to_future(
     match ty {
         InterfaceType::Future(src) => {
             let id = {
-                let (state, instance, counter) = cx.concurrent_state_and_instance_mut();
-                lift_index_to_transmit(instance, counter, state, TransmitIndex::Future(src), index)?
+                let (state, instance) = cx.concurrent_state_and_instance_mut();
+                lift_index_to_transmit(instance, state, TransmitIndex::Future(src), index)?
             };
             cx.host_resource_lower_own(id.rep(), None, None)
         }
@@ -1865,8 +1865,8 @@ pub(super) fn lift_index_to_stream(
     match ty {
         InterfaceType::Stream(src) => {
             let id = {
-                let (state, instance, counter) = cx.concurrent_state_and_instance_mut();
-                lift_index_to_transmit(instance, counter, state, TransmitIndex::Stream(src), index)?
+                let (state, instance) = cx.concurrent_state_and_instance_mut();
+                lift_index_to_transmit(instance, state, TransmitIndex::Stream(src), index)?
             };
             cx.host_resource_lower_own(id.rep(), None, None)
         }
@@ -3331,13 +3331,10 @@ impl Instance {
         ty: TransmitIndex,
         writer: u32,
     ) -> Result<()> {
-        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
-        let table = instance.table_for_transmit(ty);
+        let table = self.id().get_mut(store).table_for_transmit(ty);
         let (transmit_rep, is_done) = match ty {
-            TransmitIndex::Future(ty) => table.future_remove_writable(counter, ty, writer)?,
-            TransmitIndex::Stream(ty) => {
-                (table.stream_remove_writable(counter, ty, writer)?, false)
-            }
+            TransmitIndex::Future(ty) => table.future_remove_writable(ty, writer)?,
+            TransmitIndex::Stream(ty) => (table.stream_remove_writable(ty, writer)?, false),
         };
 
         let id = TableId::<TransmitHandle>::new(transmit_rep);
@@ -4366,11 +4363,10 @@ impl Instance {
         ty: TransmitIndex,
         reader: u32,
     ) -> Result<()> {
-        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
-        let table = instance.table_for_transmit(ty);
+        let table = self.id().get_mut(store).table_for_transmit(ty);
         let (rep, _is_done) = match ty {
-            TransmitIndex::Stream(ty) => table.stream_remove_readable(counter, ty, reader)?,
-            TransmitIndex::Future(ty) => table.future_remove_readable(counter, ty, reader)?,
+            TransmitIndex::Stream(ty) => table.stream_remove_readable(ty, reader)?,
+            TransmitIndex::Future(ty) => table.future_remove_readable(ty, reader)?,
         };
         let kind = match ty {
             TransmitIndex::Stream(_) => TransmitKind::Stream,
@@ -4578,11 +4574,11 @@ impl Instance {
         ty: TypeComponentLocalErrorContextTableIndex,
         error_context: u32,
     ) -> Result<()> {
-        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
+        let instance = self.id().get_mut(store);
 
         let local_handle_table = instance.table_for_error_context(ty);
 
-        let rep = local_handle_table.error_context_drop(counter, error_context)?;
+        let rep = local_handle_table.error_context_drop(error_context)?;
 
         let global_ref_count_idx = TypeComponentGlobalErrorContextTableIndex::from_u32(rep);
 
@@ -4631,8 +4627,8 @@ impl Instance {
         ty: TransmitIndex,
         src_idx: u32,
     ) -> Result<TableId<TransmitHandle>> {
-        let (state, _, counter, _, instance) = store.lift_context_parts(self);
-        lift_index_to_transmit(instance, counter, state.concurrent_state_mut(), ty, src_idx)
+        let (state, _, _, _, instance) = store.lift_context_parts(self);
+        lift_index_to_transmit(instance, state.concurrent_state_mut(), ty, src_idx)
     }
 
     fn lower_transmit_to_index(
@@ -4739,15 +4735,14 @@ impl Instance {
 /// expected type of future/stream.
 fn lift_index_to_transmit(
     instance: Pin<&mut ComponentInstance>,
-    counter: &mut HandleCounter,
     concurrent_state: &mut ConcurrentState,
     ty: TransmitIndex,
     src_idx: u32,
 ) -> Result<TableId<TransmitHandle>> {
     let handle_table = instance.table_for_transmit(ty);
     let (rep, is_done) = match ty {
-        TransmitIndex::Future(idx) => handle_table.future_remove_readable(counter, idx, src_idx)?,
-        TransmitIndex::Stream(idx) => handle_table.stream_remove_readable(counter, idx, src_idx)?,
+        TransmitIndex::Future(idx) => handle_table.future_remove_readable(idx, src_idx)?,
+        TransmitIndex::Stream(idx) => handle_table.stream_remove_readable(idx, src_idx)?,
     };
     let desc = match ty {
         TransmitIndex::Future(_) => "future",

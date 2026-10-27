@@ -10,7 +10,8 @@ use wasmtime::{Result, Store};
 
 /// Two instances of one sub-component, each with its own handle table, so the
 /// per-store nature of the cap can be exercised. `sprayN(n)` allocates `n` live
-/// handles; `churnN(n)` allocates and drops one `n` times, staying at one live.
+/// handles; `churnN(n)` allocates and drops one `n` times, staying at one live;
+/// `drop-allN(n)` drops handles `1..=n`, the ones a first `sprayN(n)` returns.
 const COMPONENT: &str = r#"
 (component
   (component $C
@@ -37,7 +38,15 @@ const COMPONENT: &str = r#"
               (call $drop (call $new (local.get $i)))
               (local.set $i (i32.add (local.get $i) (i32.const 1)))
               (br $l))))
-        (local.get $i)))
+        (local.get $i))
+      (func (export "drop-all") (param $n i32)
+        (local $i i32)
+        (loop $l
+          (if (i32.lt_u (local.get $i) (local.get $n))
+            (then
+              (local.set $i (i32.add (local.get $i) (i32.const 1)))
+              (call $drop (local.get $i))
+              (br $l))))))
     (core instance $i (instantiate $m
       (with "" (instance
         (export "new" (func $new))
@@ -45,11 +54,14 @@ const COMPONENT: &str = r#"
     (func (export "spray") (param "n" u32) (result u32)
       (canon lift (core func $i "spray")))
     (func (export "churn") (param "n" u32) (result u32)
-      (canon lift (core func $i "churn"))))
+      (canon lift (core func $i "churn")))
+    (func (export "drop-all") (param "n" u32)
+      (canon lift (core func $i "drop-all"))))
 
   (instance $i0 (instantiate $C))
   (export "spray0" (func $i0 "spray"))
   (export "churn0" (func $i0 "churn"))
+  (export "drop-all0" (func $i0 "drop-all"))
   (instance $i1 (instantiate $C))
   (export "spray1" (func $i1 "spray"))
   (export "churn1" (func $i1 "churn"))
@@ -116,9 +128,8 @@ fn knob_raises_the_limit() -> Result<()> {
     Ok(())
 }
 
-/// The cap counts live handles, not cumulative allocations: churning well past
-/// the limit succeeds because each handle is dropped. Catches a missing
-/// decrement in `remove`.
+/// The cap counts table slots, not cumulative allocations: churning well past
+/// the limit succeeds because each dropped handle's slot is reused.
 #[test]
 fn freeing_handles_returns_budget() -> Result<()> {
     let engine = engine();
@@ -141,6 +152,33 @@ fn freeing_handles_returns_budget() -> Result<()> {
     let spray0 = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "spray0")?;
     let (n,) = spray0.call(&mut store, (50,))?;
     assert_eq!(n, 50);
+
+    Ok(())
+}
+
+#[test]
+fn freed_slots_charged() -> Result<()> {
+    let engine = engine();
+    let component = Component::new(&engine, COMPONENT)?;
+    let linker = Linker::new(&engine);
+
+    let mut store = Store::new(&engine, ());
+    store.set_max_component_handles(20);
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let spray0 = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "spray0")?;
+    let drop_all0 = instance.get_typed_func::<(u32,), ()>(&mut store, "drop-all0")?;
+    let spray1 = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "spray1")?;
+
+    // Grow the first instance's table to 15 slots, then free them all.
+    spray0.call(&mut store, (15,))?;
+    drop_all0.call(&mut store, (15,))?;
+
+    // The second instance can't grow its table past the remaining 5.
+    spray1
+        .call(&mut store, (10,))
+        .unwrap_err()
+        .assert_contains("store handle limit exceeded");
 
     Ok(())
 }
