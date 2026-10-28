@@ -808,23 +808,6 @@ where
         )
     }
 
-    fn vmctx_store(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        base_flags: ir::MemFlagsData,
-        vmctx: ir::Value,
-        offset: u32,
-        val: ir::Value,
-    ) {
-        let region = self.vmctx_region(cursor.func, offset);
-        cursor.ins().store(
-            base_flags.with_alias_region(Some(region)),
-            val,
-            vmctx,
-            i32::try_from(offset).unwrap(),
-        );
-    }
-
     /// Load the `VMContext::magic` field.
     pub fn vmctx_magic(&mut self, cursor: &mut FuncCursor<'_>, vmctx: ir::Value) -> ir::Value {
         self.vmctx_load(
@@ -1244,6 +1227,12 @@ impl AliasRegions<VMOffsets<u8>> {
         }
     }
 
+    // The runtime data arrays get one alias region each, keyed by the array's
+    // start, rather than one region per element: module startup initializes
+    // every data segment in one function, and a region per element gives a
+    // module with more than ~32k data segments more distinct `MemFlags` than
+    // a function can hold (`MemFlagsSetOverflow`).
+
     /// Load the base of the given runtime data out of the `*mut VMContext`.
     pub fn vmctx_runtime_data_base(
         &mut self,
@@ -1251,12 +1240,13 @@ impl AliasRegions<VMOffsets<u8>> {
         vmctx: ir::Value,
         runtime_data: RuntimeDataIndex,
     ) -> ir::Value {
-        self.vmctx_load(
-            cursor,
+        let region = self.vmctx_region(cursor.func, self.offsets.vmctx_runtime_data_bases_begin());
+        let offset = self.offsets.vmctx_runtime_data_base(runtime_data);
+        cursor.ins().load(
             self.pointer_type,
-            ir::MemFlagsData::trusted(),
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
             vmctx,
-            self.offsets.vmctx_runtime_data_base(runtime_data),
+            i32::try_from(offset).unwrap(),
         )
     }
 
@@ -1267,12 +1257,14 @@ impl AliasRegions<VMOffsets<u8>> {
         vmctx: ir::Value,
         runtime_data: RuntimeDataIndex,
     ) -> ir::Value {
-        self.vmctx_load(
-            cursor,
+        let region =
+            self.vmctx_region(cursor.func, self.offsets.vmctx_runtime_data_lengths_begin());
+        let offset = self.offsets.vmctx_runtime_data_length(runtime_data);
+        cursor.ins().load(
             ir::types::I32,
-            ir::MemFlagsData::trusted(),
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
             vmctx,
-            self.offsets.vmctx_runtime_data_length(runtime_data),
+            i32::try_from(offset).unwrap(),
         )
     }
 
@@ -1284,13 +1276,15 @@ impl AliasRegions<VMOffsets<u8>> {
         runtime_data: RuntimeDataIndex,
         new_length: ir::Value,
     ) {
-        self.vmctx_store(
-            cursor,
-            ir::MemFlagsData::trusted(),
-            vmctx,
-            self.offsets.vmctx_runtime_data_length(runtime_data),
+        let region =
+            self.vmctx_region(cursor.func, self.offsets.vmctx_runtime_data_lengths_begin());
+        let offset = self.offsets.vmctx_runtime_data_length(runtime_data);
+        cursor.ins().store(
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
             new_length,
-        )
+            vmctx,
+            i32::try_from(offset).unwrap(),
+        );
     }
 }
 
