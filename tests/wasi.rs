@@ -399,6 +399,7 @@ async fn send_request(addr: SocketAddr, req: HttpRequest) -> Result<()> {
             http::Request::builder()
                 .method(http::Method::from(req.method))
                 .uri(req.path)
+                .header(http::header::HOST, "localhost")
                 .body(String::new())
                 .unwrap(),
         )
