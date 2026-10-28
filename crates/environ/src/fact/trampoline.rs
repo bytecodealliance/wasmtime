@@ -32,7 +32,8 @@ use crate::fact::{
 };
 use crate::prelude::*;
 use crate::{
-    FuncIndex, GlobalIndex, IndexType, NUM_COMPONENT_CONTEXT_SLOTS, Trap, WasmStorageType,
+    FuncIndex, GlobalIndex, IndexType, NUM_COMPONENT_CONTEXT_SLOTS, Trap, WasmFieldType,
+    WasmStorageType, WasmValType,
 };
 use std::collections::HashMap;
 use std::mem;
@@ -268,7 +269,14 @@ pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper
                 offset: 0,
             })
         }
-        HelperLocation::StructField | HelperLocation::ArrayElement => todo!("CM+GC"),
+        HelperLocation::GcRef(ty) => {
+            nlocals += 1;
+            src_flat = vec![(0, ValType::Ref(ty))];
+            Source::Stack(Stack {
+                locals: &src_flat,
+                opts: &helper.src.opts,
+            })
+        }
     };
     let dst_flat;
     let dst = match helper.dst.loc {
@@ -300,7 +308,10 @@ pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper
                 offset: 0,
             })
         }
-        HelperLocation::StructField | HelperLocation::ArrayElement => todo!("CM+GC"),
+        HelperLocation::GcRef(ty) => {
+            dst_flat = vec![ValType::Ref(ty)];
+            Destination::Stack(&dst_flat, &helper.dst.opts)
+        }
     };
     let mut compiler = Compiler {
         types: module.types,
@@ -401,9 +412,19 @@ struct GcStruct<'a> {
     local: Option<u32>,
     /// The adapter-local type index of the struct type being accessed.
     ty: u32,
-    /// The field of the struct being accessed.
+    /// The field of the struct being accessed, or `FIELD_UNSET` before
+    /// `record_field_srcs`/`record_field_dsts` has picked one out.
     field: u32,
 }
+
+impl GcStruct<'_> {
+    fn field(&self) -> u32 {
+        debug_assert_ne!(self.field, FIELD_UNSET);
+        self.field
+    }
+}
+
+const FIELD_UNSET: u32 = u32::MAX;
 
 /// Representation of where a value is coming from or going to in a GC array.
 struct GcArray<'a> {
@@ -1186,6 +1207,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
             // the results.
             None => {
                 let src_loc = match src {
+                    // A GC-lowered aggregate occupies a single stack slot and
+                    // is passed to the helper as the reference it is.
+                    Source::Stack(stack) if is_gc_ref_lowered(stack.opts, src_ty, self.types) => {
+                        assert_eq!(stack.locals.len(), 1);
+                        let (idx, ty) = stack.locals[0];
+                        self.instruction(LocalGet(idx));
+                        HelperLocation::GcRef(gc_ref_type(ty))
+                    }
                     // If the source is on the stack then `stack_get` is used to
                     // convert everything to the appropriate flat representation
                     // for the source type.
@@ -1210,15 +1239,29 @@ impl<'a, 'b> Compiler<'a, 'b> {
                         self.push_mem_addr(mem);
                         HelperLocation::Memory
                     }
-                    Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+                    // Read the aggregate's reference out of its field and pass
+                    // that along.
+                    Source::Struct(s) => {
+                        let ty = self.gc_field_ref_type(s);
+                        self.struct_get(s, false);
+                        HelperLocation::GcRef(ty)
+                    }
+                    Source::Array(_) => todo!("CM+GC"),
                 };
                 let dst_loc = match dst {
+                    Destination::Stack(tys, opts)
+                        if is_gc_ref_lowered(opts, dst_ty, self.types) =>
+                    {
+                        assert_eq!(tys.len(), 1);
+                        HelperLocation::GcRef(gc_ref_type(tys[0]))
+                    }
                     Destination::Stack(..) => HelperLocation::Stack,
                     Destination::Memory(mem) => {
                         self.push_mem_addr(mem);
                         HelperLocation::Memory
                     }
-                    Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+                    Destination::Struct(s) => HelperLocation::GcRef(self.gc_field_ref_type(s)),
+                    Destination::Array(_) => todo!("CM+GC"),
                 };
                 // Generate a `FunctionId` corresponding to the `Helper`
                 // configuration that is necessary here. This will ideally be a
@@ -1249,7 +1292,12 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 // This translation happens inline here by popping the results
                 // into new locals and then using those locals to do a
                 // `stack_set`.
-                if let Destination::Stack(tys, opts) = dst {
+                //
+                // A GC-lowered aggregate needs no such conversion because the
+                // helper returns exactly the declared reference type.
+                if let Destination::Stack(tys, opts) = dst
+                    && !is_gc_ref_lowered(opts, dst_ty, self.types)
+                {
                     let flat = self
                         .types
                         .flatten_types(
@@ -3097,7 +3145,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         let src_tys = src_ty.types.iter().copied().collect::<Vec<_>>();
         let dst_tys = dst_ty.types.iter().copied().collect::<Vec<_>>();
 
-        let src = self.tuple_src(src);
+        let (src, src_local) = self.tuple_src(src);
         let (dst, dst_struct) = self.tuple_dst(dst);
 
         let srcs = src
@@ -3113,27 +3161,49 @@ impl<'a, 'b> Compiler<'a, 'b> {
         if let Some(ty) = dst_struct {
             self.instruction(StructNew(ty));
         }
+
+        if let Some(local) = src_local {
+            self.free_temp_local(local);
+        }
     }
 
     /// Prepare the source side of a tuple translation.
-    fn tuple_src<'c>(&mut self, src: &'c Source<'c>) -> Source<'c> {
+    ///
+    /// Returns the source, plus the temporary local holding the struct
+    /// reference that a nested tuple was read out into, for the caller to free
+    /// once translation of this tuple is done.
+    fn tuple_src<'c>(&mut self, src: &'c Source<'c>) -> (Source<'c>, Option<TempLocal>) {
         match src {
             Source::Stack(stack) if stack.opts.data_model.is_gc() => {
                 assert_eq!(stack.locals.len(), 1);
                 let (idx, ty) = stack.locals[0];
-                Source::Struct(GcStruct {
+                let src = Source::Struct(GcStruct {
                     opts: stack.opts,
                     local: Some(idx),
-                    ty: gc_struct_type_index(&ty),
-                    field: 0,
-                })
+                    ty: gc_struct_type_index(ty),
+                    field: FIELD_UNSET,
+                });
+                (src, None)
             }
-            Source::Stack(stack) => Source::Stack(stack.slice(0..stack.locals.len())),
-            Source::Memory(mem) => Source::Memory(mem.bump(0)),
+            Source::Stack(stack) => (Source::Stack(stack.slice(0..stack.locals.len())), None),
+            Source::Memory(mem) => (Source::Memory(mem.bump(0)), None),
 
-            // A nested tuple: reading it out yields a reference to a struct
-            // that would itself need translating.
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            // A nested tuple: read the inner struct's reference out of its
+            // field and root a new `GcStruct` at it.
+            Source::Struct(s) => {
+                let ty = self.gc_field_ref_type(s);
+                self.struct_get(s, false);
+                let local = self.local_set_new_tmp(ValType::Ref(ty));
+                let src = Source::Struct(GcStruct {
+                    opts: s.opts,
+                    local: Some(local.idx),
+                    ty: struct_type_index(ty),
+                    field: FIELD_UNSET,
+                });
+                (src, Some(local))
+            }
+
+            Source::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -3145,13 +3215,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match dst {
             Destination::Stack(stack, opts) if opts.data_model.is_gc() => {
                 assert_eq!(stack.len(), 1);
-                let ty = gc_struct_type_index(&stack[0]);
+                let ty = gc_struct_type_index(stack[0]);
                 (
                     Destination::Struct(GcStruct {
                         opts,
                         local: None,
                         ty,
-                        field: 0,
+                        field: FIELD_UNSET,
                     }),
                     Some(ty),
                 )
@@ -3159,8 +3229,24 @@ impl<'a, 'b> Compiler<'a, 'b> {
             Destination::Stack(stack, opts) => (Destination::Stack(stack, opts), None),
             Destination::Memory(mem) => (Destination::Memory(mem.bump(0)), None),
 
-            // A nested tuple, as in `tuple_src`.
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            // A nested tuple: recurse into the inner struct, whose `struct.new`
+            // runs first and leaves its reference on the stack as one of the
+            // enclosing `struct.new`'s operands.
+            Destination::Struct(s) => {
+                assert!(s.local.is_none());
+                let ty = struct_type_index(self.gc_field_ref_type(s));
+                (
+                    Destination::Struct(GcStruct {
+                        opts: s.opts,
+                        local: None,
+                        ty,
+                        field: FIELD_UNSET,
+                    }),
+                    Some(ty),
+                )
+            }
+
+            Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -4486,7 +4572,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         ));
 
         let struct_type_index = s.ty;
-        let field_index = s.field;
+        let field_index = s.field();
 
         if !self.gc_field_is_packed(s) {
             self.instruction(StructGet {
@@ -4506,16 +4592,34 @@ impl<'a, 'b> Compiler<'a, 'b> {
         }
     }
 
-    /// Whether the field `s` describes has a packed (`i8`/`i16`) storage type.
-    fn gc_field_is_packed(&self, s: &GcStruct<'_>) -> bool {
+    /// The declared type of the field `s` describes.
+    fn gc_field_type(&self, s: &GcStruct<'_>) -> &'a WasmFieldType {
         let types = self.types.module_types_builder().types();
         let ty = self.module.core_types.module_type_of(s.ty);
-        let field = &types[ty].composite_type.inner.unwrap_struct().fields
-            [usize::try_from(s.field).unwrap()];
-        match field.element_type {
+        &types[ty].composite_type.inner.unwrap_struct().fields[usize::try_from(s.field()).unwrap()]
+    }
+
+    /// Whether the field `s` describes has a packed (`i8`/`i16`) storage type.
+    fn gc_field_is_packed(&self, s: &GcStruct<'_>) -> bool {
+        match self.gc_field_type(s).element_type {
             WasmStorageType::I8 | WasmStorageType::I16 => true,
             WasmStorageType::Val(_) => false,
         }
+    }
+
+    /// The adapter-local reference type of the field `s` describes.
+    ///
+    /// Nested aggregates lower to a reference field, so this is a bug rather
+    /// than invalid input for anything else: validation has already checked
+    /// the lowering against the declared `core-type`.
+    fn gc_field_ref_type(&self, s: &GcStruct<'_>) -> RefType {
+        let field = self.gc_field_type(s);
+        let r = match &field.element_type {
+            WasmStorageType::Val(WasmValType::Ref(r)) => r,
+            ty => panic!("GC-lowered aggregate must be in a reference field, found {ty:?}"),
+        };
+        let types = self.types.module_types_builder().types();
+        self.module.core_types.ref_type(types, r, None)
     }
 
     fn i32_store8(&mut self, mem: &Memory) {
@@ -4709,18 +4813,39 @@ impl<'a> Destination<'a> {
     }
 }
 
-/// The adapter-local struct type index a GC-lowered aggregate names.
-fn gc_struct_type_index(ty: &ValType) -> u32 {
+/// Whether `ty` lowers to a GC reference under `opts`, rather than to a scalar
+/// or to linear memory.
+fn is_gc_ref_lowered(opts: &Options, ty: &InterfaceType, types: &ComponentTypesBuilder) -> bool {
+    opts.data_model.is_gc() && opts.flat_types(ty, types).is_none()
+}
+
+/// The adapter-local reference type a GC-lowered aggregate names.
+fn gc_ref_type(ty: ValType) -> RefType {
     match ty {
-        ValType::Ref(RefType {
-            heap_type: HeapType::Concrete(idx),
-            ..
-        }) => *idx,
+        ValType::Ref(
+            r @ RefType {
+                heap_type: HeapType::Concrete(_),
+                ..
+            },
+        ) => r,
 
         // Validation has already checked the lowering against the declared
         // `core-type`, so anything else is a bug rather than invalid input.
         _ => panic!("GC-lowered aggregate must be a concrete struct reference, found {ty:?}"),
     }
+}
+
+/// The adapter-local struct type index that `ty` names.
+fn struct_type_index(ty: RefType) -> u32 {
+    match ty.heap_type {
+        HeapType::Concrete(idx) => idx,
+        ty => panic!("GC-lowered aggregate must be a concrete struct reference, found {ty:?}"),
+    }
+}
+
+/// The adapter-local struct type index a GC-lowered aggregate names.
+fn gc_struct_type_index(ty: ValType) -> u32 {
+    struct_type_index(gc_ref_type(ty))
 }
 
 fn next_field_offset<'a>(

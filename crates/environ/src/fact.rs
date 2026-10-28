@@ -272,12 +272,9 @@ enum HelperLocation {
     Stack,
     /// Located in linear memory as configured by `opts`.
     Memory,
-    /// Located in a GC struct field.
-    #[expect(dead_code, reason = "CM+GC is still WIP")]
-    StructField,
-    /// Located in a GC array element.
-    #[expect(dead_code, reason = "CM+GC is still WIP")]
-    ArrayElement,
+    /// Passed as a single GC reference of this type, which is how GC-lowered
+    /// aggregates travel.
+    GcRef(RefType),
 }
 
 impl<'a> Module<'a> {
@@ -998,7 +995,7 @@ impl Options {
         }
     }
 
-    fn flat_types<'a>(
+    pub(super) fn flat_types<'a>(
         &self,
         ty: &InterfaceType,
         types: &'a ComponentTypesBuilder,
@@ -1149,9 +1146,10 @@ impl Helper {
         // memory or otherwise is the result of the function itself for a
         // stack-based representation.
         match self.dst.loc {
-            HelperLocation::Stack => self.dst.push_flat(&mut results, types),
+            HelperLocation::Stack | HelperLocation::GcRef(_) => {
+                self.dst.push_flat(&mut results, types)
+            }
             HelperLocation::Memory => params.push(self.dst.opts.data_model.unwrap_memory().ptr()),
-            HelperLocation::StructField | HelperLocation::ArrayElement => todo!("CM+GC"),
         }
 
         core_types.function(&params, &results)
@@ -1169,7 +1167,9 @@ impl HelperType {
             HelperLocation::Memory => {
                 dst.push(self.opts.data_model.unwrap_memory().ptr());
             }
-            HelperLocation::StructField | HelperLocation::ArrayElement => todo!("CM+GC"),
+            HelperLocation::GcRef(ty) => {
+                dst.push(ValType::Ref(ty));
+            }
         }
     }
 }
