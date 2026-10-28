@@ -598,6 +598,9 @@
 
 (spec (icmp ty cc x y)
     (provide
+        ;; `ty` is the controlling type: the operand type, not the result type.
+        (= (:bits ty) (widthof x))
+        (= (:lanes ty) (lanesof x))
         (= result
             (if
                 (match cc
@@ -879,6 +882,9 @@
 ; fcmp: floating-point compare.
 (spec (fcmp ty c x y)
     (provide
+        ;; `ty` is the controlling type: the operand type, not the result type.
+        (= (:bits ty) (widthof x))
+        (= (:lanes ty) (lanesof x))
         ;; Restrict to operations used from Wasm for now
         (or (= c (FloatCC.Equal))
             (= c (FloatCC.NotEqual))

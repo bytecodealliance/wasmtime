@@ -133,10 +133,11 @@
       (subsume (iconst_s wide k)))
 
 (rule (simplify
-       (icmp result_ty
-            cc
-            (iconst ty k1)
-            (iconst ty k2)))
+       (has_type result_ty
+         (icmp ty
+              cc
+              (iconst ty k1)
+              (iconst ty k2))))
       (subsume (iconst result_ty (imm64_icmp ty cc k1 k2))))
 
 

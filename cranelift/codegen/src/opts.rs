@@ -2,7 +2,7 @@
 
 mod div_const;
 
-use crate::egraph::{NewOrExistingInst, OptimizeCtx};
+use crate::egraph::{NewOrExistingInst, OptimizeCtx, inst_ctrl_type};
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
 pub use crate::ir::immediates::{Ieee16, Ieee32, Ieee64, Ieee128, Imm64, Offset32, Uimm8, V128Imm};
@@ -114,8 +114,13 @@ where
                         return None;
                     }
                     ctx.ctx.extractor_fuel -= 1;
-                    let ty = ctx.ctx.func.dfg.value_type(value);
-                    trace!(" -> value of type {}", ty);
+                    // The type we yield is the instruction's controlling
+                    // type, matching what `make_inst` takes when a rule
+                    // constructs an instruction. For most opcodes this is
+                    // the result type, but e.g. `icmp`'s controlling type
+                    // is the operand type while its result is `i8`.
+                    let ty = inst_ctrl_type(&ctx.ctx.func.dfg, inst);
+                    trace!(" -> controlling type {}", ty);
                     return Some((ty, ctx.ctx.func.dfg.insts[inst]));
                 }
                 _ => {}

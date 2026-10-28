@@ -101,7 +101,7 @@
 
 ;; Since icmp is always 0 or 1, bmask is just a negation.
 ;; TODO: Explore whether this makes sense for things needing extension too.
-(rule (simplify (bmask $I8 cmp@(icmp $I8 _ _ _)))
+(rule (simplify (bmask $I8 cmp@(icmp _ _ _ _)))
       (ineg $I8 cmp))
 
 ;; Matches any expressions that preserve "truthiness".
@@ -126,10 +126,10 @@
 (rule (simplify (bmask ty v)) (if-let x (truthy v)) (bmask ty x))
 (rule (simplify (select ty v t f)) (if-let c (truthy v)) (select ty c t f))
 ;; (ne ty (iconst 0) v) is also canonicalized into this form via another rule
-(rule (simplify (ne cty v (all_zero _)))
+(rule (simplify (ne _ v (all_zero _)))
       (if-let c (truthy v))
       (if-let (value_type (ty_int_ref_scalar_64_extract ty)) c)
-      (ne cty c (all_zero ty)))
+      (ne ty c (all_zero ty)))
 
 
 
@@ -343,24 +343,24 @@
 (rule (simplify (bxor ty (bor ty y x) (bnot ty x))) (bor ty x (bnot ty y)))
 
 ; (x < y) | (x > y) --> x != y
-(rule (simplify (bor ty (slt ty x y) (sgt ty x y))) (ne ty x y))
-(rule (simplify (bor ty (sgt ty x y) (slt ty x y))) (ne ty x y))
-(rule (simplify (bor ty (slt ty x y) (slt ty y x))) (ne ty x y))
-(rule (simplify (bor ty (slt ty y x) (slt ty x y))) (ne ty x y))
-(rule (simplify (bor ty (sgt ty y x) (sgt ty x y))) (ne ty x y))
-(rule (simplify (bor ty (sgt ty x y) (sgt ty y x))) (ne ty x y))
-(rule (simplify (bor ty (sgt ty y x) (slt ty y x))) (ne ty x y))
-(rule (simplify (bor ty (slt ty y x) (sgt ty y x))) (ne ty x y))
+(rule (simplify (bor _ (slt ty x y) (sgt ty x y))) (ne ty x y))
+(rule (simplify (bor _ (sgt ty x y) (slt ty x y))) (ne ty x y))
+(rule (simplify (bor _ (slt ty x y) (slt ty y x))) (ne ty x y))
+(rule (simplify (bor _ (slt ty y x) (slt ty x y))) (ne ty x y))
+(rule (simplify (bor _ (sgt ty y x) (sgt ty x y))) (ne ty x y))
+(rule (simplify (bor _ (sgt ty x y) (sgt ty y x))) (ne ty x y))
+(rule (simplify (bor _ (sgt ty y x) (slt ty y x))) (ne ty x y))
+(rule (simplify (bor _ (slt ty y x) (sgt ty y x))) (ne ty x y))
 
 ; (x <_u y) | (x >_u y) --> x != y
-(rule (simplify (bor ty (ult ty x y) (ugt ty x y))) (ne ty x y))
-(rule (simplify (bor ty (ugt ty x y) (ult ty x y))) (ne ty x y))
-(rule (simplify (bor ty (ult ty x y) (ult ty y x))) (ne ty x y))
-(rule (simplify (bor ty (ult ty y x) (ult ty x y))) (ne ty x y))
-(rule (simplify (bor ty (ugt ty y x) (ugt ty x y))) (ne ty x y))
-(rule (simplify (bor ty (ugt ty x y) (ugt ty y x))) (ne ty x y))
-(rule (simplify (bor ty (ugt ty y x) (ult ty y x))) (ne ty x y))
-(rule (simplify (bor ty (ult ty y x) (ugt ty y x))) (ne ty x y))
+(rule (simplify (bor _ (ult ty x y) (ugt ty x y))) (ne ty x y))
+(rule (simplify (bor _ (ugt ty x y) (ult ty x y))) (ne ty x y))
+(rule (simplify (bor _ (ult ty x y) (ult ty y x))) (ne ty x y))
+(rule (simplify (bor _ (ult ty y x) (ult ty x y))) (ne ty x y))
+(rule (simplify (bor _ (ugt ty y x) (ugt ty x y))) (ne ty x y))
+(rule (simplify (bor _ (ugt ty x y) (ugt ty y x))) (ne ty x y))
+(rule (simplify (bor _ (ugt ty y x) (ult ty y x))) (ne ty x y))
+(rule (simplify (bor _ (ult ty y x) (ugt ty y x))) (ne ty x y))
 
 ; ~((~x) & y) --> x | ~y
 (rule (simplify (bnot ty (band ty (bnot ty x) y))) (bor ty x (bnot ty y)))
@@ -371,28 +371,28 @@
 (rule (simplify (bnot ty (bor ty y (bnot ty x)))) (band ty x (bnot ty y)))
 
 ; (x <_u y) | (x == y) --> (x <=_u y)
-(rule (simplify (bor ty (ult ty x y) (eq ty x y))) (ule ty x y))
-(rule (simplify (bor ty (eq ty x y) (ult ty x y))) (ule ty x y))
-(rule (simplify (bor ty (ult ty x y) (eq ty y x))) (ule ty x y))
-(rule (simplify (bor ty (eq ty y x) (ult ty x y))) (ule ty x y))
+(rule (simplify (bor _ (ult ty x y) (eq ty x y))) (ule ty x y))
+(rule (simplify (bor _ (eq ty x y) (ult ty x y))) (ule ty x y))
+(rule (simplify (bor _ (ult ty x y) (eq ty y x))) (ule ty x y))
+(rule (simplify (bor _ (eq ty y x) (ult ty x y))) (ule ty x y))
 
 ; (y >_u x) | (x == y) --> (x <=_u y)
-(rule (simplify (bor ty (ugt ty y x) (eq ty x y))) (ule ty x y))
-(rule (simplify (bor ty (eq ty x y) (ugt ty y x))) (ule ty x y))
-(rule (simplify (bor ty (ugt ty y x) (eq ty y x))) (ule ty x y))
-(rule (simplify (bor ty (eq ty y x) (ugt ty y x))) (ule ty x y))
+(rule (simplify (bor _ (ugt ty y x) (eq ty x y))) (ule ty x y))
+(rule (simplify (bor _ (eq ty x y) (ugt ty y x))) (ule ty x y))
+(rule (simplify (bor _ (ugt ty y x) (eq ty y x))) (ule ty x y))
+(rule (simplify (bor _ (eq ty y x) (ugt ty y x))) (ule ty x y))
 
 ; (x < y) | (x == y) --> (x <= y)
-(rule (simplify (bor ty (slt ty x y) (eq ty x y))) (sle ty x y))
-(rule (simplify (bor ty (eq ty x y) (slt ty x y))) (sle ty x y))
-(rule (simplify (bor ty (slt ty x y) (eq ty y x))) (sle ty x y))
-(rule (simplify (bor ty (eq ty y x) (slt ty x y))) (sle ty x y))
+(rule (simplify (bor _ (slt ty x y) (eq ty x y))) (sle ty x y))
+(rule (simplify (bor _ (eq ty x y) (slt ty x y))) (sle ty x y))
+(rule (simplify (bor _ (slt ty x y) (eq ty y x))) (sle ty x y))
+(rule (simplify (bor _ (eq ty y x) (slt ty x y))) (sle ty x y))
 
 ; (y > x) | (x == y) --> (x <= y)
-(rule (simplify (bor ty (sgt ty y x) (eq ty x y))) (sle ty x y))
-(rule (simplify (bor ty (eq ty x y) (sgt ty y x))) (sle ty x y))
-(rule (simplify (bor ty (sgt ty y x) (eq ty y x))) (sle ty x y))
-(rule (simplify (bor ty (eq ty y x) (sgt ty y x))) (sle ty x y))
+(rule (simplify (bor _ (sgt ty y x) (eq ty x y))) (sle ty x y))
+(rule (simplify (bor _ (eq ty x y) (sgt ty y x))) (sle ty x y))
+(rule (simplify (bor _ (sgt ty y x) (eq ty y x))) (sle ty x y))
+(rule (simplify (bor _ (eq ty y x) (sgt ty y x))) (sle ty x y))
 
 ; (x ^ z) | (((x ^ z) ^ y)) --> (x ^ z) | y
 (rule (simplify (bor ty (bxor ty x z) (bxor ty (bxor ty x z) y))) (bor ty (bxor ty x z) y))
@@ -760,24 +760,24 @@
       (subsume (all_zero ty)))
 
 ;; x >=u (x & y) --> true
-(rule (simplify (uge rty x (band ty x y))) (cmp_true rty))
-(rule (simplify (uge rty x (band ty y x))) (cmp_true rty))
-(rule (simplify (ule rty (band ty x y) x)) (cmp_true rty))
-(rule (simplify (ule rty (band ty y x) x)) (cmp_true rty))
-(rule (simplify (ugt rty (band ty x y) x)) (subsume (all_zero rty)))
-(rule (simplify (ugt rty (band ty y x) x)) (subsume (all_zero rty)))
-(rule (simplify (ult rty x (band ty x y))) (subsume (all_zero rty)))
-(rule (simplify (ult rty x (band ty y x))) (subsume (all_zero rty)))
+(rule (simplify (has_type rty (uge _ x (band ty x y)))) (cmp_true rty))
+(rule (simplify (has_type rty (uge _ x (band ty y x)))) (cmp_true rty))
+(rule (simplify (has_type rty (ule _ (band ty x y) x))) (cmp_true rty))
+(rule (simplify (has_type rty (ule _ (band ty y x) x))) (cmp_true rty))
+(rule (simplify (has_type rty (ugt _ (band ty x y) x))) (subsume (all_zero rty)))
+(rule (simplify (has_type rty (ugt _ (band ty y x) x))) (subsume (all_zero rty)))
+(rule (simplify (has_type rty (ult _ x (band ty x y)))) (subsume (all_zero rty)))
+(rule (simplify (has_type rty (ult _ x (band ty y x)))) (subsume (all_zero rty)))
 
 ;; (x | y) >=u x --> true
-(rule (simplify (uge rty (bor ty x y) x)) (cmp_true rty))
-(rule (simplify (uge rty (bor ty y x) x)) (cmp_true rty))
-(rule (simplify (ule rty x (bor ty x y))) (cmp_true rty))
-(rule (simplify (ule rty x (bor ty y x))) (cmp_true rty))
-(rule (simplify (ult rty (bor ty x y) x)) (subsume (all_zero rty)))
-(rule (simplify (ult rty (bor ty y x) x)) (subsume (all_zero rty)))
-(rule (simplify (ugt rty x (bor ty x y))) (subsume (all_zero rty)))
-(rule (simplify (ugt rty x (bor ty y x))) (subsume (all_zero rty)))
+(rule (simplify (has_type rty (uge _ (bor ty x y) x))) (cmp_true rty))
+(rule (simplify (has_type rty (uge _ (bor ty y x) x))) (cmp_true rty))
+(rule (simplify (has_type rty (ule _ x (bor ty x y)))) (cmp_true rty))
+(rule (simplify (has_type rty (ule _ x (bor ty y x)))) (cmp_true rty))
+(rule (simplify (has_type rty (ult _ (bor ty x y) x))) (subsume (all_zero rty)))
+(rule (simplify (has_type rty (ult _ (bor ty y x) x))) (subsume (all_zero rty)))
+(rule (simplify (has_type rty (ugt _ x (bor ty x y)))) (subsume (all_zero rty)))
+(rule (simplify (has_type rty (ugt _ x (bor ty y x)))) (subsume (all_zero rty)))
 
 ;; (x & y) & (x & z) --> (x & y) & z
 (rule (simplify (band ty (band ty x y) (band ty x z))) (band ty (band ty x y) z))

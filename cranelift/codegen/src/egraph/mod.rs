@@ -175,12 +175,27 @@ pub(crate) enum NewOrExistingInst {
     Existing(Inst),
 }
 
+/// The type paired with an instruction's `InstructionData` throughout the
+/// e-graph: its controlling type variable, or, for a non-polymorphic
+/// instruction that has no controlling type (e.g. `f32const`), the type of its
+/// first result.
+pub(crate) fn inst_ctrl_type(dfg: &DataFlowGraph, inst: Inst) -> Type {
+    let ty = dfg.ctrl_typevar(inst);
+    if ty != crate::ir::types::INVALID {
+        ty
+    } else if let Some(result) = dfg.inst_results(inst).first() {
+        dfg.value_type(*result)
+    } else {
+        ty
+    }
+}
+
 impl NewOrExistingInst {
     fn get_inst_key<'a>(&'a self, dfg: &'a DataFlowGraph) -> (Type, InstructionData) {
         match self {
             NewOrExistingInst::New(data, ty) => (*ty, *data),
             NewOrExistingInst::Existing(inst) => {
-                let ty = dfg.ctrl_typevar(*inst);
+                let ty = inst_ctrl_type(dfg, *inst);
                 (ty, dfg.insts[*inst])
             }
         }
@@ -250,7 +265,7 @@ where
                 NewOrExistingInst::Existing(inst) => {
                     self.stats.pure_inst_insert_orig += 1;
                     let result = self.func.dfg.first_result(inst);
-                    let ty = self.func.dfg.ctrl_typevar(inst);
+                    let ty = inst_ctrl_type(&self.func.dfg, inst);
                     (inst, result, ty)
                 }
             };
@@ -514,7 +529,7 @@ where
             // skeleton (`Layout`), we need to be mindful of whether
             // our current position is dominated by an instance of the
             // instruction. (See #5796 for details.)
-            let ty = self.func.dfg.ctrl_typevar(inst);
+            let ty = inst_ctrl_type(&self.func.dfg, inst);
             match self
                 .gvn_map
                 .entry(&NullCtx, (ty, self.func.dfg.insts[inst]))

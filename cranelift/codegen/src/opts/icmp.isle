@@ -2,16 +2,16 @@
 
 ;; `x == x` is always true for integers; `x != x` is false. Strict
 ;; inequalities are false, and loose inequalities are true.
-(rule (simplify (eq ty x x)) (subsume (cmp_true ty)))
-(rule (simplify (ne ty x x)) (subsume (all_zero ty)))
-(rule (simplify (ugt ty x x)) (subsume (all_zero ty)))
-(rule (simplify (uge ty x x)) (subsume (cmp_true ty)))
-(rule (simplify (sgt ty x x)) (subsume (all_zero ty)))
-(rule (simplify (sge ty x x)) (subsume (cmp_true ty)))
-(rule (simplify (ult ty x x)) (subsume (all_zero ty)))
-(rule (simplify (ule ty x x)) (subsume (cmp_true ty)))
-(rule (simplify (slt ty x x)) (subsume (all_zero ty)))
-(rule (simplify (sle ty x x)) (subsume (cmp_true ty)))
+(rule (simplify (has_type ty (eq _ x x))) (subsume (cmp_true ty)))
+(rule (simplify (has_type ty (ne _ x x))) (subsume (all_zero ty)))
+(rule (simplify (has_type ty (ugt _ x x))) (subsume (all_zero ty)))
+(rule (simplify (has_type ty (uge _ x x))) (subsume (cmp_true ty)))
+(rule (simplify (has_type ty (sgt _ x x))) (subsume (all_zero ty)))
+(rule (simplify (has_type ty (sge _ x x))) (subsume (cmp_true ty)))
+(rule (simplify (has_type ty (ult _ x x))) (subsume (all_zero ty)))
+(rule (simplify (has_type ty (ule _ x x))) (subsume (cmp_true ty)))
+(rule (simplify (has_type ty (slt _ x x))) (subsume (all_zero ty)))
+(rule (simplify (has_type ty (sle _ x x))) (subsume (cmp_true ty)))
 
 ;; For integers, adding the same thing on both sides of an equality check
 ;; (or an inequality check) doesn't change the result.
@@ -46,28 +46,28 @@
 ;; Optimize icmp-of-icmp.
 ;; ne(icmp(ty, cc, x, y), 0) == icmp(ty, cc, x, y)
 ;; e.g. neq(ugt(x, y), 0) == ugt(x, y)
-(rule (simplify (ne ty
-                      (uextend_maybe _ inner @ (icmp ty _ _ _))
+(rule (simplify (ne _
+                      (uextend_maybe _ inner @ (icmp _ _ _ _))
                       (all_zero _)))
       (subsume inner))
 
 ;; Likewise for icmp-of-fcmp.
 ;; ne(fcmp(ty, cc, x, y), 0) == fcmp(ty, cc, x, y)
-(rule (simplify (ne ty
-                      (uextend_maybe _ inner @ (fcmp ty _ _ _))
+(rule (simplify (ne _
+                      (uextend_maybe _ inner @ (fcmp _ _ _ _))
                       (all_zero _)))
       (subsume inner))
 
 ;; eq(icmp(ty, cc, x, y), 0) == icmp(ty, cc_complement, x, y)
 ;; e.g. eq(ugt(x, y), 0) == ule(x, y)
-(rule (simplify (eq ty
+(rule (simplify (eq _
                       (uextend_maybe _ (icmp ty cc x y))
                       (all_zero _)))
       (subsume (icmp ty (intcc_complement cc) x y)))
 
 ;; ne(icmp(ty, cc, x, y), 1) == icmp(ty, cc_complement, x, y)
 ;; e.g. ne(ugt(x, y), 1) == ule(x, y)
-(rule (simplify (ne ty
+(rule (simplify (ne _
                       (uextend_maybe _ (icmp ty cc x y))
                       (iconst_u _ 1)))
       (subsume (icmp ty (intcc_complement cc) x y)))
@@ -101,89 +101,89 @@
 
 ;; Comparisons against largest/smallest signed/unsigned values:
 ;; ult(x, 0) == false.
-(rule (simplify (ult bty x zero @ (all_zero _)))
+(rule (simplify (has_type bty (ult _ x zero @ (all_zero _))))
       (subsume (all_zero bty)))
 
 ;; ule(x, 0) == eq(x, 0)
-(rule (simplify (ule (fits_in_64 (ty_int bty)) x zero @ (all_zero _)))
-      (eq bty x zero))
+(rule (simplify (ule (fits_in_64 (ty_int cty)) x zero @ (all_zero _)))
+      (eq cty x zero))
 
 ;; ugt(x, 0) == ne(x, 0).
-(rule (simplify (ugt (fits_in_64 (ty_int bty)) x zero @ (all_zero _)))
-      (ne bty x zero))
+(rule (simplify (ugt (fits_in_64 (ty_int cty)) x zero @ (all_zero _)))
+      (ne cty x zero))
 
 ;; uge(x, 0) == true.
-(rule (simplify (uge bty x zero @ (all_zero _)))
+(rule (simplify (has_type bty (uge _ x zero @ (all_zero _))))
       (subsume (cmp_true bty)))
 
 ;; ult(x, UMAX) == ne(x, UMAX).
-(rule (simplify (ult (fits_in_64 (ty_int bty)) x umax @ (iconst_u cty y)))
+(rule (simplify (ult (fits_in_64 (ty_int cty)) x umax @ (iconst_u cty y)))
        (if-let true (u64_eq y (ty_umax cty)))
-       (ne bty x umax))
+       (ne cty x umax))
 
 ;; ule(x, UMAX) == true.
-(rule (simplify (ule (fits_in_64 (ty_int bty)) x umax @ (iconst_u cty y)))
+(rule (simplify (has_type bty (ule (fits_in_64 (ty_int cty)) x umax @ (iconst_u cty y))))
        (if-let true (u64_eq y (ty_umax cty)))
        (subsume (iconst_u bty 1)))
 
 ;; ugt(x, UMAX) == false.
-(rule (simplify (ugt (fits_in_64 (ty_int bty)) x umax @ (iconst_u cty y)))
+(rule (simplify (has_type bty (ugt (fits_in_64 (ty_int cty)) x umax @ (iconst_u cty y))))
        (if-let true (u64_eq y (ty_umax cty)))
        (subsume (all_zero bty)))
 
 ;; uge(x, UMAX) == eq(x, UMAX).
-(rule (simplify (uge (fits_in_64 (ty_int bty)) x umax @ (iconst_u cty y)))
+(rule (simplify (uge (fits_in_64 (ty_int cty)) x umax @ (iconst_u cty y)))
        (if-let true (u64_eq y (ty_umax cty)))
-       (eq bty x umax))
+       (eq cty x umax))
 
 ;; slt(x, SMIN) == false.
-(rule (simplify (slt (fits_in_64 (ty_int bty)) x smin @ (iconst_u cty y)))
+(rule (simplify (has_type bty (slt (fits_in_64 (ty_int cty)) x smin @ (iconst_u cty y))))
        (if-let true (u64_eq y (ty_smin cty)))
        (subsume (all_zero bty)))
 
 ;; sle(x, SMIN) == eq(x, SMIN).
-(rule (simplify (sle (fits_in_64 (ty_int bty)) x smin @ (iconst_u cty y)))
+(rule (simplify (sle (fits_in_64 (ty_int cty)) x smin @ (iconst_u cty y)))
        (if-let true (u64_eq y (ty_smin cty)))
-       (eq bty x smin))
+       (eq cty x smin))
 
 ;; sgt(x, SMIN) == ne(x, SMIN).
-(rule (simplify (sgt (fits_in_64 (ty_int bty)) x smin @ (iconst_u cty y)))
+(rule (simplify (sgt (fits_in_64 (ty_int cty)) x smin @ (iconst_u cty y)))
        (if-let true (u64_eq y (ty_smin cty)))
-       (ne bty x smin))
+       (ne cty x smin))
 
 ;; sge(x, SMIN) == true.
-(rule (simplify (sge (fits_in_64 (ty_int bty)) x smin @ (iconst_u cty y)))
+(rule (simplify (has_type bty (sge (fits_in_64 (ty_int cty)) x smin @ (iconst_u cty y))))
        (if-let true (u64_eq y (ty_smin cty)))
        (subsume (iconst_u bty 1)))
 
 ;; slt(x, SMAX) == ne(x, SMAX).
-(rule (simplify (slt (fits_in_64 (ty_int bty)) x smax @ (iconst_u cty y)))
+(rule (simplify (slt (fits_in_64 (ty_int cty)) x smax @ (iconst_u cty y)))
        (if-let true (u64_eq y (ty_smax cty)))
-       (ne bty x smax))
+       (ne cty x smax))
 
 ;; sle(x, SMAX) == true.
-(rule (simplify (sle (fits_in_64 (ty_int bty)) x smax @ (iconst_u cty y)))
+(rule (simplify (has_type bty (sle (fits_in_64 (ty_int cty)) x smax @ (iconst_u cty y))))
        (if-let true (u64_eq y (ty_smax cty)))
        (subsume (iconst_u bty 1)))
 
 ;; sgt(x, SMAX) == false.
-(rule (simplify (sgt (fits_in_64 (ty_int bty)) x smax @ (iconst_u cty y)))
+(rule (simplify (has_type bty (sgt (fits_in_64 (ty_int cty)) x smax @ (iconst_u cty y))))
        (if-let true (u64_eq y (ty_smax cty)))
        (subsume (all_zero bty)))
 
 ;; sge(x, SMAX) == eq(x, SMAX).
-(rule (simplify (sge (fits_in_64 (ty_int bty)) x smax @ (iconst_u cty y)))
+(rule (simplify (sge (fits_in_64 (ty_int cty)) x smax @ (iconst_u cty y)))
        (if-let true (u64_eq y (ty_smax cty)))
-       (eq bty x smax))
+       (eq cty x smax))
 
 ;; `band`/`bor` of 2 comparisons:
-(rule (simplify (band (fits_in_64 ty) (icmp ty cc1 x y) (icmp ty cc2 x y)))
+(rule (simplify (band (fits_in_64 bty) (icmp ty cc1 x y) (icmp ty cc2 x y)))
   (if-let signed (intcc_comparable cc1 cc2))
-  (compose_icmp ty (u64_and (decompose_intcc cc1) (decompose_intcc cc2)) signed x y))
+  (compose_icmp bty ty (u64_and (decompose_intcc cc1) (decompose_intcc cc2)) signed x y))
 
-(rule (simplify (bor (fits_in_64 ty) (icmp ty cc1 x y) (icmp ty cc2 x y)))
+(rule (simplify (bor (fits_in_64 bty) (icmp ty cc1 x y) (icmp ty cc2 x y)))
   (if-let signed (intcc_comparable cc1 cc2))
-  (compose_icmp ty (u64_or (decompose_intcc cc1) (decompose_intcc cc2)) signed x y))
+  (compose_icmp bty ty (u64_or (decompose_intcc cc1) (decompose_intcc cc2)) signed x y))
 
 ;; Prefer comparing against zero
 ;; uge(x, 1) == ne(x, 0)
@@ -222,19 +222,21 @@
 (rule (decompose_intcc (IntCC.SignedGreaterThanOrEqual)) 5)
 (rule (decompose_intcc (IntCC.NotEqual)) 6)
 
-(decl compose_icmp (Type u64 bool Value Value) Value)
-(rule (compose_icmp ty 0 _ _ _) (subsume (all_zero ty)))
-(rule (compose_icmp ty 1 _ x y) (icmp ty (IntCC.Equal) x y))
-(rule (compose_icmp ty 2 false x y) (icmp ty (IntCC.UnsignedLessThan) x y))
-(rule (compose_icmp ty 2 true x y) (icmp ty (IntCC.SignedLessThan) x y))
-(rule (compose_icmp ty 3 false x y) (icmp ty (IntCC.UnsignedLessThanOrEqual) x y))
-(rule (compose_icmp ty 3 true x y) (icmp ty (IntCC.SignedLessThanOrEqual) x y))
-(rule (compose_icmp ty 4 false x y) (icmp ty (IntCC.UnsignedGreaterThan) x y))
-(rule (compose_icmp ty 4 true x y) (icmp ty (IntCC.SignedGreaterThan) x y))
-(rule (compose_icmp ty 5 false x y) (icmp ty (IntCC.UnsignedGreaterThanOrEqual) x y))
-(rule (compose_icmp ty 5 true x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
-(rule (compose_icmp ty 6 _ x y) (icmp ty (IntCC.NotEqual) x y))
-(rule (compose_icmp ty 7 _ _ _) (subsume (iconst_u ty 1)))
+;; Compose a comparison from its decomposed condition code. The first type
+;; is the comparison's result type, the second its operand (controlling) type.
+(decl compose_icmp (Type Type u64 bool Value Value) Value)
+(rule (compose_icmp bty _ 0 _ _ _) (subsume (all_zero bty)))
+(rule (compose_icmp _ ty 1 _ x y) (icmp ty (IntCC.Equal) x y))
+(rule (compose_icmp _ ty 2 false x y) (icmp ty (IntCC.UnsignedLessThan) x y))
+(rule (compose_icmp _ ty 2 true x y) (icmp ty (IntCC.SignedLessThan) x y))
+(rule (compose_icmp _ ty 3 false x y) (icmp ty (IntCC.UnsignedLessThanOrEqual) x y))
+(rule (compose_icmp _ ty 3 true x y) (icmp ty (IntCC.SignedLessThanOrEqual) x y))
+(rule (compose_icmp _ ty 4 false x y) (icmp ty (IntCC.UnsignedGreaterThan) x y))
+(rule (compose_icmp _ ty 4 true x y) (icmp ty (IntCC.SignedGreaterThan) x y))
+(rule (compose_icmp _ ty 5 false x y) (icmp ty (IntCC.UnsignedGreaterThanOrEqual) x y))
+(rule (compose_icmp _ ty 5 true x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
+(rule (compose_icmp _ ty 6 _ x y) (icmp ty (IntCC.NotEqual) x y))
+(rule (compose_icmp bty _ 7 _ _ _) (subsume (iconst_u bty 1)))
 
 (decl pure intcc_class (IntCC) u64)
 (rule (intcc_class (IntCC.UnsignedLessThan)) 1)
@@ -251,45 +253,45 @@
 ;; Pattern-match what LLVM emits today for 128-bit comparisons into actual
 ;; 128-bit comparisons. Platforms like x64 and aarch64 have more optimal
 ;; lowerings for 128-bit arithmetic than the default structure.
-(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
-                           (uge ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
-                           (uge ty a_hi b_hi)))
-      (uge ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+(rule (simplify (select _ (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (uge _ a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (uge _ a_hi b_hi)))
+      (uge $I128 (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
 
-(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
-                           (uge ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
-                           (sge ty a_hi b_hi)))
-      (sge ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+(rule (simplify (select _ (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (uge _ a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (sge _ a_hi b_hi)))
+      (sge $I128 (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
 
-(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
-                           (ugt ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
-                           (ugt ty a_hi b_hi)))
-      (ugt ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+(rule (simplify (select _ (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ugt _ a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (ugt _ a_hi b_hi)))
+      (ugt $I128 (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
 
-(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
-                           (ugt ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
-                           (sgt ty a_hi b_hi)))
-      (sgt ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+(rule (simplify (select _ (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ugt _ a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (sgt _ a_hi b_hi)))
+      (sgt $I128 (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
 
-(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
-                           (ule ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
-                           (ule ty a_hi b_hi)))
-      (ule ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+(rule (simplify (select _ (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ule _ a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (ule _ a_hi b_hi)))
+      (ule $I128 (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
 
-(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
-                           (ule ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
-                           (sle ty a_hi b_hi)))
-      (sle ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+(rule (simplify (select _ (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ule _ a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (sle _ a_hi b_hi)))
+      (sle $I128 (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
 
-(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
-                           (ult ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
-                           (ult ty a_hi b_hi)))
-      (ult ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+(rule (simplify (select _ (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ult _ a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (ult _ a_hi b_hi)))
+      (ult $I128 (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
 
-(rule (simplify (select ty (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
-                           (ult ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
-                           (slt ty a_hi b_hi)))
-      (slt ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+(rule (simplify (select _ (eq _   a_hi @ (value_type $I64) b_hi @ (value_type $I64))
+                           (ult _ a_lo @ (value_type $I64) b_lo @ (value_type $I64))
+                           (slt _ a_hi b_hi)))
+      (slt $I128 (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
 
 
 (rule (simplify (eq cty x (bxor (ty_int bty) x y))) (subsume (eq cty y (all_zero bty))))
@@ -300,120 +302,120 @@
 (rule (simplify (ule cty (isub ty x y) x)) (ule cty y x))
 
 ;; (x < y) ? x : y != x == x > y, for both signed and unsigned.
-(rule (simplify (ne cty (select ty (slt cty x y) x y) x)) (sgt cty x y))
-(rule (simplify (ne cty (select ty (ult cty x y) x y) x)) (ugt cty x y))
+(rule (simplify (ne ty (select ty (slt ty x y) x y) x)) (sgt ty x y))
+(rule (simplify (ne ty (select ty (ult ty x y) x y) x)) (ugt ty x y))
 
 (rule (simplify (ult cty (bnot ty x) (bnot ty y))) (ugt cty x y))
 (rule (simplify (slt cty (bnot ty x) (bnot ty y))) (sgt cty x y))
 
 ;; a < b ^^ a > b => (a ≠ b)
-(rule (simplify (bxor ty (sgt ty x y) (sgt ty y x))) (ne ty x y))
-(rule (simplify (bxor ty (sgt ty x y) (slt ty x y))) (ne ty x y))
-(rule (simplify (bxor ty (slt ty x y) (sgt ty x y))) (ne ty x y))
-(rule (simplify (bxor ty (slt ty x y) (slt ty y x))) (ne ty x y))
-(rule (simplify (bxor ty (ugt ty x y) (ugt ty y x))) (ne ty x y))
-(rule (simplify (bxor ty (ugt ty x y) (ult ty x y))) (ne ty x y))
-(rule (simplify (bxor ty (ult ty x y) (ugt ty x y))) (ne ty x y))
-(rule (simplify (bxor ty (ult ty x y) (ult ty y x))) (ne ty x y))
+(rule (simplify (bxor _ (sgt ty x y) (sgt ty y x))) (ne ty x y))
+(rule (simplify (bxor _ (sgt ty x y) (slt ty x y))) (ne ty x y))
+(rule (simplify (bxor _ (slt ty x y) (sgt ty x y))) (ne ty x y))
+(rule (simplify (bxor _ (slt ty x y) (slt ty y x))) (ne ty x y))
+(rule (simplify (bxor _ (ugt ty x y) (ugt ty y x))) (ne ty x y))
+(rule (simplify (bxor _ (ugt ty x y) (ult ty x y))) (ne ty x y))
+(rule (simplify (bxor _ (ult ty x y) (ugt ty x y))) (ne ty x y))
+(rule (simplify (bxor _ (ult ty x y) (ult ty y x))) (ne ty x y))
 
 ;; a < b && a > b = false
-(rule (simplify (band (ty_int_vec128 ty) (sgt ty x y) (slt ty x y))) (all_zero ty))
-(rule (simplify (band (ty_int_vec128 ty) (slt ty x y) (sgt ty x y))) (all_zero ty))
-(rule (simplify (band (ty_int_vec128 ty) (ugt ty x y) (ult ty x y))) (all_zero ty))
-(rule (simplify (band (ty_int_vec128 ty) (ult ty x y) (ugt ty x y))) (all_zero ty))
+(rule (simplify (band (ty_int_vec128 bty) (sgt ty x y) (slt ty x y))) (all_zero bty))
+(rule (simplify (band (ty_int_vec128 bty) (slt ty x y) (sgt ty x y))) (all_zero bty))
+(rule (simplify (band (ty_int_vec128 bty) (ugt ty x y) (ult ty x y))) (all_zero bty))
+(rule (simplify (band (ty_int_vec128 bty) (ult ty x y) (ugt ty x y))) (all_zero bty))
 (rule
-  (simplify (band ty (sgt ty x (iconst_s _ y)) (ult ty x (iconst_s _ y))))
+  (simplify (band bty (sgt _ x (iconst_s _ y)) (ult _ x (iconst_s _ y))))
   (if-let true (i64_gt_eq y 0))
-  (all_zero ty))
+  (all_zero bty))
 (rule
-  (simplify (band ty (sgt ty (iconst_s _ x) y) (ult ty (iconst_s _ x) y)))
+  (simplify (band bty (sgt _ (iconst_s _ x) y) (ult _ (iconst_s _ x) y)))
   (if-let true (i64_lt x 0))
-  (all_zero ty))
+  (all_zero bty))
 (rule
-  (simplify (band ty (slt ty x (iconst_s _ y)) (ugt ty x (iconst_s _ y))))
+  (simplify (band bty (slt _ x (iconst_s _ y)) (ugt _ x (iconst_s _ y))))
   (if-let true (i64_lt y 0))
-  (all_zero ty))
+  (all_zero bty))
 (rule
-  (simplify (band ty (slt ty (iconst_s _ x) y) (ugt ty (iconst_s _ x) y)))
+  (simplify (band bty (slt _ (iconst_s _ x) y) (ugt _ (iconst_s _ x) y)))
   (if-let true (i64_gt_eq x 0))
-  (all_zero ty))
+  (all_zero bty))
 (rule
-  (simplify (band ty (ugt ty x (iconst_s _ y)) (slt ty x (iconst_s _ y))))
+  (simplify (band bty (ugt _ x (iconst_s _ y)) (slt _ x (iconst_s _ y))))
   (if-let true (i64_lt y 0))
-  (all_zero ty))
+  (all_zero bty))
 (rule
-  (simplify (band ty (ugt ty (iconst_s _ x) y) (slt ty (iconst_s _ x) y)))
+  (simplify (band bty (ugt _ (iconst_s _ x) y) (slt _ (iconst_s _ x) y)))
   (if-let true (i64_gt_eq x 0))
-  (all_zero ty))
+  (all_zero bty))
 (rule
-  (simplify (band ty (ult ty x (iconst_s _ y)) (sgt ty x (iconst_s _ y))))
+  (simplify (band bty (ult _ x (iconst_s _ y)) (sgt _ x (iconst_s _ y))))
   (if-let true (i64_gt_eq y 0))
-  (all_zero ty))
+  (all_zero bty))
 (rule
-  (simplify (band ty (ult ty (iconst_s _ x) y) (sgt ty (iconst_s _ x) y)))
+  (simplify (band bty (ult _ (iconst_s _ x) y) (sgt _ (iconst_s _ x) y)))
   (if-let true (i64_lt x 0))
-  (all_zero ty))
+  (all_zero bty))
 
 ;; (x < y) & (x ≠ -1) = (x < y)
 (rule
-  (simplify (band ty (ne ty x (iconst_s _ -1)) (ugt ty y x)))
+  (simplify (band _ (ne ty x (iconst_s _ -1)) (ugt ty y x)))
    (ult ty x y))
 (rule
-  (simplify (band ty (ne ty x (iconst_s _ -1)) (ult ty x z)))
+  (simplify (band _ (ne ty x (iconst_s _ -1)) (ult ty x z)))
    (ult ty x z))
 (rule
-  (simplify (band ty (ne ty (iconst_s _ -1) x) (ugt ty y x)))
+  (simplify (band _ (ne ty (iconst_s _ -1) x) (ugt ty y x)))
    (ult ty x y))
 (rule
-  (simplify (band ty (ne ty (iconst_s _ -1) x) (ult ty x z)))
+  (simplify (band _ (ne ty (iconst_s _ -1) x) (ult ty x z)))
    (ult ty x z))
 (rule
-  (simplify (band ty (ugt ty x y) (ne ty y (iconst_s _ -1))))
+  (simplify (band _ (ugt ty x y) (ne ty y (iconst_s _ -1))))
    (ult ty y x))
 (rule
-  (simplify (band ty (ugt ty x y) (ne ty (iconst_s _ -1) y)))
+  (simplify (band _ (ugt ty x y) (ne ty (iconst_s _ -1) y)))
    (ult ty y x))
 (rule
-  (simplify (band ty (ult ty x y) (ne ty x (iconst_s _ -1))))
+  (simplify (band _ (ult ty x y) (ne ty x (iconst_s _ -1))))
    (ult ty x y))
 (rule
-  (simplify (band ty (ult ty x y) (ne ty (iconst_s _ -1) x)))
+  (simplify (band _ (ult ty x y) (ne ty (iconst_s _ -1) x)))
    (ult ty x y))
 
 ;; icmp on select with two constant inputs compared with one of the two
 ;; constants can directly use the inner select condition.
 ;; See: https://github.com/bytecodealliance/wasmtime/issues/11578
 (rule (simplify (eq _
-  (select select_ty inner_cond @ (value_type inner_ty)
+  (select _ inner_cond @ (value_type inner_ty)
     (iconst_u _ k1)
     (iconst_u _ k2))
   (iconst_u _ k1)))
   (if-let false (u64_eq k1 k2))
-  (ne select_ty inner_cond (all_zero inner_ty)))
+  (ne inner_ty inner_cond (all_zero inner_ty)))
 
 (rule (simplify (eq _
-  (select select_ty inner_cond @ (value_type inner_ty)
+  (select _ inner_cond @ (value_type inner_ty)
     (iconst_u _ k1)
     (iconst_u _ k2))
   (iconst_u _ k2)))
   (if-let false (u64_eq k1 k2))
-  (eq select_ty inner_cond (all_zero inner_ty)))
+  (eq inner_ty inner_cond (all_zero inner_ty)))
 
 (rule (simplify (ne _
-  (select select_ty inner_cond @ (value_type inner_ty)
+  (select _ inner_cond @ (value_type inner_ty)
     (iconst_u _ k1)
     (iconst_u _ k2))
   (iconst_u _ k1)))
   (if-let false (u64_eq k1 k2))
-  (eq select_ty inner_cond (all_zero inner_ty)))
+  (eq inner_ty inner_cond (all_zero inner_ty)))
 
 (rule (simplify (ne _
-  (select select_ty inner_cond @ (value_type inner_ty)
+  (select _ inner_cond @ (value_type inner_ty)
     (iconst_u _ k1)
     (iconst_u _ k2))
   (iconst_u _ k2)))
   (if-let false (u64_eq k1 k2))
-  (ne select_ty inner_cond (all_zero inner_ty)))
+  (ne inner_ty inner_cond (all_zero inner_ty)))
 
 ;;;;; Boolean-context simplifications for `ctz` and `clz` ;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -460,50 +462,50 @@
 ;; `brif (ctz X) bt be` branches when `ctz(X) != 0`, i.e. LSB(X) == 0.
 (rule (simplify_skeleton (brif (ctz x_ty X) _ _))
       (replace_branch_cond
-        (eq $I8 (band x_ty X (iconst_u x_ty 1)) (all_zero x_ty))))
+        (eq x_ty (band x_ty X (iconst_u x_ty 1)) (all_zero x_ty))))
 
 ;; `brif (clz X) bt be` branches when `clz(X) != 0`, i.e. MSB(X) == 0.
 (rule (simplify_skeleton (brif (clz x_ty X) _ _))
-      (replace_branch_cond (sge $I8 X (all_zero x_ty))))
+      (replace_branch_cond (sge x_ty X (all_zero x_ty))))
 
 ;; Same when an `ireduce` (truncation) sits between the count and the
 ;; brif. The count is in [0, bitwidth] so the truncation is lossless.
 (rule (simplify_skeleton (brif (ireduce _ (ctz x_ty x)) _ _))
       (replace_branch_cond
-        (eq $I8 (band x_ty x (iconst_u x_ty 1)) (all_zero x_ty))))
+        (eq x_ty (band x_ty x (iconst_u x_ty 1)) (all_zero x_ty))))
 
 (rule (simplify_skeleton (brif (ireduce _ (clz x_ty x)) _ _))
-      (replace_branch_cond (sge $I8 x (all_zero x_ty))))
+      (replace_branch_cond (sge x_ty x (all_zero x_ty))))
 
 ;; ~x == x --> 0
-(rule (simplify (eq ty (bnot cty x) x)) (subsume (all_zero ty)))
+(rule (simplify (has_type ty (eq _ (bnot cty x) x))) (subsume (all_zero ty)))
 
 ;; ~x != x --> 1
-(rule (simplify (ne ty (bnot cty x) x)) (subsume (cmp_true ty)))
+(rule (simplify (has_type ty (ne _ (bnot cty x) x))) (subsume (cmp_true ty)))
 
 ;; x >=u (x - y) --> x >=u y
 (rule (simplify (uge rty x (isub ty x y))) (uge rty x y))
 (rule (simplify (ult rty x (isub ty x y))) (ult rty x y))
 
 ;; x >=u (x >>u y) --> true
-(rule (simplify (uge rty x (ushr ty x y))) (cmp_true rty))
-(rule (simplify (ule rty (ushr ty x y) x)) (cmp_true rty))
-(rule (simplify (ugt rty (ushr ty x y) x)) (subsume (all_zero rty)))
-(rule (simplify (ult rty x (ushr ty x y))) (subsume (all_zero rty)))
+(rule (simplify (has_type rty (uge _ x (ushr ty x y)))) (cmp_true rty))
+(rule (simplify (has_type rty (ule _ (ushr ty x y) x))) (cmp_true rty))
+(rule (simplify (has_type rty (ugt _ (ushr ty x y) x))) (subsume (all_zero rty)))
+(rule (simplify (has_type rty (ult _ x (ushr ty x y)))) (subsume (all_zero rty)))
 
 ;; smin(x, y) > smax(x, y) --> false
-(rule (simplify (sgt ty (smin cty x y) (smax cty x y))) (all_zero ty))
+(rule (simplify (has_type ty (sgt _ (smin cty x y) (smax cty x y)))) (all_zero ty))
 
 ;; umin(x, y) > umax(x, y) --> false
-(rule (simplify (ugt ty (umin cty x y) (umax cty x y))) (all_zero ty))
+(rule (simplify (has_type ty (ugt _ (umin cty x y) (umax cty x y)))) (all_zero ty))
 
 ;; smin(x, y) <= smax(x, y) --> true
-(rule (simplify (sle ty (smin cty x y) (smax cty x y))) (cmp_true ty))
-(rule (simplify (sle ty (smin cty x y) (smax cty y x))) (cmp_true ty))
+(rule (simplify (has_type ty (sle _ (smin cty x y) (smax cty x y)))) (cmp_true ty))
+(rule (simplify (has_type ty (sle _ (smin cty x y) (smax cty y x)))) (cmp_true ty))
 
 ;; umin(x, y) <= umax(x, y) --> true
-(rule (simplify (ule ty (umin cty x y) (umax cty x y))) (cmp_true ty))
-(rule (simplify (ule ty (umin cty x y) (umax cty y x))) (cmp_true ty))
+(rule (simplify (has_type ty (ule _ (umin cty x y) (umax cty x y)))) (cmp_true ty))
+(rule (simplify (has_type ty (ule _ (umin cty x y) (umax cty y x)))) (cmp_true ty))
 
 ;; smin(x, y) == smax(x, y) --> x == y
 (rule (simplify (eq ty (smin cty x y) (smax cty x y))) (eq ty x y))
@@ -547,16 +549,16 @@
       (subsume (eq ty x y)))
 
 ;; (x >=s 0) & (x <s N) --> x <u N, 0 < N < 2^(B - 1)
-(rule (simplify (band rty
-                     (sge rty x (all_zero ty))
-                     (slt rty x n @ (iconst_s (ty_int ty) limit))))
+(rule (simplify (band _
+                     (sge ty x (all_zero ty))
+                     (slt ty x n @ (iconst_s (ty_int ty) limit))))
       (if-let true (i64_gt limit 0))
-      (ult rty x n))
-(rule (simplify (band rty
-                     (slt rty x n @ (iconst_s (ty_int ty) limit))
-                     (sge rty x (all_zero ty))))
+      (ult ty x n))
+(rule (simplify (band _
+                     (slt ty x n @ (iconst_s (ty_int ty) limit))
+                     (sge ty x (all_zero ty))))
       (if-let true (i64_gt limit 0))
-      (ult rty x n))
+      (ult ty x n))
 
 ;; x == ((x + (y >>u (B - k))) & -2^k) --> (x & (2^k - 1)) == 0
 (rule (simplify (eq rty x
@@ -607,10 +609,10 @@
                       (all_zero ty))))
 
 ;; (x == y) ^ 1 --> x != y
-(rule (simplify (bxor ty
-                      (eq ty x @ (value_type cty) y @ (value_type cty))
-                      (iconst_u ty 1)))
-      (ne ty x y))
+(rule (simplify (bxor bty
+                      (eq cty x y)
+                      (iconst_u bty 1)))
+      (ne cty x y))
 
 ;; x >u (x - 1) --> x != 0
 (rule (simplify (ugt ty x (isub cty x (iconst_u cty 1))))
@@ -623,6 +625,6 @@
       (subsume (eq ty x y)))
 
 ;; (x != 0) | (y != 0) --> (x | y) != 0
-(rule (simplify (bor ty (ne ty x (iconst_u cty 0)) (ne ty y (iconst_u cty 0)))) (ne ty (bor cty x y) (all_zero cty)))
+(rule (simplify (bor _ (ne cty x (iconst_u cty 0)) (ne cty y (iconst_u cty 0)))) (ne cty (bor cty x y) (all_zero cty)))
 ;; (x == 0) & (y == 0) --> (x | y) == 0
-(rule (simplify (band ty (eq ty x (iconst_u cty 0)) (eq ty y (iconst_u cty 0)))) (eq ty (bor cty x y) (all_zero cty)))
+(rule (simplify (band _ (eq cty x (iconst_u cty 0)) (eq cty y (iconst_u cty 0)))) (eq cty (bor cty x y) (all_zero cty)))
