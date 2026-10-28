@@ -24,19 +24,23 @@ use crate::component::{
     TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
     TypeVariantIndex, VariantInfo,
 };
-use crate::fact::signature::Signature;
+use crate::fact::signature::{Signature, SignaturePart};
 use crate::fact::transcode::Transcoder;
 use crate::fact::{
     AdapterData, Body, Function, FunctionId, Helper, HelperLocation, HelperType,
-    LinearMemoryOptions, Module, Options,
+    LinearMemoryOptions, Lowering, Module, Options,
 };
 use crate::prelude::*;
-use crate::{FuncIndex, GlobalIndex, IndexType, NUM_COMPONENT_CONTEXT_SLOTS, Trap};
+use crate::{
+    FuncIndex, GlobalIndex, IndexType, NUM_COMPONENT_CONTEXT_SLOTS, Trap, WasmFieldType,
+    WasmStorageType, WasmValType,
+};
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
 use wasm_encoder::{
-    BlockType, Catch, Encode, Instruction, Instruction::*, MemArg, MemArgTarget, ValType,
+    BlockType, Catch, Encode, HeapType, Instruction, Instruction::*, MemArg, MemArgTarget, RefType,
+    ValType,
 };
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
@@ -85,8 +89,12 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
         module: &'b mut Module<'a>,
         adapter: &AdapterData,
     ) -> (Compiler<'a, 'b>, Signature, Signature) {
-        let lower_sig = module.types.signature(&adapter.lower);
-        let lift_sig = module.types.signature(&adapter.lift);
+        let lower_sig = module
+            .types
+            .signature(&mut module.core_types, &adapter.lower.options);
+        let lift_sig = module
+            .types
+            .signature(&mut module.core_types, &adapter.lift.options);
         let ty = module
             .core_types
             .function(&lower_sig.params, &lower_sig.results);
@@ -134,9 +142,11 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
     // This allows the host to delay copying the parameters until the callee
     // signals readiness by clearing its backpressure flag.
     let async_start_adapter = |module: &mut Module| {
-        let sig = module
-            .types
-            .async_start_signature(&adapter.lower, &adapter.lift);
+        let sig = module.types.async_start_signature(
+            &mut module.core_types,
+            &adapter.lower,
+            &adapter.lift,
+        );
         let ty = module.core_types.function(&sig.params, &sig.results);
         let result = module.funcs.push(Function::new(
             Some(format!("[async-start]{}", adapter.name)),
@@ -158,9 +168,11 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
     // callee to caller when that intrinsic is called rather than when the
     // callee task fully completes (which may happen much later).
     let async_return_adapter = |module: &mut Module| {
-        let sig = module
-            .types
-            .async_return_signature(&adapter.lower, &adapter.lift);
+        let sig = module.types.async_return_signature(
+            &mut module.core_types,
+            &adapter.lower,
+            &adapter.lift,
+        );
         let ty = module.core_types.function(&sig.params, &sig.results);
         let result = module.funcs.push(Function::new(
             Some(format!("[async-return]{}", adapter.name)),
@@ -184,6 +196,13 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
     }
 
     assert!(module.tunables.concurrency_support);
+
+    // The host side holds parameters and results across suspension points,
+    // where GC values would need rooting, and bakes in the linear memory
+    // flat param/result limits, which a GC-lowered function cannot spill past.
+    if adapter.lower.options.data_model.is_gc() || adapter.lift.options.data_model.is_gc() {
+        todo!("CM+GC: the component-model-async ABI does not support the GC data model");
+    }
 
     // All other cases are mediated by the host: the caller and/or callee use
     // the async ABI, or the callee has an async function type (in which case
@@ -230,7 +249,13 @@ pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper
         HelperLocation::Stack => {
             src_flat = module
                 .types
-                .flatten_types(&helper.src.opts, usize::MAX, [helper.src.ty])
+                .flatten_types(
+                    &mut module.core_types,
+                    &helper.src.opts,
+                    SignaturePart::Neither,
+                    usize::MAX,
+                    [helper.src.ty],
+                )
                 .unwrap()
                 .iter()
                 .enumerate()
@@ -252,7 +277,14 @@ pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper
                 offset: 0,
             })
         }
-        HelperLocation::StructField | HelperLocation::ArrayElement => todo!("CM+GC"),
+        HelperLocation::GcRef(ty) => {
+            nlocals += 1;
+            Source::GcRef(GcRefSrc {
+                opts: &helper.src.opts,
+                local: 0,
+                ty,
+            })
+        }
     };
     let dst_flat;
     let dst = match helper.dst.loc {
@@ -261,7 +293,13 @@ pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper
         HelperLocation::Stack => {
             dst_flat = module
                 .types
-                .flatten_types(&helper.dst.opts, usize::MAX, [helper.dst.ty])
+                .flatten_types(
+                    &mut module.core_types,
+                    &helper.dst.opts,
+                    SignaturePart::Neither,
+                    usize::MAX,
+                    [helper.dst.ty],
+                )
                 .unwrap();
             Destination::Stack(&dst_flat, &helper.dst.opts)
         }
@@ -278,7 +316,10 @@ pub(super) fn compile_helper(module: &mut Module<'_>, result: FunctionId, helper
                 offset: 0,
             })
         }
-        HelperLocation::StructField | HelperLocation::ArrayElement => todo!("CM+GC"),
+        HelperLocation::GcRef(ty) => Destination::GcRef(GcRefDst {
+            opts: &helper.dst.opts,
+            ty,
+        }),
     };
     let mut compiler = Compiler {
         types: module.types,
@@ -310,9 +351,15 @@ enum Source<'a> {
     /// structure.
     Memory(Memory<'a>),
 
+    /// This value is a whole GC object, held in a single local as a
+    /// reference to it.
+    ///
+    /// This is how a GC-lowered aggregate arrives as a parameter or result:
+    /// one reference, rather than one core value per field.
+    GcRef(GcRefSrc<'a>),
+
     /// This value is stored in a GC struct field described by the `GcStruct`
     /// structure.
-    #[allow(dead_code, reason = "CM+GC is still WIP")]
     Struct(GcStruct<'a>),
 
     /// This value is stored in a GC array element described by the `GcArray`
@@ -333,9 +380,17 @@ enum Destination<'a> {
     /// This value is to be placed in linear memory described by `Memory`.
     Memory(Memory<'a>),
 
+    /// This value is a whole GC object, to be left on the operand stack as a
+    /// single reference. See `Source::GcRef`.
+    GcRef(GcRefDst<'a>),
+
     /// This value is to be placed in a GC struct field described by the
     /// `GcStruct` structure.
-    #[allow(dead_code, reason = "CM+GC is still WIP")]
+    ///
+    /// The value is left on the operand stack for the enclosing `struct.new`,
+    /// so `translate_*` emits no store. This is distinct from `Stack` because
+    /// `stack_set` cannot describe a field: it panics on references, and a
+    /// packed `i8`/`i16` field has no `ValType`.
     Struct(GcStruct<'a>),
 
     /// This value is to be placed in a GC array element described by the
@@ -373,10 +428,39 @@ impl<'a> Memory<'a> {
     }
 }
 
+/// Representation of a whole GC object that a value is read from, held as a
+/// reference in a single local.
+#[derive(Clone, Copy)]
+struct GcRefSrc<'a> {
+    opts: &'a Options,
+    /// The local holding the reference.
+    local: u32,
+    /// The adapter-local type of the reference.
+    ty: RefType,
+}
+
+/// Representation of a whole GC object that a value is written to.
+///
+/// Unlike `GcRefSrc` there is no local, because the object does not exist
+/// yet: its fields are pushed on the operand stack and the enclosing
+/// `struct.new` allocates it.
+#[derive(Clone, Copy)]
+struct GcRefDst<'a> {
+    opts: &'a Options,
+    /// The adapter-local type of the reference to produce.
+    ty: RefType,
+}
+
 /// Representation of where a value is coming from or going to in a GC struct.
 struct GcStruct<'a> {
     opts: &'a Options,
-    // TODO: more fields to come in the future.
+    /// The local holding the struct reference, or `None` for a destination
+    /// whose `struct.new` has not run yet.
+    local: Option<u32>,
+    /// The adapter-local type index of the struct type being accessed.
+    ty: u32,
+    /// The field of the struct being accessed.
+    field: u32,
 }
 
 /// Representation of where a value is coming from or going to in a GC array.
@@ -498,7 +582,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             &adapter.name,
             &lower_sig.params,
             match adapter.lift.options.data_model {
-                DataModel::Gc {} => todo!("CM+GC"),
+                DataModel::Gc {} => unreachable!("GC + async is rejected in `compile`"),
                 DataModel::LinearMemory(LinearMemoryOptions { memory, .. }) => memory.map(|m| m.0),
             },
         );
@@ -527,19 +611,19 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // depending on `prepare_sync`
         let result_types = &self.types[self.types[adapter.lower.ty].results].types;
         if prepare_sync {
-            self.instruction(I32Const(
-                i32::try_from(
-                    self.types
-                        .flatten_types(
-                            &adapter.lower.options,
-                            usize::MAX,
-                            result_types.iter().copied(),
-                        )
-                        .map(|v| v.len())
-                        .unwrap_or(usize::try_from(i32::MAX).unwrap()),
+            // A spill to linear memory is signalled with this sentinel.
+            let flat_results = self
+                .types
+                .flatten_types(
+                    &mut self.module.core_types,
+                    &adapter.lower.options,
+                    SignaturePart::Results,
+                    usize::MAX,
+                    result_types.iter().copied(),
                 )
-                .unwrap(),
-            ));
+                .map(|v| v.len())
+                .unwrap_or(usize::try_from(i32::MAX).unwrap());
+            self.instruction(I32Const(i32::try_from(flat_results).unwrap()));
         } else {
             if result_types.len() > 0 {
                 self.instruction(I32Const(PREPARE_ASYNC_WITH_RESULT.cast_signed()));
@@ -841,16 +925,24 @@ impl<'a, 'b> Compiler<'a, 'b> {
             DataModel::LinearMemory(_) if adapter.lower.options.async_ => MAX_FLAT_ASYNC_PARAMS,
             DataModel::LinearMemory(_) => MAX_FLAT_PARAMS,
         };
-        let src_flat =
-            self.types
-                .flatten_types(lower_opts, max_flat_params, src_tys.iter().copied());
+        let src_flat = self.types.flatten_types(
+            &mut self.module.core_types,
+            lower_opts,
+            SignaturePart::Params,
+            max_flat_params,
+            src_tys.iter().copied(),
+        );
         let max_dst_flat_params = match lift_opts.data_model {
             DataModel::Gc {} => usize::MAX,
             DataModel::LinearMemory(_) => MAX_FLAT_PARAMS,
         };
-        let dst_flat =
-            self.types
-                .flatten_types(lift_opts, max_dst_flat_params, dst_tys.iter().copied());
+        let dst_flat = self.types.flatten_types(
+            &mut self.module.core_types,
+            lift_opts,
+            SignaturePart::Params,
+            max_dst_flat_params,
+            dst_tys.iter().copied(),
+        );
 
         let src = if let Some(flat) = &src_flat {
             Source::Stack(Stack {
@@ -923,12 +1015,16 @@ impl<'a, 'b> Compiler<'a, 'b> {
         let lift_opts = &adapter.lift.options;
         let lower_opts = &adapter.lower.options;
 
-        let src_flat = self
-            .types
-            .flatten_lifting_types(lift_opts, src_tys.iter().copied());
-        let dst_flat = self
-            .types
-            .flatten_lowering_types(lower_opts, dst_tys.iter().copied());
+        let src_flat = self.types.flatten_lifting_types(
+            &mut self.module.core_types,
+            lift_opts,
+            src_tys.iter().copied(),
+        );
+        let dst_flat = self.types.flatten_lowering_types(
+            &mut self.module.core_types,
+            lower_opts,
+            dst_tys.iter().copied(),
+        );
 
         let src = if src_flat.is_some() {
             Source::Stack(Stack {
@@ -1149,17 +1245,21 @@ impl<'a, 'b> Compiler<'a, 'b> {
             // the results.
             None => {
                 let src_loc = match src {
+                    // A whole GC object is passed to the helper as the
+                    // reference it is.
+                    Source::GcRef(r) => {
+                        self.instruction(LocalGet(r.local));
+                        HelperLocation::GcRef(r.ty)
+                    }
                     // If the source is on the stack then `stack_get` is used to
                     // convert everything to the appropriate flat representation
                     // for the source type.
                     Source::Stack(stack) => {
-                        for (i, ty) in stack
-                            .opts
-                            .flat_types(src_ty, self.types)
-                            .unwrap()
-                            .iter()
-                            .enumerate()
-                        {
+                        let Lowering::Scalars(flat) = stack.opts.lowering(src_ty, self.types)
+                        else {
+                            unreachable!("a GC-lowered aggregate is a `Source::GcRef`")
+                        };
+                        for (i, ty) in flat.iter().enumerate() {
                             let stack = stack.slice(i..i + 1);
                             self.stack_get(&stack, (*ty).into());
                         }
@@ -1173,15 +1273,24 @@ impl<'a, 'b> Compiler<'a, 'b> {
                         self.push_mem_addr(mem);
                         HelperLocation::Memory
                     }
-                    Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+                    // Read the aggregate's reference out of its field and pass
+                    // that along.
+                    Source::Struct(s) => {
+                        let ty = self.gc_field_ref_type(s);
+                        self.struct_get(s);
+                        HelperLocation::GcRef(ty)
+                    }
+                    Source::Array(_) => todo!("CM+GC"),
                 };
                 let dst_loc = match dst {
+                    Destination::GcRef(r) => HelperLocation::GcRef(r.ty),
                     Destination::Stack(..) => HelperLocation::Stack,
                     Destination::Memory(mem) => {
                         self.push_mem_addr(mem);
                         HelperLocation::Memory
                     }
-                    Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+                    Destination::Struct(s) => HelperLocation::GcRef(self.gc_field_ref_type(s)),
+                    Destination::Array(_) => todo!("CM+GC"),
                 };
                 // Generate a `FunctionId` corresponding to the `Helper`
                 // configuration that is necessary here. This will ideally be a
@@ -1215,7 +1324,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 if let Destination::Stack(tys, opts) = dst {
                     let flat = self
                         .types
-                        .flatten_types(opts, usize::MAX, [*dst_ty])
+                        .flatten_types(
+                            &mut self.module.core_types,
+                            opts,
+                            SignaturePart::Neither,
+                            usize::MAX,
+                            [*dst_ty],
+                        )
                         .unwrap();
                     assert_eq!(flat.len(), tys.len());
                     let locals = flat
@@ -1253,14 +1368,16 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match src {
             Source::Memory(mem) => self.i32_load8u(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I32),
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => self.struct_get_u(s),
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         self.instruction(Select);
 
         match dst {
             Destination::Memory(mem) => self.i32_store8(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1281,7 +1398,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
             Source::Stack(stack) => {
                 self.stack_get(stack, ValType::I32);
             }
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => {
+                self.struct_get_u(s);
+                needs_mask = mask != 0xff;
+            }
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         if needs_mask {
             self.instruction(I32Const(i32::from(mask)));
@@ -1290,7 +1411,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match dst {
             Destination::Memory(mem) => self.i32_store8(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1304,12 +1426,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.stack_get(stack, ValType::I32);
                 self.instruction(I32Extend8S);
             }
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => self.struct_get_s(s),
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         match dst {
             Destination::Memory(mem) => self.i32_store8(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1330,7 +1454,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
             Source::Stack(stack) => {
                 self.stack_get(stack, ValType::I32);
             }
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => {
+                self.struct_get_u(s);
+                needs_mask = mask != 0xffff;
+            }
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         if needs_mask {
             self.instruction(I32Const(i32::from(mask)));
@@ -1339,7 +1467,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match dst {
             Destination::Memory(mem) => self.i32_store16(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1353,12 +1482,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.stack_get(stack, ValType::I32);
                 self.instruction(I32Extend16S);
             }
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => self.struct_get_s(s),
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         match dst {
             Destination::Memory(mem) => self.i32_store16(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1373,7 +1504,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match src {
             Source::Memory(mem) => self.i32_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I32),
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => self.struct_get(s),
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         if mask != 0xffffffff {
             self.instruction(I32Const(mask as i32));
@@ -1382,7 +1514,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match dst {
             Destination::Memory(mem) => self.i32_store(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1393,12 +1526,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match src {
             Source::Memory(mem) => self.i32_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I32),
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => self.struct_get(s),
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         match dst {
             Destination::Memory(mem) => self.i32_store(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1409,12 +1544,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match src {
             Source::Memory(mem) => self.i64_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I64),
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => self.struct_get(s),
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         match dst {
             Destination::Memory(mem) => self.i64_store(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I64),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1425,12 +1562,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match src {
             Source::Memory(mem) => self.i64_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I64),
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => self.struct_get(s),
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         match dst {
             Destination::Memory(mem) => self.i64_store(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I64),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1441,12 +1580,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match src {
             Source::Memory(mem) => self.f32_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::F32),
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => self.struct_get(s),
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         match dst {
             Destination::Memory(mem) => self.f32_store(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::F32),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1457,12 +1598,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match src {
             Source::Memory(mem) => self.f64_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::F64),
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => self.struct_get(s),
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         match dst {
             Destination::Memory(mem) => self.f64_store(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::F64),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -1471,7 +1614,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match src {
             Source::Memory(mem) => self.i32_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I32),
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::Struct(s) => self.struct_get(s),
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
         }
         let local = self.local_set_new_tmp(ValType::I32);
 
@@ -1515,7 +1659,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.i32_store(mem);
             }
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::Struct(_) => {}
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
         }
 
         self.free_temp_local(local);
@@ -1549,7 +1694,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.ptr_load(mem);
                 self.ptr_load(&mem.bump(src_mem_opts.ptr_size().into()));
             }
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::GcRef(_) | Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
         }
         let src_len = self.local_set_new_tmp(src_mem_opts.ptr());
         let src_ptr = self.local_set_new_tmp(src_mem_opts.ptr());
@@ -1694,7 +1839,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.instruction(LocalGet(dst_str.len.idx));
                 self.ptr_store(&mem.bump(dst_mem_opts.ptr_size().into()));
             }
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::GcRef(_) | Destination::Struct(_) | Destination::Array(_) => {
+                todo!("CM+GC")
+            }
         }
 
         self.free_temp_local(src_str.ptr);
@@ -2472,7 +2619,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.ptr_load(mem);
                 self.ptr_load(&mem.bump(src_mem_opts.ptr_size().into()));
             }
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::GcRef(_) | Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
         }
         let src_len = self.local_set_new_tmp(src_mem_opts.ptr());
         let src_ptr = self.local_set_new_tmp(src_mem_opts.ptr());
@@ -2604,7 +2751,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 );
                 self.ptr_store(&mem.bump(seq.dst_mem_opts.ptr_size().into()));
             }
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::GcRef(_) | Destination::Struct(_) | Destination::Array(_) => {
+                todo!("CM+GC")
+            }
         }
 
         self.free_temp_local(seq.src_len);
@@ -2997,15 +3146,59 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // TODO: subtyping
         assert_eq!(src_ty.types.len(), dst_ty.types.len());
 
+        // A nested tuple arrives as a field of its parent; treat it as the
+        // whole object that field refers to.
+        let (nested_src, src_local) = self.nested_gc_ref_src(src).unzip();
+        let src = nested_src.as_ref().unwrap_or(src);
+        let nested_dst = self.nested_gc_ref_dst(dst);
+        let dst = nested_dst.as_ref().unwrap_or(dst);
+
         let srcs = src
-            .record_field_srcs(self.types, src_ty.types.iter().copied())
+            .aggregate_field_srcs(self.types, src_ty.types.iter().copied())
             .zip(src_ty.types.iter());
-        let dsts = dst
-            .record_field_dsts(self.types, dst_ty.types.iter().copied())
-            .zip(dst_ty.types.iter());
-        for ((src, src_ty), (dst, dst_ty)) in srcs.zip(dsts) {
+        let (dsts, dst_struct) = dst.aggregate_field_dsts(self.types, dst_ty.types.iter().copied());
+        for ((src, src_ty), (dst, dst_ty)) in srcs.zip(dsts.zip(dst_ty.types.iter())) {
             self.translate(src_ty, &src, dst_ty, &dst);
         }
+
+        if let Some(ty) = dst_struct {
+            self.instruction(StructNew(ty));
+        }
+
+        if let Some(local) = src_local {
+            self.free_temp_local(local);
+        }
+    }
+
+    /// If `src` is a struct field holding a whole GC object, read its reference
+    /// into a temporary local and return the object, plus that local for the
+    /// caller to free once done.
+    fn nested_gc_ref_src<'c>(&mut self, src: &Source<'c>) -> Option<(Source<'c>, TempLocal)> {
+        let Source::Struct(s) = src else {
+            return None;
+        };
+        let ty = self.gc_field_ref_type(s);
+        self.struct_get(s);
+        let local = self.local_set_new_tmp(ValType::Ref(ty));
+        let src = Source::GcRef(GcRefSrc {
+            opts: s.opts,
+            local: local.idx,
+            ty,
+        });
+        Some((src, local))
+    }
+
+    /// If `dst` is a struct field to receive a whole GC object, return the
+    /// object. Its `struct.new` leaves the reference on the operand stack for
+    /// the parent's `struct.new`.
+    fn nested_gc_ref_dst<'c>(&self, dst: &Destination<'c>) -> Option<Destination<'c>> {
+        let Destination::Struct(s) = dst else {
+            return None;
+        };
+        Some(Destination::GcRef(GcRefDst {
+            opts: s.opts,
+            ty: self.gc_field_ref_type(s),
+        }))
     }
 
     fn translate_fixed_length_list(
@@ -3185,7 +3378,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 DiscriminantSize::Size2 => self.i32_load16u(mem),
                 DiscriminantSize::Size4 => self.i32_load(mem),
             },
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::GcRef(_) | Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
         }
         let tmp = self.local_tee_new_tmp(ValType::I32);
 
@@ -3211,7 +3404,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
                     DiscriminantSize::Size4 => self.i32_store(mem),
                 }
             }
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::GcRef(_) | Destination::Struct(_) | Destination::Array(_) => {
+                todo!("CM+GC")
+            }
         }
         self.free_temp_local(tmp);
     }
@@ -3316,7 +3511,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 }
             },
             Destination::Memory(_) => BlockType::Empty,
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::GcRef(_) | Destination::Struct(_) | Destination::Array(_) => {
+                todo!("CM+GC")
+            }
         };
         self.instruction(Block(outer_block_ty));
 
@@ -3342,7 +3539,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 DiscriminantSize::Size2 => self.i32_load16u(mem),
                 DiscriminantSize::Size4 => self.i32_load(mem),
             },
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::GcRef(_) | Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
         }
 
         // Generate the `br_table` for the discriminant. Each case has an
@@ -3381,7 +3578,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
                     DiscriminantSize::Size2 => self.i32_store16(mem),
                     DiscriminantSize::Size4 => self.i32_store(mem),
                 },
-                Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+                Destination::GcRef(_) | Destination::Struct(_) | Destination::Array(_) => {
+                    todo!("CM+GC")
+                }
             }
 
             let src_payload = src.payload_src(self.types, src_info, src_ty);
@@ -3529,7 +3728,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match src {
             Source::Memory(mem) => self.i32_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I32),
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::GcRef(_) | Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
         }
         self.instruction(I32Const(src_ty as i32));
         if let Some(dst_ty) = dst_ty {
@@ -3539,7 +3738,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
         match dst {
             Destination::Memory(mem) => self.i32_store(mem),
             Destination::Stack(stack, _) => self.stack_set(stack, ValType::I32),
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::GcRef(_) | Destination::Struct(_) | Destination::Array(_) => {
+                todo!("CM+GC")
+            }
         }
     }
 
@@ -4304,9 +4505,97 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn push_dst_addr(&mut self, dst: &Destination) {
-        if let Destination::Memory(mem) = dst {
-            self.instruction(LocalGet(mem.addr.idx));
+        match dst {
+            Destination::Memory(mem) => self.instruction(LocalGet(mem.addr.idx)),
+
+            // No address to push; see `Destination::Struct`.
+            Destination::Struct(_)
+            | Destination::GcRef(_)
+            | Destination::Stack(..)
+            | Destination::Array(_) => {}
         }
+    }
+
+    /// Read the field `s` describes, which must not be packed.
+    ///
+    /// Aggregates use storage types, so `bool`/`s8`/`u8` live in an `i8` field
+    /// and `s16`/`u16` in an `i16`. Those widen via `struct_get_s`/`_u`.
+    ///
+    /// See https://github.com/WebAssembly/component-model/issues/525.
+    /// Read the field `s` describes, which must not be packed.
+    ///
+    /// Aggregates use storage types, so `bool`/`s8`/`u8` live in an `i8` field
+    /// and `s16`/`u16` in an `i16`. Those widen via `struct_get_s`/`_u`.
+    ///
+    /// See https://github.com/WebAssembly/component-model/issues/525.
+    fn struct_get(&mut self, s: &GcStruct<'_>) {
+        assert!(
+            !self.gc_field_is_packed(s),
+            "a packed field must widen via `struct_get_s` or `struct_get_u`",
+        );
+        self.push_struct_ref(s);
+        self.instruction(StructGet {
+            struct_type_index: s.ty,
+            field_index: s.field,
+        });
+    }
+
+    fn struct_get_s(&mut self, s: &GcStruct<'_>) {
+        if !self.gc_field_is_packed(s) {
+            return self.struct_get(s);
+        }
+        self.push_struct_ref(s);
+        self.instruction(StructGetS {
+            struct_type_index: s.ty,
+            field_index: s.field,
+        });
+    }
+
+    fn struct_get_u(&mut self, s: &GcStruct<'_>) {
+        if !self.gc_field_is_packed(s) {
+            return self.struct_get(s);
+        }
+        self.push_struct_ref(s);
+        self.instruction(StructGetU {
+            struct_type_index: s.ty,
+            field_index: s.field,
+        });
+    }
+
+    fn push_struct_ref(&mut self, s: &GcStruct<'_>) {
+        self.instruction(LocalGet(
+            s.local.expect("source struct's local always exists"),
+        ));
+    }
+
+    /// The declared type of the field `s` describes.
+    fn gc_field_type(&self, s: &GcStruct<'_>) -> &'a WasmFieldType {
+        let types = self.types.module_types_builder().types();
+        let ty = self.module.core_types.module_type_of(s.ty);
+        &types[ty].composite_type.inner.unwrap_struct().fields[usize::try_from(s.field).unwrap()]
+    }
+
+    /// Whether the field `s` describes has a packed (`i8`/`i16`) storage type.
+    fn gc_field_is_packed(&self, s: &GcStruct<'_>) -> bool {
+        match self.gc_field_type(s).element_type {
+            WasmStorageType::I8 | WasmStorageType::I16 => true,
+            WasmStorageType::Val(_) => false,
+        }
+    }
+
+    /// The adapter-local reference type of the field `s` describes.
+    ///
+    /// Nested aggregates lower to a reference field, so this is a bug rather
+    /// than invalid input for anything else: validation has already checked
+    /// the lowering against the declared `core-type`.
+    fn gc_field_ref_type(&self, s: &GcStruct<'_>) -> RefType {
+        let field = self.gc_field_type(s);
+        let r = match &field.element_type {
+            WasmStorageType::Val(WasmValType::Ref(r)) => r,
+            ty => panic!("GC-lowered aggregate must be in a reference field, found {ty:?}"),
+        };
+        let types = self.types.module_types_builder().types();
+        self.module.core_types.ref_type(types, r, &None)
     }
 
     fn i32_store8(&mut self, mem: &Memory) {
@@ -4372,18 +4661,76 @@ impl<'a> Source<'a> {
         'a: 'b,
     {
         let mut offset = 0;
-        fields.into_iter().map(move |ty| match self {
-            Source::Memory(mem) => {
-                let mem = next_field_offset(&mut offset, types, &ty, mem);
-                Source::Memory(mem)
-            }
+        fields
+            .into_iter()
+            .map(move |ty| self.field_src(&mut offset, types, &ty))
+    }
+
+    /// Advances `offset` past the field.
+    fn field_src(
+        &self,
+        offset: &mut u32,
+        types: &ComponentTypesBuilder,
+        ty: &InterfaceType,
+    ) -> Source<'a> {
+        match self {
+            Source::Memory(mem) => Source::Memory(next_field_offset(offset, types, ty, mem)),
             Source::Stack(stack) => {
-                let cnt = types.flat_types(&ty).unwrap().len() as u32;
-                offset += cnt;
-                Source::Stack(stack.slice((offset - cnt) as usize..offset as usize))
+                let cnt = u32::try_from(stack.opts.flat_count(ty, types)).unwrap();
+                *offset += cnt;
+                let start = usize::try_from(*offset - cnt).unwrap();
+                let end = usize::try_from(*offset).unwrap();
+                let stack = stack.slice(start..end);
+                match stack.opts.lowering(ty, types) {
+                    // A GC-lowered aggregate occupies one slot, holding a
+                    // reference to the object rather than its fields.
+                    Lowering::GcRef => {
+                        let (local, ty) = stack.locals[0];
+                        Source::GcRef(GcRefSrc {
+                            opts: stack.opts,
+                            local,
+                            ty: gc_ref_type(ty),
+                        })
+                    }
+                    Lowering::Scalars(_) | Lowering::Memory => Source::Stack(stack),
+                }
             }
-            Source::Struct(_) => todo!(),
-            Source::Array(_) => todo!(),
+            Source::Struct(s) => {
+                let field = *offset;
+                *offset += 1;
+                Source::Struct(GcStruct { field, ..*s })
+            }
+            Source::GcRef(_) | Source::Array(_) => todo!("CM+GC"),
+        }
+    }
+
+    /// Like `record_field_srcs`, but for a value that is itself an aggregate
+    /// rather than a parameter list.
+    ///
+    /// Differs only under GC, where the value is one local holding a struct
+    /// reference, so its fields are that struct's fields.
+    fn aggregate_field_srcs<'b>(
+        &'b self,
+        types: &'b ComponentTypesBuilder,
+        fields: impl IntoIterator<Item = InterfaceType> + 'b,
+    ) -> impl Iterator<Item = Source<'a>> + 'b
+    where
+        'a: 'b,
+    {
+        let mut offset = 0;
+        fields.into_iter().map(move |ty| match self {
+            // The aggregate's fields are the referenced struct's fields.
+            Source::GcRef(r) => {
+                let field = offset;
+                offset += 1;
+                Source::Struct(GcStruct {
+                    opts: r.opts,
+                    local: Some(r.local),
+                    ty: struct_type_index(r.ty),
+                    field,
+                })
+            }
+            _ => self.field_src(&mut offset, types, &ty),
         })
     }
 
@@ -4410,7 +4757,7 @@ impl<'a> Source<'a> {
                 };
                 Source::Memory(mem)
             }
-            Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
+            Source::GcRef(_) | Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
         }
     }
 
@@ -4418,6 +4765,7 @@ impl<'a> Source<'a> {
         match self {
             Source::Stack(s) => s.opts,
             Source::Memory(mem) => mem.opts,
+            Source::GcRef(r) => r.opts,
             Source::Struct(s) => s.opts,
             Source::Array(a) => a.opts,
         }
@@ -4436,19 +4784,85 @@ impl<'a> Destination<'a> {
         I: IntoIterator<Item = InterfaceType> + 'b,
     {
         let mut offset = 0;
-        fields.into_iter().map(move |ty| match self {
+        fields
+            .into_iter()
+            .map(move |ty| self.field_dst(&mut offset, types, &ty))
+    }
+
+    /// Same as `Source::aggregate_field_srcs` but for destinations.
+    ///
+    /// Also returns the struct type for the caller to `struct.new` once every
+    /// field is pushed, if this is a GC destination.
+    fn aggregate_field_dsts<'b, I>(
+        &'b self,
+        types: &'b ComponentTypesBuilder,
+        fields: I,
+    ) -> (
+        impl Iterator<Item = Destination<'b>> + use<'b, I>,
+        Option<u32>,
+    )
+    where
+        'a: 'b,
+        I: IntoIterator<Item = InterfaceType> + 'b,
+    {
+        let gc_struct_ty = match self {
+            Destination::GcRef(r) => Some(struct_type_index(r.ty)),
+            _ => None,
+        };
+        let mut offset = 0;
+        let iter = fields.into_iter().map(move |ty| match self {
+            // As in `Source::aggregate_field_srcs`.
+            Destination::GcRef(r) => {
+                let field = offset;
+                offset += 1;
+                Destination::Struct(GcStruct {
+                    opts: r.opts,
+                    local: None,
+                    ty: struct_type_index(r.ty),
+                    field,
+                })
+            }
+            _ => self.field_dst(&mut offset, types, &ty),
+        });
+        (iter, gc_struct_ty)
+    }
+
+    /// Advances `offset` past the field.
+    fn field_dst<'b>(
+        &'b self,
+        offset: &mut u32,
+        types: &ComponentTypesBuilder,
+        ty: &InterfaceType,
+    ) -> Destination<'b>
+    where
+        'a: 'b,
+    {
+        match self {
             Destination::Memory(mem) => {
-                let mem = next_field_offset(&mut offset, types, &ty, mem);
-                Destination::Memory(mem)
+                Destination::Memory(next_field_offset(offset, types, ty, mem))
             }
             Destination::Stack(s, opts) => {
-                let cnt = types.flat_types(&ty).unwrap().len() as u32;
-                offset += cnt;
-                Destination::Stack(&s[(offset - cnt) as usize..offset as usize], opts)
+                let cnt = u32::try_from(opts.flat_count(ty, types)).unwrap();
+                *offset += cnt;
+                let start = usize::try_from(*offset - cnt).unwrap();
+                let end = usize::try_from(*offset).unwrap();
+                let s = &s[start..end];
+                match opts.lowering(ty, types) {
+                    // As in `field_src`.
+                    Lowering::GcRef => Destination::GcRef(GcRefDst {
+                        opts,
+                        ty: gc_ref_type(s[0]),
+                    }),
+                    Lowering::Scalars(_) | Lowering::Memory => Destination::Stack(s, opts),
+                }
             }
-            Destination::Struct(_) => todo!(),
-            Destination::Array(_) => todo!(),
-        })
+            Destination::Struct(s) => {
+                let field = *offset;
+                *offset += 1;
+                Destination::Struct(GcStruct { field, ..*s })
+            }
+            Destination::GcRef(_) | Destination::Array(_) => todo!("CM+GC"),
+        }
     }
 
     /// Returns the corresponding discriminant source and payload source f
@@ -4474,7 +4888,9 @@ impl<'a> Destination<'a> {
                 };
                 Destination::Memory(mem)
             }
-            Destination::Struct(_) | Destination::Array(_) => todo!("CM+GC"),
+            Destination::GcRef(_) | Destination::Struct(_) | Destination::Array(_) => {
+                todo!("CM+GC")
+            }
         }
     }
 
@@ -4482,9 +4898,34 @@ impl<'a> Destination<'a> {
         match self {
             Destination::Stack(_, opts) => opts,
             Destination::Memory(mem) => mem.opts,
+            Destination::GcRef(r) => r.opts,
             Destination::Struct(s) => s.opts,
             Destination::Array(a) => a.opts,
         }
+    }
+}
+
+/// The adapter-local reference type a GC-lowered aggregate names.
+fn gc_ref_type(ty: ValType) -> RefType {
+    match ty {
+        ValType::Ref(
+            r @ RefType {
+                heap_type: HeapType::Concrete(_),
+                ..
+            },
+        ) => r,
+
+        // Validation has already checked the lowering against the declared
+        // `core-type`, so anything else is a bug rather than invalid input.
+        _ => panic!("GC-lowered aggregate must be a concrete struct reference, found {ty:?}"),
+    }
+}
+
+/// The adapter-local struct type index that `ty` names.
+fn struct_type_index(ty: RefType) -> u32 {
+    match ty.heap_type {
+        HeapType::Concrete(idx) => idx,
+        ty => panic!("GC-lowered aggregate must be a concrete struct reference, found {ty:?}"),
     }
 }
 
