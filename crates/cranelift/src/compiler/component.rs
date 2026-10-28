@@ -616,12 +616,14 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
-            Trampoline::ResourceTransferBorrowToOwner => {
+            Trampoline::ResourceTransferBorrowToOwner { ty } => {
                 self.translate_libcall(
                     host::resource_transfer_borrow_to_owner,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
-                    |_, _| {},
+                    |me, params| {
+                        params.push(me.index_value(*ty));
+                    },
                 );
             }
             Trampoline::PrepareCall { memory } => {
@@ -1436,7 +1438,7 @@ impl<'a> TrampolineCompiler<'a> {
             // directly from guest wasm, so no check is needed.
             Trampoline::ResourceTransferOwn
             | Trampoline::ResourceTransferBorrow
-            | Trampoline::ResourceTransferBorrowToOwner
+            | Trampoline::ResourceTransferBorrowToOwner { .. }
             | Trampoline::PrepareCall { .. }
             | Trampoline::StartCall { .. }
             | Trampoline::FutureTransfer

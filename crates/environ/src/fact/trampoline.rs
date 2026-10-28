@@ -3499,15 +3499,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected an `Borrow`"),
         };
 
-        let (transfer, dst_ty) = if self.module.resource_owned_by_own_instance(dst_ty) {
-            (self.module.import_resource_transfer_borrow_to_owner(), None)
+        if self.module.resource_owned_by_own_instance(dst_ty) {
+            let transfer = self.module.import_resource_transfer_borrow_to_owner(src_ty);
+            self.translate_handle_types(src, &[], dst, transfer);
         } else {
-            (
-                self.module.import_resource_transfer_borrow(),
-                Some(dst_ty.as_u32()),
-            )
-        };
-        self.translate_handle(src_ty.as_u32(), src, dst_ty, dst, transfer);
+            let transfer = self.module.import_resource_transfer_borrow();
+            self.translate_handle(src_ty.as_u32(), src, Some(dst_ty.as_u32()), dst, transfer);
+        }
     }
 
     /// Translates the index `src`, which resides in the table `src_ty`, into
@@ -3525,15 +3523,30 @@ impl<'a, 'b> Compiler<'a, 'b> {
         dst: &Destination,
         transfer: FuncIndex,
     ) {
+        let types: &[u32] = match dst_ty {
+            Some(dst_ty) => &[src_ty, dst_ty],
+            None => &[src_ty],
+        };
+        self.translate_handle_types(src, types, dst, transfer);
+    }
+
+    /// As [`Self::translate_handle`], except that `types` gives exactly the
+    /// type constants to push after the index.
+    fn translate_handle_types(
+        &mut self,
+        src: &Source<'_>,
+        types: &[u32],
+        dst: &Destination,
+        transfer: FuncIndex,
+    ) {
         self.push_dst_addr(dst);
         match src {
             Source::Memory(mem) => self.i32_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I32),
             Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
         }
-        self.instruction(I32Const(src_ty as i32));
-        if let Some(dst_ty) = dst_ty {
-            self.instruction(I32Const(dst_ty as i32));
+        for ty in types {
+            self.instruction(I32Const(*ty as i32));
         }
         self.instruction(Call(transfer.as_u32()));
         match dst {
