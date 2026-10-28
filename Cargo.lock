@@ -1911,6 +1911,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper-util"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddc03d96684f9226b8a787cdb71488417b53ab5ea8fdb1dac946cb9431cc8bff"
+dependencies = [
+ "bytes",
+ "http",
+ "http-body",
+ "hyper",
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
 name = "icu_collections"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4684,6 +4698,7 @@ dependencies = [
  "http",
  "http-body-util",
  "hyper",
+ "hyper-util",
  "indexmap 2.14.0",
  "libc",
  "libtest-mimic",
