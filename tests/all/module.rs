@@ -266,6 +266,27 @@ fn large_add_chain_no_stack_overflow() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
+fn many_data_segments_without_cow() -> Result<()> {
+    // Without CoW initialization every data segment is initialized by the
+    // module startup function, which once gave each segment's base and
+    // length its own alias region and overflowed the function's `MemFlags`
+    // past ~32k segments.
+    let mut config = Config::new();
+    config.memory_init_cow(false);
+    let engine = Engine::new(&config)?;
+    let mut wat = String::from("(module (memory 1)\n");
+    for i in 0..40_000 {
+        wat.push_str(&format!("(data (i32.const {}) \"x\")\n", i % 65536));
+    }
+    wat.push_str(")");
+    let module = Module::new(&engine, &wat)?;
+    let mut store = Store::new(&engine, ());
+    Instance::new(&mut store, &module, &[])?;
+    Ok(())
+}
+
+#[test]
 fn compile_a_component() -> Result<()> {
     let engine = Engine::default();
     let err = Module::new(&engine, "(component)").unwrap_err();
