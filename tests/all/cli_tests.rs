@@ -1673,6 +1673,20 @@ mod test_programs {
             send: &mut hyper::client::conn::http1::SendRequest<String>,
             req: http::Request<String>,
         ) -> Result<http::Response<String>> {
+            // RFC 9112 section 3.2: a client sends `Host` in every HTTP/1.1
+            // request, absolute-form included, so fill it in from the target.
+            let has_host = req.headers().contains_key(http::header::HOST);
+            let authority = req.uri().authority().cloned();
+            let req = match (has_host, authority) {
+                (false, Some(authority)) => {
+                    let mut req = req;
+                    let value = http::header::HeaderValue::from_str(authority.as_str())
+                        .context("failed to make Host header value")?;
+                    req.headers_mut().insert(http::header::HOST, value);
+                    req
+                }
+                _ => req,
+            };
             let response = send
                 .send_request(req)
                 .await
@@ -2207,6 +2221,127 @@ start a print 1234
             .await?;
         assert!(resp.status().is_success());
 
+        Ok(())
+    }
+
+    /// Write a raw HTTP request to a serve instance and read the whole response.
+    async fn serve_raw_request(server: &WasmtimeServe, request: &[u8]) -> Result<Vec<u8>> {
+        let mut stream = TcpStream::connect(server.first_addr()).await?;
+        stream.write_all(request).await?;
+        let mut response = Vec::new();
+        tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut response))
+            .await
+            .expect("timed out waiting for a response")?;
+        Ok(response)
+    }
+
+    /// Send the RFC 9112 section 3.2 request table to `server`: one request with
+    /// a valid `Host` and the requests that must be rejected with a 400.
+    async fn test_rfc_9112_sec_3_2(server: &WasmtimeServe) -> Result<()> {
+        let cases: &[(&str, &[u8], &[u8])] = &[
+            (
+                "valid host",
+                b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 200",
+            ),
+            (
+                "two hosts",
+                b"GET / HTTP/1.1\r\nHost: a.example\r\nHost: b.example\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "non-ascii host",
+                b"GET / HTTP/1.1\r\nHost: \x80\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "host with userinfo",
+                b"GET / HTTP/1.1\r\nHost: user@evil.com\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "no host",
+                b"GET / HTTP/1.1\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "absolute-form without host",
+                b"GET http://localhost/ HTTP/1.1\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "absolute-form",
+                b"GET http://localhost/ HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 200",
+            ),
+            (
+                "host with bad port",
+                b"GET / HTTP/1.1\r\nHost: example.com:abc\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "host with empty port",
+                b"GET / HTTP/1.1\r\nHost: example.com:\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "host with out of range port",
+                b"GET / HTTP/1.1\r\nHost: example.com:65536\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "host with empty host",
+                b"GET / HTTP/1.1\r\nHost: :8080\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "host with port",
+                b"GET / HTTP/1.1\r\nHost: example.com:8080\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 200",
+            ),
+            (
+                "host with ipv6",
+                b"GET / HTTP/1.1\r\nHost: [::1]\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 200",
+            ),
+            (
+                "absolute-form with userinfo",
+                b"GET http://user@localhost/ HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+        ];
+        for (name, request, expected) in cases {
+            let response = serve_raw_request(server, request).await?;
+            assert!(
+                response.starts_with(expected),
+                "{name}: expected {:?}, got {:?}",
+                String::from_utf8_lossy(expected),
+                String::from_utf8_lossy(&response),
+            );
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_rfc_9112_sec_3_2() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+        test_rfc_9112_sec_3_2(&server).await?;
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_rfc_9112_sec_3_2() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })?;
+        test_rfc_9112_sec_3_2(&server).await?;
+        server.finish()?;
         Ok(())
     }
 
@@ -2906,6 +3041,63 @@ start a print 1234
         conn_task.await??;
 
         server.finish()?;
+        Ok(())
+    }
+
+    async fn h2_request_status(uri: &str, hosts: &[&str]) -> Result<u16> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+        let tcp = TcpStream::connect(server.first_addr()).await?;
+        let (mut send, conn) = hyper::client::conn::http2::Builder::new(TokioExecutor)
+            .handshake(wasmtime_wasi_http::io::TokioIo::new(tcp))
+            .await
+            .context("failed http2 handshake")?;
+        let mut conn_task = tokio::task::spawn(conn);
+        let mut request = hyper::Request::builder()
+            .uri(uri)
+            .body(String::new())
+            .context("failed to make request")?;
+        for host in hosts {
+            request.headers_mut().append("host", host.parse()?);
+        }
+        let status = send
+            .send_request(request)
+            .await
+            .context("error sending request")?
+            .status()
+            .as_u16();
+        drop(send);
+        if tokio::time::timeout(Duration::from_secs(5), &mut conn_task)
+            .await
+            .is_err()
+        {
+            conn_task.abort();
+        }
+        server.finish()?;
+        Ok(status)
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_host_validation_http2() -> Result<()> {
+        assert_eq!(h2_request_status("http://a.example/", &[]).await?, 200);
+        assert_eq!(
+            h2_request_status("http://a.example/", &["a.example", "a.example"]).await?,
+            400
+        );
+        assert_eq!(
+            h2_request_status("http://a.example/", &["user@a.example"]).await?,
+            400
+        );
+        assert_eq!(
+            h2_request_status("http://a.example/", &["a.example"]).await?,
+            200
+        );
+        assert_eq!(
+            h2_request_status("http://a.example/", &["b.example"]).await?,
+            400
+        );
+        assert_eq!(h2_request_status("http://user@a.example/", &[]).await?, 400);
         Ok(())
     }
 
