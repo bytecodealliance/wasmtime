@@ -207,7 +207,7 @@ impl HandleTable {
     /// Frees the slot at `idx` for reuse by a later `insert` into this table.
     ///
     /// The slot stays charged to the store's `HandleCounter`; see its docs.
-    fn remove(&mut self, idx: u32) -> Result<()> {
+    pub fn remove(&mut self, idx: u32) -> Result<()> {
         let to_fill = Slot::Free { next: self.next };
         let slot = self.get_mut(idx)?;
         *slot = to_fill;
@@ -407,11 +407,14 @@ impl HandleTable {
         match self.get_mut(idx)? {
             Slot::Stream { rep, ty, state } => {
                 if *ty != expected_ty {
-                    bail!("handle is a stream of a different type");
+                    bail!(
+                        "handle index {idx} used with the wrong type, \
+                         expected stream but found stream of a different type"
+                    );
                 }
                 Ok((*rep, state))
             }
-            _ => bail!("handle is not a stream"),
+            _ => bail!("handle index {idx} used with the wrong type, expected stream"),
         }
     }
 
@@ -530,11 +533,14 @@ impl HandleTable {
         match self.get_mut(idx)? {
             Slot::Future { rep, ty, state } => {
                 if *ty != expected_ty {
-                    bail!("handle is a future of a different type");
+                    bail!(
+                        "handle index {idx} used with the wrong type, \
+                         expected future but found future of a different type"
+                    );
                 }
                 Ok((*rep, state))
             }
-            _ => bail!("handle is not a future"),
+            _ => bail!("handle index {idx} used with the wrong type, expected future"),
         }
     }
 

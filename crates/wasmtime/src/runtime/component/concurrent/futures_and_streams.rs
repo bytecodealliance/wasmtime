@@ -2240,6 +2240,14 @@ type PollStream = Box<
     dyn Fn() -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'static>> + Send + Sync,
 >;
 
+type ConsumeFn = Box<
+    dyn for<'a> Fn(
+            Option<&'a mut UntypedWriteBuffer<'a>>,
+        ) -> Pin<Box<dyn Future<Output = Result<StreamResult>> + Send + 'a>>
+        + Send
+        + Sync,
+>;
+
 type TryInto = Box<dyn Fn(TypeId) -> Option<Box<dyn Any>> + Send + Sync>;
 
 /// Represents the state of the write end of a stream or future.
@@ -2269,6 +2277,23 @@ enum WriteState {
     Dropped,
 }
 
+impl WriteState {
+    /// A `HostReady` write state standing in for a host producer whose
+    /// `produce` closure has been taken to pipe it directly to a host
+    /// consumer.
+    fn host_placeholder() -> Self {
+        WriteState::HostReady {
+            produce: Box::new(|| {
+                Box::pin(async { bail_bug!("unexpected invocation of `produce`") })
+            }),
+            try_into: Box::new(|_| None),
+            guest_offset: ItemCount::ZERO,
+            cancel: false,
+            cancel_waker: None,
+        }
+    }
+}
+
 impl fmt::Debug for WriteState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -2295,9 +2320,11 @@ enum ReadState {
         count: ItemCount,
         handle: u32,
     },
-    /// The read end is owned by a host task, and it is ready to consume items.
+    /// The read end is owned by a host task, and it is ready to consume items,
+    /// either from the write end of the same stream or future (when passed
+    /// `None`) or from a host-owned buffer (when passed `Some`).
     HostReady {
-        consume: PollStream,
+        consume: ConsumeFn,
         guest_offset: ItemCount,
         cancel: bool,
         cancel_waker: Option<Waker>,
@@ -2393,6 +2420,67 @@ fn settle_host_write(
     Ok(code)
 }
 
+/// Merge the progress recorded by an undelivered completion `event` into
+/// `code`, the result of a further copy on the same pending read or write.
+fn accumulate(event: Option<Event>, code: ReturnCode) -> Result<ReturnCode> {
+    let Some(event) = event else {
+        return Ok(code);
+    };
+    let (Event::StreamRead {
+        code: ReturnCode::Completed(old),
+        ..
+    }
+    | Event::StreamWrite {
+        code: ReturnCode::Completed(old),
+        ..
+    }) = event
+    else {
+        bail_bug!("unexpected undelivered event {event:?}");
+    };
+    Ok(match code {
+        ReturnCode::Completed(count) => ReturnCode::Completed(count.add(old)?),
+        ReturnCode::Dropped(count) => ReturnCode::Dropped(count.add(old)?),
+        ReturnCode::Cancelled(count) => ReturnCode::Cancelled(count.add(old)?),
+        ReturnCode::Blocked => bail_bug!("unexpected `ReturnCode::Blocked`"),
+    })
+}
+
+/// Build the event notifying a `read` or write end that the opposite end was
+/// dropped, carrying the pending guest operation's type and handle, if any.
+fn dropped_event(
+    kind: TransmitKind,
+    read: bool,
+    pending: Option<(TransmitIndex, u32)>,
+) -> Result<Event> {
+    let code = ReturnCode::Dropped(ItemCount::ZERO);
+    Ok(match kind {
+        TransmitKind::Future => {
+            let pending = match pending {
+                None => None,
+                Some((TransmitIndex::Future(ty), handle)) => Some((ty, handle)),
+                Some((TransmitIndex::Stream(_), _)) => bail_bug!("expected future type"),
+            };
+            if read {
+                Event::FutureRead { code, pending }
+            } else {
+                Event::FutureWrite { code, pending }
+            }
+        }
+        TransmitKind::Stream => {
+            let pending = match pending {
+                None => None,
+                Some((TransmitIndex::Stream(ty), handle)) => Some((ty, handle)),
+                Some((TransmitIndex::Future(_), _)) => bail_bug!("expected stream type"),
+            };
+            if read {
+                Event::StreamRead { code, pending }
+            } else {
+                Event::StreamWrite { code, pending }
+            }
+        }
+    })
+}
+
 impl StoreOpaque {
     fn pipe_from_guest(
         &mut self,
@@ -2479,16 +2567,7 @@ impl StoreOpaque {
             WriteState::GuestReady { ty, handle, .. } => {
                 state.update_event(
                     write_handle.rep(),
-                    match ty {
-                        TransmitIndex::Future(ty) => Event::FutureWrite {
-                            code: ReturnCode::Dropped(ItemCount::ZERO),
-                            pending: Some((ty, handle)),
-                        },
-                        TransmitIndex::Stream(ty) => Event::StreamWrite {
-                            code: ReturnCode::Dropped(ItemCount::ZERO),
-                            pending: Some((ty, handle)),
-                        },
-                    },
+                    dropped_event(ty.kind(), false, Some((ty, handle)))?,
                 )?;
             }
 
@@ -2496,19 +2575,7 @@ impl StoreOpaque {
             // dropped, unless it's already done.
             WriteState::Open if done => {}
             WriteState::Open => {
-                state.update_event(
-                    write_handle.rep(),
-                    match kind {
-                        TransmitKind::Future => Event::FutureWrite {
-                            code: ReturnCode::Dropped(ItemCount::ZERO),
-                            pending: None,
-                        },
-                        TransmitKind::Stream => Event::StreamWrite {
-                            code: ReturnCode::Dropped(ItemCount::ZERO),
-                            pending: None,
-                        },
-                    },
-                )?;
+                state.update_event(write_handle.rep(), dropped_event(kind, false, None)?)?;
             }
 
             // If the writer has already been dropped, then this cleans out the
@@ -2582,35 +2649,20 @@ impl StoreOpaque {
                 // Ensure the final read of the guest is queued, with appropriate closure indicator
                 self.concurrent_state_mut()?.update_event(
                     read_handle.rep(),
-                    match ty {
-                        TransmitIndex::Future(ty) => Event::FutureRead {
-                            code: ReturnCode::Dropped(ItemCount::ZERO),
-                            pending: Some((ty, handle)),
-                        },
-                        TransmitIndex::Stream(ty) => Event::StreamRead {
-                            code: ReturnCode::Dropped(ItemCount::ZERO),
-                            pending: Some((ty, handle)),
-                        },
-                    },
+                    dropped_event(ty.kind(), true, Some((ty, handle)))?,
                 )?;
             }
 
             // Notify the read-end of the drop, unless we're already done.
             ReadState::Open if done => {}
             ReadState::Open => {
-                self.concurrent_state_mut()?.update_event(
-                    read_handle.rep(),
-                    match on_drop_open {
-                        Some(_) => Event::FutureRead {
-                            code: ReturnCode::Dropped(ItemCount::ZERO),
-                            pending: None,
-                        },
-                        None => Event::StreamRead {
-                            code: ReturnCode::Dropped(ItemCount::ZERO),
-                            pending: None,
-                        },
-                    },
-                )?;
+                let kind = if on_drop_open.is_some() {
+                    TransmitKind::Future
+                } else {
+                    TransmitKind::Stream
+                };
+                self.concurrent_state_mut()?
+                    .update_event(read_handle.rep(), dropped_event(kind, true, None)?)?;
             }
 
             // If the read state was already dropped, then we can remove the
@@ -2967,11 +3019,14 @@ impl<T> StoreContextMut<'_, T> {
                 Ok(result)
             }
         };
-        let consume = {
-            let consume = consume_with_buffer.clone();
-            Box::new(move || {
-                let consume = consume.clone();
-                async move { consume(None).await }.boxed()
+        let consume: ConsumeFn = {
+            Box::new(move |input| {
+                let consume = consume_with_buffer.clone();
+                if let Some(input) = input {
+                    async move { consume(Some(input.get_mut::<C::Item>()?)).await }.boxed()
+                } else {
+                    async move { consume(None).await }.boxed()
+                }
             })
         };
 
@@ -2997,7 +3052,7 @@ impl<T> StoreContextMut<'_, T> {
                 let future = if write_has_event {
                     None
                 } else {
-                    Some(consume())
+                    Some(consume(None))
                 };
                 state.get_mut(id)?.read = ReadState::HostReady {
                     consume,
@@ -3010,57 +3065,21 @@ impl<T> StoreContextMut<'_, T> {
                 }
             }
             WriteState::HostReady { .. } => {
-                let WriteState::HostReady { produce, .. } = mem::replace(
-                    &mut transmit.write,
-                    WriteState::HostReady {
-                        produce: Box::new(|| {
-                            Box::pin(async { bail_bug!("unexpected invocation of `produce`") })
-                        }),
-                        try_into: Box::new(|_| None),
-                        guest_offset: ItemCount::ZERO,
-                        cancel: false,
-                        cancel_waker: None,
-                    },
-                ) else {
+                let WriteState::HostReady { produce, .. } =
+                    mem::replace(&mut transmit.write, WriteState::host_placeholder())
+                else {
                     bail_bug!("expected WriteState::HostReady")
                 };
 
                 transmit.read = ReadState::HostToHost {
-                    accept: Box::new(move |input| {
-                        let consume = consume_with_buffer.clone();
-                        async move { consume(Some(input.get_mut::<C::Item>()?)).await }.boxed()
-                    }),
+                    accept: Box::new(move |input| consume(Some(input))),
                     buffer: Vec::new(),
                     limit: 0,
                 };
 
-                let future = async move {
-                    loop {
-                        if tls::get(|store| {
-                            crate::error::Ok(matches!(
-                                store.concurrent_state_mut()?.get_mut(id)?.read,
-                                ReadState::Dropped
-                            ))
-                        })? {
-                            break Ok(());
-                        }
-
-                        match produce().await? {
-                            StreamResult::Completed | StreamResult::Cancelled => {}
-                            StreamResult::Dropped => break Ok(()),
-                        }
-
-                        if let TransmitKind::Future = kind {
-                            break Ok(());
-                        }
-                    }
-                }
-                .map(move |result| {
-                    tls::get(|store| store.concurrent_state_mut()?.delete_transmit(id))?;
-                    result
-                });
-
-                state.push_future(Box::pin(future));
+                state.push_future(pipe_host_to_host(kind, id, produce, move |state| {
+                    state.delete_transmit(id)
+                }));
             }
             WriteState::Dropped => {
                 let reader = transmit.read_handle;
@@ -3243,6 +3262,43 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
     }
 }
 
+/// Drives the host producer `produce` of the stream or future `id`, whose read
+/// state is `ReadState::HostToHost`, until either end is dropped (or, for a
+/// future, until the first item is produced), then runs `finish`.
+fn pipe_host_to_host(
+    kind: TransmitKind,
+    id: TableId<TransmitState>,
+    produce: PollStream,
+    finish: impl FnOnce(&mut ConcurrentState) -> Result<()> + Send + 'static,
+) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>> {
+    async move {
+        loop {
+            if tls::get(|store| {
+                crate::error::Ok(matches!(
+                    store.concurrent_state_mut()?.get_mut(id)?.read,
+                    ReadState::Dropped
+                ))
+            })? {
+                break Ok(());
+            }
+
+            match produce().await? {
+                StreamResult::Completed | StreamResult::Cancelled => {}
+                StreamResult::Dropped => break Ok(()),
+            }
+
+            if let TransmitKind::Future = kind {
+                break Ok(());
+            }
+        }
+    }
+    .map(move |result| {
+        tls::get(|store| finish(store.concurrent_state_mut()?))?;
+        result
+    })
+    .boxed()
+}
+
 /// Polls a `StreamProducer` or `StreamConsumer` future once, inline, from
 /// within a guest's `{stream,future}.{read,write}` intrinsic.
 ///
@@ -3271,11 +3327,11 @@ impl Instance {
         store: &mut dyn VMStore,
         kind: TransmitKind,
         transmit_id: TableId<TransmitState>,
-        consume: PollStream,
+        consume: ConsumeFn,
         guest_offset: ItemCount,
         cancel: bool,
     ) -> Result<ReturnCode> {
-        let mut future = consume();
+        let mut future = consume(None);
         store.concurrent_state_mut()?.get_mut(transmit_id)?.read = ReadState::HostReady {
             consume,
             guest_offset,
@@ -3706,8 +3762,6 @@ impl Instance {
                 let read_complete = count > 0;
                 let read_buffer_remaining = count < read_count;
 
-                let read_handle_rep = transmit.read_handle.rep();
-
                 let count = count.min(read_count);
 
                 Instance::copy(
@@ -3734,19 +3788,12 @@ impl Instance {
                 };
                 let concurrent_state = store.0.concurrent_state_mut()?;
                 if read_complete {
-                    let total = if let Some(Event::StreamRead {
-                        code: ReturnCode::Completed(old_total),
-                        ..
-                    }) = concurrent_state.take_event(read_handle_rep)?
-                    {
-                        count.add(old_total)?
-                    } else {
-                        count
-                    };
-
-                    let code = ReturnCode::completed(ty.kind(), total);
-
-                    concurrent_state.send_read_result(read_ty, transmit_id, read_handle, code)?;
+                    concurrent_state.send_read_result(
+                        read_ty,
+                        transmit_id,
+                        read_handle,
+                        ReturnCode::completed(ty.kind(), count),
+                    )?;
                 }
 
                 // If the reader still has buffer remaining, or if this was a
@@ -3896,7 +3943,72 @@ impl Instance {
         if !async_ {
             Waitable::Transmit(transmit_handle).trap_if_in_waitable_set(concurrent_state)?;
         }
+
+        let mut result = self.perform_guest_read(
+            store.as_context_mut(),
+            transmit_id,
+            ty,
+            options,
+            flat_abi,
+            handle,
+            address,
+            count,
+            caller_instance,
+            false,
+        )?;
+
+        if result == ReturnCode::Blocked && !async_ {
+            result = self.wait_for_read(store.0, caller_instance, transmit_handle)?;
+        }
+
+        if result != ReturnCode::Blocked {
+            *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
+                TransmitLocalState::Read {
+                    done: matches!(
+                        (result, ty),
+                        (ReturnCode::Dropped(_), TransmitIndex::Stream(_))
+                    ),
+                };
+        }
+
+        log::trace!(
+            "guest_read result for {transmit_handle:?} (handle {handle}; state {transmit_id:?}): {result:?}",
+        );
+
+        Ok(result)
+    }
+
+    /// Match a guest read with the current write state of the specified stream
+    /// or future, either completing it immediately or leaving it pending in
+    /// `ReadState::GuestReady`.
+    ///
+    /// This is shared between `guest_read`, which issues a fresh read on
+    /// behalf of the calling guest, and `guest_forward`, which transfers a
+    /// read already pending on the destination of a forward to the fused
+    /// stream or future.
+    ///
+    /// If `pending` is set, the read is already pending, so a completion
+    /// rendezvousing with a guest write is delivered as an event, accumulated
+    /// with any undelivered one, and any remaining read buffer stays pending,
+    /// mirroring the `ReadState::GuestReady` arm of `guest_write`; `Blocked` is
+    /// returned in that case.
+    fn perform_guest_read<T: 'static>(
+        self,
+        mut store: StoreContextMut<T>,
+        transmit_id: TableId<TransmitState>,
+        ty: TransmitIndex,
+        options: OptionsIndex,
+        flat_abi: Option<FlatAbi>,
+        handle: u32,
+        address: usize,
+        count: ItemCount,
+        caller_instance: RuntimeComponentInstanceIndex,
+        pending: bool,
+    ) -> Result<ReturnCode> {
+        let concurrent_state = store.0.concurrent_state_mut()?;
         let transmit = concurrent_state.get_mut(transmit_id)?;
+        let transmit_handle = transmit.read_handle;
+        let rep = transmit_handle.rep();
 
         let new_state = if let WriteState::Dropped = &transmit.write {
             WriteState::Dropped
@@ -3922,7 +4034,7 @@ impl Instance {
             Ok::<_, crate::Error>(())
         };
 
-        let mut result = match mem::replace(&mut transmit.write, new_state) {
+        let result = match mem::replace(&mut transmit.write, new_state) {
             WriteState::GuestReady {
                 instance: write_instance,
                 ty: write_ty,
@@ -3941,15 +4053,15 @@ impl Instance {
                     transmit.done = true;
                 }
 
-                let write_handle_rep = transmit.write_handle.rep();
-
                 // See the comment in `guest_write` for the
                 // `ReadState::GuestReady` case concerning zero-length reads and
                 // writes.
 
+                let read_count = count;
                 let write_complete = write_count == 0 || count > 0;
                 let read_complete = write_count > 0;
                 let write_buffer_remaining = count < write_count;
+                let read_buffer_remaining = write_count < count;
 
                 let count = count.min(write_count);
 
@@ -3978,23 +4090,11 @@ impl Instance {
                 let concurrent_state = store.0.concurrent_state_mut()?;
 
                 if write_complete {
-                    let total = if let Some(Event::StreamWrite {
-                        code: ReturnCode::Completed(old_total),
-                        ..
-                    }) = concurrent_state.take_event(write_handle_rep)?
-                    {
-                        count.add(old_total)?
-                    } else {
-                        count
-                    };
-
-                    let code = ReturnCode::completed(ty.kind(), total);
-
                     concurrent_state.send_write_result(
                         write_ty,
                         transmit_id,
                         write_handle,
-                        code,
+                        ReturnCode::completed(ty.kind(), count),
                     )?;
                 }
 
@@ -4012,7 +4112,28 @@ impl Instance {
                     };
                 }
 
-                if read_complete {
+                if read_complete && pending {
+                    concurrent_state.send_read_result(
+                        ty,
+                        transmit_id,
+                        handle,
+                        ReturnCode::completed(ty.kind(), count),
+                    )?;
+
+                    if read_buffer_remaining {
+                        concurrent_state.get_mut(transmit_id)?.read = ReadState::GuestReady {
+                            ty,
+                            flat_abi,
+                            options,
+                            address: address + (count.as_usize() * item_size),
+                            count: read_count.sub(count)?,
+                            handle,
+                            instance: self,
+                            caller_instance,
+                        };
+                    }
+                    ReturnCode::Blocked
+                } else if read_complete {
                     ReturnCode::completed(ty.kind(), count)
                 } else {
                     set_guest_ready(concurrent_state)?;
@@ -4080,25 +4201,353 @@ impl Instance {
             }
         };
 
-        if result == ReturnCode::Blocked && !async_ {
-            result = self.wait_for_read(store.0, caller_instance, transmit_handle)?;
+        Ok(result)
+    }
+
+    fn take_forwarded_end(
+        self,
+        store: &mut StoreOpaque,
+        ty: TransmitIndex,
+        idx: u32,
+        readable: bool,
+    ) -> Result<(TableId<TransmitHandle>, TableId<TransmitState>)> {
+        let desc = match ty {
+            TransmitIndex::Stream(_) => "stream",
+            TransmitIndex::Future(_) => "future",
+        };
+        let (end, other_end, op) = if readable {
+            ("readable", "writable", "read")
+        } else {
+            ("writable", "readable", "write")
+        };
+
+        let (rep, state) = self.id().get_mut(store).get_mut_by_index(ty, idx)?;
+        let done = match (&*state, readable) {
+            (&TransmitLocalState::Read { done }, true)
+            | (&TransmitLocalState::Write { done }, false) => done,
+            (TransmitLocalState::Read { .. } | TransmitLocalState::Write { .. }, _) => bail!(
+                "handle index {idx} used with the wrong type, \
+                 expected {end} {desc} but found {other_end} {desc}"
+            ),
+            (TransmitLocalState::Busy | TransmitLocalState::Cancelling, _) => {
+                bail!("cannot forward busy {desc}")
+            }
+        };
+        if done {
+            bail!("cannot forward {desc} after being notified that the {other_end} end dropped");
+        }
+        let handle = TableId::<TransmitHandle>::new(rep);
+        let concurrent_state = store.concurrent_state_mut()?;
+        if concurrent_state.get_mut(handle)?.common.set.is_some() {
+            bail!("cannot forward {desc} while it's in a waitable set");
+        }
+        let transmit_id = concurrent_state.get_mut(handle)?.state;
+        if concurrent_state.get_mut(transmit_id)?.done {
+            bail!("cannot forward {desc} after previous {op} succeeded");
         }
 
-        if result != ReturnCode::Blocked {
-            *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
-                TransmitLocalState::Read {
-                    done: matches!(
-                        (result, ty),
-                        (ReturnCode::Dropped(_), TransmitIndex::Stream(_))
-                    ),
-                };
+        self.id()
+            .get_mut(store)
+            .table_for_transmit(ty)
+            .remove(idx)?;
+
+        Ok((handle, transmit_id))
+    }
+
+    fn take_idle_host_consumer(read: &mut ReadState) -> Result<ConsumeFn> {
+        let ReadState::HostReady {
+            consume,
+            guest_offset,
+            cancel,
+            cancel_waker,
+        } = mem::replace(read, ReadState::Open)
+        else {
+            bail_bug!("expected ReadState::HostReady")
+        };
+        if cancel_waker.is_some() {
+            bail_bug!("expected cancel_waker to be none");
         }
+        if cancel {
+            bail_bug!("expected cancel to be false");
+        }
+        if guest_offset != 0 {
+            bail_bug!("expected guest_offset to be 0");
+        }
+        Ok(consume)
+    }
+
+    /// Implements the `{stream,future}.forward` intrinsics.
+    ///
+    /// This fuses the stream or future whose readable end is `src` (the
+    /// source) with the stream or future whose writable end is `dst` (the
+    /// destination), transferring both ends out of the calling component
+    /// instance.  The consumer of the destination's readable end and the
+    /// producer of the source's writable end are connected directly, as if the
+    /// source's readable end had been transferred to the consumer in place of
+    /// the destination's readable end.
+    ///
+    /// Rather than recording a delegation from the destination to the source
+    /// as the Canonical ABI specification does, the two `TransmitState`s are
+    /// eagerly merged into one, which also means chains of forwards always
+    /// collapse to a single stream or future.  Which of the two states
+    /// survives depends on which ends are host-owned, since
+    /// `StreamProducer`/`StreamConsumer` closures capture the
+    /// `TableId<TransmitState>` they were registered with:
+    ///
+    /// * By default the source's state survives and the consumer's readable
+    ///   end is re-pointed at it.
+    ///
+    /// * If the consumer is host-owned (`ReadState::HostReady`), the
+    ///   destination's state survives and the producer's writable end is
+    ///   re-pointed at it instead.
+    ///
+    /// * If the producer and consumer are both host-owned, neither state can
+    ///   be discarded; the source's producer is piped directly to the
+    ///   consumer, keeping the destination alive as a detached stub for the
+    ///   consumer's closures.
+    pub(super) fn guest_forward<T: 'static>(
+        self,
+        mut store: StoreContextMut<T>,
+        ty: TransmitIndex,
+        src: u32,
+        dst: u32,
+    ) -> Result<()> {
+        let kind = ty.kind();
+
+        let (src_transmit_handle, src_transmit_id) =
+            self.take_forwarded_end(store.0, ty, src, true)?;
+        let concurrent_state = store.0.concurrent_state_mut()?;
+        let src_transmit = concurrent_state.get_mut(src_transmit_id)?;
+        if !matches!(src_transmit.read, ReadState::Open) {
+            bail_bug!("expected `ReadState::Open`; got `{:?}`", src_transmit.read);
+        }
+        let src_write_handle = src_transmit.write_handle;
+
+        let (dst_transmit_handle, dst_transmit_id) =
+            self.take_forwarded_end(store.0, ty, dst, false)?;
+        let concurrent_state = store.0.concurrent_state_mut()?;
+        let dst_transmit = concurrent_state.get_mut(dst_transmit_id)?;
+        if !matches!(dst_transmit.write, WriteState::Open) {
+            bail_bug!(
+                "expected `WriteState::Open`; got `{:?}`",
+                dst_transmit.write
+            );
+        }
+        let dst_read_handle = dst_transmit.read_handle;
+
+        let concurrent_state = store.0.concurrent_state_mut()?;
 
         log::trace!(
-            "guest_read result for {transmit_handle:?} (handle {handle}; state {transmit_id:?}): {result:?}",
+            "guest_forward from {src_transmit_handle:?} to {dst_transmit_handle:?} \
+             (src handle {src} src state {src_transmit_id:?}; \
+             dst handle {dst} dst state {dst_transmit_id:?})",
         );
 
-        Ok(result)
+        // Since forwards eagerly fuse the source and destination, forwarding
+        // the readable end of a stream or future into its own writable end
+        // (directly or through earlier forwards) leaves no ends behind, so the
+        // whole stream or future simply disappears.
+        if src_transmit_id == dst_transmit_id {
+            return concurrent_state.delete_transmit(src_transmit_id);
+        }
+
+        // If the destination's readable end has already been dropped there is
+        // nothing left to forward into: discard the destination and drop the
+        // source's readable end, notifying the source's producer.
+        if let ReadState::Dropped = concurrent_state.get_mut(dst_transmit_id)?.read {
+            store.0.host_drop_writer(dst_transmit_handle, None)?;
+            return store.0.host_drop_reader(src_transmit_handle, kind);
+        }
+
+        let src_host = matches!(
+            concurrent_state.get_mut(src_transmit_id)?.write,
+            WriteState::HostReady { .. }
+        );
+        let dst_host = matches!(
+            concurrent_state.get_mut(dst_transmit_id)?.read,
+            ReadState::HostReady { .. }
+        );
+
+        // If the producer and consumer are both host-owned, connect them
+        // directly, mirroring the `WriteState::HostReady` arm of
+        // `set_consumer`.  Neither state can be discarded: the source hosts
+        // the pipe itself while the destination stays alive as a detached
+        // stub for the consumer's closures, and both are deleted once piping
+        // finishes.
+        if src_host && dst_host {
+            let dst_transmit = concurrent_state.get_mut(dst_transmit_id)?;
+            let consume = Self::take_idle_host_consumer(&mut dst_transmit.read)?;
+            // The consumer's closures use the destination for bookkeeping,
+            // expecting the write state a `Source` fed from a host buffer may
+            // have; give it a placeholder.
+            dst_transmit.write = WriteState::host_placeholder();
+
+            let src_transmit = concurrent_state.get_mut(src_transmit_id)?;
+            let WriteState::HostReady { produce, .. } =
+                mem::replace(&mut src_transmit.write, WriteState::host_placeholder())
+            else {
+                unreachable!()
+            };
+
+            src_transmit.read = ReadState::HostToHost {
+                accept: Box::new(move |input| consume(Some(input))),
+                buffer: Vec::new(),
+                limit: 0,
+            };
+
+            concurrent_state.push_future(pipe_host_to_host(
+                kind,
+                src_transmit_id,
+                produce,
+                move |state| {
+                    state.delete_transmit(src_transmit_id)?;
+                    state.delete_transmit(dst_transmit_id)
+                },
+            ));
+            return Ok(());
+        }
+
+        if dst_host {
+            // Keep the destination: discard the source's state after
+            // migrating its write state and re-pointing the producer's
+            // writable end.
+            let src_transmit = concurrent_state.get_mut(src_transmit_id)?;
+            let origin = src_transmit.origin;
+            let src_write = mem::replace(&mut src_transmit.write, WriteState::Dropped);
+            concurrent_state.delete(src_transmit_id)?;
+            concurrent_state.delete(src_transmit_handle)?;
+
+            match src_write {
+                WriteState::Open => {
+                    concurrent_state.get_mut(src_write_handle)?.state = dst_transmit_id;
+                    let dst_transmit = concurrent_state.get_mut(dst_transmit_id)?;
+                    dst_transmit.write_handle = src_write_handle;
+                    dst_transmit.origin = origin;
+                    concurrent_state.delete(dst_transmit_handle)?;
+                    Ok(())
+                }
+                write @ WriteState::GuestReady { .. } => {
+                    concurrent_state.get_mut(src_write_handle)?.state = dst_transmit_id;
+                    let dst_transmit = concurrent_state.get_mut(dst_transmit_id)?;
+                    dst_transmit.write_handle = src_write_handle;
+                    dst_transmit.origin = origin;
+
+                    // Mirror the `ReadState::HostReady` arm of
+                    // `guest_write`, except that the pending write's
+                    // completion is delivered as an event.
+                    let consume = Self::take_idle_host_consumer(&mut dst_transmit.read)?;
+                    let (write_ty, write_index) = match &write {
+                        WriteState::GuestReady { ty, handle, .. } => (*ty, *handle),
+                        _ => unreachable!(),
+                    };
+                    dst_transmit.write = write;
+                    concurrent_state.delete(dst_transmit_handle)?;
+
+                    let code = self.consume(
+                        store.0,
+                        kind,
+                        dst_transmit_id,
+                        consume,
+                        ItemCount::ZERO,
+                        false,
+                    )?;
+                    if code != ReturnCode::Blocked {
+                        store.0.concurrent_state_mut()?.send_write_result(
+                            write_ty,
+                            dst_transmit_id,
+                            write_index,
+                            code,
+                        )?;
+                    }
+                    Ok(())
+                }
+                WriteState::Dropped => {
+                    // The source's producer is already gone; deleting the
+                    // destination is what notifies the host-owned
+                    // consumer, mirroring `host_drop_writer`.
+                    concurrent_state.delete(src_write_handle)?;
+                    concurrent_state.delete_transmit(dst_transmit_id)
+                }
+                WriteState::HostReady { .. } => unreachable!(),
+            }
+        } else {
+            // Keep the source: discard the destination's state after migrating
+            // its read state and re-pointing the consumer's readable end.
+            let dst_transmit = concurrent_state.get_mut(dst_transmit_id)?;
+            let dst_read = mem::replace(&mut dst_transmit.read, ReadState::Dropped);
+            concurrent_state.delete(dst_transmit_id)?;
+            concurrent_state.delete(dst_transmit_handle)?;
+            concurrent_state.get_mut(dst_read_handle)?.state = src_transmit_id;
+            concurrent_state.get_mut(src_transmit_id)?.read_handle = dst_read_handle;
+            concurrent_state.delete(src_transmit_handle)?;
+
+            match dst_read {
+                ReadState::Open => {
+                    // Mirror the `ReadState::Open` arm of `host_drop_writer`:
+                    // a consumer which would have learned of the drop from the
+                    // destination must learn of it from the fused stream or
+                    // future.
+                    let concurrent_state = store.0.concurrent_state_mut()?;
+                    if let WriteState::Dropped = concurrent_state.get_mut(src_transmit_id)?.write {
+                        concurrent_state.update_event(
+                            dst_read_handle.rep(),
+                            dropped_event(kind, true, None)?,
+                        )?;
+                    }
+                    Ok(())
+                }
+                ReadState::GuestReady {
+                    ty: read_ty,
+                    flat_abi,
+                    options,
+                    address,
+                    count,
+                    handle,
+                    instance,
+                    caller_instance,
+                } => {
+                    // Mirror the `ReadState::GuestReady` arm of
+                    // `host_drop_writer`: the source's dropped event was
+                    // queued on its now-deleted readable end, so queue it
+                    // for the pending read instead.
+                    let concurrent_state = store.0.concurrent_state_mut()?;
+                    if let WriteState::Dropped = concurrent_state.get_mut(src_transmit_id)?.write {
+                        concurrent_state.update_event(
+                            dst_read_handle.rep(),
+                            dropped_event(kind, true, Some((read_ty, handle)))?,
+                        )?;
+                        return Ok(());
+                    }
+
+                    // Transfer the pending read to the fused stream or future,
+                    // delivering its completion (if any) as an event.
+                    let code = instance.perform_guest_read(
+                        store.as_context_mut(),
+                        src_transmit_id,
+                        read_ty,
+                        options,
+                        flat_abi,
+                        handle,
+                        address,
+                        count,
+                        caller_instance,
+                        true,
+                    )?;
+                    if code != ReturnCode::Blocked {
+                        store.0.concurrent_state_mut()?.send_read_result(
+                            read_ty,
+                            src_transmit_id,
+                            handle,
+                            code,
+                        )?;
+                    }
+                    Ok(())
+                }
+                ReadState::HostReady { .. } | ReadState::HostToHost { .. } | ReadState::Dropped => {
+                    bail_bug!("unexpected read state")
+                }
+            }
+        }
     }
 
     fn wait_for_write(
@@ -4840,6 +5289,7 @@ impl ConcurrentState {
         code: ReturnCode,
     ) -> Result<()> {
         let write_handle = self.get_mut(id)?.write_handle.rep();
+        let code = accumulate(self.take_event(write_handle)?, code)?;
         self.set_event(
             write_handle,
             match ty {
@@ -4863,6 +5313,7 @@ impl ConcurrentState {
         code: ReturnCode,
     ) -> Result<()> {
         let read_handle = self.get_mut(id)?.read_handle.rep();
+        let code = accumulate(self.take_event(read_handle)?, code)?;
         self.set_event(
             read_handle,
             match ty {
