@@ -148,3 +148,73 @@
   ))
 )
 (assert_trap (invoke "run" (str.const "x")) "cannot leave component instance")
+
+;; `thread.index` is nonzero in a start function.
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (func $start
+      (if (i32.eqz (call $thread-index)) (then unreachable)))
+    (start $start)
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+)
+
+;; `thread.index` is nonzero in a call from the host.
+(component
+  (core module $m
+    (import "" "thread.index" (func $thread-index (result i32)))
+    (func (export "run")
+      (if (i32.eqz (call $thread-index)) (then unreachable)))
+  )
+  (core func $thread-index (canon thread.index))
+  (core instance $m (instantiate $m (with "" (instance
+    (export "thread.index" (func $thread-index))
+  ))))
+  (func (export "run") (canon lift (core func $m "run")))
+)
+(assert_return (invoke "run"))
+
+;; `thread.index` is nonzero in both the caller and callee of a guest-to-guest
+;; call.
+(component
+  (component $c
+    (core module $m
+      (import "" "thread.index" (func $thread-index (result i32)))
+      (func (export "run") (result i32)
+        (call $thread-index))
+    )
+    (core func $thread-index (canon thread.index))
+    (core instance $m (instantiate $m (with "" (instance
+      (export "thread.index" (func $thread-index))
+    ))))
+    (func (export "run") (result u32) (canon lift (core func $m "run")))
+  )
+  (instance $c (instantiate $c))
+
+  (component $d
+    (import "c" (instance $c
+      (export "run" (func (result u32)))
+    ))
+    (core func $run (canon lower (func $c "run")))
+    (core module $m
+      (import "" "thread.index" (func $thread-index (result i32)))
+      (import "" "run" (func $run (result i32)))
+      (func (export "run")
+        (if (i32.eqz (call $thread-index)) (then unreachable))
+        (if (i32.eqz (call $run)) (then unreachable)))
+    )
+    (core func $thread-index (canon thread.index))
+    (core instance $m (instantiate $m (with "" (instance
+      (export "thread.index" (func $thread-index))
+      (export "run" (func $run))
+    ))))
+    (func (export "run") (canon lift (core func $m "run")))
+  )
+  (instance $d (instantiate $d (with "c" (instance $c))))
+  (func (export "run") (alias export $d "run"))
+)
+(assert_return (invoke "run"))
