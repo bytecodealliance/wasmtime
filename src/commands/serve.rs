@@ -2,7 +2,8 @@ use crate::common::{HttpHooks, Profile, RunCommon, RunTarget};
 use clap::Parser;
 use http::{HeaderMap, HeaderName, HeaderValue, Response, StatusCode};
 use http_body_util::{BodyExt as _, Full};
-use hyper::server::conn::http1;
+use hyper_util::rt::TokioExecutor;
+use hyper_util::server::conn::auto;
 use pin_project_lite::pin_project;
 use std::convert::Infallible;
 use std::ffi::OsString;
@@ -905,12 +906,14 @@ impl ServeCommand {
             // concurrent requests can't be served. Otherwise though spawn a
             // task to handle this client.
             match &mut debuggee_store {
-                Some(store) => handle_client(stream, &handler, &shutdown, Some(store)).await,
+                Some(store) => {
+                    handle_client(stream, handler.clone(), shutdown.clone(), Some(store)).await
+                }
                 None => {
                     let handler = handler.clone();
                     let shutdown = shutdown.clone();
                     tokio::task::spawn(async move {
-                        handle_client(stream, &handler, &shutdown, None).await;
+                        handle_client(stream, handler, shutdown, None).await;
                         drop(shutdown_guard);
                         drop(connection_permit);
                     });
@@ -1375,36 +1378,82 @@ fn setup_guest_profiler(
 
 type Request = hyper::Request<hyper::body::Incoming>;
 
+/// Drive a connection until it completes or the server shuts down.
+async fn drive_connection<F, G, E>(conn: F, shutdown: &GracefulShutdown, graceful: G)
+where
+    F: std::future::Future<Output = Result<(), E>>,
+    E: std::fmt::Debug,
+    G: FnOnce(std::pin::Pin<&mut F>),
+{
+    let mut conn = std::pin::pin!(conn);
+    let result = tokio::select! {
+        result = conn.as_mut() => result,
+        _ = shutdown.requested() => {
+            graceful(conn.as_mut());
+            conn.await
+        }
+    };
+    if let Err(e) = result {
+        eprintln!("error: {e:?}");
+    }
+}
+
 async fn handle_client(
     client: impl AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static,
-    handler: &ProxyHandler<HostHandlerState>,
-    shutdown: &GracefulShutdown,
+    handler: ProxyHandler<HostHandlerState>,
+    shutdown: Arc<GracefulShutdown>,
     debuggee_store: Option<&mut Store<Host>>,
 ) {
-    // Hyper's `service_fn` takes an `Fn` closure, so to bridge the need to
-    // transfer a mutable store to each request for debugging a tokio mutex is
-    // used. The tokio mutex is required as the returned future must also be
-    // `Send`.
-    let lock = &debuggee_store.map(tokio::sync::Mutex::new);
+    // A debugger drives one connection synchronously, so keep that path on
+    // HTTP/1.1; the auto builder needs a `'static` service future.
+    if let Some(store) = debuggee_store {
+        let lock = std::sync::Arc::new(tokio::sync::Mutex::new(store));
+        let conn = hyper::server::conn::http1::Builder::new()
+            .keep_alive(true)
+            .serve_connection(
+                TokioIo::new(client),
+                hyper::service::service_fn(move |req| {
+                    let lock = lock.clone();
+                    let handler = handler.clone();
+                    async move {
+                        let mut store = lock.lock().await;
+                        match handle_request(&handler, Some(&mut store), req).await {
+                            Ok(r) => Ok::<_, Infallible>(r),
+                            Err(e) => Ok(error_response(e)),
+                        }
+                    }
+                }),
+            );
+        drive_connection(conn, &shutdown, |conn| conn.graceful_shutdown()).await;
+        return;
+    }
 
-    let conn = http1::Builder::new().keep_alive(true).serve_connection(
+    let builder = auto::Builder::new(TokioExecutor::new());
+    let conn = builder.serve_connection_with_upgrades(
         TokioIo::new(client),
-        hyper::service::service_fn(move |req| async move {
-            let mut debuggee_store = match &lock {
-                Some(store) => Some(store.lock().await),
-                None => None,
-            };
-            let debuggee_store = debuggee_store.as_mut().map(|s| &mut ***s);
-            match handle_request(handler, debuggee_store, req).await {
-                Ok(r) => Ok::<_, Infallible>(r),
-                Err(e) => {
-                    eprintln!("error: {e:?}");
-                    let status = e
-                        .downcast_ref::<ErrorResponse>()
-                        .map(|e| e.status())
-                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-                    let error_html = format!(
-                        "\
+        hyper::service::service_fn(move |req| {
+            let handler = handler.clone();
+            async move {
+                match handle_request(&handler, None, req).await {
+                    Ok(r) => Ok::<_, Infallible>(r),
+                    Err(e) => Ok(error_response(e)),
+                }
+            }
+        }),
+    );
+    // Use hyper's built-in support for graceful shutdown whenever the server
+    // here gets a shutdown request.
+    drive_connection(conn, &shutdown, |conn| conn.graceful_shutdown()).await;
+}
+
+fn error_response(e: wasmtime::Error) -> Response<wasmtime_wasi_http::WasiBody> {
+    eprintln!("error: {e:?}");
+    let status = e
+        .downcast_ref::<ErrorResponse>()
+        .map(|e| e.status())
+        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let error_html = format!(
+        "\
 <!doctype html>
 <html>
 <head>
@@ -1418,34 +1467,16 @@ async fn handle_client(
     </center>
 </body>
 </html>"
-                    );
-                    Ok(Response::builder()
-                        .status(status)
-                        .header("Content-Type", "text/html; charset=UTF-8")
-                        .body(
-                            Full::new(bytes::Bytes::from(error_html))
-                                .map_err(|_| unreachable!())
-                                .boxed_unsync(),
-                        )
-                        .unwrap())
-                }
-            }
-        }),
     );
-    let mut conn = std::pin::pin!(conn);
-
-    // Use hyper's built-in support for graceful shutdown whenever the server
-    // here gets a shutdown request.
-    let result = tokio::select! {
-        result = conn.as_mut() => result,
-        _ = shutdown.requested() => {
-            conn.as_mut().graceful_shutdown();
-            conn.await
-        }
-    };
-    if let Err(e) = result {
-        eprintln!("error: {e:?}");
-    }
+    Response::builder()
+        .status(status)
+        .header("Content-Type", "text/html; charset=UTF-8")
+        .body(
+            Full::new(bytes::Bytes::from(error_html))
+                .map_err(|_| unreachable!())
+                .boxed_unsync(),
+        )
+        .unwrap()
 }
 
 async fn handle_request(
