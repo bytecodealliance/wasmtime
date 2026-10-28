@@ -1,8 +1,9 @@
 ;;! component_model_gc = true
 ;;! gc = true
 
-;; Tests for the component model integer types that lower to a core `i32`
-;; value under the GC data model: `{s,u}{8,16,32}`.
+;; Tests for the component model integer types under the GC data model.
+;; `{s,u}{8,16,32}` lower to a core `i32` value and `{s,u}64` lower to a
+;; core `i64` value.
 ;;
 ;; See https://github.com/WebAssembly/component-model/issues/525.
 
@@ -596,6 +597,204 @@
 (assert_return (invoke "g" (s32.const -1)) (s32.const -1))
 (assert_return (invoke "g" (s32.const 2147483647)) (s32.const 2147483647))
 (assert_return (invoke "g" (s32.const -2147483648)) (s32.const -2147483648))
+
+;; `u64`
+
+;; Both sides use the GC data model.
+(component
+  (component $A
+    (core module $m
+      (func (export "f") (param i64) (result i64) local.get 0)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" u64) (result u64)
+      (canon lift (core func $i "f") gc))
+  )
+  (instance $a (instantiate $A))
+  (alias export $a "f" (func $af))
+
+  (core type $sig (func (param i64) (result i64)))
+  (core func $l (canon lower (func $af) gc (core-type $sig)))
+
+  (core module $m
+    (import "" "f" (func $f (param i64) (result i64)))
+    (func (export "g") (param i64) (result i64) local.get 0 call $f)
+  )
+  (core instance $i (instantiate $m (with "" (instance (export "f" (func $l))))))
+
+  (func (export "g") (param "a" u64) (result u64)
+    (canon lift (core func $i "g") gc))
+)
+
+(assert_return (invoke "g" (u64.const 0)) (u64.const 0))
+(assert_return (invoke "g" (u64.const 1)) (u64.const 1))
+(assert_return (invoke "g" (u64.const 9223372036854775807)) (u64.const 9223372036854775807))
+(assert_return (invoke "g" (u64.const 9223372036854775808)) (u64.const 9223372036854775808))
+(assert_return (invoke "g" (u64.const 18446744073709551615)) (u64.const 18446744073709551615))
+
+;; A GC-lowered caller calling a linear-memory-lifted callee.
+(component
+  (component $A
+    (core module $m
+      (memory (export "m") 1)
+      (func (export "f") (param i64) (result i64) local.get 0)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" u64) (result u64)
+      (canon lift (core func $i "f") (memory (core memory $i "m"))))
+  )
+  (instance $a (instantiate $A))
+  (alias export $a "f" (func $af))
+
+  (core type $sig (func (param i64) (result i64)))
+  (core func $l (canon lower (func $af) gc (core-type $sig)))
+
+  (core module $m
+    (import "" "f" (func $f (param i64) (result i64)))
+    (func (export "g") (param i64) (result i64) local.get 0 call $f)
+  )
+  (core instance $i (instantiate $m (with "" (instance (export "f" (func $l))))))
+
+  (func (export "g") (param "a" u64) (result u64)
+    (canon lift (core func $i "g") gc))
+)
+
+(assert_return (invoke "g" (u64.const 0)) (u64.const 0))
+(assert_return (invoke "g" (u64.const 1)) (u64.const 1))
+(assert_return (invoke "g" (u64.const 9223372036854775807)) (u64.const 9223372036854775807))
+(assert_return (invoke "g" (u64.const 9223372036854775808)) (u64.const 9223372036854775808))
+(assert_return (invoke "g" (u64.const 18446744073709551615)) (u64.const 18446744073709551615))
+
+;; A linear-memory-lowered caller calling a GC-lifted callee.
+(component
+  (component $A
+    (core module $m
+      (func (export "f") (param i64) (result i64) local.get 0)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" u64) (result u64)
+      (canon lift (core func $i "f") gc))
+  )
+  (instance $a (instantiate $A))
+  (alias export $a "f" (func $af))
+
+  (core func $l (canon lower (func $af)))
+
+  (core module $m
+    (import "" "f" (func $f (param i64) (result i64)))
+    (memory (export "m") 1)
+    (func (export "g") (param i64) (result i64) local.get 0 call $f)
+  )
+  (core instance $i (instantiate $m (with "" (instance (export "f" (func $l))))))
+
+  (func (export "g") (param "a" u64) (result u64)
+    (canon lift (core func $i "g") (memory (core memory $i "m"))))
+)
+
+(assert_return (invoke "g" (u64.const 0)) (u64.const 0))
+(assert_return (invoke "g" (u64.const 1)) (u64.const 1))
+(assert_return (invoke "g" (u64.const 9223372036854775807)) (u64.const 9223372036854775807))
+(assert_return (invoke "g" (u64.const 9223372036854775808)) (u64.const 9223372036854775808))
+(assert_return (invoke "g" (u64.const 18446744073709551615)) (u64.const 18446744073709551615))
+
+;; `s64`
+
+;; Both sides use the GC data model.
+(component
+  (component $A
+    (core module $m
+      (func (export "f") (param i64) (result i64) local.get 0)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" s64) (result s64)
+      (canon lift (core func $i "f") gc))
+  )
+  (instance $a (instantiate $A))
+  (alias export $a "f" (func $af))
+
+  (core type $sig (func (param i64) (result i64)))
+  (core func $l (canon lower (func $af) gc (core-type $sig)))
+
+  (core module $m
+    (import "" "f" (func $f (param i64) (result i64)))
+    (func (export "g") (param i64) (result i64) local.get 0 call $f)
+  )
+  (core instance $i (instantiate $m (with "" (instance (export "f" (func $l))))))
+
+  (func (export "g") (param "a" s64) (result s64)
+    (canon lift (core func $i "g") gc))
+)
+
+(assert_return (invoke "g" (s64.const 0)) (s64.const 0))
+(assert_return (invoke "g" (s64.const 1)) (s64.const 1))
+(assert_return (invoke "g" (s64.const -1)) (s64.const -1))
+(assert_return (invoke "g" (s64.const 9223372036854775807)) (s64.const 9223372036854775807))
+(assert_return (invoke "g" (s64.const -9223372036854775808)) (s64.const -9223372036854775808))
+
+;; A GC-lowered caller calling a linear-memory-lifted callee.
+(component
+  (component $A
+    (core module $m
+      (memory (export "m") 1)
+      (func (export "f") (param i64) (result i64) local.get 0)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" s64) (result s64)
+      (canon lift (core func $i "f") (memory (core memory $i "m"))))
+  )
+  (instance $a (instantiate $A))
+  (alias export $a "f" (func $af))
+
+  (core type $sig (func (param i64) (result i64)))
+  (core func $l (canon lower (func $af) gc (core-type $sig)))
+
+  (core module $m
+    (import "" "f" (func $f (param i64) (result i64)))
+    (func (export "g") (param i64) (result i64) local.get 0 call $f)
+  )
+  (core instance $i (instantiate $m (with "" (instance (export "f" (func $l))))))
+
+  (func (export "g") (param "a" s64) (result s64)
+    (canon lift (core func $i "g") gc))
+)
+
+(assert_return (invoke "g" (s64.const 0)) (s64.const 0))
+(assert_return (invoke "g" (s64.const 1)) (s64.const 1))
+(assert_return (invoke "g" (s64.const -1)) (s64.const -1))
+(assert_return (invoke "g" (s64.const 9223372036854775807)) (s64.const 9223372036854775807))
+(assert_return (invoke "g" (s64.const -9223372036854775808)) (s64.const -9223372036854775808))
+
+;; A linear-memory-lowered caller calling a GC-lifted callee.
+(component
+  (component $A
+    (core module $m
+      (func (export "f") (param i64) (result i64) local.get 0)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" s64) (result s64)
+      (canon lift (core func $i "f") gc))
+  )
+  (instance $a (instantiate $A))
+  (alias export $a "f" (func $af))
+
+  (core func $l (canon lower (func $af)))
+
+  (core module $m
+    (import "" "f" (func $f (param i64) (result i64)))
+    (memory (export "m") 1)
+    (func (export "g") (param i64) (result i64) local.get 0 call $f)
+  )
+  (core instance $i (instantiate $m (with "" (instance (export "f" (func $l))))))
+
+  (func (export "g") (param "a" s64) (result s64)
+    (canon lift (core func $i "g") (memory (core memory $i "m"))))
+)
+
+(assert_return (invoke "g" (s64.const 0)) (s64.const 0))
+(assert_return (invoke "g" (s64.const 1)) (s64.const 1))
+(assert_return (invoke "g" (s64.const -1)) (s64.const -1))
+(assert_return (invoke "g" (s64.const 9223372036854775807)) (s64.const 9223372036854775807))
+(assert_return (invoke "g" (s64.const -9223372036854775808)) (s64.const -9223372036854775808))
 
 ;; `u8` masks off everything above bit 7.
 (component
