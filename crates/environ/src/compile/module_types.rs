@@ -368,6 +368,11 @@ impl ModuleTypesBuilder {
         self.types
     }
 
+    /// Get the types defined so far by this builder.
+    pub fn types(&self) -> &ModuleTypes {
+        &self.types
+    }
+
     /// Get the elements within an already-defined rec group.
     pub fn rec_group_elements(
         &self,

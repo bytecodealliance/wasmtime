@@ -605,6 +605,34 @@ impl TypeTrace for WasmHeapType {
 }
 
 impl WasmHeapType {
+    /// Get the type index this heap type refers to, if it is a concrete
+    /// (non-abstract) heap type.
+    #[inline]
+    pub fn as_concrete_type_index(&self) -> Option<EngineOrModuleTypeIndex> {
+        match *self {
+            Self::ConcreteArray(i)
+            | Self::ConcreteFunc(i)
+            | Self::ConcreteStruct(i)
+            | Self::ConcreteCont(i)
+            | Self::ConcreteExn(i) => Some(i),
+
+            Self::Extern
+            | Self::NoExtern
+            | Self::Func
+            | Self::NoFunc
+            | Self::Exn
+            | Self::NoExn
+            | Self::Cont
+            | Self::NoCont
+            | Self::Any
+            | Self::Eq
+            | Self::I31
+            | Self::Array
+            | Self::Struct
+            | Self::None => None,
+        }
+    }
+
     /// Is this a type that is represented as a `VMGcRef`?
     #[inline]
     pub fn is_vmgcref_type(&self) -> bool {
