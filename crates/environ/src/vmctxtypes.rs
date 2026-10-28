@@ -304,6 +304,15 @@ macro_rules! for_each_vmctx_type {
 
                     align { ptr }
 
+                    // Each instance's `HandleTable::slots`, which a fused
+                    // adapter reads to reach a handle's slot without calling
+                    // into the host.
+                    array {
+                        handle_table_slots
+                            [num_runtime_component_instances; RuntimeComponentInstanceIndex]:
+                                VmPtr<VMHandleTableSlot>
+                    }
+
                     array {
                         #[aggregate]
                         trampoline_func_refs[num_trampolines; TrampolineIndex]: VMFuncRef
