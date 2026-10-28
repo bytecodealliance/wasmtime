@@ -637,6 +637,15 @@ impl Config {
     /// you'll have to be sure to pour some fuel into [`Store`] before
     /// executing some code.
     ///
+    /// Some configuration options make the fuel consumed by instantiation
+    /// depend on the host. When [`Config::memory_init_cow`] is enabled, which
+    /// it is by default, initializing linear memory consumes no fuel where the
+    /// initial image can be mapped copy-on-write (on Linux, or for a module
+    /// loaded from a file on other Unix platforms). Elsewhere the image is
+    /// copied instead, and the copy consumes fuel for the image's full size,
+    /// which is rounded up to the host page size. To consume the same fuel on
+    /// every platform, disable [`Config::memory_init_cow`].
+    ///
     /// By default this option is `false`.
     ///
     /// [`Store`]: crate::Store
@@ -2335,6 +2344,10 @@ impl Config {
     ///   the module must have been compiled with this setting enabled as well.
     /// * Windows - there is no support for this feature at this time. Memory
     ///   initialization will always copy bytes.
+    ///
+    /// Because of this, with [`Config::consume_fuel`] enabled the fuel consumed
+    /// by instantiation can differ between platforms while this option is
+    /// enabled. See [`Config::consume_fuel`] for more details.
     ///
     /// By default this option is enabled.
     ///
