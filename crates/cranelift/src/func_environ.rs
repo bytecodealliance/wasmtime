@@ -6172,8 +6172,13 @@ impl FuncEnvironment<'_> {
                 }
             }
         }
+        let mut prepared_segments =
+            Vec::with_capacity(self.translation.table_initialization.segments.len());
         for segment in self.translation.table_initialization.segments.iter() {
-            self.module_initialize_table_with_segment(builder, segment)?;
+            prepared_segments.push(self.module_prepare_table_segment(builder, segment)?);
+        }
+        for prepared in prepared_segments {
+            self.module_apply_table_segment(builder, prepared)?;
         }
         match &self.translation.memory_init {
             MemoryInit::Unprocessed(_) => unreachable!(),
@@ -6311,11 +6316,11 @@ impl FuncEnvironment<'_> {
     /// initializers present. Additionally note that this doesn't use
     /// `table.init` because the element segment won't actually be present
     /// anywhere at runtime.
-    fn module_initialize_table_with_segment(
+    fn module_prepare_table_segment<'a>(
         &mut self,
         builder: &mut FunctionBuilder,
-        segment: &TableSegment,
-    ) -> WasmResult<()> {
+        segment: &'a TableSegment,
+    ) -> WasmResult<PreparedTableSegment<'a>> {
         let offset = self.translate_const_expr(builder, &segment.offset)?;
         let segment_len = builder.ins().iconst(
             index_type_to_ir_type(self.module.tables[segment.table_index].idx_type),
@@ -6339,26 +6344,44 @@ impl FuncEnvironment<'_> {
             .table_init_per_element;
         let fuel = self.pre_translate_bulk_op(builder, segment_len, cost);
 
-        // Re-use the `table.set` translation for making this a simple function
-        // to define. That re-executes the bounds check which is a bit
-        // inefficient, but can be optimized in the future.
+        // Evaluate all element expressions before applying any table writes so that
+        // if an expression traps, imported tables remain untouched per the Wasm spec.
+        let mut elements = Vec::with_capacity(usize::try_from(segment.elements.len()).unwrap());
         match &segment.elements {
             TableSegmentElements::Functions(indices) => {
-                for (i, func) in indices.iter().enumerate() {
-                    let func = self.translate_ref_func(builder.cursor(), *func)?;
-                    let index = builder.ins().iadd_imm_s(offset, i64::try_from(i).unwrap());
-                    self.translate_table_set(builder, segment.table_index, func, index)?;
+                for func in indices.iter() {
+                    let func_val = self.translate_ref_func(builder.cursor(), *func)?;
+                    elements.push(func_val);
                 }
             }
             TableSegmentElements::Expressions { exprs, ty: _ } => {
-                for (i, expr) in exprs.iter().enumerate() {
+                for expr in exprs.iter() {
                     let val = self.translate_const_expr(builder, expr)?;
-                    let index = builder.ins().iadd_imm_s(offset, i64::try_from(i).unwrap());
-                    self.translate_table_set(builder, segment.table_index, val, index)?;
+                    elements.push(val);
                 }
             }
         }
-        self.post_translate_bulk_op(builder, fuel)
+
+        Ok(PreparedTableSegment {
+            segment,
+            offset,
+            elements,
+            fuel,
+        })
+    }
+
+    fn module_apply_table_segment(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        prepared: PreparedTableSegment<'_>,
+    ) -> WasmResult<()> {
+        for (i, val) in prepared.elements.into_iter().enumerate() {
+            let index = builder
+                .ins()
+                .iadd_imm_s(prepared.offset, i64::try_from(i).unwrap());
+            self.translate_table_set(builder, prepared.segment.table_index, val, index)?;
+        }
+        self.post_translate_bulk_op(builder, prepared.fuel)
     }
 
     /// Peform initialization of an active data segment in a module.
@@ -6770,4 +6793,11 @@ impl CheckedEntity {
             CheckedEntity::Table { .. } => false,
         }
     }
+}
+
+struct PreparedTableSegment<'a> {
+    segment: &'a TableSegment,
+    offset: ir::Value,
+    elements: Vec<ir::Value>,
+    fuel: Option<DeferredBulkOp>,
 }
