@@ -1,6 +1,10 @@
-//! Shared validation for wasi-http outgoing request authorities (p2 and p3).
+//! Shared validation for wasi-http request authorities (p2 and p3).
 
-/// Parse an outgoing request `authority`, rejecting a malformed value.
+/// Parse a request `authority`, rejecting a malformed value.
+///
+/// This is used both for authorities set by guests on outgoing requests and
+/// for the `Host` header of incoming requests, which shares the same
+/// `uri-host [":" port]` grammar.
 ///
 /// `http::uri::Authority` accepts an authority whose port section is empty or
 /// non-numeric (for example `example.com:` or `example.com:abc`), so the port

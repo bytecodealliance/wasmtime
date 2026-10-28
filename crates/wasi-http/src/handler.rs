@@ -1005,7 +1005,6 @@ impl<'a, T: Send> Prepared<'a, T> {
             #[cfg(feature = "p3")]
             Proxy::P3(guest) => {
                 use http::header::HOST;
-                use http::uri::Authority;
 
                 let (parts, body) = request.into_parts();
                 let http::request::Parts {
@@ -1026,7 +1025,7 @@ impl<'a, T: Send> Prepared<'a, T> {
                     None => request_headers
                         .get(HOST)
                         .and_then(|host| host.to_str().ok())
-                        .and_then(|host| host.parse::<Authority>().ok()),
+                        .and_then(|host| crate::parse_authority(host.to_string()).ok()),
                 };
                 let hooks = view(store.data_mut()).hooks;
                 let headers = crate::FieldMap::new_immutable(hooks, request_headers);
