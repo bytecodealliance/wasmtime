@@ -44,9 +44,19 @@ const MAX_RESOURCE_HANDLE: u32 = 1 << 30;
 /// store-wide ceiling instead.
 ///
 /// A single one of these lives in the store and is passed by `&mut` to every
-/// table operation that inserts or removes a handle. The count tracks live
-/// handles (incremented in `insert`, decremented in `remove`), since freed slots
-/// are reused.
+/// table operation that inserts or removes a handle.
+///
+/// This count and limit is intended to roughly correspond with the amount of
+/// host memory being used to track handles within a store. This includes
+/// operations such as:
+///
+/// * Creating a handle (via `insert`) retains space for this. This is later
+///   decremented in `remove`.
+/// * Tracking lends to create a `borrow` (via `resource_lift_borrow`) allocates
+///   memory. This is later decremented in `exit_call`.
+///
+/// This means that sometimes a handle is double-counted (e.g. borrows in some
+/// situations), but this is intended to still reflect live active memory use.
 pub struct HandleCounter {
     live: usize,
     limit: usize,
@@ -403,14 +413,23 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
     pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
-        match self.table_for_index(&index).0.get_mut(index)? {
+        let (table, counter) = self.table_for_index(&index);
+        match table.get_mut(index)? {
             Slot::Own {
                 resource,
                 lend_count,
             } => {
                 let rep = resource.rep(&index)?;
-                // The decrement to this count happens in `exit_call`.
-                *lend_count = lend_count.checked_add(1).unwrap();
+                // The decrement to this count, and to `counter`, happens in
+                // `exit_call`.
+                let Some(new_lend_count) = lend_count.checked_add(1) else {
+                    bail!("cannot lend resource: too many active lends")
+                };
+                if counter.live >= counter.limit {
+                    bail!("cannot lend resource: store handle limit exceeded");
+                }
+                counter.live += 1;
+                *lend_count = new_lend_count;
                 let scope = self.calls.scopes.last_mut().unwrap();
                 scope.lenders.push(index);
                 Ok(rep)
@@ -462,9 +481,11 @@ impl ResourceTables<'_> {
             // Note the panics here which should never get triggered in theory
             // due to the dynamic tracking of borrows and such employed for
             // resources.
-            match self.table_for_index(lender).0.get_mut(*lender).unwrap() {
+            let (table, counter) = self.table_for_index(lender);
+            match table.get_mut(*lender).unwrap() {
                 Slot::Own { lend_count, .. } => {
                     *lend_count -= 1;
+                    counter.live -= 1;
                 }
                 _ => unreachable!(),
             }
