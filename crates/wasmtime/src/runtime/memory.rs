@@ -12,7 +12,7 @@ use core::cell::UnsafeCell;
 use core::fmt;
 use core::slice;
 use core::time::Duration;
-use wasmtime_environ::DefinedMemoryIndex;
+use wasmtime_environ::{DefinedMemoryIndex, MemoryTunables};
 
 pub use crate::runtime::vm::WaitResult;
 
@@ -980,45 +980,138 @@ impl core::hash::Hash for MemoryImage {
 /// Note that this is a relatively advanced feature and it is recommended to be
 /// familiar with Wasmtime runtime code to use it.
 pub unsafe trait MemoryCreator: Send + Sync {
-    /// Create a new `LinearMemory` object from the specified parameters.
+    /// Create a new [`LinearMemory`] object from the specified parameters.
     ///
-    /// The type of memory being created is specified by `ty` which indicates
+    /// The returned memory must satisfy all of the properties of the [`MemoryRequest`]
+    /// and be zero filled.
+    fn new_memory(&self, request: &MemoryRequest<'_>) -> Result<Box<dyn LinearMemory>>;
+}
+
+/// The kind of memory that [`MemoryCreator`] is asked to create.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum MemoryKind {
+    /// A standard WebAssembly linear memory (module or host).
+    LinearMemory,
+    /// The memory backing a store's GC heap.
+    ///
+    /// It differs from standard linear memory:
+    /// - It is created lazily, at most once per store: when a module that needs a GC heap is
+    ///   instantiated or when the first GC object is allocated. This might happen in the middle of
+    ///   execution of WebAssembly code.
+    /// - It grows as GC objects are allocated, independently of `memory.grow`.
+    /// - Its contents are Wasmtime's internal representation of GC objects, not data of the guest
+    ///   program. They are only meaningful to the store that created the GC heap, so they should not
+    ///   be shared, persisted, copied to other memories, etc.
+    GcHeap,
+}
+
+impl From<wasmtime_environ::MemoryKind> for MemoryKind {
+    fn from(value: wasmtime_environ::MemoryKind) -> Self {
+        match value {
+            wasmtime_environ::MemoryKind::LinearMemory => Self::LinearMemory,
+            wasmtime_environ::MemoryKind::GcHeap => Self::GcHeap,
+        }
+    }
+}
+
+/// A request to a [`MemoryCreator::new_memory`].
+pub struct MemoryRequest<'a> {
+    ty: &'a wasmtime_environ::Memory,
+    tunables: &'a MemoryTunables<'a>,
+    minimum: usize,
+    maximum: Option<usize>,
+}
+
+impl<'a> MemoryRequest<'a> {
+    pub(crate) fn new(
+        ty: &'a wasmtime_environ::Memory,
+        tunables: &'a MemoryTunables<'a>,
+        minimum: usize,
+        maximum: Option<usize>,
+    ) -> Self {
+        Self {
+            ty,
+            tunables,
+            minimum,
+            maximum,
+        }
+    }
+
+    /// The type of memory being created. Indicates
     /// both the minimum and maximum size, in wasm pages. The minimum and
-    /// maximum sizes, in bytes, are also specified as parameters to avoid
-    /// integer conversion if desired.
-    ///
-    /// The `reserved_size_in_bytes` value indicates the expected size of the
-    /// reservation that is to be made for this memory. If this value is `None`
-    /// than the implementation is free to allocate memory as it sees fit. If
-    /// the value is `Some`, however, then the implementation is expected to
-    /// reserve that many bytes for the memory's allocation, plus the guard
+    /// maximum sizes, in bytes, are also specified as [`minimum`](Self::minimum) and [`maximum`](Self::maximum)
+    /// to avoid integer conversion if desired.
+    pub fn ty(&self) -> MemoryType {
+        MemoryType::from_wasmtime_memory(self.ty)
+    }
+
+    /// Minimum size of the memory in bytes.
+    /// Same as the minimum of [`ty`](Self::ty), but in bytes.
+    pub fn minimum(&self) -> usize {
+        self.minimum
+    }
+
+    /// Limit on the maximum size of the memory in bytes, if any.
+    /// Same as the maximum of [`ty`](Self::ty), but in bytes.
+    pub fn maximum(&self) -> Option<usize> {
+        self.maximum
+    }
+
+    /// Indicates the expected size of the reservation that is to be made for this memory.
+    /// The implementation must reserve this many bytes for the memory's allocation, plus the guard
     /// size at the end. Note that this reservation need only be a virtual
     /// memory reservation, physical memory does not need to be allocated
-    /// immediately. In this case `grow` should never move the base pointer and
-    /// the maximum size of `ty` is guaranteed to fit within
-    /// `reserved_size_in_bytes`.
+    /// immediately.
     ///
-    /// The `guard_size_in_bytes` parameter indicates how many bytes of space,
-    /// after the memory allocation, is expected to be unmapped. JIT code will
+    /// If this value is not zero, [`grow_to`](LinearMemory::grow_to) should never move the base pointer and
+    /// the maximum size of [`ty`](Self::ty) is guaranteed to fit within `reserved_size_in_bytes`.
+    ///
+    /// This value is tuned from the various [`Config`](crate::Config) methods about
+    /// memory sizes/guards. It is guaranteed to be a multiple of the system page size.
+    pub fn reserved_size_in_bytes(&self) -> usize {
+        usize::try_from(self.tunables.reservation()).unwrap()
+    }
+
+    /// Indicates how many bytes of space after the memory allocation is expected to be unmapped. JIT code will
     /// elide bounds checks based on the `guard_size_in_bytes` provided, so for
     /// JIT code to work correctly the memory returned will need to be properly
     /// guarded with `guard_size_in_bytes` bytes left unmapped after the base
     /// allocation.
     ///
-    /// Note that the `reserved_size_in_bytes` and `guard_size_in_bytes` options
-    /// are tuned from the various [`Config`](crate::Config) methods about
-    /// memory sizes/guards. Additionally these two values are guaranteed to be
-    /// multiples of the system page size.
-    ///
-    /// Memory created from this method should be zero filled.
-    fn new_memory(
-        &self,
-        ty: MemoryType,
-        minimum: usize,
-        maximum: Option<usize>,
-        reserved_size_in_bytes: Option<usize>,
-        guard_size_in_bytes: usize,
-    ) -> Result<Box<dyn LinearMemory>, String>;
+    /// This value is tuned from the various [`Config`](crate::Config) methods about
+    /// memory sizes/guards. It is guaranteed to be a multiple of the system page size.
+    pub fn guard_size_in_bytes(&self) -> usize {
+        usize::try_from(self.tunables.guard_size()).unwrap()
+    }
+
+    /// What kind of memory is requested.
+    pub fn kind(&self) -> MemoryKind {
+        self.tunables.kind().into()
+    }
+
+    /// Internal parameter: detailed internal representation of the memory being created.
+    pub(crate) fn wasmtime_memory(&self) -> &'a wasmtime_environ::Memory {
+        self.ty
+    }
+
+    /// Internal parameter: all the tunables, including those not exposed to the public API.
+    pub(crate) fn tunables(&self) -> &'a MemoryTunables<'a> {
+        self.tunables
+    }
+}
+
+impl fmt::Debug for MemoryRequest<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MemoryRequest")
+            .field("ty", &self.ty())
+            .field("minimum", &self.minimum)
+            .field("maximum", &self.maximum)
+            .field("reserved_size_in_bytes", &self.reserved_size_in_bytes())
+            .field("guard_size_in_bytes", &self.guard_size_in_bytes())
+            .field("kind", &self.kind())
+            .finish()
+    }
 }
 
 /// A constructor for externally-created shared memory.

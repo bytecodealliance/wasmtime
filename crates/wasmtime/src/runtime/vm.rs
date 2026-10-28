@@ -109,7 +109,7 @@ pub use crate::runtime::vm::instance::{
     PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
 };
 pub use crate::runtime::vm::interpreter::*;
-pub use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator, SharedMemory};
+pub use crate::runtime::vm::memory::{Memory, SharedMemory};
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::provenance::*;
 pub use crate::runtime::vm::stack_switching::*;
