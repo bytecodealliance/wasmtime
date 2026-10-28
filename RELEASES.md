@@ -1,3 +1,19 @@
+## 36.0.20
+
+Released 2026-10-29.
+
+### Fixed
+
+* Unchecked memory usage in transferring borrowed resources between components
+  has been fixed.
+  [GHSA-6fr9-xmw9-5352](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-6fr9-xmw9-5352)
+
+* Fixed a possibility of content-length being invalid or not matching body
+  length in wasi-http p2.
+  [GHSA-h4wp-g4x3-7398](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-h4wp-g4x3-7398)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.19
 
 Released 2026-10-19.
