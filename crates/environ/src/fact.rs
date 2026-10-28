@@ -992,7 +992,45 @@ impl Options {
     ) -> Option<&'a [FlatType]> {
         let flat = types.flat_types(ty)?;
         match self.data_model {
-            DataModel::Gc {} => todo!("CM+GC"),
+            // These types lower to a scalar core value type under the GC data
+            // model, which is the same flattening that the linear memory data
+            // model uses, and which does not depend on the width of memory.
+            // Therefore the `memory32` list is reused here.
+            //
+            // See https://github.com/WebAssembly/component-model/issues/525.
+            DataModel::Gc {} => match ty {
+                InterfaceType::Bool
+                | InterfaceType::U8
+                | InterfaceType::S8
+                | InterfaceType::U16
+                | InterfaceType::S16
+                | InterfaceType::U32
+                | InterfaceType::S32
+                | InterfaceType::U64
+                | InterfaceType::S64
+                | InterfaceType::Float32
+                | InterfaceType::Float64
+                | InterfaceType::Char
+                | InterfaceType::Enum(_)
+                | InterfaceType::Flags(_) => Some(flat.memory32),
+
+                // These lower to a GC `struct`/`array` reference or to
+                // `externref`, neither of which FACT can translate yet.
+                InterfaceType::String
+                | InterfaceType::Record(_)
+                | InterfaceType::Variant(_)
+                | InterfaceType::List(_)
+                | InterfaceType::Map(_)
+                | InterfaceType::Tuple(_)
+                | InterfaceType::Option(_)
+                | InterfaceType::Result(_)
+                | InterfaceType::Own(_)
+                | InterfaceType::Borrow(_)
+                | InterfaceType::Future(_)
+                | InterfaceType::Stream(_)
+                | InterfaceType::ErrorContext(_)
+                | InterfaceType::FixedLengthList(_) => todo!("CM+GC"),
+            },
             DataModel::LinearMemory(mem_opts) => Some(if mem_opts.memory64() {
                 flat.memory64
             } else {
