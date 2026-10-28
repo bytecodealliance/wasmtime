@@ -781,10 +781,7 @@ impl RunCommand {
     ) -> Result<wasmtime::component::Instance> {
         use wasmtime::component::{
             Val,
-            wasm_wave::{
-                untyped::UntypedFuncCall,
-                wasm::{DisplayFuncResults, WasmFunc},
-            },
+            wasm_wave::{untyped::UntypedFuncCall, wasm::WasmFunc},
         };
 
         // Check if the invoke string is present
@@ -820,7 +817,17 @@ impl RunCommand {
         self.call_component_func(store, &params, func, &mut results)
             .await?;
 
-        println!("{}", DisplayFuncResults(&results));
+        // Not every value can be rendered as WAVE (e.g. resources), so this can
+        // fail even though the call itself succeeded.
+        let results = results
+            .iter()
+            .map(Val::to_wave)
+            .collect::<Result<Vec<_>>>()
+            .with_context(|| format!("failed to print the results of invoke \"{invoke}\""))?;
+        match &results[..] {
+            [result] => println!("{result}"),
+            results => println!("({})", results.join(", ")),
+        }
         Ok(instance)
     }
 
