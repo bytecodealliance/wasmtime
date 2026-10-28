@@ -69,6 +69,50 @@ enum RegallocAlgorithm {
   SinglePass = WASMTIME_REGALLOC_SINGLE_PASS,
 };
 
+/// \brief The kind of memory a custom memory creator is asked to create.
+///
+/// https://docs.wasmtime.dev/api/wasmtime/enum.MemoryKind.html
+enum class MemoryKind {
+  /// A standard WebAssembly linear memory (module or host).
+  LinearMemory = WASMTIME_MEMORY_KIND_LINEAR_MEMORY,
+  /// The memory backing a store's GC heap.
+  ///
+  /// It differs from standard linear memory:
+  /// - It is created lazily, at most once per store: when a module that needs a
+  ///   GC heap is instantiated or when the first GC object is allocated.
+  ///   This might happen in the middle of execution of WebAssembly code.
+  /// - It grows as GC objects are allocated, independently of `memory.grow`.
+  /// - Its contents are Wasmtime's internal representation of GC objects, not
+  ///   data of the guest program. They are only meaningful to the store
+  ///   that created the GC heap, so they should not be shared, persisted,
+  ///   copied to other memories, etc.
+  GcHeap = WASMTIME_MEMORY_KIND_GC_HEAP,
+};
+
+/// \brief Parameters of a request to create a new linear memory, passed to a
+/// custom memory creator. Only valid for the duration of that call.
+///
+/// https://docs.wasmtime.dev/api/wasmtime/struct.MemoryRequest.html
+class MemoryRequest {
+  const wasmtime_memory_request_t *req;
+
+public:
+  /// Wraps a raw C request.
+  explicit MemoryRequest(const wasmtime_memory_request_t *req) : req(req) {}
+  /// The type of memory being created.
+  MemoryType::Ref ty() const { return MemoryType::Ref(req->ty); }
+  /// Minimum size in bytes.
+  size_t minimum() const { return req->minimum; }
+  /// Maximum size in bytes, `SIZE_MAX` if unbounded.
+  size_t maximum() const { return req->maximum; }
+  /// Required virtual memory reservation in bytes.
+  size_t reserved_size_in_bytes() const { return req->reserved_size_in_bytes; }
+  /// Required unmapped guard region after the allocation, in bytes.
+  size_t guard_size_in_bytes() const { return req->guard_size_in_bytes; }
+  /// The kind of memory being created.
+  MemoryKind kind() const { return static_cast<MemoryKind>(req->kind); }
+};
+
 #ifdef WASMTIME_FEATURE_POOLING_ALLOCATOR
 /**
  * \brief Pool allocation configuration for Wasmtime.
@@ -643,15 +687,11 @@ private:
 
   template <typename T>
   static wasmtime_error_t *
-  raw_new_memory(void *env, const wasm_memorytype_t *ty, size_t minimum,
-                 size_t maximum, size_t reserved_size_in_bytes,
-                 size_t guard_size_in_bytes,
+  raw_new_memory(void *env, const wasmtime_memory_request_t *request,
                  wasmtime_linear_memory_t *memory_ret) {
     using Memory = typename T::Memory;
     T *creator = reinterpret_cast<T *>(env);
-    Result<Memory> result =
-        creator->new_memory(MemoryType::Ref(ty), minimum, maximum,
-                            reserved_size_in_bytes, guard_size_in_bytes);
+    Result<Memory> result = creator->new_memory(MemoryRequest(request));
     if (!result) {
       return result.err().capi_release();
     }

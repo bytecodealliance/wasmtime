@@ -96,14 +96,13 @@ struct MyMemoryCreator {
     }
   };
 
-  Result<Memory> new_memory(const MemoryType::Ref &ty, size_t minimum,
-                            size_t maximum, size_t reserved_size_in_bytes,
-                            size_t guard_size_in_bytes) {
-    EXPECT_EQ(guard_size_in_bytes, 0);
-    EXPECT_EQ(reserved_size_in_bytes, 0);
+  Result<Memory> new_memory(const MemoryRequest &request) {
+    EXPECT_EQ(request.guard_size_in_bytes(), 0);
+    EXPECT_EQ(request.reserved_size_in_bytes(), 0);
+    EXPECT_EQ(request.kind(), MemoryKind::LinearMemory);
 
     Memory mem;
-    mem.grow_memory(minimum).unwrap();
+    mem.grow_memory(request.minimum()).unwrap();
     return mem;
   }
 };
