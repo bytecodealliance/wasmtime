@@ -39,8 +39,16 @@ pub struct ComponentStoreData {
     /// are managed.
     instances: TryPrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
 
-    /// Whether an instance belonging to this store has trapped.
-    trapped: bool,
+    /// Whether an component instance belonging to this store has trapped. This
+    /// can be used to determine if the `Store` is poisoned.
+    ///
+    /// This is only set if a trap occurs while `has_components` is also set.
+    /// Pure core Wasm instances are required to continue running after traps
+    /// so `Store`s with only core modules are never considered poisoned.
+    component_trapped: bool,
+
+    /// Whether a component instance has ever been created in this store.
+    has_components: bool,
 
     /// Total number of component instances in this store, used to track
     /// resources in the instance allocator.
@@ -95,7 +103,8 @@ impl ComponentStoreData {
     pub fn new(engine: &Engine) -> ComponentStoreData {
         ComponentStoreData {
             instances: Default::default(),
-            trapped: false,
+            component_trapped: false,
+            has_components: false,
             num_component_instances: 0,
             component_host_table: Default::default(),
             handle_counter: HandleCounter::new(DEFAULT_MAX_COMPONENT_HANDLES),
@@ -294,6 +303,7 @@ impl StoreData {
         let expected = data.get().id();
         let ret = self.components.instances.push(Some(data))?;
         assert_eq!(expected, ret);
+        self.components.has_components = true;
         Ok(ret)
     }
 
@@ -322,19 +332,24 @@ impl StoreData {
 }
 
 impl StoreOpaque {
-    pub(crate) fn trapped(&self) -> bool {
-        self.store_data().components.trapped
+    #[inline]
+    pub(crate) fn component_trapped(&self) -> bool {
+        self.store_data().components.component_trapped
     }
 
     pub(crate) fn set_trapped(&mut self) {
-        self.store_data_mut().components.trapped = true;
+        let component_data = &mut self.store_data_mut().components;
+        if component_data.has_components {
+            component_data.component_trapped = true;
+        }
     }
 
     /// Determine whether an instance may be entered from the host.
     ///
     /// We return `false` here only `self` has been poisoned due to a trap.
+    #[inline]
     pub(crate) fn may_enter(&mut self) -> bool {
-        !self.trapped()
+        !self.component_trapped()
     }
 
     pub(crate) fn component_data(&self) -> &ComponentStoreData {

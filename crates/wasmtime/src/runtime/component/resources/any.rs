@@ -16,7 +16,7 @@ use crate::component::resources::{HostResourceIndex, HostResourceTables};
 use crate::component::{ComponentType, Lift, Lower, Resource, ResourceDynamic, ResourceType};
 use crate::prelude::*;
 use crate::runtime::vm::{UncaughtException, ValRaw};
-use crate::{AsContextMut, StoreContextMut, Trap};
+use crate::{AsContextMut, StoreContextMut};
 use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
@@ -377,10 +377,6 @@ impl ResourceAny {
 
             _ => unreachable!(),
         };
-
-        if slot.instance.is_some() && !store.0.may_enter() {
-            bail!(Trap::CannotEnterComponent);
-        }
 
         let dtor = match slot.dtor {
             Some(dtor) => dtor.as_non_null(),
