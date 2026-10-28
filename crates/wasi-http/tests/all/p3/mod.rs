@@ -1257,3 +1257,62 @@ async fn p3_http_named_imports() -> Result<()> {
     )
     .await
 }
+
+/// A guest forwarding a host body it has partly read, or with its own
+/// trailers, as its response body.
+mod p3_http_forward_body {
+    use super::*;
+
+    async fn forward(mode: &str) -> Result<Collected<Bytes>> {
+        let mut trailers = http::HeaderMap::new();
+        trailers.insert("x-host", HeaderValue::from_static("host"));
+        // Response body consists of "hello world" two frames followed by a
+        // trailer.
+        let frames = [
+            http_body::Frame::data(Bytes::from_static(b"hello ")),
+            http_body::Frame::data(Bytes::from_static(b"world")),
+            http_body::Frame::trailers(trailers),
+        ];
+        let req = http::Request::builder()
+            .uri("http://localhost/")
+            .header("x-mode", mode)
+            .body(http_body_util::StreamBody::new(futures::stream::iter(
+                frames.map(Ok::<_, ErrorCode>),
+            )))?;
+        let (tx, _) = oneshot::channel();
+        let res = run_http(P3_HTTP_FORWARD_BODY_COMPONENT, req, tx)
+            .await?
+            .unwrap();
+        Ok(res.into_body())
+    }
+
+    fn assert_host_trailers(body: &Collected<Bytes>) {
+        let trailers = body.trailers().expect("missing trailers");
+        assert_eq!(trailers.len(), 1, "{trailers:?}");
+        assert_eq!(trailers["x-host"], "host");
+    }
+
+    #[test_log::test(tokio::test(flavor = "multi_thread"))]
+    async fn read_0() -> Result<()> {
+        let body = forward("read-0").await?;
+        assert_host_trailers(&body);
+        assert_eq!(body.to_bytes(), "hello world");
+        Ok(())
+    }
+
+    #[test_log::test(tokio::test(flavor = "multi_thread"))]
+    async fn read_1() -> Result<()> {
+        let body = forward("read-1").await?;
+        assert_host_trailers(&body);
+        assert_eq!(body.to_bytes(), "ello world");
+        Ok(())
+    }
+
+    #[ignore = "Enable when https://github.com/bytecodealliance/wasmtime/issues/15026 has been fixed."]
+    #[test_log::test(tokio::test(flavor = "multi_thread"))]
+    async fn trailers_error() -> Result<()> {
+        let res = forward("trailers-error").await;
+        assert!(res.is_err(), "{res:?}");
+        Ok(())
+    }
+}
