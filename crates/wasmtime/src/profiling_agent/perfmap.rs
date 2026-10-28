@@ -2,6 +2,7 @@ use crate::prelude::*;
 use crate::profiling_agent::ProfilingAgent;
 use std::fs::OpenOptions;
 use std::io::{self, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::process;
 use std::{fs::File, sync::Mutex};
 
@@ -19,11 +20,15 @@ pub fn new() -> Result<Box<dyn ProfilingAgent>> {
 
         // Open the file specifically in append mode to handle the case where
         // multiple engines in the same process are all writing to this file.
+        //
+        // The path is predictable and lives in a world-writable directory, so
+        // don't follow a symlink that someone else may have planted there.
         *file = Some(
             OpenOptions::new()
                 .append(true)
                 .write(true)
                 .create(true)
+                .custom_flags(libc::O_NOFOLLOW)
                 .open(&filename)?,
         );
     }
@@ -59,5 +64,24 @@ impl ProfilingAgent for PerfMapAgent {
         if let Err(err) = Self::make_line(file, name, code) {
             eprintln!("Error when writing import trampoline info to the perf map file: {err}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn does_not_follow_symlink() {
+        let map = format!("/tmp/perf-{}.map", std::process::id());
+        let target = std::env::temp_dir().join(format!("perf-{}.map-target", std::process::id()));
+        std::fs::write(&target, "").unwrap();
+        let _ = std::fs::remove_file(&map);
+        std::os::unix::fs::symlink(&target, &map).unwrap();
+
+        let result = super::new();
+
+        std::fs::remove_file(&map).unwrap();
+        std::fs::remove_file(&target).unwrap();
+        assert!(result.is_err());
     }
 }
