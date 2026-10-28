@@ -2,7 +2,9 @@
 use crate::component;
 use crate::core;
 use crate::spectest::*;
-use json_from_wast::{Action, Command, Const, CoreConst, WasmFile, WasmFileType};
+#[cfg(feature = "component-model")]
+use json_from_wast::CoreConst;
+use json_from_wast::{Action, Command, Const, WasmFile, WasmFileType};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str;
