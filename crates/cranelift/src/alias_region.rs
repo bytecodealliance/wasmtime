@@ -808,23 +808,6 @@ where
         )
     }
 
-    fn vmctx_store(
-        &mut self,
-        cursor: &mut FuncCursor<'_>,
-        base_flags: ir::MemFlagsData,
-        vmctx: ir::Value,
-        offset: u32,
-        val: ir::Value,
-    ) {
-        let region = self.vmctx_region(cursor.func, offset);
-        cursor.ins().store(
-            base_flags.with_alias_region(Some(region)),
-            val,
-            vmctx,
-            i32::try_from(offset).unwrap(),
-        );
-    }
-
     /// Load the `VMContext::magic` field.
     pub fn vmctx_magic(&mut self, cursor: &mut FuncCursor<'_>, vmctx: ir::Value) -> ir::Value {
         self.vmctx_load(
