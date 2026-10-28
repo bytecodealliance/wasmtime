@@ -835,17 +835,24 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // Async lowered functions have a smaller limit on flat parameters, but
         // their destination, a lifted function, does not have a different limit
         // than sync functions.
-        let max_flat_params = if adapter.lower.options.async_ {
-            MAX_FLAT_ASYNC_PARAMS
-        } else {
-            MAX_FLAT_PARAMS
+        let max_flat_params = match lower_opts.data_model {
+            // Under the GC data model the core function type is declared
+            // up-front via the `core-type` canonical option and maps 1:1 to the
+            // component type, so parameters are never spilled to memory.
+            DataModel::Gc {} => usize::MAX,
+            DataModel::LinearMemory(_) if adapter.lower.options.async_ => MAX_FLAT_ASYNC_PARAMS,
+            DataModel::LinearMemory(_) => MAX_FLAT_PARAMS,
         };
         let src_flat =
             self.types
                 .flatten_types(lower_opts, max_flat_params, src_tys.iter().copied());
+        let max_dst_flat_params = match lift_opts.data_model {
+            DataModel::Gc {} => usize::MAX,
+            DataModel::LinearMemory(_) => MAX_FLAT_PARAMS,
+        };
         let dst_flat =
             self.types
-                .flatten_types(lift_opts, MAX_FLAT_PARAMS, dst_tys.iter().copied());
+                .flatten_types(lift_opts, max_dst_flat_params, dst_tys.iter().copied());
 
         let src = if let Some(flat) = &src_flat {
             Source::Stack(Stack {
