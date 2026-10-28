@@ -609,7 +609,7 @@ where
                 // `body`, so it must be yielded before the rest of `body`.
                 let body = mem::take(&mut me.body);
                 me.body = UnsyncBoxBody::new(BodyWithPrefix {
-                    prefix: Some(buffer),
+                    prefix: buffer,
                     body,
                 });
             }
@@ -622,7 +622,7 @@ where
 
 /// A wrapper around [http_body::Body], which yields `prefix` before `body`
 struct BodyWithPrefix<T> {
-    prefix: Option<Bytes>,
+    prefix: Bytes,
     body: T,
 }
 
@@ -638,18 +638,19 @@ where
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         let this = self.get_mut();
-        if let Some(prefix) = this.prefix.take() {
+        if !this.prefix.is_empty() {
+            let prefix = std::mem::take(&mut this.prefix);
             return Poll::Ready(Some(Ok(http_body::Frame::data(prefix))));
         }
         Pin::new(&mut this.body).poll_frame(cx)
     }
 
     fn is_end_stream(&self) -> bool {
-        self.prefix.is_none() && self.body.is_end_stream()
+        self.prefix.is_empty() && self.body.is_end_stream()
     }
 
     fn size_hint(&self) -> http_body::SizeHint {
-        let n = self.prefix.as_ref().map_or(0, |p| p.len() as u64);
+        let n = self.prefix.len() as u64;
         let hint = self.body.size_hint();
         let mut res = http_body::SizeHint::new();
         res.set_lower(hint.lower() + n);
