@@ -653,7 +653,7 @@ where
         let n = self.prefix.len() as u64;
         let hint = self.body.size_hint();
         let mut res = http_body::SizeHint::new();
-        res.set_lower(hint.lower() + n);
+        res.set_lower(hint.lower().saturating_add(n));
         if let Some(upper) = hint.upper() {
             res.set_upper(upper + n);
         }
