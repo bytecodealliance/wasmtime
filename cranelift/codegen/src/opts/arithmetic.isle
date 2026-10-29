@@ -721,7 +721,7 @@
 (rule (simplify (umin ty (bnot ty x) (bnot ty y))) (bnot ty (umax ty x y)))
 
 ;; (-x) - (~x) --> 1
-(rule (simplify (isub ty (ineg ty x) (bnot ty x))) (iconst_u ty 1))
+(rule (simplify (isub (ty_int_vec128 ty) (ineg ty x) (bnot ty x))) (iconst_u ty 1))
 
 ;; ~x + C --> (C - 1) - x
 (rule (simplify (iadd (fits_in_64 ty) (bnot ty x) (iconst ty y))) (isub ty (iconst ty (imm64_sub ty y (imm64 1))) x))
