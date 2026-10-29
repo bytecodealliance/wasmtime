@@ -1495,15 +1495,30 @@ impl<'a> AliasAnalysis<'a> {
                     {
                         trace!("  --> idempotent store of {store_data} to loc {check_loc:?}");
 
-                        // We are removing this idempotent store in favor of the
-                        // original, so if this idempotent store was observed,
-                        // then the original must now be observed as well.
                         if let LastStore::Inst(last_store) = last_store {
+                            // We are removing this idempotent store in favor of
+                            // the original, so if this idempotent store was
+                            // observed, then the original must now be observed
+                            // as well.
                             if let Some(observer) = self.observed_stores.get(&inst).copied() {
                                 let entry =
                                     self.observed_stores.entry(last_store).or_insert(observer);
                                 *entry = Observer::meet(*entry, observer);
                                 trace!("    observed_stores[{last_store:?}] = {entry:?}");
+                            }
+
+                            // And if the `last_store` has a trap code but this
+                            // one doesn't, then we need to additionally mark it
+                            // as observed by many because a later non-trapping
+                            // store can observe whether or not it trapped.
+                            let trap_code =
+                                |i: Inst| func.dfg.insts[i].memflags_trap_code(&func.dfg);
+                            if trap_code(inst).is_none()
+                                && trap_code(last_store).is_some()
+                                && func.dfg.insts[last_store].opcode().can_store()
+                            {
+                                self.observed_stores.insert(last_store, Observer::Many);
+                                trace!("    observed_stores[{last_store:?}] = Many");
                             }
                         }
 
