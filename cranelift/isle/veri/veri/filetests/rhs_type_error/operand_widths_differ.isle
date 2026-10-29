@@ -1,0 +1,43 @@
+; Regression test for a right-hand side that is ill-typed for some of the type
+; assignments that the left-hand side accepts.
+;
+; The rule fires whenever its left-hand side matches. Here both `ext` results
+; are 32 bits wide, but nothing ties the widths of their operands together: `x`
+; may be 8 bits and `y` 16 bits.
+
+(type Value (primitive Value))
+(model Value (type (bv)))
+
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+(instantiate test
+    ((args (bv 8)) (ret (bv 8)))
+)
+
+(decl ext (Value) Value)
+(extern extractor ext ext)
+(spec (ext x) (provide (= result (sign_ext 32 x))))
+(instantiate ext
+    ((args (bv 8)) (ret (bv 32)))
+    ((args (bv 16)) (ret (bv 32)))
+)
+
+(decl add32 (Value Value) Value)
+(extern extractor add32 add32)
+(spec (add32 x y) (provide (= result (bvadd x y))))
+(instantiate add32
+    ((args (bv 32) (bv 32)) (ret (bv 32)))
+)
+
+(decl low8 (Value) Value)
+(extern extractor low8 low8)
+(spec (low8 x) (provide (= result (extract 7 0 x))))
+(instantiate low8
+    ((args (bv 32)) (ret (bv 8)))
+)
+
+(decl add (Value Value) Value)
+(extern constructor add add)
+(spec (add x y) (provide (= result (bvadd x y))))
+
+(rule test (test (low8 (add32 (ext x) (ext y)))) (add x y))

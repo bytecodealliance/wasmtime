@@ -631,6 +631,8 @@
 ; Activate and set parameters of a CLIF load effect.
 (macro (clif_load_activate clif_load size_bits p offset)
     (and
+        ; The address is a scalar.
+        (= (lanesof p) 1)
         (:active clif_load)
         (= (:size_bits clif_load) size_bits)
         (= (:addr clif_load) (effective_address! p offset))))
@@ -758,6 +760,9 @@
 ; Activate and set parameters of a CLIF store effect.
 (macro (clif_store_activate clif_store value p offset)
     (and
+        ; The address is a scalar.
+        (= (lanesof p) 1)
+
         ; Activate the CLIF store effect
         (:active clif_store)
 

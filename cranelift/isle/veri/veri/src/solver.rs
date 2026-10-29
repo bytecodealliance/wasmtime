@@ -161,13 +161,18 @@ impl<'a> Solver<'a> {
     }
 
     pub fn encode(&mut self) -> Result<()> {
+        self.encode_exprs(&HashSet::new())
+    }
+
+    /// Declare and define the expressions, other than those in `skip`.
+    fn encode_exprs(&mut self, skip: &HashSet<ExprId>) -> Result<()> {
         // Simplifies the scalar case of specs to just the body
         self.resolve_single_lane_maps();
 
         // Expressions
         for (i, expr) in self.conditions.exprs.iter().enumerate() {
             let x = ExprId(i);
-            if self.alias.contains_key(&x) {
+            if self.alias.contains_key(&x) || skip.contains(&x) {
                 continue;
             }
             self.declare_expr(x)?;
@@ -177,6 +182,40 @@ impl<'a> Solver<'a> {
         }
 
         Ok(())
+    }
+
+    /// Check whether the left-hand side of the rule can match at all under this
+    /// type assignment, ignoring the right-hand side.
+    ///
+    /// The assignment need only type the left-hand side expressions.
+    pub fn check_lhs_feasibility(&mut self) -> Result<Applicability> {
+        // Encode left-hand side expressions.
+        let rhs = self.conditions.rhs_dependent_exprs();
+        self.encode_exprs(&rhs)?;
+
+        // Check left-hand side assumptions, together with the typing facts of
+        // the term's contract.
+        self.smt.push()?;
+        let assumptions: Vec<ExprId> = self
+            .conditions
+            .assumptions
+            .iter()
+            .chain(&self.conditions.contract_facts)
+            .copied()
+            .filter(|a| !rhs.contains(a))
+            .collect();
+        let assumptions = self.all(&assumptions);
+        self.smt.assert(assumptions)?;
+
+        let verdict = match self.check()? {
+            Response::Sat => Applicability::Applicable,
+            Response::Unsat => Applicability::Inapplicable,
+            Response::Unknown => Applicability::Unknown,
+        };
+
+        self.smt.pop()?;
+
+        Ok(verdict)
     }
 
     pub fn check_assumptions_feasibility(&mut self) -> Result<Applicability> {
