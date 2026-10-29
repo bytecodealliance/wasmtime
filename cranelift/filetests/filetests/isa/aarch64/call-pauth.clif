@@ -106,5 +106,6 @@ block0(v0: i64):
 ;   b #0x10
 ;   udf #0 ; reloc_external Abs8 %g 0
 ;   udf #0
-;   br x1
+;   mov x16, x1
+;   br x16
 

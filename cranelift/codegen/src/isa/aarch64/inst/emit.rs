@@ -3522,8 +3522,22 @@ impl MachInstEmit for Inst {
             &Inst::ReturnCallInd { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);
 
+                // Indirect tail calls must use x16 or x17 so that they are
+                // compatible with the callee's `BTI C` landing pad. Other
+                // registers are only accepted by `BTI J`, which is not a valid
+                // landing pad for a function entry.
+                let dest = xreg(16);
+                if info.dest != dest {
+                    Inst::Mov {
+                        size: OperandSize::Size64,
+                        rd: writable_xreg(16),
+                        rm: info.dest,
+                    }
+                    .emit(sink, emit_info, state);
+                }
+
                 Inst::IndirectBr {
-                    rn: info.dest,
+                    rn: dest,
                     targets: vec![],
                 }
                 .emit(sink, emit_info, state);

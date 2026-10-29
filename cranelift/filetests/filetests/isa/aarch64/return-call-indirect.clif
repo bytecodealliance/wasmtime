@@ -41,7 +41,8 @@ block0(v0: i64):
 ;   b #0x10
 ;   udf #0 ; reloc_external Abs8 %callee_i64 0
 ;   udf #0
-;   br x1
+;   mov x16, x1
+;   br x16
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -63,7 +64,8 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   adrp x1, #0 ; reloc_external Aarch64AdrPrelPgHi21 %callee_i64 0
 ;   add x1, x1, #0 ; reloc_external Aarch64AddAbsLo12Nc %callee_i64 0
-;   br x1
+;   mov x16, x1
+;   br x16
 
 ;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -106,7 +108,8 @@ block0(v0: f64):
 ;   b #0x10
 ;   udf #0 ; reloc_external Abs8 %callee_f64 0
 ;   udf #0
-;   br x1
+;   mov x16, x1
+;   br x16
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -149,7 +152,8 @@ block0(v0: i8):
 ;   b #0x10
 ;   udf #0 ; reloc_external Abs8 %callee_i8 0
 ;   udf #0
-;   br x1
+;   mov x16, x1
+;   br x16
 
 ;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -328,5 +332,6 @@ block0:
 ;   ldp x25, x26, [sp], #0x10
 ;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
-;   br x1
+;   mov x16, x1
+;   br x16
 

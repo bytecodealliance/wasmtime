@@ -31,7 +31,7 @@ block0(v0: i64):
 ; nextln:         length: 0x0000002c
 ; nextln:    CIE_pointer: 0x00000000
 ; nextln:     start_addr: 0x0000000000000000
-; nextln:     range_size: 0x00000000000000c8 (end_addr = 0x00000000000000c8)
+; nextln:     range_size: 0x00000000000000cc (end_addr = 0x00000000000000cc)
 ; nextln:   Instructions:
 ; nextln:                 DW_CFA_advance_loc (1)
 ; nextln:                 DW_CFA_def_cfa_offset (16)

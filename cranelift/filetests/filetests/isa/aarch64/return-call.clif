@@ -39,7 +39,8 @@ block0(v0: i64):
 ;   b #0x10
 ;   udf #0 ; reloc_external Abs8 %callee_i64 0
 ;   udf #0
-;   br x1
+;   mov x16, x1
+;   br x16
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -97,7 +98,8 @@ block0(v0: f64):
 ;   b #0x10
 ;   udf #0 ; reloc_external Abs8 %callee_f64 0
 ;   udf #0
-;   br x1
+;   mov x16, x1
+;   br x16
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -138,7 +140,8 @@ block0(v0: i8):
 ;   b #0x10
 ;   udf #0 ; reloc_external Abs8 %callee_i8 0
 ;   udf #0
-;   br x1
+;   mov x16, x1
+;   br x16
 
 ;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -331,7 +334,8 @@ block0:
 ;   ldp x25, x26, [sp], #0x10
 ;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
-;   br x1
+;   mov x16, x1
+;   br x16
 
 ;;;; Test diff blocks with diff return calls with diff # of stack args ;;;;;;;;;
 
@@ -559,7 +563,7 @@ block2:
 ;   mov x8, #0x7d
 ;   mov x1, #0x82
 ;   mov x0, #0x87
-;   cbnz x2, #0x12c
+;   cbnz x2, #0x130
 ; block2: ; offset 0xa0
 ;   mov x2, #0x8c
 ;   stur x28, [sp, #0x70]
@@ -595,8 +599,9 @@ block2:
 ;   ldp x25, x26, [sp], #0x10
 ;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
-;   br x1
-; block3: ; offset 0x12c
+;   mov x16, x1
+;   br x16
+; block3: ; offset 0x130
 ;   ldur x2, [sp]
 ;   stur x28, [sp, #0x80]
 ;   stur x27, [sp, #0x88]
@@ -618,8 +623,8 @@ block2:
 ;   str x8, [sp, #0x108]
 ;   str x1, [sp, #0x110]
 ;   str x0, [sp, #0x118]
-;   ldr x1, #0x188
-;   b #0x190
+;   ldr x1, #0x18c
+;   b #0x194
 ;   udf #0 ; reloc_external Abs8 %different_callee1 0
 ;   udf #0
 ;   add sp, sp, #0x10
@@ -630,5 +635,6 @@ block2:
 ;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   add sp, sp, #0x10
-;   br x1
+;   mov x16, x1
+;   br x16
 
