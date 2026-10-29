@@ -156,6 +156,44 @@ async fn p3_sockets_udp_send() -> wasmtime::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_udp_send_race() -> wasmtime::Result<()> {
+    use std::io::ErrorKind;
+    use std::net::{Ipv4Addr, UdpSocket};
+    use tokio::task::yield_now;
+    use wasmtime_wasi::sockets::SocketAddrUse;
+
+    let allowed = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0))?;
+    let forbidden = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0))?;
+    let allowed_addr = allowed.local_addr()?;
+    let forbidden_addr = forbidden.local_addr()?;
+
+    run_with_builder(P3_SOCKETS_UDP_SEND_RACE_COMPONENT, false, |builder| {
+        builder.socket_addr_check(move |addr, use_| {
+            Box::pin(async move {
+                yield_now().await;
+                !matches!(use_, SocketAddrUse::UdpSend) || addr != forbidden_addr
+            })
+        });
+        builder.env("ALLOWED_PORT", allowed_addr.port().to_string());
+        builder.env("FORBIDDEN_PORT", forbidden_addr.port().to_string());
+    })
+    .await?;
+
+    let mut buf = [0; 16];
+    allowed.set_nonblocking(true)?;
+    let n = allowed.recv(&mut buf)?;
+    assert_eq!(&buf[..n], b"x");
+
+    forbidden.set_nonblocking(true)?;
+    assert!(
+        matches!(forbidden.recv(&mut buf), Err(e) if e.kind() == ErrorKind::WouldBlock),
+        "unexpected datagram delivered to the forbidden address"
+    );
+
+    Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_sockets_udp_sockopts() -> wasmtime::Result<()> {
     run(P3_SOCKETS_UDP_SOCKOPTS_COMPONENT).await
 }
