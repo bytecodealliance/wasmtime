@@ -240,6 +240,13 @@ fn gen_common_isle(
                 (IsleTarget::Lower, _, _, _) => ("Inst", false, "make_inst", "inst_data_value"),
             };
 
+        if ty_in_decl && isle_target == IsleTarget::Opt {
+            fmt.line(";; The `Type` argument is the instruction's *controlling* type, both");
+            fmt.line(";; when matching and when constructing. For most instructions this is");
+            fmt.line(";; the result type, but not for e.g. comparisons (`icmp`'s controlling");
+            fmt.line(";; type is the operand type; its result is `i8` or a lane-wise mask).");
+            fmt.line(";; Use `(has_type ty ...)` to bind the result type instead.");
+        }
         fmtln!(
             fmt,
             "(decl {} ({}{}) {})",

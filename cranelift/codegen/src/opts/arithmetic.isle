@@ -413,10 +413,10 @@
 (rule 1 (cmp_true (ty_vec128 ty)) (iconst_s ty -1))
 
 ;; (x + y) == (y + x) --> true
-(rule (simplify (eq ty (iadd cty x y) (iadd cty y x))) (cmp_true ty))
-(rule (simplify (eq ty (iadd cty y x) (iadd cty x y))) (cmp_true ty))
-(rule (simplify (eq ty (iadd cty x y) (iadd cty x y))) (cmp_true ty))
-(rule (simplify (eq ty (iadd cty y x) (iadd cty y x))) (cmp_true ty))
+(rule (simplify (has_type ty (eq _ (iadd cty x y) (iadd cty y x)))) (cmp_true ty))
+(rule (simplify (has_type ty (eq _ (iadd cty y x) (iadd cty x y)))) (cmp_true ty))
+(rule (simplify (has_type ty (eq _ (iadd cty x y) (iadd cty x y)))) (cmp_true ty))
+(rule (simplify (has_type ty (eq _ (iadd cty y x) (iadd cty y x)))) (cmp_true ty))
 
 ;; (x - y) != x --> y != 0
 (rule (simplify (ne cty (isub ty x y) x)) (ne cty y (all_zero ty)))
@@ -440,24 +440,24 @@
 (rule (simplify (ineg ty (imul ty x (ineg ty y)))) (imul ty x y))
 
 ;; max(x, y) >= x
-(rule (simplify (sge ty (smax ty x y) x)) (cmp_true ty))
-(rule (simplify (sge ty (smax ty y x) x)) (cmp_true ty))
-(rule (simplify (sle ty x (smax ty x y))) (cmp_true ty))
-(rule (simplify (sle ty x (smax ty y x))) (cmp_true ty))
-(rule (simplify (uge ty (umax ty x y) x)) (cmp_true ty))
-(rule (simplify (uge ty (umax ty y x) x)) (cmp_true ty))
-(rule (simplify (ule ty x (umax ty x y))) (cmp_true ty))
-(rule (simplify (ule ty x (umax ty y x))) (cmp_true ty))
+(rule (simplify (has_type bty (sge ty (smax ty x y) x))) (cmp_true bty))
+(rule (simplify (has_type bty (sge ty (smax ty y x) x))) (cmp_true bty))
+(rule (simplify (has_type bty (sle ty x (smax ty x y)))) (cmp_true bty))
+(rule (simplify (has_type bty (sle ty x (smax ty y x)))) (cmp_true bty))
+(rule (simplify (has_type bty (uge ty (umax ty x y) x))) (cmp_true bty))
+(rule (simplify (has_type bty (uge ty (umax ty y x) x))) (cmp_true bty))
+(rule (simplify (has_type bty (ule ty x (umax ty x y)))) (cmp_true bty))
+(rule (simplify (has_type bty (ule ty x (umax ty y x)))) (cmp_true bty))
 
 ;; x >= min(x, y)
-(rule (simplify (sge ty x (smin ty x y))) (cmp_true ty))
-(rule (simplify (sge ty x (smin ty y x))) (cmp_true ty))
-(rule (simplify (sle ty (smin ty x y) x)) (cmp_true ty))
-(rule (simplify (sle ty (smin ty y x) x)) (cmp_true ty))
-(rule (simplify (uge ty x (umin ty x y))) (cmp_true ty))
-(rule (simplify (uge ty x (umin ty y x))) (cmp_true ty))
-(rule (simplify (ule ty (umin ty x y) x)) (cmp_true ty))
-(rule (simplify (ule ty (umin ty y x) x)) (cmp_true ty))
+(rule (simplify (has_type bty (sge ty x (smin ty x y)))) (cmp_true bty))
+(rule (simplify (has_type bty (sge ty x (smin ty y x)))) (cmp_true bty))
+(rule (simplify (has_type bty (sle ty (smin ty x y) x))) (cmp_true bty))
+(rule (simplify (has_type bty (sle ty (smin ty y x) x))) (cmp_true bty))
+(rule (simplify (has_type bty (uge ty x (umin ty x y)))) (cmp_true bty))
+(rule (simplify (has_type bty (uge ty x (umin ty y x)))) (cmp_true bty))
+(rule (simplify (has_type bty (ule ty (umin ty x y) x))) (cmp_true bty))
+(rule (simplify (has_type bty (ule ty (umin ty y x) x))) (cmp_true bty))
 
 ;; min/max(x,x) --> x
 (rule (simplify (umin ty x x)) x)
@@ -586,14 +586,17 @@
 (rule (simplify (umax ty (umin ty x y) (umax ty y x))) (umax ty x y))
 
 ;; x > max(x, y) --> 0
-(rule (simplify (sgt ty x (smax ty x y))) (all_zero ty))
-(rule (simplify (sgt ty x (smax ty y x))) (all_zero ty))
-(rule (simplify (slt ty (smax ty x y) x)) (all_zero ty))
-(rule (simplify (slt ty (smax ty y x) x)) (all_zero ty))
-(rule (simplify (ugt ty x (umax ty x y))) (all_zero ty))
-(rule (simplify (ugt ty x (umax ty y x))) (all_zero ty))
-(rule (simplify (ult ty (umax ty x y) x)) (all_zero ty))
-(rule (simplify (ult ty (umax ty y x) x)) (all_zero ty))
+;;
+;; Note: result type `rty` is an i8 for scalars, which may not be the
+;; same as the controlling type ty.
+(rule (simplify (has_type rty (sgt ty x (smax ty x y)))) (all_zero rty))
+(rule (simplify (has_type rty (sgt ty x (smax ty y x)))) (all_zero rty))
+(rule (simplify (has_type rty (slt ty (smax ty x y) x))) (all_zero rty))
+(rule (simplify (has_type rty (slt ty (smax ty y x) x))) (all_zero rty))
+(rule (simplify (has_type rty (ugt ty x (umax ty x y)))) (all_zero rty))
+(rule (simplify (has_type rty (ugt ty x (umax ty y x)))) (all_zero rty))
+(rule (simplify (has_type rty (ult ty (umax ty x y) x))) (all_zero rty))
+(rule (simplify (has_type rty (ult ty (umax ty y x) x))) (all_zero rty))
 
 ;; (-X) * C = X * (-C)
 (rule imul_ineg_const (simplify (imul (fits_in_64 ty) (ineg ty x) (iconst ty y))) (imul ty x (iconst ty (imm64_neg ty y))))
