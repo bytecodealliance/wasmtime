@@ -9,6 +9,7 @@ use crate::{
     error::internal_error,
     http_request_error,
     types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequestConfig},
+    types_impl::get_content_length,
 };
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
@@ -39,6 +40,18 @@ where
             .unwrap_or(std::time::Duration::from_secs(600));
 
         let req = self.table().delete(request_id)?;
+
+        // The `content-length` header is otherwise only validated in
+        // `outgoing-request.body` and `outgoing-body.finish`, neither of which
+        // a guest is required to call. Validate it here too so that malformed
+        // requests never reach the wire.
+        let content_length = get_content_length(&req.headers).map_err(|()| {
+            internal_error("multiple or invalid `content-length` header values".to_string())
+        })?;
+        if req.body.is_none() && content_length.is_some_and(|n| n != 0) {
+            return Err(types::ErrorCode::HttpRequestBodySize(Some(0)).into());
+        }
+
         let mut builder = hyper::Request::builder();
 
         builder = builder.method(match req.method {
