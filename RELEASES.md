@@ -1,6 +1,6 @@
 ## 48.0.8
 
-Unreleased.
+Released 2026-10-29.
 
 ### Fixed
 
