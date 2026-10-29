@@ -30,14 +30,19 @@ use wasmtime_wasi_http::{
 
 foreach_p3_http!(assert_test_exists);
 
+/// Channel over which a request forwarded to one of the `p3-test*` endpoints is
+/// sent once its body has been collected, or the error encountered while
+/// collecting it.
+type ForwardedRequestTx = oneshot::Sender<Result<http::Request<Collected<Bytes>>, Error>>;
+
 #[derive(Default)]
 struct TestHooks {
-    request_tx: Option<oneshot::Sender<http::Request<Collected<Bytes>>>>,
+    request_tx: Option<ForwardedRequestTx>,
     io_dropped_tx: Option<oneshot::Sender<()>>,
 }
 
 impl TestHooks {
-    fn new(request_tx: Option<oneshot::Sender<http::Request<Collected<Bytes>>>>) -> Self {
+    fn new(request_tx: Option<ForwardedRequestTx>) -> Self {
         Self {
             request_tx,
             ..Self::default()
@@ -45,16 +50,24 @@ impl TestHooks {
     }
 }
 
-/// Collects the body of `request`, and then sends it over the channel if
-/// present.
+/// Collects the body of `request`, and then sends it, or the error encountered
+/// while collecting it, over the channel if present.
 async fn collect_request(
     request: http::Request<WasiBody>,
-    request_tx: Option<oneshot::Sender<http::Request<Collected<Bytes>>>>,
+    request_tx: Option<ForwardedRequestTx>,
 ) -> Result<(), Error> {
     let (parts, body) = request.into_parts();
-    let body = body.collect().await?;
-    if let Some(request_tx) = request_tx {
-        _ = request_tx.send(http::Request::from_parts(parts, body));
+    let result = body.collect().await;
+    let Some(request_tx) = request_tx else {
+        return result.map(|_body| ());
+    };
+    match result {
+        Ok(body) => {
+            _ = request_tx.send(Ok(http::Request::from_parts(parts, body)));
+        }
+        Err(err) => {
+            _ = request_tx.send(Err(err));
+        }
     }
     Ok(())
 }
@@ -270,11 +283,12 @@ async fn run_http<E: Into<Error> + 'static>(
 }
 
 /// Like [`run_http`], but sends the request forwarded by the guest to one of
-/// the `p3-test*` endpoints on `request_tx`.
-async fn run_http_get_forwarded_request<E: Into<Error> + 'static>(
+/// the `p3-test*` endpoints on `request_tx`, or the error encountered while
+/// collecting its body.
+async fn run_http_forwarded<E: Into<Error> + 'static>(
     component_filename: &str,
     req: http::Request<impl Body<Data = Bytes, Error = E> + Send + Sync + 'static>,
-    request_tx: oneshot::Sender<http::Request<Collected<Bytes>>>,
+    request_tx: ForwardedRequestTx,
 ) -> wasmtime::Result<Result<http::Response<Collected<Bytes>>, Option<ErrorCode>>> {
     run_http_with_hooks(component_filename, req, TestHooks::new(Some(request_tx))).await
 }
@@ -835,7 +849,7 @@ async fn p3_http_proxy() -> Result<()> {
         .header("url", "http://p3-test-immediate-response/");
 
     let (request_body_tx, request_body_rx) = oneshot::channel();
-    let response = run_http_get_forwarded_request(
+    let response = run_http_forwarded(
         P3_HTTP_PROXY_COMPONENT,
         request.body(http_body_util::StreamBody::new(body_rx))?,
         request_body_tx,
@@ -856,7 +870,14 @@ async fn p3_http_proxy() -> Result<()> {
                 .unwrap();
             drop(body_tx);
         },
-        async { request_body_rx.await.unwrap().into_body().to_bytes() }
+        async {
+            request_body_rx
+                .await
+                .unwrap()
+                .unwrap()
+                .into_body()
+                .to_bytes()
+        }
     );
 
     assert_eq!(request_body, body.as_slice());
@@ -950,16 +971,15 @@ async fn p3_http_forwarded_trailers_filtered() -> Result<()> {
     ]));
 
     let (request_tx, request_rx) = oneshot::channel();
-    let response =
-        run_http_get_forwarded_request(P3_HTTP_PROXY_COMPONENT, request.body(body)?, request_tx)
-            .await?
-            .unwrap();
+    let response = run_http_forwarded(P3_HTTP_PROXY_COMPONENT, request.body(body)?, request_tx)
+        .await?
+        .unwrap();
     assert_eq!(response.status().as_u16(), 200);
     let response = response.into_body();
     assert_trailers_filtered(response.trailers(), "response to client");
     assert_eq!(response.to_bytes(), b"response".as_slice());
 
-    let upstream = request_rx.await.unwrap().into_body();
+    let upstream = request_rx.await.unwrap().unwrap().into_body();
     assert_trailers_filtered(upstream.trailers(), "request to upstream");
     assert_eq!(upstream.to_bytes(), b"request".as_slice());
     Ok(())
@@ -976,7 +996,7 @@ async fn p3_http_forbidden_headers() -> Result<()> {
         .header("foo", "bar");
 
     let (request_tx, request_rx) = oneshot::channel();
-    let response = run_http_get_forwarded_request(
+    let response = run_http_forwarded(
         P3_HTTP_FORBIDDEN_HEADERS_COMPONENT,
         request.body(Empty::new())?,
         request_tx,
@@ -987,7 +1007,7 @@ async fn p3_http_forbidden_headers() -> Result<()> {
 
     // Grab the headers that actually reached the backend and assert that none
     // of the forbidden inbound headers leaked across the trust boundary.
-    let outbound = request_rx.await.unwrap();
+    let outbound = request_rx.await.unwrap().unwrap();
     let headers = outbound.headers();
 
     // Forbidden headers shouldn't have gotten forwarded.
@@ -1293,8 +1313,7 @@ mod p3_http_forward_body {
             .body(http_body_util::StreamBody::new(futures::stream::iter(
                 frames.map(Ok::<_, ErrorCode>),
             )))?;
-        let (tx, _) = oneshot::channel();
-        let res = run_http(P3_HTTP_FORWARD_BODY_COMPONENT, req, tx)
+        let res = run_http(P3_HTTP_FORWARD_BODY_COMPONENT, req)
             .await?
             .unwrap();
         Ok(res.into_body())
