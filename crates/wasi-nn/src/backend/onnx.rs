@@ -6,18 +6,20 @@ use super::{
 use crate::backend::{Id, read};
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
+use half::{bf16, f16};
 use ort::{
     execution_providers::{CPUExecutionProvider, ExecutionProviderDispatch},
     inputs,
     session::{Input, Output},
     session::{Session, SessionInputValue, builder::GraphOptimizationLevel},
-    tensor::TensorElementType,
+    tensor::{PrimitiveTensorElementType, TensorElementType},
     value::{Tensor as OrtTensor, ValueType},
 };
 
 #[cfg(feature = "onnx-cuda")]
 use ort::execution_providers::CUDAExecutionProvider;
 
+use std::fmt::Debug;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -403,8 +405,10 @@ impl TryFrom<TensorElementType> for TensorType {
     type Error = BackendError;
     fn try_from(ty: TensorElementType) -> Result<Self, Self::Error> {
         match ty {
+            TensorElementType::Float16 => Ok(TensorType::Fp16),
             TensorElementType::Float32 => Ok(TensorType::Fp32),
             TensorElementType::Float64 => Ok(TensorType::Fp64),
+            TensorElementType::Bfloat16 => Ok(TensorType::Bf16),
             TensorElementType::Uint8 => Ok(TensorType::U8),
             TensorElementType::Int32 => Ok(TensorType::I32),
             TensorElementType::Int64 => Ok(TensorType::I64),
@@ -418,24 +422,13 @@ impl TryFrom<TensorElementType> for TensorType {
 fn to_input_value(slot: &TensorSlot) -> Result<[SessionInputValue<'_>; 1], BackendError> {
     match &slot.tensor {
         Some(tensor) => match tensor.ty {
-            TensorType::Fp32 => {
-                let data = bytes_to_f32_vec(tensor.data.to_vec());
-                let dimensions: Vec<i64> = tensor
-                    .dimensions
-                    .iter()
-                    .map(|d| *d as i64) // TODO: fewer conversions
-                    .collect();
-                let ort_tensor = OrtTensor::<f32>::from_array((dimensions, data)).map_err(|e| {
-                    BackendError::BackendAccess(wasmtime::format_err!(
-                        "failed to create ONNX session input: {e}"
-                    ))
-                })?;
-                Ok(inputs![ort_tensor])
-            }
-            _ => Err(BackendError::UnsupportedTensorType(format!(
-                "{:?}",
-                tensor.ty
-            ))),
+            TensorType::Fp16 => to_ort_input(tensor, f16::from_le_bytes),
+            TensorType::Fp32 => to_ort_input(tensor, f32::from_le_bytes),
+            TensorType::Fp64 => to_ort_input(tensor, f64::from_le_bytes),
+            TensorType::Bf16 => to_ort_input(tensor, bf16::from_le_bytes),
+            TensorType::U8 => to_ort_input(tensor, u8::from_le_bytes),
+            TensorType::I32 => to_ort_input(tensor, i32::from_le_bytes),
+            TensorType::I64 => to_ort_input(tensor, i64::from_le_bytes),
         },
         None => {
             return Err(BackendError::BackendAccess(wasmtime::format_err!(
@@ -444,6 +437,35 @@ fn to_input_value(slot: &TensorSlot) -> Result<[SessionInputValue<'_>; 1], Backe
             )));
         }
     }
+}
+
+/// Create an ONNX session input from a tensor whose data holds little-endian
+/// elements of `N` bytes each.
+fn to_ort_input<'a, T, const N: usize>(
+    tensor: &Tensor,
+    from_le_bytes: fn([u8; N]) -> T,
+) -> Result<[SessionInputValue<'a>; 1], BackendError>
+where
+    T: PrimitiveTensorElementType + Debug + Clone + 'static,
+{
+    let (elements, rest) = tensor.data.as_chunks::<N>();
+    if !rest.is_empty() {
+        return Err(BackendError::BackendAccess(wasmtime::format_err!(
+            "input tensor data is not a whole number of {N}-byte elements"
+        )));
+    }
+    let data: Vec<T> = elements.iter().copied().map(from_le_bytes).collect();
+    let dimensions: Vec<i64> = tensor
+        .dimensions
+        .iter()
+        .map(|d| *d as i64) // TODO: fewer conversions
+        .collect();
+    let ort_tensor = OrtTensor::<T>::from_array((dimensions, data)).map_err(|e| {
+        BackendError::BackendAccess(wasmtime::format_err!(
+            "failed to create ONNX session input: {e}"
+        ))
+    })?;
+    Ok(inputs![ort_tensor])
 }
 
 /// Return the number of bytes in a tensor of type `ty` with the given
@@ -471,12 +493,6 @@ pub fn f32_vec_to_bytes(data: Vec<f32>) -> Vec<u8> {
     data.into_iter().flat_map(f32::to_le_bytes).collect()
 }
 
-pub fn bytes_to_f32_vec(data: Vec<u8>) -> Vec<f32> {
-    data.chunks(4)
-        .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
-        .collect()
-}
-
 /// Returns whether the dimension is dynamic.
 ///
 /// ONNX uses [dimensional variables] (i.e., name strings) to indicate that the
@@ -489,4 +505,88 @@ pub fn bytes_to_f32_vec(data: Vec<u8>) -> Vec<f32> {
 ///     https://onnx.ai/onnx/repo-docs/IR.html#static-tensor-shapes
 fn is_dynamic_dimension(d: i64) -> bool {
     d == -1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Make an input slot that holds a tensor with the given type,
+    /// dimensions, and data.
+    fn input_slot(ty: TensorType, dimensions: Vec<u32>, data: Vec<u8>) -> TensorSlot {
+        TensorSlot {
+            shape: Shape {
+                name: "input".to_string(),
+                dimensions: dimensions.iter().map(|d| i64::from(*d)).collect(),
+                ty,
+            },
+            tensor: Some(Tensor::new(dimensions, ty, data)),
+        }
+    }
+
+    /// Encode `values` with `to_le_bytes` and convert them to an ONNX input
+    /// of type `ty`. Then check that the input has the same shape and values.
+    fn check_conversion<T, const N: usize>(
+        ty: TensorType,
+        values: &[T],
+        to_le_bytes: fn(T) -> [u8; N],
+    ) where
+        T: PrimitiveTensorElementType + Copy + PartialEq + Debug,
+    {
+        let len = u32::try_from(values.len()).unwrap();
+        let data = values.iter().flat_map(|v| to_le_bytes(*v)).collect();
+        let slot = input_slot(ty, vec![1, len], data);
+        let [input] = to_input_value(&slot).unwrap();
+        let (shape, elements) = input.try_extract_tensor::<T>().unwrap();
+        assert_eq!(shape.to_vec(), [1, i64::from(len)]);
+        assert_eq!(elements, values);
+    }
+
+    #[test]
+    fn to_input_value_keeps_values_exact() {
+        // `0.1` and `2^53 + 1` change if the data goes through a narrower type.
+        check_conversion(
+            TensorType::Fp16,
+            &[f16::MIN, f16::from_f32(-1.5), f16::from_f32(0.1), f16::MAX],
+            f16::to_le_bytes,
+        );
+        check_conversion(
+            TensorType::Fp32,
+            &[f32::MIN, -1.5, 0.1, f32::MAX],
+            f32::to_le_bytes,
+        );
+        check_conversion(
+            TensorType::Fp64,
+            &[f64::MIN, -1.5, 0.1, f64::MAX],
+            f64::to_le_bytes,
+        );
+        check_conversion(
+            TensorType::Bf16,
+            &[
+                bf16::MIN,
+                bf16::from_f32(-1.5),
+                bf16::from_f32(0.1),
+                bf16::MAX,
+            ],
+            bf16::to_le_bytes,
+        );
+        check_conversion(TensorType::U8, &[0, 1, 254, u8::MAX], u8::to_le_bytes);
+        check_conversion(
+            TensorType::I32,
+            &[i32::MIN, -1, 0, i32::MAX],
+            i32::to_le_bytes,
+        );
+        check_conversion(
+            TensorType::I64,
+            &[i64::MIN, -1, (1 << 53) + 1, i64::MAX],
+            i64::to_le_bytes,
+        );
+    }
+
+    #[test]
+    fn to_input_value_rejects_bad_tensors() {
+        // A partial element after the last whole one is an error, not data to drop.
+        let slot = input_slot(TensorType::I64, vec![1], vec![0; 9]);
+        assert!(to_input_value(&slot).is_err());
+    }
 }
