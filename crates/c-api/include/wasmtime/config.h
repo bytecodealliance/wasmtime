@@ -966,6 +966,15 @@ WASMTIME_CONFIG_PROP(void, wasm_component_model_async, bool)
 WASMTIME_CONFIG_PROP(void, wasm_component_model_more_async_builtins, bool)
 
 /**
+ * \brief Configures whether the `stream.forward` and `future.forward`
+ * built-ins are enabled for the component model.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_forward.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_forward, bool)
+
+/**
  * \brief Configures whether stackful coroutine support is enabled for async
  * components.
  *

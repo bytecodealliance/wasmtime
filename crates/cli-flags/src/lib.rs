@@ -492,6 +492,10 @@ wasmtime_option_group! {
         /// Component model support for async lifting/lowering: this corresponds
         /// to the 🚝 emoji in the component model specification.
         pub component_model_more_async_builtins: Option<bool>,
+        /// Component model support for `stream.forward` and `future.forward`:
+        /// this corresponds to the ➡️ emoji in the component model
+        /// specification.
+        pub component_model_forward: Option<bool>,
         /// Component model support for async lifting/lowering: this corresponds
         /// to the 🚟 emoji in the component model specification.
         pub component_model_async_stackful: Option<bool>,
@@ -1366,6 +1370,7 @@ impl CommonOptions {
             ("component-model", component_model, wasm_component_model)
             ("component-model-async", component_model_async, wasm_component_model_async)
             ("component-model-async", component_model_more_async_builtins, wasm_component_model_more_async_builtins)
+            ("component-model-async", component_model_forward, wasm_component_model_forward)
             ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
             ("component-model-async", component_model_threading, wasm_component_model_threading)
             ("component-model", component_model_error_context, wasm_component_model_error_context)
@@ -1558,6 +1563,7 @@ impl CommonOptions {
                 component_model_more_async_builtins: Some(
                     features.contains(WasmFeatures::CM_MORE_ASYNC_BUILTINS),
                 ),
+                component_model_forward: Some(features.contains(WasmFeatures::CM_FORWARD)),
                 component_model_threading: Some(features.contains(WasmFeatures::CM_THREADING)),
                 custom_page_sizes: Some(features.contains(WasmFeatures::CUSTOM_PAGE_SIZES)),
                 exceptions: Some(features.contains(WasmFeatures::EXCEPTIONS)),
