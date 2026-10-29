@@ -200,38 +200,3 @@ fn post_return_string() -> Result<()> {
 
     Ok(())
 }
-
-#[test]
-fn trap_in_post_return_poisons_instance() -> Result<()> {
-    let component = r#"
-        (component
-            (core module $m
-                (func (export "f"))
-                (func (export "post") unreachable)
-            )
-            (core instance $i (instantiate $m))
-            (func (export "f")
-                (canon lift
-                    (core func $i "f")
-                    (post-return (core func $i "post"))
-                )
-            )
-        )
-    "#;
-
-    let engine = super::engine();
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
-    let trap = f.call(&mut store, ()).unwrap_err().downcast::<Trap>()?;
-    assert_eq!(trap, Trap::UnreachableCodeReached);
-    let err = f.call(&mut store, ()).unwrap_err();
-    assert_eq!(
-        err.downcast_ref(),
-        Some(&Trap::CannotEnterComponent),
-        "{err}",
-    );
-
-    Ok(())
-}

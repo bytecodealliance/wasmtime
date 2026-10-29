@@ -862,3 +862,130 @@
     (tuple.const (option.none) (result.ok))
     (tuple.const (option.some (u8.const 2)) (result.err (str.const "hello there")))
     (tuple.const (option.some (u8.const 200)) (result.err (str.const "general kenobi")))))
+
+;; Echo a string, which is passed as two flat values and returned via a
+;; return pointer.
+(component
+  (core module $m
+    (memory (export "memory") 1)
+    (global $last (mut i32) (i32.const 8))
+    (func $realloc (export "realloc") (param i32 i32 i32 i32) (result i32)
+      (local $ret i32)
+      (local.set $ret
+        (i32.and
+          (i32.add (global.get $last) (i32.sub (local.get 2) (i32.const 1)))
+          (i32.sub (i32.const 0) (local.get 2))))
+      (global.set $last (i32.add (local.get $ret) (local.get 3)))
+      (local.get $ret))
+    (func (export "echo") (param i32 i32) (result i32)
+      (local $base i32)
+      (local.set $base
+        (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+      (i32.store offset=0 (local.get $base) (local.get 0))
+      (i32.store offset=4 (local.get $base) (local.get 1))
+      (local.get $base))
+  )
+  (core instance $i (instantiate $m))
+  (func (export "echo") (param "a" string) (result string)
+    (canon lift (core func $i "echo") (memory (core memory $i "memory"))
+      (realloc (core func $i "realloc"))))
+)
+(assert_return (invoke "echo" (str.const "hello, component!"))
+  (str.const "hello, component!"))
+
+;; Echo a record with many nested types. It has more than 16 flat values, so
+;; it is passed in memory, and the guest returns the same pointer.
+(component
+  (core module $m
+    (memory (export "memory") 1)
+    (global $last (mut i32) (i32.const 8))
+    (func $realloc (export "realloc") (param i32 i32 i32 i32) (result i32)
+      (local $ret i32)
+      (local.set $ret
+        (i32.and
+          (i32.add (global.get $last) (i32.sub (local.get 2) (i32.const 1)))
+          (i32.sub (i32.const 0) (local.get 2))))
+      (global.set $last (i32.add (local.get $ret) (local.get 3)))
+      (local.get $ret))
+    (func (export "echo") (param i32) (result i32) local.get 0)
+  )
+  (core instance $i (instantiate $m))
+
+  (type $b' (enum "a" "b"))
+  (export $b "b" (type $b'))
+  (type $c' (record (field "D" bool) (field "E" u32)))
+  (export $c "c" (type $c'))
+  (type $f' (flags "G" "H" "I"))
+  (export $f "f" (type $f'))
+  (type $m' (record (field "N" bool) (field "O" u32)))
+  (export $m "m" (type $m'))
+  (type $j' (variant
+    (case "K" u32)
+    (case "L" float64)
+    (case "M" $m)
+  ))
+  (export $j "j" (type $j'))
+  (type $Foo' (record
+    (field "A" u32)
+    (field "B" $b)
+    (field "C" $c)
+    (field "F" (list $f))
+    (field "J" $j)
+    (field "P" s8)
+    (field "Q" s16)
+    (field "R" s32)
+    (field "S" s64)
+    (field "T" float32)
+    (field "U" float64)
+    (field "V" string)
+    (field "W" char)
+    (field "Y" (tuple u32 u32))
+    (field "AA" (option u32))
+    (field "BB" (result string (error string)))
+  ))
+  (export $Foo "foo" (type $Foo'))
+
+  (func (export "echo") (param "a" $Foo) (result $Foo)
+    (canon lift (core func $i "echo") (memory (core memory $i "memory"))
+      (realloc (core func $i "realloc"))))
+)
+(assert_return
+  (invoke "echo"
+    (record.const
+      (field "A" u32.const 32343)
+      (field "B" enum.const "b")
+      (field "C" record.const
+        (field "D" bool.const false)
+        (field "E" u32.const 2084037802))
+      (field "F" list.const (flags.const "G" "I"))
+      (field "J" variant.const "L" (f64.const 3.14159265))
+      (field "P" s8.const 42)
+      (field "Q" s16.const 4242)
+      (field "R" s32.const 42424242)
+      (field "S" s64.const 424242424242424242)
+      (field "T" f32.const 3.14159265)
+      (field "U" f64.const 3.14159265)
+      (field "V" str.const "wow, nice types")
+      (field "W" char.const "🦀")
+      (field "Y" tuple.const (u32.const 42) (u32.const 24))
+      (field "AA" option.some (u32.const 314159265))
+      (field "BB" result.ok (str.const "no problem"))))
+  (record.const
+    (field "A" u32.const 32343)
+    (field "B" enum.const "b")
+    (field "C" record.const
+      (field "D" bool.const false)
+      (field "E" u32.const 2084037802))
+    (field "F" list.const (flags.const "G" "I"))
+    (field "J" variant.const "L" (f64.const 3.14159265))
+    (field "P" s8.const 42)
+    (field "Q" s16.const 4242)
+    (field "R" s32.const 42424242)
+    (field "S" s64.const 424242424242424242)
+    (field "T" f32.const 3.14159265)
+    (field "U" f64.const 3.14159265)
+    (field "V" str.const "wow, nice types")
+    (field "W" char.const "🦀")
+    (field "Y" tuple.const (u32.const 42) (u32.const 24))
+    (field "AA" option.some (u32.const 314159265))
+    (field "BB" result.ok (str.const "no problem"))))
