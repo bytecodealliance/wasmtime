@@ -15,7 +15,7 @@
 (component
   (component $A
     (core module $m
-      (rec (type $t (struct (field (mut i32)) (field (mut i32)))))
+      (type $t (struct (field (mut i32)) (field (mut i32))))
       (func (export "f") (param (ref null $t)) (result (ref null $t))
         local.get 0)
     )
@@ -26,12 +26,12 @@
   (instance $a (instantiate $A))
   (alias export $a "f" (func $af))
 
-  (core rec (type $t (struct (field (mut i32)) (field (mut i32)))))
+  (core type $t (struct (field (mut i32)) (field (mut i32))))
   (core type $sig (func (param (ref null $t)) (result (ref null $t))))
   (core func $l (canon lower (func $af) gc (core-type $sig)))
 
   (core module $m
-    (rec (type $t (struct (field (mut i32)) (field (mut i32)))))
+    (type $t (struct (field (mut i32)) (field (mut i32))))
     (import "" "f" (func $f (param (ref null $t)) (result (ref null $t))))
     (func (export "g") (param i32 i32) (result i32)
       local.get 0
@@ -61,7 +61,7 @@
 (component
   (component $A
     (core module $m
-      (rec (type $t (struct (field (mut i32)))))
+      (type $t (struct (field (mut i32))))
       (func (export "f") (param (ref null $t)) (result (ref null $t))
         local.get 0)
     )
@@ -72,12 +72,12 @@
   (instance $a (instantiate $A))
   (alias export $a "f" (func $af))
 
-  (core rec (type $t (struct (field (mut i32)))))
+  (core type $t (struct (field (mut i32))))
   (core type $sig (func (param (ref null $t)) (result (ref null $t))))
   (core func $l (canon lower (func $af) gc (core-type $sig)))
 
   (core module $m
-    (rec (type $t (struct (field (mut i32)))))
+    (type $t (struct (field (mut i32))))
     (import "" "f" (func $f (param (ref null $t)) (result (ref null $t))))
     (func (export "g") (param i32) (result i32)
       local.get 0
@@ -93,12 +93,11 @@
 
 (assert_return (invoke "g" (u32.const 42)) (u32.const 42))
 
-;; A tuple of mixed widths, including immutable fields. #525 writes a struct
-;; field's mutability as `mut?`, so both forms must be accepted.
+;; A tuple of mixed widths, including immutable fields.
 (component
   (component $A
     (core module $m
-      (rec (type $t (struct (field i8) (field (mut i64)) (field f64))))
+      (type $t (struct (field i8) (field (mut i64)) (field f64)))
       (func (export "f") (param (ref null $t)) (result (ref null $t))
         local.get 0)
     )
@@ -109,60 +108,58 @@
   (instance $a (instantiate $A))
   (alias export $a "f" (func $af))
 
-  (core rec (type $t (struct (field i8) (field (mut i64)) (field f64))))
+  (core type $t (struct (field i8) (field (mut i64)) (field f64)))
   (core type $sig (func (param (ref null $t)) (result (ref null $t))))
   (core func $l (canon lower (func $af) gc (core-type $sig)))
 
   (core module $m
-    (rec (type $t (struct (field i8) (field (mut i64)) (field f64))))
+    (type $t (struct (field i8) (field (mut i64)) (field f64)))
     (import "" "f" (func $f (param (ref null $t)) (result (ref null $t))))
-    ;; The `f64` field is passed in and read back out as a bit pattern: a
-    ;; top-level `(f64.const ...)` in a `wast` directive parses as a core value
-    ;; and can never reach a component function. See the note in `floats.wast`.
-    (func $make (param i32 i64 i64) (result (ref null $t))
+    (func $make (param i32 i64 f64) (result (ref null $t))
       local.get 0
       local.get 1
       local.get 2
-      f64.reinterpret_i64
       struct.new $t
       call $f)
-    (func (export "g") (param i32 i64 i64) (result i32)
+    (func (export "g") (param i32 i64 f64) (result i32)
       local.get 0
       local.get 1
       local.get 2
       call $make
       struct.get_u $t 0)
-    (func (export "h") (param i32 i64 i64) (result i64)
+    (func (export "h") (param i32 i64 f64) (result i64)
       local.get 0
       local.get 1
       local.get 2
       call $make
       struct.get $t 1)
-    (func (export "i") (param i32 i64 i64) (result i64)
+    (func (export "i") (param i32 i64 f64) (result f64)
       local.get 0
       local.get 1
       local.get 2
       call $make
-      struct.get $t 2
-      i64.reinterpret_f64)
+      struct.get $t 2)
   )
   (core instance $i (instantiate $m (with "" (instance (export "f" (func $l))))))
 
-  (func (export "g") (param "a" u32) (param "b" u64) (param "c" u64) (result u32)
+  (func (export "g") (param "a" u32) (param "b" u64) (param "c" f64) (result u32)
     (canon lift (core func $i "g") gc))
-  (func (export "h") (param "a" u32) (param "b" u64) (param "c" u64) (result u64)
+  (func (export "h") (param "a" u32) (param "b" u64) (param "c" f64) (result u64)
     (canon lift (core func $i "h") gc))
-  (func (export "i") (param "a" u32) (param "b" u64) (param "c" u64) (result u64)
+  (func (export "i") (param "a" u32) (param "b" u64) (param "c" f64) (result f64)
     (canon lift (core func $i "i") gc))
 )
 
-(assert_return (invoke "g" (u32.const 0xff) (u64.const 0) (u64.const 0)) (u32.const 0xff))
+(assert_return (invoke "g" (u32.const 0xff) (u64.const 0) (f64.const 0)) (u32.const 0xff))
 (assert_return
-  (invoke "h" (u32.const 0) (u64.const 0xfedcba9876543210) (u64.const 0))
+  (invoke "h" (u32.const 0) (u64.const 0xfedcba9876543210) (f64.const 0))
   (u64.const 0xfedcba9876543210))
 (assert_return
-  (invoke "i" (u32.const 0) (u64.const 0) (u64.const 0x3ff8000000000000))
-  (u64.const 0x3ff8000000000000))
+  (invoke "i" (u32.const 0) (u64.const 0) (f64.const 1.5))
+  (f64.const 1.5))
+(assert_return
+  (invoke "i" (u32.const 0) (u64.const 0) (f64.const nan:0x4000000000000))
+  (f64.const nan:0x4000000000000))
 
 ;; A GC-lowered caller calling a linear-memory-lifted callee. The tuple's
 ;; fields use packed storage types, and the callee widens each one to an
@@ -185,13 +182,13 @@
   (alias export $a "f" (func $af))
   (alias export $a "f2" (func $af2))
 
-  (core rec (type $t (struct (field (mut i8)) (field (mut i16)))))
+  (core type $t (struct (field (mut i8)) (field (mut i16))))
   (core type $sig (func (param (ref null $t)) (result i32)))
   (core func $l (canon lower (func $af) gc (core-type $sig)))
   (core func $l2 (canon lower (func $af2) gc (core-type $sig)))
 
   (core module $m
-    (rec (type $t (struct (field (mut i8)) (field (mut i16)))))
+    (type $t (struct (field (mut i8)) (field (mut i16))))
     (import "" "f" (func $f (param (ref null $t)) (result i32)))
     (import "" "f2" (func $f2 (param (ref null $t)) (result i32)))
     (func (export "g") (param i32 i32) (result i32)
@@ -237,13 +234,13 @@
   (alias export $a "f" (func $af))
   (alias export $a "f2" (func $af2))
 
-  (core rec (type $t (struct (field (mut i8)) (field (mut i16)))))
+  (core type $t (struct (field (mut i8)) (field (mut i16))))
   (core type $sig (func (param (ref null $t)) (result i32)))
   (core func $l (canon lower (func $af) gc (core-type $sig)))
   (core func $l2 (canon lower (func $af2) gc (core-type $sig)))
 
   (core module $m
-    (rec (type $t (struct (field (mut i8)) (field (mut i16)))))
+    (type $t (struct (field (mut i8)) (field (mut i16))))
     (import "" "f" (func $f (param (ref null $t)) (result i32)))
     (import "" "f2" (func $f2 (param (ref null $t)) (result i32)))
     (func (export "g") (param i32 i32) (result i32)
@@ -273,7 +270,7 @@
 (component
   (component $A
     (core module $m
-      (rec (type $t (struct (field (mut i32)) (field (mut i32)))))
+      (type $t (struct (field (mut i32)) (field (mut i32))))
       (func (export "f") (param (ref null $t)) (result i32)
         local.get 0
         struct.get $t 1)
@@ -363,7 +360,7 @@
 (component
   (component $A
     (core module $m
-      (rec (type $t (struct (field (mut i32)))))
+      (type $t (struct (field (mut i32))))
       (global $g (export "g") (mut i32) (i32.const 0))
       (func (export "f"))
       (func (export "f2") (param (ref null $t))
@@ -380,14 +377,14 @@
   (alias export $a "f" (func $af))
   (alias export $a "f2" (func $af2))
 
-  (core rec (type $t (struct (field (mut i32)))))
+  (core type $t (struct (field (mut i32))))
   (core type $sig (func))
   (core type $sig2 (func (param (ref null $t))))
   (core func $l (canon lower (func $af) gc (core-type $sig)))
   (core func $l2 (canon lower (func $af2) gc (core-type $sig2)))
 
   (core module $m
-    (rec (type $t (struct (field (mut i32)))))
+    (type $t (struct (field (mut i32))))
     (import "" "f" (func $f))
     (import "" "f2" (func $f2 (param (ref null $t))))
     (func (export "g") (result i32)

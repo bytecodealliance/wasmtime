@@ -4,15 +4,16 @@ use crate::{
     TypeTrace, WasmCompositeInnerType, WasmFieldType, WasmHeapType, WasmRefType, WasmStorageType,
     WasmSubType, WasmValType,
 };
+use core::ops::Range;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use wasm_encoder::{
-    AbstractHeapType, ArrayType, CompositeInnerType, CompositeType, FieldType, FuncType, HeapType,
-    RefType, StorageType, StructType, SubType, TypeSection, ValType,
+    AbstractHeapType, ArrayType, CompositeInnerType, CompositeType, ContType, FieldType, FuncType,
+    HeapType, RefType, StorageType, StructType, SubType, TypeSection, ValType,
 };
 
-/// The rec group currently being encoded, if any, and its members.
-type RecGroupCtx<'a> = Option<(ModuleInternedRecGroupIndex, &'a [ModuleInternedTypeIndex])>;
+/// The rec group currently being encoded, if any, and the range it spans.
+type RecGroupCtx = Option<(ModuleInternedRecGroupIndex, Range<ModuleInternedTypeIndex>)>;
 
 /// A simple representation of the type section which automatically intern's
 /// types and ensures they're only defined once.
@@ -63,41 +64,43 @@ impl CoreTypes {
                 continue;
             }
 
-            let members = types.rec_group_elements(group).collect::<Vec<_>>();
+            let range = types.rec_group_range(group);
 
             if !cloned_deps {
                 stack.push((group, true));
                 let rec_groups = &self.rec_groups;
-                for ty in members.iter() {
-                    types[*ty]
-                        .trace::<_, Infallible>(&mut |idx| {
-                            if let EngineOrModuleTypeIndex::Module(idx) = idx {
-                                if !members.contains(&idx) {
-                                    let dep = types.rec_group_of(idx);
-                                    debug_assert!(dep < group);
-                                    if !rec_groups.contains_key(&dep) {
-                                        stack.push((dep, false));
-                                    }
+                for ty in types.rec_group_elements(group) {
+                    let Ok(()) = types[ty].trace::<_, Infallible>(&mut |idx| {
+                        if let EngineOrModuleTypeIndex::Module(idx) = idx {
+                            if !range.contains(&idx) {
+                                let dep = types.rec_group_of(idx);
+                                debug_assert!(dep < group);
+                                if !rec_groups.contains_key(&dep) {
+                                    stack.push((dep, false));
                                 }
                             }
-                            Ok(())
-                        })
-                        .unwrap();
+                        }
+                        Ok(())
+                    });
                 }
                 continue;
             }
 
             // Assign indices before encoding, so references between members of
             // this group resolve.
-            let indices = members.iter().map(|_| self.push_ty()).collect::<Vec<_>>();
-            for (idx, ty) in indices.iter().zip(members.iter()) {
-                self.module_types.insert(*idx, *ty);
+            let indices = types
+                .rec_group_elements(group)
+                .map(|_| self.push_ty())
+                .collect::<Vec<_>>();
+            for (idx, ty) in indices.iter().zip(types.rec_group_elements(group)) {
+                self.module_types.insert(*idx, ty);
             }
             self.rec_groups.insert(group, indices);
 
-            let encoded = members
-                .iter()
-                .map(|ty| self.sub_type(types, &types[*ty], Some((group, &members))))
+            let ctx = Some((group, range));
+            let encoded = types
+                .rec_group_elements(group)
+                .map(|ty| self.sub_type(types, &types[ty], &ctx))
                 .collect::<Vec<_>>();
             self.section.ty().rec(encoded);
         }
@@ -109,11 +112,7 @@ impl CoreTypes {
     fn interned_type_index(&self, types: &ModuleTypes, ty: ModuleInternedTypeIndex) -> Option<u32> {
         let group = types.rec_group_of(ty);
         let indices = self.rec_groups.get(&group)?;
-        let position = types
-            .rec_group_elements(group)
-            .position(|member| member == ty)
-            .expect("`rec_group_of` returned a group that does not contain `ty`");
-        Some(indices[position])
+        Some(indices[group_position(&types.rec_group_range(group), ty)])
     }
 
     /// The component type that adapter-local type `index` was cloned from.
@@ -121,7 +120,7 @@ impl CoreTypes {
         self.module_types[&index]
     }
 
-    fn sub_type(&self, types: &ModuleTypes, ty: &WasmSubType, ctx: RecGroupCtx<'_>) -> SubType {
+    fn sub_type(&self, types: &ModuleTypes, ty: &WasmSubType, ctx: &RecGroupCtx) -> SubType {
         let inner = match &ty.composite_type.inner {
             WasmCompositeInnerType::Struct(s) => CompositeInnerType::Struct(StructType {
                 fields: s
@@ -137,10 +136,15 @@ impl CoreTypes {
                 f.params().iter().map(|t| self.val_type(types, t, ctx)),
                 f.results().iter().map(|t| self.val_type(types, t, ctx)),
             )),
+            WasmCompositeInnerType::Cont(c) => CompositeInnerType::Cont(ContType(self.type_index(
+                types,
+                EngineOrModuleTypeIndex::Module(c.unwrap_module_type_index()),
+                ctx,
+            ))),
 
-            // No component type's GC lowering uses these, and `Exn` is
-            // Wasmtime-internal with no core Wasm encoding.
-            WasmCompositeInnerType::Cont(_) | WasmCompositeInnerType::Exn(_) => todo!("CM+GC"),
+            WasmCompositeInnerType::Exn(_) => {
+                unreachable!("`exn` types are Wasmtime internal; no core Wasm encoding")
+            }
         };
 
         SubType {
@@ -159,12 +163,7 @@ impl CoreTypes {
         }
     }
 
-    fn field_type(
-        &self,
-        types: &ModuleTypes,
-        ty: &WasmFieldType,
-        ctx: RecGroupCtx<'_>,
-    ) -> FieldType {
+    fn field_type(&self, types: &ModuleTypes, ty: &WasmFieldType, ctx: &RecGroupCtx) -> FieldType {
         FieldType {
             element_type: match &ty.element_type {
                 WasmStorageType::I8 => StorageType::I8,
@@ -175,7 +174,7 @@ impl CoreTypes {
         }
     }
 
-    fn val_type(&self, types: &ModuleTypes, ty: &WasmValType, ctx: RecGroupCtx<'_>) -> ValType {
+    fn val_type(&self, types: &ModuleTypes, ty: &WasmValType, ctx: &RecGroupCtx) -> ValType {
         match ty {
             WasmValType::I32 => ValType::I32,
             WasmValType::I64 => ValType::I64,
@@ -190,7 +189,7 @@ impl CoreTypes {
         &self,
         types: &ModuleTypes,
         ty: &WasmRefType,
-        ctx: RecGroupCtx<'_>,
+        ctx: &RecGroupCtx,
     ) -> RefType {
         let abstract_ = |ty| HeapType::Abstract { shared: false, ty };
         let heap_type = match ty.heap_type {
@@ -204,17 +203,19 @@ impl CoreTypes {
             WasmHeapType::Array => abstract_(AbstractHeapType::Array),
             WasmHeapType::Struct => abstract_(AbstractHeapType::Struct),
             WasmHeapType::None => abstract_(AbstractHeapType::None),
+            WasmHeapType::Exn => abstract_(AbstractHeapType::Exn),
+            WasmHeapType::NoExn => abstract_(AbstractHeapType::NoExn),
+            WasmHeapType::Cont => abstract_(AbstractHeapType::Cont),
+            WasmHeapType::NoCont => abstract_(AbstractHeapType::NoCont),
 
             WasmHeapType::ConcreteStruct(i)
             | WasmHeapType::ConcreteArray(i)
-            | WasmHeapType::ConcreteFunc(i) => HeapType::Concrete(self.type_index(types, i, ctx)),
+            | WasmHeapType::ConcreteFunc(i)
+            | WasmHeapType::ConcreteCont(i) => HeapType::Concrete(self.type_index(types, i, ctx)),
 
-            WasmHeapType::Exn
-            | WasmHeapType::NoExn
-            | WasmHeapType::ConcreteExn(_)
-            | WasmHeapType::Cont
-            | WasmHeapType::NoCont
-            | WasmHeapType::ConcreteCont(_) => todo!("CM+GC"),
+            WasmHeapType::ConcreteExn(_) => {
+                unreachable!("`exn` types are Wasmtime-internal; no core Wasm encoding")
+            }
         };
         RefType {
             nullable: ty.nullable,
@@ -228,7 +229,7 @@ impl CoreTypes {
         &self,
         types: &ModuleTypes,
         index: EngineOrModuleTypeIndex,
-        ctx: RecGroupCtx<'_>,
+        ctx: &RecGroupCtx,
     ) -> u32 {
         let index = match index {
             EngineOrModuleTypeIndex::Module(i) => i,
@@ -236,14 +237,19 @@ impl CoreTypes {
                 panic!("adapter modules only reference module-interned types")
             }
         };
-        if let Some((group, members)) = ctx {
-            if let Some(i) = members.iter().position(|m| *m == index) {
-                return self.rec_groups[&group][i];
+        if let Some((group, range)) = ctx {
+            if range.contains(&index) {
+                return self.rec_groups[group][group_position(range, index)];
             }
         }
         self.interned_type_index(types, index)
             .expect("referenced rec groups are declared before the groups that reference them")
     }
+}
+
+fn group_position(range: &Range<ModuleInternedTypeIndex>, ty: ModuleInternedTypeIndex) -> usize {
+    debug_assert!(range.contains(&ty));
+    usize::try_from(ty.as_u32() - range.start.as_u32()).unwrap()
 }
 
 #[cfg(test)]

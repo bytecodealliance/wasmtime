@@ -991,6 +991,9 @@ pub enum Import {
 
 impl Options {
     /// The number of core values that `ty` lowers to under this data model.
+    ///
+    /// Panics under the linear memory data model if `ty` is spilled to memory
+    /// rather than passed as core values.
     pub(super) fn flat_count(&self, ty: &InterfaceType, types: &ComponentTypesBuilder) -> usize {
         match self.data_model {
             DataModel::Gc {} => 1,
@@ -998,7 +1001,12 @@ impl Options {
         }
     }
 
-    fn flat_types<'a>(
+    /// The scalar core value types that `ty` lowers to under this data model.
+    ///
+    /// `None` means `FlatType` cannot name the lowering, not that there is
+    /// none: under linear memory `ty` spilled to memory, and under GC it
+    /// lowers to a reference, which only `gc_flat_types` can recover.
+    fn scalar_flat_types<'a>(
         &self,
         ty: &InterfaceType,
         types: &'a ComponentTypesBuilder,
@@ -1162,7 +1170,7 @@ impl HelperType {
     fn push_flat(&self, dst: &mut Vec<ValType>, types: &ComponentTypesBuilder) {
         match self.loc {
             HelperLocation::Stack => {
-                for ty in self.opts.flat_types(&self.ty, types).unwrap() {
+                for ty in self.opts.scalar_flat_types(&self.ty, types).unwrap() {
                     dst.push((*ty).into());
                 }
             }

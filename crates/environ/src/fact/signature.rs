@@ -81,7 +81,7 @@ impl ComponentTypesBuilder {
                     let ty = ty.unwrap_module_type_index();
                     core_types.rec_group(types, types.rec_group_of(ty));
                 }
-                ValType::Ref(core_types.ref_type(types, r, None))
+                ValType::Ref(core_types.ref_type(types, r, &None))
             }
         }
     }
@@ -256,9 +256,9 @@ impl ComponentTypesBuilder {
         let tys = tys.into_iter().collect::<Vec<_>>();
 
         match (&opts.data_model, which) {
+            // GC never spills, so `max` does not apply and this cannot fail.
             (DataModel::Gc {}, SignaturePart::Params | SignaturePart::Results) => {
-                let flat = self.gc_flat_types(core_types, opts, which, tys.len());
-                if flat.len() > max { None } else { Some(flat) }
+                Some(self.gc_flat_types(core_types, opts, which, tys.len()))
             }
             (_, _) => {
                 let mut dst = Vec::new();
@@ -276,14 +276,20 @@ impl ComponentTypesBuilder {
     }
 
     /// The core value types that `ty` flattens to under `opts`.
+    ///
+    /// Works one type at a time, so it only reports what `FlatType` can
+    /// describe; see `Options::scalar_flat_types`.
     fn flat_val_types(&self, opts: &Options, ty: &InterfaceType) -> Option<Vec<ValType>> {
-        match opts.flat_types(ty, self) {
+        match opts.scalar_flat_types(ty, self) {
             Some(flat) => Some(flat.iter().map(|ty| (*ty).into()).collect()),
 
-            // Under GC this is a reference-lowered type rather than one
-            // spilled to memory, and only a whole signature can flatten it.
             None => match opts.data_model {
-                DataModel::Gc {} => todo!("CM+GC"),
+                // `flatten_types` routes GC parameter and result lists to
+                // `gc_flat_types`, so only a `SignaturePart::Neither` helper
+                // lands here, which no GC-supported type reaches today.
+                DataModel::Gc {} => {
+                    todo!("CM+GC: helper function for a reference-lowered type")
+                }
                 DataModel::LinearMemory(_) => None,
             },
         }

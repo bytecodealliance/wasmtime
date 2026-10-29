@@ -84,6 +84,14 @@ impl ModuleTypes {
         ModuleInternedRecGroupIndex::new(index)
     }
 
+    /// Get the range of type indices that an already-defined rec group spans.
+    pub fn rec_group_range(
+        &self,
+        rec_group: ModuleInternedRecGroupIndex,
+    ) -> Range<ModuleInternedTypeIndex> {
+        self.rec_groups[rec_group].clone()
+    }
+
     /// Get the elements within an already-defined rec group.
     pub fn rec_group_elements(
         &self,
