@@ -1662,8 +1662,15 @@ impl wasmtime_wasi::cli::IsTerminal for LogStream {
     }
 }
 
+const LOG_WRITE_BUDGET: usize = 64 * 1024;
+
 impl wasmtime_wasi::p2::OutputStream for LogStream {
     fn write(&mut self, bytes: bytes::Bytes) -> StreamResult<()> {
+        if bytes.len() > LOG_WRITE_BUDGET {
+            return Err(StreamError::Trap(wasmtime::format_err!(
+                "write exceeded budget"
+            )));
+        }
         self.write_all(&bytes)
             .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
         Ok(())
@@ -1674,7 +1681,7 @@ impl wasmtime_wasi::p2::OutputStream for LogStream {
     }
 
     fn check_write(&mut self) -> StreamResult<usize> {
-        Ok(64 * 1024)
+        Ok(LOG_WRITE_BUDGET)
     }
 }
 
