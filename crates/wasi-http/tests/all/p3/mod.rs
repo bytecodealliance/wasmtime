@@ -901,7 +901,7 @@ async fn p3_http_proxy_response_body_error() -> Result<()> {
     // transmit result to signal successful completion. Hook up `done_rx` to
     // receive that request.
     let (done_tx, done_rx) = oneshot::channel();
-    let mut store = Store::new(&engine, Ctx::new(done_tx));
+    let mut store = Store::new(&engine, Ctx::with_hooks(TestHooks::new(Some(done_tx))));
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
     wasmtime_wasi::p3::add_to_linker(&mut linker)?;
@@ -928,8 +928,9 @@ async fn p3_http_proxy_response_body_error() -> Result<()> {
             );
             done_rx
                 .await
-                .context("guest did not check the transmit result")?;
-            wasmtime::error::Ok(())
+                .context("guest did not check the transmit result")?
+                .context("failed to collect the guest's completion request")?;
+            Ok(())
         })
         .await?
 }
