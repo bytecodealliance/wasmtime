@@ -24,6 +24,10 @@ Fixed 2026-10-29.
   length in wasi-http p2.
   [GHSA-h4wp-g4x3-7398](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-h4wp-g4x3-7398)
 
+* Compiling a module with more than ~32k data segments with copy-on-write
+  memory initialization disabled no longer panics with `MemFlagsSetOverflow`.
+  [#15050](https://github.com/bytecodealliance/wasmtime/pull/15050)
+
 --------------------------------------------------------------------------------
 
 ## 48.0.7
