@@ -1,6 +1,5 @@
 //! Implementation of the `wasi:http/outgoing-handler` interface.
 
-use crate::WasiHttpCtxView;
 use crate::p2::{
     HttpResult,
     bindings::http::{
@@ -11,6 +10,7 @@ use crate::p2::{
     http_request_error,
     types::{HostFutureIncomingResponse, HostOutgoingRequest},
 };
+use crate::{WasiHttpCtxView, get_content_length};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
 use hyper::Method;
@@ -26,6 +26,17 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
         let opts = options.and_then(|opts| self.table.get(&opts).ok()).cloned();
 
         let req = self.table.delete(request_id)?;
+
+        // The `content-length` header is otherwise only validated in
+        // `outgoing-request.body` and `outgoing-body.finish`, neither of which
+        // a guest is required to call. Validate it here too so that malformed
+        // requests never reach the wire.
+        let content_length =
+            get_content_length(&req.headers).map_err(|err| internal_error(format!("{err:#}")))?;
+        if req.body.is_none() && content_length.is_some_and(|n| n != 0) {
+            return Err(types::ErrorCode::HttpRequestBodySize(Some(0)).into());
+        }
+
         let mut builder = hyper::Request::builder();
 
         builder = builder.method(match req.method {

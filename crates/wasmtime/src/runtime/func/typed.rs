@@ -323,9 +323,11 @@ pub unsafe trait WasmTy: Send {
     // Dynamic checks that `self <: actual` for concrete type arguments. See the
     // comment above in `WasmTy::typecheck`.
     //
-    // Only ever called for concrete reference type arguments, so any type which
-    // is not in a type hierarchy with concrete reference types can implement
-    // this with `unreachable!()`.
+    // This is only ever called when `actual` is verified to be in the same type
+    // hierarchy as `Self::valtype()`. For example if `Self` is part of the
+    // `any` type hierarchy then `actual` will never be a concrete function
+    // reference. Additionally `actual` here is guaranteed to be a concrete
+    // heap type.
     #[doc(hidden)]
     fn dynamic_concrete_type_check(
         &self,
