@@ -2095,6 +2095,24 @@ mod test_programs {
     }
 
     #[tokio::test]
+    async fn p2_cli_serve_write_too_much() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_WRITE_TOO_MUCH_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(!resp.status().is_success());
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn p2_cli_serve_with_print() -> Result<()> {
         let server = WasmtimeServe::new(P2_CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
             cmd.arg("-Scli");
