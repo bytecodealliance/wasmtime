@@ -316,6 +316,7 @@ impl Metadata<'_> {
             concurrency_support,
             recording,
             asan_stack_switching,
+            memory_watchpoints,
 
             // This doesn't affect compilation, it's just a runtime setting.
             memory_reservation_for_growth: _,
@@ -428,6 +429,11 @@ impl Metadata<'_> {
             asan_stack_switching,
             other.asan_stack_switching,
             "AddressSanitizer stack-switching support",
+        )?;
+        Self::check_bool(
+            memory_watchpoints,
+            other.memory_watchpoints,
+            "memory watchpoint support",
         )?;
         Self::check_inlining(inlining, other.inlining)?;
         Self::check_int(

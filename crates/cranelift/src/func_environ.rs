@@ -1685,13 +1685,161 @@ impl FuncEnvironment<'_> {
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> Heap {
         let memory = self.module.memories[index];
         let (base, bound) = self.make_heap_base_bound(func, index);
+        // Shared memories have no shadow and cannot be watched.
+        let shadow = (self.tunables.memory_watchpoints && !memory.shared)
+            .then(|| self.make_shadow_heap(func, index));
         self.heaps.push(HeapData {
             base,
             bound,
             kind: MemoryKind::LinearMemory,
             memory,
             imported: self.module.is_imported_memory(index),
+            shadow,
         })
+    }
+
+    /// Makes the heap of the watchpoint shadow of `index`, which is a memory of
+    /// the same type and size, found through its `VMMemoryDefinition` pointer
+    /// in the `vmctx`.
+    fn make_shadow_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> Heap {
+        let memory = self.module.memories[index];
+        let memory_tunables = MemoryTunables::new(self.tunables, MemoryKind::LinearMemory);
+        let base_readonly = !memory.memory_may_move(&memory_tunables);
+        let definition = self
+            .alias_regions
+            .vmctx()
+            .shadow_memories(index)
+            .to_deferred_load(func);
+        let base = self
+            .alias_regions
+            .vm_memory_definition()
+            .base()
+            .can_move()
+            .readonly_if(base_readonly)
+            .to_deferred_load(func);
+        let len = self
+            .alias_regions
+            .vm_memory_definition()
+            .current_length()
+            .to_deferred_load(func);
+        self.heaps.push(HeapData {
+            base: VmctxLoadChain::new(smallvec![definition, base]),
+            bound: VmctxLoadChain::new(smallvec![definition, len]),
+            kind: MemoryKind::LinearMemory,
+            memory,
+            // The shadow is as large as the memory, which may be larger than
+            // an import's declared minimum.
+            imported: self.module.is_imported_memory(index),
+            shadow: None,
+        })
+    }
+
+    /// Before a store of `value`, `size` bytes at the Wasm address `index` plus
+    /// `offset` of `memory`, calls the `memory_watch_store` builtin if any of
+    /// the bytes are watched. `shadow_addr` is the native address of the
+    /// bytes' shadow.
+    pub fn watch_store(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        memory: MemoryIndex,
+        shadow_addr: ir::Value,
+        index: ir::Value,
+        offset: u64,
+        size: u8,
+        value: ir::Value,
+    ) {
+        let mut shadow_flags = ir::MemFlagsData::new();
+        shadow_flags.set_alias_region(Some(self.alias_regions.shadow_memory_region(builder.func)));
+        let watched = match size {
+            1 => builder.ins().load(I8, shadow_flags, shadow_addr, 0),
+            2 => builder.ins().load(I16, shadow_flags, shadow_addr, 0),
+            4 => builder.ins().load(I32, shadow_flags, shadow_addr, 0),
+            8 => builder.ins().load(I64, shadow_flags, shadow_addr, 0),
+            16 => {
+                let low = builder.ins().load(I64, shadow_flags, shadow_addr, 0);
+                let high = builder.ins().load(I64, shadow_flags, shadow_addr, 8);
+                builder.ins().bor(low, high)
+            }
+            _ => unreachable!("unexpected store size {size}"),
+        };
+
+        let hit = builder.create_block();
+        let done = builder.create_block();
+        builder.ins().brif(watched, hit, &[], done, &[]);
+        builder.switch_to_block(hit);
+        builder.seal_block(hit);
+        builder.set_cold_block(hit);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let (lo, hi) = Self::watch_value_bits(builder, value);
+        let memory = builder.ins().iconst(I32, i64::from(memory.as_u32()));
+        // The store is in bounds, so this doesn't overflow.
+        let index = Self::to_u64(builder, index);
+        let addr = builder.ins().iadd_imm_s(index, offset.cast_signed());
+        let len = builder.ins().iconst(I32, i64::from(size));
+        let watch = self.builtin_functions.memory_watch_store(builder.func);
+        builder
+            .ins()
+            .call(watch, &[vmctx, memory, addr, len, lo, hi]);
+        builder.ins().jump(done, &[]);
+        builder.switch_to_block(done);
+        builder.seal_block(done);
+    }
+
+    /// The bits of a stored value, zero-extended to 128 bits, in halves.
+    fn watch_value_bits(
+        builder: &mut FunctionBuilder<'_>,
+        value: ir::Value,
+    ) -> (ir::Value, ir::Value) {
+        let ty = builder.func.dfg.value_type(value);
+        let mut flags = ir::MemFlagsData::new();
+        flags.set_endianness(ir::Endianness::Little);
+        let bits = match ty {
+            F32 => builder.ins().bitcast(I32, flags, value),
+            F64 => builder.ins().bitcast(I64, flags, value),
+            ty if ty.is_vector() => builder.ins().bitcast(I128, flags, value),
+            _ => value,
+        };
+        match builder.func.dfg.value_type(bits) {
+            I128 => builder.ins().isplit(bits),
+            I64 => (bits, builder.ins().iconst(I64, 0)),
+            _ => (
+                builder.ins().uextend(I64, bits),
+                builder.ins().iconst(I64, 0),
+            ),
+        }
+    }
+
+    /// Before a bulk write of `len` bytes at the Wasm address `dst` of
+    /// `memory`, calls the `memory_watch_range` builtin, which checks whether
+    /// any of the bytes are watched.
+    fn watch_range(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        memory: MemoryIndex,
+        dst: ir::Value,
+        len: ir::Value,
+    ) {
+        if !self.tunables.memory_watchpoints {
+            return;
+        }
+        let heap = self.get_or_create_heap(builder.func, memory);
+        if self.heaps[heap].shadow.is_none() {
+            return;
+        }
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let memory = builder.ins().iconst(I32, i64::from(memory.as_u32()));
+        let dst = Self::to_u64(builder, dst);
+        let len = Self::to_u64(builder, len);
+        let watch = self.builtin_functions.memory_watch_range(builder.func);
+        builder.ins().call(watch, &[vmctx, memory, dst, len]);
+    }
+
+    fn to_u64(builder: &mut FunctionBuilder<'_>, value: ir::Value) -> ir::Value {
+        if builder.func.dfg.value_type(value) == I64 {
+            value
+        } else {
+            builder.ins().uextend(I64, value)
+        }
     }
 
     fn make_heap_base_bound(
@@ -3886,6 +4034,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let cost = self.tunables.operator_cost.variable().memory_copy_per_byte;
         let fuel = self.pre_translate_bulk_op(builder, len, cost);
+        self.watch_range(builder, dst_index, dst, len);
         self.translate_entity_copy(builder, dst_index, src_index, dst, src, len)?;
         self.post_translate_bulk_op(builder, fuel)
     }
@@ -4220,6 +4369,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let cost = self.tunables.operator_cost.variable().memory_fill_per_byte;
         let fuel = self.pre_translate_bulk_op(builder, len, cost);
+        self.watch_range(builder, memory_index, dst, len);
         self.translate_entity_fill(builder, memory_index, dst, val, len)?;
         self.post_translate_bulk_op(builder, fuel)
     }
@@ -4236,6 +4386,7 @@ impl FuncEnvironment<'_> {
         let seg_index = DataIndex::from_u32(seg_index);
         let cost = self.tunables.operator_cost.variable().memory_init_per_byte;
         let fuel = self.pre_translate_bulk_op(builder, len, cost);
+        self.watch_range(builder, memory_index, dst, len);
         self.translate_entity_copy(
             builder,
             memory_index,
@@ -6411,6 +6562,7 @@ impl FuncEnvironment<'_> {
         let start = builder.ins().iconst(I32, 0);
         let cost = self.tunables.operator_cost.variable().memory_init_per_byte;
         let fuel = self.pre_translate_bulk_op(builder, len, cost);
+        self.watch_range(builder, memory, offset, len);
         self.translate_entity_copy(builder, memory, data, offset, start, len)?;
         self.post_translate_bulk_op(builder, fuel)?;
 

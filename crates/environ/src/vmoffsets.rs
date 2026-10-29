@@ -477,6 +477,10 @@ pub struct VMOffsets<P> {
     pub num_defined_memories: u32,
     /// The number of memories owned by the module instance.
     pub num_owned_memories: u32,
+    /// The number of shadow memory pointers: one per memory, imported and
+    /// defined, if the module's code checks memory shadows for watchpoints,
+    /// and otherwise none.
+    pub num_shadow_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
     /// The number of defined tags in the module.
@@ -493,6 +497,7 @@ pub struct VMOffsets<P> {
     imported_memories: u32,
     memories: u32,
     owned_memories: u32,
+    shadow_memories: u32,
     imported_functions: u32,
     imported_tables: u32,
     imported_globals: u32,
@@ -653,6 +658,10 @@ pub struct VMOffsetsFields<P> {
     pub num_defined_memories: u32,
     /// The number of memories owned by the module instance.
     pub num_owned_memories: u32,
+    /// The number of shadow memory pointers: one per memory, imported and
+    /// defined, if the module's code checks memory shadows for watchpoints,
+    /// and otherwise none.
+    pub num_shadow_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
     /// The number of defined tags in the module.
@@ -687,6 +696,11 @@ impl<P: PtrSize> VMOffsets<P> {
             num_defined_tables: cast_to_u32(module.num_defined_tables()),
             num_defined_memories: cast_to_u32(module.num_defined_memories()),
             num_owned_memories,
+            num_shadow_memories: if module.has_shadow_memories {
+                cast_to_u32(module.memories.len())
+            } else {
+                0
+            },
             num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
             num_defined_tags: cast_to_u32(module.tags.len() - module.num_imported_tags),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
@@ -722,6 +736,7 @@ impl<P: PtrSize> VMOffsets<P> {
                     num_defined_memories: _,
                     num_defined_tags: _,
                     num_owned_memories: _,
+                    num_shadow_memories: _,
                     num_escaped_funcs: _,
                     num_runtime_data: _,
                     has_startup_func: _,
@@ -764,6 +779,7 @@ impl<P: PtrSize> VMOffsets<P> {
             imported_globals: "imported globals",
             imported_tables: "imported tables",
             imported_functions: "imported functions",
+            shadow_memories: "shadow memories",
             owned_memories: "owned memories",
             memories: "defined memories",
             imported_memories: "imported memories",
@@ -792,6 +808,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_defined_tables: fields.num_defined_tables,
             num_defined_memories: fields.num_defined_memories,
             num_owned_memories: fields.num_owned_memories,
+            num_shadow_memories: fields.num_shadow_memories,
             num_defined_globals: fields.num_defined_globals,
             num_defined_tags: fields.num_defined_tags,
             num_escaped_funcs: fields.num_escaped_funcs,
@@ -800,6 +817,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             imported_memories: 0,
             memories: 0,
             owned_memories: 0,
+            shadow_memories: 0,
             imported_functions: 0,
             imported_tables: 0,
             imported_globals: 0,
@@ -930,6 +948,7 @@ mod tests {
                     num_defined_tables: 0,
                     num_defined_memories: 0,
                     num_owned_memories: 0,
+                    num_shadow_memories: 0,
                     num_defined_globals: 0,
                     num_defined_tags,
                     num_escaped_funcs: 1,

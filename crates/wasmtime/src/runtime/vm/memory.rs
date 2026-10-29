@@ -95,6 +95,11 @@ pub use self::mmap::MmapMemory;
 mod malloc;
 pub use self::malloc::MallocMemory;
 
+mod shadow;
+pub use self::shadow::ShadowMemory;
+#[cfg(feature = "debug")]
+pub use self::shadow::WATCH_DEBUG;
+
 #[cfg(feature = "pooling-allocator")]
 mod static_;
 #[cfg(feature = "pooling-allocator")]
@@ -318,6 +323,22 @@ impl Memory {
         }
     }
 
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    pub fn shadow(&self) -> Option<&ShadowMemory> {
+        match self {
+            Memory::Local(mem) => mem.shadow(),
+            Memory::Shared(_) => None,
+        }
+    }
+
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    pub fn shadow_mut(&mut self) -> Option<&mut ShadowMemory> {
+        match self {
+            Memory::Local(mem) => mem.shadow_mut(),
+            Memory::Shared(_) => None,
+        }
+    }
+
     /// Returns whether or not this memory needs initialization. It
     /// may not if it already has initial content thanks to a CoW
     /// mechanism.
@@ -478,6 +499,9 @@ pub struct LocalMemory {
     /// The memory might be already initialized from a pooled allocator or by the particular
     /// allocation's implementation, in which case this is false.
     needs_init: bool,
+
+    /// The watchpoint shadow of this memory, when compiled code checks it.
+    shadow: Option<ShadowMemory>,
 }
 
 impl LocalMemory {
@@ -494,11 +518,18 @@ impl LocalMemory {
             Some(image) => alloc.init_from_image(&crate::MemoryImage::new(image.clone()))?,
             None => false,
         };
+        // Shared memories have no shadow and cannot be watched.
+        let shadow = if memory_tunables.watchpoints() && !ty.shared {
+            Some(ShadowMemory::new(ty, memory_tunables, alloc.byte_size())?)
+        } else {
+            None
+        };
         Ok(LocalMemory {
             ty: *ty,
             alloc,
             memory_may_move: ty.memory_may_move(memory_tunables),
             needs_init: !initialized,
+            shadow,
             memory_guard_size: memory_tunables.guard_size().try_into().unwrap(),
             memory_reservation: memory_tunables.reservation().try_into().unwrap(),
         })
@@ -587,6 +618,13 @@ impl LocalMemory {
                 bail!("Memory maximum size exceeded");
             }
 
+            // The shadow grows along with this memory, below.
+            if let Some(shadow) = &self.shadow {
+                if !shadow.can_grow_to(new_byte_size) {
+                    bail!("Memory maximum size exceeded");
+                }
+            }
+
             self.alloc.grow_to(new_byte_size)
         })();
 
@@ -600,6 +638,9 @@ impl LocalMemory {
                         self.alloc.as_ptr(),
                         "linear memory moved on grow when it must not have"
                     );
+                }
+                if let Some(shadow) = &mut self.shadow {
+                    shadow.grow_to(new_byte_size)?;
                 }
 
                 Ok(Some((old_byte_size, new_byte_size)))
@@ -620,11 +661,17 @@ impl LocalMemory {
     /// Return the bounds of the memory (base, byte_size) for consumption by WebAssembly code in a
     /// repr(C) struct.
     pub fn vmmemory(&self) -> VMMemoryDefinition {
-        let base = NonNull::new(self.alloc.as_ptr()).expect("linear memory base is non-null");
-        VMMemoryDefinition {
-            base: base.into(),
-            current_length: self.alloc.byte_size().into(),
-        }
+        vmmemory(&*self.alloc)
+    }
+
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    pub fn shadow(&self) -> Option<&ShadowMemory> {
+        self.shadow.as_ref()
+    }
+
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    pub fn shadow_mut(&mut self) -> Option<&mut ShadowMemory> {
+        self.shadow.as_mut()
     }
 
     pub fn byte_size(&self) -> usize {
@@ -661,6 +708,16 @@ impl LocalMemory {
             .downcast::<StaticMemory>()
             .unwrap_or_else(|_| panic!("expected a pooling allocator memory"))
             .into_image_slot()
+    }
+}
+
+/// The bounds of `alloc` (base, byte_size) for consumption by WebAssembly code
+/// in a repr(C) struct.
+fn vmmemory(alloc: &dyn LinearMemory) -> VMMemoryDefinition {
+    let base = NonNull::new(alloc.as_ptr()).expect("linear memory base is non-null");
+    VMMemoryDefinition {
+        base: base.into(),
+        current_length: alloc.byte_size().into(),
     }
 }
 

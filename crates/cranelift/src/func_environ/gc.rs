@@ -1755,6 +1755,7 @@ impl FuncEnvironment<'_> {
             memory,
             kind: MemoryKind::GcHeap,
             imported: false,
+            shadow: None,
         });
         self.gc_heap = Some(heap);
         heap
