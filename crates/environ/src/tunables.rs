@@ -428,6 +428,11 @@ impl<'a> MemoryTunables<'a> {
         }
     }
 
+    /// Kind of memory these tunables are for.
+    pub fn kind(&self) -> MemoryKind {
+        self.kind
+    }
+
     /// Get the underlying tunables.
     ///
     /// This is ONLY for accessing tunable fields that DO NOT come in a

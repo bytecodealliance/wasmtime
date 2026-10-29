@@ -597,10 +597,72 @@ typedef struct wasmtime_linear_memory {
 } wasmtime_linear_memory_t;
 
 /**
+ * \brief The kind of memory a #wasmtime_new_memory_callback_t is asked to
+ * create, values are in #wasmtime_memory_kind_enum.
+ */
+typedef uint8_t wasmtime_memory_kind_t;
+
+/**
+ * \brief Kinds of memory that a custom memory creator may be asked to create.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/enum.MemoryKind.html
+ */
+enum wasmtime_memory_kind_enum { // MemoryKind
+  /// A standard WebAssembly linear memory (module or host).
+  WASMTIME_MEMORY_KIND_LINEAR_MEMORY,
+  /// The memory backing a store's GC heap.
+  ///
+  /// It differs from standard linear memory:
+  /// - It is created lazily, at most once per store: when a module that needs a
+  /// GC heap is
+  ///   instantiated or when the first GC object is allocated. This might happen
+  ///   in the middle of
+  ///   execution of WebAssembly code.
+  /// - It grows as GC objects are allocated, independently of `memory.grow`.
+  /// - Its contents are Wasmtime's internal representation of GC objects, not
+  /// data of the guest
+  ///   program. They are only meaningful to the store that created the GC heap,
+  ///   so they should not
+  ///   be shared, persisted, copied to other memories, etc.
+  WASMTIME_MEMORY_KIND_GC_HEAP,
+};
+
+/**
+ * \brief Parameters of a request to create a new linear memory.
+ *
+ * This structure is owned by Wasmtime and is only valid for the duration of
+ * the #wasmtime_new_memory_callback_t invocation it is passed to. New fields
+ * may be appended in future versions.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.MemoryRequest.html
+ */
+typedef struct wasmtime_memory_request {
+  /// The type of memory being created.
+  const wasm_memorytype_t *ty;
+  /// Minimum size of the memory, in bytes.
+  size_t minimum;
+  /// Maximum size of the memory, in bytes, or `SIZE_MAX` if unbounded.
+  size_t maximum;
+  /// Size of the virtual memory reservation to make for this memory, in
+  /// bytes. A multiple of the system page size.
+  size_t reserved_size_in_bytes;
+  /// Number of bytes after the memory allocation that must be left unmapped.
+  /// A multiple of the system page size.
+  size_t guard_size_in_bytes;
+  /// The kind of memory being created, see #wasmtime_memory_kind_enum.
+  wasmtime_memory_kind_t kind;
+} wasmtime_memory_request_t;
+
+/**
  * A callback to create a new LinearMemory from the specified parameters.
  *
  * The result should be written to `memory_ret` and wasmtime will own the values
  * written into that struct.
+ *
+ * The memory returned must satisfy all properties of `request` and be zero
+ * filled. `request` is only valid for the duration of this call.
  *
  * This callback must be thread-safe.
  *
@@ -608,8 +670,7 @@ typedef struct wasmtime_linear_memory {
  * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html#tymethod.new_memory
  */
 typedef wasmtime_error_t *(*wasmtime_new_memory_callback_t)(
-    void *env, const wasm_memorytype_t *ty, size_t minimum, size_t maximum,
-    size_t reserved_size_in_bytes, size_t guard_size_in_bytes,
+    void *env, const wasmtime_memory_request_t *request,
     wasmtime_linear_memory_t *memory_ret);
 
 /**

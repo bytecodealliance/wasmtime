@@ -34,6 +34,7 @@ enum ImageMode {
 #[derive(Default)]
 struct Counters {
     num_memories_created: AtomicUsize,
+    num_gc_heaps_created: AtomicUsize,
     num_bytes_accessible: AtomicUsize,
     grow_to_calls: AtomicUsize,
     init_from_image_calls: AtomicUsize,
@@ -196,21 +197,17 @@ impl CustomMemoryCreator {
 }
 
 unsafe impl MemoryCreator for CustomMemoryCreator {
-    fn new_memory(
-        &self,
-        ty: MemoryType,
-        minimum: usize,
-        _maximum: Option<usize>,
-        reserved_size: Option<usize>,
-        guard_size: usize,
-    ) -> Result<Box<dyn LinearMemory>, String> {
-        assert_eq!(guard_size, 0);
-        assert_eq!(reserved_size, Some(0));
-        assert!(!ty.is_64());
+    fn new_memory(&self, request: &MemoryRequest<'_>) -> Result<Box<dyn LinearMemory>> {
+        assert_eq!(request.guard_size_in_bytes(), 0);
+        assert_eq!(request.reserved_size_in_bytes(), 0);
+        assert!(!request.ty().is_64());
         let capacity = self.capacity_of_each;
         self.counters.num_memories_created.fetch_add(1, SeqCst);
+        if request.kind() == MemoryKind::GcHeap {
+            self.counters.num_gc_heaps_created.fetch_add(1, SeqCst);
+        }
         Ok(Box::new(CustomMemory::new(
-            minimum,
+            request.minimum(),
             capacity,
             self.move_on_grow,
             self.image_mode,
@@ -407,6 +404,29 @@ fn host_created_memory_uses_creator() -> Result<()> {
 
     drop(store);
     assert_eq!(counters.num_bytes_accessible.load(SeqCst), 0);
+
+    Ok(())
+}
+
+// The GC heaps are also created with custom creators and pass the correct kind.
+#[test]
+fn gc_heap_uses_creator() -> Result<()> {
+    let (mut store, counters) = store(CustomMemoryCreator::new(ImageMode::Fail), |_| {});
+
+    // A linear memory is not a GC heap.
+    Memory::new(&mut store, MemoryType::new(1, None)?)?;
+    assert_eq!(counters.num_memories_created.load(SeqCst), 1);
+    assert_eq!(counters.num_gc_heaps_created.load(SeqCst), 0);
+
+    // The first GC allocation creates the GC heap...
+    ExternRef::new(&mut store, 42_u32)?;
+    assert_eq!(counters.num_memories_created.load(SeqCst), 2);
+    assert_eq!(counters.num_gc_heaps_created.load(SeqCst), 1);
+
+    // ... that is reused for all GC operations.
+    ExternRef::new(&mut store, 67_u32)?;
+    assert_eq!(counters.num_memories_created.load(SeqCst), 2);
+    assert_eq!(counters.num_gc_heaps_created.load(SeqCst), 1);
 
     Ok(())
 }

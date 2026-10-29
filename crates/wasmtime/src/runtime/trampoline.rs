@@ -6,7 +6,6 @@ mod table;
 mod tag;
 
 pub use self::global::*;
-pub(crate) use memory::MemoryCreatorProxy;
 
 use self::memory::create_memory;
 use self::table::create_table;
