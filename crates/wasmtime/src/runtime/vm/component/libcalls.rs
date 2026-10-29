@@ -696,14 +696,11 @@ fn exit_sync_call(store: &mut dyn VMStore, instance: Instance) -> Result<()> {
     // `exit_guest_sync_call` below would force the thread, so this path avoids
     // them and pops the frame itself.
     #[cfg(feature = "component-model-async")]
-    if let Some(watermark) = store
-        .store_opaque_mut()
-        .deferred_frame_lazy_lenders_watermark()
-    {
+    if let Some(start) = store.store_opaque_mut().deferred_frame_lazy_lenders_start() {
         store
             .store_opaque_mut()
             .component_resource_tables_lazy_lends(Some(instance))?
-            .undo_lazy_lends(watermark)?;
+            .undo_lazy_lends(start)?;
         return store.store_opaque_mut().pop_deferred_frame();
     }
 

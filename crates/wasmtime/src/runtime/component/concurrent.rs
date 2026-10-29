@@ -88,7 +88,7 @@ use core::task::{Context, Poll, Waker};
 use futures::channel::oneshot;
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
-use smallvec::{SmallVec, ToSmallVec};
+use smallvec::SmallVec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
@@ -1879,7 +1879,7 @@ impl StoreOpaque {
                 deferred.callee_async != 0,
                 deferred.callee_instance,
                 deferred.saved_context,
-                deferred.lazy_lenders_watermark,
+                deferred.lazy_lenders_start,
             ));
             cur = deferred.parent;
         }
@@ -1897,21 +1897,21 @@ impl StoreOpaque {
         // the resulting `ConcurrentState` matches what the non-deferred path
         // would have otherwise produced.
         //
-        // A frame's own lazy lends run from its watermark to that of the frame
+        // A frame's own lazy lends run from its start to that of the frame
         // pushed after it, or to the end of the buffer for the innermost.
         let lazy_lenders_end = *self.vm_store_context_mut().lazy_lenders_len_mut();
         frames.reverse();
         let lazy_lenders_base = match frames.first() {
-            Some((_, _, _, watermark)) => *watermark,
+            Some((_, _, _, start)) => *start,
             None => bail_bug!("forcing a deferred thread with no deferred frames"),
         };
         let lazy_lender_ends = frames
             .iter()
             .skip(1)
-            .map(|(_, _, _, watermark)| *watermark)
+            .map(|(_, _, _, start)| *start)
             .chain([lazy_lenders_end])
             .collect::<SmallVec<[_; 8]>>();
-        for ((callee_async, callee_instance, saved_context, watermark), lenders_end) in
+        for ((callee_async, callee_instance, saved_context, start), lenders_end) in
             frames.into_iter().zip(lazy_lender_ends)
         {
             // Restore the caller's context slots so that we save the correct
@@ -1926,7 +1926,7 @@ impl StoreOpaque {
 
             // Now that this frame has a real `GuestTask`, move the lends it
             // recorded while deferred into that task's `CallContext`.
-            self.flush_lazy_lenders(watermark, lenders_end)?;
+            self.flush_lazy_lenders(start, lenders_end)?;
         }
 
         // Every record is attributed to a task now, so the buffer shrinks back
@@ -1970,9 +1970,9 @@ impl StoreOpaque {
         let (vm_store_context, store_data) = self.vm_store_context_and_store_data_mut();
         debug_assert!(*vm_store_context.lazy_lenders_len_mut() >= end);
 
-        let components_data = &mut store_data.components;
-        let lenders: SmallVec<[_; 8]> = components_data.lazy_lenders()[start..end].to_smallvec();
-        let call_context = components_data.task_state_mut().call_context(scope)?;
+        let (lazy_lenders, task_state) = store_data.components.lazy_lenders_and_task_state_mut();
+        let lenders = &lazy_lenders[start..end];
+        let call_context = task_state.call_context(scope)?;
 
         // Reserve up front so that either every lender moves or none does.
         call_context.reserve_lenders(lenders.len())?;

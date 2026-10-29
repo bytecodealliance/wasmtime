@@ -117,7 +117,7 @@ where
         .load(&mut builder.cursor(), vmstore);
     alias_regions
         .vm_deferred_thread()
-        .lazy_lenders_watermark()
+        .lazy_lenders_start()
         .store(&mut builder.cursor(), slot_addr, lazy_lenders_len);
 
     // Publish the deferred thread as the store's current thread.
@@ -183,13 +183,11 @@ where
         .vm_store_context()
         .lazy_lenders_len()
         .load(&mut builder.cursor(), vmstore);
-    let watermark = alias_regions
+    let start = alias_regions
         .vm_deferred_thread()
-        .lazy_lenders_watermark()
+        .lazy_lenders_start()
         .load(&mut builder.cursor(), slot_addr);
-    let no_lends = builder
-        .ins()
-        .icmp(IntCC::Equal, lazy_lenders_len, watermark);
+    let no_lends = builder.ins().icmp(IntCC::Equal, lazy_lenders_len, start);
     let is_fast = builder.ins().band(is_current, no_lends);
 
     let fast_block = builder.create_block();

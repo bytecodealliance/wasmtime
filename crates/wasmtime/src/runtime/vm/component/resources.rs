@@ -489,16 +489,16 @@ impl ResourceTables<'_> {
         table.resource_borrow_insert(counter, resource, scope)
     }
 
-    /// Undoes the lazy lends recorded above `watermark`, truncating the buffer
-    /// back to it, for a deferred frame exiting without ever having been
-    /// forced.
+    /// Undoes the lazy lends recorded at or after `start`, truncating the
+    /// buffer back to it, for a deferred frame exiting without ever having
+    /// been forced.
     ///
     /// Unlike `validate_scope_exit` this needs no borrow scope, which is what
     /// lets the frame exit without materializing a thread. There is no
     /// `borrow_count` to check: lowering a borrow requires a materialized
     /// scope, so such a frame has none.
     #[cfg(feature = "component-model-async")]
-    pub fn undo_lazy_lends(&mut self, watermark: usize) -> Result<()> {
+    pub fn undo_lazy_lends(&mut self, start: usize) -> Result<()> {
         use smallvec::{SmallVec, ToSmallVec};
 
         // Only an unforced deferred guest frame records into the buffer, so
@@ -515,15 +515,15 @@ impl ResourceTables<'_> {
             .lazy_lenders
             .as_mut()
             .ok_or_else(|| bug!("no lazy lenders buffer to undo lends from"))?;
-        if watermark > **len {
+        if start > **len {
             bail_bug!(
-                "lazy lenders watermark {watermark} is beyond the buffer length {}",
+                "lazy lenders start {start} is beyond the buffer length {}",
                 **len
             );
         }
 
-        let lenders: SmallVec<[_; 8]> = buf[watermark..**len].to_smallvec();
-        **len = watermark;
+        let lenders: SmallVec<[_; 8]> = buf[start..**len].to_smallvec();
+        **len = start;
         for packed in lenders {
             let lender = packed.unpack();
             self.table_for_index(&lender)

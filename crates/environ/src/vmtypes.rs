@@ -587,7 +587,7 @@ macro_rules! for_each_vm_type {
                 ///
                 /// Frames nest with the call stack, so that is always a contiguous
                 /// suffix by the time this frame exits.
-                pub lazy_lenders_watermark: usize,
+                pub lazy_lenders_start: usize,
             }
 
             /// This type is used to save (and subsequently restore) a subset of

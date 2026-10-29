@@ -1633,8 +1633,8 @@ impl Compiler {
                 forced,
             );
 
-            // Likewise, watermarks died with those frames, so nothing can
-            // attribute or undo the lazy lends they recorded.
+            // Likewise, those frames held the only record of where their
+            // lazy lends started, so nothing can attribute or undo them.
             //
             // The lends stay counted, leaving their handles un-droppable, which
             // is only acceptable because a trap poisons the store (see

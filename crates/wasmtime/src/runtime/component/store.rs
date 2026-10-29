@@ -145,11 +145,14 @@ impl ComponentStoreData {
         )
     }
 
-    /// The `lazy_lenders` buffer, whose occupied prefix is tracked by
-    /// `VMStoreContext::lazy_lenders_len`.
+    /// Split borrow of `lazy_lenders`, whose occupied prefix is tracked by
+    /// `VMStoreContext::lazy_lenders_len`, and `task_state`, so that lends can
+    /// move from the buffer into a `CallContext` without copying them first.
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn lazy_lenders(&self) -> &[VMResourceIndex] {
-        &self.lazy_lenders[..]
+    pub(crate) fn lazy_lenders_and_task_state_mut(
+        &mut self,
+    ) -> (&[VMResourceIndex], &mut ComponentTaskState) {
+        (&self.lazy_lenders[..], &mut self.task_state)
     }
 
     /// Hook used just before a `Store` is dropped to dispose of anything
@@ -470,10 +473,11 @@ impl StoreOpaque {
             .0)
     }
 
-    /// The current frame's `lazy_lenders` watermark, or `None` if the thread
-    /// is not an unforced deferred frame and so has a real `CallContext`.
+    /// Where the current frame's lends start in `lazy_lenders`, or `None` if
+    /// the thread is not an unforced deferred frame and so has a real
+    /// `CallContext`.
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn deferred_frame_lazy_lenders_watermark(&mut self) -> Option<usize> {
+    pub(crate) fn deferred_frame_lazy_lenders_start(&mut self) -> Option<usize> {
         let ptr = self
             .vm_store_context_mut()
             .current_thread_mut()
@@ -481,7 +485,7 @@ impl StoreOpaque {
         // SAFETY: a deferred `current_thread` points at a `VMDeferredThread`
         // in the frame of the fused adapter mid-call below us, so the referent
         // is live and exclusively ours.
-        Some(unsafe { ptr.as_non_null().as_ref().lazy_lenders_watermark })
+        Some(unsafe { ptr.as_non_null().as_ref().lazy_lenders_start })
     }
 
     /// Pops the current unforced deferred frame, restoring the caller's
@@ -502,7 +506,7 @@ impl StoreOpaque {
             Some(ptr) => ptr,
             None => bail_bug!("expected a deferred frame to pop"),
         };
-        // SAFETY: as in `deferred_frame_lazy_lenders_watermark`.
+        // SAFETY: as in `deferred_frame_lazy_lenders_start`.
         let (parent, saved_context) = unsafe {
             let deferred = ptr.as_non_null().as_ref();
             (deferred.parent, deferred.saved_context)
