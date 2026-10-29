@@ -195,15 +195,15 @@ unsafe impl VmSafe for VMGlobalKind {}
 unsafe impl VmSafe for VMTagImport {}
 
 /// Define the runtime definitions of the shared `VM*` types.
-#[cfg_attr(
-    not(test),
-    allow(
-        unused_macro_rules,
-        reason = "the `@test` arms are only expanded inside the `#[cfg(test)]` \
-                  layout-test module"
-    )
+#[allow(
+    unused_macro_rules,
+    reason = "the `@test` arms are only expanded inside the `#[cfg(test)]` \
+              layout-test module, and the enum arms go unused whenever no \
+              `VM*` type is an enum"
 )]
 macro_rules! define_vm_types {
+    // Emit the layout test for one `struct` VM type: its size and alignment,
+    // plus each field's offset, checked against the real Rust type.
     (@test [ $($cfg:tt)* ] $Name:ident $snake:ident [ $($fname:ident)* ]) => {
         $($cfg)*
         #[test]
@@ -245,7 +245,180 @@ macro_rules! define_vm_types {
         }
     };
 
-    ( $(
+    // Emit the layout test for one `#[repr(C, $tag)]` enum VM type.
+    //
+    // `offset_of!` does not work on enum variants, so instead of measuring a
+    // variant field's offset this checks the generated offsets against the
+    // layout rule `#[repr(C, $tag)]` guarantees, evaluated with each field
+    // type's real `size_of`/`align_of`.
+    (@test_enum [ $($cfg:tt)* ] $Name:ident $snake:ident $tag:ty [
+        $( { $vsnake:ident $Variant:ident [ $( $fname:ident : $fty:ty , )* ] } )*
+    ]) => {
+        $($cfg)*
+        #[test]
+        fn $snake() {
+            use super::$Name;
+
+            let host = HostPtr;
+            let offsets = host.$snake();
+
+            let expected = usize::from(offsets.size());
+            let actual = size_of::<$Name>();
+            assert_eq!(
+                expected,
+                actual,
+                "size of {} failed: {expected} (expected) != {actual} (actual)",
+                stringify!($Name),
+            );
+
+            let expected = usize::from(offsets.align());
+            let actual = align_of::<$Name>();
+            assert_eq!(
+                expected,
+                actual,
+                "alignment of {} failed: {expected} (expected) != {actual} (actual)",
+                stringify!($Name),
+            );
+
+            let expected = usize::from(offsets.tag_size());
+            let actual = size_of::<$tag>();
+            assert_eq!(
+                expected,
+                actual,
+                "tag size of {} failed: {expected} (expected) != {actual} (actual)",
+                stringify!($Name),
+            );
+
+            // The payload of a `#[repr(C, $tag)]` enum starts just past the
+            // tag, rounded up to the enum's alignment.
+            let expected = usize::from(offsets.payload());
+            let actual = align_up(size_of::<$tag>(), align_of::<$Name>());
+            assert_eq!(
+                expected,
+                actual,
+                "payload offset of {} failed: {expected} (expected) != {actual} (actual)",
+                stringify!($Name),
+            );
+
+            $(
+                // A variant with no fields leaves both untouched.
+                #[allow(
+                    unused_assignments,
+                    unused_mut,
+                    unused_variables,
+                    reason = "a variant may have no fields, and the last \
+                              field's size is accumulated but never read"
+                )]
+                {
+                    let variant = offsets.$vsnake();
+                    let mut o = usize::from(offsets.payload());
+                    $(
+                        o = align_up(o, align_of::<$fty>());
+                        let expected = usize::from(variant.$fname());
+                        assert_eq!(
+                            expected,
+                            o,
+                            "offset of {}::{}::{} failed: \
+                             {expected} (expected) != {o} (actual)",
+                            stringify!($Name),
+                            stringify!($Variant),
+                            stringify!($fname),
+                        );
+                        o += size_of::<$fty>();
+                    )*
+                }
+            )*
+        }
+    };
+
+    // Munched one at a time rather than matched as a repetition because a
+    // `struct` and an `enum` do not share a body shape.
+    (@munch { $($defs:tt)* } { $($tests:tt)* }) => {
+        $($defs)*
+
+        #[cfg(test)]
+        #[allow(
+            unused_imports,
+            dead_code,
+            reason = "the glob import and `align_up` are only used by the enum \
+                      tests, and not every `VM*` type is an enum"
+        )]
+        mod test_vm_type_layouts {
+            // The enum tests name variant fields' types, so the module needs
+            // everything the definitions above were written against.
+            use super::*;
+            use core::mem::{align_of, offset_of, size_of};
+            use wasmtime_environ::{HostPtr, PtrSize};
+
+            /// Round `offset` up to a multiple of `align`.
+            fn align_up(offset: usize, align: usize) -> usize {
+                offset.next_multiple_of(align)
+            }
+
+            $($tests)*
+        }
+    };
+
+    (@munch { $($defs:tt)* } { $($tests:tt)* }
+        $(#[doc = $sdoc:literal])*
+        $(#[cfg($($scfg:tt)*)])?
+        $(#[derive($($d:ident),*)])?
+        #[repr(C, $tag:ident)]
+        #[snake_name = $snake:ident]
+        $svis:vis enum $Name:ident {
+            $(
+                $(#[doc = $vdoc:literal])*
+                #[snake_name = $vsnake:ident]
+                $Variant:ident {
+                    $(
+                        $(#[doc = $fdoc:literal])*
+                        $(#[aggregate])?
+                        $(#[indexed])?
+                        $(#[readonly])?
+                        $(#[can_move])?
+                        $fname:ident : $fty:ty ,
+                    )*
+                } = $disc:literal ,
+            )*
+        }
+        $($rest:tt)*
+    ) => {
+        define_vm_types!(
+            @munch
+            {
+                $($defs)*
+
+                $(#[doc = $sdoc])*
+                $(#[cfg($($scfg)*)])?
+                $(#[derive($($d),*)])?
+                #[repr(C, $tag)]
+                $svis enum $Name {
+                    $(
+                        $(#[doc = $vdoc])*
+                        $Variant {
+                            $(
+                                $(#[doc = $fdoc])*
+                                $fname: $fty,
+                            )*
+                        } = $disc,
+                    )*
+                }
+            }
+            {
+                $($tests)*
+
+                define_vm_types!(
+                    @test_enum
+                    [ $(#[cfg($($scfg)*)])? ]
+                    $Name $snake $tag
+                    [ $( { $vsnake $Variant [ $( $fname : $fty , )* ] } )* ]
+                );
+            }
+            $($rest)*
+        );
+    };
+
+    (@munch { $($defs:tt)* } { $($tests:tt)* }
         $(#[doc = $sdoc:literal])*
         $(#[cfg($($scfg:tt)*)])?
         $(#[derive($($d:ident),*)])?
@@ -264,34 +437,40 @@ macro_rules! define_vm_types {
                 $fvis:vis $fname:ident : $fty:ty ,
             )*
         }
-    )* ) => {
-        $(
-            $(#[doc = $sdoc])*
-            $(#[cfg($($scfg)*)])?
-            $(#[derive($($d),*)])?
-            #[repr($($repr)*)]
-            $svis struct $Name {
-                $(
-                    $(#[doc = $fdoc])*
-                    $fvis $fname: $fty,
-                )*
+        $($rest:tt)*
+    ) => {
+        define_vm_types!(
+            @munch
+            {
+                $($defs)*
+
+                $(#[doc = $sdoc])*
+                $(#[cfg($($scfg)*)])?
+                $(#[derive($($d),*)])?
+                #[repr($($repr)*)]
+                $svis struct $Name {
+                    $(
+                        $(#[doc = $fdoc])*
+                        $fvis $fname: $fty,
+                    )*
+                }
             }
-        )*
+            {
+                $($tests)*
 
-        #[cfg(test)]
-        mod test_vm_type_layouts {
-            use core::mem::{align_of, offset_of, size_of};
-            use wasmtime_environ::{HostPtr, PtrSize};
-
-            $(
                 define_vm_types!(
                     @test
                     [ $(#[cfg($($scfg)*)])? ]
                     $Name $snake
                     [ $($fname)* ]
                 );
-            )*
-        }
+            }
+            $($rest)*
+        );
+    };
+
+    ( $($defs:tt)* ) => {
+        define_vm_types!(@munch {} {} $($defs)*);
     };
 }
 wasmtime_environ::for_each_vm_type!(define_vm_types);
