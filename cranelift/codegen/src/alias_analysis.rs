@@ -1492,6 +1492,10 @@ impl<'a> AliasAnalysis<'a> {
                         // paths leading to it go through the original store
                         // instruction.
                         && self.domtree.dominates(def_inst, inst, &func.layout)
+                        // An atomic store still publishes its value to other
+                        // threads and orders the accesses around it, even when
+                        // the bytes do not change.
+                        && !has_memory_fence_semantics(opcode)
                     {
                         trace!("  --> idempotent store of {store_data} to loc {check_loc:?}");
 
