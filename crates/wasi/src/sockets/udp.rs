@@ -127,17 +127,11 @@ impl UdpSocket {
             // On UDP sockets, "connecting" is just a local operation that sets the
             // default remote address for future sends and receives. It does not
             // actually do any I/O on its own. We'll allow the `connect` call
-            // if the address is permitted for sending or receiving.
-            if self
-                .permissions
-                .check(addr, SocketAddrUse::UdpSend)
-                .await
-                .is_err()
-            {
-                self.permissions
-                    .check(addr, SocketAddrUse::UdpReceive)
-                    .await?;
-            }
+            // if the address is permitted for sending and receiving.
+            self.permissions.check(addr, SocketAddrUse::UdpSend).await?;
+            self.permissions
+                .check(addr, SocketAddrUse::UdpReceive)
+                .await?;
         }
 
         let result = connect(&self.socket, addr);
