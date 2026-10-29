@@ -108,6 +108,18 @@ where
         );
     }
 
+    // Record where this frame's lazy lends will start, so that `exit` can tell
+    // whether it recorded any and the host can find exactly this frame's
+    // entries when it has to attribute them to a real task.
+    let lazy_lenders_len = alias_regions
+        .vm_store_context()
+        .lazy_lenders_len()
+        .load(&mut builder.cursor(), vmstore);
+    alias_regions
+        .vm_deferred_thread()
+        .lazy_lenders_start()
+        .store(&mut builder.cursor(), slot_addr, lazy_lenders_len);
+
     // Publish the deferred thread as the store's current thread.
     alias_regions.vm_store_context().current_thread().store(
         &mut builder.cursor(),
@@ -162,7 +174,21 @@ where
         .vm_store_context()
         .current_thread()
         .load(&mut builder.cursor(), vmstore);
-    let is_fast = builder.ins().icmp(IntCC::Equal, cur, slot_addr);
+    let is_current = builder.ins().icmp(IntCC::Equal, cur, slot_addr);
+
+    // The fast path also requires that this frame recorded no lazy lends,
+    // since undoing those means touching the handle tables, which only the
+    // host can do.
+    let lazy_lenders_len = alias_regions
+        .vm_store_context()
+        .lazy_lenders_len()
+        .load(&mut builder.cursor(), vmstore);
+    let start = alias_regions
+        .vm_deferred_thread()
+        .lazy_lenders_start()
+        .load(&mut builder.cursor(), slot_addr);
+    let no_lends = builder.ins().icmp(IntCC::Equal, lazy_lenders_len, start);
+    let is_fast = builder.ins().band(is_current, no_lends);
 
     let fast_block = builder.create_block();
     let slow_block = builder.create_block();

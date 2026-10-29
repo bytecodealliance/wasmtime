@@ -16,6 +16,13 @@ use crate::{
 /// defined by the component model's `context.{get,set}` intrinsics.
 pub const NUM_COMPONENT_CONTEXT_SLOTS: usize = 2;
 
+/// Capacity of the `lazy_lenders` buffer in the `VMStoreContext`.
+///
+/// A single call can lift arbitrarily many borrows (consider `list<borrow<T>>`),
+/// so this is sized to cover realistic signatures rather than being a bound;
+/// overflowing it falls back to recording in the `CallContext`.
+pub const LAZY_LENDERS_CAPACITY: usize = 128;
+
 #[cfg(target_pointer_width = "32")]
 fn cast_to_u32(sz: usize) -> u32 {
     u32::try_from(sz).unwrap()

@@ -695,6 +695,19 @@ fn hostcall_fuel(store: &mut dyn VMStore, _: Instance) -> u64 {
 }
 
 fn exit_sync_call(store: &mut dyn VMStore, instance: Instance) -> Result<()> {
+    // A still-deferred frame was never forced, so it has no `CallContext` to
+    // validate, only lazy lends to undo. Both `component_resource_tables` and
+    // `exit_guest_sync_call` below would force the thread, so this path avoids
+    // them and pops the frame itself.
+    #[cfg(feature = "component-model-async")]
+    if let Some(start) = store.store_opaque_mut().deferred_frame_lazy_lenders_start() {
+        store
+            .store_opaque_mut()
+            .component_resource_tables_lazy_lends(Some(instance))?
+            .undo_lazy_lends(start)?;
+        return store.store_opaque_mut().pop_deferred_frame();
+    }
+
     store
         .component_resource_tables(Some(instance))?
         .validate_scope_exit()?;

@@ -1,12 +1,16 @@
 use crate::prelude::*;
 use crate::runtime::component::{HostResourceData, Instance};
 use crate::runtime::vm;
+#[cfg(feature = "component-model-async")]
+use crate::runtime::vm::VMResourceIndex;
 use crate::runtime::vm::component::{
     CallContext, ComponentInstance, HandleCounter, HandleTable, OwnedComponentInstance, Scope,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
 use core::pin::Pin;
+#[cfg(feature = "component-model-async")]
+use wasmtime_environ::LAZY_LENDERS_CAPACITY;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::prelude::TryPrimaryMap;
 
@@ -57,6 +61,13 @@ pub struct ComponentStoreData {
     component_host_table: HandleTable,
     host_resource_data: HostResourceData,
 
+    /// Backing storage for `VMStoreContext::lazy_lenders`; see
+    /// `CurrentScope::DeferredGuest`.
+    ///
+    /// Boxed and never resized, since JIT code holds a raw pointer to it.
+    #[cfg(feature = "component-model-async")]
+    lazy_lenders: Box<[VMResourceIndex; LAZY_LENDERS_CAPACITY]>,
+
     /// Metadata/tasks/etc related to component-model-async and concurrency
     /// support.
     task_state: ComponentTaskState,
@@ -92,8 +103,8 @@ pub struct RuntimeInstance {
 }
 
 impl ComponentStoreData {
-    pub fn new(engine: &Engine) -> ComponentStoreData {
-        ComponentStoreData {
+    pub fn new(engine: &Engine) -> Result<ComponentStoreData> {
+        Ok(ComponentStoreData {
             instances: Default::default(),
             trapped: false,
             num_component_instances: 0,
@@ -116,7 +127,32 @@ impl ComponentStoreData {
                 ComponentTaskState::NotConcurrent(Default::default())
             },
             hostcall_fuel: DEFAULT_HOSTCALL_FUEL,
-        }
+            #[cfg(feature = "component-model-async")]
+            lazy_lenders: try_new::<Box<_>>([VMResourceIndex::EMPTY; LAZY_LENDERS_CAPACITY])?,
+        })
+    }
+
+    /// The `lazy_lenders` buffer and its capacity, to publish into the store's
+    /// `VMStoreContext`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn lazy_lenders_ptr_and_len(
+        &mut self,
+    ) -> (core::ptr::NonNull<VMResourceIndex>, usize) {
+        let len = self.lazy_lenders.len();
+        (
+            core::ptr::NonNull::from(&mut self.lazy_lenders[..]).cast(),
+            len,
+        )
+    }
+
+    /// Split borrow of `lazy_lenders`, whose occupied prefix is tracked by
+    /// `VMStoreContext::lazy_lenders_len`, and `task_state`, so that lends can
+    /// move from the buffer into a `CallContext` without copying them first.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn lazy_lenders_and_task_state_mut(
+        &mut self,
+    ) -> (&[VMResourceIndex], &mut ComponentTaskState) {
+        (&self.lazy_lenders[..], &mut self.task_state)
     }
 
     /// Hook used just before a `Store` is dropped to dispose of anything
@@ -437,6 +473,104 @@ impl StoreOpaque {
             .0)
     }
 
+    /// Where the current frame's lends start in `lazy_lenders`, or `None` if
+    /// the thread is not an unforced deferred frame and so has a real
+    /// `CallContext`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn deferred_frame_lazy_lenders_start(&mut self) -> Option<usize> {
+        let ptr = self
+            .vm_store_context_mut()
+            .current_thread_mut()
+            .as_deferred()?;
+        // SAFETY: a deferred `current_thread` points at a `VMDeferredThread`
+        // in the frame of the fused adapter mid-call below us, so the referent
+        // is live and exclusively ours.
+        Some(unsafe { ptr.as_non_null().as_ref().lazy_lenders_start })
+    }
+
+    /// Pops the current unforced deferred frame, restoring the caller's
+    /// context slots and current thread.
+    ///
+    /// The host-side twin of the inline fast path in
+    /// `component_sync_call::exit`, for when that path bailed out only to undo
+    /// lazy lends. There is no `GuestTask` yet, so unlike
+    /// `exit_guest_sync_call` this neither forces the thread nor touches
+    /// `ConcurrentState`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn pop_deferred_frame(&mut self) -> Result<()> {
+        let ptr = match self
+            .vm_store_context_mut()
+            .current_thread_mut()
+            .as_deferred()
+        {
+            Some(ptr) => ptr,
+            None => bail_bug!("expected a deferred frame to pop"),
+        };
+        // SAFETY: as in `deferred_frame_lazy_lenders_start`.
+        let (parent, saved_context) = unsafe {
+            let deferred = ptr.as_non_null().as_ref();
+            (deferred.parent, deferred.saved_context)
+        };
+        *self.vm_store_context_mut().component_context_mut() = saved_context;
+        *self.vm_store_context_mut().current_thread_mut() = parent;
+        Ok(())
+    }
+
+    /// Variant of `component_resource_tables` for operations which only record
+    /// a lend and never need a materialized scope.
+    ///
+    /// Under an unforced `VMDeferredThread` the returned tables record into
+    /// `lazy_lenders`, leaving the thread deferred; otherwise this is
+    /// `component_resource_tables`.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn component_resource_tables_lazy_lends(
+        &mut self,
+        instance: Option<Instance>,
+    ) -> Result<vm::component::ResourceTables<'_>> {
+        // NB: this check must happen *before* `current_scope()`, which is
+        // itself the call that forces the thread.
+        if !self
+            .vm_store_context_mut()
+            .current_thread_mut()
+            .is_deferred()
+        {
+            return self.component_resource_tables(instance);
+        }
+
+        let store_id = self.id();
+        // `vm_store_context` and `store_data` are disjoint fields of the store,
+        // so the buffer and the tables can be borrowed at the same time.
+        let (vm_store_context, store_data) = self.vm_store_context_and_store_data_mut();
+        let data = &mut store_data.components;
+        let guest = instance.map(|i| {
+            let i = i.id();
+            i.assert_belongs_to(store_id);
+            data.instances[i.instance]
+                .as_mut()
+                .unwrap()
+                .get_mut()
+                .instance_states()
+        });
+
+        debug_assert_eq!(
+            data.lazy_lenders.len(),
+            vm_store_context.lazy_lenders_capacity
+        );
+        let lazy_lenders = (
+            &mut data.lazy_lenders[..],
+            vm_store_context.lazy_lenders_len_mut(),
+        );
+
+        Ok(vm::component::ResourceTables {
+            host_table: &mut data.component_host_table,
+            handle_counter: &mut data.handle_counter,
+            task_state: &mut data.task_state,
+            guest,
+            current_scope: Some(vm::component::CurrentScope::DeferredGuest),
+            lazy_lenders: Some(lazy_lenders),
+        })
+    }
+
     pub(crate) fn component_resource_tables_and_host_resource_data(
         &mut self,
         instance: Option<Instance>,
@@ -465,6 +599,8 @@ impl StoreOpaque {
                 task_state: &mut data.task_state,
                 guest,
                 current_scope,
+                #[cfg(feature = "component-model-async")]
+                lazy_lenders: None,
             },
             &mut data.host_resource_data,
         ))

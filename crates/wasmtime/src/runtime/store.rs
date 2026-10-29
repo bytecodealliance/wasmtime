@@ -719,7 +719,7 @@ impl<T> Store<T> {
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
     pub fn try_new(engine: &Engine, data: T) -> Result<Self> {
-        let store_data = StoreData::new(engine);
+        let store_data = StoreData::new(engine)?;
         log::trace!("creating new store {:?}", store_data.id());
 
         let pkey = engine.allocator().next_available_pkey();
@@ -774,6 +774,20 @@ impl<T> Store<T> {
         let store_data =
             <NonNull<ManuallyDrop<T>>>::from(&mut inner.data_no_provenance).cast::<()>();
         inner.inner.vm_store_context.store_data = store_data.into();
+
+        #[cfg(feature = "component-model-async")]
+        {
+            let (lazy_lenders, capacity) =
+                inner.inner.store_data.components.lazy_lenders_ptr_and_len();
+            // SAFETY: the buffer is boxed inside `store_data`, which outlives
+            // the `VMStoreContext` beside it, and is never moved or resized.
+            unsafe {
+                inner
+                    .inner
+                    .vm_store_context
+                    .set_lazy_lenders(lazy_lenders, capacity);
+            }
+        }
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
 
@@ -1583,6 +1597,17 @@ impl StoreOpaque {
 
     pub fn store_data_mut_and_registry(&mut self) -> (&mut StoreData, &ModuleRegistry) {
         (&mut self.store_data, &self.modules)
+    }
+
+    /// Borrows the `VMStoreContext` and the store's data at the same time.
+    ///
+    /// These are disjoint fields, so JIT-visible state can be reached alongside
+    /// the tables in `StoreData` without a whole-store borrow in between.
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn vm_store_context_and_store_data_mut(
+        &mut self,
+    ) -> (&mut VMStoreContext, &mut StoreData) {
+        (&mut self.vm_store_context, &mut self.store_data)
     }
 
     #[cfg(feature = "debug")]
