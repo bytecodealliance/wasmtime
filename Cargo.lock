@@ -881,11 +881,13 @@ name = "cranelift-isle-veri-caching"
 version = "0.1.0"
 dependencies = [
  "easy-smt",
+ "hmac",
  "log",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
+ "ureq",
 ]
 
 [[package]]
@@ -4177,11 +4179,13 @@ dependencies = [
  "log",
  "native-tls",
  "percent-encoding",
+ "rustls",
  "rustls-pki-types",
  "socks",
  "ureq-proto",
  "utf-8",
  "webpki-root-certs",
+ "webpki-roots",
 ]
 
 [[package]]

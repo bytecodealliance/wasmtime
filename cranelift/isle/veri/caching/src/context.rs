@@ -696,6 +696,7 @@ impl std::ops::Deref for Context {
 mod tests {
     use super::*;
     use crate::cache::{Cache, CacheMode};
+    use crate::store::MemoryStore;
     #[cfg(unix)]
     use std::path::PathBuf;
 
@@ -768,13 +769,8 @@ done
     #[cfg(unix)]
     #[test]
     fn test_populate_then_replay_from_cache() {
-        let dir = tempfile::tempdir().unwrap();
-        let cache_dir = dir.path().join("cache");
-        let cache = Arc::new(Cache::open(
-            None,
-            Some(cache_dir.clone()),
-            CacheMode::ReadWrite,
-        ));
+        let store = Arc::new(MemoryStore::default());
+        let cache = Arc::new(Cache::open(store.clone(), CacheMode::ReadWrite).unwrap());
 
         // First run: misses; spawns the fake solver.
         let mut ctx = fake_solver(&mut ContextBuilder::new())
@@ -784,18 +780,15 @@ done
         let (resp, values) = session(&mut ctx).unwrap();
         assert_eq!(resp, Response::Sat);
         assert_eq!(values, vec![("x".to_string(), "#b00000000".to_string())]);
-        let (hits, misses, stores, _) = cache.snapshot_stats();
+        let (hits, misses, stores) = cache.snapshot_stats();
         assert_eq!((hits, misses, stores), (0, 2, 2));
+        cache.flush(None).unwrap();
 
         // Second run: everything is served from the cache; the "solver" is
         // unspawnable, but must be named like the fake solver so the cache
         // keys match. No solver is launched.
         let unspawnable = PathBuf::from("/nonexistent/dir/sh");
-        let cache = Arc::new(Cache::open(
-            Some(cache_dir),
-            None,
-            CacheMode::ReadOnlyEnforcing,
-        ));
+        let cache = Arc::new(Cache::open(store, CacheMode::ReadOnlyEnforcing).unwrap());
         let mut ctx = ContextBuilder::new()
             .solver(unspawnable)
             .cache(cache.clone())
@@ -804,7 +797,7 @@ done
         let (resp, values) = session(&mut ctx).unwrap();
         assert_eq!(resp, Response::Sat);
         assert_eq!(values, vec![("x".to_string(), "#b00000000".to_string())]);
-        let (hits, misses, _, _) = cache.snapshot_stats();
+        let (hits, misses, _) = cache.snapshot_stats();
         assert_eq!((hits, misses), (2, 0));
     }
 
@@ -813,12 +806,8 @@ done
     #[cfg(unix)]
     #[test]
     fn test_path_distinguishes_queries() {
-        let dir = tempfile::tempdir().unwrap();
-        let cache = Arc::new(Cache::open(
-            None,
-            Some(dir.path().join("cache")),
-            CacheMode::ReadWrite,
-        ));
+        let store = Arc::new(MemoryStore::default());
+        let cache = Arc::new(Cache::open(store, CacheMode::ReadWrite).unwrap());
 
         let mut ctx = fake_solver(&mut ContextBuilder::new())
             .cache(cache.clone())
@@ -836,7 +825,7 @@ done
         ctx.check().unwrap();
         ctx.exit().unwrap();
 
-        let (hits, misses, stores, _) = cache.snapshot_stats();
+        let (hits, misses, stores) = cache.snapshot_stats();
         assert_eq!((hits, misses, stores), (0, 2, 2));
     }
 
@@ -844,12 +833,8 @@ done
     /// attempt to spawn a solver.
     #[test]
     fn test_read_only_enforcing_miss() {
-        let dir = tempfile::tempdir().unwrap();
-        let cache = Arc::new(Cache::open(
-            Some(dir.path().to_path_buf()),
-            None,
-            CacheMode::ReadOnlyEnforcing,
-        ));
+        let store = Arc::new(MemoryStore::default());
+        let cache = Arc::new(Cache::open(store, CacheMode::ReadOnlyEnforcing).unwrap());
         let mut ctx = unspawnable_context(Some(cache));
         ctx.set_logic("ALL").unwrap();
         let err = ctx.check().unwrap_err();

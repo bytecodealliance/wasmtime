@@ -6,7 +6,7 @@ use anyhow::{Context as _, Result, format_err};
 use clap::{ArgAction, Parser};
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle_veri::runner::{Filter, Runner, SolverBackend, SolverRule};
-use cranelift_isle_veri_caching::{Cache, CacheMode};
+use cranelift_isle_veri_caching::{Cache, CacheMode, Credentials, S3Store};
 
 #[derive(Parser)]
 // Allow a single-valued argument to appear more than once, with the last
@@ -105,31 +105,38 @@ struct Opts {
     #[arg(long)]
     debug: bool,
 
-    /// Read cached SMT query results from this directory (read-only).
+    /// S3 bucket holding the SMT query cache. Caching is off if unset.
     ///
-    /// Cache hits found here are served without invoking the solver. In
-    /// `read-write` mode, entries used from the source are also copied into
-    /// the destination (see `--cache-dest-dir`).
-    #[arg(long)]
-    cache_source_dir: Option<std::path::PathBuf>,
+    /// Requests are signed with credentials from `AWS_ACCESS_KEY_ID`,
+    /// `AWS_SECRET_ACCESS_KEY` and (optionally) `AWS_SESSION_TOKEN` if set,
+    /// and are anonymous otherwise (for read-only access to a public bucket).
+    /// The region is taken from `AWS_REGION` or `AWS_DEFAULT_REGION`.
+    #[arg(long, env = "ISLE_VERI_CACHE_BUCKET")]
+    cache_bucket: Option<String>,
 
-    /// Write (and read) cached SMT query results in this directory.
-    ///
-    /// New results (solver invocations on a cache miss) are written here, as
-    /// are entries retained from the source. Required in `read-write` mode.
-    #[arg(long)]
-    cache_dest_dir: Option<std::path::PathBuf>,
+    /// Key prefix of the cache within the S3 bucket.
+    #[arg(long, default_value = "v1/", env = "ISLE_VERI_CACHE_PREFIX")]
+    cache_prefix: String,
 
     /// Cache mode.
     ///
-    /// - `read-write` (default): serve hits from the source and destination
-    ///   caches; on a miss, invoke the solver and write the result to the
-    ///   destination. Requires `--cache-dest-dir`.
-    /// - `read-only-enforcing`: serve hits from the source cache only and fail
-    ///   the run on any miss (never invokes the solver). Requires
-    ///   `--cache-source-dir`.
-    #[arg(long, default_value = "read-write")]
+    /// - `read-only` (default): serve hits from the cache; on a miss, invoke
+    ///   the solver, but don't upload the result.
+    /// - `read-write`: as `read-only`, but upload new results at the end of
+    ///   the run (and compact the cache when needed). Requires credentials.
+    /// - `read-only-enforcing`: serve hits from the cache and fail the run on
+    ///   any miss (never invokes the solver).
+    #[arg(long, default_value = "read-only", env = "ISLE_VERI_CACHE_MODE")]
     cache_mode: CacheMode,
+
+    /// In `read-write` mode, append the cache keys this run used to this
+    /// local file (created if missing), for a later `veri-cache compact`.
+    ///
+    /// Several runs that together make up one verification (e.g. one per
+    /// configuration) should share the file; compaction keeps only the
+    /// entries listed in it.
+    #[arg(long, value_name = "FILE")]
+    cache_used_keys_file: Option<std::path::PathBuf>,
 }
 
 impl Opts {
@@ -298,29 +305,24 @@ fn main() -> Result<()> {
     runner.skip_solver(opts.skip_solver);
     runner.debug(opts.debug);
 
-    // Setup caching if any cache directory is provided.
-    let caching = opts.cache_source_dir.is_some() || opts.cache_dest_dir.is_some();
-    if caching {
-        match opts.cache_mode {
-            CacheMode::ReadOnlyEnforcing if opts.cache_source_dir.is_none() => {
+    // Set up caching if a bucket is provided.
+    let cache = match &opts.cache_bucket {
+        Some(bucket) => {
+            let credentials = Credentials::from_env();
+            if opts.cache_mode == CacheMode::ReadWrite && credentials.is_none() {
                 return Err(format_err!(
-                    "--cache-mode read-only-enforcing requires --cache-source-dir"
+                    "--cache-mode read-write requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY"
                 ));
             }
-            CacheMode::ReadWrite if opts.cache_dest_dir.is_none() => {
-                return Err(format_err!(
-                    "--cache-mode read-write requires --cache-dest-dir"
-                ));
-            }
-            _ => {}
+            let store = S3Store::new(bucket, &opts.cache_prefix, credentials);
+            let cache = Cache::open(Arc::new(store), opts.cache_mode)
+                .context("failed to load SMT query cache")?;
+            let cache = Arc::new(cache);
+            runner.set_cache(cache.clone());
+            Some(cache)
         }
-        let cache = Cache::open(
-            opts.cache_source_dir.clone(),
-            opts.cache_dest_dir.clone(),
-            opts.cache_mode,
-        );
-        runner.set_cache(Arc::new(cache));
-    }
+        None => None,
+    };
 
     // Summarize what is being excluded and where output is going before
     // starting verification.
@@ -380,19 +382,31 @@ fn main() -> Result<()> {
     println!("==========================");
 
     // Print cache config.
-    if caching {
-        let dir_str = |d: &Option<std::path::PathBuf>| match d {
-            Some(p) => p.display().to_string(),
-            None => "(none)".to_string(),
-        };
-        println!("Cache mode:         {:?}", opts.cache_mode);
-        println!("Cache source:       {}", dir_str(&opts.cache_source_dir));
-        println!("Cache destination:  {}", dir_str(&opts.cache_dest_dir));
+    if let Some(cache) = &cache {
+        println!("Cache mode:         {}", cache.mode());
+        println!(
+            "Cache:              {} entries loaded from bucket {} under {}",
+            cache.loaded_entries(),
+            opts.cache_bucket.as_deref().unwrap(),
+            opts.cache_prefix,
+        );
     } else {
         println!("Cache:              off");
     }
 
-    runner.run()?;
+    let result = runner.run();
 
+    // Upload new results even if verification failed: they are valid
+    // solver responses regardless of the verdict.
+    if let Some(cache) = &cache {
+        let delta = cache
+            .flush(opts.cache_used_keys_file.as_deref())
+            .context("failed to write SMT query cache")?;
+        if let Some(delta) = &delta {
+            println!("Cache: uploaded new entries as {delta}");
+        }
+    }
+
+    result?;
     Ok(())
 }
