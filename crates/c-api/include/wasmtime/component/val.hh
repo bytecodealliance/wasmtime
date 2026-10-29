@@ -84,8 +84,12 @@ public:                                                                        \
    * \brief Copy assignment to clone from `other`.                             \
    */                                                                          \
   name &operator=(const name &other) {                                         \
+    /* `other` may be `*this` or owned by it, so clone it before destroying */ \
+    Raw old = raw;                                                             \
+    copy(this == &other ? old : other.raw);                                    \
+    std::swap(old, raw);                                                       \
     destroy();                                                                 \
-    copy(other.raw);                                                           \
+    raw = old;                                                                 \
     return *this;                                                              \
   }                                                                            \
                                                                                \
