@@ -471,7 +471,7 @@ impl<D: 'static> DirectDestination<'_, D> {
     /// Provide direct access to the writer's buffer.
     pub fn remaining(&mut self) -> Result<&mut [u8]> {
         if let Some(buffer) = self.host_buffer.as_mut() {
-            return Ok(buffer.dst);
+            return Ok(&mut buffer.dst[*buffer.marked_written..]);
         }
         let transmit = self
             .store
@@ -5297,5 +5297,34 @@ mod tests {
             poll_future_producer(rx.as_mut(), true),
             Poll::Ready(Err(..)),
         ));
+    }
+
+    #[test]
+    fn direct_destination_successive_writes() {
+        use std::io::Write;
+
+        let mut store = Store::new(&ENGINE, ());
+        let mut buffer = ();
+        let mut dst = Vec::new();
+        let mut marked_written = 0;
+        let destination = Destination::<u8, ()> {
+            id: TableId::new(0),
+            buffer: &mut buffer,
+            host_buffer: Some(HostBuffer {
+                dst: &mut dst,
+                marked_written: &mut marked_written,
+            }),
+            _phantom: PhantomData,
+        };
+
+        // Each write must land after the bytes already marked as written,
+        // not overwrite them.
+        let mut direct = destination.as_direct(store.as_context_mut(), 6);
+        direct.write_all(&[1, 2, 3]).unwrap();
+        direct.write_all(&[4, 5, 6]).unwrap();
+        drop(direct);
+
+        assert_eq!(marked_written, 6);
+        assert_eq!(dst, [1, 2, 3, 4, 5, 6]);
     }
 }
