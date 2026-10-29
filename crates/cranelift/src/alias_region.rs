@@ -10,7 +10,8 @@
 //!
 //! 1. Fields of the `VM*` types and of the vmctx types get one region per
 //!    field, and an accessor per field is generated from our
-//!    `for_each_vm[ctx]_type!` macros.
+//!    `for_each_vm[ctx]_type!` macros. An `enum` gets only two: one for its
+//!    tag, one shared by all variants' fields, which overlap in memory.
 //!
 //! 2. There are a handful of hand-written methods for memory regions that are
 //!    not part of the vmctx or a `VM*` type at all (linear memories, the GC
@@ -98,7 +99,8 @@ enum AliasRegionKey {
         /// The type of VM data structure being accessed.
         ty: VmType,
         /// The offset of the accessed field *within* the `ty` structure (or
-        /// the base offset of the array, for array fields).
+        /// the base offset of the array, for array fields, or the payload
+        /// offset, for an enum's variants' fields).
         offset: u32,
     },
 
@@ -443,11 +445,25 @@ impl<'a, Offsets> Field<'a, Offsets> {
         flags: ir::MemFlagsData,
         ty: ir::Type,
     ) -> Self {
+        Self::new_in_region(regions, vm_type, offset, offset, flags, ty)
+    }
+
+    /// As `new`, but keyed on `region_offset` rather than the field's own
+    /// `offset`, so that fields overlapping in memory (an enum's variants'
+    /// fields) share one region instead of claiming they cannot alias.
+    fn new_in_region(
+        regions: &'a mut AliasRegions<Offsets>,
+        vm_type: VmType,
+        region_offset: u32,
+        offset: u32,
+        flags: ir::MemFlagsData,
+        ty: ir::Type,
+    ) -> Self {
         Field {
             regions,
             key: AliasRegionKey::Vm {
                 ty: vm_type,
-                offset,
+                offset: region_offset,
             },
             offset,
             flags,
@@ -886,18 +902,20 @@ macro_rules! define_vm_type_alias_region_helpers {
         }
     };
 
-    // As `@method` above, but the offset comes from the variant's own offsets.
+    // As `@method` above, but the offset comes from the variant's own offsets
+    // and the region is the enum's shared payload one.
     (@variant_method $Name:ident $snake:ident $vsnake:ident plain $fname:ident
         [ $($fattr:tt)* ] [ $($fty:tt)* ]
     ) => {
         #[doc = concat!(
             "Get the [`Field`] for the `", stringify!($fname),
-            "` field of this variant of `", stringify!($Name), "`."
+            "` field of this variant of `", stringify!($Name), "`.\n\n\
+             All variants' fields share one alias region."
         )]
         pub fn $fname(self) -> Field<'a, Offsets> {
-            let offset = u32::from(
-                self.regions.offsets.get_ptr_size().$snake().$vsnake().$fname()
-            );
+            let ptr_size = self.regions.offsets.get_ptr_size();
+            let payload = u32::from(ptr_size.$snake().payload());
+            let offset = u32::from(ptr_size.$snake().$vsnake().$fname());
             let flags = ir::MemFlagsData::trusted();
             $(
                 let flags = define_vm_type_alias_region_helpers!(
@@ -907,12 +925,15 @@ macro_rules! define_vm_type_alias_region_helpers {
             let ty = define_vm_type_alias_region_helpers!(
                 @field_ty self.regions.pointer_type, $($fty)*
             );
-            Field::new(self.regions, VmType::$Name, offset, flags, ty)
+            Field::new_in_region(self.regions, VmType::$Name, payload, offset, flags, ty)
         }
     };
 
     // Emit the accessor `struct` for a `#[repr(C, u32)]` enum: its `u32` tag,
     // plus one nested accessor type per variant.
+    //
+    // An enum gets two regions, not one per field: variants' fields occupy the
+    // same payload bytes, so they can alias both across and within a variant.
     (@emit_enum $Name:ident $snake:ident $tag:ident {
         $( { $VariantAccess:ident $vsnake:ident { $($vgroups:tt)* } } )*
     }) => {
@@ -952,7 +973,8 @@ macro_rules! define_vm_type_alias_region_helpers {
         {
             #[doc = concat!(
                 "Get the [`Field`] for the `", stringify!($tag), "` tag of `",
-                stringify!($Name), "`."
+                stringify!($Name), "`.\n\n\
+                 The tag has its own alias region, distinct from the variants'."
             )]
             pub fn tag(self) -> Field<'a, Offsets> {
                 let offset = u32::from(

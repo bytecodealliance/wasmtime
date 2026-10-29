@@ -85,6 +85,9 @@
 /// tag values compiled code compares against), braces even when empty, and its
 /// own `#[snake_name]` for its generated accessors. Variant fields take a
 /// struct field's marker attributes but no visibility.
+///
+/// An enum gets two alias regions rather than a struct's one per field: one for
+/// the tag, one shared by all variants' fields, because they overlap.
 #[macro_export]
 macro_rules! for_each_vm_type {
     ($mac:ident) => {
