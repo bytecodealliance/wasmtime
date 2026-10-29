@@ -1,3 +1,31 @@
+## 49.0.5
+
+Released 2026-10-29.
+
+### Fixed
+
+* wasi-sockets: UDP `connect` only required the address to be permitted for
+  sending *or* receiving, allowing guests to send datagrams to addresses denied
+  for `UdpSend`.
+  [GHSA-hmmr-87qq-258j](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hmmr-87qq-258j)
+
+* Cross-engine type confusion with host-created struct-types-with-supertypes
+  has been fixed.
+  [GHSA-qw58-7h65-crq2](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-qw58-7h65-crq2)
+
+* Panic with typed functions with `i31` or `nullref` arguments has been fixed.
+  [GHSA-3982-jqvv-277m](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-3982-jqvv-277m)
+
+* Unchecked memory usage in transferring borrowed resources between components
+  has been fixed.
+  [GHSA-6fr9-xmw9-5352](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-6fr9-xmw9-5352)
+
+* Fixed a possibility of content-length being invalid or not matching body
+  length in wasi-http p2.
+  [GHSA-h4wp-g4x3-7398](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-h4wp-g4x3-7398)
+
+--------------------------------------------------------------------------------
+
 ## 49.0.4
 
 Released 2026-10-19.

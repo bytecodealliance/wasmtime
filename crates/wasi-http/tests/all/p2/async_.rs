@@ -107,6 +107,18 @@ async fn p2_http_outbound_request_content_length() -> Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_http_outbound_request_forward_duplicate_content_length() -> Result<()> {
+    crate::shared::forward_duplicate_content_length(async |server| {
+        run(
+            P2_HTTP_OUTBOUND_REQUEST_FORWARD_DUPLICATE_CONTENT_LENGTH_COMPONENT,
+            server,
+        )
+        .await
+    })
+    .await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_http_outbound_request_missing_path_and_query() -> Result<()> {
     let server = Server::http1(1)?;
     run(

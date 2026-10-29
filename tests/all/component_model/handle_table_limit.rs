@@ -144,3 +144,93 @@ fn freeing_handles_returns_budget() -> Result<()> {
 
     Ok(())
 }
+
+/// Borrows lent to the resource's owner count against the limit while the
+/// call is active, and return their budget when it returns.
+#[test]
+fn lends_to_owner_count_against_the_limit() -> Result<()> {
+    // `$D` defines a resource and `$U` passes a `list<borrow<R>>` of `n` copies
+    // of one handle to `$D`'s `take`, `k` times. `$D` receives reps, so no
+    // handles are created for the borrows, but each lend still counts against
+    // the limit until `take` returns.
+    const LEND_COMPONENT: &str = r#"
+(component
+  (component $D
+    (type $R (resource (rep i32)))
+    (core func $new (canon resource.new $R))
+    (core module $m
+      (import "" "new" (func $new (param i32) (result i32)))
+      (memory (export "mem") 1)
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32) (i32.const 16))
+      (func (export "make") (result i32) (call $new (i32.const 42)))
+      (func (export "take") (param i32 i32) (result i32) (local.get 1)))
+    (core instance $i (instantiate $m (with "" (instance (export "new" (func $new))))))
+    (export $Rx "r" (type $R))
+    (func (export "make") (result (own $Rx)) (canon lift (core func $i "make")))
+    (func (export "take") (param "xs" (list (borrow $Rx))) (result u32)
+      (canon lift (core func $i "take") (memory (core memory $i "mem"))
+        (realloc (core func $i "realloc")))))
+  (instance $d (instantiate $D))
+
+  (component $U
+    (import "r" (type $R (sub resource)))
+    (import "make" (func $make (result (own $R))))
+    (import "take" (func $take (param "xs" (list (borrow $R))) (result u32)))
+    (core module $mm (memory (export "mem") 1))
+    (core instance $mi (instantiate $mm))
+    (core func $make (canon lower (func $make)))
+    (core func $take (canon lower (func $take) (memory (core memory $mi "mem"))))
+    (core module $m
+      (import "" "mem" (memory 1))
+      (import "" "make" (func $make (result i32)))
+      (import "" "take" (func $take (param i32 i32) (result i32)))
+      (func (export "run") (param $n i32) (param $k i32) (result i32)
+        (local $h i32) (local $i i32)
+        (local.set $h (call $make))
+        (loop $l
+          (if (i32.lt_u (local.get $i) (local.get $n)) (then
+            (i32.store (i32.shl (local.get $i) (i32.const 2)) (local.get $h))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $l))))
+        (local.set $i (i32.const 0))
+        (loop $l
+          (if (i32.lt_u (local.get $i) (local.get $k)) (then
+            (drop (call $take (i32.const 0) (local.get $n)))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $l))))
+        (local.get $k)))
+    (core instance $i (instantiate $m (with "" (instance
+      (export "mem" (memory $mi "mem"))
+      (export "make" (func $make)) (export "take" (func $take))))))
+    (func (export "run") (param "n" u32) (param "k" u32) (result u32)
+      (canon lift (core func $i "run"))))
+  (instance $u (instantiate $U (with "r" (type $d "r"))
+    (with "make" (func $d "make")) (with "take" (func $d "take"))))
+  (export "run" (func $u "run"))
+)
+"#;
+    let engine = engine();
+    let component = Component::new(&engine, LEND_COMPONENT)?;
+    let linker = Linker::new(&engine);
+
+    let mut store = Store::new(&engine, ());
+    store.set_max_component_handles(20);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(u32, u32), (u32,)>(&mut store, "run")?;
+
+    // Ten lends at a time, many times over, fit.
+    let (n,) = run.call(&mut store, (10, 100))?;
+    assert_eq!(n, 100);
+
+    let mut store = Store::new(&engine, ());
+    store.set_max_component_handles(20);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(u32, u32), (u32,)>(&mut store, "run")?;
+
+    // Fifty lends in one call don't.
+    run.call(&mut store, (50, 1))
+        .unwrap_err()
+        .assert_contains("store handle limit exceeded");
+
+    Ok(())
+}

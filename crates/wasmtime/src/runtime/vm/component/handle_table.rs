@@ -11,8 +11,18 @@ const MAX_HANDLE: u32 = 1 << 28;
 
 /// Live-handle count for all `HandleTable`s in a store.
 ///
-/// The count tracks live handles (incremented in `insert`, decremented in
-/// `remove`), since freed slots are reused.
+/// This count and limit is intended to roughly correspond with the amount of
+/// host memory being used to track handles within a store. This includes
+/// operations such as:
+///
+/// * Creating a handle (via `insert`) retains space for this. This is later
+///   decremented in `remove`.
+/// * Tracking lends to create a `borrow` (via `resource_lend` and in
+///   `resource_lift_borrow` elsewhere allocates memory). This is later
+///   decremented in `resource_undo_lend`.
+///
+/// This means that sometimes a handle is double-counted (e.g. borrows in some
+/// situations), but this is intended to still reflect live active memory use.
 pub struct HandleCounter {
     live: usize,
     limit: usize,
@@ -271,17 +281,29 @@ impl HandleTable {
     ///
     /// This will increase `lend_count` for owned resources and must be paired
     /// with a `resource_undo_lend` below later on (managed by `CallContexts`).
+    /// Each such lend is also charged to `counter` until then.
     ///
     /// Upon success returns the "rep" plus whether the borrow came from an
     /// `own` handle.
-    pub fn resource_lend(&mut self, idx: TypedResourceIndex) -> Result<(u32, bool)> {
+    pub fn resource_lend(
+        &mut self,
+        counter: &mut HandleCounter,
+        idx: TypedResourceIndex,
+    ) -> Result<(u32, bool)> {
         match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn {
                 resource,
                 lend_count,
             } => {
                 let rep = resource.rep(&idx)?;
-                *lend_count = lend_count.checked_add(1).unwrap();
+                let Some(new_lend_count) = lend_count.checked_add(1) else {
+                    bail!("cannot lend resource: too many active lends")
+                };
+                if counter.live >= counter.limit {
+                    bail!("cannot lend resource: store handle limit exceeded");
+                }
+                counter.live += 1;
+                *lend_count = new_lend_count;
                 Ok((rep, true))
             }
             Slot::ResourceBorrow { resource, .. } => Ok((resource.rep(&idx)?, false)),
@@ -291,10 +313,15 @@ impl HandleTable {
 
     /// For `own` resources that were borrowed in `resource_lend`, undoes the
     /// lending operation.
-    pub fn resource_undo_lend(&mut self, idx: TypedResourceIndex) -> Result<()> {
+    pub fn resource_undo_lend(
+        &mut self,
+        counter: &mut HandleCounter,
+        idx: TypedResourceIndex,
+    ) -> Result<()> {
         match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn { lend_count, .. } => {
                 *lend_count -= 1;
+                counter.live -= 1;
                 Ok(())
             }
             _ => bail!("index {} is not an own resource", idx.raw_index()),
