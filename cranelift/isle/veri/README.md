@@ -38,37 +38,45 @@ Alternatively, on Linux or MacOS you can install from Github release with:
 
 If you use this method, ensure that `<install_path>/bin` is on your `$PATH`.
 
-## Sharing the cache with CI
+## The SMT query cache
 
-To keep local runs fast, CI maintains a shared copy of the verifier's SMT
-query cache in the GitHub Actions cache under keys of the form
-`isle-veri-cache-v1-<hash>`, where `<hash>` is derived from the ISLE sources
-and toolchain. Runs in the merge queue save entries in the default branch's
-cache scope, so every subsequent PR restores the most recent entry and
-verifies incrementally on top of it.
+Solver results are cached in an S3 bucket so that runs only invoke a solver
+for queries no earlier run has answered. The cache is keyed by a hash of the
+solver name and the full SMT query, and is stored as a base snapshot plus one
+delta per run that computed new results. `verify.sh read-write` finishes by
+running `veri-cache compact`, which, once enough deltas have accumulated
+(`--threshold`, default 20), folds everything into a new base, dropping
+entries that none of that verification's runs used.
+See
+[`caching/src/cache.rs`](caching/src/cache.rs) for details.
 
-The current cache is also published as the `isle-veri-cache.tar.gz` asset on
-the rolling
-[`dev` release](https://github.com/bytecodealliance/wasmtime/releases/tag/dev)
-for local use: the "ISLE verifier full check" job in the CI workflow
-([`.github/workflows/main.yml`](../../.github/workflows/main.yml)) uploads the
-rebuilt cache as a run artifact, and the
-[`publish-artifacts.yml`](../../.github/workflows/publish-artifacts.yml)
-workflow publishes it to the `dev` release when the run lands on `main`. The
-job runs on full CI and, on pull requests, when the PR touches the ISLE
-sources (`cranelift/codegen/**/*.isle`) or the ISLE toolchain
-(`cranelift/isle`), or a commit message contains `prtest:full`.
+Point the verifier at the bucket with `--cache-bucket` (or the
+`ISLE_VERI_CACHE_BUCKET` environment variable) and choose a mode with
+`--cache-mode`:
 
-To start a local session from the cache CI is currently using, run:
+- `read-only` (the default): use cached results and solve misses locally,
+  without writing anything back.
+- `read-write`: also upload newly-computed results at the end of the run.
+- `read-only-enforcing`: fail on any cache miss without invoking a solver.
 
-```
-./cranelift/isle/veri/setup/download-cache.sh
-```
+Requests are signed using `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and
+optionally `AWS_SESSION_TOKEN`, when they are set, and are anonymous
+otherwise, which is enough to read a public bucket. `read-write` mode requires
+credentials. The region comes from `AWS_REGION` or `AWS_DEFAULT_REGION`
+(default `us-east-1`).
 
-This downloads the latest asset from the `dev` release and installs it as
-`cranelift/isle/veri/cache`. You can then verify incrementally on top of it
-with `./cranelift/isle/veri/verify.sh` (and check full cache coverage with
-`verify.sh cache-only`).
+[`verify.sh`](verify.sh) wraps these modes for the default set of
+configurations: `verify.sh` (read-only), `verify.sh read-write`, and
+`verify.sh cache-only` (enforcing).
+
+CI's "ISLE verifier full check" job
+([`.github/workflows/main.yml`](../../.github/workflows/main.yml)) uses the
+`isle-veri-cache` bucket. Merge-queue runs into `main` write their new results
+to it; all other runs, including pull requests, read it anonymously. The job
+runs on full CI and, on pull requests, when the PR touches the ISLE sources
+(`cranelift/codegen/**/*.isle`) or the ISLE toolchain (`cranelift/isle`), or a
+commit message contains `prtest:full`. To start a local session from the same
+cache, run `verify.sh` with `ISLE_VERI_CACHE_BUCKET=isle-veri-cache`.
 
 ## Configuration files
 

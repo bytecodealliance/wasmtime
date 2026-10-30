@@ -24,17 +24,22 @@
 //!   on `pop` rather than reusing internal solver state across context
 //!   frames.
 //!
-//! The cache itself ([`Cache`]) is a directory of JSON files with an optional
-//! read-only source and a read-write destination, and supports a
-//! read-only-enforcing mode that fails on any miss without ever invoking a
-//! solver. See [`CacheMode`].
+//! The cache itself ([`Cache`]) lives in an [`ObjectStore`] — in practice an
+//! S3 bucket ([`S3Store`]) — as a base snapshot plus deltas, and is loaded
+//! into memory in full when opened. It supports a read-only-enforcing mode
+//! that fails on any miss without ever invoking a solver. See [`CacheMode`].
 
 mod cache;
 mod context;
 mod convert;
+mod pack;
+mod s3;
+mod store;
 
-pub use cache::{Cache, CacheMode};
+pub use cache::{Cache, CacheMode, CompactionSummary, write_seed_base};
 pub use context::{Context, ContextBuilder};
+pub use s3::{Credentials, S3Store};
+pub use store::{MemoryStore, ObjectStore};
 
 // Re-export the easy-smt surface that clients use alongside the context, so
 // that switching to this crate is a pure import change.
