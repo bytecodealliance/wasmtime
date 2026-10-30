@@ -503,7 +503,8 @@ impl StoreOpaque {
                                 Ok(oom2) => {
                                     // Collection wasn't enough; grow and try
                                     // one final time.
-                                    let (value, _) = oom2.take_inner();
+                                    let (value, oom2) = oom2.take_inner();
+                                    let bytes_needed = oom2.bytes_needed();
                                     // Ignore error; we'll get one from
                                     // `alloc_func` below if growth failed and
                                     // failure to grow was fatal.

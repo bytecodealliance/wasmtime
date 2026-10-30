@@ -173,7 +173,7 @@ impl NullHeap {
         let len = self.memory.as_ref().unwrap().byte_size();
         let len = u32::try_from(len).unwrap_or(u32::MAX);
         if end_of_object > len {
-            return Ok(Err(u64::try_from(layout.size())?));
+            return Ok(Err(u64::from(end_of_object - len)));
         }
 
         // Update the bump pointer, write the header, and return the GC ref.
