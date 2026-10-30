@@ -19,6 +19,9 @@ typedef struct wasmtime_exn_type wasmtime_exn_type_t;
 ///
 /// Fills in `out` on success and returns `NULL`. Otherwise returns an
 /// error and does not modify `out`.
+///
+/// This function aborts the process if any parameter's type comes from an
+/// engine other than `engine`.
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_exn_type_new(const wasm_engine_t *engine,
                       const wasm_valtype_vec_t *params,
