@@ -4355,12 +4355,26 @@
 (rule (lower (snarrow $I16X8 a @ (value_type $I32X4) b))
       (x64_packssdw a b))
 
-;; We're missing a `snarrow` case for $I64X2
-;; https://github.com/bytecodealliance/wasmtime/issues/4734
+;; Keep the conversion-specific rules below ahead of this general lowering.
+(rule -1 (lower (snarrow $I32X4 a @ (value_type $I64X2) b))
+      (let ((a Xmm a)
+            (b Xmm b)
+            ;; Gather halves in result lane order: a[0], a[1], b[0], b[1].
+            (lo Xmm (x64_shufps a b 0b10_00_10_00))
+            (hi Xmm (x64_shufps a b 0b11_01_11_01))
+            ;; A signed i32 fits exactly when its high half extends its sign.
+            (lo_sign Xmm (x64_psrad lo (xmi_imm 31)))
+            (fits Xmm (x64_pcmpeqd hi lo_sign))
+            ;; Otherwise clamp to i32::MIN or i32::MAX using the i64 sign.
+            (hi_sign Xmm (x64_psrad hi (xmi_imm 31)))
+            (max XmmMem128 (emit_xmm_mem_128_le_const 0x7fffffff_7fffffff_7fffffff_7fffffff))
+            (saturated Xmm (x64_pxor hi_sign max))
+            (valid_lanes Xmm (x64_pand lo fits))
+            (clamped_lanes Xmm (x64_pandn fits saturated)))
+        (x64_por valid_lanes clamped_lanes)))
 
 ;; This rule is a special case for handling the translation of the wasm op
-;; `i32x4.trunc_sat_f64x2_s_zero`. It can be removed once we have an
-;; implementation of `snarrow` for `I64X2`.
+;; `i32x4.trunc_sat_f64x2_s_zero`.
 (rule (lower (snarrow $I32X4 (fcvt_to_sint_sat $I64X2 val)
                                        (vconst _ (u128_from_constant 0))))
       (let ((a Xmm val)
@@ -4435,8 +4449,18 @@
         )
         (x64_pshufd val 0b00_00_10_00)))
 
-;; We're missing a `unarrow` case for $I64X2
-;; https://github.com/bytecodealliance/wasmtime/issues/4734
+;; The inputs are signed i64 lanes even though the results are unsigned.
+(rule -1 (lower (unarrow $I32X4 a @ (value_type $I64X2) b))
+      (let ((a Xmm a)
+            (b Xmm b)
+            (lo Xmm (x64_shufps a b 0b10_00_10_00))
+            (hi Xmm (x64_shufps a b 0b11_01_11_01))
+            (zero Xmm (xmm_zero $I32X4))
+            ;; hi == 0 preserves lo; hi > 0 clamps to u32::MAX; hi < 0 to 0.
+            (fits Xmm (x64_pcmpeqd hi zero))
+            (saturated Xmm (x64_pcmpgtd_a_or_avx hi zero))
+            (valid_lanes Xmm (x64_pand lo fits)))
+        (x64_por valid_lanes saturated)))
 
 ;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
