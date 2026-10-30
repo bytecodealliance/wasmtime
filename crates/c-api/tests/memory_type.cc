@@ -90,3 +90,11 @@ TEST(MemoryType, Builder) {
   // Invalid custom page size.
   EXPECT_FALSE(MemoryType::Builder().min(1).page_size_log2(4).build());
 }
+
+TEST(MemoryType, CopyAssign) {
+  MemoryType a(1, 2);
+  MemoryType b(3);
+  b = a;
+  EXPECT_EQ(b->min(), 1);
+  EXPECT_EQ(b->max(), 2);
+}

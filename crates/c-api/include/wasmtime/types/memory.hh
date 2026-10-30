@@ -129,6 +129,7 @@ public:
   /// Copies the provided type into a new type.
   MemoryType &operator=(const MemoryType &other) {
     ptr.reset(wasm_memorytype_copy(other.ptr.get()));
+    ref = ptr.get();
     return *this;
   }
   ~MemoryType() = default;

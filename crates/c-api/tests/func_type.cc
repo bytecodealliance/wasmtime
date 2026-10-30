@@ -22,3 +22,11 @@ TEST(FuncType, Smoke) {
     EXPECT_EQ(ty, ValType::i64());
   }
 }
+
+TEST(FuncType, CopyAssign) {
+  FuncType a({ValType::i32(), ValType::i64()}, {ValType::f32()});
+  FuncType b({}, {});
+  b = a;
+  EXPECT_EQ(b->params().size(), 2);
+  EXPECT_EQ(b->results().size(), 1);
+}

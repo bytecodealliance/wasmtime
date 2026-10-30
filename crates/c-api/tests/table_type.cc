@@ -34,3 +34,12 @@ TEST(TableType, Table64) {
   EXPECT_EQ(ty.max(), 0x200000000);
   EXPECT_TRUE(ty.is_64());
 }
+
+TEST(TableType, CopyAssign) {
+  TableType a(ValType::externref(), 2, 3);
+  TableType b(ValType::funcref(), 1);
+  b = a;
+  EXPECT_EQ(b->min(), 2);
+  EXPECT_EQ(b->max(), 3);
+  EXPECT_EQ(b->element(), ValType::externref());
+}

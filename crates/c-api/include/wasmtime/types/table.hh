@@ -88,6 +88,7 @@ public:
   /// Copies another table type into this one.
   TableType &operator=(const TableType &other) {
     ptr.reset(wasm_tabletype_copy(other.ptr.get()));
+    ref = ptr.get();
     return *this;
   }
   ~TableType() = default;
