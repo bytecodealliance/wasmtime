@@ -214,6 +214,8 @@ macro_rules! foreach_builtin_component_function {
             error_context_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             #[cfg(feature = "component-model-async")]
             thread_index(vmctx: vmctx) -> u64;
+            // FIXME(#4311): `func_idx` and `context` need to be `u64` for
+            // 64-bit tables and `i64` closures
             #[cfg(feature = "component-model-async")]
             thread_new_indirect(vmctx: vmctx, caller_instance: u32, func_ty_id: u32, func_table_idx: u32, func_idx: u32, context: u32) -> u64;
             #[cfg(feature = "component-model-async")]
