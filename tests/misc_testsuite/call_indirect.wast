@@ -185,3 +185,15 @@
 (assert_return (invoke "type-second-i64") (i64.const 64))
 (assert_return (invoke "type-second-f32") (f32.const 32))
 (assert_return (invoke "type-second-f64") (f64.const 64.1))
+
+;; A signature mismatch in a start function traps during instantiation.
+(assert_trap
+  (module
+    (func $foo
+      i32.const 0
+      call_indirect)
+    (func $bar (param i32))
+    (start $foo)
+    (table 1 funcref)
+    (elem (i32.const 0) $bar))
+  "indirect call type mismatch")

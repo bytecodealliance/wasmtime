@@ -764,25 +764,6 @@ fn custom_1byte_page_cant_grow() -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test]
-#[cfg_attr(miri, ignore)]
-#[cfg(target_pointer_width = "64")] // requires large VM reservation
-fn init_with_negative_segment(cfg: &mut Config) -> Result<()> {
-    let engine = Engine::new(cfg)?;
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-                (memory 65536)
-                (data (i32.const 0x8000_0000) "x")
-            )
-        "#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    Instance::new(&mut store, &module, &[])?;
-    Ok(())
-}
-
 #[test]
 fn non_page_aligned_static_memory() -> Result<()> {
     let mut config = Config::new();

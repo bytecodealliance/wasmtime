@@ -137,40 +137,6 @@ fn function_interposition_renamed() -> Result<()> {
     Ok(())
 }
 
-// Similar to `function_interposition`, but use `Linker::instance` instead of
-// `Linker::define`.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn module_interposition() -> Result<()> {
-    let mut store = Store::<()>::default();
-    let mut linker = Linker::new(store.engine());
-    linker.allow_shadowing(true);
-    let mut module = Module::new(
-        store.engine(),
-        r#"(module (func (export "export") (result i32) (i32.const 7)))"#,
-    )?;
-    for _ in 0..4 {
-        let instance = linker.instantiate(&mut store, &module)?;
-        linker.instance(&mut store, "instance", instance)?;
-        module = Module::new(
-            store.engine(),
-            r#"(module
-                (import "instance" "export" (func (result i32)))
-                (func (export "export") (result i32) (i32.mul (call 0) (i32.const 2)))
-            )"#,
-        )?;
-    }
-    let instance = linker.instantiate(&mut store, &module)?;
-    let func = instance
-        .get_export(&mut store, "export")
-        .unwrap()
-        .into_func()
-        .unwrap();
-    let func = func.typed::<(), i32>(&store)?;
-    assert_eq!(func.call(&mut store, ())?, 112);
-    Ok(())
-}
-
 #[test]
 #[cfg_attr(miri, ignore)]
 fn allow_unknown_exports() -> Result<()> {

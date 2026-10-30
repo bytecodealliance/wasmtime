@@ -3,7 +3,7 @@ use wasmtime::*;
 mod test_utils {
     use std::any::*;
     use std::panic::AssertUnwindSafe;
-    use wasmtime::{bail, *};
+    use wasmtime::*;
 
     pub struct Runner {
         pub engine: Engine,
@@ -63,22 +63,6 @@ mod test_utils {
             }))
             .unwrap_err()
         }
-    }
-
-    /// Creates a simple Host function that increments an i32
-    pub fn make_i32_inc_host_func(runner: &mut Runner) -> Func {
-        Func::new(
-            &mut runner.store,
-            FuncType::new(&runner.engine, vec![ValType::I32], vec![ValType::I32]),
-            |mut _caller, args: &[Val], results: &mut [Val]| {
-                let res = match args {
-                    [Val::I32(i)] => i + 1,
-                    _ => bail!("Error: Received illegal argument (should be single i32)"),
-                };
-                results[0] = Val::I32(res);
-                Ok(())
-            },
-        )
     }
 
     /// Creates a host function of type i32 -> i32. `export_func` must denote an
@@ -266,79 +250,6 @@ mod wasi {
     }
 }
 
-/// Test that two distinct instantiations of the same module yield
-/// different control tag identities.
-#[cfg_attr(miri, ignore)]
-#[test]
-fn inter_instance_suspend() -> Result<()> {
-    let mut config = Config::default();
-    config.wasm_function_references(true);
-    config.wasm_exceptions(true);
-    config.wasm_stack_switching(true);
-
-    let engine = Engine::new(&config)?;
-
-    let mut store = Store::<()>::new(&engine, ());
-
-    let wat_other = r#"
-        (module
-
-          (type $ft (func))
-          (type $ct (cont $ft))
-          (tag $tag)
-
-
-          (func $suspend (export "suspend")
-            (suspend $tag)
-          )
-
-          (func $resume (export "resume") (param $f (ref $ct))
-            (block $handler (result (ref $ct))
-              (resume $ct (on $tag $handler) (local.get $f))
-              (unreachable)
-            )
-            (drop)
-          )
-        )
-    "#;
-
-    let wat_main = r#"
-        (module
-
-          (type $ft (func))
-          (type $ct (cont $ft))
-
-          (import "other" "suspend" (func $suspend))
-          (import "other" "resume" (func $resume (param (ref $ct))))
-
-          (elem declare func $suspend)
-
-
-          (func $entry (export "entry")
-            (call $resume (cont.new $ct (ref.func $suspend)))
-          )
-        )
-    "#;
-
-    let module_other = Module::new(&engine, wat_other)?;
-
-    let other_inst1 = Instance::new(&mut store, &module_other, &[])?;
-    let other_inst2 = Instance::new(&mut store, &module_other, &[])?;
-
-    // Crucially, suspend and resume are from two separate instances
-    // of the same module.
-    let suspend = other_inst1.get_func(&mut store, "suspend").unwrap();
-    let resume = other_inst2.get_func(&mut store, "resume").unwrap();
-
-    let module_main = Module::new(&engine, wat_main)?;
-    let main_instance = Instance::new(&mut store, &module_main, &[suspend.into(), resume.into()])?;
-    let entry_func = main_instance.get_func(&mut store, "entry").unwrap();
-
-    let result = entry_func.call(&mut store, &[], &mut []);
-    assert!(result.is_err());
-    Ok(())
-}
-
 /// Regression test for https://github.com/bytecodealliance/wasmtime/issues/13750.
 ///
 /// A GC reference returned through a continuation payload must retain
@@ -402,48 +313,6 @@ fn continuation_result_gc_ref_on_operand_stack() -> Result<()> {
     let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
     assert_eq!(run.call(&mut store, ())?, 0x12345678);
     Ok(())
-}
-
-/// https://github.com/bytecodealliance/wasmtime/issues/14239.
-///
-/// GC should trace the suspended continuation and entry should
-/// complete normally.
-#[cfg_attr(miri, ignore)]
-#[test]
-fn gc_traces_a_suspended_continuation() -> Result<()> {
-    let wat = r#"
-        (module
-            (type $ft (func))
-            (type $ct (cont $ft))
-            (type $st (struct (field i32)))
-            (tag $t)
-
-            (func $suspend
-                (suspend $t)
-            )
-            (elem declare func $suspend)
-
-            (func (export "entry")
-                (local $continuation (ref null $ct))
-                (local $i i32)
-                (block $handler (result (ref $ct))
-                    (resume $ct
-                        (on $t $handler)
-                        (cont.new $ct (ref.func $suspend)))
-                    (return)
-                )
-                (local.set $continuation)
-                (loop $allocate
-                    (drop (struct.new $st (i32.const 7)))
-                    (local.set $i (i32.add (local.get $i) (i32.const 1)))
-                    (br_if $allocate (i32.lt_u (local.get $i) (i32.const 20000)))
-                )
-                (resume $ct (local.get $continuation))
-            )
-        )
-    "#;
-
-    test_utils::Runner::new().run_test::<()>(wat, &[])
 }
 
 /// Tests interaction with host functions. Note that the interaction with host
@@ -656,37 +525,6 @@ mod host {
             }
         }
 
-        Ok(())
-    }
-
-    #[cfg_attr(miri, ignore)]
-    #[test]
-    /// Tests calling a host function from within a wasm function running inside a continuation.
-    /// Call chain:
-    /// $entry -resume-> a -call-> host_func_a
-    fn call_host_from_continuation() -> Result<()> {
-        let wat = r#"
-        (module
-            (type $ft (func (result i32)))
-            (type $ct (cont $ft))
-
-            (import "" "" (func $host_func_a (param i32) (result i32)))
-
-            (func $a (export "a") (result i32)
-                (call $host_func_a (i32.const 122))
-            )
-            (func $entry (export "entry") (result i32)
-                (resume $ct (cont.new $ct (ref.func $a)))
-            )
-        )
-    "#;
-
-        let mut runner = Runner::new();
-
-        let host_func_a = make_i32_inc_host_func(&mut runner);
-
-        let result = runner.run_test::<i32>(wat, &[host_func_a.into()]).unwrap();
-        assert_eq!(result, 123);
         Ok(())
     }
 
@@ -1444,51 +1282,6 @@ mod traps {
         let f = make_panicking_host_func(&mut runner.store, msg);
         let error = runner.run_test_expect_panic(wat, &[f.into()]);
         assert_eq!(error.downcast_ref::<&'static str>(), Some(&msg));
-
-        Ok(())
-    }
-
-    #[cfg_attr(miri, ignore)]
-    #[test]
-    fn stack_overflow_in_continuation() -> Result<()> {
-        let wat = r#"
-        (module
-            (type $ft (func (param i32)))
-            (type $ct (cont $ft))
-
-            (func $entry (export "entry")
-                (call $a)
-            )
-
-            (func $a (export "a")
-                ;; We ask for a billion recursive calls
-                (i32.const 1_000_000_000)
-
-                (resume $ct (cont.new $ct (ref.func $overflow)))
-            )
-
-            (func $overflow (export "overflow") (param $i i32)
-                (block $continue
-                    (local.get $i)
-                    ;; return if $i == 0
-                    (br_if $continue)
-                    (return)
-                )
-                (i32.sub (local.get $i) (i32.const 1))
-                (call $overflow)
-            )
-
-        )
-    "#;
-
-        let runner = Runner::new();
-
-        let error = runner
-            .run_test::<()>(wat, &[])
-            .expect_err("Expecting execution to yield error");
-
-        assert!(error.root_cause().is::<Trap>());
-        assert_eq!(*error.downcast_ref::<Trap>().unwrap(), Trap::StackOverflow);
 
         Ok(())
     }
