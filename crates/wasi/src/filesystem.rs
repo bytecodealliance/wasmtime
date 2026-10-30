@@ -4,6 +4,7 @@ use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use crate::{NamedId, WasiCtxNamedView};
 use std::collections::hash_map;
 use std::marker;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tracing::debug;
@@ -65,10 +66,21 @@ impl HasData for WasiFilesystem {
     type Data<'a> = WasiFilesystemCtxView<'a>;
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct WasiFilesystemCtx {
     pub(crate) allow_blocking_current_thread: bool,
     pub(crate) preopens: Vec<(Dir, String)>,
+    pub(crate) max_io_size: NonZeroUsize,
+}
+
+impl Default for WasiFilesystemCtx {
+    fn default() -> Self {
+        Self {
+            allow_blocking_current_thread: false,
+            preopens: Vec::new(),
+            max_io_size: crate::DEFAULT_MAX_IO_SIZE,
+        }
+    }
 }
 
 pub struct WasiFilesystemCtxView<'a> {

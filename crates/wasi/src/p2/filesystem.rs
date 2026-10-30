@@ -67,6 +67,7 @@ pub struct FileInputStream {
     file: File,
     position: u64,
     state: ReadState,
+    max_read_size: usize,
 }
 enum ReadState {
     Idle,
@@ -76,16 +77,17 @@ enum ReadState {
     Closed,
 }
 impl FileInputStream {
-    pub fn new(file: &File, position: u64) -> Self {
+    pub fn new(file: &File, position: u64, max_read_size: usize) -> Self {
         Self {
             file: file.clone(),
             position,
             state: ReadState::Idle,
+            max_read_size,
         }
     }
 
     fn blocking_read(file: &std::fs::File, offset: u64, size: usize) -> ReadState {
-        let mut buf = BytesMut::zeroed(size.min(crate::MAX_READ_SIZE_ALLOC));
+        let mut buf = BytesMut::zeroed(size);
         loop {
             match sys::read_at_cursor_unspecified(file, &mut buf, offset) {
                 Ok(0) => return ReadState::Closed,
@@ -121,6 +123,7 @@ impl InputStream for FileInputStream {
                 }
 
                 let p = self.position;
+                let size = size.min(self.max_read_size);
                 self.state = ReadState::Waiting(
                     self.file
                         .spawn_blocking(move |f| Self::blocking_read(f, p, size)),
@@ -152,6 +155,7 @@ impl InputStream for FileInputStream {
         // Before we defer to the regular `read`, make sure it has data ready to go:
         if let ReadState::Idle = self.state {
             let p = self.position;
+            let size = size.min(self.max_read_size);
             self.state = self
                 .file
                 .run_blocking(move |f| Self::blocking_read(f, p, size))
@@ -208,6 +212,7 @@ pub(crate) struct FileOutputStream {
     file: File,
     mode: FileOutputMode,
     state: OutputState,
+    max_write_size: usize,
 }
 
 enum OutputState {
@@ -221,19 +226,21 @@ enum OutputState {
 }
 
 impl FileOutputStream {
-    pub fn write_at(file: &File, position: u64) -> Self {
+    pub fn write_at(file: &File, position: u64, max_write_size: usize) -> Self {
         Self {
             file: file.clone(),
             mode: FileOutputMode::Position(position),
             state: OutputState::Ready,
+            max_write_size,
         }
     }
 
-    pub fn append(file: &File) -> Self {
+    pub fn append(file: &File, max_write_size: usize) -> Self {
         Self {
             file: file.clone(),
             mode: FileOutputMode::Append,
             state: OutputState::Ready,
+            max_write_size,
         }
     }
 
@@ -273,14 +280,11 @@ impl FileOutputStream {
     }
 }
 
-// FIXME: configurable? determine from how much space left in file?
-const FILE_WRITE_CAPACITY: usize = crate::MAX_READ_SIZE_ALLOC;
-
 #[async_trait::async_trait]
 impl OutputStream for FileOutputStream {
     fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
         match self.state {
-            OutputState::Ready if buf.len() <= FILE_WRITE_CAPACITY => {}
+            OutputState::Ready if buf.len() <= self.max_write_size => {}
             OutputState::Ready => {
                 return Err(StreamError::Trap(format_err!("write exceeded budget")));
             }
@@ -350,7 +354,7 @@ impl OutputStream for FileOutputStream {
     }
     fn check_write(&mut self) -> Result<usize, StreamError> {
         match self.state {
-            OutputState::Ready => Ok(FILE_WRITE_CAPACITY),
+            OutputState::Ready => Ok(self.max_write_size),
             OutputState::Closed => Err(StreamError::Closed),
             OutputState::Error(_) => match mem::replace(&mut self.state, OutputState::Closed) {
                 OutputState::Error(e) => Err(StreamError::LastOperationFailed(e.into())),

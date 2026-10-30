@@ -1,4 +1,3 @@
-use crate::MAX_READ_SIZE_ALLOC;
 use crate::p2::bindings::sockets::network::ErrorCode;
 use crate::p2::{
     DynInputStream, DynOutputStream, InputStream, OutputStream, Pollable, SocketResult, StreamError,
@@ -42,9 +41,12 @@ impl TcpSocket {
             writer: None,
         }
     }
-    pub(crate) fn take_streams(&mut self) -> SocketResult<(DynInputStream, DynOutputStream)> {
-        let reader = TcpReader::new(self.inner.take_receive_stream()?);
-        let writer = TcpWriter::new(self.inner.take_send_stream()?);
+    pub(crate) fn take_streams(
+        &mut self,
+        max_io_size: usize,
+    ) -> SocketResult<(DynInputStream, DynOutputStream)> {
+        let reader = TcpReader::new(self.inner.take_receive_stream()?, max_io_size);
+        let writer = TcpWriter::new(self.inner.take_send_stream()?, max_io_size);
         self.reader = Some(reader.clone());
         self.writer = Some(writer.clone());
         let input: DynInputStream = Box::new(reader);
@@ -56,11 +58,11 @@ impl TcpSocket {
         let writer = self.writer.as_mut().ok_or(ErrorCode::InvalidState)?;
 
         if let Shutdown::Both | Shutdown::Read = how {
-            reader.0.lock().unwrap().shutdown();
+            reader.state.lock().unwrap().shutdown();
         }
 
         if let Shutdown::Both | Shutdown::Write = how {
-            writer.0.lock().unwrap().shutdown();
+            writer.state.lock().unwrap().shutdown();
         }
 
         Ok(())
@@ -79,7 +81,7 @@ impl ReadState {
         if size == 0 {
             return Ok(bytes::Bytes::new());
         }
-        let mut buf = bytes::BytesMut::zeroed(size.min(crate::MAX_READ_SIZE_ALLOC));
+        let mut buf = bytes::BytesMut::zeroed(size);
         let n = match poll_now(|cx| stream.poll_read(cx, &mut buf)) {
             None => 0,
             Some(Ok(0)) => {
@@ -110,24 +112,33 @@ impl ReadState {
 }
 
 #[derive(Clone)]
-struct TcpReader(Arc<Mutex<ReadState>>);
+struct TcpReader {
+    state: Arc<Mutex<ReadState>>,
+    max_read_size: usize,
+}
 impl TcpReader {
-    fn new(stream: TcpReceiveStream) -> Self {
-        Self(Arc::new(Mutex::new(ReadState::Open(stream))))
+    fn new(stream: TcpReceiveStream, max_read_size: usize) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(ReadState::Open(stream))),
+            max_read_size,
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl InputStream for TcpReader {
     fn read(&mut self, size: usize) -> StreamResult<bytes::Bytes> {
-        self.0.lock().unwrap().read(size)
+        self.state
+            .lock()
+            .unwrap()
+            .read(size.min(self.max_read_size))
     }
 }
 
 #[async_trait::async_trait]
 impl Pollable for TcpReader {
     async fn ready(&mut self) {
-        std::future::poll_fn(|cx| self.0.lock().unwrap().poll_ready(cx)).await
+        std::future::poll_fn(|cx| self.state.lock().unwrap().poll_ready(cx)).await
     }
 }
 
@@ -158,11 +169,11 @@ impl WriteState {
         mem::replace(self, WriteState::Closed(WriteError::Closed))
     }
 
-    fn check_write(&mut self) -> StreamResult<usize> {
+    fn check_write(&mut self, max_write_size: usize) -> StreamResult<usize> {
         match poll_now(|cx| self.poll_ready(cx)) {
             None => Ok(0),
             Some(Ok((_, permit))) => {
-                *permit = MAX_READ_SIZE_ALLOC;
+                *permit = max_write_size;
                 Ok(*permit)
             }
             Some(Err(e)) => Err(e),
@@ -284,25 +295,31 @@ impl WriteState {
 }
 
 #[derive(Clone)]
-struct TcpWriter(Arc<Mutex<WriteState>>);
+struct TcpWriter {
+    state: Arc<Mutex<WriteState>>,
+    max_write_size: usize,
+}
 impl TcpWriter {
-    fn new(stream: TcpSendStream) -> Self {
-        Self(Arc::new(Mutex::new(WriteState::Ready(stream, 0))))
+    fn new(stream: TcpSendStream, max_write_size: usize) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(WriteState::Ready(stream, 0))),
+            max_write_size,
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl OutputStream for TcpWriter {
     fn write(&mut self, bytes: bytes::Bytes) -> StreamResult<()> {
-        self.0.lock().unwrap().write(bytes)
+        self.state.lock().unwrap().write(bytes)
     }
 
     fn flush(&mut self) -> StreamResult<()> {
-        self.0.lock().unwrap().flush()
+        self.state.lock().unwrap().flush()
     }
 
     fn check_write(&mut self) -> StreamResult<usize> {
-        self.0.lock().unwrap().check_write()
+        self.state.lock().unwrap().check_write(self.max_write_size)
     }
 
     async fn cancel(&mut self) {
@@ -315,6 +332,6 @@ impl OutputStream for TcpWriter {
 #[async_trait::async_trait]
 impl Pollable for TcpWriter {
     async fn ready(&mut self) {
-        poll_fn(|cx| self.0.lock().unwrap().poll_ready(cx).map(|_| ())).await;
+        poll_fn(|cx| self.state.lock().unwrap().poll_ready(cx).map(|_| ())).await;
     }
 }

@@ -190,7 +190,7 @@ impl udp::HostIncomingDatagramStream for WasiSocketsCtxView<'_> {
         let mut datagrams = vec![];
         let mut sum = 0;
 
-        while datagrams.len() < max_results && sum < crate::MAX_READ_SIZE_ALLOC {
+        while datagrams.len() < max_results && sum < self.ctx.max_io_size.get() {
             match stream.try_recv() {
                 Err(ErrorCode::WouldBlock) => break,
                 Ok((data, remote_addr)) => {
