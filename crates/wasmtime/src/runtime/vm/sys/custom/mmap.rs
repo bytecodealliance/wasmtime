@@ -78,49 +78,34 @@ impl Mmap {
         self.memory.as_ptr().len()
     }
 
+    unsafe fn change_protections(&self, range: Range<usize>, permissions: u32) -> Result<()> {
+        let base = unsafe { self.memory.as_ptr().byte_add(range.start).cast() };
+        let len = range.end - range.start;
+
+        unsafe { cvt(capi::wasmtime_mprotect(base, len, permissions)) }
+    }
+
     pub unsafe fn make_executable(
         &self,
         range: Range<usize>,
         enable_branch_protection: bool,
     ) -> Result<()> {
-        unsafe {
-            let base = self.memory.as_ptr().byte_add(range.start).cast();
-            let len = range.end - range.start;
+        // not mapped into the C API at this time.
+        let _ = enable_branch_protection;
 
-            // not mapped into the C API at this time.
-            let _ = enable_branch_protection;
-
-            cvt(capi::wasmtime_mprotect(
-                base,
-                len,
-                capi::PROT_READ | capi::PROT_EXEC,
-            ))?;
-        }
-        Ok(())
+        unsafe { self.change_protections(range, capi::PROT_READ | capi::PROT_EXEC) }
     }
 
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
-        unsafe {
-            let base = self.memory.as_ptr().byte_add(range.start).cast();
-            let len = range.end - range.start;
-
-            cvt(capi::wasmtime_mprotect(base, len, capi::PROT_READ))?;
-        }
-        Ok(())
+        unsafe { self.change_protections(range, capi::PROT_READ) }
     }
 
     pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
-        unsafe {
-            let base = self.memory.as_ptr().byte_add(range.start).cast();
-            let len = range.end - range.start;
+        unsafe { self.change_protections(range, capi::PROT_READ | capi::PROT_WRITE) }
+    }
 
-            cvt(capi::wasmtime_mprotect(
-                base,
-                len,
-                capi::PROT_READ | capi::PROT_WRITE,
-            ))?;
-        }
-        Ok(())
+    pub unsafe fn make_inaccessible(&self, range: Range<usize>) -> Result<()> {
+        unsafe { self.change_protections(range, 0) }
     }
 }
 
