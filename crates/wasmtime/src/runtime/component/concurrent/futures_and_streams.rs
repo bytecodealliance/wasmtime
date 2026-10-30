@@ -497,13 +497,7 @@ impl<D: 'static> DirectDestination<'_, D> {
 
         let memory = instance
             .options_memory_mut(self.store.0, options)
-            .get_mut(
-                if count == 0 {
-                    0
-                } else {
-                    address + guest_offset.as_usize()
-                }..,
-            )
+            .get_mut(address + guest_offset.as_usize()..)
             .and_then(|b| b.get_mut(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -904,12 +898,6 @@ impl<'a, T> Source<'a, T> {
                 bail_bug!("expected WriteState::GuestReady");
             };
 
-            // Zero-length writes are exempt from bounds/alignment checks, so
-            // there's nothing to lift.
-            if guest_offset >= count {
-                return Ok(());
-            }
-
             let cx = &mut LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
             let ty = ty.payload(cx.types);
             let old_remaining = buffer.remaining_capacity();
@@ -1022,13 +1010,7 @@ impl<D: 'static> DirectSource<'_, D> {
 
         let memory = instance
             .options_memory(self.store.0, options)
-            .get(
-                if count == 0 {
-                    0
-                } else {
-                    address + guest_offset.as_usize()
-                }..,
-            )
+            .get(address + guest_offset.as_usize()..)
             .and_then(|b| b.get(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -3390,8 +3372,9 @@ impl Instance {
         let read_types = read_component.types();
         let count = count.as_usize();
 
-        // Validate `write_ty` w.r.t. `write_address` to ensure it's properly
-        // aligned and in-bounds.
+        // Double-check that both buffers are properly aligned and in-bounds.
+        // This was already validated in `check_bounds` when the read/write was
+        // issued, so failure here is a bug.
         //
         // FIXME(#4311): this and the rest of this function use the 32-bit
         // layout of payloads, which needs memory64 handling.
@@ -3404,15 +3387,18 @@ impl Instance {
             Some(abi) => usize::try_from(abi.size)? * count,
             None => usize::try_from(write_abi.size32)? * count,
         };
-        if write_length_in_bytes > 0 {
+        if write_payload_ty.is_some() {
             if write_address % usize::try_from(write_abi.align32)? != 0 {
-                bail!("write pointer not aligned");
+                bail_bug!("write pointer not aligned");
             }
-            write_instance
+            if write_instance
                 .options_memory(store, write_options)
                 .get(write_address..)
                 .and_then(|b| b.get(..write_length_in_bytes))
-                .ok_or_else(|| crate::format_err!("write pointer out of bounds"))?;
+                .is_none()
+            {
+                bail_bug!("write pointer out of bounds");
+            }
         }
 
         let read_payload_ty = read_ty.payload(read_types);
@@ -3424,15 +3410,18 @@ impl Instance {
             Some(abi) => usize::try_from(abi.size)? * count,
             None => usize::try_from(read_abi.size32)? * count,
         };
-        if read_length_in_bytes > 0 {
+        if read_payload_ty.is_some() {
             if read_address % usize::try_from(read_abi.align32)? != 0 {
-                bail!("read pointer not aligned");
+                bail_bug!("read pointer not aligned");
             }
-            read_instance
+            if read_instance
                 .options_memory(store, read_options)
                 .get(read_address..)
                 .and_then(|b| b.get(..read_length_in_bytes))
-                .ok_or_else(|| crate::format_err!("read pointer out of bounds"))?;
+                .is_none()
+            {
+                bail_bug!("read pointer out of bounds");
+            }
         }
 
         if write_runtime_instance == read_runtime_instance
@@ -3571,14 +3560,11 @@ impl Instance {
             TransmitIndex::Future(ty) => types[types[ty].ty].payload,
             TransmitIndex::Stream(ty) => types[types[ty].ty].payload,
         };
+        // Empty payloads ignore the pointer entirely, but otherwise the
+        // alignment and bounds checks apply even to zero-length reads/writes.
         let Some(payload) = payload else {
             return Ok(());
         };
-        // As-written the spec currently exempts zero-length reads/writes from
-        // bounds/alignment checks.
-        if count == 0 {
-            return Ok(());
-        }
         let abi = types.canonical_abi(&payload);
         // FIXME(#4311): needs memory64 handling
         let size = usize::try_from(abi.size32)?;

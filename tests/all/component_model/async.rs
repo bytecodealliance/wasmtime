@@ -2609,7 +2609,7 @@ async fn zero_length_reads_and_writes() -> Result<()> {
                     (local $stream-reader i32)
                     (local $ret i32)
 
-                    (local.set $ret (call $stream.read (local.get $stream) (i32.const 0xFFFFFF) (i32.const 0)))
+                    (local.set $ret (call $stream.read (local.get $stream) (i32.const 0x10000) (i32.const 0)))
                     (if (i32.ne (local.get $ret) (i32.const 1 (; DROPPED ;))) (then unreachable))
 
                     (local.set $tmp (call $stream.new))
@@ -2618,7 +2618,7 @@ async fn zero_length_reads_and_writes() -> Result<()> {
 
                     (call $task.return (local.get $stream-reader))
 
-                    (local.set $ret (call $stream.write (local.get $stream-writer) (i32.const 0xFFFFFF) (i32.const 0)))
+                    (local.set $ret (call $stream.write (local.get $stream-writer) (i32.const 0x10000) (i32.const 0)))
                     (if (i32.ne (local.get $ret) (i32.const -1 (; BLOCKED ;))) (then unreachable))
 
                     (local.set $set (call $waitable-set.new))
@@ -2677,8 +2677,9 @@ async fn zero_length_reads_and_writes() -> Result<()> {
             _finish: bool,
         ) -> Poll<Result<StreamResult>> {
             // This used to panic on zero-length reads with out-of-bounds
-            // addresses:
-            _ = destination.as_direct(store, 1).remaining();
+            // addresses, and should work with an address at the very end of
+            // memory:
+            _ = destination.as_direct(store, 1).remaining()?;
             Poll::Ready(Ok(StreamResult::Dropped))
         }
     }
@@ -2696,8 +2697,9 @@ async fn zero_length_reads_and_writes() -> Result<()> {
             _finish: bool,
         ) -> Poll<Result<StreamResult>> {
             // This used to panic on zero-length reads with out-of-bounds
-            // addresses:
-            _ = source.as_direct(store).remaining();
+            // addresses, and should work with an address at the very end of
+            // memory:
+            _ = source.as_direct(store).remaining()?;
             Poll::Ready(Ok(StreamResult::Dropped))
         }
     }
