@@ -581,10 +581,12 @@ impl WastTest {
             return true;
         }
 
-        // Wasmtime doesn't implement `assert_{invalid,malformed}_custom`
         let unsupported = [
+            // Wasmtime doesn't implement `assert_{invalid,malformed}_custom`
             "spec_testsuite/proposals/extended-name-section/custom/name_annot.wast",
             "spec_testsuite/proposals/extended-name-section/custom/name.wast",
+            // Waiting on WebAssembly/component-model#755 to land
+            "component-model/test/async/zero-length.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;
