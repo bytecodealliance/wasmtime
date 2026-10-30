@@ -1,6 +1,6 @@
 use crate::{
-    ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, PanicOnOom as _, TypeTrace, WasmSubType,
-    packed_option::PackedOption, prelude::*,
+    EntityRef as _, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, PanicOnOom as _,
+    TypeTrace, WasmSubType, packed_option::PackedOption, prelude::*,
 };
 use core::ops::{Index, Range};
 use serde_derive::{Deserialize, Serialize};
@@ -60,6 +60,36 @@ impl ModuleTypes {
     ) -> impl ExactSizeIterator<Item = (ModuleInternedRecGroupIndex, Range<ModuleInternedTypeIndex>)> + '_
     {
         self.rec_groups.iter().map(|(k, v)| (k, v.clone()))
+    }
+
+    /// Get the rec group that `ty` was defined within.
+    ///
+    /// Groups are pushed in the same order as their types, so their ranges
+    /// partition the type index space in increasing order and can be binary
+    /// searched.
+    pub fn rec_group_of(&self, ty: ModuleInternedTypeIndex) -> ModuleInternedRecGroupIndex {
+        let index = self
+            .rec_groups
+            .as_values_slice()
+            .binary_search_by(|range| {
+                if range.end <= ty {
+                    core::cmp::Ordering::Less
+                } else if range.start > ty {
+                    core::cmp::Ordering::Greater
+                } else {
+                    core::cmp::Ordering::Equal
+                }
+            })
+            .unwrap_or_else(|_| panic!("{ty:?} is not a member of any rec group"));
+        ModuleInternedRecGroupIndex::new(index)
+    }
+
+    /// Get the range of type indices that an already-defined rec group spans.
+    pub fn rec_group_range(
+        &self,
+        rec_group: ModuleInternedRecGroupIndex,
+    ) -> Range<ModuleInternedTypeIndex> {
+        self.rec_groups[rec_group].clone()
     }
 
     /// Get the elements within an already-defined rec group.

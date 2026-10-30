@@ -216,6 +216,11 @@ impl DataModel {
             DataModel::LinearMemory(opts) => opts,
         }
     }
+
+    #[must_use]
+    fn is_gc(&self) -> bool {
+        matches!(self, Self::Gc { .. })
+    }
 }
 
 /// This type is split out of `AdapterOptions` and is specifically used to
@@ -337,7 +342,7 @@ impl<'a> Module<'a> {
         // Import the core wasm function which was lifted using its appropriate
         // signature since the exported function this adapter generates will
         // call the lifted function.
-        let signature = self.types.signature(&lift);
+        let signature = self.types.signature(&mut self.core_types, &lift.options);
         let ty = self
             .core_types
             .function(&signature.params, &signature.results);
@@ -985,7 +990,23 @@ pub enum Import {
 }
 
 impl Options {
-    fn flat_types<'a>(
+    /// The number of core values that `ty` lowers to under this data model.
+    ///
+    /// Panics under the linear memory data model if `ty` is spilled to memory
+    /// rather than passed as core values.
+    pub(super) fn flat_count(&self, ty: &InterfaceType, types: &ComponentTypesBuilder) -> usize {
+        match self.data_model {
+            DataModel::Gc {} => 1,
+            DataModel::LinearMemory(_) => types.flat_types(ty).unwrap().len(),
+        }
+    }
+
+    /// The scalar core value types that `ty` lowers to under this data model.
+    ///
+    /// `None` means `FlatType` cannot name the lowering, not that there is
+    /// none: under linear memory `ty` spilled to memory, and under GC it
+    /// lowers to a reference, which only `gc_flat_types` can recover.
+    fn scalar_flat_types<'a>(
         &self,
         ty: &InterfaceType,
         types: &'a ComponentTypesBuilder,
@@ -1014,14 +1035,17 @@ impl Options {
                 | InterfaceType::Enum(_)
                 | InterfaceType::Flags(_) => Some(flat.memory32),
 
-                // These lower to a GC `struct`/`array` reference or to
-                // `externref`, neither of which FACT can translate yet.
+                // A `tuple` lowers to a `(ref null (struct ...))`, which
+                // `FlatType` cannot describe; `flatten_types` handles it.
+                InterfaceType::Tuple(_) => None,
+
+                // These also lower to a reference, but FACT cannot translate
+                // them yet.
                 InterfaceType::String
                 | InterfaceType::Record(_)
                 | InterfaceType::Variant(_)
                 | InterfaceType::List(_)
                 | InterfaceType::Map(_)
-                | InterfaceType::Tuple(_)
                 | InterfaceType::Option(_)
                 | InterfaceType::Result(_)
                 | InterfaceType::Own(_)
@@ -1146,7 +1170,7 @@ impl HelperType {
     fn push_flat(&self, dst: &mut Vec<ValType>, types: &ComponentTypesBuilder) {
         match self.loc {
             HelperLocation::Stack => {
-                for ty in self.opts.flat_types(&self.ty, types).unwrap() {
+                for ty in self.opts.scalar_flat_types(&self.ty, types).unwrap() {
                     dst.push((*ty).into());
                 }
             }
