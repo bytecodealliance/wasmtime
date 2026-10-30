@@ -52,6 +52,12 @@ pub enum Reloc {
     S390xPCRel32Dbl,
     /// s390x PC-relative 4-byte offset to PLT
     S390xPLTRel32Dbl,
+    /// s390x PC-relative 4-byte doubled offset to GOT entry (R_390_GOTENT).
+    ///
+    /// Applied to the 32-bit doubled-offset field of a LARL instruction.
+    /// The linker fills in the PC-relative distance (in doublewords) to the
+    /// GOT entry for the referenced symbol.
+    S390xGOTRel32Dbl,
 
     /// Elf x86_64 32 bit signed PC relative offset to two GOT entries for GD symbol.
     ElfX86_64TlsGd,
@@ -202,6 +208,7 @@ impl fmt::Display for Reloc {
             Self::Abs8 => write!(f, "Abs8"),
             Self::S390xPCRel32Dbl => write!(f, "PCRel32Dbl"),
             Self::S390xPLTRel32Dbl => write!(f, "PLTRel32Dbl"),
+            Self::S390xGOTRel32Dbl => write!(f, "GOTRel32Dbl"),
             Self::X86PCRel4 => write!(f, "PCRel4"),
             Self::X86CallPCRel4 => write!(f, "CallPCRel4"),
             Self::X86CallPLTRel4 => write!(f, "CallPLTRel4"),
