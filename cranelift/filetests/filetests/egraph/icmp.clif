@@ -1122,18 +1122,13 @@ block0(v0: i32):
 
 ; function %srem_zero_i32_divisor7(i32) -> i8 fast {
 ; block0(v0: i32):
-;     v5 = iconst.i32 -1840700269
-;     v6 = smulhi v0, v5  ; v5 = -1840700269
-;     v7 = iadd v6, v0
-;     v8 = iconst.i32 2
-;     v9 = sshr v7, v8  ; v8 = 2
-;     v10 = iconst.i32 31
-;     v11 = ushr v9, v10  ; v10 = 31
-;     v12 = iadd v9, v11
-;     v1 = iconst.i32 7
-;     v13 = imul v12, v1  ; v1 = 7
-;     v15 = icmp eq v0, v13
-;     return v15
+;     v5 = iconst.i32 -1227133513
+;     v6 = imul v0, v5  ; v5 = -1227133513
+;     v7 = iconst.i32 0x1249_2492
+;     v8 = iadd v6, v7  ; v7 = 0x1249_2492
+;     v9 = iconst.i32 0x2492_4924
+;     v14 = icmp ule v8, v9  ; v9 = 0x2492_4924
+;     return v14
 ; }
 
 function %srem_zero_shared_remainder(i32) -> i32, i8 {
