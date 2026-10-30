@@ -214,7 +214,7 @@ block2:
 ; run: %smulof_flags_brif_i32(0x80000000, -1) == 1
 ; run: %smulof_flags_brif_i32(0x7FFFFFFF, -1) == 0
 
-function %smulof_flags_select_load_product_stored(i32, i32) -> i32, i8 {
+function %smulof_flags_select_load_product_stored(i32, i32) -> i32, i8 system_v {
   ss0 = explicit_slot 8
 block0(v0: i32, v1: i32):
   v2 = stack_addr.i64 ss0
