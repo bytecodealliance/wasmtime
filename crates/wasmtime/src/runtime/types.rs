@@ -2891,6 +2891,10 @@ impl ExnType {
     /// given signature, i.e., list of payload value types. This
     /// signature implies a tag type, and when instantiated at
     /// runtime, it must be associated with a tag of that type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any field type is not associated with the given engine.
     pub fn new(engine: &Engine, fields: impl IntoIterator<Item = ValType>) -> Result<ExnType> {
         let fields: TryVec<_> = fields.into_iter().try_collect()?;
 
