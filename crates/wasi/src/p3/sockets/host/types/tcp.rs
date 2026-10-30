@@ -1,4 +1,3 @@
-use crate::p3::DEFAULT_BUFFER_CAPACITY;
 use crate::p3::bindings::sockets::types::{
     Duration, ErrorCode, HostTcpSocket, HostTcpSocketWithStore, IpAddressFamily, IpSocketAddress,
     TcpSocket,
@@ -83,7 +82,10 @@ where
     }
 }
 
-struct ReceiveStreamProducer(Option<(TcpReceiveStream, oneshot::Sender<Result<(), ErrorCode>>)>);
+struct ReceiveStreamProducer {
+    stream: Option<(TcpReceiveStream, oneshot::Sender<Result<(), ErrorCode>>)>,
+    max_read_size: usize,
+}
 
 impl Drop for ReceiveStreamProducer {
     fn drop(&mut self) {
@@ -93,7 +95,7 @@ impl Drop for ReceiveStreamProducer {
 
 impl ReceiveStreamProducer {
     fn close(&mut self, res: Result<(), ErrorCode>) {
-        if let Some((_, tx)) = self.0.take() {
+        if let Some((_, tx)) = self.stream.take() {
             _ = tx.send(res);
         }
     }
@@ -110,7 +112,8 @@ impl<D> StreamProducer<D> for ReceiveStreamProducer {
         dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
-        let Some((stream, _)) = self.0.as_mut() else {
+        let max_read_size = self.max_read_size;
+        let Some((stream, _)) = self.stream.as_mut() else {
             return Poll::Ready(Ok(StreamResult::Dropped));
         };
 
@@ -123,7 +126,7 @@ impl<D> StreamProducer<D> for ReceiveStreamProducer {
             };
         }
 
-        let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
+        let mut dst = dst.as_direct(store, max_read_size);
         let buf = dst.remaining()?;
         match stream.poll_read(cx, buf) {
             Poll::Ready(Ok(0)) => {
@@ -226,13 +229,18 @@ fn send(
 fn receive(
     mut store: impl AsContextMut,
     stream: Result<TcpReceiveStream, crate::sockets::ErrorCode>,
+    max_read_size: usize,
 ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
     let mut store = store.as_context_mut();
     match stream {
         Ok(stream) => {
             let (result_tx, result_rx) = oneshot::channel();
+            let producer = ReceiveStreamProducer {
+                stream: Some((stream, result_tx)),
+                max_read_size,
+            };
             Ok((
-                StreamReader::new(&mut store, ReceiveStreamProducer(Some((stream, result_tx))))?,
+                StreamReader::new(&mut store, producer)?,
                 FutureReader::new(&mut store, result_rx)?,
             ))
         }
@@ -320,7 +328,8 @@ impl<T: Send> HostTcpSocketWithStore<T> for WasiSockets {
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
         let socket = get_socket_mut(store.get().table, &socket)?;
         let stream = socket.take_receive_stream();
-        receive(&mut store, stream)
+        let max = store.get().ctx.max_io_size.get();
+        receive(&mut store, stream, max)
     }
 }
 
@@ -549,7 +558,8 @@ mod named {
         ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
             let socket = super::get_socket_mut(store.get().0.sockets(id).table, &socket)?;
             let stream = socket.take_receive_stream();
-            super::receive(&mut store, stream)
+            let max = store.get().0.sockets(id).ctx.max_io_size.get();
+            super::receive(&mut store, stream, max)
         }
     }
 
