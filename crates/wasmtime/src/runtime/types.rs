@@ -2988,6 +2988,7 @@ impl ExnType {
     ///
     /// Returns `None` if `index` does not name a registered type of this
     /// shape, since indices may come from the untrusted GC heap.
+    #[cfg(feature = "gc")]
     pub(crate) fn from_shared_type_index(
         engine: &Engine,
         index: VMSharedTypeIndex,
