@@ -6,6 +6,15 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 1
 
+  - package-ecosystem: "cargo"
+    directory: "/"
+    open-pull-requests-limit: 1
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch"]
+
   # The base images of CI's docker containers are pinned by digest so that
   # CI's docker layer caches, keyed on the Dockerfile contents, stay valid.
   # This is intended to keep those up-to-date as they change over time and
