@@ -117,6 +117,5 @@ block0(v0: i64):
 ;   ldp x19, x20, [sp], #0x10
 ;   ldp x21, x22, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
-;   mov x16, x1
-;   br x16
+;   br x1
 
