@@ -70,9 +70,15 @@ fn is_not_supported_by_wasmtime(status: &ExitStatus) -> bool {
         .is_some_and(|x| x == EXIT_MPK_NOT_SUPPORTED_BY_WASMTIME)
 }
 
+#[cfg(unix)]
 fn is_illegal_instruction(status: &ExitStatus) -> bool {
     use std::os::unix::process::ExitStatusExt;
     status.signal() == Some(libc::SIGILL)
+}
+
+#[cfg(not(unix))]
+fn is_illegal_instruction(status: &ExitStatus) -> bool {
+    false
 }
 
 /// Checks `RDPKRU`, `WRPKRU`, and tries to allocate and free a pkey.
