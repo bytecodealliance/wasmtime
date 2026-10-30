@@ -1,0 +1,54 @@
+test compile precise-output
+set unwind_info=false
+target aarch64 use_bti
+
+;; Indirect tail calls must branch through x16 (the spill-temp register) so
+;; that BTI classifies the branch as a call and the callee's `bti c` landing
+;; pad is accepted.
+
+function %callee_i64(i64) -> i64 tail {
+block0(v0: i64):
+    v2 = iconst.i64 10
+    v1 = iadd v0, v2
+    return v1
+}
+
+; VCode:
+;   bti c
+; block0:
+;   add x2, x2, #10
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bti c
+; block1: ; offset 0x4
+;   add x2, x2, #0xa
+;   ret
+
+function %call_i64(i64) -> i64 tail {
+    sig0 = (i64) -> i64 tail
+    fn0 = %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    return_call_indirect sig0, v1(v0)
+}
+
+; VCode:
+;   bti c
+; block0:
+;   load_ext_name_far x1, TestCase(%callee_i64)+0
+;   return_call_ind x1 new_stack_arg_size:0 x2=x2
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bti c
+; block1: ; offset 0x4
+;   ldr x1, #0xc
+;   b #0x14
+;   udf #0 ; reloc_external Abs8 %callee_i64 0
+;   udf #0
+;   mov x16, x1
+;   br x16
+

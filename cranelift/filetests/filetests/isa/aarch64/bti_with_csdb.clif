@@ -48,6 +48,7 @@ block5(v5: i32):
 ;   movz w5, #1
 ;   b label5
 ; block4:
+;   bti j
 ;   movz w5, #4
 ;   b label5
 ; block5:
@@ -73,18 +74,19 @@ block5(v5: i32):
 ; block2: ; offset 0x34
 ;   bti j
 ;   mov w5, #3
-;   b #0x5c
+;   b #0x60
 ; block3: ; offset 0x40
 ;   bti j
 ;   mov w5, #2
-;   b #0x5c
+;   b #0x60
 ; block4: ; offset 0x4c
 ;   bti j
 ;   mov w5, #1
-;   b #0x5c
+;   b #0x60
 ; block5: ; offset 0x58
+;   bti j
 ;   mov w5, #4
-; block6: ; offset 0x5c
+; block6: ; offset 0x60
 ;   add w0, w0, w5
 ;   ret
 
@@ -119,6 +121,7 @@ block2:
 ;   add x0, x0, #42
 ;   ret
 ; block2:
+;   bti j
 ;   mov x0, x8
 ;   ret
 ;
@@ -144,6 +147,7 @@ block2:
 ;   add x0, x0, #0x2a
 ;   ret
 ; block3: ; offset 0x44
+;   bti j
 ;   mov x0, x8
 ;   ret
 

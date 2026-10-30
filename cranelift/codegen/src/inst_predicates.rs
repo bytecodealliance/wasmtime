@@ -205,7 +205,7 @@ pub fn inst_store_data(func: &Function, inst: Inst) -> Option<Value> {
 /// Visit all successors of a block with a given visitor closure. The closure
 /// arguments are the branch instruction that is used to reach the successor,
 /// the successor block itself, and a flag indicating whether the block is
-/// branched to via a table entry.
+/// reached via an indirect branch.
 pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
     f: &Function,
     block: Block,
@@ -231,17 +231,16 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                 let pool = &f.dfg.value_lists;
                 let table = &f.stencil.dfg.jump_tables[*table];
 
-                // The default block is reached via a direct conditional branch,
-                // so it is not part of the table. We visit the default block
-                // first explicitly, to mirror the traversal order of
-                // `JumpTableData::all_branches`, and transitively the order of
-                // `InstructionData::branch_destination`.
+                // The default block is also an indirect branch target on
+                // backends that include it in the jump table (aarch64).
+                // We visit the default block first explicitly, to mirror the
+                // traversal order of `JumpTableData::all_branches`, and
+                // transitively the order of `InstructionData::branch_destination`.
                 //
                 // Additionally, this case is why we are unable to replace this
                 // whole function with a loop over `branch_destination`: we need
-                // to report which branch targets come from the table vs the
-                // default.
-                visit(inst, table.default_block().block(pool), false);
+                // to report which branch targets are reached indirectly.
+                visit(inst, table.default_block().block(pool), true);
 
                 for dest in table.as_slice() {
                     visit(inst, dest.block(pool), true);
@@ -253,9 +252,15 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                 let pool = &f.dfg.value_lists;
                 let exdata = &f.stencil.dfg.exception_tables[*exception];
 
-                for dest in exdata.all_branches() {
-                    visit(inst, dest.block(pool), false);
+                // Exception handlers are resumed into via an indirect branch
+                // from the unwinder, so they are indirect branch targets too.
+                // The last target is the normal-return path, which is reached
+                // directly after the call returns.
+                let (normal, handlers) = exdata.all_branches().split_last().unwrap();
+                for dest in handlers {
+                    visit(inst, dest.block(pool), true);
                 }
+                visit(inst, normal.block(pool), false);
             }
 
             inst => debug_assert!(!inst.opcode().is_branch()),

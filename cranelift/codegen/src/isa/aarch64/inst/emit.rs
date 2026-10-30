@@ -3522,8 +3522,31 @@ impl MachInstEmit for Inst {
             &Inst::ReturnCallInd { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);
 
+                // Indirect tail calls must use x16 or x17 when BTI is enabled
+                // so that they are compatible with the callee's `BTI C`
+                // landing pad. Other registers are only accepted by `BTI J`,
+                // which is not a valid landing pad for a function entry.
+                //
+                // x16 is the spill-temp register, which by Cranelift
+                // convention we are allowed to use as a scratch register
+                // within one VCode inst, so this is safe.
+                let dest = if emit_info.isa_flags.use_bti() {
+                    let dest = xreg(16);
+                    if info.dest != dest {
+                        Inst::Mov {
+                            size: OperandSize::Size64,
+                            rd: writable_xreg(16),
+                            rm: info.dest,
+                        }
+                        .emit(sink, emit_info, state);
+                    }
+                    dest
+                } else {
+                    info.dest
+                };
+
                 Inst::IndirectBr {
-                    rn: info.dest,
+                    rn: dest,
                     targets: vec![],
                 }
                 .emit(sink, emit_info, state);
