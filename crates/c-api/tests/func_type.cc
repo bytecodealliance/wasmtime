@@ -12,6 +12,10 @@ TEST(FuncType, Smoke) {
   auto other = t;
   other = t;
 
+  FuncType assigned({ValType::i32()}, {});
+  assigned = t;
+  EXPECT_EQ(assigned->params().size(), 0);
+
   FuncType t2({ValType::i32()}, {ValType::i64()});
   EXPECT_EQ(t2->params().size(), 1);
   for (auto ty : t2->params()) {

@@ -61,6 +61,7 @@ public:
   /// Copies other type information into this one.
   GlobalType &operator=(const GlobalType &other) {
     ptr.reset(wasm_globaltype_copy(other.ptr.get()));
+    ref = ptr.get();
     return *this;
   }
   ~GlobalType() = default;

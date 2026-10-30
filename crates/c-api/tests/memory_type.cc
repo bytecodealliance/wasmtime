@@ -21,6 +21,10 @@ TEST(MemoryType, WithMax) {
   EXPECT_FALSE(ty->is_shared());
   EXPECT_EQ(ty->page_size_log2(), 16);
   EXPECT_EQ(ty->page_size(), 1 << 16);
+
+  MemoryType other(3);
+  other = ty;
+  EXPECT_EQ(other->min(), 1);
 }
 
 TEST(MemoryType, Mem64) {
