@@ -1075,6 +1075,11 @@ impl<'a, T: Send> Prepared<'a, T> {
         view: fn(&mut T) -> WasiHttpCtxView<'_>,
         tx: oneshot::Sender<Result<Response, wasmtime::Error>>,
     ) -> Result<Prepared<'a, T>> {
+        if crate::has_ambiguous_framing(request.version(), request.headers()) {
+            let error = bad_request("HTTP request has both Transfer-Encoding and Content-Length");
+            _ = tx.send(Err(error));
+            wasmtime::bail!("request was rejected before it could be turned into a guest request");
+        }
         match proxy {
             #[cfg(feature = "p3")]
             Proxy::P3(guest) => {

@@ -3119,6 +3119,66 @@ start a print 1234
         Ok(())
     }
 
+    /// A request with both `Transfer-Encoding` and `Content-Length` is
+    /// ambiguous to frame, so it is rejected; the other framings still work.
+    async fn test_transfer_encoding_with_content_length(
+        component: &str,
+        configure: fn(&mut Command),
+    ) -> Result<()> {
+        let server = WasmtimeServe::new(component, configure)?;
+        let cases: &[(&str, &[u8], &[u8])] = &[
+            (
+                "both",
+                b"GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n0\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "both-uppercase",
+                b"GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\nTRANSFER-ENCODING: Chunked\r\nConnection: close\r\n\r\n0\r\n\r\n",
+                b"HTTP/1.1 400",
+            ),
+            (
+                "chunked",
+                b"GET / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n0\r\n\r\n",
+                b"HTTP/1.1 200",
+            ),
+            (
+                "length",
+                b"GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                b"HTTP/1.1 200",
+            ),
+        ];
+        for (name, request, expected) in cases {
+            let response = serve_raw_request(&server, request).await?;
+            assert!(
+                response.starts_with(expected),
+                "{name}: expected {:?}, got {:?}",
+                String::from_utf8_lossy(expected),
+                String::from_utf8_lossy(&response),
+            );
+        }
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_transfer_encoding_with_content_length() -> Result<()> {
+        test_transfer_encoding_with_content_length(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })
+        .await
+    }
+
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_transfer_encoding_with_content_length() -> Result<()> {
+        test_transfer_encoding_with_content_length(P3_CLI_SERVE_HELLO_WORLD_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })
+        .await
+    }
+
     #[tokio::test]
     async fn p2_cli_serve_hello_world() -> Result<()> {
         cli_serve_hello_world(P2_CLI_SERVE_HELLO_WORLD_COMPONENT, 1, 1, |cmd| {

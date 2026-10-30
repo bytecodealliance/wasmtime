@@ -111,6 +111,14 @@ where
             return Err(send_dummy_io_err(store, getter, e, io_result_tx));
         }
     };
+    if crate::has_ambiguous_framing(res.version(), res.headers()) {
+        return Err(send_dummy_io_err(
+            store,
+            getter,
+            Error::HttpProtocolError,
+            io_result_tx,
+        ));
+    }
     let (
         http::response::Parts {
             status, headers, ..

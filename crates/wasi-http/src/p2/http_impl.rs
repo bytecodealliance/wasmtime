@@ -117,6 +117,9 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
             .send_request(request, opts, Box::new(async { Ok(()) }));
         let future = wasmtime_wasi::runtime::spawn(async move {
             let (res, io) = Pin::from(future).await?;
+            if crate::has_ambiguous_framing(res.version(), res.headers()) {
+                return Err(crate::Error::HttpProtocolError);
+            }
             let io = wasmtime_wasi::runtime::spawn(async move {
                 match Pin::from(io).await {
                     Ok(()) => {}
