@@ -2086,9 +2086,24 @@ pub(crate) fn lower_error_context_to_index<U>(
                 .instance_handle()
                 .id()
                 .get_mut_and_handle_counter(cx.store.0);
-            instance
+            let dst_idx = instance
                 .table_for_error_context(dst)
-                .error_context_insert(counter, rep)
+                .error_context_insert(counter, rep)?;
+
+            let global_ref_count = cx
+                .store
+                .0
+                .concurrent_state_mut()?
+                .global_error_context_ref_counts
+                .get_mut(&TypeComponentGlobalErrorContextTableIndex::from_u32(rep))
+                .context("global ref count present for existing (sub)component error context")?;
+
+            global_ref_count.0 = global_ref_count
+                .0
+                .checked_add(1)
+                .ok_or_else(|| format_err!(Trap::ReferenceCountOverflow))?;
+
+            Ok(dst_idx)
         }
         _ => func::bad_type_info(),
     }
