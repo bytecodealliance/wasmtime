@@ -6394,6 +6394,12 @@ criteria = "safe-to-deploy"
 version = "1.0.4"
 notes = "Purely a data crate."
 
+[[audits.webpki-root-certs]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.4 -> 1.0.11"
+notes = "Standard root updates"
+
 [[audits.webpki-roots]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -6415,6 +6421,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.7 -> 1.0.10"
 notes = "Only contains updated certs"
+
+[[audits.webpki-roots]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.10 -> 1.0.11"
+notes = "Removing two more anchors"
 
 [[audits.which]]
 who = "Alex Crichton <alex@alexcrichton.com>"
