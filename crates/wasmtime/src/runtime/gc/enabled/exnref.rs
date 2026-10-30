@@ -466,7 +466,8 @@ impl ExnRef {
 
     pub(crate) fn _matches_ty(&self, store: &StoreOpaque, ty: &HeapType) -> Result<bool> {
         assert!(self.comes_from_same_store(store));
-        Ok(HeapType::from(self._ty(store)?).matches(ty))
+        self.inner.try_gc_ref(store)?;
+        Ok(HeapType::Exn.matches(ty))
     }
 
     pub(crate) fn ensure_matches_ty(&self, store: &StoreOpaque, ty: &HeapType) -> Result<()> {
@@ -649,13 +650,11 @@ unsafe impl WasmTy for Rooted<ExnRef> {
     #[inline]
     fn dynamic_concrete_type_check(
         &self,
-        _store: &StoreOpaque,
+        store: &StoreOpaque,
         _nullable: bool,
-        _ty: &HeapType,
+        ty: &HeapType,
     ) -> Result<()> {
-        // Wasm can't specify a concrete exn type, so there are no
-        // dynamic checks.
-        Ok(())
+        self.ensure_matches_ty(store, ty)
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {

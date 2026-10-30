@@ -798,16 +798,8 @@ pub enum HeapType {
     /// The abstract `exn` heap type represents a reference to any
     /// kind of exception.
     ///
-    /// This is a supertype of the internal concrete exception heap
-    /// types and the `noexn` heap type.
+    /// This is a supertype of the `noexn` heap type.
     Exn,
-
-    /// A concrete exception object with a specific tag.
-    ///
-    /// These are internal, not exposed at the Wasm level, but useful
-    /// in our implementation and host API. These are subtypes of
-    /// `exn` and supertypes of `noexn`.
-    ConcreteExn(ExnType),
 
     /// A reference to a continuation of a specific, concrete type.
     ///
@@ -909,7 +901,6 @@ impl Display for HeapType {
             HeapType::ConcreteArray(ty) => write!(f, "(concrete array {:?})", ty.type_index()),
             HeapType::ConcreteStruct(ty) => write!(f, "(concrete struct {:?})", ty.type_index()),
             HeapType::ConcreteCont(ty) => write!(f, "(concrete cont {:?})", ty.type_index()),
-            HeapType::ConcreteExn(ty) => write!(f, "(concrete exn {:?})", ty.type_index()),
             HeapType::Cont => write!(f, "cont"),
             HeapType::NoCont => write!(f, "nocont"),
             HeapType::Exn => write!(f, "exn"),
@@ -943,13 +934,6 @@ impl From<ContType> for HeapType {
     #[inline]
     fn from(f: ContType) -> Self {
         HeapType::ConcreteCont(f)
-    }
-}
-
-impl From<ExnType> for HeapType {
-    #[inline]
-    fn from(e: ExnType) -> Self {
-        HeapType::ConcreteExn(e)
     }
 }
 
@@ -1017,7 +1001,6 @@ impl HeapType {
                 | HeapType::ConcreteArray(_)
                 | HeapType::ConcreteStruct(_)
                 | HeapType::ConcreteCont(_)
-                | HeapType::ConcreteExn(_)
         )
     }
 
@@ -1105,21 +1088,6 @@ impl HeapType {
         self.as_concrete_struct().unwrap()
     }
 
-    /// Is this a concrete, user-defined exception type?
-    pub fn is_concrete_exn(&self) -> bool {
-        matches!(self, HeapType::ConcreteExn(_))
-    }
-
-    /// Get the underlying concrete, user-defined exception type, if any.
-    ///
-    /// Returns `None` if this is not a concrete exception type.
-    pub fn as_concrete_exn(&self) -> Option<&ExnType> {
-        match self {
-            HeapType::ConcreteExn(e) => Some(e),
-            _ => None,
-        }
-    }
-
     /// Get the top type of this heap type's type hierarchy.
     ///
     /// The returned type represents a supertype of all types in this heap
@@ -1142,7 +1110,7 @@ impl HeapType {
 
             HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapTopType::Cont,
 
-            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapTopType::Exn,
+            HeapType::Exn | HeapType::NoExn => HeapTopType::Exn,
         }
     }
 
@@ -1179,7 +1147,7 @@ impl HeapType {
 
             HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapBottomType::NoCont,
 
-            HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn => HeapBottomType::NoExn,
+            HeapType::Exn | HeapType::NoExn => HeapBottomType::NoExn,
         }
     }
 
@@ -1287,12 +1255,8 @@ impl HeapType {
             (HeapType::Any, HeapType::Any) => true,
             (HeapType::Any, _) => false,
 
-            (HeapType::NoExn, HeapType::Exn | HeapType::ConcreteExn(_) | HeapType::NoExn) => true,
+            (HeapType::NoExn, HeapType::Exn | HeapType::NoExn) => true,
             (HeapType::NoExn, _) => false,
-
-            (HeapType::ConcreteExn(_), HeapType::Exn) => true,
-            (HeapType::ConcreteExn(a), HeapType::ConcreteExn(b)) => a.matches(b),
-            (HeapType::ConcreteExn(_), _) => false,
 
             (HeapType::Exn, HeapType::Exn) => true,
             (HeapType::Exn, _) => false,
@@ -1343,7 +1307,6 @@ impl HeapType {
             HeapType::ConcreteArray(ty) => ty.comes_from_same_engine(engine),
             HeapType::ConcreteStruct(ty) => ty.comes_from_same_engine(engine),
             HeapType::ConcreteCont(ty) => ty.comes_from_same_engine(engine),
-            HeapType::ConcreteExn(ty) => ty.comes_from_same_engine(engine),
         }
     }
 
@@ -1375,9 +1338,6 @@ impl HeapType {
             }
             HeapType::Exn => WasmHeapType::Exn,
             HeapType::NoExn => WasmHeapType::NoExn,
-            HeapType::ConcreteExn(e) => {
-                WasmHeapType::ConcreteExn(EngineOrModuleTypeIndex::Engine(e.type_index()))
-            }
         }
     }
 
@@ -1420,11 +1380,12 @@ impl HeapType {
             WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::Engine(idx)) => {
                 HeapType::ConcreteCont(ContType::from_shared_type_index(engine, *idx).unwrap())
             }
-            WasmHeapType::Exn => HeapType::Exn,
-            WasmHeapType::NoExn => HeapType::NoExn,
-            WasmHeapType::ConcreteExn(EngineOrModuleTypeIndex::Engine(idx)) => {
-                HeapType::ConcreteExn(ExnType::from_shared_type_index(engine, *idx).unwrap())
+            // Concrete exception types are an implementation detail of
+            // Wasmtime that Wasm can't name, so they're only `exn` here.
+            WasmHeapType::Exn | WasmHeapType::ConcreteExn(EngineOrModuleTypeIndex::Engine(_)) => {
+                HeapType::Exn
             }
+            WasmHeapType::NoExn => HeapType::NoExn,
         }
     }
 
@@ -1434,7 +1395,6 @@ impl HeapType {
             HeapType::ConcreteFunc(f) => Some(&f.registered_type),
             HeapType::ConcreteArray(a) => Some(&a.registered_type),
             HeapType::ConcreteStruct(a) => Some(&a.registered_type),
-            HeapType::ConcreteExn(e) => Some(&e.registered_type),
 
             HeapType::Extern
             | HeapType::NoExtern
@@ -1479,7 +1439,6 @@ impl HeapType {
             ConcreteArray(ty) => Some(ty.registered_type),
             ConcreteStruct(ty) => Some(ty.registered_type),
             ConcreteCont(ty) => Some(ty.registered_type),
-            ConcreteExn(ty) => Some(ty.registered_type),
             Extern | NoExtern | Func | NoFunc | Any | Eq | I31 | Array | Struct | Cont | NoCont
             | Exn | NoExn | None => Option::None,
         }
