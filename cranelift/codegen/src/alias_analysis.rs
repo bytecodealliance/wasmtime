@@ -125,6 +125,7 @@ fn alias_regions_observed(func: &Function, inst: Inst, opcode: Opcode) -> AliasR
     debug_assert_eq!(func.dfg.insts[inst].opcode(), opcode);
     if opcode.is_return()
         || opcode.is_call()
+        || opcode == Opcode::InterruptPoll
         || opcode.can_trap()
         // NB: the `opcode.can_trap()` check above only covers explicitly
         // trapping instructions (like `trap` and `trapz`), not loads/stores

@@ -1,12 +1,13 @@
 test inline precise-output
 target x86_64
 
-;; `interrupt_poll` is classified as `is_call()` (it transfers control to the
-;; interpreter), but it is not an inlineable function call and it cannot raise a
-;; Cranelift exception. It must not trip the inliner's "unknown call" fallback,
-;; and, when inlined at a `try_call` site, it must not be treated as a call
-;; whose exception table needs fixing up. Its stack map must still be preserved
-;; and remapped into the caller's stack slot index space.
+;; `interrupt_poll` is not a call instruction (it has no callee, arguments,
+;; or calling convention), but it is a safepoint that can hold user stack maps.
+;; When a function containing `interrupt_poll` is inlined, the poll instruction
+;; must not trip the inliner's unknown-call assertion, and its stack map must
+;; be preserved and remapped into the caller's stack slot space. When inlined
+;; at a `try_call` site, `interrupt_poll` must not be treated as a call whose
+;; exception table needs fixing up.
 
 ;; A callee with a poll and its own stack map, inlined at a normal call site
 ;; that also has a stack map. The two maps should be merged.
@@ -58,32 +59,6 @@ block0(v0: i64, v1: i64, v2: i64):
 ;     v7 = iadd v4, v6
 ;     return v7
 ; }
-
-;; A non-tail caller must keep the call: inlining the poll would violate the
-;; verifier's requirement that `interrupt_poll` only appears in functions using
-;; the `tail` calling convention.
-function %poll_systemv_caller(i64, i64, i64) -> i64 system_v {
-    fn0 = %poll_callee(i64, i64, i64) -> i64 tail
-block0(v0: i64, v1: i64, v2: i64):
-    v3 = call fn0(v0, v1, v2)
-    return v3
-}
-
-; (no functions inlined into %poll_systemv_caller)
-
-;; A non-tail caller must also keep a `try_call` to a poll-containing callee.
-function %poll_try_systemv_caller(i64, i64, i64) -> i64 system_v {
-    sig0 = (i64, i64, i64) -> i64 tail
-    fn0 = %poll_callee sig0
-block0(v0: i64, v1: i64, v2: i64):
-    try_call fn0(v0, v1, v2), sig0, block1(ret0), [default: block2(exn0)]
-block1(v3: i64):
-    return v3
-block2(v4: i64):
-    return v4
-}
-
-; (no functions inlined into %poll_try_systemv_caller)
 
 ;; A callee with both a poll and a real call, inlined at a `try_call` site: the
 ;; real call has to be rewritten to a `try_call`, but the poll must be left

@@ -1846,23 +1846,16 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
-    /// Get the PC of the most recently pushed user stack map, if any.
-    pub(crate) fn last_user_stack_map_pc(&self) -> Option<CodeOffset> {
-        self.user_stack_maps.last().map(|(pc, _, _)| *pc)
-    }
-
     /// Push a user stack map onto this buffer.
     ///
     /// The stack map is associated with the given `pc` code offset. For a
     /// call, this is the return address: the PC of the instruction just
-    /// *after* the call. For a resumable fault, this is the PC of the
-    /// faulting instruction itself. For a stack switch, this is the PC at
-    /// which execution resumes after the switch. In all cases, `pc` must
-    /// identify the machine state described by the map.
+    /// *after* the call. For a resumable fault (such as `interrupt_poll`),
+    /// this is the PC of the faulting instruction itself. For a stack switch,
+    /// this is the PC at which execution resumes after the switch. In all
+    /// cases, `pc` identifies the machine state described by the map.
     ///
-    /// Stack maps must be pushed in strictly increasing `pc` order. Callers
-    /// that can produce two maps for the same PC must separate them (for
-    /// example, with a nop) rather than relying on this method to merge them.
+    /// Stack maps must be pushed in strictly increasing `pc` order.
     pub fn push_user_stack_map(
         &mut self,
         emit_state: &I::State,
