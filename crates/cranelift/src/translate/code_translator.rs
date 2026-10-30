@@ -93,7 +93,7 @@ use itertools::Itertools;
 use smallvec::{SmallVec, ToSmallVec};
 use std::collections::{HashMap, hash_map};
 use std::vec::Vec;
-use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
+use wasmparser::{FuncValidator, MemArg, MemArgTarget, Operator, Ordering, WasmModuleResources};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TagIndex, TypeConvert,
     TypeIndex, WasmHeapType, WasmRefType, WasmResult, WasmValType, wasm_unsupported,
@@ -1431,7 +1431,10 @@ pub fn translate_operator(
                 Operator::MemoryAtomicWait32 { .. } => I32,
                 _ => unreachable!(),
             };
-            let memory_index = MemoryIndex::from_u32(memarg.memory);
+            let memory_index = match memarg.target {
+                MemArgTarget::Memory(index) => MemoryIndex::from_u32(index),
+                MemArgTarget::Array(_) => return Err(wasm_unsupported!("should not be valid")),
+            };
             let heap = environ.get_or_create_heap(builder.func, memory_index);
             let timeout = environ.stacks.pop1(); // 64 (fixed)
             let expected = environ.stacks.pop1(); // 32 or 64 (per the `Ixx` in `IxxAtomicWait`)
@@ -1457,7 +1460,10 @@ pub fn translate_operator(
             environ.stacks.push1(res);
         }
         Operator::MemoryAtomicNotify { memarg } => {
-            let memory_index = MemoryIndex::from_u32(memarg.memory);
+            let memory_index = match memarg.target {
+                MemArgTarget::Memory(index) => MemoryIndex::from_u32(index),
+                MemArgTarget::Array(_) => return Err(wasm_unsupported!("should not be valid")),
+            };
             let heap = environ.get_or_create_heap(builder.func, memory_index);
             let count = environ.stacks.pop1(); // 32 (fixed)
             let addr = environ.stacks.pop1();
@@ -1675,7 +1681,10 @@ pub fn translate_operator(
             translate_atomic_cas(I64, I32, memarg, builder, environ)?
         }
 
-        Operator::AtomicFence { .. } => {
+        Operator::AtomicFence { ordering } => {
+            if *ordering != Ordering::SeqCst {
+                return Err(wasm_unsupported!("acquire-release-atomics"));
+            }
             builder.ins().fence();
         }
         Operator::MemoryCopy { src_mem, dst_mem } => {
@@ -3619,7 +3628,10 @@ fn prepare_addr(
 ) -> WasmResult<Reachability<(MemFlagsData, Value, Value)>> {
     let index = environ.stacks.pop1();
 
-    let memory_index = MemoryIndex::from_u32(memarg.memory);
+    let memory_index = match memarg.target {
+        MemArgTarget::Memory(index) => MemoryIndex::from_u32(index),
+        MemArgTarget::Array(_) => return Err(wasm_unsupported!("multibyte-array-access proposal")),
+    };
     let heap = environ.get_or_create_heap(builder.func, memory_index);
 
     // How exactly the bounds check is performed here and what it's performed
@@ -3820,6 +3832,9 @@ fn prepare_atomic_addr(
     builder: &mut FunctionBuilder,
     environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<Reachability<(MemFlagsData, Value, Value)>> {
+    if memarg.ordering.is_some() {
+        return Err(wasm_unsupported!("acquire-release-atomics"));
+    }
     align_atomic_addr(memarg, loaded_bytes, builder, environ);
     prepare_addr(memarg, loaded_bytes, builder, environ)
 }
