@@ -118,6 +118,19 @@ fn p2_http_outbound_request_response_build() -> Result<()> {
 }
 
 #[test_log::test]
+fn p2_http_outbound_request_ambiguous_framing() -> Result<()> {
+    for response in crate::shared::ambiguous_responses() {
+        let response = *response;
+        let (server, _) = Server::raw(1, move |_| response.to_vec())?;
+        run(
+            P2_HTTP_OUTBOUND_REQUEST_AMBIGUOUS_FRAMING_COMPONENT,
+            &server,
+        )?;
+    }
+    Ok(())
+}
+
+#[test_log::test]
 fn p2_http_outbound_request_content_length() -> Result<()> {
     let server = Server::http1(1)?;
     run(P2_HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server)
