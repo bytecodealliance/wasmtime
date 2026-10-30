@@ -312,7 +312,8 @@ fn build_wasm(image: &HeapImage, offset: u32) -> Vec<u8> {
                 wasm_encoder::MemArg {
                     offset: u64::from(offset),
                     align: 0,
-                    memory_index: 0,
+                    target: Default::default(),
+                    ordering: None,
                 },
             ));
             func.instruction(&wasm_encoder::Instruction::End);
@@ -328,7 +329,8 @@ fn build_wasm(image: &HeapImage, offset: u32) -> Vec<u8> {
                 wasm_encoder::MemArg {
                     offset: u64::from(offset),
                     align: 0,
-                    memory_index: 0,
+                    target: Default::default(),
+                    ordering: None,
                 },
             ));
             func.instruction(&wasm_encoder::Instruction::End);
@@ -343,7 +345,8 @@ fn build_wasm(image: &HeapImage, offset: u32) -> Vec<u8> {
             func.instruction(&wasm_encoder::Instruction::I32Load(wasm_encoder::MemArg {
                 offset: u64::from(offset),
                 align: 0,
-                memory_index: 0,
+                target: Default::default(),
+                ordering: None,
             }));
             func.instruction(&wasm_encoder::Instruction::End);
             code.function(&func);
@@ -357,7 +360,8 @@ fn build_wasm(image: &HeapImage, offset: u32) -> Vec<u8> {
             func.instruction(&wasm_encoder::Instruction::I64Load(wasm_encoder::MemArg {
                 offset: u64::from(offset),
                 align: 0,
-                memory_index: 0,
+                target: Default::default(),
+                ordering: None,
             }));
             func.instruction(&wasm_encoder::Instruction::End);
             code.function(&func);

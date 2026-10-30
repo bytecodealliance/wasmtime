@@ -19,8 +19,8 @@ use cranelift_codegen::{
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 use wasmparser::{
-    BinaryReader, FuncValidator, MemArg, Operator, OperatorsReader, ValidatorResources,
-    VisitOperator, VisitSimdOperator, WasmFeatures,
+    BinaryReader, FuncValidator, MemArg, MemArgTarget, Operator, OperatorsReader,
+    ValidatorResources, VisitOperator, VisitSimdOperator, WasmFeatures,
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
@@ -1527,6 +1527,9 @@ where
         memarg: &MemArg,
         access_size: OperandSize,
     ) -> Result<Option<Reg>> {
+        if memarg.ordering.is_some() {
+            bail!(wasm_unsupported!("acquire-release-atomics"));
+        }
         self.emit_check_align(heap, memarg, access_size)?;
         self.emit_compute_heap_address(heap, memarg, access_size)
     }
@@ -1548,7 +1551,7 @@ where
             Ok(())
         };
 
-        let memory_index = MemoryIndex::from_u32(arg.memory);
+        let memory_index = memarg_memory_index(arg)?;
         let heap = self.env.resolve_heap(memory_index);
 
         // Ensure that the destination register is not allocated if
@@ -1595,7 +1598,7 @@ where
 
     /// Emit a WebAssembly store.
     pub fn emit_wasm_store(&mut self, arg: &MemArg, kind: StoreKind) -> Result<()> {
-        let memory_index = MemoryIndex::from_u32(arg.memory);
+        let memory_index = memarg_memory_index(arg)?;
         let heap = self.env.resolve_heap(memory_index);
         let src = self.context.pop_to_reg(self.masm, None)?;
 
@@ -2545,7 +2548,7 @@ where
         size: OperandSize,
         extend: Option<Extend<Zero>>,
     ) -> Result<()> {
-        let memory_index = MemoryIndex::from_u32(arg.memory);
+        let memory_index = memarg_memory_index(arg)?;
         let heap = self.env.resolve_heap(memory_index);
         // We need to pop-push the operand to compute the address before passing control over to
         // masm, because some architectures may have specific requirements for the registers used
@@ -2603,7 +2606,7 @@ where
         let replacement = self.context.pop_to_reg(self.masm, None)?;
         let expected = self.context.pop_to_reg(self.masm, None)?;
 
-        let memory_index = MemoryIndex::from_u32(arg.memory);
+        let memory_index = memarg_memory_index(arg)?;
         let heap = self.env.resolve_heap(memory_index);
         if let Some(addr) = self.emit_compute_heap_address_align_checked(&heap, arg, size)? {
             self.context
@@ -2647,11 +2650,8 @@ where
             AtomicWaitKind::Wait32 => self.env.builtins.memory_atomic_wait32::<M::ABI>()?,
             AtomicWaitKind::Wait64 => self.env.builtins.memory_atomic_wait64::<M::ABI>()?,
         };
-        let builtin = self.prepare_builtin_defined_memory_arg(
-            MemoryIndex::from_u32(arg.memory),
-            stack_len,
-            builtin,
-        )?;
+        let builtin =
+            self.prepare_builtin_defined_memory_arg(memarg_memory_index(arg)?, stack_len, builtin)?;
 
         if arg.offset != 0 {
             self.masm.checked_uadd(
@@ -2692,11 +2692,8 @@ where
         // Put the target memory index as the first argument.
         let builtin = self.env.builtins.memory_atomic_notify::<M::ABI>()?;
         let stack_len = self.context.stack.len();
-        let builtin = self.prepare_builtin_defined_memory_arg(
-            MemoryIndex::from_u32(arg.memory),
-            stack_len,
-            builtin,
-        )?;
+        let builtin =
+            self.prepare_builtin_defined_memory_arg(memarg_memory_index(arg)?, stack_len, builtin)?;
 
         if arg.offset != 0 {
             self.masm.checked_uadd(
@@ -2795,4 +2792,17 @@ pub fn control_index(depth: u32, control_length: usize) -> Result<usize> {
     (control_length - 1)
         .checked_sub(depth as usize)
         .ok_or_else(|| format_err!(CodeGenError::control_frame_expected()))
+}
+
+/// Returns the linear memory targeted by the given `MemArg`.
+///
+/// Note that winch doesn't support the multibyte-array-access proposal at this
+/// time hence this helper to return an error if that shows up.
+fn memarg_memory_index(memarg: &MemArg) -> Result<MemoryIndex> {
+    match memarg.target {
+        MemArgTarget::Memory(index) => Ok(MemoryIndex::from_u32(index)),
+        MemArgTarget::Array(_) => Err(format_err!(wasm_unsupported!(
+            "multibyte-array-access proposal"
+        ))),
+    }
 }
