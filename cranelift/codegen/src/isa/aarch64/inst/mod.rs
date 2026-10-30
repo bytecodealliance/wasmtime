@@ -1257,7 +1257,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::Call { .. } | Inst::CallInd { .. } => true,
+            Inst::Call { .. } | Inst::CallInd { .. } | Inst::InterruptPoll { .. } => true,
             _ => false,
         }
     }

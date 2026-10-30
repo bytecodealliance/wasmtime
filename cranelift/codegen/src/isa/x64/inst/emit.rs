@@ -656,9 +656,30 @@ pub(crate) fn emit(
             trap_code,
             ..
         } => {
+            let stack_map = state.take_stack_map();
+
+            // A stack map for a preceding call is associated with that call's
+            // return address, which is this instruction's address when the
+            // call is immediately followed by the poll. Stack maps are keyed
+            // by exact PC, so separate the two with a nop. This is rare (it
+            // requires the call to preserve every register, e.g. a
+            // `preserve_all` callee) but must be handled in release builds
+            // where the buffer's ordering assertion is compiled out.
+            if stack_map.is_some() && sink.last_user_stack_map_pc() == Some(sink.cur_offset()) {
+                sink.put1(0x90);
+            }
+
             // Record the address of load in the trap table so a signal handler
             // can later distinguish whether a segfault is its fault.
             sink.add_trap(*trap_code);
+
+            // The stack map (if any) is associated with the address of the
+            // load itself, not the following instruction: a signal handler
+            // that observes the fault resumes by re-executing the load, so
+            // that is the PC at which the suspended frame is inspected.
+            if let Some(stack_map) = stack_map {
+                sink.push_user_stack_map(state, sink.cur_offset(), stack_map);
+            }
 
             let load_ptr_addr = SyntheticAmode::real(Amode::imm_reg(0, **load_ptr));
             // Since we're clobbering dst anyway to store the resume address,
