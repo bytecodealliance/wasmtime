@@ -33,11 +33,7 @@ public:
   /// Copy constructor.
   HeapType(const HeapType &other) { wasmtime_heaptype_clone(&other.ty, &ty); }
   /// Copy assignment operator.
-  HeapType &operator=(const HeapType &other) {
-    wasmtime_heaptype_delete(&ty);
-    wasmtime_heaptype_clone(&other.ty, &ty);
-    return *this;
-  }
+  HeapType &operator=(const HeapType &other) { return *this = HeapType(other); }
   ~HeapType() {
     if (is_concrete())
       wasmtime_heaptype_delete(&ty);
@@ -219,11 +215,7 @@ public:
   /// Copy constructor.
   RefType(const RefType &other) { wasmtime_reftype_clone(&other.ty, &ty); }
   /// Copy assignment operator.
-  RefType &operator=(const RefType &other) {
-    wasmtime_reftype_delete(&ty);
-    wasmtime_reftype_clone(&other.ty, &ty);
-    return *this;
-  }
+  RefType &operator=(const RefType &other) { return *this = RefType(other); }
   ~RefType() { wasmtime_reftype_delete(&ty); }
   /// Move constructor
   RefType(RefType &&other) {

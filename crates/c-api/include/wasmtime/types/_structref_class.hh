@@ -27,9 +27,7 @@ public:
   }
   /// Copy assignment operator.
   StorageType &operator=(const StorageType &other) {
-    wasmtime_storage_type_delete(&ty);
-    wasmtime_storage_type_clone(&other.ty, &ty);
-    return *this;
+    return *this = StorageType(other);
   }
   ~StorageType() { wasmtime_storage_type_delete(&ty); }
   /// Move constructor
@@ -91,9 +89,7 @@ public:
   }
   /// Copy assignment operator.
   FieldType &operator=(const FieldType &other) {
-    wasmtime_field_type_delete(&ty);
-    wasmtime_field_type_clone(&other.ty, &ty);
-    return *this;
+    return *this = FieldType(other);
   }
   ~FieldType() { wasmtime_field_type_delete(&ty); }
   /// Move constructor
