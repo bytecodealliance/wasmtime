@@ -3419,9 +3419,9 @@ async fn task_group_hook_fails_to_enter_call_async() -> Result<()> {
     Ok(())
 }
 
-/// `Func::call_async` and `TypedFunc::call_async` from within a host function,
-/// while the event loop is already running, fail without queueing the call to
-/// run later.
+/// `Func::call_async`, `TypedFunc::call_async` and `instantiate_async` from
+/// within a host function, while the event loop is already running, fail
+/// without queueing the call or start function to run later.
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn call_async_from_host_function() -> Result<()> {
@@ -3442,6 +3442,15 @@ async fn call_async_from_host_function() -> Result<()> {
             (func (export "trap") (canon lift (core func $i "trap")))
         )"#,
     )?;
+    let trap_on_start = Component::new(
+        &engine,
+        r#"(component
+            (core module $m
+                (func $start unreachable)
+                (start $start))
+            (core instance (instantiate $m))
+        )"#,
+    )?;
     let trap = Arc::new(Mutex::new(None::<Func>));
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap("host", {
@@ -3452,6 +3461,10 @@ async fn call_async_from_host_function() -> Result<()> {
             assert!(matches!(result, Some(Err(_))));
             let trap = trap.typed::<(), ()>(&store)?;
             let result = trap.call_async(&mut store, ()).now_or_never();
+            assert!(matches!(result, Some(Err(_))));
+            let result = Linker::new(store.engine())
+                .instantiate_async(&mut store, &trap_on_start)
+                .now_or_never();
             assert!(matches!(result, Some(Err(_))));
             Ok(())
         }

@@ -1784,6 +1784,8 @@ impl<T> StoreContextMut<'_, T> {
         instance: ModuleInstance,
         callee: Option<RuntimeInstance>,
     ) -> Result<ModuleInstance> {
+        // See `Func::call_async` for why this is checked up front.
+        self.0.check_event_loop_not_running()?;
         let (tx, rx) = oneshot::channel();
         let token = StoreToken::new(self.as_context_mut());
         self.0.queue_task(move |store| {
