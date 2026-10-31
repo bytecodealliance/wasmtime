@@ -896,6 +896,57 @@ async fn p3_http_proxy() -> Result<()> {
     Ok(())
 }
 
+/// A guest forwards a response body from an upstream server which closes the
+/// connection partway through it. The client must see an error in the response
+/// body, and the guest must see an error from the `response.new` transmit
+/// future.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_proxy_response_body_error() -> Result<()> {
+    let server = Server::http1_drop_mid_body(1)?;
+
+    let engine = test_programs_artifacts::engine(|config| {
+        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+        config.wasm_component_model_async(true);
+    });
+    let component = Component::from_file(&engine, P3_HTTP_PROXY_COMPONENT)?;
+    // The guest sends a request to `http://p3-test/` once it has checked the
+    // transmit result to signal successful completion. Hook up `done_rx` to
+    // receive that request.
+    let (done_tx, done_rx) = oneshot::channel();
+    let mut store = Store::new(&engine, Ctx::with_hooks(TestHooks::new(Some(done_tx))));
+    let mut linker = Linker::new(&engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+    wasmtime_wasi::p3::add_to_linker(&mut linker)?;
+    wasmtime_wasi_http::p3::add_to_linker(&mut linker)?;
+    let service = Service::instantiate_async(&mut store, &component, &linker).await?;
+
+    let req = http::Request::builder()
+        .uri("http://localhost/")
+        .header("url", format!("http://{}/", server.addr()))
+        .header("expect-transmit-error", "true")
+        .body(Empty::<Bytes>::new())?;
+    let (req, _io) = Request::from_http(&mut store.data_mut().hooks, req);
+    store
+        .run_concurrent(async |store| {
+            let res = service.handle(store, req).await?.unwrap();
+            // As in `wasmtime serve`, report that the incoming request was
+            // handled successfully.
+            let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
+            assert_eq!(res.status(), 200);
+            let body = res.into_body().collect().await;
+            assert!(
+                body.is_err(),
+                "client should see an error in the response body"
+            );
+            done_rx
+                .await
+                .context("guest did not check the transmit result")?
+                .context("failed to collect the guest's completion request")?;
+            Ok(())
+        })
+        .await?
+}
+
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_proxy_store_drop_cancels_io() -> Result<()> {
     let (_body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(1);
