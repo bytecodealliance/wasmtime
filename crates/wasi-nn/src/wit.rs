@@ -19,7 +19,7 @@ use crate::{Backend, Registry};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::{fmt, str::FromStr};
-use wasmtime::component::{HasData, Resource, ResourceTable};
+use wasmtime::component::{FixedHostHeapUsage, HasData, HostHeapUsage, Resource, ResourceTable};
 use wasmtime::format_err;
 
 /// Capture the state necessary for calling into the backend ML libraries.
@@ -56,7 +56,7 @@ impl<'a> WasiNnView<'a> {
 
 /// A wasi-nn error; this appears on the Wasm side as a component model
 /// resource.
-#[derive(Debug)]
+#[derive(Debug, HostHeapUsage)]
 pub struct Error {
     code: ErrorCode,
     data: wasmtime::Error,
@@ -92,7 +92,7 @@ impl From<wasmtime::component::ResourceTableError> for Error {
 
 /// The list of error codes available to the `wasi-nn` API; this should match
 /// what is specified in WIT.
-#[derive(Debug)]
+#[derive(Debug, FixedHostHeapUsage)]
 pub enum ErrorCode {
     /// Caller module passed an invalid argument.
     InvalidArgument,

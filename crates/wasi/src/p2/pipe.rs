@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
+use wasmtime::component::{FixedHostHeapUsage, HostHeapUsage};
 use wasmtime::format_err;
 use wasmtime_wasi_io::{
     poll::Pollable,
@@ -49,6 +50,12 @@ impl InputStream for MemoryInputPipe {
         let size = size.min(buffer.len());
         let read = buffer.split_to(size);
         Ok(read)
+    }
+}
+
+impl HostHeapUsage for MemoryInputPipe {
+    fn heap_size_of_children(&self) -> usize {
+        self.buffer.lock().map_or(0, |buf| buf.len())
     }
 }
 
@@ -119,6 +126,12 @@ impl OutputStream for MemoryOutputPipe {
             // Since the buffer is full, no more bytes will ever be written
             Err(StreamError::Closed)
         }
+    }
+}
+
+impl HostHeapUsage for MemoryOutputPipe {
+    fn heap_size_of_children(&self) -> usize {
+        self.buffer.lock().map_or(0, |buf| buf.capacity())
     }
 }
 
@@ -262,6 +275,16 @@ impl InputStream for AsyncReadStream {
     }
 }
 
+impl HostHeapUsage for AsyncReadStream {
+    fn heap_size_of_children(&self) -> usize {
+        // Account for any buffered chunk currently staged for the guest to read.
+        match &self.buffer {
+            Some(Ok(bytes)) => bytes.len(),
+            _ => 0,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl Pollable for AsyncReadStream {
     async fn ready(&mut self) {
@@ -336,11 +359,18 @@ impl Pollable for ClosedOutputStream {
     async fn ready(&mut self) {}
 }
 
+impl FixedHostHeapUsage for SinkOutputStream {}
+impl FixedHostHeapUsage for ClosedInputStream {}
+impl FixedHostHeapUsage for ClosedOutputStream {}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use std::time::Duration;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+    use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
+    use wasmtime_wasi_io::bindings::wasi::io::streams::{Host, HostOutputStream};
+    use wasmtime_wasi_io::streams::DynOutputStream;
 
     // This is a gross way to handle CI running under qemu for non-x86 architectures.
     #[cfg(not(target_arch = "x86_64"))]
@@ -906,6 +936,39 @@ mod test {
             .await
             .expect("ready is ok");
         assert_eq!(permit, 1024);
+    }
+
+    #[test]
+    fn test_memory_pipe_heap_usage_and_limit() {
+        let input = MemoryInputPipe::new(Bytes::from_static(b"hello world"));
+        assert_eq!(input.heap_size_of_children(), 11);
+
+        let mut table = ResourceTable::new();
+        table.set_max_host_heap_usage(Some(128));
+
+        let pipe: DynOutputStream = Box::new(MemoryOutputPipe::new(4096));
+        let r = table.push(pipe).unwrap();
+
+        // Writing within limit via HostOutputStream succeeds and updates table accounting.
+        HostOutputStream::write(
+            &mut table,
+            Resource::new_borrow(r.rep()),
+            b"within limit".to_vec(),
+        )
+        .unwrap();
+
+        // Writing beyond table limit produces a StreamError::Trap that converts to
+        // HostMemoryLimitExceeded in Host::convert_stream_error.
+        let stream_err =
+            HostOutputStream::write(&mut table, Resource::new_borrow(r.rep()), vec![0u8; 256])
+                .unwrap_err();
+        assert!(matches!(stream_err, StreamError::Trap(_)));
+        let trap_err = Host::convert_stream_error(&mut table, stream_err).unwrap_err();
+        assert!(
+            trap_err
+                .downcast_ref::<ResourceTableError>()
+                .is_some_and(|e| matches!(e, ResourceTableError::HostMemoryLimitExceeded))
+        );
     }
 }
 

@@ -9,6 +9,21 @@ use syn::{DeriveInput, Error, parse_macro_input};
 
 mod bindgen;
 mod component;
+mod host_heap_usage;
+
+#[proc_macro_derive(HostHeapUsage, attributes(component))]
+pub fn host_heap_usage(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    host_heap_usage::expand_host_heap_usage(&parse_macro_input!(input as DeriveInput))
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
+
+#[proc_macro_derive(FixedHostHeapUsage, attributes(component))]
+pub fn fixed_host_heap_usage(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    host_heap_usage::expand_fixed_host_heap_usage(&parse_macro_input!(input as DeriveInput))
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
 
 #[proc_macro_derive(Lift, attributes(component))]
 pub fn lift(input: proc_macro::TokenStream) -> proc_macro::TokenStream {

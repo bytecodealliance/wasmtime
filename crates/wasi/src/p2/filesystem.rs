@@ -7,6 +7,7 @@ use crate::runtime::AbortOnDropJoinHandle;
 use bytes::{Bytes, BytesMut};
 use std::io;
 use std::mem;
+use wasmtime::component::{FixedHostHeapUsage, HostHeapUsage};
 use wasmtime::format_err;
 
 pub type FsResult<T> = Result<T, FsError>;
@@ -419,3 +420,15 @@ impl IntoIterator for ReaddirIterator {
         self.0.into_inner().unwrap()
     }
 }
+
+impl HostHeapUsage for FileInputStream {
+    fn heap_size_of_children(&self) -> usize {
+        match &self.state {
+            ReadState::DataAvailable(b) => b.len(),
+            _ => 0,
+        }
+    }
+}
+
+impl FixedHostHeapUsage for FileOutputStream {}
+impl FixedHostHeapUsage for ReaddirIterator {}

@@ -53,7 +53,8 @@
 use self::error_contexts::GlobalErrorContextRefCount;
 use crate::component::func::{Func, call_post_return};
 use crate::component::{
-    HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
+    FixedHostHeapUsage, HasData, HasSelf, HostHeapUsage, Instance, Resource, ResourceTable,
+    ResourceTableError, RuntimeInstance,
 };
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
 use crate::hash_set::HashSet;
@@ -1267,6 +1268,7 @@ impl<T> StoreContextMut<'_, T> {
     /// #   },
     /// # };
     /// #
+    /// # #[derive(wasmtime::component::FixedHostHeapUsage)]
     /// # struct MyResource(u32);
     /// # struct Ctx { table: ResourceTable }
     /// #
@@ -5846,6 +5848,13 @@ impl TableDebug for WaitableSet {
     }
 }
 
+// `ConcurrentState::table` is an internal table with no heap limit configured.
+impl FixedHostHeapUsage for WorkItem {}
+impl FixedHostHeapUsage for HostTask {}
+impl FixedHostHeapUsage for GuestThread {}
+impl FixedHostHeapUsage for GuestTask {}
+impl FixedHostHeapUsage for WaitableSet {}
+
 /// Type-erased closure to lower the parameters for a guest task.
 type RawLower =
     Box<dyn FnOnce(&mut dyn VMStore, &mut [MaybeUninit<ValRaw>]) -> Result<()> + Send + Sync>;
@@ -6328,8 +6337,10 @@ impl ConcurrentState {
         // push can consume and drop its argument when the table is full.
         // Reserve with an empty item before taking the fiber-owning source.
         let saved = self.push(None::<WorkItem>)?;
-        let slot = self.table.get_mut().get_mut(&Resource::from(saved))?;
-        *slot = self.next_switch_item.take();
+        let item = self.next_switch_item.take();
+        self.table
+            .get_mut()
+            .update(&Resource::from(saved), |slot| *slot = item)?;
         Ok(saved)
     }
 
@@ -6355,14 +6366,17 @@ impl ConcurrentState {
         Ok(instance)
     }
 
-    fn push<V: Send + Sync + 'static>(
+    fn push<V: Send + Sync + 'static + HostHeapUsage>(
         &mut self,
         value: V,
     ) -> Result<TableId<V>, ResourceTableError> {
         self.table.get_mut().push(value).map(TableId::from)
     }
 
-    fn get_mut<V: 'static>(&mut self, id: TableId<V>) -> Result<&mut V, ResourceTableError> {
+    fn get_mut<V: 'static + FixedHostHeapUsage>(
+        &mut self,
+        id: TableId<V>,
+    ) -> Result<&mut V, ResourceTableError> {
         self.table.get_mut().get_mut(&Resource::from(id))
     }
 

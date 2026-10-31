@@ -2,7 +2,9 @@
 
 use super::make_echo_component;
 use wasmtime::Result;
-use wasmtime::component::{Component, ComponentType, Lift, Linker, Lower};
+use wasmtime::component::{
+    Component, ComponentType, FixedHostHeapUsage, HostHeapUsage, Lift, Linker, Lower,
+};
 use wasmtime::{Engine, Store};
 use wasmtime_test_macros::{add_variants, flags_test};
 
@@ -690,4 +692,125 @@ fn flags() -> Result<()> {
     }
 
     Ok(())
+}
+
+// Compile-time checks that a derive produced the expected marker trait impl.
+fn assert_fixed<T: FixedHostHeapUsage>() {}
+fn assert_heap_usage<T: HostHeapUsage>() {}
+
+#[test]
+#[allow(dead_code, reason = "fields only tested via derive")]
+fn host_heap_usage_derive_fixed() {
+    #[derive(FixedHostHeapUsage)]
+    struct FixedStruct {
+        a: u32,
+        b: bool,
+    }
+
+    // `Option`/`Result` of fixed types are fixed.
+    #[derive(FixedHostHeapUsage)]
+    struct FixedOptions(Option<u64>, Result<u8, ()>);
+
+    // Arrays and tuples of fixed types are fixed.
+    #[derive(FixedHostHeapUsage)]
+    struct FixedArrTuple([u8; 16], (u32, u64));
+
+    assert_fixed::<FixedStruct>();
+    assert_fixed::<FixedOptions>();
+    assert_fixed::<FixedArrTuple>();
+    assert_eq!(FixedStruct { a: 1, b: true }.heap_size_of_children(), 0);
+}
+
+#[test]
+#[allow(dead_code, reason = "fields only tested via derive")]
+fn host_heap_usage_derive_struct_and_enum() {
+    #[derive(FixedHostHeapUsage)]
+    struct FixedStruct {
+        a: u32,
+    }
+
+    #[derive(HostHeapUsage)]
+    struct DynamicStruct {
+        fixed: FixedStruct,
+        name: String,
+        numbers: Vec<u32>,
+    }
+
+    // Fixed fields contribute nothing; dynamic fields are summed.
+    let s = DynamicStruct {
+        fixed: FixedStruct { a: 10 },
+        name: String::from("hello"),
+        numbers: vec![1, 2, 3, 4],
+    };
+    assert_eq!(
+        s.heap_size_of_children(),
+        s.name.heap_size_of_children() + s.numbers.heap_size_of_children()
+    );
+
+    #[derive(HostHeapUsage)]
+    enum DynamicEnum {
+        Empty,
+        Data(Vec<u8>),
+    }
+
+    assert_eq!(DynamicEnum::Empty.heap_size_of_children(), 0);
+    assert_eq!(DynamicEnum::Data(vec![0; 128]).heap_size_of_children(), 128);
+
+    // Uninhabited enums are supported.
+    #[derive(HostHeapUsage)]
+    enum Void {}
+    assert_heap_usage::<Void>();
+}
+
+#[test]
+#[allow(dead_code, reason = "fields only tested via derive")]
+fn host_heap_usage_derive_generics() {
+    #[derive(HostHeapUsage)]
+    enum Generic<T, U> {
+        Named { items: Vec<T> },
+        Phantom(core::marker::PhantomData<U>),
+    }
+
+    // Bounds are on field types, so `U`, which has no tracked field, is
+    // unconstrained and need not implement `HostHeapUsage`.
+    struct NotTracked;
+    let g = Generic::<u8, NotTracked>::Named { items: vec![0; 16] };
+    assert_eq!(g.heap_size_of_children(), 16);
+}
+
+#[test]
+#[allow(dead_code, reason = "fields only tested via derive")]
+fn host_heap_usage_derive_recursive_and_composite() {
+    // Recursive types still derive and delegate to their fields.
+    #[derive(HostHeapUsage)]
+    struct GNode<T> {
+        value: T,
+        children: Vec<GNode<T>>,
+    }
+    let tree = GNode {
+        value: String::from("root"),
+        children: vec![GNode {
+            value: String::from("leaf"),
+            children: Vec::new(),
+        }],
+    };
+    assert_eq!(
+        tree.heap_size_of_children(),
+        tree.value.heap_size_of_children() + tree.children.heap_size_of_children()
+    );
+
+    // Dynamic types nested in tuples, arrays, and `Vec`s are all counted.
+    #[derive(HostHeapUsage)]
+    struct DynamicArrTuple {
+        pairs: Vec<(String, Vec<u8>)>,
+        names: [String; 2],
+    }
+    let dat = DynamicArrTuple {
+        pairs: vec![(String::from("k"), vec![1, 2, 3])],
+        names: [String::from("ab"), String::from("cde")],
+    };
+    assert_eq!(
+        dat.heap_size_of_children(),
+        dat.pairs.heap_size_of_children() + dat.names.heap_size_of_children()
+    );
 }

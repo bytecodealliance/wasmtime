@@ -10,6 +10,7 @@ use rustix::io::Errno;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::debug;
+use wasmtime::component::FixedHostHeapUsage;
 
 /// Theoretical maximum byte size of a UDP datagram, the real limit is lower,
 /// but we do not account for e.g. the transport layer here for simplicity.
@@ -403,3 +404,5 @@ fn disconnect(sockfd: impl AsFd) -> Result<(), Errno> {
         r => r,
     }
 }
+
+impl FixedHostHeapUsage for UdpSocket {}

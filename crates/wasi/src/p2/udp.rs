@@ -9,6 +9,7 @@ use std::{
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
+use wasmtime::component::FixedHostHeapUsage;
 
 /// A UDP socket + associated p2 bookkeeping.
 pub struct UdpSocket {
@@ -162,3 +163,7 @@ impl OutgoingDatagramStream {
         }
     }
 }
+
+impl FixedHostHeapUsage for UdpSocket {}
+impl FixedHostHeapUsage for IncomingDatagramStream {}
+impl FixedHostHeapUsage for OutgoingDatagramStream {}

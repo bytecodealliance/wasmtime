@@ -5,6 +5,7 @@ use std::fmt;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmtime::Result;
+use wasmtime::component::HostHeapUsage;
 
 /// A wrapper around [`http::HeaderMap`] which implements `wasi:http` semantics.
 ///
@@ -362,6 +363,7 @@ mod tests {
     use crate::default_hooks;
     use http::header::{CONTENT_LENGTH, CONTENT_TYPE};
     use http::{HeaderName, HeaderValue};
+    use wasmtime::component::{ResourceTable, ResourceTableError};
 
     #[test]
     fn test_immutable() {
@@ -594,6 +596,33 @@ mod tests {
         );
         assert_eq!(map.size, FieldMap::content_size(&map.map));
     }
+
+    #[test]
+    fn test_field_map_resource_table_limit() -> Result<(), FieldMapError> {
+        let mut table = ResourceTable::new();
+        let map = FieldMap::new_mutable(1000);
+        let r = table.push(map).unwrap();
+        let baseline = table.current_host_heap_usage();
+        table.set_max_host_heap_usage(Some(baseline + 100));
+
+        let hooks = default_hooks();
+        let name = "custom-header".to_string();
+
+        // Mutating within table limit succeeds
+        table
+            .update(&r, |map| map.append(hooks, name.clone(), b"small".to_vec()))
+            .unwrap()
+            .unwrap();
+
+        // Mutating beyond table limit returns HostMemoryLimitExceeded
+        let err = table
+            .update(&r, |map| map.append(hooks, name.clone(), vec![b'a'; 500]))
+            .unwrap_err();
+
+        assert!(matches!(err, ResourceTableError::HostMemoryLimitExceeded));
+
+        Ok(())
+    }
 }
 
 /// Removes all fields from `map` whose name `is_forbidden`.
@@ -601,5 +630,14 @@ pub(crate) fn remove_forbidden(map: &mut HeaderMap, is_forbidden: &ForbiddenHead
     let forbidden_keys = Vec::from_iter(map.keys().filter(|name| is_forbidden(name)).cloned());
     for name in forbidden_keys {
         map.remove(&name);
+    }
+}
+
+impl HostHeapUsage for FieldMap {
+    fn heap_size_of_children(&self) -> usize {
+        // Clones share the `HeaderMap` via `Arc`, so this can overcount. It
+        // never undercounts: any clone may outlive the others, and mutating a
+        // shared map copies it.
+        self.size
     }
 }

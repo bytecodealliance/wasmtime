@@ -1,4 +1,5 @@
 use crate::bail_bug;
+use crate::component::FixedHostHeapUsage;
 use crate::component::concurrent::table::{TableDebug, TableId};
 use crate::component::concurrent::{ConcurrentState, CurrentThread};
 use crate::error::Result;
@@ -10,6 +11,9 @@ use alloc::vec::Vec;
 struct TaskGroup {
     ref_count: usize,
 }
+
+// `ConcurrentState::table` is an internal table with no heap limit configured.
+impl FixedHostHeapUsage for TaskGroup {}
 
 impl TableDebug for TaskGroup {
     fn type_name() -> &'static str {

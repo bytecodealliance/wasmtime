@@ -7,8 +7,8 @@ use crate::component::resources::{HostResourceIndex, HostResourceTables};
 use crate::component::types;
 use crate::component::values::ErrorContextAny;
 use crate::component::{
-    AsAccessor, ComponentInstanceId, ComponentType, FutureAny, Instance, Lift, Lower,
-    RuntimeInstance, StreamAny, Val, WasmList,
+    AsAccessor, ComponentInstanceId, ComponentType, FixedHostHeapUsage, FutureAny, Instance, Lift,
+    Lower, RuntimeInstance, StreamAny, Val, WasmList,
 };
 use crate::prelude::*;
 use crate::store::{StoreOpaque, StoreToken};
@@ -2208,6 +2208,11 @@ impl TableDebug for TransmitState {
         "TransmitState"
     }
 }
+
+// `ConcurrentState::table` is an internal table with no heap limit configured.
+impl FixedHostHeapUsage for ErrorContextState {}
+impl FixedHostHeapUsage for TransmitHandle {}
+impl FixedHostHeapUsage for TransmitState {}
 
 impl TransmitOrigin {
     fn guest(id: ComponentInstanceId, index: TransmitIndex) -> Self {

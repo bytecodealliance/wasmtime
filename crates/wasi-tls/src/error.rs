@@ -1,7 +1,14 @@
 use std::sync::Arc;
+use wasmtime::component::HostHeapUsage;
 
 /// TLS error
 pub struct Error(Arc<String>);
+
+impl HostHeapUsage for Error {
+    fn heap_size_of_children(&self) -> usize {
+        self.0.len()
+    }
+}
 
 impl Error {
     /// Creates a new error with the given message.

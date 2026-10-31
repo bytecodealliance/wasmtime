@@ -32,6 +32,7 @@ use std::task::{Context, Poll};
 use tokio::io::{self, AsyncRead, ReadBuf};
 use tokio::sync::Notify;
 use tokio::sync::futures::Notified;
+use wasmtime::component::FixedHostHeapUsage;
 use wasmtime_wasi_io::{
     poll::Pollable,
     streams::{InputStream, StreamError},
@@ -345,3 +346,5 @@ impl WasiStdinAsyncRead {
         }
     }
 }
+
+impl FixedHostHeapUsage for WasiStdin {}

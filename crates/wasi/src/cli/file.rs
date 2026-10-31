@@ -6,6 +6,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use tokio::io::{self, AsyncRead, AsyncWrite};
+use wasmtime::component::FixedHostHeapUsage;
 
 /// This implementation will yield output streams that block on writes, and
 /// output directly to a file. If truly async output is required,
@@ -157,6 +158,9 @@ impl AsyncRead for InputFile {
         }
     }
 }
+
+impl FixedHostHeapUsage for OutputFile {}
+impl FixedHostHeapUsage for InputFile {}
 
 #[cfg(test)]
 mod tests {

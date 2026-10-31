@@ -8,7 +8,7 @@ use bytes::Bytes;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use wasmtime::component::{Resource, ResourceTable};
+use wasmtime::component::{HostHeapUsage, Resource, ResourceTable, ResourceTableError};
 use wasmtime::{Result, format_err};
 
 impl poll::Host for ResourceTable {
@@ -117,6 +117,26 @@ impl error::HostError for ResourceTable {
     }
 }
 
+// Runs an async `&mut T` stream operation and then refreshes the entry's
+// heap accounting via `ResourceTable::update`.
+async fn update_stream_async<T, F, R>(
+    table: &mut ResourceTable,
+    stream: &Resource<T>,
+    f: F,
+) -> Result<R, ResourceTableError>
+where
+    T: core::any::Any + HostHeapUsage,
+    F: for<'a> FnOnce(&'a mut T) -> Pin<alloc::boxed::Box<dyn Future<Output = R> + Send + 'a>>,
+{
+    let entry = table
+        .get_any_mut(stream.rep())?
+        .downcast_mut::<T>()
+        .ok_or(ResourceTableError::WrongType)?;
+    let res = f(entry).await;
+    table.update(stream, |_| ())?;
+    Ok(res)
+}
+
 impl streams::HostOutputStream for ResourceTable {
     async fn drop(&mut self, stream: Resource<DynOutputStream>) -> Result<()> {
         self.delete(stream)?.cancel().await;
@@ -124,12 +144,12 @@ impl streams::HostOutputStream for ResourceTable {
     }
 
     fn check_write(&mut self, stream: Resource<DynOutputStream>) -> StreamResult<u64> {
-        let bytes = self.get_mut(&stream)?.check_write()?;
+        let bytes = self.update(&stream, |s| s.check_write())??;
         Ok(bytes as u64)
     }
 
     fn write(&mut self, stream: Resource<DynOutputStream>, bytes: Vec<u8>) -> StreamResult<()> {
-        self.get_mut(&stream)?.write(bytes.into())?;
+        self.update(&stream, |s| s.write(bytes.into()))??;
         Ok(())
     }
 
@@ -148,9 +168,8 @@ impl streams::HostOutputStream for ResourceTable {
             ));
         }
 
-        self.get_mut(&stream)?
-            .blocking_write_and_flush(bytes.into())
-            .await
+        let bytes = bytes.into();
+        update_stream_async(self, &stream, |s| s.blocking_write_and_flush(bytes)).await?
     }
 
     async fn blocking_write_zeroes_and_flush(
@@ -167,23 +186,22 @@ impl streams::HostOutputStream for ResourceTable {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
         let bs = Bytes::from_iter(core::iter::repeat(0).take(len as usize));
-        self.get_mut(&stream)?.blocking_write_and_flush(bs).await
+        update_stream_async(self, &stream, |s| s.blocking_write_and_flush(bs)).await?
     }
 
     fn write_zeroes(&mut self, stream: Resource<DynOutputStream>, len: u64) -> StreamResult<()> {
-        self.get_mut(&stream)?.write_zeroes(len as usize)?;
+        self.update(&stream, |s| s.write_zeroes(len as usize))??;
         Ok(())
     }
 
     fn flush(&mut self, stream: Resource<DynOutputStream>) -> StreamResult<()> {
-        self.get_mut(&stream)?.flush()?;
+        self.update(&stream, |s| s.flush())??;
         Ok(())
     }
 
     async fn blocking_flush(&mut self, stream: Resource<DynOutputStream>) -> StreamResult<()> {
-        let s = self.get_mut(&stream)?;
-        s.flush()?;
-        s.write_ready().await?;
+        self.update(&stream, |s| s.flush())??;
+        update_stream_async(self, &stream, |s| s.write_ready()).await??;
         Ok(())
     }
 
@@ -195,24 +213,20 @@ impl streams::HostOutputStream for ResourceTable {
     ) -> StreamResult<u64> {
         let len = len.try_into().unwrap_or(usize::MAX);
 
-        let permit = {
-            let output = self.get_mut(&dest)?;
-            output.check_write()?
-        };
+        let permit = self.update(&dest, |output| output.check_write())??;
         let len = len.min(permit);
         if len == 0 {
             return Ok(0);
         }
 
-        let contents = self.get_mut(&src)?.read(len)?;
+        let contents = self.update(&src, |input| input.read(len))??;
 
         let len = contents.len();
         if len == 0 {
             return Ok(0);
         }
 
-        let output = self.get_mut(&dest)?;
-        output.write(contents)?;
+        self.update(&dest, |output| output.write(contents))??;
         Ok(len.try_into().expect("usize can fit in u64"))
     }
 
@@ -224,24 +238,20 @@ impl streams::HostOutputStream for ResourceTable {
     ) -> StreamResult<u64> {
         let len = len.try_into().unwrap_or(usize::MAX);
 
-        let permit = {
-            let output = self.get_mut(&dest)?;
-            output.write_ready().await?
-        };
+        let permit = update_stream_async(self, &dest, |s| s.write_ready()).await??;
         let len = len.min(permit);
         if len == 0 {
             return Ok(0);
         }
 
-        let contents = self.get_mut(&src)?.blocking_read(len).await?;
+        let contents = update_stream_async(self, &src, |s| s.blocking_read(len)).await??;
 
         let len = contents.len();
         if len == 0 {
             return Ok(0);
         }
 
-        let output = self.get_mut(&dest)?;
-        output.blocking_write_and_flush(contents).await?;
+        update_stream_async(self, &dest, |s| s.blocking_write_and_flush(contents)).await??;
         Ok(len.try_into().expect("usize can fit in u64"))
     }
 }
@@ -254,7 +264,7 @@ impl streams::HostInputStream for ResourceTable {
 
     fn read(&mut self, stream: Resource<DynInputStream>, len: u64) -> StreamResult<Vec<u8>> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let bytes = self.get_mut(&stream)?.read(len)?;
+        let bytes = self.update(&stream, |s| s.read(len))??;
         debug_assert!(bytes.len() <= len);
         Ok(bytes.into())
     }
@@ -265,14 +275,14 @@ impl streams::HostInputStream for ResourceTable {
         len: u64,
     ) -> StreamResult<Vec<u8>> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let bytes = self.get_mut(&stream)?.blocking_read(len).await?;
+        let bytes = update_stream_async(self, &stream, |s| s.blocking_read(len)).await??;
         debug_assert!(bytes.len() <= len);
         Ok(bytes.into())
     }
 
     fn skip(&mut self, stream: Resource<DynInputStream>, len: u64) -> StreamResult<u64> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let written = self.get_mut(&stream)?.skip(len)?;
+        let written = self.update(&stream, |s| s.skip(len))??;
         Ok(written.try_into().expect("usize always fits in u64"))
     }
 
@@ -282,7 +292,7 @@ impl streams::HostInputStream for ResourceTable {
         len: u64,
     ) -> StreamResult<u64> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let written = self.get_mut(&stream)?.blocking_skip(len).await?;
+        let written = update_stream_async(self, &stream, |s| s.blocking_skip(len)).await??;
         Ok(written.try_into().expect("usize always fits in u64"))
     }
 

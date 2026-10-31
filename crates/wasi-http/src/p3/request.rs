@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use tracing::debug;
 use wasmtime::AsContextMut;
+use wasmtime::component::HostHeapUsage;
 
 /// The concrete type behind a `wasi:http/types.request` resource.
 pub struct Request {
@@ -32,6 +33,12 @@ pub struct Request {
     pub options: Option<Arc<RequestOptions>>,
     /// Request body.
     pub(crate) body: Body,
+}
+
+impl HostHeapUsage for Request {
+    fn heap_size_of_children(&self) -> usize {
+        self.headers.heap_size_of_children()
+    }
 }
 
 impl Request {

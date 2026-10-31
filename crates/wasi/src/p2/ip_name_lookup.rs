@@ -7,7 +7,7 @@ use crate::sockets::{MaybeSpawned, WasiSocketsCtxView};
 use std::net::IpAddr;
 use std::vec;
 use wasmtime::Result;
-use wasmtime::component::Resource;
+use wasmtime::component::{FixedHostHeapUsage, Resource};
 use wasmtime_wasi_io::poll::{DynPollable, Pollable, subscribe};
 
 pub struct ResolveAddressStream(MaybeSpawned<Result<vec::IntoIter<IpAddr>, ErrorCode>>);
@@ -178,3 +178,7 @@ mod named {
         }
     }
 }
+
+// Background lookup results are bounded by OS resolver replies and retain their
+// allocation until dropped.
+impl FixedHostHeapUsage for ResolveAddressStream {}
