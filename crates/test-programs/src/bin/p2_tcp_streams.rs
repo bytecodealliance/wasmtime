@@ -1,4 +1,5 @@
 use test_programs::sockets::supports_ipv6;
+use test_programs::wasi::clocks::monotonic_clock;
 use test_programs::wasi::io::streams::{InputStream, OutputStream, StreamError};
 use test_programs::wasi::sockets::network::{IpAddress, IpAddressFamily, IpSocketAddress, Network};
 use test_programs::wasi::sockets::tcp::{ShutdownType, TcpSocket};
@@ -110,6 +111,51 @@ fn test_tcp_shutdown_should_not_lose_data(net: &Network, family: IpAddressFamily
     });
 }
 
+/// Drop must cancel an unflushed write so the guest can read its peer.
+fn test_tcp_drop_should_not_wait_for_peer(net: &Network, family: IpAddressFamily, shutdown: bool) {
+    setup(net, family, |server, client| {
+        client.socket.set_send_buffer_size(1024).unwrap();
+        let writable = client.output.subscribe();
+        let chunk = vec![0x5a; 64 * 1024];
+        let mut sent = 0;
+        let mut last_write = 0;
+
+        // Fill the connection without reading the peer. Wait out transient
+        // background work so check-write returning zero means backpressure.
+        loop {
+            let permit = client.output.check_write().unwrap() as usize;
+            if permit == 0 {
+                let timeout = monotonic_clock::subscribe_duration(1_000_000_000);
+                if writable.block_until(&timeout).is_err() {
+                    break;
+                }
+                continue;
+            }
+            let len = permit.min(chunk.len());
+            client.output.write(&chunk[..len]).unwrap();
+            sent += len;
+            last_write = len;
+            assert!(sent < 64 * 1024 * 1024, "connection never backed up");
+        }
+        assert!(sent > 0);
+        assert_eq!(client.output.check_write().unwrap(), 0);
+        drop(writable);
+
+        // Cover cancelling both a write and a shutdown waiting for that write.
+        if shutdown {
+            client.socket.shutdown(ShutdownType::Send).unwrap();
+        }
+        drop(client);
+
+        // Dropping an unflushed stream may lose the unfinished write, but all
+        // earlier writes must have reached the OS and remain intact.
+        let received = server.input.blocking_read_to_end().unwrap();
+        assert!(received.len() >= sent - last_write);
+        assert!(received.len() <= sent);
+        assert!(received.iter().all(|byte| *byte == 0x5a));
+    });
+}
+
 // Once a stream is writable it should in theory always be writable...
 fn test_tcp_check_write_should_not_be_rate_limited(net: &Network, family: IpAddressFamily) {
     setup(net, family, |_server, client| {
@@ -156,6 +202,8 @@ fn main() {
     test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
     test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv4);
     test_tcp_shutdown_should_not_lose_data(&net, IpAddressFamily::Ipv4);
+    test_tcp_drop_should_not_wait_for_peer(&net, IpAddressFamily::Ipv4, false);
+    test_tcp_drop_should_not_wait_for_peer(&net, IpAddressFamily::Ipv4, true);
     test_tcp_check_write_should_not_be_rate_limited(&net, IpAddressFamily::Ipv4);
     test_tcp_nonblocking_write_loop(&net, IpAddressFamily::Ipv4);
 
@@ -164,6 +212,8 @@ fn main() {
         test_tcp_input_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
         test_tcp_output_stream_should_be_closed_by_local_shutdown(&net, IpAddressFamily::Ipv6);
         test_tcp_shutdown_should_not_lose_data(&net, IpAddressFamily::Ipv6);
+        test_tcp_drop_should_not_wait_for_peer(&net, IpAddressFamily::Ipv6, false);
+        test_tcp_drop_should_not_wait_for_peer(&net, IpAddressFamily::Ipv6, true);
         test_tcp_check_write_should_not_be_rate_limited(&net, IpAddressFamily::Ipv6);
         test_tcp_nonblocking_write_loop(&net, IpAddressFamily::Ipv6);
     }
