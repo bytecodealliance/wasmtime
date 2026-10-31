@@ -52,12 +52,22 @@ fn main() {
         && cfg!(feature = "custom-sync-primitives")
         && cfg!(feature = "runtime");
     let has_custom_fiber = !has_builtin_stackswitch && cfg!(feature = "custom-fiber");
+    // Runtime support for MMU interruption. Whether interruption checks are
+    // compiled in is up to the `mmu_interruption` tunable. Keep in sync with
+    // `has_mmu_interruption` in the root-level build.rs. This doesn't require
+    // cranelift to be on, because we could be running precompiled cwasms.
+    let has_mmu_interruption = has_native_signals
+        && cfg_is("target_os", "linux")
+        && (target_arch == "x86_64" || target_arch == "aarch64")
+        && cfg!(feature = "async")
+        && cfg!(feature = "std");
 
     custom_cfg("has_native_signals", has_native_signals);
     custom_cfg("has_virtual_memory", has_virtual_memory);
     custom_cfg("has_custom_fiber", has_custom_fiber);
     custom_cfg("has_custom_sync", has_custom_sync);
     custom_cfg("has_host_compiler_backend", has_host_compiler_backend);
+    custom_cfg("has_mmu_interruption", has_mmu_interruption);
     custom_cfg("gc_zeal", cfg("fuzzing"));
 
     // If this OS isn't supported and no debug-builtins or if Cranelift doesn't support
