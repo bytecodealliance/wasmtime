@@ -22,7 +22,7 @@ fn duplicate_headers(addr: &str) -> Fields {
     let headers = response.headers();
     assert_eq!(
         headers.get("content-length"),
-        [b"5".to_vec(), b"100".to_vec()],
+        [b"5".to_vec(), b"5".to_vec()],
         "precondition: the response must carry both values"
     );
     headers

@@ -97,8 +97,17 @@ pub async fn run_named_imports_test<T>(
     run(&mut store, &component, &linker).await
 }
 
+pub fn ambiguous_responses() -> &'static [&'static [u8]] {
+    &[
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Length: 5\r\n\r\n0\r\n\r\n",
+        b"HTTP/1.1 200 OK\r\nTRANSFER-ENCODING: Chunked\r\nContent-Length: 5\r\n\r\n0\r\n\r\n",
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip\r\nContent-Length: 5\r\n\r\nAAAAA",
+        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: gzip\r\nContent-Length: 5\r\n\r\n0\r\n\r\n",
+    ]
+}
+
 /// Runs a guest which fetches `/dup` from a raw server, whose response
-/// carries two conflicting `content-length` values, and then forwards those
+/// carries two `content-length` values, and then forwards those
 /// headers in a new request to `/victim`, which the host must reject.
 ///
 /// `run_guest` instantiates and runs the guest against the given server; the
@@ -107,14 +116,13 @@ pub async fn run_named_imports_test<T>(
 pub async fn forward_duplicate_content_length(
     run_guest: impl AsyncFnOnce(&Server) -> Result<()>,
 ) -> Result<()> {
-    // `hyper`'s client accepts this response since `transfer-encoding` takes
-    // precedence over `content-length`, but both values reach the guest.
+    // `hyper` forwards both headers to the guest, and the guest must not be
+    // able to forward them into a new request.
     const DUP: &[u8] = b"HTTP/1.1 200 OK\r\n\
         content-length: 5\r\n\
-        content-length: 100\r\n\
-        transfer-encoding: chunked\r\n\
+        content-length: 5\r\n\
         \r\n\
-        0\r\n\r\n";
+        AAAAA";
     // The guest fetches `/dup` twice, and must never send `/victim`; the
     // extra connections let a `/victim` request be observed should it
     // escape.
