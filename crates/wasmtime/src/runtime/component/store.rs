@@ -4,7 +4,7 @@ use crate::runtime::vm;
 use crate::runtime::vm::component::{
     CallContext, ComponentInstance, HandleCounter, HandleTable, OwnedComponentInstance, Scope,
 };
-use crate::store::{StoreData, StoreId, StoreOpaque};
+use crate::store::{StoreData, StoreFuel, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
 use core::pin::Pin;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
@@ -75,6 +75,10 @@ pub struct ComponentStoreData {
     /// Caps the size of the allocations made on the host to this amount
     /// effectively.
     hostcall_fuel: usize,
+
+    /// Whether hostcall fuel consumed while lifting is also deducted from the
+    /// store's Wasm fuel.
+    hostcall_fuel_consumes_store_fuel: bool,
 }
 
 /// State tracking for tasks within components.
@@ -125,6 +129,7 @@ impl ComponentStoreData {
                 ComponentTaskState::NotConcurrent(Default::default())
             },
             hostcall_fuel: DEFAULT_HOSTCALL_FUEL,
+            hostcall_fuel_consumes_store_fuel: false,
         }
     }
 
@@ -428,18 +433,41 @@ impl StoreOpaque {
         &mut HostResourceData,
         Pin<&mut ComponentInstance>,
     ) {
+        let (parts, _fuel) = self.lift_context_parts_and_fuel(instance);
+        parts
+    }
+
+    /// Same as [`Self::lift_context_parts`], but additionally returns a borrow
+    /// of this store's Wasm fuel state.
+    pub(crate) fn lift_context_parts_and_fuel(
+        &mut self,
+        instance: Instance,
+    ) -> (
+        (
+            &mut ComponentTaskState,
+            &mut HandleTable,
+            &mut HandleCounter,
+            &mut HostResourceData,
+            Pin<&mut ComponentInstance>,
+        ),
+        StoreFuel<'_>,
+    ) {
         let instance = instance.id();
         instance.assert_belongs_to(self.id());
-        let data = self.component_data_mut();
+        let (data, fuel) = self.store_data_mut_and_fuel();
+        let data = &mut data.components;
         (
-            &mut data.task_state,
-            &mut data.component_host_table,
-            &mut data.handle_counter,
-            &mut data.host_resource_data,
-            data.instances[instance.instance]
-                .as_mut()
-                .unwrap()
-                .get_mut(),
+            (
+                &mut data.task_state,
+                &mut data.component_host_table,
+                &mut data.handle_counter,
+                &mut data.host_resource_data,
+                data.instances[instance.instance]
+                    .as_mut()
+                    .unwrap()
+                    .get_mut(),
+            ),
+            fuel,
         )
     }
 
@@ -512,6 +540,14 @@ impl StoreOpaque {
         self.component_data_mut().hostcall_fuel = fuel;
     }
 
+    pub(crate) fn hostcall_fuel_consumes_store_fuel(&self) -> bool {
+        self.component_data().hostcall_fuel_consumes_store_fuel
+    }
+
+    pub(crate) fn set_hostcall_fuel_consumes_store_fuel(&mut self, enable: bool) {
+        self.component_data_mut().hostcall_fuel_consumes_store_fuel = enable;
+    }
+
     pub(crate) fn max_component_handles(&self) -> usize {
         self.component_data().handle_counter.limit()
     }
@@ -579,8 +615,52 @@ impl<T> Store<T> {
     /// guest to the host is limited.
     ///
     /// The default value for this is 128 MiB.
+    ///
+    /// Hostcall fuel is separate from the store's Wasm fuel configured with
+    /// [`Store::set_fuel`]. To additionally charge data lifted from the guest
+    /// against the store's Wasm fuel see
+    /// [`Store::set_hostcall_fuel_consumes_store_fuel`].
     pub fn set_hostcall_fuel(&mut self, fuel: usize) {
         self.as_context_mut().set_hostcall_fuel(fuel)
+    }
+
+    /// Returns whether hostcall fuel consumed while lifting values from the
+    /// guest is also deducted from this store's Wasm fuel.
+    ///
+    /// See [`Store::set_hostcall_fuel_consumes_store_fuel`] for more details.
+    pub fn hostcall_fuel_consumes_store_fuel(&self) -> bool {
+        self.as_context().0.hostcall_fuel_consumes_store_fuel()
+    }
+
+    /// Configures whether hostcall fuel consumed while lifting values from the
+    /// guest is also deducted from this store's Wasm fuel.
+    ///
+    /// By default [hostcall fuel](Store::set_hostcall_fuel) and the store's
+    /// Wasm fuel (see [`Store::set_fuel`]) are independent: copying a large
+    /// string or list from the guest into the host consumes hostcall fuel but
+    /// not Wasm fuel. When this is enabled each unit of hostcall fuel consumed
+    /// while lifting, typically one per byte, additionally consumes one unit
+    /// of the store's Wasm fuel. This lets a single fuel budget cover both the
+    /// guest's own execution and the host's work copying data out of the
+    /// guest.
+    ///
+    /// Fuel is deducted before the corresponding data is copied into the
+    /// host. If the store does not have enough Wasm fuel remaining then all
+    /// remaining fuel is consumed and the operation fails with
+    /// [`Trap::OutOfFuel`](crate::Trap::OutOfFuel). Fuel consumed earlier in
+    /// the same lift remains consumed.
+    ///
+    /// This only applies to lifting, meaning data flowing from the guest to
+    /// the host such as arguments to host functions or results of guest
+    /// exports. Lowering values from the host into the guest is not charged.
+    ///
+    /// This setting has no effect unless
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel) is enabled.
+    ///
+    /// The default value for this is `false`.
+    pub fn set_hostcall_fuel_consumes_store_fuel(&mut self, enable: bool) {
+        self.as_context_mut()
+            .set_hostcall_fuel_consumes_store_fuel(enable)
     }
 
     /// Returns the maximum number of component-model handle-table slots
@@ -647,6 +727,16 @@ impl<T> StoreContextMut<'_, T> {
     /// See [`Store::set_hostcall_fuel`].
     pub fn set_hostcall_fuel(&mut self, fuel: usize) {
         self.0.set_hostcall_fuel(fuel)
+    }
+
+    /// See [`Store::hostcall_fuel_consumes_store_fuel`].
+    pub fn hostcall_fuel_consumes_store_fuel(&self) -> bool {
+        self.0.hostcall_fuel_consumes_store_fuel()
+    }
+
+    /// See [`Store::set_hostcall_fuel_consumes_store_fuel`].
+    pub fn set_hostcall_fuel_consumes_store_fuel(&mut self, enable: bool) {
+        self.0.set_hostcall_fuel_consumes_store_fuel(enable)
     }
 
     /// See [`Store::max_component_handles`].

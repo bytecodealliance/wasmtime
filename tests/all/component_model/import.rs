@@ -1233,6 +1233,125 @@ fn hostcall_fuel_limits_val() -> Result<()> {
     Ok(())
 }
 
+/// Number of bytes the guest in `hostcall_store_fuel_setup` passes to the host.
+const HOSTCALL_STORE_FUEL_BYTES: u64 = 10_000;
+
+/// Creates a store and `run` export where `run` passes a
+/// `HOSTCALL_STORE_FUEL_BYTES`-long `list<u8>` to the host import `hi`. The
+/// store's data counts the number of times `hi` was invoked.
+fn hostcall_store_fuel_setup(consume_fuel: bool) -> Result<(Store<u32>, TypedFunc<(), ()>)> {
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.consume_fuel(consume_fuel);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        format!(
+            r#"(component
+                (import "hi" (func $hi (param "x" (list u8))))
+                (core module $libc
+                    (memory (export "memory") 1)
+                )
+                (core module $m
+                    (import "libc" "memory" (memory 1))
+                    (import "" "hi" (func $hi (param i32 i32)))
+
+                    (func (export "run")
+                        i32.const 0
+                        i32.const {HOSTCALL_STORE_FUEL_BYTES}
+                        call $hi)
+                )
+                (core instance $libc (instantiate $libc))
+                (core func $hi (canon lower (func $hi) (memory (core memory $libc "memory"))))
+                (core instance $i (instantiate $m
+                    (with "libc" (instance $libc))
+                    (with "" (instance (export "hi" (func $hi))))
+                ))
+                (func (export "run") (canon lift (core func $i "run")))
+            )"#
+        ),
+    )?;
+    let mut store = Store::new(&engine, 0);
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap(
+        "hi",
+        |mut cx: StoreContextMut<'_, u32>, (x,): (Vec<u8>,)| {
+            assert_eq!(x.len() as u64, HOSTCALL_STORE_FUEL_BYTES);
+            *cx.data_mut() += 1;
+            Ok(())
+        },
+    )?;
+    if consume_fuel {
+        store.set_fuel(u64::MAX)?;
+    }
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    Ok((store, run))
+}
+
+/// Returns how much store fuel one call to `run` consumes.
+fn hostcall_store_fuel_delta(consumes_store_fuel: bool) -> Result<u64> {
+    let (mut store, run) = hostcall_store_fuel_setup(true)?;
+    store.set_hostcall_fuel_consumes_store_fuel(consumes_store_fuel);
+    assert_eq!(
+        store.hostcall_fuel_consumes_store_fuel(),
+        consumes_store_fuel
+    );
+    let before = store.get_fuel()?;
+    run.call(&mut store, ())?;
+    assert_eq!(*store.data(), 1);
+    Ok(before - store.get_fuel()?)
+}
+
+#[test]
+fn hostcall_fuel_does_not_consume_store_fuel_by_default() -> Result<()> {
+    let (store, _) = hostcall_store_fuel_setup(true)?;
+    assert!(!store.hostcall_fuel_consumes_store_fuel());
+
+    // Only the guest's own instructions are charged, not the lifted bytes.
+    let delta = hostcall_store_fuel_delta(false)?;
+    assert!(delta < HOSTCALL_STORE_FUEL_BYTES, "consumed {delta}");
+    Ok(())
+}
+
+#[test]
+fn hostcall_fuel_consumes_store_fuel() -> Result<()> {
+    let off = hostcall_store_fuel_delta(false)?;
+    let on = hostcall_store_fuel_delta(true)?;
+    assert!(on >= HOSTCALL_STORE_FUEL_BYTES, "consumed {on}");
+    assert!(on - off >= HOSTCALL_STORE_FUEL_BYTES, "on={on} off={off}");
+    Ok(())
+}
+
+#[test]
+fn hostcall_fuel_consumes_store_fuel_out_of_fuel() -> Result<()> {
+    let (mut store, run) = hostcall_store_fuel_setup(true)?;
+    store.set_hostcall_fuel_consumes_store_fuel(true);
+
+    // Enough fuel for the guest to reach the host call, but not enough to
+    // lift its argument.
+    store.set_fuel(1_000)?;
+    let err = run.call(&mut store, ()).unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<Trap>(),
+        Some(&Trap::OutOfFuel),
+        "{err:?}"
+    );
+    assert_eq!(store.get_fuel()?, 0);
+    assert_eq!(*store.data(), 0, "host function should not have run");
+    Ok(())
+}
+
+#[test]
+fn hostcall_fuel_consumes_store_fuel_requires_consume_fuel() -> Result<()> {
+    let (mut store, run) = hostcall_store_fuel_setup(false)?;
+    store.set_hostcall_fuel_consumes_store_fuel(true);
+    run.call(&mut store, ())?;
+    assert_eq!(*store.data(), 1);
+    assert!(store.get_fuel().is_err());
+    Ok(())
+}
+
 #[test]
 fn host_throw_is_trap() -> Result<()> {
     for concurrency in [true, false] {

@@ -10,7 +10,7 @@ use crate::runtime::vm::component::{
     ComponentInstance, CurrentScope, HandleCounter, HandleTable, ResourceTables,
 };
 use crate::runtime::vm::{UncaughtException, VMFuncRef};
-use crate::store::{StoreId, StoreOpaque};
+use crate::store::{StoreFuel, StoreId, StoreOpaque};
 use alloc::sync::Arc;
 use core::pin::Pin;
 use core::ptr::NonNull;
@@ -363,6 +363,11 @@ pub struct LiftContext<'a> {
     /// This is decremented for strings/lists, for example, to cap the size of
     /// data the host allocates on behalf of the guest.
     hostcall_fuel: usize,
+
+    /// The store's Wasm fuel, present only if
+    /// `Store::set_hostcall_fuel_consumes_store_fuel` is enabled and fuel is
+    /// enabled in the engine. Consumed alongside `hostcall_fuel`.
+    store_fuel: Option<StoreFuel<'a>>,
 }
 
 #[doc(hidden)]
@@ -376,6 +381,8 @@ impl<'a> LiftContext<'a> {
     ) -> Result<LiftContext<'a>> {
         let store_id = store.id();
         let hostcall_fuel = store.hostcall_fuel();
+        let consume_store_fuel =
+            store.hostcall_fuel_consumes_store_fuel() && store.engine().tunables().consume_fuel;
         let current_scope = store.current_scope()?;
         // From `&mut StoreOpaque` provided the goal here is to project out
         // three different disjoint fields owned by the store: memory,
@@ -385,8 +392,13 @@ impl<'a> LiftContext<'a> {
         // at this time.
         let memory =
             instance_handle.options_memory(unsafe { &*(store as *const StoreOpaque) }, options);
-        let (task_state, host_table, handle_counter, host_resource_data, instance) =
-            store.lift_context_parts(instance_handle);
+        let ((task_state, host_table, handle_counter, host_resource_data, instance), store_fuel) =
+            store.lift_context_parts_and_fuel(instance_handle);
+        let store_fuel = if consume_store_fuel {
+            Some(store_fuel)
+        } else {
+            None
+        };
         let (component, instance) = instance.component_and_self();
 
         Ok(LiftContext {
@@ -402,6 +414,7 @@ impl<'a> LiftContext<'a> {
             handle_counter,
             host_resource_data,
             hostcall_fuel,
+            store_fuel,
         })
     }
 
@@ -528,11 +541,17 @@ impl<'a> LiftContext<'a> {
     ///
     /// Returns an error if the fuel is exhausted which will cause a trap in the
     /// guest. Note that this is distinct from Wasm's fuel, this is just for
-    /// keeping track of data flowing from the guest to the host.
+    /// keeping track of data flowing from the guest to the host. If
+    /// `Store::set_hostcall_fuel_consumes_store_fuel` is enabled, however, the
+    /// same amount is additionally deducted from the store's Wasm fuel and
+    /// `Trap::OutOfFuel` is returned if that runs out.
     pub fn consume_fuel(&mut self, amt: usize) -> Result<()> {
         match self.hostcall_fuel.checked_sub(amt) {
             Some(new) => self.hostcall_fuel = new,
             None => bail!(crate::Trap::HostcallFuelExhausted),
+        }
+        if let Some(store_fuel) = &mut self.store_fuel {
+            store_fuel.consume(u64::try_from(amt)?)?;
         }
         Ok(())
     }
