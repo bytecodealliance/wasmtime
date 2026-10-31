@@ -78,3 +78,11 @@ You can make this deterministic in a variety of ways:
 If you are making Wasm execution interruptible, use [deterministic fuel-based
 interruption](./examples-interrupting-wasm.md#deterministic-fuel) rather than
 non-deterministic epoch-based interruption.
+
+If fuel consumption must also be the same across platforms, disable
+copy-on-write memory initialization. Otherwise instantiation can consume a
+different amount of fuel depending on the host. See
+[`wasmtime::Config::memory_init_cow`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.memory_init_cow)
+and
+[`wasmtime::Config::consume_fuel`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.consume_fuel)
+for more details.

@@ -32,6 +32,12 @@ other form of non-determinism that causes the program to behave differently).
 The downside is that fuel-based interruption imposes more overhead on execution,
 slowing down Wasm programs, than epochs do.
 
+Note that with copy-on-write memory initialization enabled, which is the
+default, instantiating a module can consume a different amount of fuel on
+different platforms. If the same program must consume the same fuel everywhere,
+disable it with
+[`wasmtime::Config::memory_init_cow`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.memory_init_cow).
+
 ```rust,ignore
 {{#include ../examples/fuel.rs}}
 ```
