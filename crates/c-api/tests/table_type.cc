@@ -16,6 +16,10 @@ TEST(TableType, Simple) {
   EXPECT_EQ(ty->min(), 2);
   EXPECT_EQ(ty->max(), 3);
   EXPECT_EQ(ty->element(), ValType::externref());
+
+  TableType other(ValType::funcref(), 1);
+  other = ty;
+  EXPECT_EQ(other->min(), 2);
 }
 
 TEST(TableType, Table64) {

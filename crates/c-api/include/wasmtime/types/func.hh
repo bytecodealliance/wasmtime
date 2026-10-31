@@ -63,6 +63,7 @@ public:
   /// Copies another type's information into this one.
   FuncType &operator=(const FuncType &other) {
     ptr.reset(wasm_functype_copy(other.ptr.get()));
+    ref = ptr.get();
     return *this;
   }
   ~FuncType() = default;
