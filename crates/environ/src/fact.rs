@@ -216,6 +216,11 @@ impl DataModel {
             DataModel::LinearMemory(opts) => opts,
         }
     }
+
+    #[must_use]
+    fn is_gc(&self) -> bool {
+        matches!(self, Self::Gc { .. })
+    }
 }
 
 /// This type is split out of `AdapterOptions` and is specifically used to
@@ -267,12 +272,9 @@ enum HelperLocation {
     Stack,
     /// Located in linear memory as configured by `opts`.
     Memory,
-    /// Located in a GC struct field.
-    #[expect(dead_code, reason = "CM+GC is still WIP")]
-    StructField,
-    /// Located in a GC array element.
-    #[expect(dead_code, reason = "CM+GC is still WIP")]
-    ArrayElement,
+    /// Passed as a single GC reference of this type, which is how GC-lowered
+    /// aggregates travel.
+    GcRef(RefType),
 }
 
 impl<'a> Module<'a> {
@@ -337,7 +339,7 @@ impl<'a> Module<'a> {
         // Import the core wasm function which was lifted using its appropriate
         // signature since the exported function this adapter generates will
         // call the lifted function.
-        let signature = self.types.signature(&lift);
+        let signature = self.types.signature(&mut self.core_types, &lift.options);
         let ty = self
             .core_types
             .function(&signature.params, &signature.results);
@@ -985,7 +987,15 @@ pub enum Import {
 }
 
 impl Options {
-    fn flat_types<'a>(
+    /// The number of core values that `ty` lowers to under this data model.
+    pub(super) fn flat_count(&self, ty: &InterfaceType, types: &ComponentTypesBuilder) -> usize {
+        match self.data_model {
+            DataModel::Gc {} => 1,
+            DataModel::LinearMemory(_) => types.flat_types(ty).unwrap().len(),
+        }
+    }
+
+    pub(super) fn flat_types<'a>(
         &self,
         ty: &InterfaceType,
         types: &'a ComponentTypesBuilder,
@@ -1014,14 +1024,17 @@ impl Options {
                 | InterfaceType::Enum(_)
                 | InterfaceType::Flags(_) => Some(flat.memory32),
 
-                // These lower to a GC `struct`/`array` reference or to
-                // `externref`, neither of which FACT can translate yet.
+                // A `tuple` lowers to a `(ref null (struct ...))`, which
+                // `FlatType` cannot describe; `flatten_types` handles it.
+                InterfaceType::Tuple(_) => None,
+
+                // These also lower to a reference, but FACT cannot translate
+                // them yet.
                 InterfaceType::String
                 | InterfaceType::Record(_)
                 | InterfaceType::Variant(_)
                 | InterfaceType::List(_)
                 | InterfaceType::Map(_)
-                | InterfaceType::Tuple(_)
                 | InterfaceType::Option(_)
                 | InterfaceType::Result(_)
                 | InterfaceType::Own(_)
@@ -1133,9 +1146,10 @@ impl Helper {
         // memory or otherwise is the result of the function itself for a
         // stack-based representation.
         match self.dst.loc {
-            HelperLocation::Stack => self.dst.push_flat(&mut results, types),
+            HelperLocation::Stack | HelperLocation::GcRef(_) => {
+                self.dst.push_flat(&mut results, types)
+            }
             HelperLocation::Memory => params.push(self.dst.opts.data_model.unwrap_memory().ptr()),
-            HelperLocation::StructField | HelperLocation::ArrayElement => todo!("CM+GC"),
         }
 
         core_types.function(&params, &results)
@@ -1153,7 +1167,9 @@ impl HelperType {
             HelperLocation::Memory => {
                 dst.push(self.opts.data_model.unwrap_memory().ptr());
             }
-            HelperLocation::StructField | HelperLocation::ArrayElement => todo!("CM+GC"),
+            HelperLocation::GcRef(ty) => {
+                dst.push(ValType::Ref(ty));
+            }
         }
     }
 }
