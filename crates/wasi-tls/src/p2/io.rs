@@ -265,7 +265,7 @@ where
 }
 
 enum WriteState<IO> {
-    Ready(IO),
+    Ready(IO, usize),
     Writing(AbortOnDropJoinHandle<io::Result<IO>>),
     Flushing(AbortOnDropJoinHandle<io::Result<IO>>),
     Closing(AbortOnDropJoinHandle<io::Result<()>>),
@@ -279,21 +279,27 @@ where
     IO: AsyncWrite + Send + Unpin + 'static,
 {
     fn new(stream: IO) -> Self {
-        Self::Ready(stream)
+        Self::Ready(stream, 0)
     }
 
     fn write(&mut self, mut bytes: bytes::Bytes) -> StreamResult<()> {
-        let WriteState::Ready(_) = self else {
+        let WriteState::Ready(_, permit) = self else {
             return Err(StreamError::Trap(wasmtime::format_err!(
                 "unpermitted: must call check_write first"
             )));
         };
+        if bytes.len() > *permit {
+            return Err(StreamError::Trap(wasmtime::format_err!(
+                "not permitted to write {} bytes",
+                bytes.len()
+            )));
+        }
 
         if bytes.is_empty() {
             return Ok(());
         }
 
-        let WriteState::Ready(mut stream) = std::mem::replace(self, WriteState::Closed) else {
+        let WriteState::Ready(mut stream, _) = std::mem::replace(self, WriteState::Closed) else {
             unreachable!()
         };
 
@@ -312,8 +318,8 @@ where
     fn flush(&mut self) -> StreamResult<()> {
         match self {
             // Immediately flush:
-            WriteState::Ready(_) => {
-                let WriteState::Ready(mut stream) = std::mem::replace(self, WriteState::Closed)
+            WriteState::Ready(_, _) => {
+                let WriteState::Ready(mut stream, _) = std::mem::replace(self, WriteState::Closed)
                 else {
                     unreachable!()
                 };
@@ -344,7 +350,10 @@ where
 
     fn check_write(&mut self) -> StreamResult<usize> {
         match self {
-            WriteState::Ready(_) => Ok(READY_SIZE),
+            WriteState::Ready(_, permit) => {
+                *permit = READY_SIZE;
+                Ok(READY_SIZE)
+            }
             WriteState::Writing(_) => Ok(0),
             WriteState::Flushing(_) => Ok(0),
             WriteState::Closing(_) => Ok(0),
@@ -362,7 +371,7 @@ where
     fn close(&mut self) {
         match std::mem::replace(self, WriteState::Closed) {
             // No write in progress, immediately shut down:
-            WriteState::Ready(mut stream) => {
+            WriteState::Ready(mut stream, _) => {
                 *self = WriteState::Closing(wasmtime_wasi::runtime::spawn(async move {
                     stream.shutdown().await
                 }));
@@ -395,7 +404,7 @@ where
         match self {
             WriteState::Writing(task) | WriteState::Flushing(task) => {
                 *self = match task.await {
-                    Ok(s) => WriteState::Ready(s),
+                    Ok(s) => WriteState::Ready(s, 0),
                     Err(e) => WriteState::Error(e),
                 }
             }
@@ -407,5 +416,27 @@ where
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn write_requires_a_permit() {
+        let mut state = WriteState::new(tokio::io::sink());
+        assert!(matches!(
+            state.write(bytes::Bytes::from_static(b"x")),
+            Err(StreamError::Trap(_))
+        ));
+    }
+
+    #[test]
+    fn write_rejects_bytes_over_the_permit() {
+        let mut state = WriteState::new(tokio::io::sink());
+        let permit = state.check_write().unwrap();
+        let too_many = bytes::Bytes::from(vec![0; permit + 1]);
+        assert!(matches!(state.write(too_many), Err(StreamError::Trap(_))));
     }
 }

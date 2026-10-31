@@ -3,7 +3,9 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     format_err,
 };
-use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::bindings::Command};
+use wasmtime_wasi::{
+    WasiCtx, WasiCtxView, WasiView, p2::bindings::Command, p2::pipe::MemoryOutputPipe,
+};
 use wasmtime_wasi_tls::{
     TlsProvider, WasiTlsCtx, WasiTlsCtxBuilder, WasiTlsCtxView, WasiTlsView, p2,
 };
@@ -104,6 +106,61 @@ mod nativetls {
     }
 
     test_programs_artifacts::foreach_p2_tls!(nativetls_test_case);
+}
+
+async fn run_test_capture_stderr(
+    provider: Box<dyn TlsProvider>,
+    path: &str,
+) -> Result<(Option<String>, String)> {
+    let stderr = MemoryOutputPipe::new(64 * 1024);
+    let ctx = Ctx {
+        table: ResourceTable::new(),
+        wasi_ctx: WasiCtx::builder()
+            .inherit_stdout()
+            .stderr(stderr.clone())
+            .inherit_network()
+            .allow_ip_name_lookup(true)
+            .allow_tcp(true)
+            .allow_udp(true)
+            .build(),
+        wasi_tls_ctx: WasiTlsCtxBuilder::new().provider(provider).build(),
+    };
+
+    let engine = test_programs_artifacts::engine(|_config| {});
+    let mut store = Store::new(&engine, ctx);
+    let component = Component::from_file(&engine, path)?;
+
+    let mut linker = Linker::new(&engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+    let mut opts = p2::LinkOptions::default();
+    opts.tls(true);
+    wasmtime_wasi_tls::p2::add_to_linker(&mut linker, &opts)?;
+
+    let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+    let trapped = match command.wasi_cli_run().call_run(&mut store).await {
+        Ok(Ok(())) => None,
+        Ok(Err(())) => Some(String::from("command returned with failing exit status")),
+        Err(e) => Some(format!("{e:#}")),
+    };
+    let captured = String::from_utf8_lossy(&stderr.contents()).into_owned();
+    Ok((trapped, captured))
+}
+
+async fn p2_tls_write_too_much(provider: Box<dyn TlsProvider>) -> Result<()> {
+    let (trapped, stderr) = run_test_capture_stderr(
+        provider,
+        test_programs_artifacts::P2_TLS_WRITE_TOO_MUCH_COMPONENT,
+    )
+    .await?;
+    assert!(
+        stderr.contains("check-write permit:"),
+        "the guest never reached the write: {stderr}"
+    );
+    assert!(
+        trapped.is_some(),
+        "the oversized write returned instead of trapping: {stderr}"
+    );
+    Ok(())
 }
 
 async fn p2_tls_sample_application(provider: Box<dyn TlsProvider>) -> Result<()> {
