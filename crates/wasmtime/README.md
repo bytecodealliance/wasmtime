@@ -84,9 +84,10 @@ fn main() -> Result<()> {
     // Create a `Linker` which will be later used to instantiate this module.
     // Host functionality is defined by name within the `Linker`.
     let mut linker = Linker::new(&engine);
-    linker.func_wrap("host", "host_func", |caller: Caller<'_, u32>, param: i32| {
+    linker.root().instance("host").func_wrap("host_func", |ctx: StoreContextMut<'_, ()>, (param,): (i32,)| {
         println!("Got {} from WebAssembly", param);
-        println!("my host state is: {}", caller.data());
+        println!("my host state is: {}", ctx.data());
+        Ok(())
     })?;
 
     // All wasm objects operate within the context of a "store". Each
