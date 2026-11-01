@@ -258,7 +258,7 @@ impl Config {
                 .max(limits::MEMORIES_PER_MODULE);
             pooling.max_memories_per_component = pooling
                 .max_memories_per_component
-                .max(limits::MEMORIES_PER_MODULE);
+                .max(limits::MEMORIES_PER_COMPONENT);
             pooling.total_core_instances = pooling.total_core_instances.max(limits::CORE_INSTANCES);
             pooling.max_memory_size = pooling
                 .max_memory_size

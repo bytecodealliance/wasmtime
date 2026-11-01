@@ -21,6 +21,7 @@ pub mod limits {
     pub const GC_HEAP_SIZE: usize = 2 << 20; // 2MiB
     pub const TABLES: u32 = 200;
     pub const MEMORIES_PER_MODULE: u32 = 9;
+    pub const MEMORIES_PER_COMPONENT: u32 = 12;
     pub const TABLES_PER_MODULE: u32 = 5;
     pub const COMPONENT_INSTANCES: u32 = 50;
     pub const CORE_INSTANCES: u32 = 900;
