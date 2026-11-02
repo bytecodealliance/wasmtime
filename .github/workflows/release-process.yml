@@ -37,6 +37,8 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
+  actions: write
 
 jobs:
   release_process:
@@ -51,7 +53,6 @@ jobs:
         run: |
           git config user.name 'Wasmtime Publish'
           git config user.email 'wasmtime-publish@users.noreply.github.com'
-          git remote set-url origin https://git:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}
 
       - uses: ./.github/actions/install-rust
       - uses: ./.github/actions/cargo-install
@@ -64,7 +65,7 @@ jobs:
           github.event.schedule == '0 0 5 * *' ||
           github.event.inputs.action == 'cut'
         env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -ex
           # The `main` branch always carries a `-dev` version. Strip that suffix
@@ -79,6 +80,7 @@ jobs:
 
           # Push the current contents of `main` to a new release branch
           git push origin HEAD:$branch
+          gh workflow run main.yml --ref $branch
 
           # Update version numbers and make a commit indicating that. Note that
           # on merge this will not trigger a publish.
@@ -126,6 +128,7 @@ jobs:
             --base main \
             --title "Bump Wasmtime to $num" \
            --body-file pr-body-main
+          gh workflow run main.yml --ref ci/bump-to-$num
 
           # Now go back to where the release branch was cut and prepare the
           # first release candidate for it.
@@ -151,13 +154,14 @@ jobs:
             --base $branch \
             --title "Release Wasmtime $rc" \
             --body-file pr-body-rc
+          gh workflow run main.yml --ref ci/rc-$rc
 
       - name: Perform latest release
         if: >-
           github.event.schedule == '0 0 20 * *' ||
           github.event.inputs.action == 'release-latest'
         env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -ex
           git fetch origin
@@ -195,11 +199,12 @@ jobs:
             --base release-$cur \
             --title "Release Wasmtime $cur" \
             --body-file pr-body
+          gh workflow run main.yml --ref ci/release-$cur
 
       - name: Release a new release candidate
         if: github.event.inputs.action == 'release-rc'
         env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -ex
           # Move to the next release candidate for this branch. Note that this
@@ -226,11 +231,12 @@ jobs:
             --base ${{ github.ref_name }} \
             --title "Release Wasmtime $rc" \
             --body-file pr-body
+          gh workflow run main.yml --ref ci/rc-$rc
 
       - name: Bump and release patch version number
         if: github.event.inputs.action == 'release-patch'
         env:
-          GH_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -ex
           # Update version numbers on a patch basis and update RELEASES.md if a
@@ -262,3 +268,4 @@ jobs:
             --base ${{ github.ref_name }} \
             --title "Release Wasmtime $num" \
             --body-file pr-body
+          gh workflow run main.yml --ref ci/bump-to-$num
