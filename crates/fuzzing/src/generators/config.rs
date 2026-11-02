@@ -715,8 +715,20 @@ impl WasmtimeConfig {
 
             CompilerStrategy::CraneliftPulley => {
                 config.config.threads_enabled = false;
+
+                // Pulley doesn't use signals anyway and this avoids configuring
+                // the engine on platorms which don't support signals anyway, so
+                // alway disable.
                 self.signals_based_traps = false;
             }
+        }
+
+        // Unconditionally disable s390x signals because in CI they're disabled
+        // in Wasmtime due to possible QEMU emulation bugs (see wasmtime's
+        // `build.rs`). In such a situation if it were enabled here that'd lead
+        // to an error because Wasmtime would claim a lack of support.
+        if cfg!(target_arch = "s390x") {
+            self.signals_based_traps = false;
         }
 
         // If using the pooling allocator, constrain the memory and module configurations
