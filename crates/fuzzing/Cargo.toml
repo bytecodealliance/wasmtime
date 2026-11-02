@@ -34,7 +34,6 @@ wasmtime-core = { workspace = true, features = ['backtrace', 'serde'] }
 wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true, features = ['serde'] }
 wasm-mutate = { workspace = true }
-wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
 wasmi = { version = "1.0.8", default-features = false, features = ["std", "simd"] }
 futures = { workspace = true }
 wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
@@ -74,13 +73,6 @@ cranelift-bforest = { workspace = true }
 cranelift-bitset = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time", "macros", "rt-multi-thread"] }
 
-# Only enable the `build-libinterpret` feature when fuzzing is enabled, enabling
-# commands like `cargo test --workspace` or similar to not need an ocaml
-# installation and only fuzzers need it by default.
-[target.'cfg(fuzzing)'.dependencies]
-wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true, features = ['build-libinterpret'] }
-
 [features]
 default = ['v8']
-fuzz-spec-interpreter = ['dep:wasm-spec-interpreter']
 v8 = ['dep:v8']

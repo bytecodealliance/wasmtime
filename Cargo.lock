@@ -1113,12 +1113,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cty"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
-
-[[package]]
 name = "debugid"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2597,35 +2591,6 @@ dependencies = [
  "hashbrown 0.17.0",
  "indexmap 2.14.0",
  "memchr",
-]
-
-[[package]]
-name = "ocaml-boxroot-sys"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5186393bfbee4ce2bc5bbb82beafb77e85c1d0a557e3cfc8c8a0d63d7845fed5"
-dependencies = [
- "cc",
-]
-
-[[package]]
-name = "ocaml-interop"
-version = "0.8.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e01e08412a7e072a90a225d2ae49a2860aeea853ce673bc63891dbf86aed063"
-dependencies = [
- "ocaml-boxroot-sys",
- "ocaml-sys",
- "static_assertions",
-]
-
-[[package]]
-name = "ocaml-sys"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73ec6ca7d41458442627435afb8f4671e83fd642e8a560171d671a1f679aa3cf"
-dependencies = [
- "cty",
 ]
 
 [[package]]
@@ -4466,14 +4431,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-spec-interpreter"
-version = "0.0.0"
-dependencies = [
- "ocaml-interop",
- "wat",
-]
-
-[[package]]
 name = "wasm-wave"
 version = "0.262.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4872,7 +4829,6 @@ dependencies = [
  "wasm-encoder 0.262.0",
  "wasm-mutate",
  "wasm-smith",
- "wasm-spec-interpreter",
  "wasmi",
  "wasmparser 0.262.0",
  "wasmprinter",

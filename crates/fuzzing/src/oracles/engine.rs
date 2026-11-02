@@ -33,11 +33,6 @@ pub fn build(
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
         "winch" => return Ok(None),
 
-        #[cfg(feature = "fuzz-spec-interpreter")]
-        "spec" => Box::new(crate::oracles::diff_spec::SpecInterpreter::new(config)),
-        #[cfg(not(feature = "fuzz-spec-interpreter"))]
-        "spec" => return Ok(None),
-
         #[cfg(feature = "v8")]
         "v8" => Box::new(crate::oracles::diff_v8::V8Engine::new(config)),
         #[cfg(not(feature = "v8"))]
@@ -98,8 +93,7 @@ pub trait DiffInstance {
 /// Initialize any global state associated with runtimes that may be
 /// differentially executed against.
 pub fn setup_engine_runtimes() {
-    #[cfg(feature = "fuzz-spec-interpreter")]
-    crate::oracles::diff_spec::setup_ocaml_runtime();
+    // empty for now
 }
 
 /// Build a list of allowed values from the given `defaults` using the
