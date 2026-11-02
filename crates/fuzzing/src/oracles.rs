@@ -42,7 +42,7 @@ use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
-#[cfg(feature = "v8")]
+#[cfg(v8)]
 mod diff_v8;
 
 static CNT: AtomicUsize = AtomicUsize::new(0);
@@ -94,9 +94,15 @@ struct LimitsState {
 /// most interesting behavior.
 const MAX_MEMORY: usize = 1 << 30;
 
-/// Allow up to 4G of bytes to be copied (conservatively) which should enable
+/// Maximum number of bytes to be copied (conservatively) which should enable
 /// growth up to `MAX_MEMORY` or at least up to a relatively large amount.
-const MAX_MEMORY_MOVED: usize = 4 << 30;
+///
+/// Set to 4G on 64-bit platforms but a bit smaller on 32.
+const MAX_MEMORY_MOVED: usize = if cfg!(target_pointer_width = "32") {
+    1 << 30
+} else {
+    4 << 30
+};
 
 impl StoreLimits {
     /// Creates the default set of limits for all fuzzing stores.
@@ -632,6 +638,17 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
     // fuzzer and we also limit memory growth which would cause the test to
     // fail.
     if test.config.hogs_memory.unwrap_or(false) {
+        return Err(arbitrary::Error::IncorrectFormat);
+    }
+
+    // Like integration tests skip all pooling allocator tests on 32-bit
+    // platforms.
+    if cfg!(target_pointer_width = "32")
+        && matches!(
+            fuzz_config.wasmtime.strategy,
+            generators::InstanceAllocationStrategy::Pooling(_)
+        )
+    {
         return Err(arbitrary::Error::IncorrectFormat);
     }
 

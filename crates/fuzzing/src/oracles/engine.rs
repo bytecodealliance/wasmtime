@@ -16,11 +16,10 @@ pub fn build(
     config: &mut Config,
 ) -> arbitrary::Result<Option<Box<dyn DiffEngine>>> {
     let engine: Box<dyn DiffEngine> = match name {
-        "wasmtime" => Box::new(WasmtimeEngine::new(
-            u,
-            config,
-            CompilerStrategy::CraneliftNative,
-        )?),
+        "wasmtime" if CompilerStrategy::CRANELIFT_NATIVE_SUPPORTED => Box::new(
+            WasmtimeEngine::new(u, config, CompilerStrategy::CraneliftNative)?,
+        ),
+        "wasmtime" => return Ok(None),
         "pulley" => Box::new(WasmtimeEngine::new(
             u,
             config,
@@ -28,14 +27,14 @@ pub fn build(
         )?),
         "wasmi" => Box::new(WasmiEngine::new(config)),
 
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-        "winch" => Box::new(WasmtimeEngine::new(u, config, CompilerStrategy::Winch)?),
-        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        "winch" if CompilerStrategy::WINCH_SUPPORTED => {
+            Box::new(WasmtimeEngine::new(u, config, CompilerStrategy::Winch)?)
+        }
         "winch" => return Ok(None),
 
-        #[cfg(feature = "v8")]
+        #[cfg(v8)]
         "v8" => Box::new(crate::oracles::diff_v8::V8Engine::new(config)),
-        #[cfg(not(feature = "v8"))]
+        #[cfg(not(v8))]
         "v8" => return Ok(None),
 
         _ => panic!("unknown engine {name}"),

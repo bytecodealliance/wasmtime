@@ -389,7 +389,11 @@ impl Config {
         };
         self.wasmtime.compiler_strategy.configure(&mut cfg);
 
-        self.wasmtime.codegen.configure(&mut cfg);
+        // Host-specific codegen settings (target triple and ISA flags) don't
+        // apply to Pulley, so skip this if that's selected.
+        if *compiler_strategy != CompilerStrategy::CraneliftPulley {
+            self.wasmtime.codegen.configure(&mut cfg);
+        }
 
         cfg.codegen.inlining = self.wasmtime.inlining.map(|i| i.into());
 
@@ -684,18 +688,6 @@ impl WasmtimeConfig {
             CompilerStrategy::CraneliftNative => {}
 
             CompilerStrategy::Winch => {
-                // Winch is not complete on non-x64 targets, so just abandon this test
-                // case. We don't want to force Cranelift because we change what module
-                // config features are enabled based on the compiler strategy, and we
-                // don't want to make the same fuzz input DNA generate different test
-                // cases on different targets.
-                if cfg!(not(any(target_arch = "x86_64", target_arch = "aarch64"))) {
-                    log::warn!(
-                        "want to compile with Winch but host architecture does not support it"
-                    );
-                    return Err(arbitrary::Error::IncorrectFormat);
-                }
-
                 // Winch doesn't support the same set of wasm proposal as Cranelift
                 // at this time, so if winch is selected be sure to disable wasm
                 // proposals in `Config` to ensure that Winch can compile the
@@ -732,6 +724,7 @@ impl WasmtimeConfig {
 
             CompilerStrategy::CraneliftPulley => {
                 config.config.threads_enabled = false;
+                self.signals_based_traps = false;
             }
         }
 
@@ -988,7 +981,7 @@ impl From<Inlining> for wasmtime::Inlining {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 /// Compiler to use.
 pub enum CompilerStrategy {
     /// Cranelift compiler for the native architecture.
@@ -1000,6 +993,17 @@ pub enum CompilerStrategy {
 }
 
 impl CompilerStrategy {
+    /// Whether native Cranelift (`CraneliftNative`) can run on this host.
+    pub const CRANELIFT_NATIVE_SUPPORTED: bool = cfg!(any(
+        target_arch = "x86_64",
+        target_arch = "aarch64",
+        target_arch = "riscv64",
+        target_arch = "s390x",
+    ));
+
+    /// Whether Winch can run on this host.
+    pub const WINCH_SUPPORTED: bool = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
+
     /// Configures `config` to use this compilation strategy
     pub fn configure(&self, config: &mut wasmtime_cli_flags::CommonOptions) {
         match self {
@@ -1011,7 +1015,11 @@ impl CompilerStrategy {
             }
             CompilerStrategy::CraneliftPulley => {
                 config.codegen.compiler = Some(wasmtime::Strategy::Cranelift);
-                config.target = Some("pulley64".to_string());
+                if cfg!(target_pointer_width = "32") {
+                    config.target = Some("pulley32".to_string());
+                } else {
+                    config.target = Some("pulley64".to_string());
+                }
             }
         }
     }
@@ -1019,13 +1027,28 @@ impl CompilerStrategy {
 
 impl Arbitrary<'_> for CompilerStrategy {
     fn arbitrary(u: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
+        // Favor actually using native cranelift, but if it's not actually
+        // supported on this platform then fall back to pulley instead.
+        // Similarly, when winch is selected use that when it's supported,
+        // otherwise fall back to whatever cranelift is.
+        let native = if Self::CRANELIFT_NATIVE_SUPPORTED {
+            Self::CraneliftNative
+        } else {
+            Self::CraneliftPulley
+        };
+        let winch = if Self::WINCH_SUPPORTED {
+            Self::Winch
+        } else {
+            native
+        };
+
         // Favor fuzzing native cranelift, but if allowed also enable
         // winch/pulley.
-        match u.int_in_range(0..=19)? {
-            1 => Ok(Self::CraneliftPulley),
-            2 => Ok(Self::Winch),
-            _ => Ok(Self::CraneliftNative),
-        }
+        Ok(match u.int_in_range(0..=19)? {
+            1 => Self::CraneliftPulley,
+            2 => winch,
+            _ => native,
+        })
     }
 }
 
