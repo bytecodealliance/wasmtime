@@ -3111,7 +3111,7 @@ impl Inst {
                     };
                     ret.push_str(&add.print_with_state(&mut EmitState::default()));
                 } else {
-                    let tmp = writable_spilltmp_reg();
+                    let tmp = writable_tmp2_reg();
                     for inst in Inst::load_constant(tmp, abs_offset).into_iter() {
                         ret.push_str(&inst.print_with_state(&mut EmitState::default()));
                     }

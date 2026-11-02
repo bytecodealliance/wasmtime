@@ -65,7 +65,11 @@ pub fn mem_finalize(
                 };
                 (smallvec![], mem)
             } else {
-                let tmp = writable_spilltmp_reg();
+                let tmp = if basereg == spilltmp_reg() {
+                    writable_tmp2_reg()
+                } else {
+                    writable_spilltmp_reg()
+                };
                 (
                     Inst::load_constant(tmp, off as u64),
                     AMode::RegExtended {
