@@ -1008,6 +1008,8 @@ impl CompilerStrategy {
                 config.codegen.compiler = Some(wasmtime::Strategy::Cranelift);
                 if cfg!(target_pointer_width = "32") {
                     config.target = Some("pulley32".to_string());
+                } else if cfg!(target_endian = "big") {
+                    config.target = Some("pulley64be".to_string());
                 } else {
                     config.target = Some("pulley64".to_string());
                 }
