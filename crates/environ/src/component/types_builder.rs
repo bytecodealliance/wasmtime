@@ -397,6 +397,13 @@ impl ComponentTypesBuilder {
     ) -> Result<TypeModuleIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
+
+        // Intern all types found in this module as they could show up anywhere
+        // within imports/exports/etc.
+        for id in ty.types.iter() {
+            self.module_types_builder_mut().intern_type(types, *id)?;
+        }
+
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
             result.imports.insert(
@@ -426,17 +433,9 @@ impl ComponentTypesBuilder {
                     .intern_type(types, *id)?
                     .into()
             }),
-            Table(ty) => {
-                self.intern_ref_type(types, ty.element_type)?;
-                EntityType::Table(self.convert_table_type(ty)?)
-            }
+            Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
             Memory(ty) => EntityType::Memory((*ty).into()),
-            Global(ty) => {
-                if let wasmparser::ValType::Ref(r) = ty.content_type {
-                    self.intern_ref_type(types, r)?;
-                }
-                EntityType::Global(self.convert_global_type(ty)?)
-            }
+            Global(ty) => EntityType::Global(self.convert_global_type(ty)?),
             Tag(id) => {
                 let func = self.module_types_builder_mut().intern_type(types, *id)?;
                 let exc = self
@@ -449,15 +448,6 @@ impl ComponentTypesBuilder {
             }
             FuncExact(_) => bail!("custom-descriptors proposal not implemented"),
         })
-    }
-
-    /// Interns the concrete type, if any, referenced by `ty` so that it can
-    /// subsequently be converted with this builder's `TypeConvert` impl.
-    fn intern_ref_type(&mut self, types: TypesRef<'_>, ty: wasmparser::RefType) -> Result<()> {
-        if let Some(id) = ty.type_index().and_then(|i| i.as_core_type_id()) {
-            self.module_types_builder_mut().intern_type(types, id)?;
-        }
-        Ok(())
     }
 
     /// Convert a wasmparser `ComponentDefinedTypeId` into Wasmtime's type representation.
