@@ -372,18 +372,18 @@ wit-bindgen = { version = "0.63.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.63.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.262.0", default-features = false, features = ['simd'] }
-wat = "1.262.0"
-wast = "262.0.0"
-wasmprinter = "0.262.0"
-wasm-encoder = "0.262.0"
-wasm-smith = "0.262.0"
-wasm-mutate = "0.262.0"
-wit-parser = "0.262.0"
-wit-component = "0.262.0"
-wasm-wave = "0.262.0"
-wasm-compose = { version = "0.262.0", default-features = false }
-json-from-wast = "0.262.0"
+wasmparser = { version = "0.263.0", default-features = false, features = ['simd'] }
+wat = "1.263.0"
+wast = "263.0.0"
+wasmprinter = "0.263.0"
+wasm-encoder = "0.263.0"
+wasm-smith = "0.263.0"
+wasm-mutate = "0.263.0"
+wit-parser = "0.263.0"
+wit-component = "0.263.0"
+wasm-wave = "0.263.0"
+wasm-compose = { version = "0.263.0", default-features = false }
+json-from-wast = "0.263.0"
 
 wstd = "0.6.5"
 wasip2 = "1.0"

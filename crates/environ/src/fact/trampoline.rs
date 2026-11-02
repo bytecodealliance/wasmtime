@@ -35,7 +35,9 @@ use crate::{FuncIndex, GlobalIndex, IndexType, NUM_COMPONENT_CONTEXT_SLOTS, Trap
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
-use wasm_encoder::{BlockType, Catch, Encode, Instruction, Instruction::*, MemArg, ValType};
+use wasm_encoder::{
+    BlockType, Catch, Encode, Instruction, Instruction::*, MemArg, MemArgTarget, ValType,
+};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 use super::DataModel;
@@ -4506,7 +4508,8 @@ impl<'a> Memory<'a> {
         MemArg {
             offset: u64::from(self.offset),
             align,
-            memory_index: self.mem_opts().memory.unwrap().0.as_u32(),
+            target: MemArgTarget::Memory(self.mem_opts().memory.unwrap().0.as_u32()),
+            ordering: None,
         }
     }
 
