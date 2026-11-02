@@ -338,7 +338,7 @@ jobs:
         mv crates/c-api/html gh-pages/c-api
         mv target/doc gh-pages/api
         tar czf gh-pages.tar.gz gh-pages
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: gh-pages
         path: gh-pages.tar.gz
@@ -1155,7 +1155,7 @@ jobs:
       env:
         VERSION: ${{ github.sha }}
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: bins-wasi-preview1-component-adapter
         path: target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.*.wasm
@@ -1210,7 +1210,7 @@ jobs:
         MIN_PLATFORM_EXAMPLE_DISABLE_WASI: 1
 
     # Add the `wasmtime-platform.h` file as a release artifact
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: wasmtime-platform-header
         path: examples/min-platform/embedding/wasmtime-platform.h
@@ -1383,7 +1383,7 @@ jobs:
     - name: Package rebuilt cache
       run: tar czf isle-veri-cache.tar.gz -C cranelift/isle/veri cache
     - name: Upload cache tarball as run artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: isle-veri-cache
         path: isle-veri-cache.tar.gz
@@ -1447,7 +1447,7 @@ jobs:
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: bins-${{ matrix.build }}
         path: dist
