@@ -305,7 +305,11 @@ impl Config {
             wmemcheck: false,
             #[cfg(feature = "coredump")]
             coredump_on_trap: false,
-            macos_use_mach_ports: !cfg!(miri),
+            // Disable mach ports on miri since it doesn't emulate those APIs,
+            // and additionally disable it with ASAN by default because
+            // otherwise mach ports routes around signal handlers installed by
+            // ASAN.
+            macos_use_mach_ports: !cfg!(miri) && !cfg!(asan),
             #[cfg(feature = "std")]
             detect_host_feature: Some(detect_host_feature),
             #[cfg(not(feature = "std"))]
