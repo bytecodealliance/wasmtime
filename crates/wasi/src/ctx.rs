@@ -8,6 +8,7 @@ use rand::Rng;
 use std::future::Future;
 use std::mem;
 use std::net::SocketAddr;
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::pin::Pin;
 use tokio::io::{stderr, stdin, stdout};
@@ -160,6 +161,25 @@ impl WasiCtxBuilder {
     /// support is disabled.
     pub fn allow_blocking_current_thread(&mut self, enable: bool) -> &mut Self {
         self.filesystem.allow_blocking_current_thread = enable;
+        self
+    }
+
+    /// Configures the maximum number of bytes that a single read or write of a
+    /// file or socket may transfer.
+    ///
+    /// This bounds the size of the host-side buffer allocated for each
+    /// individual filesystem or socket I/O operation, which is how much data a
+    /// guest can cause the host to allocate at once. For example file
+    /// reads/writes, UDP bytes received, and TCP reads/writes will use this
+    /// value when limiting a buffering being allocated is appropriate.
+    ///
+    /// Larger values may improve throughput of large transfers at the cost of
+    /// larger per-operation allocations.
+    ///
+    /// The default is 64 KiB.
+    pub fn max_io_size(&mut self, size: NonZeroUsize) -> &mut Self {
+        self.filesystem.max_io_size = size;
+        self.sockets.max_io_size = size;
         self
     }
 

@@ -635,6 +635,10 @@ wasmtime_option_group! {
         pub max_resources: Option<usize>,
         /// Fuel to use for all hostcalls to limit guest<->host data transfer.
         pub hostcall_fuel: Option<usize>,
+        /// Maximum size, in bytes, of a single WASI filesystem or socket read
+        /// or write, which bounds the host buffer allocated per I/O operation.
+        /// (default: 2MiB)
+        pub max_io_size: Option<NonZeroUsize>,
         /// Maximum number of component-model handle-table slots (e.g. for
         /// resources, streams, futures) per store; allocating past it traps.
         /// (default: 100000)
