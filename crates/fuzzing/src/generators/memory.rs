@@ -133,27 +133,32 @@ pub struct MemoryConfig {
 
 impl<'a> Arbitrary<'a> for MemoryConfig {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let max_log2 = if cfg!(target_pointer_width = "32") {
+            25
+        } else {
+            63
+        };
         Ok(Self {
             // Allow up to 8GiB reservations of the virtual address space for
             // the initial memory reservation.
-            memory_reservation: interesting_virtual_memory_size(u, 33)?,
+            memory_reservation: interesting_virtual_memory_size(u, 33.min(max_log2))?,
 
             // Allow up to 4GiB guard page reservations to be made.
-            memory_guard_size: interesting_virtual_memory_size(u, 32)?,
+            memory_guard_size: interesting_virtual_memory_size(u, 32.min(max_log2))?,
 
             // Allow up to 1GiB extra memory to grow into for dynamic memories.
-            memory_reservation_for_growth: interesting_virtual_memory_size(u, 30)?,
+            memory_reservation_for_growth: interesting_virtual_memory_size(u, 30.min(max_log2))?,
 
             guard_before_linear_memory: u.arbitrary()?,
             cranelift_enable_heap_access_spectre_mitigations: u.arbitrary()?,
             memory_init_cow: u.arbitrary()?,
 
             // GC heap tunables, same ranges as corresponding memory tunables.
-            gc_heap_reservation: interesting_virtual_memory_size(u, 33)?,
-            gc_heap_guard_size: interesting_virtual_memory_size(u, 32)?,
-            gc_heap_reservation_for_growth: interesting_virtual_memory_size(u, 30)?,
+            gc_heap_reservation: interesting_virtual_memory_size(u, 33.min(max_log2))?,
+            gc_heap_guard_size: interesting_virtual_memory_size(u, 32.min(max_log2))?,
+            gc_heap_reservation_for_growth: interesting_virtual_memory_size(u, 30.min(max_log2))?,
             gc_heap_may_move: u.arbitrary()?,
-            gc_heap_initial_size: interesting_virtual_memory_size(u, 22)?,
+            gc_heap_initial_size: interesting_virtual_memory_size(u, 22.min(max_log2))?,
         })
     }
 }

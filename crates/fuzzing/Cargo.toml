@@ -34,7 +34,6 @@ wasmtime-core = { workspace = true, features = ['backtrace', 'serde'] }
 wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true, features = ['serde'] }
 wasm-mutate = { workspace = true }
-wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
 wasmi = { version = "1.0.8", default-features = false, features = ["std", "simd"] }
 futures = { workspace = true }
 wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
@@ -59,12 +58,17 @@ features = [
   'stack-switching',
 ]
 
-# We rely on precompiled v8 binaries, but rusty-v8 doesn't have a precompiled
-# binary for MinGW which is built on our CI. It does have one for Windows-msvc,
-# though, so we could use that if we wanted. For now though just simplify a bit
-# and don't depend on this on Windows.  The same applies on s390x and riscv.
-[target.'cfg(not(any(windows, target_arch = "s390x", target_arch = "riscv64")))'.dependencies]
-v8 = { version = "139.0.0", optional = true }
+# We rely on precompiled v8 binaries, but this crate doesn't have a precompiled
+# version for all platforms. Allow-list certain platforms here that are indeed
+# supported. Keep in-sync with the `build.rs` script for this crate which sets
+# a custom `v8` #[cfg] so testing for the crate is easier in source code
+# itself.
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+v8 = { workspace = true, optional = true }
+[target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dependencies]
+v8 = { workspace = true, optional = true }
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+v8 = { workspace = true, optional = true }
 
 [dev-dependencies]
 wat = { workspace = true }
@@ -74,13 +78,6 @@ cranelift-bforest = { workspace = true }
 cranelift-bitset = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time", "macros", "rt-multi-thread"] }
 
-# Only enable the `build-libinterpret` feature when fuzzing is enabled, enabling
-# commands like `cargo test --workspace` or similar to not need an ocaml
-# installation and only fuzzers need it by default.
-[target.'cfg(fuzzing)'.dependencies]
-wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true, features = ['build-libinterpret'] }
-
 [features]
 default = ['v8']
-fuzz-spec-interpreter = ['dep:wasm-spec-interpreter']
 v8 = ['dep:v8']

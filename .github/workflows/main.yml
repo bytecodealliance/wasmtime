@@ -325,8 +325,6 @@ jobs:
           --exclude test-programs-artifacts \
           --exclude cranelift-codegen-meta \
           --exclude wasmtime-wasi-nn \
-          --exclude wasmtime-fuzzing \
-          --exclude wasm-spec-interpreter \
           --exclude calculator \
           --all-features
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
@@ -559,8 +557,6 @@ jobs:
           --exclude test-programs-artifacts \
           --exclude wasmtime-wasi-nn \
           --exclude wasmtime-wasi-tls \
-          --exclude wasmtime-fuzzing \
-          --exclude wasm-spec-interpreter \
           --exclude cranelift-isle-veri \
           --exclude calculator \
           --exclude wasi-preview1-component-adapter
@@ -758,16 +754,10 @@ jobs:
     - run: test -f report/index.html
 
     # Ensure that fuzzers still build.
-    #
-    # Install the OCaml packages necessary for fuzz targets that use the
-    # `wasm-spec-interpreter`.
     - uses: ./.github/actions/cargo-install
       with:
         crate: cargo-fuzz
         version: 0.13.2
-    - uses: ./.github/actions/apt-get-install
-      with:
-        packages: ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fuzz check --dev --features fuzz-xed
     - run: cargo fuzz check --dev --fuzz-dir ./cranelift/isle/fuzz
     - run: cargo fuzz check --dev --fuzz-dir ./crates/environ/fuzz --features component-model
@@ -1057,24 +1047,6 @@ jobs:
         "OPENSSL_DIR=$opensslDir" | Out-File -FilePath $env:GITHUB_ENV -Append
         "OPENSSL_LIB_DIR=$opensslLibDir" | Out-File -FilePath $env:GITHUB_ENV -Append
     - run: cargo test -p wasmtime-wasi-tls --all-features
-
-  # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
-  # `--all-features` brings in OCaml, which is a pain to get setup for all
-  # targets.
-  test_fuzzing:
-    needs: determine
-    if: needs.determine.outputs.run-full
-    name: Test wasmtime-fuzzing
-    runs-on: 'ubuntu-latest'
-    steps:
-    - uses: actions/checkout@v7
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-
-    # Run the tests
-    - run: |
-        cargo test -p wasmtime-fuzzing -p wasm-spec-interpreter
 
   # Test debug (DWARF) related functionality.
   test_debug_dwarf:
@@ -1477,7 +1449,6 @@ jobs:
       - test
       - test_capi
       - test_debug_dwarf
-      - test_fuzzing
       - test_nightly
       - build
       - rustfmt
