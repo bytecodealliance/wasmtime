@@ -147,6 +147,9 @@ impl InputStream for FileInputStream {
     /// Specialized blocking_* variant to bypass tokio's task spawning & joining
     /// overhead on synchronous file I/O.
     async fn blocking_read(&mut self, size: usize) -> StreamResult<Bytes> {
+        if size == 0 {
+            return self.read(size);
+        }
         self.wait_ready().await;
 
         // Before we defer to the regular `read`, make sure it has data ready to go:
