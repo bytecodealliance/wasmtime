@@ -1367,6 +1367,9 @@ jobs:
         # Bump `v1` if the cache format changes. `hashFiles` covers the ISLE
         # sources and the ISLE toolchain itself by hashing the paths and
         # contents of all matching files.
+        #
+        # Note: keep this key in sync with the same key in the
+        # `isle-veri-cache` job in `publish-artifacts.yml`.
         key: isle-veri-cache-v1-${{ hashFiles('cranelift/isle/**/*.rs', 'cranelift/codegen/**/*.isle') }}
         restore-keys: |
           isle-veri-cache-v1-

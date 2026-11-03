@@ -62,6 +62,31 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       continue-on-error: true
 
+  # Publish the ISLE verifier's SMT query cache.
+  isle-veri-cache:
+    name: Publish new isle-veri cache
+    runs-on: ubuntu-latest
+    if: github.repository == 'bytecodealliance/wasmtime' && github.ref == 'refs/heads/main'
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      # git checkout is needed to have the files we hash below.
+    - uses: actions/checkout@v7
+    - uses: ./.github/actions/fetch-run-id
+    - name: Download rebuilt cache from CI run
+      run: gh run download ${COMMIT_RUN_ID} --name isle-veri-cache
+      env:
+        GH_TOKEN: ${{ github.token }}
+    - name: Unpack rebuilt cache
+      run: tar xzf isle-veri-cache.tar.gz -C cranelift/isle/veri
+    - name: Save verifier cache
+      uses: actions/cache/save@v6
+      with:
+        path: cranelift/isle/veri/cache
+        # Note: keep this key in sync with cache fetch in `main.yml`'s isle-veri job.
+        key: isle-veri-cache-v1-${{ hashFiles('cranelift/isle/**/*.rs', 'cranelift/codegen/**/*.isle') }}
+
   # See https://github.com/actions/deploy-pages
   deploy:
     name: Deploy gh-pages artifact
