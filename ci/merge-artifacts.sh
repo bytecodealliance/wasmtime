@@ -37,19 +37,6 @@ for min in bins-*-min/*.tar.*; do
  rm $min $normal
 done
 
-for min in bins-*-min/*.zip; do
-  normal=${min/-min\//\/}
-  filename=$(basename $normal)
-  dir=${filename%.zip}
-
-  rm -rf tmp
-  mkdir tmp
-  (cd tmp && unzip -o ../$min)
-  (cd tmp && unzip -o ../$normal)
-  (cd tmp && 7z a ../dist/$dir.zip $dir/)
-  rm $min $normal
-done
-
 # Builds without a `*-min` counterpart weren't merged above, so recompress their
 # tarballs with xz and move their zips over as-is. This keeps the final artifact
 # names consistent regardless of whether a min build was produced.
