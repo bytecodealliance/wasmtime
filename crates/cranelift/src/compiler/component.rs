@@ -729,6 +729,8 @@ impl<'a> TrampolineCompiler<'a> {
                 start_func_table_idx,
                 start_func_ty_idx,
             } => {
+                // FIXME(#4311): the wasm arguments are `i64` for a 64-bit
+                // table or an `i64` closure, but the libcall takes `u32`s
                 self.translate_libcall(
                     host::thread_new_indirect,
                     TrapSentinel::NegativeOne,
