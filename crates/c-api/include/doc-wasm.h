@@ -369,6 +369,10 @@
  *
  * The caller is responsible for deleting the returned value.
  *
+ * The returned function type is associated with an engine the first time it's
+ * used with one, for example by #wasmtime_func_new. At that point the process
+ * aborts if any parameter or result type comes from a different engine.
+ *
  * \fn const wasm_valtype_vec_t* wasm_functype_params(const wasm_functype_t *);
  * \brief Returns the list of parameters of this function type.
  *
