@@ -32,7 +32,7 @@ jobs:
     - run: tar xf gh-pages.tar.gz
       working-directory: gh-pages
     - if: github.ref == 'refs/heads/main'
-      uses: actions/configure-pages@v5
+      uses: actions/configure-pages@v6
     - if: github.ref == 'refs/heads/main'
       uses: actions/upload-pages-artifact@v5
       with:
