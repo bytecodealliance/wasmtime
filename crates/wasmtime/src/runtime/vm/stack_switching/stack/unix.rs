@@ -83,6 +83,77 @@ pub enum Allocator {
 #[cfg(asan)]
 static ASAN_STACKS: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
 
+struct ContinuationStackLayout {
+    args_capacity: u32,
+    args_data_size: usize,
+    dynamic_data_size: usize,
+    total_control_size: usize,
+    required_stack_size: usize,
+}
+
+impl ContinuationStackLayout {
+    fn new(
+        parameter_count: u32,
+        return_value_count: u32,
+        gc_refs: bool,
+        runtime_headroom: usize,
+    ) -> Result<Self> {
+        let args_capacity = std::cmp::max(parameter_count, return_value_count);
+        let args_data_size = usize::try_from(args_capacity)?
+            .checked_mul(std::mem::size_of::<ValRaw>())
+            .ok_or_else(|| {
+                format_err!(
+                    "continuation function type with {args_capacity} args \
+                     overflows stack control data size calculation"
+                )
+            })?;
+        // Keep the fixed startup data 16-byte aligned.
+        let gc_refs_data_size = if cfg!(feature = "gc") && gc_refs {
+            usize::try_from(args_capacity)?
+                .checked_add(15)
+                .map(|s| s & !15)
+                .ok_or_else(|| {
+                    format_err!(
+                        "continuation function type with {args_capacity} args \
+                         overflows stack control data size calculation"
+                    )
+                })?
+        } else {
+            0
+        };
+        let dynamic_data_size = args_data_size
+            .checked_add(gc_refs_data_size)
+            .ok_or_else(|| {
+                format_err!(
+                    "continuation function type with {args_capacity} args \
+                     overflows stack control data size calculation"
+                )
+            })?;
+        let total_control_size = dynamic_data_size.checked_add(0x40).ok_or_else(|| {
+            format_err!(
+                "continuation function type with {args_capacity} args \
+                 overflows stack control data size calculation"
+            )
+        })?;
+        let required_stack_size = total_control_size
+            .checked_add(runtime_headroom)
+            .ok_or_else(|| {
+                format_err!(
+                    "continuation function type with {args_capacity} args \
+                     overflows required stack size calculation"
+                )
+            })?;
+
+        Ok(Self {
+            args_capacity,
+            args_data_size,
+            dynamic_data_size,
+            total_control_size,
+            required_stack_size,
+        })
+    }
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct VMContinuationStack {
@@ -291,7 +362,41 @@ impl VMContinuationStack {
         parameter_count: u32,
         return_value_count: u32,
         gc_refs: bool,
+        runtime_headroom: usize,
     ) -> Result<()> {
+        let layout = ContinuationStackLayout::new(
+            parameter_count,
+            return_value_count,
+            gc_refs,
+            runtime_headroom,
+        )?;
+
+        // We must that ensure the control data (fixed header + args
+        // buffer) fits within the usable stack space while leaving
+        // enough room to enter and run the continuation.
+        let usable_len = match self.allocator {
+            Allocator::Mmap =>
+            // A Mmap allocation includes a guard page, which is
+            // not writable. Thus, we subtract the guard page to
+            // calculate the effective usable stack space.
+            {
+                self.len.saturating_sub(host_page_size())
+            }
+            Allocator::Custom => self.len,
+        };
+        ensure!(
+            layout.total_control_size <= usable_len,
+            "continuation function type requires {} bytes of stack control data, \
+             which exceeds the {usable_len}-byte usable stack allocation",
+            layout.total_control_size,
+        );
+        ensure!(
+            layout.required_stack_size <= usable_len,
+            "continuation function type requires {} bytes of stack control data \
+             and {runtime_headroom} bytes of runtime headroom, which \
+             exceeds the {usable_len}-byte usable stack allocation",
+            layout.total_control_size,
+        );
         let tos = self.top.as_ptr();
 
         unsafe {
@@ -302,82 +407,26 @@ impl VMContinuationStack {
 
             let payloads = &mut *args;
             let args_ref = &mut payloads.buffer;
-            let args_capacity = std::cmp::max(parameter_count, return_value_count);
             // The args object must currently be empty.
             debug_assert_eq!(args_ref.capacity, 0);
             debug_assert_eq!(args_ref.length, 0);
 
-            let args_data_size = usize::try_from(args_capacity)?
-                .checked_mul(std::mem::size_of::<ValRaw>())
-                .ok_or_else(|| {
-                    format_err!(
-                        "continuation function type with {args_capacity} args \
-                         overflows stack control data size calculation"
-                    )
-                })?;
-            // Keep the fixed startup data 16-byte aligned.
-            let gc_refs_data_size = if cfg!(feature = "gc") && gc_refs {
-                usize::try_from(args_capacity)?
-                    .checked_add(15)
-                    .map(|s| s & !15)
-                    .ok_or_else(|| {
-                        format_err!(
-                            "continuation function type with {args_capacity} args \
-                             overflows stack control data size calculation"
-                        )
-                    })?
-            } else {
-                0
-            };
-            let dynamic_data_size =
-                args_data_size
-                    .checked_add(gc_refs_data_size)
-                    .ok_or_else(|| {
-                        format_err!(
-                            "continuation function type with {args_capacity} args \
-                         overflows stack control data size calculation"
-                        )
-                    })?;
-            let total_control_size = dynamic_data_size.checked_add(0x40).ok_or_else(|| {
-                format_err!(
-                    "continuation function type with {args_capacity} args \
-                     overflows stack control data size calculation"
-                )
-            })?;
-
-            // Ensure the control data (fixed header + args buffer) fits
-            // within the usable stack space. For Mmap allocations,
-            // self.len includes the guard page, which is not writable.
-            // Without subtracting the guard page, a high-arity function
-            // type could pass this check but write into the guard page,
-            // causing a segfault (see #13703).
-            let page_size = host_page_size();
-            let usable_len = match self.allocator {
-                Allocator::Mmap => self.len.saturating_sub(page_size),
-                Allocator::Custom => self.len,
-            };
-            ensure!(
-                total_control_size <= usable_len,
-                "continuation function type requires {total_control_size} bytes \
-                 of stack control data, which exceeds the {usable_len}-byte \
-                 usable stack allocation",
-            );
-            let args_data_ptr = if args_capacity == 0 {
+            let args_data_ptr = if layout.args_capacity == 0 {
                 ptr::null_mut()
             } else {
-                tos.sub(0x20 + args_data_size)
+                tos.sub(0x20 + layout.args_data_size)
             };
 
-            args_ref.capacity = args_capacity;
+            args_ref.capacity = layout.args_capacity;
             args_ref.data = NonNull::new(args_data_ptr).map(VmPtr::from);
             if cfg!(feature = "gc") && gc_refs {
-                let data = if args_capacity == 0 {
+                let data = if layout.args_capacity == 0 {
                     ptr::null_mut()
                 } else {
-                    tos.sub(0x20 + dynamic_data_size)
+                    tos.sub(0x20 + layout.dynamic_data_size)
                 };
-                if args_capacity > 0 {
-                    data.write_bytes(0, usize::try_from(args_capacity)?);
+                if layout.args_capacity > 0 {
+                    data.write_bytes(0, usize::try_from(layout.args_capacity)?);
                 }
                 payloads.gc_ref_data = NonNull::new(data).map(VmPtr::from);
             }
@@ -386,17 +435,17 @@ impl VMContinuationStack {
                 // Data near top of stack:
                 (0x08, wasmtime_continuation_start_address().addr()),
                 (0x10, tos.sub(0x10).addr()),
-                (0x18, tos.sub(total_control_size).addr()),
-                (0x20, usize::try_from(args_capacity)?),
+                (0x18, tos.sub(layout.total_control_size).addr()),
+                (0x20, usize::try_from(layout.args_capacity)?),
                 // Data after the args buffer:
-                (0x28 + dynamic_data_size, func_ref.addr()),
-                (0x30 + dynamic_data_size, caller_vmctx.addr()),
+                (0x28 + layout.dynamic_data_size, func_ref.addr()),
+                (0x30 + layout.dynamic_data_size, caller_vmctx.addr()),
                 (
-                    0x38 + dynamic_data_size,
+                    0x38 + layout.dynamic_data_size,
                     (args_ref as *mut VMHostArray).addr(),
                 ),
                 (
-                    0x40 + dynamic_data_size,
+                    0x40 + layout.dynamic_data_size,
                     usize::try_from(return_value_count)?,
                 ),
             ];

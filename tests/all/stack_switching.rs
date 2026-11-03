@@ -1350,3 +1350,73 @@ fn corruption_of_callthread_state_when_host_function_is_called_on_continuation()
     assert_eq!(result, 1);
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn cont_new_rejects_signature_without_runtime_headroom() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_stack_switching(true);
+    config.wasm_function_references(true);
+    config.wasm_exceptions(true);
+
+    // A 32-KiB production stack has ample room for ordinary continuations and
+    // can even initialize the 511-parameter signature from #13020. A still
+    // larger signature must be rejected when its persistent control data,
+    // compiled array-to-Wasm trampoline frame, and outgoing arguments cannot
+    // all fit.
+    config.async_stack_size(32 << 10);
+    config.max_wasm_stack(4 << 10);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let medium_params = " i32".repeat(511);
+    let medium_args = " (i32.const 0)".repeat(511);
+    let large_params = " i32".repeat(800);
+    let module = Module::new(
+        &engine,
+        format!(
+            r#"
+                (module
+                    (type $small_ft (func))
+                    (type $small_ct (cont $small_ft))
+                    (type $medium_ft (func (param{medium_params})))
+                    (type $medium_ct (cont $medium_ft))
+                    (type $large_ft (func (param{large_params})))
+                    (type $large_ct (cont $large_ft))
+
+                    (func $small_target)
+                    (func $medium_target (type $medium_ft))
+                    (func $large_target (type $large_ft))
+                    (elem declare func $small_target $medium_target $large_target)
+
+                    (func (export "small")
+                        (drop (cont.new $small_ct (ref.func $small_target))))
+                    (func (export "medium")
+                        (resume $medium_ct {medium_args}
+                            (cont.new $medium_ct (ref.func $medium_target))))
+                    (func (export "large")
+                        (drop (cont.new $large_ct (ref.func $large_target))))
+                )
+            "#,
+        ),
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let small = instance.get_typed_func::<(), ()>(&mut store, "small")?;
+    small.call(&mut store, ())?;
+
+    let medium = instance.get_typed_func::<(), ()>(&mut store, "medium")?;
+    medium.call(&mut store, ())?;
+
+    let large = instance.get_typed_func::<(), ()>(&mut store, "large")?;
+    let error = large
+        .call(&mut store, ())
+        .expect_err("large continuation signature should exceed the stack allocation");
+    assert!(
+        format!("{error:#}").contains("bytes of runtime headroom"),
+        "unexpected error: {error:#}",
+    );
+
+    Ok(())
+}
