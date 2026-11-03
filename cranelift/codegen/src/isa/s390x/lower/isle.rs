@@ -586,7 +586,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
     #[inline]
     fn fcvt_to_uint_ub32(&mut self, size: u8) -> u64 {
-        (2.0_f32).powi(size.into()).to_bits() as u64
+        libm::powf(2.0_f32, size.into()).to_bits() as u64
     }
 
     #[inline]
@@ -596,7 +596,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
     #[inline]
     fn fcvt_to_uint_ub64(&mut self, size: u8) -> u64 {
-        (2.0_f64).powi(size.into()).to_bits()
+        libm::pow(2.0_f64, size.into()).to_bits()
     }
 
     #[inline]
@@ -616,23 +616,23 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
     #[inline]
     fn fcvt_to_sint_ub32(&mut self, size: u8) -> u64 {
-        (2.0_f32).powi((size - 1).into()).to_bits() as u64
+        libm::powf(2.0_f32, (size - 1).into()).to_bits() as u64
     }
 
     #[inline]
     fn fcvt_to_sint_lb32(&mut self, size: u8) -> u64 {
-        let lb = (-2.0_f32).powi((size - 1).into());
+        let lb = libm::powf(-2.0_f32, (size - 1).into());
         core::cmp::max(lb.to_bits() + 1, (lb - 1.0).to_bits()) as u64
     }
 
     #[inline]
     fn fcvt_to_sint_ub64(&mut self, size: u8) -> u64 {
-        (2.0_f64).powi((size - 1).into()).to_bits()
+        libm::pow(2.0_f64, (size - 1).into()).to_bits()
     }
 
     #[inline]
     fn fcvt_to_sint_lb64(&mut self, size: u8) -> u64 {
-        let lb = (-2.0_f64).powi((size - 1).into());
+        let lb = libm::pow(-2.0_f64, (size - 1).into());
         core::cmp::max(lb.to_bits() + 1, (lb - 1.0).to_bits())
     }
 

@@ -422,7 +422,7 @@ jobs:
             checks: |
               -p cranelift-codegen --benches
               -p cranelift-codegen --no-default-features --features std,unwind,all-arch
-              -p cranelift-codegen --no-default-features --features std,all-arch
+              -p cranelift-codegen --no-default-features --features all-arch
 
           - name: cranelift-entity
             checks: |
