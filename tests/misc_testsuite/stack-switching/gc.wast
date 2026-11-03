@@ -361,3 +361,33 @@
 (assert_return
   (invoke "gc-ref-in-resume-throw-payload")
   (i32.const 202))
+
+;; Regression test for #13750: a suspended continuation held in a local must be
+;; traced by GCs that happen before it is resumed.
+(module
+  (type $ft (func))
+  (type $ct (cont $ft))
+  (type $st (struct (field i32)))
+  (tag $t)
+
+  (func $suspend
+    (suspend $t))
+  (elem declare func $suspend)
+
+  (func (export "entry")
+    (local $continuation (ref null $ct))
+    (local $i i32)
+    (block $handler (result (ref $ct))
+      (resume $ct
+        (on $t $handler)
+        (cont.new $ct (ref.func $suspend)))
+      (return))
+    (local.set $continuation)
+    (loop $allocate
+      (drop (struct.new $st (i32.const 7)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br_if $allocate (i32.lt_u (local.get $i) (i32.const 20000))))
+    (resume $ct (local.get $continuation)))
+)
+
+(assert_return (invoke "entry"))
