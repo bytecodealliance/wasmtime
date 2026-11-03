@@ -1431,3 +1431,863 @@ block0(v0: i8, v1: i64):
 ; run: %bor_select_nonconstant_branch_i64(0, 128) == 133
 ; run: %bor_select_nonconstant_branch_i64(1, 0) == 21
 ; run: %bor_select_nonconstant_branch_i64(-1, 128) == 21
+
+function %transplant_42865_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp eq v0, v1
+    v3 = ineg v0
+    v4 = select v2, v3, v0
+    return v4
+}
+; run: %transplant_42865_i8(-128) == -128
+; run: %transplant_42865_i8(-86) == -86
+; run: %transplant_42865_i8(-1) == -1
+; run: %transplant_42865_i8(0) == 0
+; run: %transplant_42865_i8(1) == 1
+; run: %transplant_42865_i8(2) == 2
+; run: %transplant_42865_i8(7) == 7
+; run: %transplant_42865_i8(8) == 8
+; run: %transplant_42865_i8(9) == 9
+; run: %transplant_42865_i8(13) == 13
+; run: %transplant_42865_i8(42) == 42
+; run: %transplant_42865_i8(85) == 85
+; run: %transplant_42865_i8(127) == 127
+
+function %transplant_42865_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp eq v0, v1
+    v3 = ineg v0
+    v4 = select v2, v3, v0
+    return v4
+}
+; run: %transplant_42865_i64(-9223372036854775808) == -9223372036854775808
+; run: %transplant_42865_i64(-6148914691236517206) == -6148914691236517206
+; run: %transplant_42865_i64(-1) == -1
+; run: %transplant_42865_i64(0) == 0
+; run: %transplant_42865_i64(1) == 1
+; run: %transplant_42865_i64(2) == 2
+; run: %transplant_42865_i64(13) == 13
+; run: %transplant_42865_i64(42) == 42
+; run: %transplant_42865_i64(63) == 63
+; run: %transplant_42865_i64(64) == 64
+; run: %transplant_42865_i64(65) == 65
+; run: %transplant_42865_i64(6148914691236517205) == 6148914691236517205
+; run: %transplant_42865_i64(9223372036854775807) == 9223372036854775807
+
+function %transplant_43009_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp ne v0, v1
+    v3 = ineg v0
+    v4 = select v2, v0, v3
+    return v4
+}
+; run: %transplant_43009_i8(-128) == -128
+; run: %transplant_43009_i8(-86) == -86
+; run: %transplant_43009_i8(-1) == -1
+; run: %transplant_43009_i8(0) == 0
+; run: %transplant_43009_i8(1) == 1
+; run: %transplant_43009_i8(2) == 2
+; run: %transplant_43009_i8(7) == 7
+; run: %transplant_43009_i8(8) == 8
+; run: %transplant_43009_i8(9) == 9
+; run: %transplant_43009_i8(13) == 13
+; run: %transplant_43009_i8(42) == 42
+; run: %transplant_43009_i8(85) == 85
+; run: %transplant_43009_i8(127) == 127
+
+function %transplant_43009_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp ne v0, v1
+    v3 = ineg v0
+    v4 = select v2, v0, v3
+    return v4
+}
+; run: %transplant_43009_i64(-9223372036854775808) == -9223372036854775808
+; run: %transplant_43009_i64(-6148914691236517206) == -6148914691236517206
+; run: %transplant_43009_i64(-1) == -1
+; run: %transplant_43009_i64(0) == 0
+; run: %transplant_43009_i64(1) == 1
+; run: %transplant_43009_i64(2) == 2
+; run: %transplant_43009_i64(13) == 13
+; run: %transplant_43009_i64(42) == 42
+; run: %transplant_43009_i64(63) == 63
+; run: %transplant_43009_i64(64) == 64
+; run: %transplant_43009_i64(65) == 65
+; run: %transplant_43009_i64(6148914691236517205) == 6148914691236517205
+; run: %transplant_43009_i64(9223372036854775807) == 9223372036854775807
+
+function %transplant_39182_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 13
+    v2 = iconst.i8 42
+    v3 = select v0, v1, v2
+    v4 = bnot v3
+    return v4
+}
+; run: %transplant_39182_i8(-128) == -14
+; run: %transplant_39182_i8(-86) == -14
+; run: %transplant_39182_i8(-1) == -14
+; run: %transplant_39182_i8(0) == -43
+; run: %transplant_39182_i8(1) == -14
+; run: %transplant_39182_i8(2) == -14
+; run: %transplant_39182_i8(7) == -14
+; run: %transplant_39182_i8(8) == -14
+; run: %transplant_39182_i8(9) == -14
+; run: %transplant_39182_i8(13) == -14
+; run: %transplant_39182_i8(42) == -14
+; run: %transplant_39182_i8(85) == -14
+; run: %transplant_39182_i8(127) == -14
+
+function %transplant_39182_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 13
+    v2 = iconst.i64 42
+    v3 = select v0, v1, v2
+    v4 = bnot v3
+    return v4
+}
+; run: %transplant_39182_i64(-86) == -14
+; run: %transplant_39182_i64(-1) == -14
+; run: %transplant_39182_i64(0) == -43
+; run: %transplant_39182_i64(1) == -14
+; run: %transplant_39182_i64(2) == -14
+; run: %transplant_39182_i64(13) == -14
+; run: %transplant_39182_i64(42) == -14
+; run: %transplant_39182_i64(63) == -14
+; run: %transplant_39182_i64(64) == -14
+; run: %transplant_39182_i64(65) == -14
+; run: %transplant_39182_i64(85) == -14
+
+function %transplant_42061_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 13
+    v2 = iconst.i8 42
+    v3 = select v0, v1, v2
+    v4 = ineg v3
+    return v4
+}
+; run: %transplant_42061_i8(-128) == -13
+; run: %transplant_42061_i8(-86) == -13
+; run: %transplant_42061_i8(-1) == -13
+; run: %transplant_42061_i8(0) == -42
+; run: %transplant_42061_i8(1) == -13
+; run: %transplant_42061_i8(2) == -13
+; run: %transplant_42061_i8(7) == -13
+; run: %transplant_42061_i8(8) == -13
+; run: %transplant_42061_i8(9) == -13
+; run: %transplant_42061_i8(13) == -13
+; run: %transplant_42061_i8(42) == -13
+; run: %transplant_42061_i8(85) == -13
+; run: %transplant_42061_i8(127) == -13
+
+function %transplant_42061_i64(i8) -> i64 {
+block0(v0: i8):
+    v1 = iconst.i64 13
+    v2 = iconst.i64 42
+    v3 = select v0, v1, v2
+    v4 = ineg v3
+    return v4
+}
+; run: %transplant_42061_i64(-86) == -13
+; run: %transplant_42061_i64(-1) == -13
+; run: %transplant_42061_i64(0) == -42
+; run: %transplant_42061_i64(1) == -13
+; run: %transplant_42061_i64(2) == -13
+; run: %transplant_42061_i64(13) == -13
+; run: %transplant_42061_i64(42) == -13
+; run: %transplant_42061_i64(63) == -13
+; run: %transplant_42061_i64(64) == -13
+; run: %transplant_42061_i64(65) == -13
+; run: %transplant_42061_i64(85) == -13
+
+function %transplant_42859_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp eq v0, v2
+    v4 = iconst.i8 0
+    v5 = band v0, v1
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42859_i8(-128, -128) == -128
+; run: %transplant_42859_i8(-128, -86) == -128
+; run: %transplant_42859_i8(-128, 0) == 0
+; run: %transplant_42859_i8(-86, -86) == -86
+; run: %transplant_42859_i8(-86, 9) == 8
+; run: %transplant_42859_i8(-1, -1) == -1
+; run: %transplant_42859_i8(-1, 0) == 0
+; run: %transplant_42859_i8(-1, 85) == 85
+; run: %transplant_42859_i8(0, -128) == 0
+; run: %transplant_42859_i8(0, -1) == 0
+; run: %transplant_42859_i8(0, 0) == 0
+; run: %transplant_42859_i8(0, 1) == 0
+; run: %transplant_42859_i8(0, 127) == 0
+; run: %transplant_42859_i8(1, 0) == 0
+; run: %transplant_42859_i8(1, 1) == 1
+; run: %transplant_42859_i8(1, 127) == 1
+; run: %transplant_42859_i8(2, 0) == 0
+; run: %transplant_42859_i8(2, 2) == 2
+; run: %transplant_42859_i8(7, 2) == 2
+; run: %transplant_42859_i8(7, 7) == 7
+; run: %transplant_42859_i8(8, 8) == 8
+; run: %transplant_42859_i8(8, 13) == 8
+; run: %transplant_42859_i8(9, 9) == 9
+; run: %transplant_42859_i8(9, 42) == 8
+; run: %transplant_42859_i8(13, 1) == 1
+; run: %transplant_42859_i8(13, 13) == 13
+; run: %transplant_42859_i8(42, -1) == 42
+; run: %transplant_42859_i8(42, 42) == 42
+; run: %transplant_42859_i8(85, 8) == 0
+; run: %transplant_42859_i8(85, 85) == 85
+; run: %transplant_42859_i8(127, 0) == 0
+; run: %transplant_42859_i8(127, 7) == 7
+; run: %transplant_42859_i8(127, 127) == 127
+
+function %transplant_42859_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp eq v0, v2
+    v4 = iconst.i64 0
+    v5 = band v0, v1
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42859_i64(-9223372036854775808, -9223372036854775808) == -9223372036854775808
+; run: %transplant_42859_i64(-9223372036854775808, -6148914691236517206) == -9223372036854775808
+; run: %transplant_42859_i64(-9223372036854775808, 0) == 0
+; run: %transplant_42859_i64(-6148914691236517206, -6148914691236517206) == -6148914691236517206
+; run: %transplant_42859_i64(-6148914691236517206, 65) == 0
+; run: %transplant_42859_i64(-1, -1) == -1
+; run: %transplant_42859_i64(-1, 0) == 0
+; run: %transplant_42859_i64(-1, 6148914691236517205) == 6148914691236517205
+; run: %transplant_42859_i64(0, -9223372036854775808) == 0
+; run: %transplant_42859_i64(0, -1) == 0
+; run: %transplant_42859_i64(0, 0) == 0
+; run: %transplant_42859_i64(0, 1) == 0
+; run: %transplant_42859_i64(0, 9223372036854775807) == 0
+; run: %transplant_42859_i64(1, 0) == 0
+; run: %transplant_42859_i64(1, 1) == 1
+; run: %transplant_42859_i64(1, 9223372036854775807) == 1
+; run: %transplant_42859_i64(2, 0) == 0
+; run: %transplant_42859_i64(2, 2) == 2
+; run: %transplant_42859_i64(13, 1) == 1
+; run: %transplant_42859_i64(13, 13) == 13
+; run: %transplant_42859_i64(42, -1) == 42
+; run: %transplant_42859_i64(42, 42) == 42
+; run: %transplant_42859_i64(63, 2) == 2
+; run: %transplant_42859_i64(63, 63) == 63
+; run: %transplant_42859_i64(64, 13) == 0
+; run: %transplant_42859_i64(64, 64) == 64
+; run: %transplant_42859_i64(65, 42) == 0
+; run: %transplant_42859_i64(65, 65) == 65
+; run: %transplant_42859_i64(6148914691236517205, 64) == 64
+; run: %transplant_42859_i64(6148914691236517205, 6148914691236517205) == 6148914691236517205
+; run: %transplant_42859_i64(9223372036854775807, 0) == 0
+; run: %transplant_42859_i64(9223372036854775807, 63) == 63
+; run: %transplant_42859_i64(9223372036854775807, 9223372036854775807) == 9223372036854775807
+
+function %transplant_42860_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp eq v0, v2
+    v4 = iconst.i8 0
+    v5 = band v1, v0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42860_i8(-128, -128) == -128
+; run: %transplant_42860_i8(-128, -86) == -128
+; run: %transplant_42860_i8(-128, 0) == 0
+; run: %transplant_42860_i8(-86, -86) == -86
+; run: %transplant_42860_i8(-86, 9) == 8
+; run: %transplant_42860_i8(-1, -1) == -1
+; run: %transplant_42860_i8(-1, 0) == 0
+; run: %transplant_42860_i8(-1, 85) == 85
+; run: %transplant_42860_i8(0, -128) == 0
+; run: %transplant_42860_i8(0, -1) == 0
+; run: %transplant_42860_i8(0, 0) == 0
+; run: %transplant_42860_i8(0, 1) == 0
+; run: %transplant_42860_i8(0, 127) == 0
+; run: %transplant_42860_i8(1, 0) == 0
+; run: %transplant_42860_i8(1, 1) == 1
+; run: %transplant_42860_i8(1, 127) == 1
+; run: %transplant_42860_i8(2, 0) == 0
+; run: %transplant_42860_i8(2, 2) == 2
+; run: %transplant_42860_i8(7, 2) == 2
+; run: %transplant_42860_i8(7, 7) == 7
+; run: %transplant_42860_i8(8, 8) == 8
+; run: %transplant_42860_i8(8, 13) == 8
+; run: %transplant_42860_i8(9, 9) == 9
+; run: %transplant_42860_i8(9, 42) == 8
+; run: %transplant_42860_i8(13, 1) == 1
+; run: %transplant_42860_i8(13, 13) == 13
+; run: %transplant_42860_i8(42, -1) == 42
+; run: %transplant_42860_i8(42, 42) == 42
+; run: %transplant_42860_i8(85, 8) == 0
+; run: %transplant_42860_i8(85, 85) == 85
+; run: %transplant_42860_i8(127, 0) == 0
+; run: %transplant_42860_i8(127, 7) == 7
+; run: %transplant_42860_i8(127, 127) == 127
+
+function %transplant_42860_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp eq v0, v2
+    v4 = iconst.i64 0
+    v5 = band v1, v0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42860_i64(-9223372036854775808, -9223372036854775808) == -9223372036854775808
+; run: %transplant_42860_i64(-9223372036854775808, -6148914691236517206) == -9223372036854775808
+; run: %transplant_42860_i64(-9223372036854775808, 0) == 0
+; run: %transplant_42860_i64(-6148914691236517206, -6148914691236517206) == -6148914691236517206
+; run: %transplant_42860_i64(-6148914691236517206, 65) == 0
+; run: %transplant_42860_i64(-1, -1) == -1
+; run: %transplant_42860_i64(-1, 0) == 0
+; run: %transplant_42860_i64(-1, 6148914691236517205) == 6148914691236517205
+; run: %transplant_42860_i64(0, -9223372036854775808) == 0
+; run: %transplant_42860_i64(0, -1) == 0
+; run: %transplant_42860_i64(0, 0) == 0
+; run: %transplant_42860_i64(0, 1) == 0
+; run: %transplant_42860_i64(0, 9223372036854775807) == 0
+; run: %transplant_42860_i64(1, 0) == 0
+; run: %transplant_42860_i64(1, 1) == 1
+; run: %transplant_42860_i64(1, 9223372036854775807) == 1
+; run: %transplant_42860_i64(2, 0) == 0
+; run: %transplant_42860_i64(2, 2) == 2
+; run: %transplant_42860_i64(13, 1) == 1
+; run: %transplant_42860_i64(13, 13) == 13
+; run: %transplant_42860_i64(42, -1) == 42
+; run: %transplant_42860_i64(42, 42) == 42
+; run: %transplant_42860_i64(63, 2) == 2
+; run: %transplant_42860_i64(63, 63) == 63
+; run: %transplant_42860_i64(64, 13) == 0
+; run: %transplant_42860_i64(64, 64) == 64
+; run: %transplant_42860_i64(65, 42) == 0
+; run: %transplant_42860_i64(65, 65) == 65
+; run: %transplant_42860_i64(6148914691236517205, 64) == 64
+; run: %transplant_42860_i64(6148914691236517205, 6148914691236517205) == 6148914691236517205
+; run: %transplant_42860_i64(9223372036854775807, 0) == 0
+; run: %transplant_42860_i64(9223372036854775807, 63) == 63
+; run: %transplant_42860_i64(9223372036854775807, 9223372036854775807) == 9223372036854775807
+
+function %transplant_42992_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp ne v0, v2
+    v4 = band v0, v1
+    v5 = iconst.i8 0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42992_i8(-128, -128) == -128
+; run: %transplant_42992_i8(-128, -86) == -128
+; run: %transplant_42992_i8(-128, 0) == 0
+; run: %transplant_42992_i8(-86, -86) == -86
+; run: %transplant_42992_i8(-86, 9) == 8
+; run: %transplant_42992_i8(-1, -1) == -1
+; run: %transplant_42992_i8(-1, 0) == 0
+; run: %transplant_42992_i8(-1, 85) == 85
+; run: %transplant_42992_i8(0, -128) == 0
+; run: %transplant_42992_i8(0, -1) == 0
+; run: %transplant_42992_i8(0, 0) == 0
+; run: %transplant_42992_i8(0, 1) == 0
+; run: %transplant_42992_i8(0, 127) == 0
+; run: %transplant_42992_i8(1, 0) == 0
+; run: %transplant_42992_i8(1, 1) == 1
+; run: %transplant_42992_i8(1, 127) == 1
+; run: %transplant_42992_i8(2, 0) == 0
+; run: %transplant_42992_i8(2, 2) == 2
+; run: %transplant_42992_i8(7, 2) == 2
+; run: %transplant_42992_i8(7, 7) == 7
+; run: %transplant_42992_i8(8, 8) == 8
+; run: %transplant_42992_i8(8, 13) == 8
+; run: %transplant_42992_i8(9, 9) == 9
+; run: %transplant_42992_i8(9, 42) == 8
+; run: %transplant_42992_i8(13, 1) == 1
+; run: %transplant_42992_i8(13, 13) == 13
+; run: %transplant_42992_i8(42, -1) == 42
+; run: %transplant_42992_i8(42, 42) == 42
+; run: %transplant_42992_i8(85, 8) == 0
+; run: %transplant_42992_i8(85, 85) == 85
+; run: %transplant_42992_i8(127, 0) == 0
+; run: %transplant_42992_i8(127, 7) == 7
+; run: %transplant_42992_i8(127, 127) == 127
+
+function %transplant_42992_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp ne v0, v2
+    v4 = band v0, v1
+    v5 = iconst.i64 0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42992_i64(-9223372036854775808, -9223372036854775808) == -9223372036854775808
+; run: %transplant_42992_i64(-9223372036854775808, -6148914691236517206) == -9223372036854775808
+; run: %transplant_42992_i64(-9223372036854775808, 0) == 0
+; run: %transplant_42992_i64(-6148914691236517206, -6148914691236517206) == -6148914691236517206
+; run: %transplant_42992_i64(-6148914691236517206, 65) == 0
+; run: %transplant_42992_i64(-1, -1) == -1
+; run: %transplant_42992_i64(-1, 0) == 0
+; run: %transplant_42992_i64(-1, 6148914691236517205) == 6148914691236517205
+; run: %transplant_42992_i64(0, -9223372036854775808) == 0
+; run: %transplant_42992_i64(0, -1) == 0
+; run: %transplant_42992_i64(0, 0) == 0
+; run: %transplant_42992_i64(0, 1) == 0
+; run: %transplant_42992_i64(0, 9223372036854775807) == 0
+; run: %transplant_42992_i64(1, 0) == 0
+; run: %transplant_42992_i64(1, 1) == 1
+; run: %transplant_42992_i64(1, 9223372036854775807) == 1
+; run: %transplant_42992_i64(2, 0) == 0
+; run: %transplant_42992_i64(2, 2) == 2
+; run: %transplant_42992_i64(13, 1) == 1
+; run: %transplant_42992_i64(13, 13) == 13
+; run: %transplant_42992_i64(42, -1) == 42
+; run: %transplant_42992_i64(42, 42) == 42
+; run: %transplant_42992_i64(63, 2) == 2
+; run: %transplant_42992_i64(63, 63) == 63
+; run: %transplant_42992_i64(64, 13) == 0
+; run: %transplant_42992_i64(64, 64) == 64
+; run: %transplant_42992_i64(65, 42) == 0
+; run: %transplant_42992_i64(65, 65) == 65
+; run: %transplant_42992_i64(6148914691236517205, 64) == 64
+; run: %transplant_42992_i64(6148914691236517205, 6148914691236517205) == 6148914691236517205
+; run: %transplant_42992_i64(9223372036854775807, 0) == 0
+; run: %transplant_42992_i64(9223372036854775807, 63) == 63
+; run: %transplant_42992_i64(9223372036854775807, 9223372036854775807) == 9223372036854775807
+
+function %transplant_42993_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp ne v0, v2
+    v4 = band v1, v0
+    v5 = iconst.i8 0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42993_i8(-128, -128) == -128
+; run: %transplant_42993_i8(-128, -86) == -128
+; run: %transplant_42993_i8(-128, 0) == 0
+; run: %transplant_42993_i8(-86, -86) == -86
+; run: %transplant_42993_i8(-86, 9) == 8
+; run: %transplant_42993_i8(-1, -1) == -1
+; run: %transplant_42993_i8(-1, 0) == 0
+; run: %transplant_42993_i8(-1, 85) == 85
+; run: %transplant_42993_i8(0, -128) == 0
+; run: %transplant_42993_i8(0, -1) == 0
+; run: %transplant_42993_i8(0, 0) == 0
+; run: %transplant_42993_i8(0, 1) == 0
+; run: %transplant_42993_i8(0, 127) == 0
+; run: %transplant_42993_i8(1, 0) == 0
+; run: %transplant_42993_i8(1, 1) == 1
+; run: %transplant_42993_i8(1, 127) == 1
+; run: %transplant_42993_i8(2, 0) == 0
+; run: %transplant_42993_i8(2, 2) == 2
+; run: %transplant_42993_i8(7, 2) == 2
+; run: %transplant_42993_i8(7, 7) == 7
+; run: %transplant_42993_i8(8, 8) == 8
+; run: %transplant_42993_i8(8, 13) == 8
+; run: %transplant_42993_i8(9, 9) == 9
+; run: %transplant_42993_i8(9, 42) == 8
+; run: %transplant_42993_i8(13, 1) == 1
+; run: %transplant_42993_i8(13, 13) == 13
+; run: %transplant_42993_i8(42, -1) == 42
+; run: %transplant_42993_i8(42, 42) == 42
+; run: %transplant_42993_i8(85, 8) == 0
+; run: %transplant_42993_i8(85, 85) == 85
+; run: %transplant_42993_i8(127, 0) == 0
+; run: %transplant_42993_i8(127, 7) == 7
+; run: %transplant_42993_i8(127, 127) == 127
+
+function %transplant_42993_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp ne v0, v2
+    v4 = band v1, v0
+    v5 = iconst.i64 0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42993_i64(-9223372036854775808, -9223372036854775808) == -9223372036854775808
+; run: %transplant_42993_i64(-9223372036854775808, -6148914691236517206) == -9223372036854775808
+; run: %transplant_42993_i64(-9223372036854775808, 0) == 0
+; run: %transplant_42993_i64(-6148914691236517206, -6148914691236517206) == -6148914691236517206
+; run: %transplant_42993_i64(-6148914691236517206, 65) == 0
+; run: %transplant_42993_i64(-1, -1) == -1
+; run: %transplant_42993_i64(-1, 0) == 0
+; run: %transplant_42993_i64(-1, 6148914691236517205) == 6148914691236517205
+; run: %transplant_42993_i64(0, -9223372036854775808) == 0
+; run: %transplant_42993_i64(0, -1) == 0
+; run: %transplant_42993_i64(0, 0) == 0
+; run: %transplant_42993_i64(0, 1) == 0
+; run: %transplant_42993_i64(0, 9223372036854775807) == 0
+; run: %transplant_42993_i64(1, 0) == 0
+; run: %transplant_42993_i64(1, 1) == 1
+; run: %transplant_42993_i64(1, 9223372036854775807) == 1
+; run: %transplant_42993_i64(2, 0) == 0
+; run: %transplant_42993_i64(2, 2) == 2
+; run: %transplant_42993_i64(13, 1) == 1
+; run: %transplant_42993_i64(13, 13) == 13
+; run: %transplant_42993_i64(42, -1) == 42
+; run: %transplant_42993_i64(42, 42) == 42
+; run: %transplant_42993_i64(63, 2) == 2
+; run: %transplant_42993_i64(63, 63) == 63
+; run: %transplant_42993_i64(64, 13) == 0
+; run: %transplant_42993_i64(64, 64) == 64
+; run: %transplant_42993_i64(65, 42) == 0
+; run: %transplant_42993_i64(65, 65) == 65
+; run: %transplant_42993_i64(6148914691236517205, 64) == 64
+; run: %transplant_42993_i64(6148914691236517205, 6148914691236517205) == 6148914691236517205
+; run: %transplant_42993_i64(9223372036854775807, 0) == 0
+; run: %transplant_42993_i64(9223372036854775807, 63) == 63
+; run: %transplant_42993_i64(9223372036854775807, 9223372036854775807) == 9223372036854775807
+
+function %transplant_42861_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp eq v0, v2
+    v4 = iconst.i8 0
+    v5 = imul v0, v1
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42861_i8(-128, -128) == 0
+; run: %transplant_42861_i8(-128, -86) == 0
+; run: %transplant_42861_i8(-128, 0) == 0
+; run: %transplant_42861_i8(-86, -86) == -28
+; run: %transplant_42861_i8(-86, 9) == -6
+; run: %transplant_42861_i8(-1, -1) == 1
+; run: %transplant_42861_i8(-1, 0) == 0
+; run: %transplant_42861_i8(-1, 85) == -85
+; run: %transplant_42861_i8(0, -128) == 0
+; run: %transplant_42861_i8(0, -1) == 0
+; run: %transplant_42861_i8(0, 0) == 0
+; run: %transplant_42861_i8(0, 1) == 0
+; run: %transplant_42861_i8(0, 127) == 0
+; run: %transplant_42861_i8(1, 0) == 0
+; run: %transplant_42861_i8(1, 1) == 1
+; run: %transplant_42861_i8(1, 127) == 127
+; run: %transplant_42861_i8(2, 0) == 0
+; run: %transplant_42861_i8(2, 2) == 4
+; run: %transplant_42861_i8(7, 2) == 14
+; run: %transplant_42861_i8(7, 7) == 49
+; run: %transplant_42861_i8(8, 8) == 64
+; run: %transplant_42861_i8(8, 13) == 104
+; run: %transplant_42861_i8(9, 9) == 81
+; run: %transplant_42861_i8(9, 42) == 122
+; run: %transplant_42861_i8(13, 1) == 13
+; run: %transplant_42861_i8(13, 13) == -87
+; run: %transplant_42861_i8(42, -1) == -42
+; run: %transplant_42861_i8(42, 42) == -28
+; run: %transplant_42861_i8(85, 8) == -88
+; run: %transplant_42861_i8(85, 85) == 57
+; run: %transplant_42861_i8(127, 0) == 0
+; run: %transplant_42861_i8(127, 7) == 121
+; run: %transplant_42861_i8(127, 127) == 1
+
+function %transplant_42861_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp eq v0, v2
+    v4 = iconst.i64 0
+    v5 = imul v0, v1
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42861_i64(-9223372036854775808, -9223372036854775808) == 0
+; run: %transplant_42861_i64(-9223372036854775808, -6148914691236517206) == 0
+; run: %transplant_42861_i64(-9223372036854775808, 0) == 0
+; run: %transplant_42861_i64(-6148914691236517206, -6148914691236517206) == 4099276460824344804
+; run: %transplant_42861_i64(-6148914691236517206, 65) == 6148914691236517162
+; run: %transplant_42861_i64(-1, -1) == 1
+; run: %transplant_42861_i64(-1, 0) == 0
+; run: %transplant_42861_i64(-1, 6148914691236517205) == -6148914691236517205
+; run: %transplant_42861_i64(0, -9223372036854775808) == 0
+; run: %transplant_42861_i64(0, -1) == 0
+; run: %transplant_42861_i64(0, 0) == 0
+; run: %transplant_42861_i64(0, 1) == 0
+; run: %transplant_42861_i64(0, 9223372036854775807) == 0
+; run: %transplant_42861_i64(1, 0) == 0
+; run: %transplant_42861_i64(1, 1) == 1
+; run: %transplant_42861_i64(1, 9223372036854775807) == 9223372036854775807
+; run: %transplant_42861_i64(2, 0) == 0
+; run: %transplant_42861_i64(2, 2) == 4
+; run: %transplant_42861_i64(13, 1) == 13
+; run: %transplant_42861_i64(13, 13) == 169
+; run: %transplant_42861_i64(42, -1) == -42
+; run: %transplant_42861_i64(42, 42) == 1764
+; run: %transplant_42861_i64(63, 2) == 126
+; run: %transplant_42861_i64(63, 63) == 3969
+; run: %transplant_42861_i64(64, 13) == 832
+; run: %transplant_42861_i64(64, 64) == 4096
+; run: %transplant_42861_i64(65, 42) == 2730
+; run: %transplant_42861_i64(65, 65) == 4225
+; run: %transplant_42861_i64(6148914691236517205, 64) == 6148914691236517184
+; run: %transplant_42861_i64(6148914691236517205, 6148914691236517205) == -8198552921648689607
+; run: %transplant_42861_i64(9223372036854775807, 0) == 0
+; run: %transplant_42861_i64(9223372036854775807, 63) == 9223372036854775745
+; run: %transplant_42861_i64(9223372036854775807, 9223372036854775807) == 1
+
+function %transplant_42862_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp eq v0, v2
+    v4 = iconst.i8 0
+    v5 = imul v1, v0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42862_i8(-128, -128) == 0
+; run: %transplant_42862_i8(-128, -86) == 0
+; run: %transplant_42862_i8(-128, 0) == 0
+; run: %transplant_42862_i8(-86, -86) == -28
+; run: %transplant_42862_i8(-86, 9) == -6
+; run: %transplant_42862_i8(-1, -1) == 1
+; run: %transplant_42862_i8(-1, 0) == 0
+; run: %transplant_42862_i8(-1, 85) == -85
+; run: %transplant_42862_i8(0, -128) == 0
+; run: %transplant_42862_i8(0, -1) == 0
+; run: %transplant_42862_i8(0, 0) == 0
+; run: %transplant_42862_i8(0, 1) == 0
+; run: %transplant_42862_i8(0, 127) == 0
+; run: %transplant_42862_i8(1, 0) == 0
+; run: %transplant_42862_i8(1, 1) == 1
+; run: %transplant_42862_i8(1, 127) == 127
+; run: %transplant_42862_i8(2, 0) == 0
+; run: %transplant_42862_i8(2, 2) == 4
+; run: %transplant_42862_i8(7, 2) == 14
+; run: %transplant_42862_i8(7, 7) == 49
+; run: %transplant_42862_i8(8, 8) == 64
+; run: %transplant_42862_i8(8, 13) == 104
+; run: %transplant_42862_i8(9, 9) == 81
+; run: %transplant_42862_i8(9, 42) == 122
+; run: %transplant_42862_i8(13, 1) == 13
+; run: %transplant_42862_i8(13, 13) == -87
+; run: %transplant_42862_i8(42, -1) == -42
+; run: %transplant_42862_i8(42, 42) == -28
+; run: %transplant_42862_i8(85, 8) == -88
+; run: %transplant_42862_i8(85, 85) == 57
+; run: %transplant_42862_i8(127, 0) == 0
+; run: %transplant_42862_i8(127, 7) == 121
+; run: %transplant_42862_i8(127, 127) == 1
+
+function %transplant_42862_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp eq v0, v2
+    v4 = iconst.i64 0
+    v5 = imul v1, v0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42862_i64(-9223372036854775808, -9223372036854775808) == 0
+; run: %transplant_42862_i64(-9223372036854775808, -6148914691236517206) == 0
+; run: %transplant_42862_i64(-9223372036854775808, 0) == 0
+; run: %transplant_42862_i64(-6148914691236517206, -6148914691236517206) == 4099276460824344804
+; run: %transplant_42862_i64(-6148914691236517206, 65) == 6148914691236517162
+; run: %transplant_42862_i64(-1, -1) == 1
+; run: %transplant_42862_i64(-1, 0) == 0
+; run: %transplant_42862_i64(-1, 6148914691236517205) == -6148914691236517205
+; run: %transplant_42862_i64(0, -9223372036854775808) == 0
+; run: %transplant_42862_i64(0, -1) == 0
+; run: %transplant_42862_i64(0, 0) == 0
+; run: %transplant_42862_i64(0, 1) == 0
+; run: %transplant_42862_i64(0, 9223372036854775807) == 0
+; run: %transplant_42862_i64(1, 0) == 0
+; run: %transplant_42862_i64(1, 1) == 1
+; run: %transplant_42862_i64(1, 9223372036854775807) == 9223372036854775807
+; run: %transplant_42862_i64(2, 0) == 0
+; run: %transplant_42862_i64(2, 2) == 4
+; run: %transplant_42862_i64(13, 1) == 13
+; run: %transplant_42862_i64(13, 13) == 169
+; run: %transplant_42862_i64(42, -1) == -42
+; run: %transplant_42862_i64(42, 42) == 1764
+; run: %transplant_42862_i64(63, 2) == 126
+; run: %transplant_42862_i64(63, 63) == 3969
+; run: %transplant_42862_i64(64, 13) == 832
+; run: %transplant_42862_i64(64, 64) == 4096
+; run: %transplant_42862_i64(65, 42) == 2730
+; run: %transplant_42862_i64(65, 65) == 4225
+; run: %transplant_42862_i64(6148914691236517205, 64) == 6148914691236517184
+; run: %transplant_42862_i64(6148914691236517205, 6148914691236517205) == -8198552921648689607
+; run: %transplant_42862_i64(9223372036854775807, 0) == 0
+; run: %transplant_42862_i64(9223372036854775807, 63) == 9223372036854775745
+; run: %transplant_42862_i64(9223372036854775807, 9223372036854775807) == 1
+
+function %transplant_42996_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp ne v0, v2
+    v4 = imul v0, v1
+    v5 = iconst.i8 0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42996_i8(-128, -128) == 0
+; run: %transplant_42996_i8(-128, -86) == 0
+; run: %transplant_42996_i8(-128, 0) == 0
+; run: %transplant_42996_i8(-86, -86) == -28
+; run: %transplant_42996_i8(-86, 9) == -6
+; run: %transplant_42996_i8(-1, -1) == 1
+; run: %transplant_42996_i8(-1, 0) == 0
+; run: %transplant_42996_i8(-1, 85) == -85
+; run: %transplant_42996_i8(0, -128) == 0
+; run: %transplant_42996_i8(0, -1) == 0
+; run: %transplant_42996_i8(0, 0) == 0
+; run: %transplant_42996_i8(0, 1) == 0
+; run: %transplant_42996_i8(0, 127) == 0
+; run: %transplant_42996_i8(1, 0) == 0
+; run: %transplant_42996_i8(1, 1) == 1
+; run: %transplant_42996_i8(1, 127) == 127
+; run: %transplant_42996_i8(2, 0) == 0
+; run: %transplant_42996_i8(2, 2) == 4
+; run: %transplant_42996_i8(7, 2) == 14
+; run: %transplant_42996_i8(7, 7) == 49
+; run: %transplant_42996_i8(8, 8) == 64
+; run: %transplant_42996_i8(8, 13) == 104
+; run: %transplant_42996_i8(9, 9) == 81
+; run: %transplant_42996_i8(9, 42) == 122
+; run: %transplant_42996_i8(13, 1) == 13
+; run: %transplant_42996_i8(13, 13) == -87
+; run: %transplant_42996_i8(42, -1) == -42
+; run: %transplant_42996_i8(42, 42) == -28
+; run: %transplant_42996_i8(85, 8) == -88
+; run: %transplant_42996_i8(85, 85) == 57
+; run: %transplant_42996_i8(127, 0) == 0
+; run: %transplant_42996_i8(127, 7) == 121
+; run: %transplant_42996_i8(127, 127) == 1
+
+function %transplant_42996_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp ne v0, v2
+    v4 = imul v0, v1
+    v5 = iconst.i64 0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42996_i64(-9223372036854775808, -9223372036854775808) == 0
+; run: %transplant_42996_i64(-9223372036854775808, -6148914691236517206) == 0
+; run: %transplant_42996_i64(-9223372036854775808, 0) == 0
+; run: %transplant_42996_i64(-6148914691236517206, -6148914691236517206) == 4099276460824344804
+; run: %transplant_42996_i64(-6148914691236517206, 65) == 6148914691236517162
+; run: %transplant_42996_i64(-1, -1) == 1
+; run: %transplant_42996_i64(-1, 0) == 0
+; run: %transplant_42996_i64(-1, 6148914691236517205) == -6148914691236517205
+; run: %transplant_42996_i64(0, -9223372036854775808) == 0
+; run: %transplant_42996_i64(0, -1) == 0
+; run: %transplant_42996_i64(0, 0) == 0
+; run: %transplant_42996_i64(0, 1) == 0
+; run: %transplant_42996_i64(0, 9223372036854775807) == 0
+; run: %transplant_42996_i64(1, 0) == 0
+; run: %transplant_42996_i64(1, 1) == 1
+; run: %transplant_42996_i64(1, 9223372036854775807) == 9223372036854775807
+; run: %transplant_42996_i64(2, 0) == 0
+; run: %transplant_42996_i64(2, 2) == 4
+; run: %transplant_42996_i64(13, 1) == 13
+; run: %transplant_42996_i64(13, 13) == 169
+; run: %transplant_42996_i64(42, -1) == -42
+; run: %transplant_42996_i64(42, 42) == 1764
+; run: %transplant_42996_i64(63, 2) == 126
+; run: %transplant_42996_i64(63, 63) == 3969
+; run: %transplant_42996_i64(64, 13) == 832
+; run: %transplant_42996_i64(64, 64) == 4096
+; run: %transplant_42996_i64(65, 42) == 2730
+; run: %transplant_42996_i64(65, 65) == 4225
+; run: %transplant_42996_i64(6148914691236517205, 64) == 6148914691236517184
+; run: %transplant_42996_i64(6148914691236517205, 6148914691236517205) == -8198552921648689607
+; run: %transplant_42996_i64(9223372036854775807, 0) == 0
+; run: %transplant_42996_i64(9223372036854775807, 63) == 9223372036854775745
+; run: %transplant_42996_i64(9223372036854775807, 9223372036854775807) == 1
+
+function %transplant_42997_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iconst.i8 0
+    v3 = icmp ne v0, v2
+    v4 = imul v1, v0
+    v5 = iconst.i8 0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42997_i8(-128, -128) == 0
+; run: %transplant_42997_i8(-128, -86) == 0
+; run: %transplant_42997_i8(-128, 0) == 0
+; run: %transplant_42997_i8(-86, -86) == -28
+; run: %transplant_42997_i8(-86, 9) == -6
+; run: %transplant_42997_i8(-1, -1) == 1
+; run: %transplant_42997_i8(-1, 0) == 0
+; run: %transplant_42997_i8(-1, 85) == -85
+; run: %transplant_42997_i8(0, -128) == 0
+; run: %transplant_42997_i8(0, -1) == 0
+; run: %transplant_42997_i8(0, 0) == 0
+; run: %transplant_42997_i8(0, 1) == 0
+; run: %transplant_42997_i8(0, 127) == 0
+; run: %transplant_42997_i8(1, 0) == 0
+; run: %transplant_42997_i8(1, 1) == 1
+; run: %transplant_42997_i8(1, 127) == 127
+; run: %transplant_42997_i8(2, 0) == 0
+; run: %transplant_42997_i8(2, 2) == 4
+; run: %transplant_42997_i8(7, 2) == 14
+; run: %transplant_42997_i8(7, 7) == 49
+; run: %transplant_42997_i8(8, 8) == 64
+; run: %transplant_42997_i8(8, 13) == 104
+; run: %transplant_42997_i8(9, 9) == 81
+; run: %transplant_42997_i8(9, 42) == 122
+; run: %transplant_42997_i8(13, 1) == 13
+; run: %transplant_42997_i8(13, 13) == -87
+; run: %transplant_42997_i8(42, -1) == -42
+; run: %transplant_42997_i8(42, 42) == -28
+; run: %transplant_42997_i8(85, 8) == -88
+; run: %transplant_42997_i8(85, 85) == 57
+; run: %transplant_42997_i8(127, 0) == 0
+; run: %transplant_42997_i8(127, 7) == 121
+; run: %transplant_42997_i8(127, 127) == 1
+
+function %transplant_42997_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    v3 = icmp ne v0, v2
+    v4 = imul v1, v0
+    v5 = iconst.i64 0
+    v6 = select v3, v4, v5
+    return v6
+}
+; run: %transplant_42997_i64(-9223372036854775808, -9223372036854775808) == 0
+; run: %transplant_42997_i64(-9223372036854775808, -6148914691236517206) == 0
+; run: %transplant_42997_i64(-9223372036854775808, 0) == 0
+; run: %transplant_42997_i64(-6148914691236517206, -6148914691236517206) == 4099276460824344804
+; run: %transplant_42997_i64(-6148914691236517206, 65) == 6148914691236517162
+; run: %transplant_42997_i64(-1, -1) == 1
+; run: %transplant_42997_i64(-1, 0) == 0
+; run: %transplant_42997_i64(-1, 6148914691236517205) == -6148914691236517205
+; run: %transplant_42997_i64(0, -9223372036854775808) == 0
+; run: %transplant_42997_i64(0, -1) == 0
+; run: %transplant_42997_i64(0, 0) == 0
+; run: %transplant_42997_i64(0, 1) == 0
+; run: %transplant_42997_i64(0, 9223372036854775807) == 0
+; run: %transplant_42997_i64(1, 0) == 0
+; run: %transplant_42997_i64(1, 1) == 1
+; run: %transplant_42997_i64(1, 9223372036854775807) == 9223372036854775807
+; run: %transplant_42997_i64(2, 0) == 0
+; run: %transplant_42997_i64(2, 2) == 4
+; run: %transplant_42997_i64(13, 1) == 13
+; run: %transplant_42997_i64(13, 13) == 169
+; run: %transplant_42997_i64(42, -1) == -42
+; run: %transplant_42997_i64(42, 42) == 1764
+; run: %transplant_42997_i64(63, 2) == 126
+; run: %transplant_42997_i64(63, 63) == 3969
+; run: %transplant_42997_i64(64, 13) == 832
+; run: %transplant_42997_i64(64, 64) == 4096
+; run: %transplant_42997_i64(65, 42) == 2730
+; run: %transplant_42997_i64(65, 65) == 4225
+; run: %transplant_42997_i64(6148914691236517205, 64) == 6148914691236517184
+; run: %transplant_42997_i64(6148914691236517205, 6148914691236517205) == -8198552921648689607
+; run: %transplant_42997_i64(9223372036854775807, 0) == 0
+; run: %transplant_42997_i64(9223372036854775807, 63) == 9223372036854775745
+; run: %transplant_42997_i64(9223372036854775807, 9223372036854775807) == 1

@@ -1481,3 +1481,1265 @@ block0(v0: i32, v1: i32):
 ;     v7 = icmp eq v6, v2  ; v2 = 0
 ;     return v7
 ; }
+
+function %transplant_41371_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i32 1
+    v2 = ishl v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %transplant_41371_i8(i8) -> i8 fast {
+; block0(v0: i8):
+;     v4 = iconst.i8 0
+;     v5 = icmp eq v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %transplant_41371_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i32 1
+    v2 = ishl v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %transplant_41371_i64(i64) -> i8 fast {
+; block0(v0: i64):
+;     v4 = iconst.i64 0
+;     v5 = icmp eq v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %transplant_41371_i128(i128) -> i8 {
+block0(v0: i128):
+    v1 = iconst.i32 1
+    v2 = ishl v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %transplant_41371_i128(i128) -> i8 fast {
+; block0(v0: i128):
+;     v4 = iconst.i64 0
+;     v5 = uextend.i128 v4  ; v4 = 0
+;     v6 = icmp eq v0, v5
+;     return v6
+; }
+
+function %transplant_41481_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i32 1
+    v2 = ishl v0, v1
+    v3 = icmp eq v0, v2
+    return v3
+}
+
+; function %transplant_41481_i8(i8) -> i8 fast {
+; block0(v0: i8):
+;     v4 = iconst.i8 0
+;     v5 = icmp eq v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %transplant_41481_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i32 1
+    v2 = ishl v0, v1
+    v3 = icmp eq v0, v2
+    return v3
+}
+
+; function %transplant_41481_i64(i64) -> i8 fast {
+; block0(v0: i64):
+;     v4 = iconst.i64 0
+;     v5 = icmp eq v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %transplant_41468_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i32 1
+    v2 = ushr v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %transplant_41468_i8(i8) -> i8 fast {
+; block0(v0: i8):
+;     v4 = iconst.i8 0
+;     v5 = icmp eq v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %transplant_41468_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i32 1
+    v2 = ushr v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %transplant_41468_i64(i64) -> i8 fast {
+; block0(v0: i64):
+;     v4 = iconst.i64 0
+;     v5 = icmp eq v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %transplant_41468_i128(i128) -> i8 {
+block0(v0: i128):
+    v1 = iconst.i32 1
+    v2 = ushr v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %transplant_41468_i128(i128) -> i8 fast {
+; block0(v0: i128):
+;     v4 = iconst.i64 0
+;     v5 = uextend.i128 v4  ; v4 = 0
+;     v6 = icmp eq v0, v5
+;     return v6
+; }
+
+function %transplant_41521_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i32 1
+    v2 = ushr v0, v1
+    v3 = icmp eq v0, v2
+    return v3
+}
+
+; function %transplant_41521_i8(i8) -> i8 fast {
+; block0(v0: i8):
+;     v4 = iconst.i8 0
+;     v5 = icmp eq v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %transplant_41521_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i32 1
+    v2 = ushr v0, v1
+    v3 = icmp eq v0, v2
+    return v3
+}
+
+; function %transplant_41521_i64(i64) -> i8 fast {
+; block0(v0: i64):
+;     v4 = iconst.i64 0
+;     v5 = icmp eq v0, v4  ; v4 = 0
+;     return v5
+; }
+
+function %transplant_41309_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bnot v0
+    v3 = band v2, v1
+    v4 = icmp eq v3, v1
+    return v4
+}
+
+; function %transplant_41309_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = band v1, v0
+;     v6 = iconst.i8 0
+;     v7 = icmp eq v5, v6  ; v6 = 0
+;     return v7
+; }
+
+function %transplant_41309_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = bnot v0
+    v3 = band v2, v1
+    v4 = icmp eq v3, v1
+    return v4
+}
+
+; function %transplant_41309_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = band v1, v0
+;     v6 = iconst.i64 0
+;     v7 = icmp eq v5, v6  ; v6 = 0
+;     return v7
+; }
+
+function %transplant_41309_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+    v2 = bnot v0
+    v3 = band v2, v1
+    v4 = icmp eq v3, v1
+    return v4
+}
+
+; function %transplant_41309_i128(i128, i128) -> i8 fast {
+; block0(v0: i128, v1: i128):
+;     v5 = band v1, v0
+;     v6 = iconst.i64 0
+;     v7 = uextend.i128 v6  ; v6 = 0
+;     v8 = icmp eq v5, v7
+;     return v8
+; }
+
+function %transplant_41318_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bnot v1
+    v3 = band v0, v2
+    v4 = icmp eq v3, v0
+    return v4
+}
+
+; function %transplant_41318_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = band v0, v1
+;     v6 = iconst.i8 0
+;     v7 = icmp eq v5, v6  ; v6 = 0
+;     return v7
+; }
+
+function %transplant_41318_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = bnot v1
+    v3 = band v0, v2
+    v4 = icmp eq v3, v0
+    return v4
+}
+
+; function %transplant_41318_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = band v0, v1
+;     v6 = iconst.i64 0
+;     v7 = icmp eq v5, v6  ; v6 = 0
+;     return v7
+; }
+
+function %transplant_41469_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bnot v1
+    v3 = band v2, v0
+    v4 = icmp eq v0, v3
+    return v4
+}
+
+; function %transplant_41469_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = band v0, v1
+;     v6 = iconst.i8 0
+;     v7 = icmp eq v5, v6  ; v6 = 0
+;     return v7
+; }
+
+function %transplant_41469_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = bnot v1
+    v3 = band v2, v0
+    v4 = icmp eq v0, v3
+    return v4
+}
+
+; function %transplant_41469_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = band v0, v1
+;     v6 = iconst.i64 0
+;     v7 = icmp eq v5, v6  ; v6 = 0
+;     return v7
+; }
+
+function %transplant_41472_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bnot v1
+    v3 = band v0, v2
+    v4 = icmp eq v0, v3
+    return v4
+}
+
+; function %transplant_41472_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = band v0, v1
+;     v6 = iconst.i8 0
+;     v7 = icmp eq v5, v6  ; v6 = 0
+;     return v7
+; }
+
+function %transplant_41472_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = bnot v1
+    v3 = band v0, v2
+    v4 = icmp eq v0, v3
+    return v4
+}
+
+; function %transplant_41472_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = band v0, v1
+;     v6 = iconst.i64 0
+;     v7 = icmp eq v5, v6  ; v6 = 0
+;     return v7
+; }
+
+function %transplant_41459_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umax v0, v1
+    v3 = iconst.i8 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41459_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = bor v0, v1
+;     v3 = iconst.i8 0
+;     v6 = icmp eq v5, v3  ; v3 = 0
+;     return v6
+; }
+
+function %transplant_41459_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = umax v0, v1
+    v3 = iconst.i64 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41459_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = bor v0, v1
+;     v3 = iconst.i64 0
+;     v6 = icmp eq v5, v3  ; v3 = 0
+;     return v6
+; }
+
+function %transplant_41459_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+    v2 = umax v0, v1
+    v3 = iconst.i64 0
+    v4 = sextend.i128 v3
+    v5 = icmp eq v2, v4
+    return v5
+}
+
+; function %transplant_41459_i128(i128, i128) -> i8 fast {
+; block0(v0: i128, v1: i128):
+;     v2 = umax v0, v1
+;     v3 = iconst.i64 0
+;     v4 = sextend.i128 v3  ; v3 = 0
+;     v5 = icmp eq v2, v4
+;     return v5
+; }
+
+function %transplant_42478_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umax v0, v1
+    v3 = iconst.i8 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42478_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = bor v0, v1
+;     v3 = iconst.i8 0
+;     v6 = icmp ne v5, v3  ; v3 = 0
+;     return v6
+; }
+
+function %transplant_42478_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = umax v0, v1
+    v3 = iconst.i64 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42478_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = bor v0, v1
+;     v3 = iconst.i64 0
+;     v6 = icmp ne v5, v3  ; v3 = 0
+;     return v6
+; }
+
+function %transplant_42478_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+    v2 = umax v0, v1
+    v3 = iconst.i64 0
+    v4 = sextend.i128 v3
+    v5 = icmp ne v2, v4
+    return v5
+}
+
+; function %transplant_42478_i128(i128, i128) -> i8 fast {
+; block0(v0: i128, v1: i128):
+;     v2 = umax v0, v1
+;     v3 = iconst.i64 0
+;     v4 = sextend.i128 v3  ; v3 = 0
+;     v5 = icmp ne v2, v4
+;     return v5
+; }
+
+function %transplant_41460_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umax v0, v1
+    v3 = umin v0, v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41460_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_41460_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = umax v0, v1
+    v3 = umin v0, v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41460_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_41460_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+    v2 = umax v0, v1
+    v3 = umin v0, v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41460_i128(i128, i128) -> i8 fast {
+; block0(v0: i128, v1: i128):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_41461_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umax v0, v1
+    v3 = umin v1, v0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41461_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_41461_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = umax v0, v1
+    v3 = umin v1, v0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41461_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_41464_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umin v0, v1
+    v3 = umax v0, v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41464_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_41464_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = umin v0, v1
+    v3 = umax v0, v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41464_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_41465_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umin v0, v1
+    v3 = umax v1, v0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41465_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_41465_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = umin v0, v1
+    v3 = umax v1, v0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41465_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_42479_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umax v0, v1
+    v3 = umin v0, v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42479_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %transplant_42479_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = umax v0, v1
+    v3 = umin v0, v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42479_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %transplant_42479_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+    v2 = umax v0, v1
+    v3 = umin v0, v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42479_i128(i128, i128) -> i8 fast {
+; block0(v0: i128, v1: i128):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %transplant_42480_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umax v0, v1
+    v3 = umin v1, v0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42480_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %transplant_42480_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = umax v0, v1
+    v3 = umin v1, v0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42480_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %transplant_42483_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umin v0, v1
+    v3 = umax v0, v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42483_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %transplant_42483_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = umin v0, v1
+    v3 = umax v0, v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42483_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %transplant_42484_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umin v0, v1
+    v3 = umax v1, v0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42484_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %transplant_42484_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = umin v0, v1
+    v3 = umax v1, v0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42484_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %transplant_41327_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bnot v0
+    v3 = bnot v0
+    v4 = bor v3, v1
+    v5 = icmp eq v2, v4
+    return v5
+}
+
+; function %transplant_41327_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v6 = band v1, v0
+;     v7 = iconst.i8 0
+;     v8 = icmp eq v6, v7  ; v7 = 0
+;     return v8
+; }
+
+function %transplant_41327_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = bnot v0
+    v3 = bnot v0
+    v4 = bor v3, v1
+    v5 = icmp eq v2, v4
+    return v5
+}
+
+; function %transplant_41327_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v6 = band v1, v0
+;     v7 = iconst.i64 0
+;     v8 = icmp eq v6, v7  ; v7 = 0
+;     return v8
+; }
+
+function %transplant_41327_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+    v2 = bnot v0
+    v3 = bnot v0
+    v4 = bor v3, v1
+    v5 = icmp eq v2, v4
+    return v5
+}
+
+; function %transplant_41327_i128(i128, i128) -> i8 fast {
+; block0(v0: i128, v1: i128):
+;     v6 = band v1, v0
+;     v7 = iconst.i64 0
+;     v8 = uextend.i128 v7  ; v7 = 0
+;     v9 = icmp eq v6, v8
+;     return v9
+; }
+
+function %transplant_41328_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bnot v0
+    v3 = bnot v0
+    v4 = bor v1, v3
+    v5 = icmp eq v2, v4
+    return v5
+}
+
+; function %transplant_41328_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v6 = band v1, v0
+;     v7 = iconst.i8 0
+;     v8 = icmp eq v6, v7  ; v7 = 0
+;     return v8
+; }
+
+function %transplant_41328_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = bnot v0
+    v3 = bnot v0
+    v4 = bor v1, v3
+    v5 = icmp eq v2, v4
+    return v5
+}
+
+; function %transplant_41328_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v6 = band v1, v0
+;     v7 = iconst.i64 0
+;     v8 = icmp eq v6, v7  ; v7 = 0
+;     return v8
+; }
+
+function %transplant_41330_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bnot v0
+    v3 = bor v2, v1
+    v4 = bnot v0
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; function %transplant_41330_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v6 = band v1, v0
+;     v7 = iconst.i8 0
+;     v8 = icmp eq v6, v7  ; v7 = 0
+;     return v8
+; }
+
+function %transplant_41330_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = bnot v0
+    v3 = bor v2, v1
+    v4 = bnot v0
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; function %transplant_41330_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v6 = band v1, v0
+;     v7 = iconst.i64 0
+;     v8 = icmp eq v6, v7  ; v7 = 0
+;     return v8
+; }
+
+function %transplant_41334_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = bnot v1
+    v3 = bor v0, v2
+    v4 = bnot v1
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; function %transplant_41334_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v6 = band v0, v1
+;     v7 = iconst.i8 0
+;     v8 = icmp eq v6, v7  ; v7 = 0
+;     return v8
+; }
+
+function %transplant_41334_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = bnot v1
+    v3 = bor v0, v2
+    v4 = bnot v1
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; function %transplant_41334_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v6 = band v0, v1
+;     v7 = iconst.i64 0
+;     v8 = icmp eq v6, v7  ; v7 = 0
+;     return v8
+; }
+
+function %transplant_41425_i8(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+    v3 = select v0, v1, v2
+    v4 = select v0, v2, v1
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; function %transplant_41425_i8(i8, i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8, v2: i8):
+;     v6 = icmp eq v1, v2
+;     return v6
+; }
+
+function %transplant_41425_i64(i8, i64, i64) -> i8 {
+block0(v0: i8, v1: i64, v2: i64):
+    v3 = select v0, v1, v2
+    v4 = select v0, v2, v1
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; function %transplant_41425_i64(i8, i64, i64) -> i8 fast {
+; block0(v0: i8, v1: i64, v2: i64):
+;     v6 = icmp eq v1, v2
+;     return v6
+; }
+
+function %transplant_41425_i128(i8, i128, i128) -> i8 {
+block0(v0: i8, v1: i128, v2: i128):
+    v3 = select v0, v1, v2
+    v4 = select v0, v2, v1
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; function %transplant_41425_i128(i8, i128, i128) -> i8 fast {
+; block0(v0: i8, v1: i128, v2: i128):
+;     v6 = icmp eq v1, v2
+;     return v6
+; }
+
+function %transplant_38178_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp sge v0, v1
+    v3 = icmp sge v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38178_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38178_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp sge v0, v1
+    v3 = icmp sge v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38178_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38178_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+    v2 = icmp sge v0, v1
+    v3 = icmp sge v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38178_i128(i128, i128) -> i8 fast {
+; block0(v0: i128, v1: i128):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38180_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp sge v0, v1
+    v3 = icmp sle v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38180_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38180_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp sge v0, v1
+    v3 = icmp sle v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38180_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38418_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp sle v0, v1
+    v3 = icmp sge v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38418_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38418_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp sle v0, v1
+    v3 = icmp sge v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38418_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38422_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp sle v0, v1
+    v3 = icmp sle v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38422_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38422_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp sle v0, v1
+    v3 = icmp sle v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38422_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38685_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp uge v0, v1
+    v3 = icmp uge v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38685_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38685_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp uge v0, v1
+    v3 = icmp uge v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38685_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38685_i128(i128, i128) -> i8 {
+block0(v0: i128, v1: i128):
+    v2 = icmp uge v0, v1
+    v3 = icmp uge v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38685_i128(i128, i128) -> i8 fast {
+; block0(v0: i128, v1: i128):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38687_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp uge v0, v1
+    v3 = icmp ule v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38687_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38687_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp uge v0, v1
+    v3 = icmp ule v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38687_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38925_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp ule v0, v1
+    v3 = icmp uge v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38925_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38925_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp ule v0, v1
+    v3 = icmp uge v0, v1
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38925_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38931_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = icmp ule v0, v1
+    v3 = icmp ule v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38931_i8(i8, i8) -> i8 fast {
+; block0(v0: i8, v1: i8):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38931_i64(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp ule v0, v1
+    v3 = icmp ule v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38931_i64(i64, i64) -> i8 fast {
+; block0(v0: i64, v1: i64):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_41371_i32x4(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 1
+    v2 = ishl v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %transplant_41371_i32x4(i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4):
+;     v4 = vconst.i32x4 const0
+;     v5 = icmp eq v0, v4  ; v4 = const0
+;     return v5
+; }
+
+function %transplant_41468_i32x4(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 1
+    v2 = ushr v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %transplant_41468_i32x4(i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4):
+;     v4 = vconst.i32x4 const0
+;     v5 = icmp eq v0, v4  ; v4 = const0
+;     return v5
+; }
+
+function %transplant_41309_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bnot v0
+    v3 = band v2, v1
+    v4 = icmp eq v3, v1
+    return v4
+}
+
+; function %transplant_41309_i32x4(i32x4, i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4, v1: i32x4):
+;     v2 = bnot v0
+;     v3 = band v2, v1
+;     v4 = icmp eq v3, v1
+;     return v4
+; }
+
+function %transplant_41459_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = umax v0, v1
+    v993 = iconst.i32 0
+    v3 = splat.i32x4 v993
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41459_i32x4(i32x4, i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4, v1: i32x4):
+;     v996 = bor v0, v1
+;     v994 = vconst.i32x4 const0
+;     v997 = icmp eq v996, v994  ; v994 = const0
+;     return v997
+; }
+
+function %transplant_42478_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = umax v0, v1
+    v993 = iconst.i32 0
+    v3 = splat.i32x4 v993
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42478_i32x4(i32x4, i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4, v1: i32x4):
+;     v996 = bor v0, v1
+;     v994 = vconst.i32x4 const0
+;     v997 = icmp ne v996, v994  ; v994 = const0
+;     return v997
+; }
+
+function %transplant_41460_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = umax v0, v1
+    v3 = umin v0, v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %transplant_41460_i32x4(i32x4, i32x4) -> i32x4 fast {
+; block0(v0: i32x4, v1: i32x4):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_42479_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = umax v0, v1
+    v3 = umin v0, v1
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %transplant_42479_i32x4(i32x4, i32x4) -> i32x4 fast {
+; block0(v0: i32x4, v1: i32x4):
+;     v5 = icmp ne v0, v1
+;     return v5
+; }
+
+function %transplant_41327_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bnot v0
+    v3 = bnot v0
+    v4 = bor v3, v1
+    v5 = icmp eq v2, v4
+    return v5
+}
+
+; function %transplant_41327_i32x4(i32x4, i32x4) -> i32x4 fast {
+;     const0 = 0x00000000000000000000000000000000
+;
+; block0(v0: i32x4, v1: i32x4):
+;     v6 = band v1, v0
+;     v7 = vconst.i32x4 const0
+;     v8 = icmp eq v6, v7  ; v7 = const0
+;     return v8
+; }
+
+function %transplant_38178_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp sge v0, v1
+    v3 = icmp sge v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38178_i32x4(i32x4, i32x4) -> i32x4 fast {
+; block0(v0: i32x4, v1: i32x4):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
+
+function %transplant_38685_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp uge v0, v1
+    v3 = icmp uge v1, v0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %transplant_38685_i32x4(i32x4, i32x4) -> i32x4 fast {
+; block0(v0: i32x4, v1: i32x4):
+;     v5 = icmp eq v0, v1
+;     return v5
+; }
