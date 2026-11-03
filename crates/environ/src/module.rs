@@ -131,6 +131,14 @@ pub struct TableSegment {
     pub offset: ConstExpr,
     /// The values to write into the table elements.
     pub elements: TableSegmentElements,
+    /// If `Some`, then `elements` may trap during evaluation, and they are
+    /// instead evaluated up-front into this passive element segment's storage
+    /// alongside all other passive element segments.
+    ///
+    /// Instantiation evaluates all element segment expressions before any
+    /// active segment is written to a table, so a trapping expression must not
+    /// leave earlier segments' writes visible in imported tables.
+    pub staged: Option<PassiveElemIndex>,
 }
 
 /// Elements of a table segment, either a list of functions or list of arbitrary

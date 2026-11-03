@@ -3149,7 +3149,7 @@ impl FuncEnvironment<'_> {
             self,
             builder,
             array_type_index,
-            CheckedEntity::Elem(elem_index),
+            CheckedEntity::Elem(self.translation.passive_elem_map[elem_index]),
             elem_offset,
             len,
             cost,
@@ -3284,7 +3284,7 @@ impl FuncEnvironment<'_> {
                 ty,
                 initialized: true,
             },
-            CheckedEntity::Elem(elem_index),
+            CheckedEntity::Elem(self.translation.passive_elem_map[elem_index]),
             dst_index,
             elem_offset,
             len,
@@ -4415,7 +4415,7 @@ impl FuncEnvironment<'_> {
                 None => builder.ins().iconst(pointer_type, 0),
             },
             CheckedEntity::RuntimeData(i) => self.load_runtime_data_length_as_pointer(builder, i),
-            CheckedEntity::Elem(i) => match self.translation.passive_elem_map[i] {
+            CheckedEntity::Elem(i) => match i {
                 Some(passive_index) => {
                     let vmctx = self.vmctx_val(&mut builder.cursor());
                     let libcall = self
@@ -4502,7 +4502,7 @@ impl FuncEnvironment<'_> {
             },
             CheckedEntity::RuntimeData(i) => self.load_runtime_data_base(builder, i),
             // Element segments are quite similar to data segments just above.
-            CheckedEntity::Elem(i) => match self.translation.passive_elem_map[i] {
+            CheckedEntity::Elem(i) => match i {
                 Some(passive_index) => {
                     let vmctx = self.vmctx_val(&mut builder.cursor());
                     let libcall = self
@@ -5187,7 +5187,7 @@ impl FuncEnvironment<'_> {
                 table: table_index,
                 initialized: true,
             },
-            CheckedEntity::Elem(ElemIndex::from_u32(seg_index)),
+            CheckedEntity::Elem(self.translation.passive_elem_map[ElemIndex::from_u32(seg_index)]),
             dst,
             src,
             len,
@@ -6339,6 +6339,31 @@ impl FuncEnvironment<'_> {
             .table_init_per_element;
         let fuel = self.pre_translate_bulk_op(builder, segment_len, cost);
 
+        // If this segment's elements were already evaluated into passive
+        // storage then copy them into the table from there, like `table.init`,
+        // and then free that storage like `elem.drop`.
+        if let Some(passive_index) = segment.staged {
+            let src = builder.ins().iconst(I32, 0);
+            self.translate_entity_copy(
+                builder,
+                CheckedEntity::Table {
+                    table: segment.table_index,
+                    initialized: true,
+                },
+                CheckedEntity::Elem(Some(passive_index)),
+                offset,
+                src,
+                segment_len,
+            )?;
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let libcall = self
+                .builtin_functions
+                .passive_elem_segment_drop(builder.func);
+            let idx = builder.ins().iconst(I32, i64::from(passive_index.as_u32()));
+            builder.ins().call(libcall, &[vmctx, idx]);
+            return self.post_translate_bulk_op(builder, fuel);
+        }
+
         // Re-use the `table.set` translation for making this a simple function
         // to define. That re-executes the bounds check which is a bit
         // inefficient, but can be optimized in the future.
@@ -6663,8 +6688,11 @@ enum CheckedEntity {
     /// This isn't reachable from core wasm but is used during module
     /// startup.
     RuntimeData(RuntimeDataIndex),
-    /// A WebAssembly passive element segment.
-    Elem(ElemIndex),
+    /// A WebAssembly element segment, resolved to its passive storage.
+    ///
+    /// This is `None` for active and declared segments, which behave as if
+    /// they have zero length when accessed from wasm.
+    Elem(Option<PassiveElemIndex>),
     /// An `arrayref` with the specified type.
     Array {
         /// The type of this array.

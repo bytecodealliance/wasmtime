@@ -792,6 +792,31 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let (offset, escaped) = ConstExpr::from_wasmparser(self, offset_expr)?;
                             debug_assert!(escaped.is_empty());
 
+                            // If any element expression may trap then stage
+                            // its evaluation into a passive element segment,
+                            // which is evaluated before any active segment is
+                            // applied. Note that this passive segment isn't
+                            // registered in `passive_elem_map` so it's not
+                            // reachable from wasm itself.
+                            let may_trap = match &elements {
+                                TableSegmentElements::Functions(_) => false,
+                                TableSegmentElements::Expressions { exprs, .. } => exprs
+                                    .iter()
+                                    .any(|expr| expr.ops().iter().any(|op| op.may_trap())),
+                            };
+                            let staged = if may_trap {
+                                let passive_index = self
+                                    .result
+                                    .module
+                                    .passive_elements
+                                    .push((elements.ty(), elements.len()))?;
+                                self.result.passive_elements.push(elements.clone());
+                                self.require_startup_func();
+                                Some(passive_index)
+                            } else {
+                                None
+                            };
+
                             self.result
                                 .table_initialization
                                 .segments
@@ -799,6 +824,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                     table_index,
                                     offset,
                                     elements,
+                                    staged,
                                 })?;
                             None
                         }
