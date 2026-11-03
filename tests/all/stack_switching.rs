@@ -1571,9 +1571,7 @@ fn cont_new_rejects_signature_without_runtime_headroom() -> Result<()> {
     // larger signature must be rejected when its persistent control data,
     // compiled array-to-Wasm trampoline frame, and outgoing arguments cannot
     // all fit.
-    // ASan retains its 64-KiB minimum runtime headroom, so give that build just
-    // enough additional room to preserve the same boundary in this test.
-    config.async_stack_size(if cfg!(asan) { 76 << 10 } else { 32 << 10 });
+    config.async_stack_size(32 << 10);
     config.max_wasm_stack(4 << 10);
 
     let engine = Engine::new(&config)?;
