@@ -30,6 +30,34 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
             None => None,
         };
 
+        // The request is transferred to this call, so its `headers` children
+        // must not keep it from being deleted.
+        let parent = Resource::<HostOutgoingRequest>::new_borrow(request_id.rep());
+        let mut detach = Vec::new();
+        for rep in self.table.get(&request_id)?.header_handles.clone() {
+            let child = Resource::<crate::FieldMap>::new_own(rep);
+            let Ok(fields) = self.table.get(&child) else {
+                continue;
+            };
+            // A dropped handle's slot may have been reused, so only detach
+            // handles that are still children of this request.
+            let still_child = self.table.iter_children(&parent)?.any(|e| {
+                e.downcast_ref::<crate::FieldMap>()
+                    .is_some_and(|f| std::ptr::eq(f, fields))
+            });
+            if still_child {
+                detach.push(rep);
+            }
+        }
+        detach.sort_unstable();
+        detach.dedup();
+        for rep in detach {
+            let _ = self.table.remove_child(
+                Resource::<crate::FieldMap>::new_own(rep),
+                Resource::<HostOutgoingRequest>::new_borrow(request_id.rep()),
+            );
+        }
+
         let req = self.table.delete(request_id)?;
 
         // The `content-length` header is otherwise only validated in

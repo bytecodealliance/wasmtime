@@ -19,6 +19,23 @@ fn run(path: &str, server: &Server) -> Result<()> {
 }
 
 #[test_log::test]
+fn p2_http_children_traps() -> Result<()> {
+    let server = Server::http1(1)?;
+    let e = run(P2_HTTP_CHILDREN_TRAPS_COMPONENT, &server).unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "resource has children"
+    );
+    Ok(())
+}
+
+#[test_log::test]
+fn p2_http_outbound_request_headers_transfer() -> Result<()> {
+    let server = Server::http1(1)?;
+    run(P2_HTTP_OUTBOUND_REQUEST_HEADERS_TRANSFER_COMPONENT, &server)
+}
+
+#[test_log::test]
 fn p2_http_outbound_request_get() -> Result<()> {
     let server = Server::http1(1)?;
     run(P2_HTTP_OUTBOUND_REQUEST_GET_COMPONENT, &server)

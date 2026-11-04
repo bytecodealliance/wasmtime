@@ -214,6 +214,7 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
                 headers,
                 scheme: None,
                 body: None,
+                header_handles: Vec::new(),
             })
             .context("[new_outgoing_request] pushing request")
     }
@@ -362,9 +363,27 @@ impl types::HostOutgoingRequest for WasiHttpCtxView<'_> {
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
     ) -> wasmtime::Result<wasmtime::component::Resource<FieldMap>> {
-        let req = self.table.get(&request)?;
-        let id = self.table.push(req.headers.clone())?;
-        Ok(id)
+        let headers = self.table.get(&request)?.headers.clone();
+        let handle = self.table.push_child(headers, &request)?;
+        let mut handles = std::mem::take(&mut self.table.get_mut(&request)?.header_handles);
+        // Drop bookkeeping for children the guest already dropped. Doing this
+        // only once the list grows keeps the common path a single push.
+        if handles.len() >= 64 {
+            let live: Vec<*const FieldMap> = self
+                .table
+                .iter_children(&request)?
+                .filter_map(|c| c.downcast_ref::<FieldMap>())
+                .map(|f| f as *const FieldMap)
+                .collect();
+            handles.retain(|rep| {
+                self.table
+                    .get(&Resource::<FieldMap>::new_own(*rep))
+                    .is_ok_and(|f| live.iter().any(|p| std::ptr::eq(*p, f)))
+            });
+        }
+        handles.push(handle.rep());
+        self.table.get_mut(&request)?.header_handles = handles;
+        Ok(handle)
     }
 }
 

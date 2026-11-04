@@ -202,6 +202,8 @@ pub struct HostOutgoingRequest {
     pub headers: FieldMap,
     /// The request body.
     pub body: Option<HyperOutgoingBody>,
+    /// Handles created by `headers`, detached when the request is transferred.
+    pub header_handles: Vec<u32>,
 }
 
 /// The concrete type behind a `wasi:http/types.incoming-response` resource.
