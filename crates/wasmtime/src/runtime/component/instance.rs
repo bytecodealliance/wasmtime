@@ -1149,6 +1149,7 @@ impl<T: 'static> InstancePre<T> {
                     RuntimeImport::Resource { dtor, .. } => dtor.asyncness(),
                 };
         }
+
         InstancePre {
             component,
             imports,

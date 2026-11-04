@@ -106,7 +106,11 @@
 //!
 //! impl WasiView for MyCtx {
 //!     fn ctx(&mut self) -> WasiCtxView<'_> {
-//!         WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
+//!         WasiCtxView {
+//!             ctx: &mut self.wasi,
+//!             table: &mut self.table,
+//!             hooks: Default::default(),
+//!         }
 //!     }
 //! }
 //! ```
@@ -307,7 +311,11 @@ pub use wasmtime_wasi_io::streams::{
 ///
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///         WasiCtxView {
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///             hooks: Default::default(),
+///         }
 ///     }
 /// }
 /// ```
@@ -329,6 +337,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
     bindings::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    bindings::sockets::tcp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
@@ -360,7 +369,6 @@ where
     cli::terminal_stdin::add_to_linker::<T, WasiCli>(l, T::cli)?;
     cli::terminal_stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
     cli::terminal_stderr::add_to_linker::<T, WasiCli>(l, T::cli)?;
-    sockets::tcp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     sockets::instance_network::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     sockets::network::add_to_linker::<T, WasiSockets>(l, &options.into(), T::sockets)?;
     Ok(())
@@ -445,7 +453,11 @@ fn add_proxy_interfaces_nonblocking<T: WasiView>(linker: &mut Linker<T>) -> wasm
 /// }
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///         WasiCtxView {
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///             hooks: Default::default(),
+///         }
 ///     }
 /// }
 /// ```
@@ -469,6 +481,7 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
     bindings::sync::sockets::tcp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sync::sockets::udp::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sync::sockets::udp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
+    bindings::sync::sockets::tcp_create_socket::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     bindings::sync::sockets::ip_name_lookup::add_to_linker::<T, WasiSockets>(l, T::sockets)?;
     Ok(())
 }
@@ -632,6 +645,7 @@ pub enum Interface {
 ///         WasiCtxView {
 ///             ctx: &mut self.contexts[id.0],
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }

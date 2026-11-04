@@ -52,9 +52,10 @@
 //!
 //! impl WasiView for MyState {
 //!     fn ctx(&mut self) -> WasiCtxView<'_> {
-//!         WasiCtxView{
+//!         WasiCtxView {
 //!             ctx: &mut self.ctx,
 //!             table: &mut self.table,
+//!             hooks: Default::default(),
 //!         }
 //!     }
 //! }
@@ -85,6 +86,7 @@ mod generated {
             "wasi:filesystem/types.[method]descriptor.write-via-stream": store | tracing | trappable,
             "wasi:filesystem/types.[method]descriptor.append-via-stream": store | tracing | trappable,
             "wasi:filesystem/types.[method]descriptor.read-directory": store | tracing | trappable,
+            "wasi:sockets/types.[static]tcp-socket.create": async | tracing | trappable,
             "wasi:sockets/types.[method]tcp-socket.bind": async | tracing | trappable,
             "wasi:sockets/types.[method]tcp-socket.listen": async | store | tracing | trappable,
             "wasi:sockets/types.[method]tcp-socket.send": store | tracing | trappable,
@@ -198,9 +200,10 @@ pub use self::generated::wasi::*;
 ///
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView{
+///         WasiCtxView {
 ///             ctx: &mut self.ctx,
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }
@@ -272,9 +275,10 @@ pub use self::generated::Command;
 ///
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView{
+///         WasiCtxView {
 ///             ctx: &mut self.ctx,
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }

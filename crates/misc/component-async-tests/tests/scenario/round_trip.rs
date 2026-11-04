@@ -238,6 +238,7 @@ async fn test_round_trip_recurse(component: &str, same_instance: bool) -> Result
             WasiCtxView {
                 ctx: &mut self.wasi,
                 table: &mut self.table,
+                hooks: Default::default(),
             }
         }
     }
