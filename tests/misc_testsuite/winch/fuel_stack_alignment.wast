@@ -1,3 +1,7 @@
+;;! consume_fuel = true
+
+;; Regression test for #9554: a fuel check must keep the stack aligned when it
+;; calls the out-of-fuel builtin. A fuzz-generated module.
 (module
   (type (;0;) (func))
   (type (;1;) (func (param f32)))
@@ -379,3 +383,5 @@
   (export "" (func 0))
   (export "1" (table 0))
 )
+
+(assert_trap (invoke "" (f32.const 50397184)) "unreachable")

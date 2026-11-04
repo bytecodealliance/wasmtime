@@ -1,5 +1,6 @@
 ;;! bulk_memory = true
 ;;! reference_types = true
+;;! memory64 = true
 ;;! consume_fuel = true
 
 ;; Fuel charged by bulk memory and table operations, on top of the usual cost
@@ -393,3 +394,126 @@
   )
   (start $f))
 (assert_return (invoke $Fuel "get-fuel") (i64.const 995))
+
+;; A bulk op whose size-proportional cost exceeds the remaining fuel runs out
+;; of fuel.
+(invoke $Fuel "set-fuel" (i64.const 100))
+(assert_trap
+  (module
+    (memory 1)
+    (start 0)
+    (func
+      i32.const 0
+      i32.const 0
+      i32.const 200
+      memory.copy))
+  "all fuel consumed")
+
+(invoke $Fuel "set-fuel" (i64.const 100))
+(assert_trap
+  (module
+    (memory 1)
+    (start 0)
+    (func
+      i32.const 0
+      i32.const 0
+      i32.const 200
+      memory.fill))
+  "all fuel consumed")
+
+(invoke $Fuel "set-fuel" (i64.const 100))
+(assert_trap
+  (module
+    (memory 1)
+    (start 0)
+    (func
+      i32.const 0
+      i32.const 0
+      i32.const 200
+      memory.init $d)
+    (data $d
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+  "all fuel consumed")
+
+(invoke $Fuel "set-fuel" (i64.const 100))
+(assert_trap
+  (module
+    (table 200 funcref)
+    (start 0)
+    (func
+      i32.const 0
+      i32.const 0
+      i32.const 200
+      table.copy))
+  "all fuel consumed")
+
+(invoke $Fuel "set-fuel" (i64.const 100))
+(assert_trap
+  (module
+    (table 200 funcref)
+    (start 0)
+    (func
+      i32.const 0
+      ref.null func
+      i32.const 200
+      table.fill))
+  "all fuel consumed")
+
+(invoke $Fuel "set-fuel" (i64.const 100))
+(assert_trap
+  (module
+    (table 0 funcref)
+    (start 0)
+    (func
+      ref.null func
+      i32.const 200
+      table.grow
+      drop))
+  "all fuel consumed")
+
+(invoke $Fuel "set-fuel" (i64.const 100))
+(assert_trap
+  (module
+    (table 200 funcref)
+    (start 0)
+    (func
+      i32.const 0
+      i32.const 0
+      i32.const 200
+      table.init $e)
+    (func $f)
+    (elem $e func
+      $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f
+      $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f
+      $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f
+      $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f
+      $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f
+      $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f
+      $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f
+      $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f))
+  "all fuel consumed")
+
+;; A failed `table.grow` by a huge 64-bit delta must not add fuel, so these
+;; loops still run out of fuel and leave none behind.
+(module
+  (table $t i64 0 0x10000 (ref null func))
+  (func (export "run") (param $delta i64)
+    (loop $l
+      (drop (table.grow $t (ref.null func) (local.get $delta)))
+      (br $l))))
+(invoke $Fuel "set-fuel" (i64.const 100000))
+(assert_trap (invoke "run" (i64.const -500)) "all fuel consumed")
+(assert_return (invoke $Fuel "get-fuel") (i64.const 0))
+
+(module
+  (table $t i64 0 0x10000 (ref null func))
+  (func (export "run")
+    (loop $l
+      (drop (table.grow $t (ref.null func) (i64.const -500)))
+      (br $l))))
+(invoke $Fuel "set-fuel" (i64.const 100000))
+(assert_trap (invoke "run") "all fuel consumed")
+(assert_return (invoke $Fuel "get-fuel") (i64.const 0))
