@@ -7,8 +7,6 @@ pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
-#[cfg(feature = "component-model-async")]
-use crate::vm::component::TypedResourceIndex;
 use crate::vm::stack_switching::{VMContinuationStack, VMStackChain, VMStackState};
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -20,10 +18,6 @@ use core::num::NonZeroU32;
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
-#[cfg(feature = "component-model-async")]
-use wasmtime_environ::LAZY_LENDERS_CAPACITY;
-#[cfg(feature = "component-model-async")]
-use wasmtime_environ::component::TypeResourceTableIndex;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
     DefinedTagIndex, NUM_COMPONENT_CONTEXT_SLOTS, VMCONTEXT_MAGIC, VMSharedTypeIndex,
@@ -1019,31 +1013,6 @@ impl VMStoreContext {
     pub(crate) fn component_context_mut(&mut self) -> &mut [u32; NUM_COMPONENT_CONTEXT_SLOTS] {
         self.component_context.get_mut()
     }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn current_thread_mut(&mut self) -> &mut VMLazyThread {
-        self.current_thread.get_mut()
-    }
-
-    /// Points `lazy_lenders` at the store's buffer.
-    ///
-    /// # Safety
-    ///
-    /// `buf` must stay valid and must not move for as long as this
-    /// `VMStoreContext` is used: JIT code reads the pointer without
-    /// re-deriving it, and nothing here invalidates it.
-    #[cfg(feature = "component-model-async")]
-    pub(crate) unsafe fn set_lazy_lenders(
-        &mut self,
-        buf: NonNull<[VMResourceIndex; LAZY_LENDERS_CAPACITY]>,
-    ) {
-        self.lazy_lenders = buf.cast::<VMResourceIndex>().into();
-    }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn lazy_lenders_len_mut(&mut self) -> &mut usize {
-        self.lazy_lenders_len.get_mut()
-    }
 }
 
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
@@ -1126,47 +1095,6 @@ mod test_vm_cont_ref {
     fn revision_is_eight_aligned() {
         assert_eq!(4u8.vm_cont_ref().revision() % 8, 0);
         assert_eq!(8u8.vm_cont_ref().revision() % 8, 0);
-    }
-}
-
-#[cfg(feature = "component-model-async")]
-impl VMResourceIndex {
-    /// The `ty` of a host resource, which is otherwise never a valid
-    /// `TypeResourceTableIndex`.
-    const HOST: u32 = u32::MAX;
-
-    /// A slot that holds no recorded lend.
-    pub(crate) const EMPTY: VMResourceIndex = VMResourceIndex {
-        ty: Self::HOST,
-        index: 0,
-    };
-
-    /// Converts `index` into its JIT-visible form.
-    pub(crate) fn new(index: TypedResourceIndex) -> VMResourceIndex {
-        match index {
-            TypedResourceIndex::Host(index) => VMResourceIndex {
-                ty: Self::HOST,
-                index,
-            },
-            TypedResourceIndex::Component { ty, index } => {
-                debug_assert_ne!(ty.as_u32(), Self::HOST);
-                VMResourceIndex {
-                    ty: ty.as_u32(),
-                    index,
-                }
-            }
-        }
-    }
-
-    /// Inverse of `new`.
-    pub(crate) fn get(&self) -> TypedResourceIndex {
-        match self.ty {
-            Self::HOST => TypedResourceIndex::Host(self.index),
-            ty => TypedResourceIndex::Component {
-                index: self.index,
-                ty: TypeResourceTableIndex::from_u32(ty),
-            },
-        }
     }
 }
 

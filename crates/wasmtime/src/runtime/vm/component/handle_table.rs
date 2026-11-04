@@ -47,7 +47,6 @@ impl HandleCounter {
 
     /// Returns whether `n` more slots can be allocated without exceeding the
     /// limit.
-    #[cfg(feature = "component-model-async")]
     pub fn has_room(&self, n: usize) -> bool {
         self.used
             .checked_add(n)
@@ -320,7 +319,6 @@ impl HandleTable {
     /// For lends recorded in the `lazy_lenders` buffer, whose `lend_count`
     /// increments and handle charges are deferred until the recording thread is
     /// forced.
-    #[cfg(feature = "component-model-async")]
     pub fn resource_lend_deferred(&mut self, idx: TypedResourceIndex) -> Result<u32> {
         self.resource_lend_impl(idx, None)
     }

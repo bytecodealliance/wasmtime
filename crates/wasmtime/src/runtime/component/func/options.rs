@@ -380,7 +380,6 @@ impl<'a> LiftContext<'a> {
 
         // Computing the scope forces any deferred thread, so host lifts never
         // record lazy lends and always see a complete `lend_count`.
-        #[cfg(feature = "component-model-async")]
         debug_assert!(
             !store
                 .vm_store_context_mut()

@@ -1,7 +1,6 @@
 use crate::prelude::*;
 use crate::runtime::component::{HostResourceData, Instance};
 use crate::runtime::vm;
-#[cfg(feature = "component-model-async")]
 use crate::runtime::vm::VMResourceIndex;
 use crate::runtime::vm::component::{
     CallContext, ComponentInstance, HandleCounter, HandleTable, OwnedComponentInstance, Scope,
@@ -9,7 +8,6 @@ use crate::runtime::vm::component::{
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
 use core::pin::Pin;
-#[cfg(feature = "component-model-async")]
 use wasmtime_environ::LAZY_LENDERS_CAPACITY;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::prelude::TryPrimaryMap;
@@ -20,12 +18,6 @@ use crate::{
     component::concurrent::ConcurrentState,
     runtime::vm::{VMStore, component::InstanceState},
 };
-
-/// The `lazy_lenders` buffer as returned by `ComponentStoreData::resource_tables`.
-#[cfg(feature = "component-model-async")]
-type LazyLendersBuf<'a> = &'a mut [VMResourceIndex];
-#[cfg(not(feature = "component-model-async"))]
-type LazyLendersBuf<'a> = ();
 
 /// Default amount of fuel allowed for all guest-to-host calls in the component
 /// model.
@@ -76,10 +68,9 @@ pub struct ComponentStoreData {
     host_resource_data: HostResourceData,
 
     /// Backing storage for `VMStoreContext::lazy_lenders`; see
-    /// `CurrentScope::DeferredGuest`.
+    /// `ResourceTables::resource_lift_borrow_lazy`.
     ///
     /// Boxed and never resized, since JIT code holds a raw pointer to it.
-    #[cfg(feature = "component-model-async")]
     lazy_lenders: Box<[VMResourceIndex; LAZY_LENDERS_CAPACITY]>,
 
     /// Metadata/tasks/etc related to component-model-async and concurrency
@@ -142,7 +133,6 @@ impl ComponentStoreData {
                 ComponentTaskState::NotConcurrent(Default::default())
             },
             hostcall_fuel: DEFAULT_HOSTCALL_FUEL,
-            #[cfg(feature = "component-model-async")]
             lazy_lenders: try_new::<Box<_>>([VMResourceIndex::EMPTY; LAZY_LENDERS_CAPACITY])?,
         })
     }
@@ -161,7 +151,7 @@ impl ComponentStoreData {
     ) -> (
         vm::component::ResourceTables<'_>,
         &mut HostResourceData,
-        LazyLendersBuf<'_>,
+        &mut [VMResourceIndex],
     ) {
         let guest = instance.map(|i| {
             let i = i.id();
@@ -181,19 +171,24 @@ impl ComponentStoreData {
                 current_scope,
             },
             &mut self.host_resource_data,
-            #[cfg(feature = "component-model-async")]
             &mut self.lazy_lenders[..],
-            #[cfg(not(feature = "component-model-async"))]
-            (),
         )
     }
 
-    /// The `lazy_lenders` buffer, to publish into the store's `VMStoreContext`.
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn lazy_lenders_ptr(
+    /// Points `vm_store_context` at this store's `lazy_lenders` buffer.
+    ///
+    /// # Safety
+    ///
+    /// `self` must outlive `vm_store_context` and must not move while it is in
+    /// use, since JIT code reads the buffer through the published pointer.
+    pub(crate) unsafe fn publish_lazy_lenders(
         &mut self,
-    ) -> core::ptr::NonNull<[VMResourceIndex; LAZY_LENDERS_CAPACITY]> {
-        core::ptr::NonNull::from(&mut *self.lazy_lenders)
+        vm_store_context: &mut vm::VMStoreContext,
+    ) {
+        let lazy_lenders = core::ptr::NonNull::from(&mut *self.lazy_lenders);
+        // SAFETY: the buffer is boxed, so it stays put as long as `self` does,
+        // which the caller guarantees.
+        unsafe { vm_store_context.set_lazy_lenders(lazy_lenders) }
     }
 
     /// Hook used just before a `Store` is dropped to dispose of anything
@@ -547,7 +542,6 @@ impl StoreOpaque {
     ) -> Result<u32> {
         // NB: this check must happen before anything calls `current_scope()`,
         // which is itself the call that forces the thread.
-        #[cfg(feature = "component-model-async")]
         if self
             .vm_store_context_mut()
             .current_thread_mut()
@@ -575,7 +569,14 @@ impl StoreOpaque {
 
     /// Promotes the lazy lends in `start..end` into real lends owned by
     /// `scope`; see `ResourceTables::promote_lazy_lends`.
-    #[cfg(feature = "component-model-async")]
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(
+            dead_code,
+            reason = "deferred threads are only created with `component-model-async`, \
+                      so nothing promotes lazy lends without it"
+        )
+    )]
     pub(crate) fn promote_lazy_lends(
         &mut self,
         instance: Instance,

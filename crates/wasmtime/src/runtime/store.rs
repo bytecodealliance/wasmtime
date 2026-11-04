@@ -775,14 +775,16 @@ impl<T> Store<T> {
             <NonNull<ManuallyDrop<T>>>::from(&mut inner.data_no_provenance).cast::<()>();
         inner.inner.vm_store_context.store_data = store_data.into();
 
-        #[cfg(feature = "component-model-async")]
-        {
-            let lazy_lenders = inner.inner.store_data.components.lazy_lenders_ptr();
-            // SAFETY: the buffer is boxed inside `store_data`, which outlives
-            // the `VMStoreContext` beside it, and is never moved.
-            unsafe {
-                inner.inner.vm_store_context.set_lazy_lenders(lazy_lenders);
-            }
+        // SAFETY: `store_data` and the `VMStoreContext` beside it live in the
+        // same boxed `StoreInner`, so neither outlives nor moves out from under
+        // the other.
+        unsafe {
+            let StoreOpaque {
+                store_data,
+                vm_store_context,
+                ..
+            } = &mut inner.inner;
+            store_data.publish_to_vm_store_context(vm_store_context);
         }
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
@@ -1599,7 +1601,7 @@ impl StoreOpaque {
     ///
     /// These are disjoint fields, so JIT-visible state can be reached alongside
     /// the tables in `StoreData` without a whole-store borrow in between.
-    #[cfg(feature = "component-model-async")]
+    #[cfg(feature = "component-model")]
     pub(crate) fn vm_store_context_and_store_data_mut(
         &mut self,
     ) -> (&mut VMStoreContext, &mut StoreData) {

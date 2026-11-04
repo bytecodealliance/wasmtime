@@ -24,7 +24,6 @@ use super::{HandleCounter, HandleTable, InstanceState, RemovedResource};
 use crate::bail_bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
-#[cfg(feature = "component-model-async")]
 use crate::runtime::vm::{VMResourceIndex, VMStoreContext};
 use core::error::Error;
 use core::fmt;
@@ -210,39 +209,6 @@ impl CallContext {
 }
 
 impl ResourceTables<'_> {
-    /// Promotes lazy lends recorded by `resource_lift_borrow_lazy` into real
-    /// lends owned by `scope`'s `CallContext`, incrementing each handle's
-    /// `lend_count` and charging the store's handle count now that the thread
-    /// that made them has been forced.
-    ///
-    /// Either every lend is promoted or, on error, none is.
-    #[cfg(feature = "component-model-async")]
-    pub fn promote_lazy_lends(
-        &mut self,
-        scope: Scope,
-        lazy_lenders: &[VMResourceIndex],
-    ) -> Result<()> {
-        // Fail up front on anything that could otherwise fail partway through
-        // and leave some of these lends promoted but not the rest.
-        self.task_state
-            .call_context(scope)?
-            .lenders
-            .reserve(lazy_lenders.len())?;
-        if !self.handle_counter.has_room(lazy_lenders.len()) {
-            bail!("cannot lend resource: store handle limit exceeded");
-        }
-
-        for lender in lazy_lenders {
-            let index = lender.get();
-            let (table, counter) = self.table_for_index(&index);
-            table.resource_lend(counter, index)?;
-            self.task_state.call_context(scope)?.lenders.push(index)?;
-        }
-        Ok(())
-    }
-}
-
-impl ResourceTables<'_> {
     fn table_for_resource(
         &mut self,
         resource: &TypedResource,
@@ -394,6 +360,10 @@ impl ResourceTables<'_> {
         // tasks. Ideally the `lenders.push` would be skipped for sync tasks but
         // that requires a bit more plumbing and also appropriately tracking the
         // `lend_count` and such. For now this treats own/borrow the same way.
+        //
+        // Space for the lender is reserved first so that recording it can't
+        // fail after the lend.
+        self.current_scope()?.lenders.reserve(1)?;
         let (table, counter) = self.table_for_index(&index);
         let rep = table.resource_lend(counter, index)?;
         self.current_scope()?.lenders.push(index)?;
@@ -413,7 +383,6 @@ impl ResourceTables<'_> {
     /// Returns `Ok(None)` without lending anything if the buffer is full, in
     /// which case the caller must force the thread and use
     /// `resource_lift_borrow` instead.
-    #[cfg(feature = "component-model-async")]
     pub fn resource_lift_borrow_lazy(
         &mut self,
         index: TypedResourceIndex,
@@ -435,6 +404,43 @@ impl ResourceTables<'_> {
         *slot = VMResourceIndex::new(index);
         *lazy_lenders_len += 1;
         Ok(Some(rep))
+    }
+
+    /// Promotes lazy lends recorded by `resource_lift_borrow_lazy` into real
+    /// lends owned by `scope`'s `CallContext`, incrementing each handle's
+    /// `lend_count` and charging the store's handle count now that the thread
+    /// that made them has been forced.
+    ///
+    /// Either every lend is promoted or, on error, none is.
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(
+            dead_code,
+            reason = "deferred threads are only created with `component-model-async`, so nothing promotes lazy lends without it"
+        )
+    )]
+    pub fn promote_lazy_lends(
+        &mut self,
+        scope: Scope,
+        lazy_lenders: &[VMResourceIndex],
+    ) -> Result<()> {
+        // Fail up front on anything that could otherwise fail partway through
+        // and leave some of these lends promoted but not the rest.
+        self.task_state
+            .call_context(scope)?
+            .lenders
+            .reserve(lazy_lenders.len())?;
+        if !self.handle_counter.has_room(lazy_lenders.len()) {
+            bail!("cannot lend resource: store handle limit exceeded");
+        }
+
+        for lender in lazy_lenders {
+            let index = lender.get();
+            let (table, counter) = self.table_for_index(&index);
+            table.resource_lend(counter, index)?;
+            self.task_state.call_context(scope)?.lenders.push(index)?;
+        }
+        Ok(())
     }
 
     /// Records a new `borrow` resource with the given representation within the

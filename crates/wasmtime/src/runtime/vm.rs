@@ -136,7 +136,7 @@ pub use crate::runtime::vm::vmcontext::VMDrcHeapData;
 pub use crate::runtime::vm::vmcontext::VMLazyThread;
 #[cfg(feature = "gc-null")]
 pub use crate::runtime::vm::vmcontext::VMNullHeapData;
-#[cfg(feature = "component-model-async")]
+#[cfg(feature = "component-model")]
 pub use crate::runtime::vm::vmcontext::VMResourceIndex;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallHostFuncContext, VMCommonStackInformation, VMContRef, VMContext, VMFuncRef,

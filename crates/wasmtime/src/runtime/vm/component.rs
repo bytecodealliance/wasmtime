@@ -14,10 +14,11 @@ use crate::runtime::component::concurrent::ConcurrentInstanceState;
 use crate::runtime::component::{ComponentInstanceId, RuntimeInstance};
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
+use crate::runtime::vm::vmcontext::VMLazyThread;
 use crate::runtime::vm::{
     HostResult, SendSyncPtr, UncaughtException, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition,
-    VMMemoryDefinition, VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableImport, VMWasmCallFunction,
-    ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
+    VMMemoryDefinition, VMOpaqueContext, VMResourceIndex, VMStore, VMStoreContext, VMStoreRawPtr,
+    VMTableImport, VMWasmCallFunction, ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
 };
 use crate::store::InstanceId;
 use crate::{Func, vm};
@@ -30,7 +31,9 @@ use core::ptr::NonNull;
 use wasmtime_environ::component::*;
 use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::prelude::TryPrimaryMap;
-use wasmtime_environ::{HostPtr, PrimaryMap, PtrSize as _, VMSharedTypeIndex};
+use wasmtime_environ::{
+    HostPtr, LAZY_LENDERS_CAPACITY, PrimaryMap, PtrSize as _, VMSharedTypeIndex,
+};
 
 #[allow(
     clippy::cast_possible_truncation,
@@ -48,6 +51,70 @@ pub use self::handle_table::{ThreadHandleTable, TransmitLocalState, Waitable};
 pub use self::resources::{
     CallContext, CurrentScope, ResourceTables, Scope, TypedResource, TypedResourceIndex,
 };
+
+impl VMResourceIndex {
+    /// The `ty` of a host resource, which is otherwise never a valid
+    /// `TypeResourceTableIndex`.
+    const HOST: u32 = u32::MAX;
+
+    /// A slot that holds no recorded lend.
+    pub(crate) const EMPTY: VMResourceIndex = VMResourceIndex {
+        ty: Self::HOST,
+        index: 0,
+    };
+
+    /// Converts `index` into its JIT-visible form.
+    pub(crate) fn new(index: TypedResourceIndex) -> VMResourceIndex {
+        match index {
+            TypedResourceIndex::Host(index) => VMResourceIndex {
+                ty: Self::HOST,
+                index,
+            },
+            TypedResourceIndex::Component { ty, index } => {
+                debug_assert_ne!(ty.as_u32(), Self::HOST);
+                VMResourceIndex {
+                    ty: ty.as_u32(),
+                    index,
+                }
+            }
+        }
+    }
+
+    /// Inverse of `new`.
+    pub(crate) fn get(&self) -> TypedResourceIndex {
+        match self.ty {
+            Self::HOST => TypedResourceIndex::Host(self.index),
+            ty => TypedResourceIndex::Component {
+                index: self.index,
+                ty: TypeResourceTableIndex::from_u32(ty),
+            },
+        }
+    }
+}
+
+impl VMStoreContext {
+    pub(crate) fn current_thread_mut(&mut self) -> &mut VMLazyThread {
+        self.current_thread.get_mut()
+    }
+
+    /// Points `lazy_lenders` at the store's buffer.
+    ///
+    /// # Safety
+    ///
+    /// `buf` must stay valid and must not move for as long as this
+    /// `VMStoreContext` is used: JIT code reads the pointer without
+    /// re-deriving it, and nothing here invalidates it.
+    pub(crate) unsafe fn set_lazy_lenders(
+        &mut self,
+        buf: NonNull<[VMResourceIndex; LAZY_LENDERS_CAPACITY]>,
+    ) {
+        self.lazy_lenders = buf.cast::<VMResourceIndex>().into();
+    }
+
+    pub(crate) fn lazy_lenders_len_mut(&mut self) -> &mut usize {
+        self.lazy_lenders_len.get_mut()
+    }
+}
 
 /// Represents the state of a (sub-)component instance.
 #[derive(Default)]

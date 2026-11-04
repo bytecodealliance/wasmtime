@@ -577,10 +577,10 @@ macro_rules! for_each_vm_type {
             #[snake_name = vm_resource_index]
             pub struct VMResourceIndex {
                 /// The raw `TypeResourceTableIndex`, or `u32::MAX` for a host resource.
-                ty: u32,
+                pub(crate) ty: u32,
 
                 /// The handle's index within its table.
-                index: u32,
+                pub(crate) index: u32,
             }
 
             /// A deferred component-model thread.
