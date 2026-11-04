@@ -1262,11 +1262,11 @@ impl<'a> TrampolineCompiler<'a> {
             .builder
             .ins()
             .iconst(ir::types::I32, i64::from(callee_instance.as_u32()));
-        crate::component_sync_call::enter(
+        crate::func_environ::component_sync_call::enter(
             &mut self.builder,
             &mut self.alias_regions,
             vmctx,
-            crate::component_sync_call::EnterArgs {
+            crate::func_environ::component_sync_call::EnterArgs {
                 callee_async,
                 callee_instance,
             },
@@ -1278,7 +1278,7 @@ impl<'a> TrampolineCompiler<'a> {
         // Note that the helper here wants a core wasm vmctx, not a component
         // one like `vmctx` is in this function.
         let caller_vmctx = self.caller_vmctx();
-        let slow = crate::component_sync_call::exit(
+        let slow = crate::func_environ::component_sync_call::exit(
             &mut self.builder,
             &mut self.alias_regions,
             caller_vmctx,

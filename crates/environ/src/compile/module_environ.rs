@@ -45,12 +45,24 @@ pub struct ModuleEnvironment<'a, 'data> {
 pub enum FactInlineIntrinsic {
     /// `enter-sync-call`: push a deferred component-model thread inline.
     EnterSyncCall,
+
     /// `exit-sync-call`: pop the deferred thread inline on the fast path, or
     /// fall back to the out-of-line `exit-sync-call` libcall when the thread
     /// was promoted.
     ExitSyncCall,
+
     /// `trap`: raise the given trap.
     Trap(Trap),
+
+    /// `resource.transfer-borrow-to-owner`: lazily lend a `borrow` to its
+    /// resource's owning instance, or fall back to the libcall.
+    #[cfg(feature = "component-model")]
+    ResourceTransferBorrowToOwner {
+        /// The resource type of the handle being lent.
+        ty: crate::component::TypeResourceTableIndex,
+        /// The component instance owning `ty`'s handle table.
+        instance: crate::component::RuntimeComponentInstanceIndex,
+    },
 }
 
 /// A statically-known function import.

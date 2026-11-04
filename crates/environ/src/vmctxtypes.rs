@@ -308,9 +308,10 @@ macro_rules! for_each_vmctx_type {
                     // adapter reads to reach a handle's slot without calling
                     // into the host.
                     array {
-                        handle_table_slots
+                        #[aggregate]
+                        handle_tables
                             [num_runtime_component_instances; RuntimeComponentInstanceIndex]:
-                                VmPtr<VMHandleTableSlot>
+                                VMHandleTable
                     }
 
                     array {
