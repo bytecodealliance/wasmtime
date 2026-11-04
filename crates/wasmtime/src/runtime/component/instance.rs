@@ -449,25 +449,8 @@ impl Instance {
         index: u32,
         src: TypeResourceTableIndex,
     ) -> Result<u32> {
-        let index = TypedResourceIndex::Component { ty: src, index };
-
-        // This only records a lend, so it needs no materialized scope and can
-        // leave a deferred thread alone. A full buffer is the one way that
-        // fails, and nothing has been lent yet when it does.
-        #[cfg(feature = "component-model-async")]
-        {
-            let mut tables = store.component_resource_tables_lazy_lends(Some(self))?;
-            match tables.resource_lift_borrow(index) {
-                Err(e) if e.is::<vm::component::LazyLendersFull>() => {
-                    // Fallthrough to the path below that forces the deferred
-                    // thread, at which point the lend will succeed.
-                }
-                result => return result,
-            }
-        }
-
-        let mut tables = store.component_resource_tables(Some(self))?;
-        tables.resource_lift_borrow(index)
+        store
+            .resource_lift_borrow_maybe_lazy(self, TypedResourceIndex::Component { ty: src, index })
     }
 
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {

@@ -45,8 +45,6 @@ mod resources;
 pub use self::handle_table::{HandleCounter, HandleTable, RemovedResource};
 #[cfg(feature = "component-model-async")]
 pub use self::handle_table::{ThreadHandleTable, TransmitLocalState, Waitable};
-#[cfg(feature = "component-model-async")]
-pub use self::resources::LazyLendersFull;
 pub use self::resources::{
     CallContext, CurrentScope, ResourceTables, Scope, TypedResource, TypedResourceIndex,
 };

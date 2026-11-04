@@ -1634,11 +1634,9 @@ impl Compiler {
             );
 
             // Likewise, those frames held the only record of where their
-            // lazy lends started, so nothing can attribute or undo them.
-            //
-            // The lends stay counted, leaving their handles un-droppable, which
-            // is only acceptable because a trap poisons the store (see
-            // `StoreOpaque::may_enter`) so no guest can observe it.
+            // lazy lends started. Those lends never touched a `lend_count`, so
+            // discarding them all is exactly what unwinding the frames' exits
+            // would have done.
             let zero = builder.ins().iconst(pointer_type, 0);
             alias_regions.vm_store_context().lazy_lenders_len().store(
                 &mut builder.cursor(),

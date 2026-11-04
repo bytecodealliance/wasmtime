@@ -44,6 +44,15 @@ impl HandleCounter {
     pub fn set_limit(&mut self, limit: usize) {
         self.limit = limit;
     }
+
+    /// Returns whether `n` more slots can be allocated without exceeding the
+    /// limit.
+    #[cfg(feature = "component-model-async")]
+    pub fn has_room(&self, n: usize) -> bool {
+        self.used
+            .checked_add(n)
+            .is_some_and(|used| used <= self.limit)
+    }
 }
 
 /// Represents the state of a stream or future handle from the perspective of a
@@ -302,6 +311,27 @@ impl HandleTable {
         counter: &mut HandleCounter,
         idx: TypedResourceIndex,
     ) -> Result<u32> {
+        self.resource_lend_impl(idx, Some(counter))
+    }
+
+    /// Like `resource_lend`, but only validates the lend, leaving `lend_count`
+    /// and the store's handle count alone.
+    ///
+    /// For lends recorded in the `lazy_lenders` buffer, whose `lend_count`
+    /// increments and handle charges are deferred until the recording thread is
+    /// forced.
+    #[cfg(feature = "component-model-async")]
+    pub fn resource_lend_deferred(&mut self, idx: TypedResourceIndex) -> Result<u32> {
+        self.resource_lend_impl(idx, None)
+    }
+
+    /// Validates a lend of `idx`, additionally counting it when given the
+    /// store's `counter`.
+    fn resource_lend_impl(
+        &mut self,
+        idx: TypedResourceIndex,
+        counter: Option<&mut HandleCounter>,
+    ) -> Result<u32> {
         match self.get_mut(idx.raw_index())? {
             Slot::ResourceOwn {
                 resource,
@@ -313,14 +343,16 @@ impl HandleTable {
                 ..
             } => {
                 let rep = resource.rep(&idx)?;
-                let Some(new_lend_count) = lend_count.checked_add(1) else {
-                    bail!("cannot lend resource: too many active lends")
-                };
-                if counter.used >= counter.limit {
-                    bail!("cannot lend resource: store handle limit exceeded");
+                if let Some(counter) = counter {
+                    let Some(new_lend_count) = lend_count.checked_add(1) else {
+                        bail!("cannot lend resource: too many active lends")
+                    };
+                    if counter.used >= counter.limit {
+                        bail!("cannot lend resource: store handle limit exceeded");
+                    }
+                    counter.used += 1;
+                    *lend_count = new_lend_count;
                 }
-                counter.used += 1;
-                *lend_count = new_lend_count;
                 Ok(rep)
             }
             _ => bail!("index {} is not a resource", idx.raw_index()),

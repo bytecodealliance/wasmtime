@@ -18,10 +18,10 @@ pub const NUM_COMPONENT_CONTEXT_SLOTS: usize = 2;
 
 /// Capacity of the `lazy_lenders` buffer in the `VMStoreContext`.
 ///
-/// A single call can lift arbitrarily many borrows (consider `list<borrow<T>>`),
-/// so this is sized to cover realistic signatures rather than being a bound;
-/// overflowing it falls back to recording in the `CallContext`.
-pub const LAZY_LENDERS_CAPACITY: usize = 128;
+/// Fast paths usually lend only one or two handles, so this is small; a lend
+/// that does not fit forces the deferred thread and records in its
+/// `CallContext` instead.
+pub const LAZY_LENDERS_CAPACITY: usize = 8;
 
 #[cfg(target_pointer_width = "32")]
 fn cast_to_u32(sz: usize) -> u32 {

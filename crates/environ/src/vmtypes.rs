@@ -506,16 +506,13 @@ macro_rules! for_each_vm_type {
                 /// NB: `UnsafeCell` because JIT code writes to this field.
                 pub current_thread: UnsafeCell<VMLazyThread>,
 
-                /// Lazily-resolved resource lends recorded while a
-                /// `VMDeferredThread` was unforced.
+                /// Resource lends made under unforced `VMDeferredThread`s and not
+                /// yet reflected in any handle's `lend_count`.
+                ///
+                /// Holds `LAZY_LENDERS_CAPACITY` entries.
                 #[readonly]
                 #[can_move]
                 pub lazy_lenders: VmPtr<VMResourceIndex>,
-
-                /// The capacity of `lazy_lenders`.
-                #[readonly]
-                #[can_move]
-                pub lazy_lenders_capacity: usize,
 
                 /// Number of occupied slots at the front of `lazy_lenders`.
                 ///
@@ -573,18 +570,17 @@ macro_rules! for_each_vm_type {
             /// JIT-visible encoding of a component-model resource handle, as stored in
             /// the `VMStoreContext::lazy_lenders` buffer.
             ///
-            /// This is the raw, packed version of `TypedResourceIndex` that is
-            /// exposed to Wasm code; use `VMResourceIndex::[un]pack` to
-            /// convert.
+            /// This is the raw version of `TypedResourceIndex` that is exposed to Wasm
+            /// code; use `VMResourceIndex::{new,get}` to convert.
             #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-            #[repr(transparent)]
+            #[repr(C)]
             #[snake_name = vm_resource_index]
             pub struct VMResourceIndex {
-                /// Bits:      63..32    32..0
-                ///         +-------------------+
-                /// Fields: |  table  |  index  |
-                ///         +-------------------+
-                packed: u64,
+                /// The raw `TypeResourceTableIndex`, or `u32::MAX` for a host resource.
+                ty: u32,
+
+                /// The handle's index within its table.
+                index: u32,
             }
 
             /// A deferred component-model thread.
@@ -617,10 +613,11 @@ macro_rules! for_each_vm_type {
                 pub saved_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
 
                 /// `VMStoreContext::lazy_lenders_len` as of this frame's push, so
-                /// that the lends this frame recorded are everything above it.
+                /// that the lends this frame recorded are everything at or after it.
                 ///
                 /// Frames nest with the call stack, so that is always a contiguous
-                /// suffix by the time this frame exits.
+                /// suffix by the time this frame exits, and exiting an unforced frame
+                /// discards it by resetting `lazy_lenders_len` back to this.
                 pub lazy_lenders_start: usize,
             }
 

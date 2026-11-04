@@ -36,7 +36,7 @@
 ;;       retq
 ;;   77: movq    (%rsp), %r8
 ;;   7b: movq    $1, 0x88(%r8)
-;;   86: movq    $0, 0xa0(%r8)
+;;   86: movq    $0, 0x98(%r8)
 ;;   91: xorl    %eax, %eax
 ;;   93: movq    0x10(%rsp), %rbx
 ;;   98: movq    0x18(%rsp), %r12

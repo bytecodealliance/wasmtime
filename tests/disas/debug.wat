@@ -91,7 +91,7 @@
 ;;       retq
 ;;  102: movq    8(%rsp), %r10
 ;;  107: movq    $1, 0x88(%r10)
-;;  112: movq    $0, 0xa0(%r10)
+;;  112: movq    $0, 0x98(%r10)
 ;;  11d: xorl    %eax, %eax
 ;;  11f: movq    0x10(%rsp), %rbx
 ;;  124: movq    0x18(%rsp), %r12

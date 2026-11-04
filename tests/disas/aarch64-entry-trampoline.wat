@@ -49,7 +49,7 @@
 ;;   ac: ldur    x2, [sp]
 ;;   b0: str     x1, [x2, #0x88]
 ;;   b4: mov     x1, #0
-;;   b8: str     x1, [x2, #0xa0]
+;;   b8: str     x1, [x2, #0x98]
 ;;   bc: mov     w0, #0
 ;;   c0: add     sp, sp, #0x10
 ;;   c4: ldp     d8, d9, [sp], #0x10

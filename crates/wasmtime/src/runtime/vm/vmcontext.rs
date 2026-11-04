@@ -4,8 +4,6 @@
 mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
-#[cfg(feature = "component-model-async")]
-use crate::bug;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
@@ -23,7 +21,7 @@ use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(feature = "component-model-async")]
-use wasmtime_core::truncate::truncate_u64_to_u32;
+use wasmtime_environ::LAZY_LENDERS_CAPACITY;
 #[cfg(feature = "component-model-async")]
 use wasmtime_environ::component::TypeResourceTableIndex;
 use wasmtime_environ::{
@@ -1037,11 +1035,9 @@ impl VMStoreContext {
     #[cfg(feature = "component-model-async")]
     pub(crate) unsafe fn set_lazy_lenders(
         &mut self,
-        buf: NonNull<VMResourceIndex>,
-        capacity: usize,
+        buf: NonNull<[VMResourceIndex; LAZY_LENDERS_CAPACITY]>,
     ) {
-        self.lazy_lenders = buf.into();
-        self.lazy_lenders_capacity = capacity;
+        self.lazy_lenders = buf.cast::<VMResourceIndex>().into();
     }
 
     #[cfg(feature = "component-model-async")]
@@ -1081,10 +1077,7 @@ impl Default for VMStoreContext {
             store_data: VmPtr::dangling(),
             component_context: UnsafeCell::new([0; NUM_COMPONENT_CONTEXT_SLOTS]),
             current_thread: UnsafeCell::new(VMLazyThread::none()),
-            // Dangling until the store publishes its buffer; the zero capacity
-            // keeps anything from indexing it until then.
             lazy_lenders: VmPtr::dangling(),
-            lazy_lenders_capacity: 0,
             lazy_lenders_len: UnsafeCell::new(0),
         }
     }
@@ -1138,38 +1131,40 @@ mod test_vm_cont_ref {
 
 #[cfg(feature = "component-model-async")]
 impl VMResourceIndex {
-    /// A slot that holds no recorded lend.
-    pub(crate) const EMPTY: VMResourceIndex = VMResourceIndex { packed: 0 };
+    /// The `ty` of a host resource, which is otherwise never a valid
+    /// `TypeResourceTableIndex`.
+    const HOST: u32 = u32::MAX;
 
-    /// Packs `index` into its JIT-visible form.
-    ///
-    /// The table is biased by one in the high half so that zero encodes
-    /// `TypedResourceIndex::Host`.
-    pub(crate) fn pack(index: TypedResourceIndex) -> Result<VMResourceIndex> {
-        let (ty, index) = match index {
-            TypedResourceIndex::Host(index) => (0, index),
+    /// A slot that holds no recorded lend.
+    pub(crate) const EMPTY: VMResourceIndex = VMResourceIndex {
+        ty: Self::HOST,
+        index: 0,
+    };
+
+    /// Converts `index` into its JIT-visible form.
+    pub(crate) fn new(index: TypedResourceIndex) -> VMResourceIndex {
+        match index {
+            TypedResourceIndex::Host(index) => VMResourceIndex {
+                ty: Self::HOST,
+                index,
+            },
             TypedResourceIndex::Component { ty, index } => {
-                let ty = ty
-                    .as_u32()
-                    .checked_add(1)
-                    .ok_or_else(|| bug!("type index too large to fit in `VMResourceIndex`"))?;
-                (ty, index)
+                debug_assert_ne!(ty.as_u32(), Self::HOST);
+                VMResourceIndex {
+                    ty: ty.as_u32(),
+                    index,
+                }
             }
-        };
-        Ok(VMResourceIndex {
-            packed: (u64::from(ty) << 32) | u64::from(index),
-        })
+        }
     }
 
-    /// Inverse of `pack`.
-    pub(crate) fn unpack(&self) -> TypedResourceIndex {
-        let index = truncate_u64_to_u32(self.packed);
-        let ty = truncate_u64_to_u32(self.packed >> 32);
-        match ty {
-            0 => TypedResourceIndex::Host(index),
+    /// Inverse of `new`.
+    pub(crate) fn get(&self) -> TypedResourceIndex {
+        match self.ty {
+            Self::HOST => TypedResourceIndex::Host(self.index),
             ty => TypedResourceIndex::Component {
-                index,
-                ty: TypeResourceTableIndex::from_u32(ty - 1),
+                index: self.index,
+                ty: TypeResourceTableIndex::from_u32(ty),
             },
         }
     }

@@ -76,7 +76,7 @@
 ;;     region10 = 71 ""
 ;;     region11 = 149 ""
 ;;     region12 = 93 ""
-;;     region13 = 32 ""
+;;     region13 = 30 ""
 ;;     region14 = 184 ""
 ;;     region15 = 132 ""
 ;;     region16 = 174 ""
@@ -127,7 +127,7 @@
 ;;                                     v19 = load.i32 notrap aligned region11 v15+132
 ;;                                     store notrap aligned region12 v19, v14+20
 ;;                                     store notrap aligned region11 v8, v15+132  ; v8 = 0
-;;                                     v21 = load.i64 notrap aligned region13 v15+160
+;;                                     v21 = load.i64 notrap aligned region13 v15+152
 ;;                                     store notrap aligned region14 v21, v14+24
 ;;                                     store notrap aligned region5 v14, v15+136
 ;;                                     v22 = load.i64 notrap aligned readonly can_move region3 v3+208
@@ -170,6 +170,6 @@
 ;;
 ;;                                 block1:
 ;; @0120                               v2 = iconst.i32 1234
-;;                                     v51 = iadd.i32 v30, v2  ; v2 = 1234
-;; @0125                               return v51
+;;                                     v48 = iadd.i32 v30, v2  ; v2 = 1234
+;; @0125                               return v48
 ;; }

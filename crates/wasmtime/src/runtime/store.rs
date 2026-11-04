@@ -777,15 +777,11 @@ impl<T> Store<T> {
 
         #[cfg(feature = "component-model-async")]
         {
-            let (lazy_lenders, capacity) =
-                inner.inner.store_data.components.lazy_lenders_ptr_and_len();
+            let lazy_lenders = inner.inner.store_data.components.lazy_lenders_ptr();
             // SAFETY: the buffer is boxed inside `store_data`, which outlives
-            // the `VMStoreContext` beside it, and is never moved or resized.
+            // the `VMStoreContext` beside it, and is never moved.
             unsafe {
-                inner
-                    .inner
-                    .vm_store_context
-                    .set_lazy_lenders(lazy_lenders, capacity);
+                inner.inner.vm_store_context.set_lazy_lenders(lazy_lenders);
             }
         }
 

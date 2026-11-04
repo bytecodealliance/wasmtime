@@ -25,7 +25,7 @@
 ;;   4c: xload64le_o32 x3, sp, 0
 ;;   53: xstore64le_o32 x3, 136, x1
 ;;   5a: xzero x1
-;;   5c: xstore64le_o32 x3, 160, x1
+;;   5c: xstore64le_o32 x3, 152, x1
 ;;   63: xzero x0
 ;;   65: pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
 ;;   6a: ret

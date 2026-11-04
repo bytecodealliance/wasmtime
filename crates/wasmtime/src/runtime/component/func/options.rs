@@ -377,6 +377,17 @@ impl<'a> LiftContext<'a> {
         let store_id = store.id();
         let hostcall_fuel = store.hostcall_fuel();
         let current_scope = store.current_scope()?;
+
+        // Computing the scope forces any deferred thread, so host lifts never
+        // record lazy lends and always see a complete `lend_count`.
+        #[cfg(feature = "component-model-async")]
+        debug_assert!(
+            !store
+                .vm_store_context_mut()
+                .current_thread_mut()
+                .is_deferred()
+        );
+
         // From `&mut StoreOpaque` provided the goal here is to project out
         // three different disjoint fields owned by the store: memory,
         // `CallContexts`, and `HandleTable`. There's no native API for that
@@ -512,10 +523,6 @@ impl<'a> LiftContext<'a> {
                 task_state: self.task_state,
                 guest: Some(self.instance.as_mut().instance_states()),
                 current_scope: self.current_scope,
-                // `LiftContext` computes `current_scope` up front, forcing the
-                // thread, so host lifts always have a materialized scope.
-                #[cfg(feature = "component-model-async")]
-                lazy_lenders: None,
             },
             self.host_resource_data,
         )

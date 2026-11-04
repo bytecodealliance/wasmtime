@@ -102,9 +102,18 @@
   (export "run" (func $b "run"))
 )
 
-;; Comfortably within the buffer, so every lend is recorded lazily.
-(assert_return (invoke "run" (u32.const 64)) (u32.const 64))
+;; Within the buffer, so every lend is recorded lazily and discarded inline when
+;; the call returns.
+(assert_return (invoke "run" (u32.const 4)) (u32.const 4))
 
-;; Past the buffer's capacity, so the lift switches to the forced path partway
-;; through and the undo has to cover both halves.
+;; Exactly fills the buffer without forcing.
+(assert_return (invoke "run" (u32.const 8)) (u32.const 8))
+
+;; Past the buffer's capacity, so the lift forces the thread partway through:
+;; the buffered lends are promoted into real ones and the rest are made
+;; directly, and every one of them must be undone by the time of the drop.
+(assert_return (invoke "run" (u32.const 9)) (u32.const 9))
 (assert_return (invoke "run" (u32.const 1000)) (u32.const 1000))
+
+;; Lazy and forced calls interleave without leaking lends between them.
+(assert_return (invoke "run" (u32.const 3)) (u32.const 3))

@@ -80,7 +80,7 @@
 ;;       addi    a1, zero, 1
 ;;       ld      a5, 0(sp)
 ;;       sd      a1, 0x88(a5)
-;;       sd      zero, 0xa0(a5)
+;;       sd      zero, 0x98(a5)
 ;;       mv      a0, zero
 ;;       ld      s0, 0xc8(sp)
 ;;       ld      s1, 0xc0(sp)
