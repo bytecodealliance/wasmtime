@@ -400,6 +400,33 @@ impl Memory {
         Ok(())
     }
 
+    /// Returns the [`LinearMemory`] backing this memory if it is of the concrete type `M`.
+    ///
+    /// This is intended for embedders that create memories with a custom
+    /// [`MemoryCreator`] (see [`Config::with_host_memory`](crate::Config::with_host_memory))
+    /// and need to inspect the created [`LinearMemory`] object after instantiation.
+    ///
+    /// Returns `None` if the memory is not of type `M`.
+    /// Keeping the concrete `M` returned by a [`MemoryCreator`] private
+    /// ensures that no other code with access to the store can obtain it.
+    ///
+    /// Note that this method will consider the entire store context provided as
+    /// borrowed for the duration of the lifetime of the returned reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn linear_memory<'a, M: LinearMemory, T: 'static>(
+        &self,
+        store: impl Into<StoreContext<'a, T>>,
+    ) -> Option<&'a M> {
+        let store: &'a StoreOpaque = store.into().0;
+        let memory: &'a dyn Any = store[self.instance]
+            .get_defined_memory(self.index)
+            .as_linear_memory()?;
+        memory.downcast_ref()
+    }
+
     /// Returns this memory as a native Rust slice.
     ///
     /// Note that this method will consider the entire store context provided as
@@ -778,6 +805,11 @@ impl Memory {
 /// then every byte from `as_ptr() + byte_size()`, rounded up to the next host page boundary, up to
 /// `as_ptr() + max(reserved_size_in_bytes, byte_size()) + guard_size_in_bytes` must be
 /// inaccessible, so that any access to it faults. This must hold at all times, including after growth.
+///
+/// - **Shared access.** Embedders can obtain `&Self` through [`Memory::linear_memory`] whenever
+/// the owning store is not in use. Methods taking `&self` must therefore be safe to call at any
+/// such time, from any thread, and must not hand out mutable access to state that Wasmtime or
+/// WebAssembly code also mutates, such as the memory's contents.
 ///
 /// Additionally, observe the safety requirements when the memory is accessed, as explained in [`Memory`].
 ///
