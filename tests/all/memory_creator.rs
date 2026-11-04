@@ -489,6 +489,31 @@ fn growth_limited_to_capacity_when_memory_may_not_move() -> Result<()> {
     Ok(())
 }
 
+// The `LinearMemory` returned by a custom creator can be recovered from an
+// instance's exported memory.
+#[test]
+fn linear_memory_downcasts_to_creator_type() -> Result<()> {
+    let (mut store, counters) = store(CustomMemoryCreator::new(ImageMode::ReturnFalse), |_| {});
+    let module = Module::new(store.engine(), DATA_MODULE)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+
+    let custom = memory.linear_memory::<CustomMemory, _>(&store).unwrap();
+    // Check that this is the same instance that we expect it to be.
+    assert!(Arc::ptr_eq(&custom.counters, &counters));
+    assert_eq!(custom.byte_size(), WASM_PAGE);
+    assert_eq!(custom.base(), memory.data_ptr(&store));
+
+    // Make sure grow works and is reflected in the returned reference.
+    let grow = instance.get_typed_func::<i32, i32>(&mut store, "grow")?;
+    assert_eq!(grow.call(&mut store, 1)?, 1);
+    let custom = memory.linear_memory::<CustomMemory, _>(&store).unwrap();
+    assert_eq!(custom.byte_size(), 2 * WASM_PAGE);
+    assert_eq!(custom.base(), memory.data_ptr(&store));
+
+    Ok(())
+}
+
 // A memory that moves while growing within its capacity violates the `LinearMemory` contract.
 // Wasmtime does not guarantee that this is detected, but it is an easy check that prevents
 // potentially catastrophic errors, so we make sure it leads to a panic.

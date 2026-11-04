@@ -374,6 +374,14 @@ impl Memory {
             Memory::Shared(_) => panic!("expected a local memory"),
         }
     }
+    /// Returns the [`LinearMemory`] allocation backing this memory, or `None`
+    /// for shared memories.
+    pub fn as_linear_memory(&self) -> Option<&dyn LinearMemory> {
+        match self {
+            Memory::Local(mem) => Some(&*mem.alloc),
+            Memory::Shared(_) => None,
+        }
+    }
 
     /// Is this a shared memory?
     pub fn is_shared_memory(&self) -> bool {
