@@ -52,6 +52,7 @@
 
 use self::error_contexts::GlobalErrorContextRefCount;
 use crate::component::func::{Func, call_post_return};
+use crate::component::store::ComponentInstanceId;
 use crate::component::{
     HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
 };
@@ -88,6 +89,7 @@ use core::task::{Context, Poll, Waker};
 use futures::channel::oneshot;
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
+use smallvec::SmallVec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
@@ -1868,7 +1870,7 @@ impl StoreOpaque {
 
         // Collect the deferred frames pushed inline by fused adapters, walking
         // the `parent` chain from innermost to the base.
-        let mut frames = Vec::new();
+        let mut frames = SmallVec::<[_; 8]>::new();
         let mut cur = *self.vm_store_context_mut().current_thread_mut();
         while let Some(ptr) = cur.as_deferred() {
             // SAFETY: `ptr` points at a `VMDeferredThread` living in a fused
@@ -1880,6 +1882,7 @@ impl StoreOpaque {
                 deferred.callee_async != 0,
                 deferred.callee_instance,
                 deferred.saved_context,
+                deferred.lazy_lenders_start,
             ));
             cur = deferred.parent;
         }
@@ -1896,7 +1899,24 @@ impl StoreOpaque {
         // Replay the deferred `enter_guest_sync_call`s outermost-first so that
         // the resulting `ConcurrentState` matches what the non-deferred path
         // would have otherwise produced.
-        for (callee_async, callee_instance, saved_context) in frames.into_iter().rev() {
+        //
+        // A frame's own lazy lends run from its start to that of the frame
+        // pushed after it, or to the end of the buffer for the innermost.
+        let lazy_lenders_end = *self.vm_store_context_mut().lazy_lenders_len_mut();
+        frames.reverse();
+        let lazy_lenders_base = match frames.first() {
+            Some((_, _, _, start)) => *start,
+            None => bail_bug!("forcing a deferred thread with no deferred frames"),
+        };
+        let lazy_lender_ends = frames
+            .iter()
+            .skip(1)
+            .map(|(_, _, _, start)| *start)
+            .chain([lazy_lenders_end])
+            .collect::<SmallVec<[_; 8]>>();
+        for ((callee_async, callee_instance, saved_context, start), lenders_end) in
+            frames.into_iter().zip(lazy_lender_ends)
+        {
             // Restore the caller's context slots so that we save the correct
             // values into the caller's thread, exactly as the non-deferred path
             // would have on entry.
@@ -1906,7 +1926,19 @@ impl StoreOpaque {
                 index: RuntimeComponentInstanceIndex::from_u32(callee_instance),
             };
             self.enter_guest_sync_call(callee_async, callee)?;
+
+            // Now that this frame has a real `GuestTask`, promote any lazy
+            // lends it recorded while deferred.
+            self.promote_current_lazy_lends(id, start, lenders_end)?;
         }
+
+        // Every lazy-lend record was promoted, so the length resets back to
+        // where the outermost frame found it.
+        debug_assert_eq!(
+            *self.vm_store_context_mut().lazy_lenders_len_mut(),
+            lazy_lenders_end
+        );
+        *self.vm_store_context_mut().lazy_lenders_len_mut() = lazy_lenders_base;
 
         // Replaying done; restore the current context.
         *self.vm_store_context_mut().component_context_mut() = current_context;
@@ -1914,6 +1946,33 @@ impl StoreOpaque {
         Ok(self
             .concurrent_state_mut_without_forcing_current_thread()
             .unforced_current_thread)
+    }
+
+    /// Promotes the `lazy_lenders` entries in `start..end` into real lends
+    /// owned by the current thread's `CallContext`.
+    ///
+    /// The task's `validate_scope_exit` then undoes them as if they had been
+    /// lent there all along.
+    fn promote_current_lazy_lends(
+        &mut self,
+        id: ComponentInstanceId,
+        start: usize,
+        end: usize,
+    ) -> Result<()> {
+        if start == end {
+            return Ok(());
+        }
+
+        let scope = match self
+            .concurrent_state_mut_without_forcing_current_thread()
+            .unforced_current_thread
+            .guest_task()
+        {
+            Some(task) => Scope::Id(task.rep()),
+            None => bail_bug!("replayed deferred frame is not a guest thread"),
+        };
+        let instance = Instance::from_wasmtime(self, id);
+        self.promote_lazy_lends(instance, scope, start, end)
     }
 
     fn current_guest_thread(&mut self) -> Result<QualifiedThreadId> {

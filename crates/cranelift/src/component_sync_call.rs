@@ -108,6 +108,18 @@ where
         );
     }
 
+    // Record where this frame's lazy lends will start, so that `exit` can
+    // discard them and the host can find exactly this frame's entries if it
+    // has to promote them into real lends.
+    let lazy_lenders_len = alias_regions
+        .vm_store_context()
+        .lazy_lenders_len()
+        .load(&mut builder.cursor(), vmstore);
+    alias_regions
+        .vm_deferred_thread()
+        .lazy_lenders_start()
+        .store(&mut builder.cursor(), slot_addr, lazy_lenders_len);
+
     // Publish the deferred thread as the store's current thread.
     alias_regions.vm_store_context().current_thread().store(
         &mut builder.cursor(),
@@ -138,11 +150,12 @@ impl SlowExit {
 /// the stack slot that `enter` returned.
 ///
 /// If the deferred thread pushed by `enter` is still the store's current
-/// thread, meaning nothing ever forced it into a real one, then it is popped
-/// and the caller's context slots restored inline. Otherwise the host has state
-/// to tear down, which only it can do, so the caller must emit an out-of-line
-/// call to the `exit_sync_call` intrinsic: on return the builder is positioned
-/// in that slow path, which is finished with [`SlowExit::finish`].
+/// thread, meaning nothing ever forced it into a real one, then it is popped,
+/// its lazy lends discarded, and the caller's context slots restored inline.
+/// Otherwise the host has state to tear down, which only it can do, so the
+/// caller must emit an out-of-line call to the `exit_sync_call` intrinsic: on
+/// return the builder is positioned in that slow path, which is finished with
+/// [`SlowExit::finish`].
 pub fn exit<O>(
     builder: &mut FunctionBuilder<'_>,
     alias_regions: &mut AliasRegions<O>,
@@ -162,14 +175,14 @@ where
         .vm_store_context()
         .current_thread()
         .load(&mut builder.cursor(), vmstore);
-    let is_fast = builder.ins().icmp(IntCC::Equal, cur, slot_addr);
+    let is_current = builder.ins().icmp(IntCC::Equal, cur, slot_addr);
 
     let fast_block = builder.create_block();
     let slow_block = builder.create_block();
     let cont_block = builder.create_block();
     builder
         .ins()
-        .brif(is_fast, fast_block, &[], slow_block, &[]);
+        .brif(is_current, fast_block, &[], slow_block, &[]);
     builder.seal_block(fast_block);
     builder.seal_block(slow_block);
 
@@ -183,6 +196,20 @@ where
         .vm_store_context()
         .current_thread()
         .store(&mut builder.cursor(), vmstore, parent);
+
+    // Discard the lazy lends this frame recorded. We can do this by simply
+    // resetting the `lazy_lenders_len`, and without any per-lend work, since
+    // the deferred thread and its lazy lends were never materialized.
+    let start = alias_regions
+        .vm_deferred_thread()
+        .lazy_lenders_start()
+        .load(&mut builder.cursor(), slot_addr);
+    alias_regions.vm_store_context().lazy_lenders_len().store(
+        &mut builder.cursor(),
+        vmstore,
+        start,
+    );
+
     for i in 0..u8::try_from(NUM_COMPONENT_CONTEXT_SLOTS).unwrap() {
         let saved = alias_regions
             .vm_deferred_thread()

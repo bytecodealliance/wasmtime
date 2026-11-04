@@ -1,12 +1,14 @@
 use crate::prelude::*;
 use crate::runtime::component::{HostResourceData, Instance};
 use crate::runtime::vm;
+use crate::runtime::vm::VMResourceIndex;
 use crate::runtime::vm::component::{
     CallContext, ComponentInstance, HandleCounter, HandleTable, OwnedComponentInstance, Scope,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
 use core::pin::Pin;
+use wasmtime_environ::LAZY_LENDERS_CAPACITY;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::prelude::TryPrimaryMap;
 
@@ -65,6 +67,12 @@ pub struct ComponentStoreData {
     component_host_table: HandleTable,
     host_resource_data: HostResourceData,
 
+    /// Backing storage for `VMStoreContext::lazy_lenders`; see
+    /// `ResourceTables::resource_lift_borrow_lazy`.
+    ///
+    /// Boxed and never resized, since JIT code holds a raw pointer to it.
+    lazy_lenders: Box<[VMResourceIndex; LAZY_LENDERS_CAPACITY]>,
+
     /// Metadata/tasks/etc related to component-model-async and concurrency
     /// support.
     task_state: ComponentTaskState,
@@ -100,8 +108,8 @@ pub struct RuntimeInstance {
 }
 
 impl ComponentStoreData {
-    pub fn new(engine: &Engine) -> ComponentStoreData {
-        ComponentStoreData {
+    pub fn new(engine: &Engine) -> Result<ComponentStoreData> {
+        Ok(ComponentStoreData {
             instances: Default::default(),
             component_trapped: false,
             has_components: false,
@@ -125,7 +133,62 @@ impl ComponentStoreData {
                 ComponentTaskState::NotConcurrent(Default::default())
             },
             hostcall_fuel: DEFAULT_HOSTCALL_FUEL,
-        }
+            lazy_lenders: try_new::<Box<_>>([VMResourceIndex::EMPTY; LAZY_LENDERS_CAPACITY])?,
+        })
+    }
+
+    /// Builds the resource tables for `instance` with an explicit
+    /// `current_scope`.
+    ///
+    /// Also returns the host resource data and the `lazy_lenders` buffer, which
+    /// live alongside the tables and so can only be borrowed together with
+    /// them.
+    fn resource_tables(
+        &mut self,
+        store_id: StoreId,
+        instance: Option<Instance>,
+        current_scope: Option<vm::component::CurrentScope>,
+    ) -> (
+        vm::component::ResourceTables<'_>,
+        &mut HostResourceData,
+        &mut [VMResourceIndex],
+    ) {
+        let guest = instance.map(|i| {
+            let i = i.id();
+            i.assert_belongs_to(store_id);
+            self.instances[i.instance]
+                .as_mut()
+                .unwrap()
+                .get_mut()
+                .instance_states()
+        });
+        (
+            vm::component::ResourceTables {
+                host_table: &mut self.component_host_table,
+                handle_counter: &mut self.handle_counter,
+                task_state: &mut self.task_state,
+                guest,
+                current_scope,
+            },
+            &mut self.host_resource_data,
+            &mut self.lazy_lenders[..],
+        )
+    }
+
+    /// Points `vm_store_context` at this store's `lazy_lenders` buffer.
+    ///
+    /// # Safety
+    ///
+    /// `self` must outlive `vm_store_context` and must not move while it is in
+    /// use, since JIT code reads the buffer through the published pointer.
+    pub(crate) unsafe fn publish_lazy_lenders(
+        &mut self,
+        vm_store_context: &mut vm::VMStoreContext,
+    ) {
+        let lazy_lenders = core::ptr::NonNull::from(&mut *self.lazy_lenders);
+        // SAFETY: the buffer is boxed, so it stays put as long as `self` does,
+        // which the caller guarantees.
+        unsafe { vm_store_context.set_lazy_lenders(lazy_lenders) }
     }
 
     /// Hook used just before a `Store` is dropped to dispose of anything
@@ -460,29 +523,73 @@ impl StoreOpaque {
         &mut crate::component::HostResourceData,
     )> {
         let current_scope = self.current_scope()?;
-
         let store_id = self.id();
-        let data = self.component_data_mut();
-        let guest = instance.map(|i| {
-            let i = i.id();
-            i.assert_belongs_to(store_id);
-            data.instances[i.instance]
-                .as_mut()
-                .unwrap()
-                .get_mut()
-                .instance_states()
-        });
+        let (tables, host_resource_data, _) =
+            self.component_data_mut()
+                .resource_tables(store_id, instance, current_scope);
+        Ok((tables, host_resource_data))
+    }
 
-        Ok((
-            vm::component::ResourceTables {
-                host_table: &mut data.component_host_table,
-                handle_counter: &mut data.handle_counter,
-                task_state: &mut data.task_state,
-                guest,
-                current_scope,
-            },
-            &mut data.host_resource_data,
-        ))
+    /// Records a borrow of `index` within `instance` without forcing an
+    /// unforced `VMDeferredThread`, falling back to forcing it when that is
+    /// not possible.
+    ///
+    /// See `ResourceTables::resource_lift_borrow_lazy`.
+    pub(crate) fn resource_lift_borrow_maybe_lazy(
+        &mut self,
+        instance: Instance,
+        index: vm::component::TypedResourceIndex,
+    ) -> Result<u32> {
+        // NB: this check must happen before anything calls `current_scope()`,
+        // which is itself the call that forces the thread.
+        if self
+            .vm_store_context_mut()
+            .current_thread_mut()
+            .is_deferred()
+        {
+            let store_id = self.id();
+            let (vm_store_context, store_data) = self.vm_store_context_and_store_data_mut();
+            let (mut tables, _, lazy_lenders) =
+                store_data
+                    .components
+                    .resource_tables(store_id, Some(instance), None);
+            match tables.resource_lift_borrow_lazy(index, lazy_lenders, vm_store_context)? {
+                Some(rep) => return Ok(rep),
+                None => {
+                    // Fallthrough: the buffer is full and nothing was lent.
+                }
+            }
+        }
+
+        // The path for forcing the `VMDeferredThread`, or using an
+        // already-forced one.
+        self.component_resource_tables(Some(instance))?
+            .resource_lift_borrow(index)
+    }
+
+    /// Promotes the lazy lends in `start..end` into real lends owned by
+    /// `scope`; see `ResourceTables::promote_lazy_lends`.
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(
+            dead_code,
+            reason = "deferred threads are only created with `component-model-async`, \
+                      so nothing promotes lazy lends without it"
+        )
+    )]
+    pub(crate) fn promote_lazy_lends(
+        &mut self,
+        instance: Instance,
+        scope: vm::component::Scope,
+        start: usize,
+        end: usize,
+    ) -> Result<()> {
+        debug_assert!(start <= end && end <= *self.vm_store_context_mut().lazy_lenders_len_mut());
+        let store_id = self.id();
+        let (mut tables, _, lazy_lenders) =
+            self.component_data_mut()
+                .resource_tables(store_id, Some(instance), None);
+        tables.promote_lazy_lends(scope, &lazy_lenders[start..end])
     }
 
     pub(crate) fn enter_call_not_concurrent(&mut self) -> Result<()> {

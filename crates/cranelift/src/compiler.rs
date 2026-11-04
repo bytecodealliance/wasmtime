@@ -1632,6 +1632,17 @@ impl Compiler {
                 vm_store_ctx,
                 forced,
             );
+
+            // Likewise, those frames held the only record of where their
+            // lazy lends started. Those lends never touched a `lend_count`, so
+            // discarding them all is exactly what unwinding the frames' exits
+            // would have done.
+            let zero = builder.ins().iconst(pointer_type, 0);
+            alias_regions.vm_store_context().lazy_lenders_len().store(
+                &mut builder.cursor(),
+                vm_store_ctx,
+                zero,
+            );
         }
         let false_return = builder.ins().iconst(ir::types::I8, 0);
         builder.ins().return_(&[false_return]);

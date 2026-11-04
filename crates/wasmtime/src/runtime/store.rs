@@ -719,7 +719,7 @@ impl<T> Store<T> {
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
     pub fn try_new(engine: &Engine, data: T) -> Result<Self> {
-        let store_data = StoreData::new(engine);
+        let store_data = StoreData::new(engine)?;
         log::trace!("creating new store {:?}", store_data.id());
 
         let pkey = engine.allocator().next_available_pkey();
@@ -774,6 +774,18 @@ impl<T> Store<T> {
         let store_data =
             <NonNull<ManuallyDrop<T>>>::from(&mut inner.data_no_provenance).cast::<()>();
         inner.inner.vm_store_context.store_data = store_data.into();
+
+        // SAFETY: `store_data` and the `VMStoreContext` beside it live in the
+        // same boxed `StoreInner`, so neither outlives nor moves out from under
+        // the other.
+        unsafe {
+            let StoreOpaque {
+                store_data,
+                vm_store_context,
+                ..
+            } = &mut inner.inner;
+            store_data.publish_to_vm_store_context(vm_store_context);
+        }
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
 
@@ -1583,6 +1595,17 @@ impl StoreOpaque {
 
     pub fn store_data_mut_and_registry(&mut self) -> (&mut StoreData, &ModuleRegistry) {
         (&mut self.store_data, &self.modules)
+    }
+
+    /// Borrows the `VMStoreContext` and the store's data at the same time.
+    ///
+    /// These are disjoint fields, so JIT-visible state can be reached alongside
+    /// the tables in `StoreData` without a whole-store borrow in between.
+    #[cfg(feature = "component-model")]
+    pub(crate) fn vm_store_context_and_store_data_mut(
+        &mut self,
+    ) -> (&mut VMStoreContext, &mut StoreData) {
+        (&mut self.vm_store_context, &mut self.store_data)
     }
 
     #[cfg(feature = "debug")]

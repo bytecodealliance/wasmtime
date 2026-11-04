@@ -377,6 +377,16 @@ impl<'a> LiftContext<'a> {
         let store_id = store.id();
         let hostcall_fuel = store.hostcall_fuel();
         let current_scope = store.current_scope()?;
+
+        // Computing the scope forces any deferred thread, so host lifts never
+        // record lazy lends and always see a complete `lend_count`.
+        debug_assert!(
+            !store
+                .vm_store_context_mut()
+                .current_thread_mut()
+                .is_deferred()
+        );
+
         // From `&mut StoreOpaque` provided the goal here is to project out
         // three different disjoint fields owned by the store: memory,
         // `CallContexts`, and `HandleTable`. There's no native API for that

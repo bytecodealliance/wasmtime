@@ -433,6 +433,9 @@ impl Instance {
             !self.id().get(store).resource_owned_by_own_instance(dst),
             "should have used `resource.transfer-borrow-to-owner` instead",
         );
+        // No lazy-lend path here: the `resource_lower_borrow` below needs a
+        // materialized scope for its `borrow_count`, so the thread has to be
+        // forced anyway.
         let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
         tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
@@ -446,8 +449,8 @@ impl Instance {
         index: u32,
         src: TypeResourceTableIndex,
     ) -> Result<u32> {
-        let mut tables = store.component_resource_tables(Some(self))?;
-        tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })
+        store
+            .resource_lift_borrow_maybe_lazy(self, TypedResourceIndex::Component { ty: src, index })
     }
 
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {

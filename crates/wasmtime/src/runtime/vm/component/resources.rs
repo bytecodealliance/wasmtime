@@ -24,6 +24,7 @@ use super::{HandleCounter, HandleTable, InstanceState, RemovedResource};
 use crate::bail_bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
+use crate::runtime::vm::{VMResourceIndex, VMStoreContext};
 use core::error::Error;
 use core::fmt;
 use core::mem;
@@ -367,6 +368,79 @@ impl ResourceTables<'_> {
         let rep = table.resource_lend(counter, index)?;
         self.current_scope()?.lenders.push(index)?;
         Ok(rep)
+    }
+
+    /// Variant of `resource_lift_borrow` for an unforced `VMDeferredThread`,
+    /// which records the lend in the store's `lazy_lenders` buffer instead of a
+    /// `CallContext`.
+    ///
+    /// The handle's `lend_count` is left alone: forcing the thread performs the
+    /// real lend for each buffered entry (see `promote_lazy_lends`), and exiting
+    /// an unforced frame discards its entries by resetting `lazy_lenders_len`.
+    /// Everything that reads `lend_count` forces the thread first, so the count
+    /// is always complete by the time anything relies on it.
+    ///
+    /// Returns `Ok(None)` without lending anything if the buffer is full, in
+    /// which case the caller must force the thread and use
+    /// `resource_lift_borrow` instead.
+    pub fn resource_lift_borrow_lazy(
+        &mut self,
+        index: TypedResourceIndex,
+        lazy_lenders: &mut [VMResourceIndex],
+        vm_store_context: &mut VMStoreContext,
+    ) -> Result<Option<u32>> {
+        // A forced thread already has a `CallContext`, and anything recorded
+        // here would never be promoted into it.
+        debug_assert!(vm_store_context.current_thread_mut().is_deferred());
+
+        let lazy_lenders_len = vm_store_context.lazy_lenders_len_mut();
+        let Some(slot) = lazy_lenders.get_mut(*lazy_lenders_len) else {
+            return Ok(None);
+        };
+        let rep = self
+            .table_for_index(&index)
+            .0
+            .resource_lend_deferred(index)?;
+        *slot = VMResourceIndex::new(index);
+        *lazy_lenders_len += 1;
+        Ok(Some(rep))
+    }
+
+    /// Promotes lazy lends recorded by `resource_lift_borrow_lazy` into real
+    /// lends owned by `scope`'s `CallContext`, incrementing each handle's
+    /// `lend_count` and charging the store's handle count now that the thread
+    /// that made them has been forced.
+    ///
+    /// Either every lend is promoted or, on error, none is.
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(
+            dead_code,
+            reason = "deferred threads are only created with `component-model-async`, so nothing promotes lazy lends without it"
+        )
+    )]
+    pub fn promote_lazy_lends(
+        &mut self,
+        scope: Scope,
+        lazy_lenders: &[VMResourceIndex],
+    ) -> Result<()> {
+        // Fail up front on anything that could otherwise fail partway through
+        // and leave some of these lends promoted but not the rest.
+        self.task_state
+            .call_context(scope)?
+            .lenders
+            .reserve(lazy_lenders.len())?;
+        if !self.handle_counter.has_room(lazy_lenders.len()) {
+            bail!("cannot lend resource: store handle limit exceeded");
+        }
+
+        for lender in lazy_lenders {
+            let index = lender.get();
+            let (table, counter) = self.table_for_index(&index);
+            table.resource_lend(counter, index)?;
+            self.task_state.call_context(scope)?.lenders.push(index)?;
+        }
+        Ok(())
     }
 
     /// Records a new `borrow` resource with the given representation within the

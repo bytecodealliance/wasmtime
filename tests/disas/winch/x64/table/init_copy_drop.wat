@@ -138,13 +138,13 @@
 ;;       movq    %rsi, (%rsp)
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
-;;       callq   0x115e
+;;       callq   0x11ab
 ;;       movq    8(%rsp), %r14
 ;;       pushq   %rax
 ;;       subq    $8, %rsp
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
-;;       callq   0x1189
+;;       callq   0x11d6
 ;;       addq    $8, %rsp
 ;;       movq    0x10(%rsp), %r14
 ;;       movq    %r14, %r11
@@ -190,17 +190,17 @@
 ;;       jmp     0x1f4
 ;;  256: movq    %r14, %rdi
 ;;       movl    $0, %esi
-;;       callq   0x11b4
+;;       callq   0x1201
 ;;       movq    8(%rsp), %r14
 ;;       movq    %r14, %rdi
 ;;       movl    $1, %esi
-;;       callq   0x115e
+;;       callq   0x11ab
 ;;       movq    8(%rsp), %r14
 ;;       pushq   %rax
 ;;       subq    $8, %rsp
 ;;       movq    %r14, %rdi
 ;;       movl    $1, %esi
-;;       callq   0x1189
+;;       callq   0x11d6
 ;;       addq    $8, %rsp
 ;;       movq    0x10(%rsp), %r14
 ;;       movq    %r14, %r11
@@ -246,7 +246,7 @@
 ;;       jmp     0x2ed
 ;;  34f: movq    %r14, %rdi
 ;;       movl    $1, %esi
-;;       callq   0x11b4
+;;       callq   0x1201
 ;;       movq    8(%rsp), %r14
 ;;       movl    $5, %eax
 ;;       movl    $0xf, %ecx
@@ -305,7 +305,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
 ;;       movq    8(%rsp), %rdx
-;;       callq   0x11f8
+;;       callq   0x1245
 ;;       addq    $0x10, %rsp
 ;;       movq    0x28(%rsp), %r14
 ;;       jmp     0x463
@@ -389,7 +389,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
 ;;       movq    8(%rsp), %rdx
-;;       callq   0x11f8
+;;       callq   0x1245
 ;;       addq    $0x10, %rsp
 ;;       movq    0x28(%rsp), %r14
 ;;       jmp     0x5b7
@@ -473,7 +473,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
 ;;       movq    8(%rsp), %rdx
-;;       callq   0x11f8
+;;       callq   0x1245
 ;;       addq    $0x10, %rsp
 ;;       movq    0x28(%rsp), %r14
 ;;       jmp     0x70b
@@ -557,7 +557,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
 ;;       movq    8(%rsp), %rdx
-;;       callq   0x11f8
+;;       callq   0x1245
 ;;       addq    $0x10, %rsp
 ;;       movq    0x28(%rsp), %r14
 ;;       jmp     0x85f
@@ -641,7 +641,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
 ;;       movq    8(%rsp), %rdx
-;;       callq   0x11f8
+;;       callq   0x1245
 ;;       addq    $0x10, %rsp
 ;;       movq    0x28(%rsp), %r14
 ;;       jmp     0x9b3
@@ -751,7 +751,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
 ;;       movl    0xc(%rsp), %edx
-;;       callq   0x11f8
+;;       callq   0x1245
 ;;       addq    $0x10, %rsp
 ;;       movq    0x18(%rsp), %r14
 ;;       jmp     0xb24

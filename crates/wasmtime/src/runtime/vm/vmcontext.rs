@@ -1013,11 +1013,6 @@ impl VMStoreContext {
     pub(crate) fn component_context_mut(&mut self) -> &mut [u32; NUM_COMPONENT_CONTEXT_SLOTS] {
         self.component_context.get_mut()
     }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn current_thread_mut(&mut self) -> &mut VMLazyThread {
-        self.current_thread.get_mut()
-    }
 }
 
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
@@ -1051,6 +1046,8 @@ impl Default for VMStoreContext {
             store_data: VmPtr::dangling(),
             component_context: UnsafeCell::new([0; NUM_COMPONENT_CONTEXT_SLOTS]),
             current_thread: UnsafeCell::new(VMLazyThread::none()),
+            lazy_lenders: VmPtr::dangling(),
+            lazy_lenders_len: UnsafeCell::new(0),
         }
     }
 }
