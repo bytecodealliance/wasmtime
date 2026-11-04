@@ -25,15 +25,13 @@ impl<K, V> BoxedSlice<K, V>
 where
     K: EntityRef,
 {
-    /// Create a new slice from a raw pointer. A safer way to create slices is
-    /// to use `PrimaryMap::into_boxed_slice()`.
+    /// Create a new slice that takes ownership of `elems`.
     ///
-    /// # Safety
-    ///
-    /// This relies on `raw` pointing to a valid slice of `V`s.
-    pub unsafe fn from_raw(raw: *mut [V]) -> Self {
+    /// Use `PrimaryMap::into_boxed_slice()` to create one from outside this
+    /// crate.
+    pub(crate) fn new(elems: Box<[V]>) -> Self {
         Self {
-            elems: unsafe { Box::from_raw(raw) },
+            elems,
             unused: PhantomData,
         }
     }

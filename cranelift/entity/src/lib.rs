@@ -30,6 +30,7 @@
 //!   `Vec`.
 
 #![deny(missing_docs)]
+#![forbid(unsafe_code)]
 #![no_std]
 
 extern crate alloc;

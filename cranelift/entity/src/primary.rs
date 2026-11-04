@@ -3,7 +3,6 @@ use crate::EntityRef;
 use crate::boxed_slice::BoxedSlice;
 use crate::iter::{IntoIter, Iter, IterMut};
 use crate::keys::Keys;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
@@ -187,7 +186,7 @@ where
 
     /// Consumes this `PrimaryMap` and produces a `BoxedSlice`.
     pub fn into_boxed_slice(self) -> BoxedSlice<K, V> {
-        unsafe { BoxedSlice::<K, V>::from_raw(Box::<[V]>::into_raw(self.elems.into_boxed_slice())) }
+        BoxedSlice::new(self.elems.into_boxed_slice())
     }
 
     /// Returns mutable references to many elements at once.
@@ -233,10 +232,9 @@ where
     /// this is only here to help borrow two elements simultaneously with miri.
     pub fn get_raw_mut(&mut self, k: K) -> Option<*mut V> {
         if k.index() < self.elems.len() {
-            // SAFETY: the `add` function requires that the index is in-bounds
-            // with respect to the allocation which is satisfied here due to
-            // the bounds-check above.
-            unsafe { Some(self.elems.as_mut_ptr().add(k.index())) }
+            // The index is in bounds per the check above, so `wrapping_add`
+            // produces the same pointer that `add` would, without `unsafe`.
+            Some(self.elems.as_mut_ptr().wrapping_add(k.index()))
         } else {
             None
         }
@@ -588,5 +586,18 @@ mod tests {
             m.get_disjoint_mut([E(4)]),
             Err(slice::GetDisjointMutError::IndexOutOfBounds)
         );
+    }
+
+    #[test]
+    fn get_raw_mut() {
+        let mut m: PrimaryMap<E, usize> = PrimaryMap::new();
+        let _0 = m.push(0);
+        let _1 = m.push(1);
+
+        let p0 = m.get_raw_mut(_0).unwrap();
+        let p1 = m.get_raw_mut(_1).unwrap();
+        assert_eq!(p0, &raw mut m[_0]);
+        assert_eq!(p1, &raw mut m[_1]);
+        assert_eq!(m.get_raw_mut(E(2)), None);
     }
 }
