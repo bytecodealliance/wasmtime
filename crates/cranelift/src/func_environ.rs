@@ -1755,11 +1755,7 @@ impl FuncEnvironment<'_> {
             2 => builder.ins().load(I16, shadow_flags, shadow_addr, 0),
             4 => builder.ins().load(I32, shadow_flags, shadow_addr, 0),
             8 => builder.ins().load(I64, shadow_flags, shadow_addr, 0),
-            16 => {
-                let low = builder.ins().load(I64, shadow_flags, shadow_addr, 0);
-                let high = builder.ins().load(I64, shadow_flags, shadow_addr, 8);
-                builder.ins().bor(low, high)
-            }
+            16 => builder.ins().load(I128, shadow_flags, shadow_addr, 0),
             _ => unreachable!("unexpected store size {size}"),
         };
 
@@ -1835,7 +1831,9 @@ impl FuncEnvironment<'_> {
     }
 
     fn to_u64(builder: &mut FunctionBuilder<'_>, value: ir::Value) -> ir::Value {
-        if builder.func.dfg.value_type(value) == I64 {
+        let ty = builder.func.dfg.value_type(value);
+        assert!(ty.is_int() && ty.bits() <= 64, "unexpected type {ty}");
+        if ty == I64 {
             value
         } else {
             builder.ins().uextend(I64, value)
