@@ -221,7 +221,12 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
 
     for (engine, desc) in engines {
         let result = engine.and_then(|engine| {
-            let mut wast_context = WastContext::new(&engine, Async::Yes, |_store| {});
+            let consume_fuel = test.config.consume_fuel();
+            let mut wast_context = WastContext::new(&engine, Async::Yes, move |store| {
+                if consume_fuel {
+                    store.set_fuel(u64::MAX).unwrap();
+                }
+            });
             wast_context.generate_dwarf(true);
             wast_context.register_spectest(&SpectestConfig {
                 use_shared_memory: true,

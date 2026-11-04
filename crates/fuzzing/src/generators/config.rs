@@ -158,6 +158,7 @@ impl Config {
             custom_descriptors: _,
 
             hogs_memory: _,
+            consume_fuel,
             nan_canonicalization: _,
             gc_types: _,
             stack_switching,
@@ -187,6 +188,9 @@ impl Config {
         self.module_config.component_model_accessors = component_model_accessors.unwrap_or(false);
         self.module_config.stack_switching = stack_switching.unwrap_or(false);
         self.wasmtime.branch_hinting = branch_hinting.unwrap_or(false);
+        if consume_fuel.unwrap_or(false) {
+            self.wasmtime.consume_fuel = true;
+        }
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
         // read when creating `wasmtime::Config`.

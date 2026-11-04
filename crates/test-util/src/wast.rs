@@ -355,6 +355,7 @@ macro_rules! foreach_config_option {
             branch_hinting
             compact_imports
             hogs_memory
+            consume_fuel
             nan_canonicalization
             component_model_async
             component_model_more_async_builtins
@@ -601,6 +602,7 @@ impl WastTest {
                 "extended-const/global.wast",
                 "misc_testsuite/externref-segments.wast",
                 "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
+                "misc_testsuite/fuel/bulk-ops.wast",
                 "misc_testsuite/many_table_gets_lead_to_gc.wast",
                 "misc_testsuite/no-panic.wast",
             ];
