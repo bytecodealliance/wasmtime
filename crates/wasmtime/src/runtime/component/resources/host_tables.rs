@@ -108,16 +108,19 @@ impl HostResourceIndex {
     const TAG: u64 = 1 << 31;
 
     /// Returns this index with its tag bit set to `tag`.
+    #[cfg(feature = "component-model-async")]
     pub(crate) const fn with_tag(self, tag: bool) -> HostResourceIndex {
         HostResourceIndex((self.0 & !Self::TAG) | if tag { Self::TAG } else { 0 })
     }
 
     /// Returns whether this index's tag bit is set.
+    #[cfg(feature = "component-model-async")]
     pub(crate) const fn tag(&self) -> bool {
         self.0 & Self::TAG != 0
     }
 
     /// Returns this index with its tag bit cleared.
+    #[cfg(feature = "component-model-async")]
     pub(crate) const fn untagged(self) -> HostResourceIndex {
         self.with_tag(false)
     }
