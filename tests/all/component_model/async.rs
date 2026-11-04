@@ -3825,6 +3825,7 @@ async fn max_fibers() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn cancel_stream_read_completed_by_host() -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_async(true);
