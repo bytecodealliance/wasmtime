@@ -271,6 +271,10 @@ wasmtime_option_group! {
         /// Controls whether native unwind information is present in compiled
         /// object files.
         pub native_unwind_info: Option<bool>,
+        /// Whether compiled code includes the hooks needed to run in a
+        /// Wasmtime built with AddressSanitizer (defaults to whether this
+        /// Wasmtime was built with AddressSanitizer).
+        pub asan_compatible_code: Option<bool>,
 
         /// Whether to perform function inlining during compilation.
         #[serde(default)]
@@ -1123,6 +1127,9 @@ impl CommonOptions {
         if let Some(enable) = self.codegen.native_unwind_info {
             config.native_unwind_info(enable);
         }
+        if let Some(enable) = self.codegen.asan_compatible_code {
+            config.asan_compatible_code(enable);
+        }
         if let Some(enable) = self.codegen.inlining {
             config.compiler_inlining(enable);
         }
@@ -1491,6 +1498,7 @@ impl CommonOptions {
                 cranelift_debug_verifier: engine.get_cranelift_debug_verifier(),
                 inlining: Some(engine.get_compiler_inlining()),
                 native_unwind_info: engine.get_native_unwind_info(),
+                asan_compatible_code: Some(engine.get_asan_compatible_code()),
                 parallel_compilation: Some(engine.get_parallel_compilation()),
                 metadata_for_internal_asserts: Some(engine.get_metadata_for_internal_asserts()),
                 metadata_for_gc_heap_corruption: Some(engine.get_metadata_for_gc_heap_corruption()),
