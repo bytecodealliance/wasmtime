@@ -59,7 +59,7 @@ doc = false
 [dependencies]
 wasmtime = { workspace = true, features = ['std'] }
 wasmtime-cache = { workspace = true, optional = true }
-wasmtime-cli-flags = { workspace = true, features = ['clap', 'toml'] }
+wasmtime-cli-flags = { workspace = true, features = ['clap', 'toml', 'runtime'] }
 wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
@@ -624,7 +624,7 @@ serve = [
   "wasmtime-wasi-http?/p2",
 ]
 explore = ["dep:wasmtime-explorer", "dep:tempfile"]
-wast = ["dep:wasmtime-wast", "wasmtime-cli-flags/runtime"]
+wast = ["dep:wasmtime-wast"]
 config = ["cache"]
 compile = ["cranelift"]
 run = [
