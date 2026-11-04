@@ -54,6 +54,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         component_model_canonical_names,
         component_model_accessors,
         nan_canonicalization,
+        consume_fuel,
         simd,
         exceptions,
         legacy_exceptions,
@@ -144,7 +145,8 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_exceptions(exceptions)
         .wasm_stack_switching(stack_switching)
         .gc_support(gc_types)
-        .cranelift_nan_canonicalization(nan_canonicalization);
+        .cranelift_nan_canonicalization(nan_canonicalization)
+        .consume_fuel(consume_fuel.unwrap_or(false));
     #[expect(deprecated, reason = "forwarding legacy-exceptions")]
     config.wasm_legacy_exceptions(legacy_exceptions);
 }
