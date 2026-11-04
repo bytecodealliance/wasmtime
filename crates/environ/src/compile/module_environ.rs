@@ -1,6 +1,7 @@
 use crate::error::{OutOfMemory, Result, bail};
 use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, Module, TableSegment, TableSegmentElements,
+    TableSegmentInit,
 };
 use crate::prelude::*;
 use crate::{
@@ -792,7 +793,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let (offset, escaped) = ConstExpr::from_wasmparser(self, offset_expr)?;
                             debug_assert!(escaped.is_empty());
 
-                            // If any element expression may trap then stage
+                            // The spec's instantiation evaluates the
+                            // expressions of all element segments before
+                            // executing any active segment's `table.init`
+                            // (https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation).
+                            // So if any element expression may trap then stage
                             // its evaluation into a passive element segment,
                             // which is evaluated before any active segment is
                             // applied. Note that this passive segment isn't
@@ -804,17 +809,18 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                     .iter()
                                     .any(|expr| expr.ops().iter().any(|op| op.may_trap())),
                             };
-                            let staged = if may_trap {
-                                let passive_index = self
+                            let init = if may_trap {
+                                let len = elements.len();
+                                let index = self
                                     .result
                                     .module
                                     .passive_elements
-                                    .push((elements.ty(), elements.len()))?;
-                                self.result.passive_elements.push(elements.clone());
+                                    .push((elements.ty(), len))?;
+                                self.result.passive_elements.push(elements);
                                 self.require_startup_func();
-                                Some(passive_index)
+                                TableSegmentInit::Staged { index, len }
                             } else {
-                                None
+                                TableSegmentInit::Direct(elements)
                             };
 
                             self.result
@@ -823,8 +829,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 .push(TableSegment {
                                     table_index,
                                     offset,
-                                    elements,
-                                    staged,
+                                    init,
                                 })?;
                             None
                         }
@@ -1317,19 +1322,15 @@ impl ModuleTranslation<'_> {
                 // A dynamic offset cannot be proven to be in bounds here.
                 _ => return true,
             };
-            let top = match offset.checked_add(segment.elements.len()) {
+            let top = match offset.checked_add(segment.init.len()) {
                 Some(top) => top,
                 None => return true,
             };
             if top > self.module.tables[segment.table_index].limits.min {
                 return true;
             }
-            match &segment.elements {
-                TableSegmentElements::Functions(_) => false,
-                TableSegmentElements::Expressions { exprs, .. } => exprs
-                    .iter()
-                    .any(|expr| expr.ops().iter().any(|op| op.may_trap())),
-            }
+            // Only segments whose elements may trap are staged.
+            matches!(segment.init, TableSegmentInit::Staged { .. })
         })
     }
 
@@ -1670,7 +1671,7 @@ impl ModuleTranslation<'_> {
             // Get the end of this segment. If out-of-bounds, or too
             // large for our dense table representation, then skip the
             // segment.
-            let top = match offset.checked_add(segment.elements.len()) {
+            let top = match offset.checked_add(segment.init.len()) {
                 Some(top) => top,
                 None => break,
             };
@@ -1698,9 +1699,10 @@ impl ModuleTranslation<'_> {
 
             // Function indices can be optimized here, but fully general
             // expressions are deferred to get evaluated at runtime.
-            let function_elements = match &segment.elements {
-                TableSegmentElements::Functions(indices) => indices,
-                TableSegmentElements::Expressions { .. } => break,
+            let function_elements = match &segment.init {
+                TableSegmentInit::Direct(TableSegmentElements::Functions(indices)) => indices,
+                TableSegmentInit::Direct(TableSegmentElements::Expressions { .. })
+                | TableSegmentInit::Staged { .. } => break,
             };
 
             match &self.table_initialization.initial_values[defined_index] {

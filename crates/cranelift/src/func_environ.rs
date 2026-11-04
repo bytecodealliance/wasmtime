@@ -40,7 +40,7 @@ use wasmtime_environ::{
     IndexType, KnownFunc, KnownGlobal, Memory, MemoryIndex, MemoryInit, MemorySegmentOffset,
     MemoryTunables, Module, ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder,
     PassiveElemIndex, RuntimeDataIndex, Table, TableIndex, TableInitialValue, TableSegment,
-    TableSegmentElements, TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets,
+    TableSegmentElements, TableSegmentInit, TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets,
     WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
     WasmStorageType, WasmValType,
 };
@@ -6319,7 +6319,7 @@ impl FuncEnvironment<'_> {
         let offset = self.translate_const_expr(builder, &segment.offset)?;
         let segment_len = builder.ins().iconst(
             index_type_to_ir_type(self.module.tables[segment.table_index].idx_type),
-            i64::try_from(segment.elements.len()).unwrap(),
+            i64::try_from(segment.init.len()).unwrap(),
         );
 
         // Check the bounds first before mutating anything.
@@ -6339,35 +6339,40 @@ impl FuncEnvironment<'_> {
             .table_init_per_element;
         let fuel = self.pre_translate_bulk_op(builder, segment_len, cost);
 
-        // If this segment's elements were already evaluated into passive
-        // storage then copy them into the table from there, like `table.init`,
-        // and then free that storage like `elem.drop`.
-        if let Some(passive_index) = segment.staged {
-            let src = builder.ins().iconst(I32, 0);
-            self.translate_entity_copy(
-                builder,
-                CheckedEntity::Table {
-                    table: segment.table_index,
-                    initialized: true,
-                },
-                CheckedEntity::Elem(Some(passive_index)),
-                offset,
-                src,
-                segment_len,
-            )?;
-            let vmctx = self.vmctx_val(&mut builder.cursor());
-            let libcall = self
-                .builtin_functions
-                .passive_elem_segment_drop(builder.func);
-            let idx = builder.ins().iconst(I32, i64::from(passive_index.as_u32()));
-            builder.ins().call(libcall, &[vmctx, idx]);
-            return self.post_translate_bulk_op(builder, fuel);
-        }
+        let elements = match &segment.init {
+            TableSegmentInit::Direct(elements) => elements,
+
+            // If this segment's elements were already evaluated into passive
+            // storage then copy them into the table from there, like
+            // `table.init`, and then free that storage like `elem.drop`.
+            TableSegmentInit::Staged { index, .. } => {
+                let passive_index = *index;
+                let src = builder.ins().iconst(I32, 0);
+                self.translate_entity_copy(
+                    builder,
+                    CheckedEntity::Table {
+                        table: segment.table_index,
+                        initialized: true,
+                    },
+                    CheckedEntity::Elem(Some(passive_index)),
+                    offset,
+                    src,
+                    segment_len,
+                )?;
+                let vmctx = self.vmctx_val(&mut builder.cursor());
+                let libcall = self
+                    .builtin_functions
+                    .passive_elem_segment_drop(builder.func);
+                let idx = builder.ins().iconst(I32, i64::from(passive_index.as_u32()));
+                builder.ins().call(libcall, &[vmctx, idx]);
+                return self.post_translate_bulk_op(builder, fuel);
+            }
+        };
 
         // Re-use the `table.set` translation for making this a simple function
         // to define. That re-executes the bounds check which is a bit
         // inefficient, but can be optimized in the future.
-        match &segment.elements {
+        match elements {
             TableSegmentElements::Functions(indices) => {
                 for (i, func) in indices.iter().enumerate() {
                     let func = self.translate_ref_func(builder.cursor(), *func)?;

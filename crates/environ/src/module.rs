@@ -130,15 +130,39 @@ pub struct TableSegment {
     /// The base offset to start this segment at.
     pub offset: ConstExpr,
     /// The values to write into the table elements.
-    pub elements: TableSegmentElements,
-    /// If `Some`, then `elements` may trap during evaluation, and they are
-    /// instead evaluated up-front into this passive element segment's storage
-    /// alongside all other passive element segments.
+    pub init: TableSegmentInit,
+}
+
+/// How the values of an active table segment are produced.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TableSegmentInit {
+    /// The elements cannot trap, so they are evaluated and written directly
+    /// to the table in segment order. These never appear in `vm::Instance`.
+    Direct(TableSegmentElements),
+    /// The elements may trap during evaluation, so they are instead evaluated
+    /// up-front into this passive element segment's storage alongside all
+    /// other passive element segments. The segment is then copied into the
+    /// table in segment order and dropped.
     ///
     /// Instantiation evaluates all element segment expressions before any
     /// active segment is written to a table, so a trapping expression must not
     /// leave earlier segments' writes visible in imported tables.
-    pub staged: Option<PassiveElemIndex>,
+    Staged {
+        /// The passive element segment holding the evaluated elements.
+        index: PassiveElemIndex,
+        /// The number of elements in this segment.
+        len: u64,
+    },
+}
+
+impl TableSegmentInit {
+    /// Returns the number of elements in this segment.
+    pub fn len(&self) -> u64 {
+        match self {
+            Self::Direct(elements) => elements.len(),
+            Self::Staged { len, .. } => *len,
+        }
+    }
 }
 
 /// Elements of a table segment, either a list of functions or list of arbitrary
