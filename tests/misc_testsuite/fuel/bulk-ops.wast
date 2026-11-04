@@ -1,7 +1,7 @@
 ;;! bulk_memory = true
 ;;! reference_types = true
 ;;! memory64 = true
-;;! consume_fuel = true
+;;! flags = "-W fuel=1000000000"
 
 ;; Fuel charged by bulk memory and table operations, on top of the usual cost
 ;; per operator. Like `costs.wast`, each test sets the fuel to 1000,

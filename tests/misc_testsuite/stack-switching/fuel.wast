@@ -1,7 +1,7 @@
 ;;! bulk_memory = true
 ;;! function_references = true
 ;;! stack_switching = true
-;;! consume_fuel = true
+;;! flags = "-W fuel=1000000000"
 
 ;; Fuel used inside a continuation is accounted for.
 (module $Fuel

@@ -129,8 +129,16 @@ macro_rules! wasmtime_option_group {
         }
 
         impl $opts {
-            fn configure_with(&mut self, opts: &[$crate::opt::CommaSeparated<$option>]) -> Result<()> {
-                let env_opts = <$option as $crate::opt::WasmtimeOption>::parse_env()?;
+            fn configure_with(
+                &mut self,
+                opts: &[$crate::opt::CommaSeparated<$option>],
+                env: bool,
+            ) -> Result<()> {
+                let env_opts = if env {
+                    <$option as $crate::opt::WasmtimeOption>::parse_env()?
+                } else {
+                    Vec::new()
+                };
                 for opt in env_opts.iter().chain(opts.iter().flat_map(|o| o.0.iter())) {
                     self.configure(opt);
                 }

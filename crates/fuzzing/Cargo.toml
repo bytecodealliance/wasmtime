@@ -36,7 +36,7 @@ wasm-smith = { workspace = true, features = ['serde'] }
 wasm-mutate = { workspace = true }
 wasmi = { version = "1.0.8", default-features = false, features = ["std", "simd"] }
 futures = { workspace = true }
-wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
+wasmtime-test-util = { workspace = true, features = ['wast', 'wasmtime-wast', 'component-fuzz', 'component'] }
 serde_json = { workspace = true }
 serde = { workspace = true }
 

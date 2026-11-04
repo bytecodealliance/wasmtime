@@ -1,4 +1,4 @@
-;;! consume_fuel = true
+;;! flags = "-W fuel=1000000000"
 
 ;; Regression test for #9554: a fuel check must keep the stack aligned when it
 ;; calls the out-of-fuel builtin. A fuzz-generated module.

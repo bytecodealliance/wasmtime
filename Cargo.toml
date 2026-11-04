@@ -624,7 +624,7 @@ serve = [
   "wasmtime-wasi-http?/p2",
 ]
 explore = ["dep:wasmtime-explorer", "dep:tempfile"]
-wast = ["dep:wasmtime-wast"]
+wast = ["dep:wasmtime-wast", "wasmtime-cli-flags/runtime"]
 config = ["cache"]
 compile = ["cranelift"]
 run = [
@@ -632,6 +632,7 @@ run = [
   "wasmtime/runtime",
   "wasmtime/wave",
   "dep:tokio",
+  "wasmtime-cli-flags/runtime",
   "wasmtime-cli-flags/async",
   "wasmtime-wasi-http?/p2",
 ]

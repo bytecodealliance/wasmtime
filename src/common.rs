@@ -525,24 +525,10 @@ impl RunCommon {
                 table.set_max_capacity(max);
             }
         }
-        if let Some(fuel) = self.common.wasi.hostcall_fuel {
-            store.set_hostcall_fuel(fuel);
-        }
-        if let Some(max) = self.common.wasi.max_component_handles {
-            store.set_max_component_handles(max);
-        }
-        if let Some(max) = self.common.wasi.max_fibers {
-            store.set_max_fibers(max);
-        }
+        self.common.configure_store(store)?;
 
         *limits(store.data_mut()) = self.store_limits();
         store.limiter(move |t| limits(t));
-
-        // If fuel has been configured, we want to add the configured
-        // fuel amount to this store.
-        if let Some(fuel) = self.common.wasm.fuel {
-            store.set_fuel(fuel)?;
-        }
         Ok(())
     }
 }

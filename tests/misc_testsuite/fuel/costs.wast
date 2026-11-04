@@ -1,7 +1,7 @@
 ;;! bulk_memory = true
 ;;! reference_types = true
 ;;! exceptions = true
-;;! consume_fuel = true
+;;! flags = "-W fuel=1000000000"
 
 ;; Each test sets the store's fuel to 1000, instantiates a module (usually
 ;; running its start function), and checks exactly how much fuel is left.

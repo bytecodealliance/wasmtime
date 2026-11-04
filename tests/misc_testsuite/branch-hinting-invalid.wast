@@ -1,4 +1,4 @@
-;;! branch_hinting = true
+;;! flags = "-W branch-hinting"
 
 ;; A malformed `metadata.code.branch_hint` section must be ignored, not rejected:
 ;; the section is advisory and unvalidated, so a decode error discards it and

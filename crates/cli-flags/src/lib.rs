@@ -528,6 +528,11 @@ wasmtime_option_group! {
         pub extended_const: Option<bool>,
         /// Configure support for the exceptions proposal.
         pub exceptions: Option<bool>,
+        /// Configure support for the legacy exceptions proposal.
+        ///
+        /// This only exists for Wasmtime's own testing of the spec test suite
+        /// and may be removed at any time.
+        pub legacy_exceptions: Option<bool>,
         /// Whether or not any GC infrastructure in Wasmtime is enabled or not.
         pub gc_support: Option<bool>,
         /// Component model support for fixed-length lists: this corresponds
@@ -783,6 +788,12 @@ pub struct CommonOptions {
     #[cfg_attr(feature = "serde", serde(skip))]
     configured: bool,
 
+    /// Whether to ignore `WASMTIME_*` environment variables, which are
+    /// otherwise read as options in addition to those specified here.
+    #[cfg_attr(feature = "clap", arg(skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub ignore_env: bool,
+
     #[cfg_attr(feature = "clap", arg(skip))]
     #[cfg_attr(feature = "serde", serde(rename = "optimize", default))]
     pub opts: OptimizeOptions,
@@ -823,6 +834,101 @@ pub struct CommonOptions {
     pub config: Option<PathBuf>,
 }
 
+type F = WasmFeatures;
+
+/// The options in [`WasmOptions`] that enable or disable a [`WasmFeatures`]
+/// flag.
+///
+/// Each entry is the flag, the option, and the option's name if it's not the
+/// flag's name in lowercase with dashes (`CM_ASYNC` is `cm-async`).
+static WASM_FEATURE_OPTIONS: &[(WasmFeatures, fn(&WasmOptions) -> Option<bool>, Option<&str>)] = &[
+    (F::SIMD, |w| w.simd, None),
+    (F::RELAXED_SIMD, |w| w.relaxed_simd, None),
+    (F::BULK_MEMORY, |w| w.bulk_memory, None),
+    (F::MULTI_VALUE, |w| w.multi_value, None),
+    (F::TAIL_CALL, |w| w.tail_call, None),
+    (F::MULTI_MEMORY, |w| w.multi_memory, None),
+    (F::MEMORY64, |w| w.memory64, None),
+    (F::CUSTOM_PAGE_SIZES, |w| w.custom_page_sizes, None),
+    (F::WIDE_ARITHMETIC, |w| w.wide_arithmetic, None),
+    (F::COMPACT_IMPORTS, |w| w.compact_imports, None),
+    (F::EXTENDED_CONST, |w| w.extended_const, None),
+    (F::THREADS, |w| w.threads, None),
+    (
+        F::SHARED_EVERYTHING_THREADS,
+        |w| w.shared_everything_threads,
+        None,
+    ),
+    (F::GC, |w| w.gc, None),
+    (F::GC_TYPES, |w| w.gc_support, Some("gc-support")),
+    (F::REFERENCE_TYPES, |w| w.reference_types, None),
+    (F::FUNCTION_REFERENCES, |w| w.function_references, None),
+    (F::EXCEPTIONS, |w| w.exceptions, None),
+    (F::LEGACY_EXCEPTIONS, |w| w.legacy_exceptions, None),
+    (F::STACK_SWITCHING, |w| w.stack_switching, None),
+    (F::COMPONENT_MODEL, |w| w.component_model, None),
+    (
+        F::CM_ASYNC,
+        |w| w.component_model_async,
+        Some("component-model-async"),
+    ),
+    (
+        F::CM_MORE_ASYNC_BUILTINS,
+        |w| w.component_model_more_async_builtins,
+        Some("component-model-more-async-builtins"),
+    ),
+    (
+        F::CM_ASYNC_STACKFUL,
+        |w| w.component_model_async_stackful,
+        Some("component-model-async-stackful"),
+    ),
+    (
+        F::CM_THREADING,
+        |w| w.component_model_threading,
+        Some("component-model-threading"),
+    ),
+    (
+        F::CM_ERROR_CONTEXT,
+        |w| w.component_model_error_context,
+        Some("component-model-error-context"),
+    ),
+    (
+        F::CM_MAP,
+        |w| w.component_model_map,
+        Some("component-model-map"),
+    ),
+    (
+        F::CM_FIXED_LENGTH_LISTS,
+        |w| w.component_model_fixed_length_lists,
+        Some("component-model-fixed-length-lists"),
+    ),
+    (
+        F::CM_IMPLEMENTS,
+        |w| w.component_model_implements,
+        Some("component-model-implements"),
+    ),
+    (
+        F::CM_CANON_NAMES,
+        |w| w.component_model_canonical_names,
+        Some("component-model-canonical-names"),
+    ),
+    (
+        F::CM_ACCESSORS,
+        |w| w.component_model_accessors,
+        Some("component-model-accessors"),
+    ),
+    (
+        F::CM64,
+        |w| w.component_model_memory64,
+        Some("component-model-memory64"),
+    ),
+    (
+        F::CM_GC,
+        |w| w.component_model_gc,
+        Some("component-model-gc"),
+    ),
+];
+
 macro_rules! match_feature {
     (
         [$feat:tt : $config:expr]
@@ -855,6 +961,7 @@ impl CommonOptions {
             wasi_raw: Vec::new(),
             record_raw: Vec::new(),
             configured: true,
+            ignore_env: false,
             opts: Default::default(),
             codegen: Default::default(),
             debug: Default::default(),
@@ -890,12 +997,66 @@ impl CommonOptions {
                 );
             }
         }
-        self.opts.configure_with(&self.opts_raw)?;
-        self.codegen.configure_with(&self.codegen_raw)?;
-        self.debug.configure_with(&self.debug_raw)?;
-        self.wasm.configure_with(&self.wasm_raw)?;
-        self.wasi.configure_with(&self.wasi_raw)?;
-        self.record.configure_with(&self.record_raw)?;
+        self.opts.configure_with(&self.opts_raw, !self.ignore_env)?;
+        self.codegen
+            .configure_with(&self.codegen_raw, !self.ignore_env)?;
+        self.debug
+            .configure_with(&self.debug_raw, !self.ignore_env)?;
+        self.wasm.configure_with(&self.wasm_raw, !self.ignore_env)?;
+        self.wasi.configure_with(&self.wasi_raw, !self.ignore_env)?;
+        self.record
+            .configure_with(&self.record_raw, !self.ignore_env)?;
+        Ok(())
+    }
+
+    /// Layers `other` on top of `self`.
+    ///
+    /// Each option that `other` specifies overrides the one in `self`, and
+    /// options that `other` doesn't specify are left as they are in `self`.
+    pub fn merge(&mut self, other: &mut CommonOptions) -> Result<()> {
+        self.configure()?;
+        other.configure()?;
+        let CommonOptions {
+            // Processed into the fields below by `configure`.
+            opts_raw: _,
+            codegen_raw: _,
+            debug_raw: _,
+            wasm_raw: _,
+            wasi_raw: _,
+            record_raw: _,
+            configured: _,
+            ignore_env: _,
+            config: _,
+
+            opts,
+            codegen,
+            debug,
+            wasm,
+            wasi,
+            record,
+            target,
+        } = other;
+        for opt in opts.to_options() {
+            self.opts.configure(&opt);
+        }
+        for opt in codegen.to_options() {
+            self.codegen.configure(&opt);
+        }
+        for opt in debug.to_options() {
+            self.debug.configure(&opt);
+        }
+        for opt in wasm.to_options() {
+            self.wasm.configure(&opt);
+        }
+        for opt in wasi.to_options() {
+            self.wasi.configure(&opt);
+        }
+        for opt in record.to_options() {
+            self.record.configure(&opt);
+        }
+        if target.is_some() {
+            self.target = target.clone();
+        }
         Ok(())
     }
 
@@ -932,9 +1093,21 @@ impl CommonOptions {
         Ok(())
     }
 
+    /// Returns a fresh new [`Config`] which reflects all configuration settings
+    /// in `self`.
     pub fn config(&mut self, pooling_allocator_default: Option<bool>) -> Result<Config> {
-        self.configure()?;
         let mut config = Config::new();
+        self.apply_config(&mut config, pooling_allocator_default)?;
+        Ok(config)
+    }
+
+    /// Applies the options in `self` to an existing `config`.
+    pub fn apply_config(
+        &mut self,
+        config: &mut Config,
+        pooling_allocator_default: Option<bool>,
+    ) -> Result<()> {
+        self.configure()?;
 
         match_feature! {
             ["cranelift" : self.codegen.compiler]
@@ -984,7 +1157,7 @@ impl CommonOptions {
             true => err,
         }
 
-        self.enable_wasm_features(&mut config)?;
+        self.enable_wasm_features(config)?;
 
         #[cfg(feature = "cranelift")]
         for (name, value) in self.codegen.cranelift.iter() {
@@ -1284,10 +1457,6 @@ impl CommonOptions {
             true => err,
         }
 
-        if let Some(enable) = self.wasm.gc_support {
-            config.gc_support(enable);
-        }
-
         if let Some(enable) = self.wasm.concurrency_support {
             config.concurrency_support(enable);
         }
@@ -1305,98 +1474,80 @@ impl CommonOptions {
             _ => err,
         }
 
-        Ok(config)
+        Ok(())
+    }
+
+    /// Applies the per-`Store` options in `self` to `store`.
+    ///
+    /// Note that [`CommonOptions::config`] or [`CommonOptions::apply_config`]
+    /// should be called before this to ensure options are processed internally
+    /// correctly.
+    #[cfg(feature = "runtime")]
+    pub fn configure_store<T>(&self, store: &mut wasmtime::Store<T>) -> Result<()> {
+        debug_assert!(self.configured, "`config` or `apply_config` not called");
+        #[cfg(feature = "component-model")]
+        {
+            if let Some(fuel) = self.wasi.hostcall_fuel {
+                store.set_hostcall_fuel(fuel);
+            }
+            if let Some(max) = self.wasi.max_component_handles {
+                store.set_max_component_handles(max);
+            }
+        }
+        #[cfg(feature = "async")]
+        if let Some(max) = self.wasi.max_fibers {
+            store.set_max_fibers(max);
+        }
+        if let Some(fuel) = self.wasm.fuel {
+            store.set_fuel(fuel)?;
+        }
+        Ok(())
     }
 
     pub fn enable_wasm_features(&self, config: &mut Config) -> Result<()> {
         let all = self.wasm.all_proposals;
-
-        if let Some(enable) = self.wasm.simd.or(all) {
-            config.wasm_simd(enable);
-        }
-        if let Some(enable) = self.wasm.relaxed_simd.or(all) {
-            config.wasm_relaxed_simd(enable);
-        }
-        if let Some(enable) = self.wasm.bulk_memory.or(all) {
-            config.wasm_bulk_memory(enable);
-        }
-        if let Some(enable) = self.wasm.multi_value.or(all) {
-            config.wasm_multi_value(enable);
-        }
-        if let Some(enable) = self.wasm.tail_call.or(all) {
-            config.wasm_tail_call(enable);
-        }
-        if let Some(enable) = self.wasm.multi_memory.or(all) {
-            config.wasm_multi_memory(enable);
-        }
-        if let Some(enable) = self.wasm.memory64.or(all) {
-            config.wasm_memory64(enable);
-        }
-        if let Some(enable) = self.wasm.stack_switching {
-            config.wasm_stack_switching(enable);
-        }
-        if let Some(enable) = self.wasm.custom_page_sizes.or(all) {
-            config.wasm_custom_page_sizes(enable);
-        }
-        if let Some(enable) = self.wasm.wide_arithmetic.or(all) {
-            config.wasm_wide_arithmetic(enable);
-        }
-        // Not included in `all_proposals`: off by default until fuzzed.
-        if let Some(enable) = self.wasm.branch_hinting {
-            config.wasm_branch_hinting(enable);
-        }
-        // Not included in `all_proposals`: off by default until fuzzed.
-        if let Some(enable) = self.wasm.compact_imports {
-            config.wasm_compact_imports(enable);
-        }
-        if let Some(enable) = self.wasm.extended_const.or(all) {
-            config.wasm_extended_const(enable);
-        }
-
-        macro_rules! handle_conditionally_compiled {
-            ($(($feature:tt, $field:tt, $method:tt))*) => ($(
-                if let Some(enable) = self.wasm.$field.or(all) {
-                    #[cfg(feature = $feature)]
-                    config.$method(enable);
-                    #[cfg(not(feature = $feature))]
-                    if enable && all.is_none() {
-                        bail!("support for {} was disabled at compile-time", $feature);
-                    }
-                }
-            )*)
-        }
-
-        handle_conditionally_compiled! {
-            ("component-model", component_model, wasm_component_model)
-            ("component-model-async", component_model_async, wasm_component_model_async)
-            ("component-model-async", component_model_more_async_builtins, wasm_component_model_more_async_builtins)
-            ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
-            ("component-model-async", component_model_threading, wasm_component_model_threading)
-            ("component-model", component_model_error_context, wasm_component_model_error_context)
-            ("component-model", component_model_map, wasm_component_model_map)
-            ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
-            ("component-model", component_model_implements, wasm_component_model_implements)
-            ("component-model", component_model_canonical_names, wasm_component_model_canonical_names)
-            ("component-model", component_model_accessors, wasm_component_model_accessors)
-            ("component-model", component_model_memory64, wasm_component_model_memory64)
-            ("threads", threads, wasm_threads)
-            ("gc", gc, wasm_gc)
-            ("gc", reference_types, wasm_reference_types)
-            ("gc", function_references, wasm_function_references)
-            ("gc", exceptions, wasm_exceptions)
-            ("stack-switching", stack_switching, wasm_stack_switching)
-        }
-
-        if let Some(enable) = self.wasm.component_model_gc {
-            #[cfg(all(feature = "component-model", feature = "gc"))]
-            config.wasm_component_model_gc(enable);
-            #[cfg(not(all(feature = "component-model", feature = "gc")))]
-            if enable && all.is_none() {
-                bail!("support for `component-model-gc` was disabled at compile time")
+        for (feature, option, _) in WASM_FEATURE_OPTIONS {
+            let mut value = option(&self.wasm);
+            // Exempt legacy exceptions from `-Wall-proposals`.
+            if *feature != F::LEGACY_EXCEPTIONS {
+                value = value.or(all);
+            }
+            if let Some(enable) = value {
+                config.wasm_features(*feature, enable);
             }
         }
 
+        // Branch hinting is a setting of the compiler rather than a
+        // `WasmFeatures` flag.
+        if let Some(enable) = self.wasm.branch_hinting.or(all) {
+            config.wasm_branch_hinting(enable);
+        }
+
         Ok(())
+    }
+
+    /// Returns the names of the specified options that enable or disable a
+    /// WebAssembly feature, such as `simd` for `-W simd=y`.
+    ///
+    /// This includes `all-proposals` for `-W all-proposals`.
+    pub fn wasm_features_specified(&self) -> Vec<String> {
+        let mut ret = Vec::new();
+        for (feature, option, name) in WASM_FEATURE_OPTIONS {
+            if option(&self.wasm).is_none() {
+                continue;
+            }
+            ret.push(match name {
+                Some(name) => name.to_string(),
+                None => {
+                    let (name, _) = feature.iter_names().next().unwrap();
+                    name.to_lowercase().replace('_', "-")
+                }
+            });
+        }
+        if self.wasm.all_proposals.is_some() {
+            ret.push("all-proposals".to_string());
+        }
+        ret
     }
 
     #[cfg(feature = "toml")]
@@ -1565,6 +1716,7 @@ impl CommonOptions {
                 component_model_threading: Some(features.contains(WasmFeatures::CM_THREADING)),
                 custom_page_sizes: Some(features.contains(WasmFeatures::CUSTOM_PAGE_SIZES)),
                 exceptions: Some(features.contains(WasmFeatures::EXCEPTIONS)),
+                legacy_exceptions: Some(features.contains(WasmFeatures::LEGACY_EXCEPTIONS)),
                 extended_const: Some(features.contains(WasmFeatures::EXTENDED_CONST)),
                 function_references: Some(features.contains(WasmFeatures::FUNCTION_REFERENCES)),
                 gc: Some(features.contains(WasmFeatures::GC)),
@@ -1620,6 +1772,7 @@ impl CommonOptions {
 
             // CLI flags are represented above, they have default values here.
             configured: true,
+            ignore_env: false,
             codegen_raw: Default::default(),
             debug_raw: Default::default(),
             opts_raw: Default::default(),
@@ -1784,6 +1937,7 @@ impl fmt::Display for CommonOptions {
             record_raw,
             record,
             configured,
+            ignore_env: _,
             target,
             config,
         } = self;

@@ -1,4 +1,4 @@
-;;! consume_fuel = true
+;;! flags = "-W fuel=1000000000"
 
 ;; Infinite loops and exponential call trees run out of fuel.
 (module $Fuel

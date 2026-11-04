@@ -693,9 +693,17 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
         wasmtime_wast::Async::Yes
     };
     log::debug!("async: {async_:?}");
-    let engine = Engine::new(&fuzz_config.to_wasmtime()).unwrap();
+    // The test's configuration is layered on top of the fuzz configuration toe
+    // ensure that any explicitly specified configuration overrides whatever the
+    // fuzz-generated input selected.
+    let mut opts = fuzz_config.to_common_options();
+    test.config
+        .apply(&mut opts)
+        .expect("invalid `flags` in wast test");
+    let engine = Engine::new(&fuzz_config.to_wasmtime_with(&mut opts)).unwrap();
     let mut wast_context = WastContext::new(&engine, async_, move |store| {
         fuzz_config.configure_store_epoch_and_fuel(store);
+        opts.configure_store(store).unwrap();
     });
     wast_context.ignore_error_messages(test.config.spec_test.unwrap_or(false));
     wast_context

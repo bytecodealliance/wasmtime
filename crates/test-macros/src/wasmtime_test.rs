@@ -339,19 +339,10 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
                         return;
                     }
                     let _ = env_logger::try_init();
-                    let mut config = Config::new();
-                    wasmtime_test_util::wasmtime_wast::apply_test_config(
-                        &mut config,
-                        &#flags,
-                    );
-                    wasmtime_test_util::wasmtime_wast::apply_wast_config(
-                        &mut config,
-                        &wasmtime_test_util::wast::WastConfig {
-                            compiler,
-                            pooling: false,
-                            collector: wasmtime_test_util::wast::Collector::#collector_ident,
-                        },
-                    );
+                    let mut opts = compiler.common_options();
+                    opts.codegen.collector = Some(wasmtime::Collector::#collector_ident);
+                    #flags.apply(&mut opts).unwrap();
+                    let mut config: Config = opts.config(None).unwrap();
                     let result = #func_name(&mut config) #await_;
                     if compiler.should_fail(&#flags) {
                         assert!(result.is_err());

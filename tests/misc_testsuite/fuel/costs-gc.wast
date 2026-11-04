@@ -2,7 +2,7 @@
 ;;! gc = true
 ;;! function_references = true
 ;;! exceptions = true
-;;! consume_fuel = true
+;;! flags = "-W fuel=1000000000"
 
 ;; Like `costs.wast`, but for the tests that need GC or typed function
 ;; references. Each test sets the store's fuel to 1000, instantiates a module
