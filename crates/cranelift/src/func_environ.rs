@@ -1727,8 +1727,6 @@ impl FuncEnvironment<'_> {
             bound: VmctxLoadChain::new(smallvec![definition, len]),
             kind: MemoryKind::LinearMemory,
             memory,
-            // The shadow is as large as the memory, which may be larger than
-            // an import's declared minimum.
             imported: self.module.is_imported_memory(index),
             shadow: None,
         })
