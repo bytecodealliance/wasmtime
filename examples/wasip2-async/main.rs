@@ -26,6 +26,7 @@ impl WasiView for ComponentRunStates {
         WasiCtxView {
             ctx: &mut self.wasi_ctx,
             table: &mut self.resource_table,
+            hooks: Default::default(),
         }
     }
 }

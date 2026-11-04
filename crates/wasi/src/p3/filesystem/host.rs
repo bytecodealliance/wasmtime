@@ -7,6 +7,7 @@ use crate::p3::bindings::filesystem::types::{
     Filesize, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
+use crate::{Permitted, WasiPermitType};
 use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
@@ -261,7 +262,7 @@ struct ReadDirStream {
 
 impl ReadDirStream {
     fn new(
-        dir: Arc<std::fs::File>,
+        dir: Arc<Permitted<std::fs::File>>,
         result: oneshot::Sender<Result<(), ErrorCode>>,
     ) -> ReadDirStream {
         let (tx, rx) = mpsc::channel(1);
@@ -758,7 +759,14 @@ impl WasiFilesystemCtxView<'_> {
     ) -> impl Future<Output = FilesystemResult<Descriptor>> + use<> {
         let dir = get_dir(self.table, fd).cloned();
         let allow_blocking_current_thread = self.ctx.allow_blocking_current_thread;
+        let permit = self.hooks.acquire(WasiPermitType::FileOrDirectory);
         async move {
+            let permit = permit.await.map_err(|e| {
+                // Ideally, we'd return something like POSIX's `ENFILE`, but
+                // `wasi:filesystem/types#error-code` doesn't have any
+                // equivalent.
+                ErrorCode::Other(Some(e.to_string()))
+            })?;
             let fd = dir?
                 .open_at(
                     path_flags.into(),
@@ -766,6 +774,7 @@ impl WasiFilesystemCtxView<'_> {
                     open_flags.into(),
                     flags.into(),
                     allow_blocking_current_thread,
+                    permit,
                 )
                 .await?;
             Ok(fd)

@@ -103,6 +103,7 @@ impl WasiView for Ctx<MyWasiCtx> {
         WasiCtxView {
             ctx: &mut self.wasi.wasi,
             table: &mut self.wasi.table,
+            hooks: Default::default(),
         }
     }
 }
