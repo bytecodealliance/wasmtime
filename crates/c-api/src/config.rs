@@ -299,6 +299,11 @@ pub extern "C" fn wasmtime_config_native_unwind_info_set(c: &mut wasm_config_t, 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_asan_compatible_code_set(c: &mut wasm_config_t, enabled: bool) {
+    c.config.asan_compatible_code(enabled);
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_config_target_set(
     c: &mut wasm_config_t,
     target: *const c_char,
