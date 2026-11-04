@@ -148,7 +148,7 @@
 ;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to a pulley function.
-(rule 1 (lower (call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args))
+(rule (lower (call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
@@ -158,7 +158,7 @@
         output))
 
 ;; Direct call to a host function.
-(rule (lower (call (func_ref_data sig_ref name _ false) args))
+(rule (lower (call (func_ref_data sig_ref name (RelocDistance.Far) false) args))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_call_args abi args))
@@ -181,7 +181,7 @@
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to a pulley function.
-(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args et) targets)
+(rule (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Near) patchable) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
@@ -190,7 +190,7 @@
         (emit_side_effect (call_impl info))))
 
 ;; Direct call to a host function.
-(rule (lower_branch (try_call (func_ref_data sig_ref name _ false) args et) targets)
+(rule (lower_branch (try_call (func_ref_data sig_ref name (RelocDistance.Far) false) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (uses CallArgList (gen_call_args abi args))
@@ -212,17 +212,17 @@
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Direct call to a pulley function.
-(rule 1 (lower (return_call (func_ref_data sig_ref name (RelocDistance.Near) false) args))
+(rule (lower (return_call (func_ref_data sig_ref name (RelocDistance.Near) false) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_return_call_args abi args))
             (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
         (side_effect (return_call_impl info))))
 
-;; Direct call to a pulley function.
-(rule (lower (return_call (func_ref_data sig_ref name dist false) args))
+;; Indirect call to a host function.
+(rule (lower (return_call (func_ref_data sig_ref name (RelocDistance.Far) false) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (gen_return_call_args abi args))
-            (target Reg (load_ext_name name 0 dist))
+            (target Reg (load_ext_name name 0 (RelocDistance.Far)))
             (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
         (side_effect (return_indirect_call_impl info))))
 
