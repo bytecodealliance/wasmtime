@@ -231,6 +231,14 @@ WASMTIME_CONFIG_PROP(void, wasm_function_references, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_gc, bool)
 
+/**
+ * \brief Configures whether the WebAssembly stack switching
+ * proposal is enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_stack_switching, bool)
+
 #endif // WASMTIME_FEATURE_GC
 
 /**
@@ -341,14 +349,6 @@ WASMTIME_CONFIG_PROP(void, wasm_custom_page_sizes, bool)
 WASMTIME_CONFIG_PROP(void, wasm_compact_imports, bool)
 
 #ifdef WASMTIME_FEATURE_COMPILER
-
-/**
- * \brief Configures whether the WebAssembly stack switching
- * proposal is enabled.
- *
- * This setting is `false` by default.
- */
-WASMTIME_CONFIG_PROP(void, wasm_stack_switching, bool)
 
 /**
  * \brief Configures how JIT code will be compiled.

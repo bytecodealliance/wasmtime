@@ -49,6 +49,7 @@ TEST(Config, Smoke) {
   config.wasm_multi_value(false);
   config.wasm_multi_memory(false);
   config.wasm_memory64(false);
+  config.wasm_stack_switching(false);
   config.wasm_wide_arithmetic(false);
   config.wasm_component_model(false);
   config.wasm_exceptions(false);
