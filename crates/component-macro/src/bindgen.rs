@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use std::collections::HashMap;
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
@@ -17,7 +17,7 @@ pub struct Config {
     resolve: Resolve,
     world: WorldId,
     files: Vec<PathBuf>,
-    include_generated_code_from_file: bool,
+    debug: Option<syn::LitStr>,
 }
 
 pub fn expand(input: &mut Config) -> Result<TokenStream> {
@@ -32,21 +32,27 @@ pub fn expand(input: &mut Config) -> Result<TokenStream> {
 
     check_for_sync_exports_and_async_imports(input)?;
 
-    // If a magical `WASMTIME_DEBUG_BINDGEN` environment variable is set then
-    // place a formatted version of the expanded code into a file. This file
-    // will then show up in rustc error messages for any codegen issues and can
-    // be inspected manually.
-    if input.include_generated_code_from_file
-        || input.opts.debug
-        || std::env::var("WASMTIME_DEBUG_BINDGEN").is_ok()
-    {
+    // If debugging is enabled then place a formatted version of the expanded
+    // code into a file. This file will then show up in rustc error messages for
+    // any codegen issues and can be inspected manually.
+    if let Some(root) = input.generated_code_output_dir()? {
         static INVOCATION: AtomicUsize = AtomicUsize::new(0);
-        let root = Path::new(env!("DEBUG_OUTPUT_DIR"));
         let world_name = &input.resolve.worlds[input.world].name;
         let n = INVOCATION.fetch_add(1, Relaxed);
-        let path = root.join(format!("{world_name}{n}.rs"));
+        let krate = env::var("CARGO_CRATE_NAME").unwrap_or_default();
+        let path = root.join(format!("{krate}-{world_name}-{n}.rs"));
 
-        std::fs::write(&path, &src).unwrap();
+        std::fs::create_dir_all(&root)
+            .and_then(|()| std::fs::write(&path, &src))
+            .map_err(|e| {
+                Error::new(
+                    Span::call_site(),
+                    format!(
+                        "failed to write generated code to `{}`: {e}",
+                        path.display()
+                    ),
+                )
+            })?;
 
         // optimistically format the code but don't require success
         drop(
@@ -74,6 +80,64 @@ pub fn expand(input: &mut Config) -> Result<TokenStream> {
     }
 
     Ok(contents)
+}
+
+impl Config {
+    /// Returns the directory, if any, that generated code should be written to
+    /// and then `include!`'d from.
+    fn generated_code_output_dir(&self) -> Result<Option<PathBuf>> {
+        let dir = match (&self.debug, env::var_os("WASMTIME_DEBUG_BINDGEN")) {
+            (Some(dir), _) => {
+                let value = dir.value();
+                if value.is_empty() {
+                    return Err(Error::new(dir.span(), "`debug` directory cannot be empty"));
+                }
+                // Small hack for `bindgen_examples` in the `wasmtime` crate to
+                // support `$OUT_DIR` as a prefix to find some writable
+                // directory when documenting. This isn't intended to be widely
+                // used in theory though so this is hopefully just a hack for
+                // that one use case...
+                match value.strip_prefix("$OUT_DIR") {
+                    Some(rest) => match env::var_os("OUT_DIR") {
+                        Some(out_dir) => {
+                            let mut path = PathBuf::from(out_dir);
+                            path.push(rest.trim_start_matches(['/', '\\']));
+                            path
+                        }
+                        None => {
+                            return Err(Error::new(
+                                dir.span(),
+                                "`$OUT_DIR` used but `OUT_DIR` is not set; \
+                                 does this crate have a build script?",
+                            ));
+                        }
+                    },
+                    None => PathBuf::from(value),
+                }
+            }
+            (None, Some(env)) => {
+                // Historically `WASMTIME_DEBUG_BINDGEN=1` was the documented
+                // way to turn this on, so reject that (and `0`, which
+                // previously still enabled debug output) rather than silently
+                // writing to a directory named `1` or `0`.
+                if env.is_empty() || env == "1" || env == "0" {
+                    return Err(Error::new(
+                        Span::call_site(),
+                        format!(
+                            "`WASMTIME_DEBUG_BINDGEN={}` is no longer supported; set it to \
+                             a directory to write generated code to instead, for example \
+                             `WASMTIME_DEBUG_BINDGEN=/tmp/wasmtime-bindgen-debug`",
+                            env.display(),
+                        ),
+                    ));
+                }
+                PathBuf::from(env)
+            }
+            (None, None) => return Ok(None),
+        };
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+        Ok(Some(root.join(dir)))
+    }
 }
 
 fn check_for_sync_exports_and_async_imports(input: &Config) -> Result<()> {
@@ -146,7 +210,7 @@ impl Parse for Config {
         let mut paths = Vec::new();
         let mut imports_configured = false;
         let mut exports_configured = false;
-        let mut include_generated_code_from_file = false;
+        let mut debug = None;
 
         if input.peek(token::Brace) {
             let content;
@@ -169,7 +233,7 @@ impl Parse for Config {
                         }
                         inline = Some(s.value());
                     }
-                    Opt::Debug(val) => opts.debug = val,
+                    Opt::Debug(dir) => debug = Some(dir),
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
                     Opt::Ownership(val) => opts.ownership = val,
                     Opt::Interfaces(s) => {
@@ -215,7 +279,6 @@ impl Parse for Config {
                     Opt::Anyhow(val) => {
                         opts.anyhow = val;
                     }
-                    Opt::IncludeGeneratedCodeFromFile(i) => include_generated_code_from_file = i,
                     Opt::IncludeComponentType(val) => opts.include_component_type = val,
                     Opt::Imports(config, span) => {
                         if imports_configured {
@@ -250,7 +313,7 @@ impl Parse for Config {
             resolve,
             world,
             files,
-            include_generated_code_from_file,
+            debug,
         })
     }
 }
@@ -328,7 +391,6 @@ mod kw {
     syn::custom_keyword!(wasmtime_crate);
     syn::custom_keyword!(map_type);
     syn::custom_keyword!(anyhow);
-    syn::custom_keyword!(include_generated_code_from_file);
     syn::custom_keyword!(include_component_type);
     syn::custom_keyword!(debug);
     syn::custom_keyword!(imports);
@@ -354,9 +416,8 @@ enum Opt {
     WasmtimeCrate(syn::Path),
     MapType(syn::Path),
     Anyhow(bool),
-    IncludeGeneratedCodeFromFile(bool),
     IncludeComponentType(bool),
-    Debug(bool),
+    Debug(syn::LitStr),
     Imports(FunctionConfig, Span),
     Exports(FunctionConfig, Span),
 }
@@ -367,7 +428,7 @@ impl Parse for Opt {
         if l.peek(kw::debug) {
             input.parse::<kw::debug>()?;
             input.parse::<Token![:]>()?;
-            Ok(Opt::Debug(input.parse::<syn::LitBool>()?.value))
+            Ok(Opt::Debug(input.parse()?))
         } else if l.peek(kw::path) {
             input.parse::<kw::path>()?;
             input.parse::<Token![:]>()?;
@@ -497,12 +558,6 @@ impl Parse for Opt {
             input.parse::<kw::anyhow>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::Anyhow(input.parse::<syn::LitBool>()?.value))
-        } else if l.peek(kw::include_generated_code_from_file) {
-            input.parse::<kw::include_generated_code_from_file>()?;
-            input.parse::<Token![:]>()?;
-            Ok(Opt::IncludeGeneratedCodeFromFile(
-                input.parse::<syn::LitBool>()?.value,
-            ))
         } else if l.peek(kw::include_component_type) {
             input.parse::<kw::include_component_type>()?;
             input.parse::<Token![:]>()?;
