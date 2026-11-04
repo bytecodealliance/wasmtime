@@ -5,12 +5,14 @@
 use bytes::Bytes;
 use criterion::{Criterion, criterion_group, criterion_main};
 use http_body_util::{BodyExt, Empty, Full};
+use std::cell::Cell;
 use std::time::{Duration, Instant};
 use wasmtime::component::{Component, InstancePre, Linker, ResourceTable};
 use wasmtime::{Engine, Result, Store};
+use wasmtime_bench_util::{self as bench, Timer};
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi::p3::bindings::CommandPre;
-use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
+use wasmtime_wasi::{HostMonotonicClock, WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::p3::Request;
 use wasmtime_wasi_http::p3::bindings::{Service, ServicePre};
 use wasmtime_wasi_http::{
@@ -129,11 +131,11 @@ fn bench_p3_http_proxy(c: &mut Criterion) {
                 let mut store = new_store(pre.engine(), WasiCtx::builder().build());
                 let service = pre.instantiate_async(&mut store).await.unwrap();
 
-                let start = Instant::now();
+                let start = Timer::start();
                 for _ in 0..iters {
                     proxy_one_request(&mut store, &service).await.unwrap();
                 }
-                let elapsed = start.elapsed();
+                let elapsed = start.stop();
 
                 // Explicit tear down after the timer has stopped.
                 drop(store);
@@ -195,10 +197,13 @@ fn bench_p3_http_api(c: &mut Criterion) {
 /// the time it reports those calls took.
 async fn run_api(pre: &CommandPre<Ctx>, api: &str, iters: u64) -> Result<Duration> {
     let stdout = MemoryOutputPipe::new(1024);
-    let wasi = WasiCtx::builder()
-        .args(&["p3_http_api_bench", api, &iters.to_string()])
-        .stdout(stdout.clone())
-        .build();
+    let mut wasi = WasiCtx::builder();
+    wasi.args(&["p3_http_api_bench", api, &iters.to_string()])
+        .stdout(stdout.clone());
+    if bench::on_valgrind() {
+        wasi.monotonic_clock(TimerClock::default());
+    }
+    let wasi = wasi.build();
     let mut store = new_store(pre.engine(), wasi);
     let command = pre.instantiate_async(&mut store).await?;
     store
@@ -207,4 +212,43 @@ async fn run_api(pre: &CommandPre<Ctx>, api: &str, iters: u64) -> Result<Duratio
         .map_err(|()| wasmtime::format_err!("`{api}` failed"))?;
     let elapsed = std::str::from_utf8(&stdout.contents())?.trim().parse()?;
     Ok(Duration::from_nanos(elapsed))
+}
+
+/// The guest's monotonic clock under Valgrind, where the guest's own timing is
+/// also a Callgrind measurement.
+///
+/// The guest reads the clock either side of the calls it times, so the first
+/// read of each pair starts a [`Timer`] and the second stops it.
+struct TimerClock {
+    epoch: Instant,
+    timer: Cell<Option<Timer>>,
+}
+
+impl Default for TimerClock {
+    fn default() -> Self {
+        Self {
+            epoch: Instant::now(),
+            timer: Cell::new(None),
+        }
+    }
+}
+
+impl HostMonotonicClock for TimerClock {
+    fn resolution(&self) -> u64 {
+        1
+    }
+
+    fn now(&self) -> u64 {
+        let now = match self.timer.take() {
+            None => {
+                self.timer.set(Some(Timer::start()));
+                self.epoch.elapsed()
+            }
+            Some(timer) => {
+                timer.stop();
+                self.epoch.elapsed()
+            }
+        };
+        now.as_nanos().try_into().unwrap()
+    }
 }

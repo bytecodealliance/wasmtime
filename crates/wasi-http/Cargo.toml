@@ -60,6 +60,7 @@ wasm-compose = { workspace = true }
 tempfile = { workspace = true }
 env_logger = { workspace = true }
 criterion = { workspace = true }
+wasmtime-bench-util = { workspace = true }
 
 [[bench]]
 name = "p3_http_proxy"

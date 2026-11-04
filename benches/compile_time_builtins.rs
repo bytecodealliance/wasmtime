@@ -1,8 +1,9 @@
 //! Measure accessing a host buffer via traditional host APIs and via compile-time builtins.
 
 use criterion::{Bencher, Criterion, criterion_group, criterion_main};
-use std::{mem, time::Instant};
+use std::mem;
 use wasmtime::{component::Component, *};
+use wasmtime_bench_util::Timer;
 
 // The nearest power of two to 100,000 (2^17 = 131_072). Using a power of two
 // lets the PRNG's high bits map directly onto the buffer without division.
@@ -330,11 +331,11 @@ mod inc_list {
             let instance = linker.instantiate(&mut store, &component)?;
             let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
 
-            let start = Instant::now();
+            let start = Timer::start();
             for _ in 0..iters {
                 main.call(&mut store, ())?;
             }
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             let expected = iters as u8;
             store.data().get().iter().enumerate().for_each(|(i, byte)| {
@@ -386,11 +387,11 @@ mod inc_list {
             let instance = linker.instantiate(&mut store, &component)?;
             let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
 
-            let start = Instant::now();
+            let start = Timer::start();
             for _ in 0..iters {
                 main.call(&mut store, ())?;
             }
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             let expected = iters as u8;
             store.data().get().iter().enumerate().for_each(|(i, byte)| {
@@ -467,11 +468,11 @@ mod inc_list {
 
             let mut buf = std::iter::repeat_n(0u8, HOST_BUF_LEN).collect::<Vec<u8>>();
 
-            let start = Instant::now();
+            let start = Timer::start();
             for _ in 0..iters {
                 buf = inc_list.call(&mut store, (&buf,))?.0;
             }
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             let expected = iters as u8;
             store.data().get().iter().enumerate().for_each(|(i, byte)| {
@@ -617,9 +618,9 @@ mod inc_random {
             let instance = linker.instantiate(&mut store, &component)?;
             let inc_random = instance.get_typed_func::<(u64,), ()>(&mut store, "inc-random")?;
 
-            let start = Instant::now();
+            let start = Timer::start();
             inc_random.call(&mut store, (iters,))?;
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             let expected = get_expected(iters);
             let actual = store.data().get();
@@ -668,9 +669,9 @@ mod inc_random {
             let instance = linker.instantiate(&mut store, &component)?;
             let inc_random = instance.get_typed_func::<(u64,), ()>(&mut store, "inc-random")?;
 
-            let start = Instant::now();
+            let start = Timer::start();
             inc_random.call(&mut store, (iters,))?;
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             let expected = get_expected(iters);
             let actual = store.data().get();
@@ -726,11 +727,11 @@ mod inc_random {
             let i = u32::try_from(get_random_index()?)?;
             let mut buf = std::iter::repeat_n(0u8, HOST_BUF_LEN).collect::<Vec<u8>>();
 
-            let start = Instant::now();
+            let start = Timer::start();
             for _ in 0..iters {
                 buf = inc_random.call(&mut store, (i, &buf))?.0;
             }
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             let expected = iters as u8;
             let actual = buf[usize::try_from(i)?];

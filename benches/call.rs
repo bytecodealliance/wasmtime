@@ -4,8 +4,8 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-use std::time::Instant;
 use wasmtime::*;
+use wasmtime_bench_util::{self as bench, Timer};
 
 criterion_main!(benches);
 criterion_group!(benches, measure_execution_time);
@@ -48,6 +48,11 @@ impl IsAsync {
     }
 }
 
+/// The number of memories in the pooling allocator under Valgrind, whose
+/// address space must hold every pooled engine alive at once: up to four, each
+/// reserving `memory_reservation` and guards for every memory.
+const VALGRIND_POOL_SIZE: u32 = 2;
+
 fn engines(concurrency_support: bool) -> Vec<(Engine, IsAsync)> {
     let mut config = Config::new();
 
@@ -60,6 +65,11 @@ fn engines(concurrency_support: bool) -> Vec<(Engine, IsAsync)> {
     let mut pool = PoolingAllocationConfig::default();
     if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
         pool.memory_protection_keys(Enabled::Yes);
+    }
+    if bench::on_valgrind() {
+        // The default pool reserves more address space than Valgrind gives a
+        // process.
+        pool.total_memories(VALGRIND_POOL_SIZE);
     }
 
     vec![
@@ -148,7 +158,7 @@ fn bench_host_to_wasm<Params, Results>(
         let typed = instance
             .get_typed_func::<Params, Results>(&mut *store, name)
             .unwrap();
-        b.iter(|| {
+        bench::iter(b, || {
             let results = if is_async.use_async() {
                 run_await(typed.call_async(&mut *store, typed_params)).unwrap()
             } else {
@@ -165,7 +175,7 @@ fn bench_host_to_wasm<Params, Results>(
         let params = typed_params.to_vals();
         let expected_results = typed_results.to_vals();
         let mut results = vec![Val::I32(0); expected_results.len()];
-        b.iter(|| {
+        bench::iter(b, || {
             if is_async.use_async() {
                 run_await(untyped.call_async(&mut *store, &params, &mut results)).unwrap();
             } else {
@@ -190,7 +200,7 @@ fn bench_host_to_wasm<Params, Results>(
         let params = typed_params.to_vals();
         let results = typed_results.to_vals();
         let mut space = vec![ValRaw::i32(0); params.len().max(results.len())];
-        b.iter(|| unsafe {
+        bench::iter(b, || unsafe {
             for (i, param) in params.iter().enumerate() {
                 space[i] = param.to_raw(&mut *store).unwrap();
             }
@@ -403,13 +413,13 @@ fn wasm_to_host(c: &mut Criterion) {
                 .get_typed_func::<u64, ()>(&mut *store, "run-nop")
                 .unwrap();
             b.iter_custom(|iters| {
-                let start = Instant::now();
+                let start = Timer::start();
                 if is_async.use_async() {
                     run_await(run.call_async(&mut *store, iters)).unwrap();
                 } else {
                     run.call(&mut *store, iters).unwrap();
                 }
-                start.elapsed()
+                start.stop()
             })
         });
         group.bench_function(
@@ -419,13 +429,13 @@ fn wasm_to_host(c: &mut Criterion) {
                     .get_typed_func::<u64, ()>(&mut *store, "run-nop-params-and-results")
                     .unwrap();
                 b.iter_custom(|iters| {
-                    let start = Instant::now();
+                    let start = Timer::start();
                     if is_async.use_async() {
                         run_await(run.call_async(&mut *store, iters)).unwrap();
                     } else {
                         run.call(&mut *store, iters).unwrap();
                     }
-                    start.elapsed()
+                    start.stop()
                 })
             },
         );
@@ -655,7 +665,7 @@ mod component {
             let typed = instance
                 .get_typed_func::<Params, Results>(&mut *store, name)
                 .unwrap();
-            b.iter(|| {
+            bench::iter(b, || {
                 let results = if is_async.use_async() {
                     run_await(typed.call_async(&mut *store, typed_params)).unwrap()
                 } else {
@@ -673,7 +683,7 @@ mod component {
                 let params = typed_params.to_component_vals();
                 let expected_results = typed_results.to_component_vals();
                 let mut results = vec![component::Val::U32(0); expected_results.len()];
-                b.iter(|| {
+                bench::iter(b, || {
                     if is_async.use_async() {
                         run_await(untyped.call_async(&mut *store, &params, &mut results)).unwrap();
                     } else {
@@ -871,13 +881,13 @@ mod component {
                     .get_typed_func::<(u64,), ()>(&mut *store, "run-nop")
                     .unwrap();
                 b.iter_custom(|iters| {
-                    let start = Instant::now();
+                    let start = Timer::start();
                     if is_async.use_async() {
                         run_await(run.call_async(&mut *store, (iters,))).unwrap();
                     } else {
                         run.call(&mut *store, (iters,)).unwrap();
                     }
-                    start.elapsed()
+                    start.stop()
                 })
             });
             group.bench_function(
@@ -887,13 +897,13 @@ mod component {
                         .get_typed_func::<(u64,), ()>(&mut *store, "run-nop-params-and-results")
                         .unwrap();
                     b.iter_custom(|iters| {
-                        let start = Instant::now();
+                        let start = Timer::start();
                         if is_async.use_async() {
                             run_await(run.call_async(&mut *store, (iters,))).unwrap();
                         } else {
                             run.call(&mut *store, (iters,)).unwrap();
                         }
-                        start.elapsed()
+                        start.stop()
                     })
                 },
             );
@@ -958,7 +968,7 @@ mod component_async {
             .unwrap();
 
         group.bench_function("host-to-wasm", |b| {
-            b.iter(|| {
+            bench::iter(b, || {
                 run_await(store.run_concurrent(async |accessor| {
                     nop.call_concurrent(accessor, ()).await.unwrap()
                 }))
@@ -1144,12 +1154,12 @@ mod component_async {
 
         group.bench_function("wasm-to-host", |b| {
             b.iter_custom(|iterations| {
-                let start = Instant::now();
+                let start = Timer::start();
                 run_await(store.run_concurrent(async |accessor| {
                     run.call_concurrent(accessor, (iterations,)).await.unwrap()
                 }))
                 .unwrap();
-                start.elapsed()
+                start.stop()
             });
         });
 
@@ -1158,7 +1168,7 @@ mod component_async {
             .unwrap();
         group.bench_function("wasm-to-host-borrow", |b| {
             b.iter_custom(|iterations| {
-                let start = Instant::now();
+                let start = Timer::start();
                 run_await(store.run_concurrent(async |accessor| {
                     run_borrow
                         .call_concurrent(accessor, (iterations,))
@@ -1166,7 +1176,7 @@ mod component_async {
                         .unwrap()
                 }))
                 .unwrap();
-                start.elapsed()
+                start.stop()
             });
         });
 
@@ -1176,7 +1186,7 @@ mod component_async {
 
         group.bench_function("wasm-to-host-pending-once", |b| {
             b.iter_custom(|iterations| {
-                let start = Instant::now();
+                let start = Timer::start();
                 run_await(store.run_concurrent(async |accessor| {
                     run_pending_once
                         .call_concurrent(accessor, (iterations,))
@@ -1184,7 +1194,7 @@ mod component_async {
                         .unwrap()
                 }))
                 .unwrap();
-                start.elapsed()
+                start.stop()
             });
         });
     }
@@ -1266,9 +1276,9 @@ mod indirect {
                         .get_typed_func::<(u32, u32), ()>(&mut store, "run")
                         .unwrap();
 
-                    let start = Instant::now();
+                    let start = Timer::start();
                     let result = run.call(&mut store, (0, calls.try_into().unwrap()));
-                    total += start.elapsed();
+                    total += start.stop();
 
                     result.unwrap();
                 }
@@ -1339,9 +1349,9 @@ mod indirect {
                         .get_typed_func::<(u32, u32), ()>(&mut store, "run")
                         .unwrap();
 
-                    let start = Instant::now();
+                    let start = Timer::start();
                     let result = run.call(&mut store, (0, calls.try_into().unwrap()));
-                    total += start.elapsed();
+                    total += start.stop();
 
                     result.unwrap();
                 }

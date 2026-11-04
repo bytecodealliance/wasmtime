@@ -1113,6 +1113,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cty"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
+
+[[package]]
 name = "debugid"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2316,8 +2322,8 @@ dependencies = [
  "fnv",
  "proc-macro2",
  "quote",
- "regex-automata 0.4.11",
- "regex-syntax 0.8.5",
+ "regex-automata 0.4.18",
+ "regex-syntax",
  "syn 2.0.106",
 ]
 
@@ -2368,7 +2374,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
- "regex-automata 0.4.11",
+ "regex-automata 0.4.18",
 ]
 
 [[package]]
@@ -2911,7 +2917,7 @@ dependencies = [
  "rand 0.9.4",
  "rand_chacha 0.9.0",
  "rand_xorshift",
- "regex-syntax 0.8.5",
+ "regex-syntax",
  "rusty-fork",
  "tempfile",
  "unarray",
@@ -3129,14 +3135,14 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.9.1"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2eae68fc220f7cf2532e4494aded17545fce192d59cd996e0fe7887f4ceb575"
+checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.3.3",
- "regex-syntax 0.7.4",
+ "regex-automata 0.4.18",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -3144,21 +3150,16 @@ name = "regex-automata"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39354c10dd07468c2e73926b23bb9c2caca74c5501e38a35da70406f1d923310"
-dependencies = [
- "aho-corasick",
- "memchr",
- "regex-syntax 0.7.4",
-]
 
 [[package]]
 name = "regex-automata"
-version = "0.4.11"
+version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "833eb9ce86d40ef33cb1306d8accf7bc8ec2bfea4355cbdebb3df68b40925cad"
+checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.8.5",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -3170,15 +3171,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.7.4"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5ea92a5b6195c6ef2a0295ea818b312502c6fc94dde986c5553242e18fd4ce2"
-
-[[package]]
-name = "regex-syntax"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "region"
@@ -3217,6 +3212,15 @@ name = "rustc-hash"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d"
+
+[[package]]
+name = "rustc_version"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+dependencies = [
+ "semver",
+]
 
 [[package]]
 name = "rustix"
@@ -3599,6 +3603,27 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
 
 [[package]]
 name = "subtle"
@@ -4047,7 +4072,7 @@ dependencies = [
  "matchers",
  "nu-ansi-term",
  "once_cell",
- "regex-automata 0.4.11",
+ "regex-automata 0.4.18",
  "sharded-slab",
  "thread_local",
  "tracing",
@@ -4210,6 +4235,21 @@ dependencies = [
  "miniz_oxide",
  "paste",
  "which",
+]
+
+[[package]]
+name = "valgrind-requests"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "796c44118a551cc842f2ce6fce4983b86e282ec99b6b5e80b09dfeab830e7755"
+dependencies = [
+ "bindgen",
+ "cc",
+ "cfg-if",
+ "cty",
+ "regex",
+ "rustc_version",
+ "strum",
 ]
 
 [[package]]
@@ -4631,6 +4671,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-bench-util"
+version = "52.0.0-dev"
+dependencies = [
+ "criterion",
+ "valgrind-requests",
+]
+
+[[package]]
 name = "wasmtime-c-api"
 version = "52.0.0-dev"
 dependencies = [
@@ -4711,6 +4759,7 @@ dependencies = [
  "wasmparser 0.263.0",
  "wasmprinter",
  "wasmtime",
+ "wasmtime-bench-util",
  "wasmtime-cli-flags",
  "wasmtime-environ",
  "wasmtime-internal-cache",
@@ -5202,6 +5251,7 @@ dependencies = [
  "tracing-subscriber",
  "wasm-compose",
  "wasmtime",
+ "wasmtime-bench-util",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
  "wasmtime-wasi-io",

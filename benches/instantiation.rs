@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::thread;
 use wasmtime::*;
+use wasmtime_bench_util as bench;
 use wasmtime_wasi::{WasiCtx, p1::WasiP1Ctx};
 
 fn store(engine: &Engine) -> Store<WasiP1Ctx> {
@@ -57,7 +58,7 @@ fn bench_sequential(c: &mut Criterion, path: &Path) {
 
         group.bench_function(id, |b| {
             let (engine, pre) = &*state;
-            b.iter(|| {
+            bench::iter(b, || {
                 instantiate(&pre, &engine).expect("failed to instantiate module");
             });
         });
@@ -130,7 +131,7 @@ fn bench_parallel(c: &mut Criterion, path: &Path) {
                 // Now that our background work is configured we can
                 // benchmark the amount of time it takes to instantiate this
                 // module.
-                b.iter(|| {
+                bench::iter(b, || {
                     instantiate(&pre, &engine).expect("failed to instantiate module");
                 });
 
@@ -162,13 +163,13 @@ fn bench_deserialize_module(c: &mut Criterion, path: &Path) {
     });
     group.bench_function(BenchmarkId::new("deserialize", name), |b| {
         let (engine, bytes, _) = &*state;
-        b.iter(|| unsafe {
+        bench::iter(b, || unsafe {
             Module::deserialize(&engine, bytes).unwrap();
         });
     });
     group.bench_function(BenchmarkId::new("deserialize_file", name), |b| {
         let (engine, _, path) = &*state;
-        b.iter(|| unsafe {
+        bench::iter(b, || unsafe {
             Module::deserialize_file(&engine, path).unwrap();
         });
     });
@@ -220,6 +221,11 @@ fn strategies() -> impl Iterator<Item = InstanceAllocationStrategy> {
         InstanceAllocationStrategy::Pooling({
             let mut config = PoolingAllocationConfig::default();
             config.max_memory_size(10_000 << 16);
+            if bench::on_valgrind() {
+                // The default pool reserves more address space than Valgrind
+                // gives a process.
+                config.total_memories(10);
+            }
             config
         }),
     ]
