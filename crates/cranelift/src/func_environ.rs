@@ -6345,9 +6345,14 @@ impl FuncEnvironment<'_> {
             // If this segment's elements were already evaluated into passive
             // storage then copy them into the table from there, like
             // `table.init`, and then free that storage like `elem.drop`.
-            TableSegmentInit::Staged { index, .. } => {
+            TableSegmentInit::Staged { index, len } => {
                 let passive_index = *index;
+                // Like `table.init`, the source and length are always 32-bit
+                // since element segments are, even for 64-bit tables.
                 let src = builder.ins().iconst(I32, 0);
+                let len = builder
+                    .ins()
+                    .iconst(I32, i64::from(u32::try_from(*len).unwrap()));
                 self.translate_entity_copy(
                     builder,
                     CheckedEntity::Table {
@@ -6357,7 +6362,7 @@ impl FuncEnvironment<'_> {
                     CheckedEntity::Elem(Some(passive_index)),
                     offset,
                     src,
-                    segment_len,
+                    len,
                 )?;
                 let vmctx = self.vmctx_val(&mut builder.cursor());
                 let libcall = self

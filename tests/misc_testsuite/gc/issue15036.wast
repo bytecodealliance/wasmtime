@@ -1,5 +1,6 @@
 ;;! gc = true
 ;;! bulk_memory = true
+;;! memory64 = true
 
 ;; All element segment expressions are evaluated before any active element
 ;; segment is written to a table, so a trapping expression must leave imported
@@ -92,3 +93,28 @@
 (assert_return (invoke $N "is-null" (i32.const 3)) (i32.const 1))
 (assert_return (invoke $N "init" (i32.const 0)))
 (assert_trap (invoke $N "init" (i32.const 1)) "out of bounds table access")
+
+;; Staged segments also work with 64-bit tables, where the copy from the
+;; 32-bit element segment uses a 32-bit length like `table.init`.
+(module $T64
+  (type $s (struct (field i32)))
+  (table $t i64 3 anyref)
+  (elem (table $t) (i64.const 1) anyref
+    (struct.new $s (i32.const 11))
+    (struct.new $s (i32.const 12)))
+  (func (export "get") (param i64) (result i32)
+    (struct.get $s 0 (ref.cast (ref $s) (table.get $t (local.get 0)))))
+  (func (export "is-null") (param i64) (result i32)
+    (ref.is_null (table.get $t (local.get 0)))))
+(assert_return (invoke $T64 "is-null" (i64.const 0)) (i32.const 1))
+(assert_return (invoke $T64 "get" (i64.const 1)) (i32.const 11))
+(assert_return (invoke $T64 "get" (i64.const 2)) (i32.const 12))
+
+;; An out-of-bounds 64-bit offset still traps.
+(assert_trap
+  (module
+    (type $s (struct (field i32)))
+    (table $t i64 3 anyref)
+    (elem (table $t) (i64.const 0xffffffffffffffff) anyref
+      (struct.new $s (i32.const 1))))
+  "out of bounds table access")
