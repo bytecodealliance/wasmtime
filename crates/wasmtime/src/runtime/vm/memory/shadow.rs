@@ -5,10 +5,10 @@
 //! watchpoint builtin before the corresponding memory byte is written. The
 //! bits of a shadow byte say why it is watched.
 
-use crate::LinearMemory;
 use crate::prelude::*;
-use crate::runtime::vm::memory::{DefaultMemoryCreator, RuntimeMemoryCreator};
+use crate::runtime::vm::memory::DefaultMemoryCreator;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
+use crate::{LinearMemory, MemoryCreator, MemoryRequest};
 use core::ptr::NonNull;
 use wasmtime_environ::MemoryTunables;
 
@@ -51,7 +51,8 @@ impl ShadowMemory {
             .maximum_byte_size()
             .ok()
             .and_then(|n| usize::try_from(n).ok());
-        let alloc = DefaultMemoryCreator.new_memory(ty, memory_tunables, len, maximum)?;
+        let request = MemoryRequest::new(ty, memory_tunables, len, maximum);
+        let alloc = DefaultMemoryCreator.new_memory(&request)?;
         let definition = try_new::<Box<_>>(super::vmmemory(&*alloc))?;
         Ok(ShadowMemory {
             alloc,

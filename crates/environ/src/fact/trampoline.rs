@@ -35,7 +35,9 @@ use crate::{FuncIndex, GlobalIndex, IndexType, NUM_COMPONENT_CONTEXT_SLOTS, Trap
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
-use wasm_encoder::{BlockType, Catch, Encode, Instruction, Instruction::*, MemArg, ValType};
+use wasm_encoder::{
+    BlockType, Catch, Encode, Instruction, Instruction::*, MemArg, MemArgTarget, ValType,
+};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 use super::DataModel;
@@ -501,13 +503,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
             },
         );
 
-        self.flush_code();
-        self.module.funcs[self.result]
-            .body
-            .push(Body::RefFunc(start));
-        self.module.funcs[self.result]
-            .body
-            .push(Body::RefFunc(return_));
+        self.push_body(Body::RefFunc(start));
+        self.push_body(Body::RefFunc(return_));
         self.instruction(I32Const(
             i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
         ));
@@ -820,6 +817,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .iter()
             .copied()
             .collect::<Vec<_>>();
+        self.init_hostcall_fuel(&src_tys);
         let dst_tys = self.types[adapter.lift.ty].params;
         let dst_tys = self.types[dst_tys]
             .types
@@ -835,17 +833,24 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // Async lowered functions have a smaller limit on flat parameters, but
         // their destination, a lifted function, does not have a different limit
         // than sync functions.
-        let max_flat_params = if adapter.lower.options.async_ {
-            MAX_FLAT_ASYNC_PARAMS
-        } else {
-            MAX_FLAT_PARAMS
+        let max_flat_params = match lower_opts.data_model {
+            // Under the GC data model the core function type is declared
+            // up-front via the `core-type` canonical option and maps 1:1 to the
+            // component type, so parameters are never spilled to memory.
+            DataModel::Gc {} => usize::MAX,
+            DataModel::LinearMemory(_) if adapter.lower.options.async_ => MAX_FLAT_ASYNC_PARAMS,
+            DataModel::LinearMemory(_) => MAX_FLAT_PARAMS,
         };
         let src_flat =
             self.types
                 .flatten_types(lower_opts, max_flat_params, src_tys.iter().copied());
+        let max_dst_flat_params = match lift_opts.data_model {
+            DataModel::Gc {} => usize::MAX,
+            DataModel::LinearMemory(_) => MAX_FLAT_PARAMS,
+        };
         let dst_flat =
             self.types
-                .flatten_types(lift_opts, MAX_FLAT_PARAMS, dst_tys.iter().copied());
+                .flatten_types(lift_opts, max_dst_flat_params, dst_tys.iter().copied());
 
         let src = if let Some(flat) = &src_flat {
             Source::Stack(Stack {
@@ -908,6 +913,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .iter()
             .copied()
             .collect::<Vec<_>>();
+        self.init_hostcall_fuel(&src_tys);
         let dst_tys = self.types[adapter.lower.ty].results;
         let dst_tys = self.types[dst_tys]
             .types
@@ -1196,8 +1202,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 });
                 // Emit a `call` instruction which will get "relocated" to a
                 // function index once translation has completely finished.
-                self.flush_code();
-                self.module.funcs[self.result].body.push(Body::Call(helper));
+                self.push_body(Body::Call(helper));
 
                 // If the destination of the translation was on the stack then
                 // the types on the stack need to be optionally converted to
@@ -1696,6 +1701,51 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.free_temp_local(src_str.len);
         self.free_temp_local(dst_str.ptr);
         self.free_temp_local(dst_str.len);
+    }
+
+    /// Resets the hostcall fuel remaining for the strings in `tys` to the
+    /// store's hostcall fuel, if there are any strings.
+    ///
+    /// Strings are the only values the host copies on behalf of an adapter;
+    /// everything else is copied by the adapter's own wasm and charged as
+    /// such.
+    fn init_hostcall_fuel(&mut self, tys: &[InterfaceType]) {
+        if !tys.iter().any(|ty| self.types.ty_contains_string(ty)) {
+            return;
+        }
+        self.module.hostcall_fuel_global = true;
+        let hostcall_fuel = self.module.import_hostcall_fuel();
+        self.instruction(Call(hostcall_fuel.as_u32()));
+        self.push_body(Body::HostcallFuelGlobalSet);
+    }
+
+    /// Charges `src`'s code units at `enc`'s width against the remaining
+    /// hostcall fuel before the host copies it, trapping if there isn't
+    /// enough.
+    fn consume_hostcall_fuel(&mut self, src: &WasmString<'_>, enc: FE) {
+        self.instruction(LocalGet(src.len.idx));
+        if src.len.ty == ValType::I32 {
+            self.instruction(I64ExtendI32U);
+        }
+        if enc.width() > 1 {
+            self.instruction(I64Const(i64::from(enc.width())));
+            self.instruction(I64Mul);
+        }
+        let bytes = self.local_set_new_tmp(ValType::I64);
+
+        self.instruction(LocalGet(bytes.idx));
+        self.push_body(Body::HostcallFuelGlobalGet);
+        self.instruction(I64GtU);
+        self.instruction(If(BlockType::Empty));
+        self.trap(Trap::HostcallFuelExhausted);
+        self.instruction(End);
+
+        self.push_body(Body::HostcallFuelGlobalGet);
+        self.instruction(LocalGet(bytes.idx));
+        self.instruction(I64Sub);
+        self.push_body(Body::HostcallFuelGlobalSet);
+
+        self.free_temp_local(bytes);
     }
 
     // Corresponding function for `store_string_copy` in the spec.
@@ -2325,7 +2375,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn validate_string_length(&mut self, src: &WasmString<'_>, dst: FE) {
-        self.validate_string_length_u8(src, dst.width())
+        self.validate_string_length_u8(src, dst.width());
+        self.consume_hostcall_fuel(src, dst);
     }
 
     fn validate_string_length_u8(&mut self, s: &WasmString<'_>, dst: u8) {
@@ -3942,6 +3993,12 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(End);
     }
 
+    /// Pushes a `Body` fragment directly to the function being created.
+    fn push_body(&mut self, body: Body) {
+        self.flush_code();
+        self.module.funcs[self.result].body.push(body);
+    }
+
     /// Flushes out the current `code` instructions into the destination
     /// function.
     ///
@@ -4451,7 +4508,8 @@ impl<'a> Memory<'a> {
         MemArg {
             offset: u64::from(self.offset),
             align,
-            memory_index: self.mem_opts().memory.unwrap().0.as_u32(),
+            target: MemArgTarget::Memory(self.mem_opts().memory.unwrap().0.as_u32()),
+            ordering: None,
         }
     }
 

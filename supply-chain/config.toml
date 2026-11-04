@@ -320,6 +320,10 @@ criteria = "safe-to-deploy"
 version = "2.1.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.hyper-util]]
+version = "0.1.21"
+criteria = "safe-to-deploy"
+
 [[exemptions.ipnet]]
 version = "2.5.0"
 criteria = "safe-to-deploy"
@@ -549,4 +553,8 @@ criteria = "safe-to-deploy"
 
 [[exemptions.zstd-sys]]
 version = "2.0.9+zstd.1.5.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.zstd-sys]]
+version = "2.1.2+zstd.1.5.7"
 criteria = "safe-to-deploy"

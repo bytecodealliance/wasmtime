@@ -101,10 +101,12 @@ TEST(StructRef, CreateAndReadFields) {
   auto cx = store.context();
 
   // Create a struct type with two mutable i32 fields.
-  auto ty = StructType(engine, {
+  auto ty = StructType::create(engine,
+                               {
                                    FieldType::mut_(ValType::i32()),
                                    FieldType::mut_(ValType::i32()),
-                               });
+                               })
+                .unwrap();
   auto pre = StructRefPre::create(cx, ty);
 
   // Allocate a struct with field values 10 and 20.
@@ -132,6 +134,15 @@ TEST(StructRef, CreateAndReadFields) {
   EXPECT_EQ(v0b.ok().i32(), 42);
 }
 
+TEST(StructType, TooManyFields) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+
+  std::vector<FieldType> fields(10001, FieldType::const_(ValType::i32()));
+  EXPECT_FALSE(StructType::create(engine, fields));
+}
+
 TEST(StructRef, UpcastAndDowncast) {
   Config config;
   config.wasm_gc(true);
@@ -139,9 +150,11 @@ TEST(StructRef, UpcastAndDowncast) {
   Store store(engine);
   auto cx = store.context();
 
-  auto ty = StructType(engine, {
+  auto ty = StructType::create(engine,
+                               {
                                    FieldType::const_(ValType::i32()),
-                               });
+                               })
+                .unwrap();
   auto pre = StructRefPre::create(cx, ty);
 
   auto result = StructRef::create(cx, pre, {Val(int32_t(99))});
@@ -309,7 +322,8 @@ TEST(AnyRef, DowncastStruct) {
   Store store(engine);
   auto cx = store.context();
 
-  auto ty = StructType(engine, {FieldType::const_(ValType::i32())});
+  auto ty =
+      StructType::create(engine, {FieldType::const_(ValType::i32())}).unwrap();
   auto pre = StructRefPre::create(cx, ty);
   auto result = StructRef::create(cx, pre, {Val(int32_t(77))});
   ASSERT_TRUE(result);

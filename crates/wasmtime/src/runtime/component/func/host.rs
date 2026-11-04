@@ -456,7 +456,7 @@ where
         // If the store was poisoned while the host function ran, e.g. because
         // it made a nested call back into the guest which failed but then
         // returned normally, then don't let the guest continue running.
-        if store.0.trapped() {
+        if store.0.component_trapped() {
             bail!(crate::Trap::CannotEnterComponent);
         }
 

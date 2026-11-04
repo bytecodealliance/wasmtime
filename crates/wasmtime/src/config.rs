@@ -17,11 +17,7 @@ use crate::memory::MemoryCreator;
 #[cfg(feature = "runtime")]
 use crate::profiling_agent::{self, ProfilingAgent};
 #[cfg(feature = "runtime")]
-use crate::runtime::vm::{
-    GcRuntime, InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator,
-};
-#[cfg(feature = "runtime")]
-use crate::trampoline::MemoryCreatorProxy;
+use crate::runtime::vm::{GcRuntime, InstanceAllocator, OnDemandInstanceAllocator};
 
 #[cfg(feature = "async")]
 use crate::stack::{StackCreator, StackCreatorProxy};
@@ -168,7 +164,7 @@ pub struct Config {
     #[cfg(feature = "cache")]
     pub(crate) cache: Option<Cache>,
     #[cfg(feature = "runtime")]
-    pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
+    pub(crate) mem_creator: Option<Arc<dyn MemoryCreator>>,
     #[cfg(feature = "runtime")]
     pub(crate) custom_code_memory: Option<Arc<dyn CustomCodeMemory>>,
     pub(crate) allocation_strategy: InstanceAllocationStrategy,
@@ -309,7 +305,11 @@ impl Config {
             wmemcheck: false,
             #[cfg(feature = "coredump")]
             coredump_on_trap: false,
-            macos_use_mach_ports: !cfg!(miri),
+            // Disable mach ports on miri since it doesn't emulate those APIs,
+            // and additionally disable it with ASAN by default because
+            // otherwise mach ports routes around signal handlers installed by
+            // ASAN.
+            macos_use_mach_ports: !cfg!(miri) && !cfg!(asan),
             #[cfg(feature = "std")]
             detect_host_feature: Some(detect_host_feature),
             #[cfg(not(feature = "std"))]
@@ -637,9 +637,20 @@ impl Config {
     /// you'll have to be sure to pour some fuel into [`Store`] before
     /// executing some code.
     ///
+    /// Fuel accounting is not precise when WebAssembly traps. Each call is
+    /// still bounded by the fuel in the [`Store`], but the amount of fuel
+    /// listed as being consumed when WebAssembly traps may not accurately
+    /// reflect the exact amount that was consumed. This tradeoff enables
+    /// Wasmtime to optimize fuel-consumption primarily while still ensuring
+    /// that non-trapping code is always bounded. Embedders which need precise
+    /// fuel consumption metrics should not reuse a [`Store`] after a trap and
+    /// should not rely on the precise value of [`Store::get_fuel`] in the event
+    /// of a trap.
+    ///
     /// By default this option is `false`.
     ///
     /// [`Store`]: crate::Store
+    /// [`Store::get_fuel`]: crate::Store::get_fuel
     pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
         self.tunables.consume_fuel = Some(enable);
         self
@@ -1758,7 +1769,7 @@ impl Config {
     /// creating instance linear memories for the on-demand instance allocation strategy.
     #[cfg(feature = "runtime")]
     pub fn with_host_memory(&mut self, mem_creator: Arc<dyn MemoryCreator>) -> &mut Self {
-        self.mem_creator = Some(Arc::new(MemoryCreatorProxy(mem_creator)));
+        self.mem_creator = Some(mem_creator);
         self
     }
 

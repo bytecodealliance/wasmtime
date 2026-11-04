@@ -137,6 +137,8 @@ const FULL_MATRIX = [
     "os": macos,
     "filter": "macos-x64",
     "target": "x86_64-apple-darwin",
+    "crates": "wasmtime-cli",
+    "args": "--test wast",
   },
   {
     "name": "Test macOS arm64",
@@ -306,7 +308,7 @@ async function shard(configs) {
             name: useSuffix ? `${config.name} (${crate})` : config.name,
             bucket: members
               .map(c => c === crate ? `--package ${c}` : `--exclude ${c}`)
-              .join(" "),
+              .join(" ") + " " + (config.args || ""),
           }
         ));
       }

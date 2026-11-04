@@ -178,7 +178,10 @@ impl Val {
             Val::AnyRef(None) => ValType::NULLREF,
             Val::AnyRef(Some(a)) => ValType::Ref(RefType::new(false, a._ty(store)?)),
             Val::ExnRef(None) => ValType::NULLEXNREF,
-            Val::ExnRef(Some(e)) => ValType::Ref(RefType::new(false, e._ty(store)?.into())),
+            Val::ExnRef(Some(e)) => {
+                e.try_gc_ref(store)?;
+                ValType::Ref(RefType::new(false, HeapType::Exn))
+            }
             Val::ContRef(_) => {
                 // TODO(#10248): Return proper continuation reference type when available
                 return Err(crate::format_err!(
@@ -345,9 +348,7 @@ impl Val {
                         AnyRef::_from_raw(store, raw.get_anyref()).into()
                     }
 
-                    HeapType::Exn | HeapType::ConcreteExn(_) => {
-                        ExnRef::_from_raw(store, raw.get_exnref()).into()
-                    }
+                    HeapType::Exn => ExnRef::_from_raw(store, raw.get_exnref()).into(),
                     HeapType::NoExn => Ref::Exn(None),
 
                     HeapType::None => Ref::Any(None),
@@ -1051,7 +1052,10 @@ impl Ref {
                 Ref::Any(Some(a)) => a._ty(store)?,
 
                 Ref::Exn(None) => HeapType::NoExn,
-                Ref::Exn(Some(e)) => e._ty(store)?.into(),
+                Ref::Exn(Some(e)) => {
+                    e.try_gc_ref(store)?;
+                    HeapType::Exn
+                }
             },
         ))
     }
@@ -1121,10 +1125,7 @@ impl Ref {
                 true
             }
             (Ref::Exn(None), HeapType::Exn) => true,
-            (Ref::Exn(None), HeapType::NoExn | HeapType::ConcreteExn(_)) => true,
-            (Ref::Exn(Some(e)), HeapType::ConcreteExn(_)) => {
-                e._matches_ty(store, &ty.heap_type())?
-            }
+            (Ref::Exn(None), HeapType::NoExn) => true,
             (Ref::Exn(_), _) => false,
         })
     }

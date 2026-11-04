@@ -6,7 +6,7 @@ use crate::code::ModuleWithCode;
 use crate::module::ModuleRegistry;
 use crate::prelude::*;
 use crate::runtime::vm::export::{Export, ExportMemory};
-use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
+use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,

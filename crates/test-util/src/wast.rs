@@ -21,6 +21,7 @@ pub mod limits {
     pub const GC_HEAP_SIZE: usize = 2 << 20; // 2MiB
     pub const TABLES: u32 = 200;
     pub const MEMORIES_PER_MODULE: u32 = 9;
+    pub const MEMORIES_PER_COMPONENT: u32 = 12;
     pub const TABLES_PER_MODULE: u32 = 5;
     pub const COMPONENT_INSTANCES: u32 = 50;
     pub const CORE_INSTANCES: u32 = 900;
@@ -354,6 +355,7 @@ macro_rules! foreach_config_option {
             branch_hinting
             compact_imports
             hogs_memory
+            consume_fuel
             nan_canonicalization
             component_model_async
             component_model_more_async_builtins
@@ -581,10 +583,12 @@ impl WastTest {
             return true;
         }
 
-        // Wasmtime doesn't implement `assert_{invalid,malformed}_custom`
         let unsupported = [
+            // Wasmtime doesn't implement `assert_{invalid,malformed}_custom`
             "spec_testsuite/proposals/extended-name-section/custom/name_annot.wast",
             "spec_testsuite/proposals/extended-name-section/custom/name.wast",
+            // Waiting on WebAssembly/component-model#755 to land
+            "component-model/test/async/zero-length.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;
@@ -598,6 +602,7 @@ impl WastTest {
                 "extended-const/global.wast",
                 "misc_testsuite/externref-segments.wast",
                 "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
+                "misc_testsuite/fuel/bulk-ops.wast",
                 "misc_testsuite/many_table_gets_lead_to_gc.wast",
                 "misc_testsuite/no-panic.wast",
             ];

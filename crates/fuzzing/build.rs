@@ -44,6 +44,19 @@ fn main() {
 
     // NB: duplicating a workaround in the wasmtime-fiber build script.
     custom_cfg("asan", cfg_is("sanitize", "address"));
+
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+
+    // Keep this in sync with the platforms listed in `Cargo.toml` that the
+    // `v8` dependency is enabled for.
+    let v8_supported = match target_os.as_str() {
+        "linux" => target_arch == "x86_64" || target_arch == "aarch64",
+        "macos" => target_arch == "aarch64",
+        _ => false,
+    };
+    let v8 = v8_supported && env::var_os("CARGO_FEATURE_V8").is_some();
+    custom_cfg("v8", v8);
 }
 
 fn cfg_is(key: &str, val: &str) -> bool {

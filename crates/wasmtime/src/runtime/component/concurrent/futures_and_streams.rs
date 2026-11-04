@@ -471,7 +471,7 @@ impl<D: 'static> DirectDestination<'_, D> {
     /// Provide direct access to the writer's buffer.
     pub fn remaining(&mut self) -> Result<&mut [u8]> {
         if let Some(buffer) = self.host_buffer.as_mut() {
-            return Ok(buffer.dst);
+            return Ok(&mut buffer.dst[*buffer.marked_written..]);
         }
         let transmit = self
             .store
@@ -497,13 +497,7 @@ impl<D: 'static> DirectDestination<'_, D> {
 
         let memory = instance
             .options_memory_mut(self.store.0, options)
-            .get_mut(
-                if count == 0 {
-                    0
-                } else {
-                    address + guest_offset.as_usize()
-                }..,
-            )
+            .get_mut(address + guest_offset.as_usize()..)
             .and_then(|b| b.get_mut(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -735,10 +729,20 @@ pub trait StreamProducer<D>: Send + 'static {
     /// Attempt to convert the specified object into a `Box<dyn Any>` which may
     /// be downcast to the specified type.
     ///
+    /// `buffer` contains any items which this producer previously passed to
+    /// [`Destination::set_buffer`] but which have not yet been delivered to
+    /// the reader. If the implementation returns `Ok(_)`, it must ensure those
+    /// items are retained by the returned value, since they are otherwise
+    /// lost.
+    ///
     /// The implementation must ensure that, if it returns `Ok(_)`, a downcast
     /// to the specified type is guaranteed to succeed.
-    fn try_into(me: Pin<Box<Self>>, _ty: TypeId) -> Result<Box<dyn Any>, Pin<Box<Self>>> {
-        Err(me)
+    fn try_into(
+        me: Pin<Box<Self>>,
+        buffer: Self::Buffer,
+        _ty: TypeId,
+    ) -> Result<Box<dyn Any>, (Pin<Box<Self>>, Self::Buffer)> {
+        Err((me, buffer))
     }
 }
 
@@ -894,12 +898,6 @@ impl<'a, T> Source<'a, T> {
                 bail_bug!("expected WriteState::GuestReady");
             };
 
-            // Zero-length writes are exempt from bounds/alignment checks, so
-            // there's nothing to lift.
-            if guest_offset >= count {
-                return Ok(());
-            }
-
             let cx = &mut LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
             let ty = ty.payload(cx.types);
             let old_remaining = buffer.remaining_capacity();
@@ -1012,13 +1010,7 @@ impl<D: 'static> DirectSource<'_, D> {
 
         let memory = instance
             .options_memory(self.store.0, options)
-            .get(
-                if count == 0 {
-                    0
-                } else {
-                    address + guest_offset.as_usize()
-                }..,
-            )
+            .get(address + guest_offset.as_usize()..)
             .and_then(|b| b.get(..(count.as_usize() - guest_offset.as_usize())));
         match memory {
             Some(memory) => Ok(memory),
@@ -1474,8 +1466,8 @@ pub(super) fn lift_index_to_future(
     match ty {
         InterfaceType::Future(src) => {
             let id = {
-                let (state, instance, counter) = cx.concurrent_state_and_instance_mut();
-                lift_index_to_transmit(instance, counter, state, TransmitIndex::Future(src), index)?
+                let (state, instance) = cx.concurrent_state_and_instance_mut();
+                lift_index_to_transmit(instance, state, TransmitIndex::Future(src), index)?
             };
             cx.host_resource_lower_own(id.rep(), None, None)
         }
@@ -1865,8 +1857,8 @@ pub(super) fn lift_index_to_stream(
     match ty {
         InterfaceType::Stream(src) => {
             let id = {
-                let (state, instance, counter) = cx.concurrent_state_and_instance_mut();
-                lift_index_to_transmit(instance, counter, state, TransmitIndex::Stream(src), index)?
+                let (state, instance) = cx.concurrent_state_and_instance_mut();
+                lift_index_to_transmit(instance, state, TransmitIndex::Stream(src), index)?
             };
             cx.host_resource_lower_own(id.rep(), None, None)
         }
@@ -2321,11 +2313,26 @@ impl fmt::Debug for ReadState {
     }
 }
 
-fn return_code(kind: TransmitKind, state: StreamResult, count: ItemCount) -> Result<ReturnCode> {
-    Ok(match state {
-        StreamResult::Dropped => ReturnCode::Dropped(count),
-        StreamResult::Completed => ReturnCode::completed(kind, count),
-        StreamResult::Cancelled => ReturnCode::Cancelled(count),
+fn return_code(
+    kind: TransmitKind,
+    state: StreamResult,
+    count: ItemCount,
+    cancel: bool,
+) -> Result<ReturnCode> {
+    // The spec says that for streams the priority of return codes is
+    //
+    //   DROPPED > CANCELLED > COMPLETED
+    //
+    // where for futures it's
+    //
+    //   COMPLETED > DROPPED > CANCELLED
+    //
+    // which is what's implemented here.
+    Ok(match (state, kind) {
+        (StreamResult::Dropped, _) => ReturnCode::Dropped(count),
+        (StreamResult::Completed, TransmitKind::Stream) if cancel => ReturnCode::Cancelled(count),
+        (StreamResult::Completed, _) => ReturnCode::completed(kind, count),
+        (StreamResult::Cancelled, _) => ReturnCode::Cancelled(count),
     })
 }
 
@@ -2337,12 +2344,13 @@ fn settle_host_read(
     let ReadState::HostReady {
         consume,
         guest_offset,
+        cancel,
         ..
     } = mem::replace(&mut transmit.read, ReadState::Open)
     else {
         bail_bug!("expected ReadState::HostReady")
     };
-    let code = return_code(kind, state, guest_offset)?;
+    let code = return_code(kind, state, guest_offset, cancel)?;
     transmit.read = match state {
         StreamResult::Dropped => ReadState::Dropped,
         StreamResult::Completed | StreamResult::Cancelled => ReadState::HostReady {
@@ -2364,12 +2372,13 @@ fn settle_host_write(
         produce,
         try_into,
         guest_offset,
+        cancel,
         ..
     } = mem::replace(&mut transmit.write, WriteState::Open)
     else {
         bail_bug!("expected WriteState::HostReady")
     };
-    let code = return_code(kind, state, guest_offset)?;
+    let code = return_code(kind, state, guest_offset, cancel)?;
     transmit.write = match state {
         StreamResult::Dropped => WriteState::Dropped,
         StreamResult::Completed | StreamResult::Cancelled => WriteState::HostReady {
@@ -2722,7 +2731,6 @@ impl<T> StoreContextMut<'_, T> {
                                 {
                                     let WriteState::HostReady {
                                         guest_offset,
-                                        cancel,
                                         cancel_waker,
                                         ..
                                     } = &mut transmit.write
@@ -2730,7 +2738,7 @@ impl<T> StoreContextMut<'_, T> {
                                         bail_bug!("expected WriteState::HostReady")
                                     };
 
-                                    if poll.is_pending() {
+                                    *cancel_waker = if poll.is_pending() {
                                         if !buffer.remaining().is_empty()
                                             || *guest_offset > 0
                                             || host_offset > 0
@@ -2740,11 +2748,10 @@ impl<T> StoreContextMut<'_, T> {
                                                  after producing at least one item"
                                             )
                                         }
-                                        *cancel_waker = Some(cx.waker().clone());
+                                         Some(cx.waker().clone())
                                     } else {
-                                        *cancel_waker = None;
-                                        *cancel = false;
-                                    }
+                                         None
+                                    };
                                 }
 
                                 Ok(poll.map(|v| v.map(|result| (result, cancel))))
@@ -2826,9 +2833,9 @@ impl<T> StoreContextMut<'_, T> {
         });
         let try_into = Box::new(move |ty| {
             let (mine, buffer) = producer.try_lock().ok()?.take()?;
-            match P::try_into(mine, ty) {
+            match P::try_into(mine, buffer, ty) {
                 Ok(value) => Some(value),
-                Err(mine) => {
+                Err((mine, buffer)) => {
                     *producer.try_lock().ok()? = Some((mine, buffer));
                     None
                 }
@@ -2882,18 +2889,14 @@ impl<T> StoreContextMut<'_, T> {
                             cancel,
                         );
 
-                        if let ReadState::HostReady {
-                            cancel_waker,
-                            cancel,
-                            ..
-                        } = &mut store.concurrent_state_mut()?.get_mut(id)?.read
+                        if let ReadState::HostReady { cancel_waker, .. } =
+                            &mut store.concurrent_state_mut()?.get_mut(id)?.read
                         {
-                            if poll.is_pending() {
-                                *cancel_waker = Some(cx.waker().clone());
+                            *cancel_waker = if poll.is_pending() {
+                                Some(cx.waker().clone())
                             } else {
-                                *cancel_waker = None;
-                                *cancel = false;
-                            }
+                                None
+                            };
                         }
 
                         Ok(poll.map(|v| v.map(|result| (result, cancel))))
@@ -3331,13 +3334,10 @@ impl Instance {
         ty: TransmitIndex,
         writer: u32,
     ) -> Result<()> {
-        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
-        let table = instance.table_for_transmit(ty);
+        let table = self.id().get_mut(store).table_for_transmit(ty);
         let (transmit_rep, is_done) = match ty {
-            TransmitIndex::Future(ty) => table.future_remove_writable(counter, ty, writer)?,
-            TransmitIndex::Stream(ty) => {
-                (table.stream_remove_writable(counter, ty, writer)?, false)
-            }
+            TransmitIndex::Future(ty) => table.future_remove_writable(ty, writer)?,
+            TransmitIndex::Stream(ty) => (table.stream_remove_writable(ty, writer)?, false),
         };
 
         let id = TableId::<TransmitHandle>::new(transmit_rep);
@@ -3383,8 +3383,9 @@ impl Instance {
         let read_types = read_component.types();
         let count = count.as_usize();
 
-        // Validate `write_ty` w.r.t. `write_address` to ensure it's properly
-        // aligned and in-bounds.
+        // Double-check that both buffers are properly aligned and in-bounds.
+        // This was already validated in `check_bounds` when the read/write was
+        // issued, so failure here is a bug.
         //
         // FIXME(#4311): this and the rest of this function use the 32-bit
         // layout of payloads, which needs memory64 handling.
@@ -3397,15 +3398,18 @@ impl Instance {
             Some(abi) => usize::try_from(abi.size)? * count,
             None => usize::try_from(write_abi.size32)? * count,
         };
-        if write_length_in_bytes > 0 {
+        if write_payload_ty.is_some() {
             if write_address % usize::try_from(write_abi.align32)? != 0 {
-                bail!("write pointer not aligned");
+                bail_bug!("write pointer not aligned");
             }
-            write_instance
+            if write_instance
                 .options_memory(store, write_options)
                 .get(write_address..)
                 .and_then(|b| b.get(..write_length_in_bytes))
-                .ok_or_else(|| crate::format_err!("write pointer out of bounds"))?;
+                .is_none()
+            {
+                bail_bug!("write pointer out of bounds");
+            }
         }
 
         let read_payload_ty = read_ty.payload(read_types);
@@ -3417,15 +3421,18 @@ impl Instance {
             Some(abi) => usize::try_from(abi.size)? * count,
             None => usize::try_from(read_abi.size32)? * count,
         };
-        if read_length_in_bytes > 0 {
+        if read_payload_ty.is_some() {
             if read_address % usize::try_from(read_abi.align32)? != 0 {
-                bail!("read pointer not aligned");
+                bail_bug!("read pointer not aligned");
             }
-            read_instance
+            if read_instance
                 .options_memory(store, read_options)
                 .get(read_address..)
                 .and_then(|b| b.get(..read_length_in_bytes))
-                .ok_or_else(|| crate::format_err!("read pointer out of bounds"))?;
+                .is_none()
+            {
+                bail_bug!("read pointer out of bounds");
+            }
         }
 
         if write_runtime_instance == read_runtime_instance
@@ -3477,7 +3484,13 @@ impl Instance {
                     Some(ty) => ty,
                     None => bail_bug!("expected read payload type to be present"),
                 };
-                if flat_abi.is_some() {
+                let lift =
+                    &mut LiftContext::new(store.store_opaque_mut(), write_options, write_instance)?;
+                if let Some(abi) = flat_abi {
+                    // The host copies these bytes itself rather than wasm, so
+                    // charge them against hostcall fuel.
+                    lift.consume_fuel_array(count, usize::try_from(abi.size)?)?;
+
                     // Fast path memcpy for "flat" (i.e. no pointers or handles) payloads:
                     let store_opaque = store.store_opaque_mut();
 
@@ -3517,8 +3530,6 @@ impl Instance {
                         }
                     }
                 } else {
-                    let store_opaque = store.store_opaque_mut();
-                    let lift = &mut LiftContext::new(store_opaque, write_options, write_instance)?;
                     let bytes = &lift.memory()[write_address..][..write_length_in_bytes];
                     lift.consume_fuel_array(count, size_of::<Val>())?;
 
@@ -3560,14 +3571,11 @@ impl Instance {
             TransmitIndex::Future(ty) => types[types[ty].ty].payload,
             TransmitIndex::Stream(ty) => types[types[ty].ty].payload,
         };
+        // Empty payloads ignore the pointer entirely, but otherwise the
+        // alignment and bounds checks apply even to zero-length reads/writes.
         let Some(payload) = payload else {
             return Ok(());
         };
-        // As-written the spec currently exempts zero-length reads/writes from
-        // bounds/alignment checks.
-        if count == 0 {
-            return Ok(());
-        }
         let abi = types.canonical_abi(&payload);
         // FIXME(#4311): needs memory64 handling
         let size = usize::try_from(abi.size32)?;
@@ -4366,11 +4374,10 @@ impl Instance {
         ty: TransmitIndex,
         reader: u32,
     ) -> Result<()> {
-        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
-        let table = instance.table_for_transmit(ty);
+        let table = self.id().get_mut(store).table_for_transmit(ty);
         let (rep, _is_done) = match ty {
-            TransmitIndex::Stream(ty) => table.stream_remove_readable(counter, ty, reader)?,
-            TransmitIndex::Future(ty) => table.future_remove_readable(counter, ty, reader)?,
+            TransmitIndex::Stream(ty) => table.stream_remove_readable(ty, reader)?,
+            TransmitIndex::Future(ty) => table.future_remove_readable(ty, reader)?,
         };
         let kind = match ty {
             TransmitIndex::Stream(_) => TransmitKind::Stream,
@@ -4578,11 +4585,11 @@ impl Instance {
         ty: TypeComponentLocalErrorContextTableIndex,
         error_context: u32,
     ) -> Result<()> {
-        let (instance, counter) = self.id().get_mut_and_handle_counter(store);
+        let instance = self.id().get_mut(store);
 
         let local_handle_table = instance.table_for_error_context(ty);
 
-        let rep = local_handle_table.error_context_drop(counter, error_context)?;
+        let rep = local_handle_table.error_context_drop(error_context)?;
 
         let global_ref_count_idx = TypeComponentGlobalErrorContextTableIndex::from_u32(rep);
 
@@ -4631,8 +4638,8 @@ impl Instance {
         ty: TransmitIndex,
         src_idx: u32,
     ) -> Result<TableId<TransmitHandle>> {
-        let (state, _, counter, _, instance) = store.lift_context_parts(self);
-        lift_index_to_transmit(instance, counter, state.concurrent_state_mut(), ty, src_idx)
+        let (state, _, _, _, instance) = store.lift_context_parts(self);
+        lift_index_to_transmit(instance, state.concurrent_state_mut(), ty, src_idx)
     }
 
     fn lower_transmit_to_index(
@@ -4739,15 +4746,14 @@ impl Instance {
 /// expected type of future/stream.
 fn lift_index_to_transmit(
     instance: Pin<&mut ComponentInstance>,
-    counter: &mut HandleCounter,
     concurrent_state: &mut ConcurrentState,
     ty: TransmitIndex,
     src_idx: u32,
 ) -> Result<TableId<TransmitHandle>> {
     let handle_table = instance.table_for_transmit(ty);
     let (rep, is_done) = match ty {
-        TransmitIndex::Future(idx) => handle_table.future_remove_readable(counter, idx, src_idx)?,
-        TransmitIndex::Stream(idx) => handle_table.stream_remove_readable(counter, idx, src_idx)?,
+        TransmitIndex::Future(idx) => handle_table.future_remove_readable(idx, src_idx)?,
+        TransmitIndex::Stream(idx) => handle_table.stream_remove_readable(idx, src_idx)?,
     };
     let desc = match ty {
         TransmitIndex::Future(_) => "future",
@@ -5288,5 +5294,34 @@ mod tests {
             poll_future_producer(rx.as_mut(), true),
             Poll::Ready(Err(..)),
         ));
+    }
+
+    #[test]
+    fn direct_destination_successive_writes() {
+        use std::io::Write;
+
+        let mut store = Store::new(&ENGINE, ());
+        let mut buffer = ();
+        let mut dst = Vec::new();
+        let mut marked_written = 0;
+        let destination = Destination::<u8, ()> {
+            id: TableId::new(0),
+            buffer: &mut buffer,
+            host_buffer: Some(HostBuffer {
+                dst: &mut dst,
+                marked_written: &mut marked_written,
+            }),
+            _phantom: PhantomData,
+        };
+
+        // Each write must land after the bytes already marked as written,
+        // not overwrite them.
+        let mut direct = destination.as_direct(store.as_context_mut(), 6);
+        direct.write_all(&[1, 2, 3]).unwrap();
+        direct.write_all(&[4, 5, 6]).unwrap();
+        drop(direct);
+
+        assert_eq!(marked_written, 6);
+        assert_eq!(dst, [1, 2, 3, 4, 5, 6]);
     }
 }

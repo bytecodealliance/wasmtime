@@ -1,7 +1,7 @@
 //! Utilities for testing and fuzzing out-of-memory handling.
 //!
 //! Inspired by SpiderMonkey's `oomTest()` helper:
-//! https://firefox-source-docs.mozilla.org/js/hacking_tips.html#how-to-debug-oomtest-failures
+//! <https://firefox-source-docs.mozilla.org/js/hacking_tips.html#how-to-debug-oomtest-failures>
 
 use backtrace::Backtrace;
 use rand::{RngExt, SeedableRng, rngs::SmallRng};

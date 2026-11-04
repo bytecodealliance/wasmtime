@@ -2297,7 +2297,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         path: GuestPtr<str>,
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
-        let path = memory.as_cow_str(path)?.into_owned();
+        let path = self.read_string(memory, path)?;
         self.filesystem()
             .unlink_file_at(dirfd.borrowed(), path)
             .await?;

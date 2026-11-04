@@ -98,6 +98,7 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
 hyper = { workspace = true, optional = true }
+hyper-util = { workspace = true, optional = true, features = ["server-auto"] }
 http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
@@ -371,18 +372,18 @@ wit-bindgen = { version = "0.63.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.63.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.262.0", default-features = false, features = ['simd'] }
-wat = "1.262.0"
-wast = "262.0.0"
-wasmprinter = "0.262.0"
-wasm-encoder = "0.262.0"
-wasm-smith = "0.262.0"
-wasm-mutate = "0.262.0"
-wit-parser = "0.262.0"
-wit-component = "0.262.0"
-wasm-wave = "0.262.0"
-wasm-compose = { version = "0.262.0", default-features = false }
-json-from-wast = "0.262.0"
+wasmparser = { version = "0.263.0", default-features = false, features = ['simd'] }
+wat = "1.263.0"
+wast = "263.0.0"
+wasmprinter = "0.263.0"
+wasm-encoder = "0.263.0"
+wasm-smith = "0.263.0"
+wasm-mutate = "0.263.0"
+wit-parser = "0.263.0"
+wit-component = "0.263.0"
+wasm-wave = "0.263.0"
+wasm-compose = { version = "0.263.0", default-features = false }
+json-from-wast = "0.263.0"
 
 wstd = "0.6.5"
 wasip2 = "1.0"
@@ -430,7 +431,8 @@ filecheck = "0.5.0"
 libc = { version = "0.2.190", default-features = true }
 file-per-thread-logger = "0.2.0"
 tokio = { version = "1.51.6", features = [ "rt", "time" ] }
-hyper = "1.9.0"
+hyper = "1.12.0"
+hyper-util = { version = "0.1", features = ["tokio"] }
 http = "1.5.0"
 http-body = "1.0.1"
 http-body-util = "0.1.3"
@@ -456,7 +458,7 @@ tokio-native-tls = "0.3.1"
 native-tls = "0.2.11"
 tokio-openssl = "0.6.5"
 openssl = "0.10.80"
-webpki-roots = "1.0.10"
+webpki-roots = "1.0.11"
 itertools = "0.14.0"
 base64 = "0.22.1"
 termcolor = "1.4.1"
@@ -469,6 +471,7 @@ pin-project-lite = "0.2.14"
 sha2 = { version = "0.10.2", default-features = false }
 gdbstub = "0.7.10"
 gdbstub_arch = "0.3.3"
+v8 = "139.0.0"
 
 # =============================================================================
 #
@@ -614,6 +617,7 @@ serve = [
   "wasmtime-wasi-http/component-model-async",
   "component-model",
   "dep:http-body-util",
+  "dep:hyper-util",
   "dep:http",
   "dep:pin-project-lite",
   "wasmtime-cli-flags/async",

@@ -15,7 +15,7 @@ pub enum Constrain {
 }
 
 impl Constrain {
-    fn bindings(&self) -> Vec<BindingId> {
+    pub fn bindings(&self) -> Vec<BindingId> {
         match self {
             Constrain::Match(binding_id, _) => vec![*binding_id],
             Constrain::Equal(a, b) => vec![*a, *b],

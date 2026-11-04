@@ -11,7 +11,7 @@ use crate::{
     MachTextSectionBuilder, TextSectionBuilder,
     dominator_tree::DominatorTree,
     ir,
-    isa::{self, IsaFlagsHashKey, OwnedTargetIsa, TargetIsa},
+    isa::{IsaFlagsHashKey, OwnedTargetIsa, TargetIsa},
     machinst::{self, CompiledCode, CompiledCodeStencil, MachInst, SigSet, VCode},
     result::CodegenResult,
     settings::{self as shared_settings, Flags},
@@ -207,11 +207,12 @@ where
         }))
     }
 
+    #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        _result: &crate::CompiledCode,
+        _result: &CompiledCode,
         _kind: super::unwind::UnwindInfoKind,
-    ) -> CodegenResult<Option<isa::unwind::UnwindInfo>> {
+    ) -> CodegenResult<Option<super::unwind::UnwindInfo>> {
         // TODO: actually support unwind info?
         Ok(None)
     }

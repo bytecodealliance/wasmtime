@@ -191,3 +191,214 @@
     )
   )
   "unreachable")
+
+;; Many parameters of an `async`-typed function lifted without `async`, which
+;; are passed in memory. The callee checks the in-memory layout of the
+;; parameters and then returns the same memory as its result.
+(component
+  (core module $m
+    (memory (export "memory") 1)
+    (global $last (mut i32) (i32.const 8))
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+      (local $ret i32)
+      (local.set $ret
+        (i32.and
+          (i32.add (global.get $last) (i32.sub (local.get 2) (i32.const 1)))
+          (i32.sub (i32.const 0) (local.get 2))))
+      (global.set $last (i32.add (local.get $ret) (local.get 3)))
+      (local.get $ret))
+
+    (func (export "foo") (param $p i32) (result i32)
+      (if (i32.ne (i32.load8_s offset=0 (local.get $p)) (i32.const -100)) (then unreachable))
+      (if (i64.ne (i64.load offset=8 (local.get $p)) (i64.const 0x7fffffffffffffff))
+        (then unreachable))
+      (if (i32.ne (i32.load offset=16 (local.get $p)) (i32.const 0x7fc00001)) (then unreachable))
+      (if (i32.ne (i32.load8_u offset=20 (local.get $p)) (i32.const 38)) (then unreachable))
+      (if (i32.ne (i32.load16_s offset=22 (local.get $p)) (i32.const 18831)) (then unreachable))
+      (if (i32.ne (i32.load offset=28 (local.get $p)) (i32.const 24)) (then unreachable))
+      (if (i32.ne (i32.load offset=36 (local.get $p)) (i32.const 8)) (then unreachable))
+      (if (i32.ne (i32.load8_u offset=40 (local.get $p)) (i32.const 1)) (then unreachable))
+      (if (i32.ne (i32.load8_u offset=41 (local.get $p)) (i32.const 0)) (then unreachable))
+      (if (i32.ne (i32.load offset=44 (local.get $p)) (i32.const 0x1f6a9)) (then unreachable))
+      (if (i32.ne (i32.load offset=52 (local.get $p)) (i32.const 5)) (then unreachable))
+      (if (i32.ne (i32.load offset=60 (local.get $p)) (i32.const 5)) (then unreachable))
+      (if (i32.ne (i32.load offset=68 (local.get $p)) (i32.const 5)) (then unreachable))
+      (local.get $p))
+  )
+  (core instance $i (instantiate $m))
+
+  (type $tuple (tuple
+    s8                ;; offset  0, size 1
+    u64               ;; offset  8, size 8
+    f32               ;; offset 16, size 4
+    u8                ;; offset 20, size 1
+    s16               ;; offset 22, size 2
+    string            ;; offset 24, size 8
+    (list u32)        ;; offset 32, size 8
+    bool              ;; offset 40, size 1
+    bool              ;; offset 41, size 1
+    char              ;; offset 44, size 4
+    (list bool)       ;; offset 48, size 8
+    (list char)       ;; offset 56, size 8
+    (list string)))   ;; offset 64, size 8
+  (type $t (func async
+    (param "p1" s8)
+    (param "p2" u64)
+    (param "p3" f32)
+    (param "p4" u8)
+    (param "p5" s16)
+    (param "p6" string)
+    (param "p7" (list u32))
+    (param "p8" bool)
+    (param "p9" bool)
+    (param "p0" char)
+    (param "pa" (list bool))
+    (param "pb" (list char))
+    (param "pc" (list string))
+    (result $tuple)))
+  (func (export "many-param") (type $t)
+    (canon lift (core func $i "foo") (memory (core memory $i "memory"))
+      (realloc (core func $i "realloc"))))
+)
+
+(assert_return
+  (invoke "many-param"
+    (s8.const -100)
+    (u64.const 0x7fffffffffffffff)
+    (f32.const nan:0x400001)
+    (u8.const 38)
+    (s16.const 18831)
+    (str.const "this is the first string")
+    (list.const
+      (u32.const 1) (u32.const 2) (u32.const 3) (u32.const 4)
+      (u32.const 5) (u32.const 6) (u32.const 7) (u32.const 8))
+    (bool.const true)
+    (bool.const false)
+    (char.const "🚩")
+    (list.const
+      (bool.const false) (bool.const true) (bool.const false)
+      (bool.const true) (bool.const true))
+    (list.const
+      (char.const "🍌") (char.const "🥐") (char.const "🍗")
+      (char.const "🍙") (char.const "🍡"))
+    (list.const
+      (str.const "the quick")
+      (str.const "brown fox")
+      (str.const "was too lazy")
+      (str.const "to jump over the dog")
+      (str.const "what a demanding dog")))
+  (tuple.const
+    (s8.const -100)
+    (u64.const 0x7fffffffffffffff)
+    (f32.const nan:0x400001)
+    (u8.const 38)
+    (s16.const 18831)
+    (str.const "this is the first string")
+    (list.const
+      (u32.const 1) (u32.const 2) (u32.const 3) (u32.const 4)
+      (u32.const 5) (u32.const 6) (u32.const 7) (u32.const 8))
+    (bool.const true)
+    (bool.const false)
+    (char.const "🚩")
+    (list.const
+      (bool.const false) (bool.const true) (bool.const false)
+      (bool.const true) (bool.const true))
+    (list.const
+      (char.const "🍌") (char.const "🥐") (char.const "🍗")
+      (char.const "🍙") (char.const "🍡"))
+    (list.const
+      (str.const "the quick")
+      (str.const "brown fox")
+      (str.const "was too lazy")
+      (str.const "to jump over the dog")
+      (str.const "what a demanding dog"))))
+
+;; Many results of an `async`-typed function lifted without `async`, which are
+;; returned through memory.
+(component
+  (core module $m
+    (memory (export "memory") 1)
+
+    ;; Strings and list contents referenced by the result.
+    (data (i32.const 100) "abcdef")
+    (data (i32.const 112)
+      "\01\00\00\00\02\00\00\00\03\00\00\00\04\00\00\00"
+      "\05\00\00\00\06\00\00\00\07\00\00\00\08\00\00\00")
+    (data (i32.const 144) "\00\01\00\01\01")
+    (data (i32.const 152)
+      "\4c\f3\01\00" ;; '🍌'
+      "\50\f9\01\00" ;; '🥐'
+      "\57\f3\01\00" ;; '🍗'
+      "\59\f3\01\00" ;; '🍙'
+      "\61\f3\01\00" ;; '🍡'
+    )
+    (data (i32.const 172)
+      "\66\00\00\00\02\00\00\00" ;; "cd"
+      "\68\00\00\00\02\00\00\00" ;; "ef"
+    )
+
+    (func (export "foo") (result i32)
+      (local $base i32)
+      (local.set $base (i32.const 8))
+      (i32.store8 offset=0 (local.get $base) (i32.const -100))
+      (i64.store offset=8 (local.get $base) (i64.const 0x7fffffffffffffff))
+      (i32.store offset=16 (local.get $base) (i32.const 0x7fc00001))
+      (i32.store8 offset=20 (local.get $base) (i32.const 38))
+      (i32.store16 offset=22 (local.get $base) (i32.const 18831))
+      (i32.store offset=24 (local.get $base) (i32.const 100))
+      (i32.store offset=28 (local.get $base) (i32.const 2))
+      (i32.store offset=32 (local.get $base) (i32.const 112))
+      (i32.store offset=36 (local.get $base) (i32.const 8))
+      (i32.store8 offset=40 (local.get $base) (i32.const 1))
+      (i32.store8 offset=41 (local.get $base) (i32.const 0))
+      (i32.store offset=44 (local.get $base) (i32.const 0x1f6a9)) ;; '🚩'
+      (i32.store offset=48 (local.get $base) (i32.const 144))
+      (i32.store offset=52 (local.get $base) (i32.const 5))
+      (i32.store offset=56 (local.get $base) (i32.const 152))
+      (i32.store offset=60 (local.get $base) (i32.const 5))
+      (i32.store offset=64 (local.get $base) (i32.const 172))
+      (i32.store offset=68 (local.get $base) (i32.const 2))
+      (local.get $base))
+  )
+  (core instance $i (instantiate $m))
+
+  (type $tuple (tuple
+    s8
+    u64
+    f32
+    u8
+    s16
+    string
+    (list u32)
+    bool
+    bool
+    char
+    (list bool)
+    (list char)
+    (list string)))
+  (type $t (func async (result $tuple)))
+  (func (export "many-results") (type $t)
+    (canon lift (core func $i "foo") (memory (core memory $i "memory"))))
+)
+
+(assert_return (invoke "many-results")
+  (tuple.const
+    (s8.const -100)
+    (u64.const 0x7fffffffffffffff)
+    (f32.const nan:0x400001)
+    (u8.const 38)
+    (s16.const 18831)
+    (str.const "ab")
+    (list.const
+      (u32.const 1) (u32.const 2) (u32.const 3) (u32.const 4)
+      (u32.const 5) (u32.const 6) (u32.const 7) (u32.const 8))
+    (bool.const true)
+    (bool.const false)
+    (char.const "🚩")
+    (list.const
+      (bool.const false) (bool.const true) (bool.const false)
+      (bool.const true) (bool.const true))
+    (list.const
+      (char.const "🍌") (char.const "🥐") (char.const "🍗")
+      (char.const "🍙") (char.const "🍡"))
+    (list.const (str.const "cd") (str.const "ef"))))

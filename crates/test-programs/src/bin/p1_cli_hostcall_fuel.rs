@@ -18,6 +18,10 @@ fn big_string() {
         unsafe { wasip1::path_create_directory(dir_fd, &s) },
         Err(wasip1::ERRNO_NOMEM)
     );
+    assert_eq!(
+        unsafe { wasip1::path_unlink_file(dir_fd, &s) },
+        Err(wasip1::ERRNO_NOMEM)
+    );
 }
 
 fn big_iovecs(blocking_mode: BlockingMode) {

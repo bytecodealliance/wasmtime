@@ -14,47 +14,6 @@ use wasmtime::component::{TaskGroupHook, TaskGroupId};
 use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, component::*};
 use wasmtime_component_util::REALLOC_AND_FREE;
 
-/// This is super::func::thunks, except with an async store.
-#[tokio::test]
-#[cfg_attr(miri, ignore)]
-async fn smoke() -> Result<()> {
-    let component = r#"
-        (component
-            (core module $m
-                (func (export "thunk"))
-                (func (export "thunk-trap") unreachable)
-            )
-            (core instance $i (instantiate $m))
-            (func (export "thunk")
-                (canon lift (core func $i "thunk"))
-            )
-            (func (export "thunk-trap")
-                (canon lift (core func $i "thunk-trap"))
-            )
-        )
-    "#;
-
-    let engine = super::async_engine();
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine)
-        .instantiate_async(&mut store, &component)
-        .await?;
-
-    let thunk = instance.get_typed_func::<(), ()>(&mut store, "thunk")?;
-
-    thunk.call_async(&mut store, ()).await?;
-
-    let err = instance
-        .get_typed_func::<(), ()>(&mut store, "thunk-trap")?
-        .call_async(&mut store, ())
-        .await
-        .unwrap_err();
-    assert_eq!(err.downcast::<Trap>()?, Trap::UnreachableCodeReached);
-
-    Ok(())
-}
-
 #[tokio::test(flavor = "current_thread")]
 async fn run_concurrent_yields_during_high_priority_work() -> Result<()> {
     const TASKS: usize = 256;
@@ -2650,7 +2609,7 @@ async fn zero_length_reads_and_writes() -> Result<()> {
                     (local $stream-reader i32)
                     (local $ret i32)
 
-                    (local.set $ret (call $stream.read (local.get $stream) (i32.const 0xFFFFFF) (i32.const 0)))
+                    (local.set $ret (call $stream.read (local.get $stream) (i32.const 0x10000) (i32.const 0)))
                     (if (i32.ne (local.get $ret) (i32.const 1 (; DROPPED ;))) (then unreachable))
 
                     (local.set $tmp (call $stream.new))
@@ -2659,7 +2618,7 @@ async fn zero_length_reads_and_writes() -> Result<()> {
 
                     (call $task.return (local.get $stream-reader))
 
-                    (local.set $ret (call $stream.write (local.get $stream-writer) (i32.const 0xFFFFFF) (i32.const 0)))
+                    (local.set $ret (call $stream.write (local.get $stream-writer) (i32.const 0x10000) (i32.const 0)))
                     (if (i32.ne (local.get $ret) (i32.const -1 (; BLOCKED ;))) (then unreachable))
 
                     (local.set $set (call $waitable-set.new))
@@ -2718,8 +2677,9 @@ async fn zero_length_reads_and_writes() -> Result<()> {
             _finish: bool,
         ) -> Poll<Result<StreamResult>> {
             // This used to panic on zero-length reads with out-of-bounds
-            // addresses:
-            _ = destination.as_direct(store, 1).remaining();
+            // addresses, and should work with an address at the very end of
+            // memory:
+            _ = destination.as_direct(store, 1).remaining()?;
             Poll::Ready(Ok(StreamResult::Dropped))
         }
     }
@@ -2737,8 +2697,9 @@ async fn zero_length_reads_and_writes() -> Result<()> {
             _finish: bool,
         ) -> Poll<Result<StreamResult>> {
             // This used to panic on zero-length reads with out-of-bounds
-            // addresses:
-            _ = source.as_direct(store).remaining();
+            // addresses, and should work with an address at the very end of
+            // memory:
+            _ = source.as_direct(store).remaining()?;
             Poll::Ready(Ok(StreamResult::Dropped))
         }
     }
@@ -3460,9 +3421,9 @@ async fn task_group_hook_fails_to_enter_call_async() -> Result<()> {
     Ok(())
 }
 
-/// `Func::call_async` and `TypedFunc::call_async` from within a host function,
-/// while the event loop is already running, fail without queueing the call to
-/// run later.
+/// `Func::call_async`, `TypedFunc::call_async` and `instantiate_async` from
+/// within a host function, while the event loop is already running, fail
+/// without queueing the call or start function to run later.
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn call_async_from_host_function() -> Result<()> {
@@ -3483,6 +3444,15 @@ async fn call_async_from_host_function() -> Result<()> {
             (func (export "trap") (canon lift (core func $i "trap")))
         )"#,
     )?;
+    let trap_on_start = Component::new(
+        &engine,
+        r#"(component
+            (core module $m
+                (func $start unreachable)
+                (start $start))
+            (core instance (instantiate $m))
+        )"#,
+    )?;
     let trap = Arc::new(Mutex::new(None::<Func>));
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap("host", {
@@ -3493,6 +3463,10 @@ async fn call_async_from_host_function() -> Result<()> {
             assert!(matches!(result, Some(Err(_))));
             let trap = trap.typed::<(), ()>(&store)?;
             let result = trap.call_async(&mut store, ()).now_or_never();
+            assert!(matches!(result, Some(Err(_))));
+            let result = Linker::new(store.engine())
+                .instantiate_async(&mut store, &trap_on_start)
+                .now_or_never();
             assert!(matches!(result, Some(Err(_))));
             Ok(())
         }
@@ -3848,4 +3822,78 @@ async fn max_fibers() -> Result<()> {
     run(9).await?;
     assert!(run(10).await.is_err());
     Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn cancel_stream_read_completed_by_host() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc (memory (export "memory") 1))
+  (core instance $libc (instantiate $libc))
+  (type $s (stream u8))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "memory"))))
+  (core func $stream.cancel-read (canon stream.cancel-read $s))
+  (core func $task.return (canon task.return (result u32)))
+  (core module $m
+    (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+    (import "" "stream.cancel-read" (func $stream.cancel-read (param i32) (result i32)))
+    (import "" "task.return" (func $task.return (param i32)))
+    (func (export "run") (param $r i32) (result i32)
+      (if (i32.ne (call $stream.read (local.get $r) (i32.const 0) (i32.const 4))
+            (i32.const -1 (; BLOCKED ;)))
+        (then unreachable))
+      (call $task.return (call $stream.cancel-read (local.get $r)))
+      (i32.const 0 (; EXIT ;)))
+    (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+  )
+  (core instance $i (instantiate $m (with "" (instance
+    (export "stream.read" (func $stream.read))
+    (export "stream.cancel-read" (func $stream.cancel-read))
+    (export "task.return" (func $task.return))))))
+  (func (export "run") async (param "s" $s) (result u32)
+    (canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let run = instance.get_typed_func::<(StreamReader<u8>,), (u32,)>(&mut store, "run")?;
+
+    // The host only completes the read, with one item, once the guest cancels
+    // it, which must still report CANCELLED(1).
+    let reader = StreamReader::new(&mut store, ProduceOnFinish)?;
+    let (code,) = run.call_async(&mut store, (reader,)).await?;
+    assert_eq!(code, (1 << 4) | 2, "{code:#x}");
+    return Ok(());
+
+    struct ProduceOnFinish;
+
+    impl StreamProducer<()> for ProduceOnFinish {
+        type Item = u8;
+        type Buffer = Option<u8>;
+
+        fn poll_produce<'a>(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<'a, ()>,
+            mut destination: Destination<'a, u8, Option<u8>>,
+            finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            if finish {
+                destination.set_buffer(Some(0));
+                Poll::Ready(Ok(StreamResult::Completed))
+            } else {
+                Poll::Pending
+            }
+        }
+    }
 }

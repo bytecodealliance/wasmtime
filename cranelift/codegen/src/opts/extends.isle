@@ -26,14 +26,16 @@
 
 ;; 32-bit integers zero-extended to 64-bit integers are never negative
 (rule (simplify
-       (slt ty
-             (uextend $I64 x @ (value_type $I32))
-             (all_zero _)))
+       (has_type ty
+         (slt _
+               (uextend $I64 x @ (value_type $I32))
+               (all_zero _))))
       (subsume (all_zero ty)))
 (rule (simplify
-       (sge ty
-             (uextend $I64 x @ (value_type $I32))
-             (all_zero _)))
+       (has_type ty
+         (sge _
+               (uextend $I64 x @ (value_type $I32))
+               (all_zero _))))
       (subsume (iconst_u ty 1)))
 
 ;; Sign-extending can't change whether a number is zero nor how it signed-compares to zero
@@ -91,49 +93,49 @@
 (rule (simplify (ireduce ty (band _ x y))) (band ty (ireduce ty x) (ireduce ty y)))
 
 ;; Try to transform an `iconcat` into an i128 into either an sextend or uextend
-(rule (simplify (iconcat $I128 x (all_zero _))) (uextend $I128 x))
-(rule (simplify (iconcat $I128 x (sshr _ x (iconst_u _ 63)))) (sextend $I128 x))
+(rule (simplify (iconcat $I64 x (all_zero _))) (uextend $I128 x))
+(rule (simplify (iconcat $I64 x (sshr _ x (iconst_u _ 63)))) (sextend $I128 x))
 
 ;; ireduce(ireduce(x)) --> ireduce(x)
 (rule (simplify (ireduce ty (ireduce cty x))) (ireduce ty x))
 
 ;; uextend(x) <u uextend(y) --> x <u y
-(rule (simplify (ult ty (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ult ty x y))
+(rule (simplify (ult _ (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ult ty1 x y))
 
 ;; uextend(x) == 0 --> x == 0
-(rule (simplify (eq ty
+(rule (simplify (eq _
                     (uextend ty1 x @ (value_type cty))
                     (iconst_u ty1 0)))
-      (eq ty x (iconst_u cty 0)))
+      (eq cty x (iconst_u cty 0)))
 
 ;; uextend(x) == uextend(y) --> x == y
-(rule (simplify (eq ty
+(rule (simplify (eq _
                     (uextend cty x @ (value_type ty1))
                     (uextend cty y @ (value_type ty1))))
-      (eq ty x y))
+      (eq ty1 x y))
 
 ;; sextend(x) OP sextend(y) --> x OP y (OP = {==, <s})
-(rule (simplify (eq ty (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (eq ty x y))
-(rule (simplify (slt ty (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (slt ty x y))
+(rule (simplify (eq _ (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (eq ty1 x y))
+(rule (simplify (slt _ (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (slt ty1 x y))
 
 ;; extend(x) != extend(y) --> x != y
-(rule (simplify (ne ty (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (ne ty x y))
-(rule (simplify (ne ty (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ne ty x y))
+(rule (simplify (ne _ (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (ne ty1 x y))
+(rule (simplify (ne _ (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ne ty1 x y))
 
 ;; sextend(x) OPs sextend(y) --> x OPs y
-(rule (simplify (sge ty (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (sge ty x y))
-(rule (simplify (sle ty (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (sge ty y x))
+(rule (simplify (sge _ (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (sge ty1 x y))
+(rule (simplify (sle _ (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (sge ty1 y x))
 
 ;; uextend(x) OPs uextend(y) --> x OPu y
-(rule (simplify (sge ty (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (uge ty x y))
-(rule (simplify (sgt ty (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ugt ty x y))
-(rule (simplify (sle ty (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ule ty x y))
-(rule (simplify (slt ty (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ult ty x y))
+(rule (simplify (sge _ (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (uge ty1 x y))
+(rule (simplify (sgt _ (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ugt ty1 x y))
+(rule (simplify (sle _ (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ule ty1 x y))
+(rule (simplify (slt _ (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ult ty1 x y))
 
 ;; extend(x) OPu extend(y) --> x OPu y
-(rule (simplify (uge ty (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (uge ty x y))
-(rule (simplify (ugt ty (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (ugt ty x y))
-(rule (simplify (ule ty (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (ule ty x y))
-(rule (simplify (ult ty (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (ult ty x y))
-(rule (simplify (uge ty (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (uge ty x y))
-(rule (simplify (ule ty (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ule ty x y))
+(rule (simplify (uge _ (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (uge ty1 x y))
+(rule (simplify (ugt _ (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (ugt ty1 x y))
+(rule (simplify (ule _ (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (ule ty1 x y))
+(rule (simplify (ult _ (sextend cty x @ (value_type ty1)) (sextend cty y @ (value_type ty1)))) (ult ty1 x y))
+(rule (simplify (uge _ (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (uge ty1 x y))
+(rule (simplify (ule _ (uextend cty x @ (value_type ty1)) (uextend cty y @ (value_type ty1)))) (ule ty1 x y))

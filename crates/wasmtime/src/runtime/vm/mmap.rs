@@ -287,6 +287,24 @@ impl<T> Mmap<T> {
         self.sys.len()
     }
 
+    /// Panics if the range start or end aren't in bounds, in the proper order,
+    /// or page-aligned. Returns whether the range is non-zero size and thus
+    /// merits further action.
+    fn check_range(&self, range: &Range<usize>) -> bool {
+        assert!(range.start <= self.len());
+        assert!(range.end <= self.len());
+        assert!(range.start <= range.end);
+        assert!(
+            range.start % crate::runtime::vm::host_page_size() == 0,
+            "changing of protections isn't page-aligned",
+        );
+
+        // A zero-sized mprotect (or equivalent) is allowed on some
+        // platforms but not others (notably Windows). Treat it as a no-op
+        // everywhere.
+        range.start != range.end
+    }
+
     /// Makes the specified `range` within this `Mmap` to be read/execute.
     ///
     /// # Unsafety
@@ -304,74 +322,50 @@ impl<T> Mmap<T> {
         range: Range<usize>,
         enable_branch_protection: bool,
     ) -> Result<()> {
-        assert!(range.start <= self.len());
-        assert!(range.end <= self.len());
-        assert!(range.start <= range.end);
-        assert!(
-            range.start % crate::runtime::vm::host_page_size() == 0,
-            "changing of protections isn't page-aligned",
-        );
-
-        if range.start == range.end {
-            // A zero-sized mprotect (or equivalent) is allowed on some
-            // platforms but not others (notably Windows). Treat it as a no-op
-            // everywhere.
-            return Ok(());
+        if self.check_range(&range) {
+            return unsafe {
+                self.sys
+                    .make_executable(range, enable_branch_protection)
+                    .context("failed to make memory executable")
+            };
         }
-
-        unsafe {
-            self.sys
-                .make_executable(range, enable_branch_protection)
-                .context("failed to make memory executable")
-        }
+        Ok(())
     }
 
     /// Makes the specified `range` within this `Mmap` to be readonly.
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
-        assert!(range.start <= self.len());
-        assert!(range.end <= self.len());
-        assert!(range.start <= range.end);
-        assert!(
-            range.start % crate::runtime::vm::host_page_size() == 0,
-            "changing of protections isn't page-aligned",
-        );
-
-        if range.start == range.end {
-            // A zero-sized mprotect (or equivalent) is allowed on some
-            // platforms but not others (notably Windows). Treat it as a no-op
-            // everywhere.
-            return Ok(());
+        if self.check_range(&range) {
+            return unsafe {
+                self.sys
+                    .make_readonly(range)
+                    .context("failed to make memory readonly")
+            };
         }
-
-        unsafe {
-            self.sys
-                .make_readonly(range)
-                .context("failed to make memory readonly")
-        }
+        Ok(())
     }
 
     /// Makes the specified `range` within this `Mmap` to be read-write.
     pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
-        assert!(range.start <= self.len());
-        assert!(range.end <= self.len());
-        assert!(range.start <= range.end);
-        assert!(
-            range.start % crate::runtime::vm::host_page_size() == 0,
-            "changing of protections isn't page-aligned",
-        );
-
-        if range.start == range.end {
-            // A zero-sized mprotect (or equivalent) is allowed on some
-            // platforms but not others (notably Windows). Treat it as a no-op
-            // everywhere.
-            return Ok(());
+        if self.check_range(&range) {
+            return unsafe {
+                self.sys
+                    .make_readwrite(range)
+                    .context("failed to make memory read-write")
+            };
         }
+        Ok(())
+    }
 
-        unsafe {
-            self.sys
-                .make_readwrite(range)
-                .context("failed to make memory read-write")
+    /// Makes the specified `range` within this `Mmap` inaccessible.
+    pub unsafe fn make_inaccessible(&self, range: Range<usize>) -> Result<()> {
+        if self.check_range(&range) {
+            return unsafe {
+                self.sys
+                    .make_inaccessible(range)
+                    .context("failed to make memory inaccessible")
+            };
         }
+        Ok(())
     }
 }
 

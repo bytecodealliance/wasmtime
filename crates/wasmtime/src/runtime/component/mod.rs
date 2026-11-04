@@ -198,12 +198,19 @@ pub(crate) use self::store::ComponentStoreData;
 ///
 /// # Debugging and Exploring
 ///
-/// If you need to debug the output of `bindgen!` you can try using the
-/// `WASMTIME_DEBUG_BINDGEN=1` environment variable. This will write the
-/// generated code to a file on disk so rustc can produce better error messages
-/// against the actual generated source instead of the macro invocation itself.
-/// This additionally can enable opening up the generated code in an editor and
-/// exploring it (through an error message).
+/// If you need to debug the output of `bindgen!` you can try setting the
+/// `WASMTIME_DEBUG_BINDGEN` environment variable to a directory, for example
+/// `WASMTIME_DEBUG_BINDGEN=/tmp/wasmtime-bindgen-debug`. This will write the
+/// generated code to a file in that directory so rustc can produce better error
+/// messages against the actual generated source instead of the macro invocation
+/// itself. This additionally can enable opening up the generated code in an
+/// editor and exploring it (through an error message). Relative paths are
+/// resolved against the `CARGO_MANIFEST_DIR` of the crate invoking the macro.
+///
+/// The same behavior can be enabled for a single `bindgen!` invocation with the
+/// `debug: "some/dir"` option, which takes precedence over
+/// `WASMTIME_DEBUG_BINDGEN` and is also resolved relative to
+/// `CARGO_MANIFEST_DIR`.
 ///
 /// The generated bindings can additionally be explored with `cargo doc` to see
 /// what's generated. It's also recommended to browse the [`bindgen_examples`]
@@ -272,11 +279,28 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // functionality per-function or by default for all imports. Note that
 ///     // exports are also supported via the `exports` key below.
 ///     //
-///     // Functions in this list are specified as their interface first then
-///     // the raw wasm name of the function. Interface versions can be
-///     // optionally omitted and prefixes are also supported to configure
-///     // entire interfaces at once for example. Only the first matching item
-///     // in this list is used to configure a function.
+///     // Each key names either one function or a group of functions:
+///     //
+///     // * `"my-func"` - a function imported directly by the world.
+///     // * `"wasi:io/poll.poll"` - the `poll` function in the `wasi:io/poll`
+///     //   interface. A version is optional: `"wasi:io/poll@0.2.0.poll"`.
+///     // * `"wasi:io/poll"` - every function in the `wasi:io/poll` interface.
+///     // * `"wasi:io"` or `"wasi"` - every function in a package or namespace.
+///     //
+///     // Resource functions are named by their component-model name, written
+///     // after the interface:
+///     //
+///     // * `"my:local/api.[constructor]my-resource"`
+///     // * `"my:local/api.[method]my-resource.my-method"`
+///     // * `"my:local/api.[static]my-resource.my-static-func"`
+///     // * `"my:local/api.[drop]my-resource"`
+///     //
+///     // A resource name on its own (`"my:local/api.my-resource"`) isn't a valid
+///     // key. List each resource function by itself, or use the interface key
+///     // to cover all of them.
+///     //
+///     // When more than one key matches a function, the most specific one is
+///     // used and the rest are ignored for that function.
 ///     //
 ///     // Configuration for a function is a set of flags which can be added
 ///     // per-function. Each flag's meaning is documented below and the final
@@ -353,6 +377,18 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // host function return `wasmtime::Result<Result<WitOk, WitErr>>`
 ///         // for example and instead return `Result<WitOk, RustErrorType>`.
 ///         "my:local/api.fallible": trappable,
+///
+///         // Resource methods, constructors, and static functions are
+///         // configured with their `[method]`, `[constructor]`, `[drop]`, or `[static]`
+///         // name as described above.
+///         //
+///         // Note that if one resource method specifies a flag, the remaining resource methods
+///         // are no longer covered by e.g. `default: trappable`, and must be flagged
+///         // individually.
+///         "my:local/api.[method]my-resource.my-method": async | trappable,
+///         "my:local/api.[static]my-resource.my-static-func": trappable,
+///         "my:local/api.[constructor]my-resource": trappable,
+///         "my:local/api.[drop]my-resource": trappable,
 ///
 ///         // The `exact` flag ensures that the filter, here "f", only matches
 ///         // functions exactly. For example "f" here would only refer to
@@ -532,19 +568,6 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // When enabled, the generated code requires the `"anyhow"` cargo feature
 ///     // to also be enabled in the `wasmtime` crate.
 ///     anyhow: false,
-///
-///     // This is an in-source alternative to using `WASMTIME_DEBUG_BINDGEN`.
-///     //
-///     // Note that if this option is specified then the compiler will always
-///     // recompile your bindings. Cargo records the start time of when rustc
-///     // is spawned by this will write a file during compilation. To Cargo
-///     // that looks like a file was modified after `rustc` was spawned,
-///     // so Cargo will always think your project is "dirty" and thus always
-///     // recompile it. Recompiling will then overwrite the file again,
-///     // starting the cycle anew. This is only recommended for debugging.
-///     //
-///     // This option defaults to false.
-///     include_generated_code_from_file: false,
 ///
 ///     // Whether to generate a `COMPONENT_TYPE` constant containing a
 ///     // binary-encoded description of the WIT world that bindings

@@ -2,6 +2,8 @@
 use crate::component;
 use crate::core;
 use crate::spectest::*;
+#[cfg(feature = "component-model")]
+use json_from_wast::CoreConst;
 use json_from_wast::{Action, Command, Const, WasmFile, WasmFileType};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -253,6 +255,15 @@ impl WastContext {
                 caller.gc(None)?;
                 Ok(())
             })?;
+        self.core_linker.func_wrap(
+            "wasmtime",
+            "set-fuel",
+            |mut caller: Caller<_>, fuel: u64| caller.set_fuel(fuel),
+        )?;
+        self.core_linker
+            .func_wrap("wasmtime", "get-fuel", |caller: Caller<_>| {
+                caller.get_fuel()
+            })?;
         #[cfg(feature = "component-model")]
         {
             let mut i = self.component_linker.instance("wasmtime")?;
@@ -269,6 +280,12 @@ impl WastContext {
             )?;
             i.func_wrap("gc", |mut store, (): ()| {
                 store.as_context_mut().gc(None)?;
+                Ok(())
+            })?;
+            i.func_wrap("set-hostcall-fuel", |mut store, (fuel,): (u64,)| {
+                store
+                    .as_context_mut()
+                    .set_hostcall_fuel(usize::try_from(fuel).unwrap_or(usize::MAX));
                 Ok(())
             })?;
         }
@@ -336,6 +353,12 @@ impl WastContext {
                         .iter()
                         .map(|v| match v {
                             Const::Component(v) => component::val(v),
+                            Const::Core(CoreConst::F32 { value }) => {
+                                Ok(component::Val::Float32(f32::from_bits(value.to_bits())))
+                            }
+                            Const::Core(CoreConst::F64 { value }) => {
+                                Ok(component::Val::Float64(f64::from_bits(value.to_bits())))
+                            }
                             _ => bail!("expected component function, found other argument {v:?}"),
                         })
                         .collect::<Result<Vec<_>>>()?;
@@ -521,12 +544,17 @@ impl WastContext {
                     bail!("expected {} results found {}", results.len(), values.len());
                 }
                 for (i, (v, e)) in values.iter().zip(results).enumerate() {
-                    let e = match e {
-                        Const::Component(val) => val,
+                    match (e, v) {
+                        (Const::Component(e), v) => component::match_val(e, v),
+                        (Const::Core(CoreConst::F32 { value }), component::Val::Float32(v)) => {
+                            core::match_f32(v.to_bits(), value)
+                        }
+                        (Const::Core(CoreConst::F64 { value }), component::Val::Float64(v)) => {
+                            core::match_f64(v.to_bits(), value)
+                        }
                         _ => bail!("expected component value found other value {e:?}"),
-                    };
-                    component::match_val(e, v)
-                        .with_context(|| format!("result {i} didn't match"))?;
+                    }
+                    .with_context(|| format!("result {i} didn't match"))?;
                 }
             }
         }

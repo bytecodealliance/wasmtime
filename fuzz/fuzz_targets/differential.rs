@@ -30,8 +30,6 @@ static STATS: RuntimeStats = RuntimeStats::new();
 
 fuzz_target!(|data: &[u8]| {
     SETUP.call_once(|| {
-        // To avoid a uncaught `SIGSEGV` due to signal handlers; see comments on
-        // `setup_ocaml_runtime`.
         engine::setup_engine_runtimes();
 
         // Retrieve the configuration for this fuzz target from `ALLOWED_*`

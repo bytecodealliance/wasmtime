@@ -93,7 +93,8 @@ use crate::{
         inst_addr_offset_type, inst_store_data, is_volatile_access, visit_block_succs,
     },
     ir::{
-        AliasRegion, Block, Endianness, Function, Inst, Opcode, Type, Value, immediates::Offset32,
+        AliasRegion, Block, Endianness, Function, Inst, MemFlagsData, Opcode, Type, Value,
+        immediates::Offset32,
     },
     post_dominator_tree::PostDominatorTree,
     trace,
@@ -131,24 +132,29 @@ enum AliasRegionsObserved {
 }
 
 /// Which alias region(s) can an instruction observe?
-fn alias_regions_observed(func: &Function, inst: Inst, opcode: Opcode) -> AliasRegionsObserved {
+///
+/// `memflags` must be the instruction's memflags, if it has any.
+fn alias_regions_observed(
+    func: &Function,
+    inst: Inst,
+    opcode: Opcode,
+    memflags: Option<MemFlagsData>,
+) -> AliasRegionsObserved {
     debug_assert_eq!(func.dfg.insts[inst].opcode(), opcode);
+    debug_assert_eq!(func.dfg.insts[inst].memflags_data(&func.dfg), memflags);
     if opcode.is_return()
         || opcode.is_call()
         || opcode.can_trap()
         // NB: the `opcode.can_trap()` check above only covers explicitly
         // trapping instructions (like `trap` and `trapz`), not loads/stores
         // that can implicitly trap; we check those via their memflags.
-        || func.dfg.insts[inst]
-            .memflags_data(&func.dfg)
-            .and_then(|flags| flags.trap_code())
-            .is_some()
+        || memflags.and_then(|flags| flags.trap_code()).is_some()
     {
         return AliasRegionsObserved::All;
     }
 
     if opcode.can_load() {
-        if let Some(region) = func.dfg.insts[inst].alias_region(&func.dfg) {
+        if let Some(region) = memflags.and_then(|flags| flags.alias_region()) {
             AliasRegionsObserved::Just(region)
         } else {
             AliasRegionsObserved::Other
@@ -348,14 +354,6 @@ fn classify(func: &Function, inst: Inst) -> InstEffect {
         return InstEffect::Fence;
     }
 
-    // A volatile access must stay as written, in order with the accesses
-    // around it: treat it as a fence, which observes every earlier store (so
-    // that none of them is removed as dead across it) and forgets everything
-    // known about memory (so that nothing is forwarded across it).
-    if is_volatile_access(func, inst) {
-        return InstEffect::Fence;
-    }
-
     // Explicitly trapping instructions (`trap`, `trapz`, `udiv`,
     // `uadd_overflow_trap`, etc... but not loads/stores that can implicitly
     // trap): allow store-to-load forwarding across these instructions, but do
@@ -366,29 +364,46 @@ fn classify(func: &Function, inst: Inst) -> InstEffect {
         return InstEffect::Trap;
     }
 
+    // A volatile access must stay as written, in order with the accesses
+    // around it: treat it as a fence, which observes every earlier store (so
+    // that none of them is removed as dead across it) and forgets everything
+    // known about memory (so that nothing is forwarded across it). Only loads
+    // and stores can be volatile, so rather than looking up every
+    // instruction's memflags up here, we check for it below, where we already
+    // look them up.
+
     // Store instructions: update the last-store information for this
     // instruction's alias region, or, if it has no alias region, treat it as a
     // fence.
     if opcode.can_store() {
         // A store with no memflags, and therefore no alias region, may alias
         // any region, so treat it like a fence. Ditto for a store whose
-        // memflags name no alias region.
+        // memflags name no alias region, and for a volatile store.
         let Some(memflags) = func.dfg.insts[inst].memflags() else {
             return InstEffect::Fence;
         };
-        let Some(region) = func.dfg.mem_flags[memflags].alias_region() else {
+        let memflags = func.dfg.mem_flags[memflags];
+        if memflags.volatile() {
+            return InstEffect::Fence;
+        }
+        let Some(region) = memflags.alias_region() else {
             return InstEffect::Fence;
         };
 
         return InstEffect::Store {
             region,
-            can_trap: func.dfg.mem_flags[memflags].trap_code().is_some(),
+            can_trap: memflags.trap_code().is_some(),
         };
     }
 
-    // Everything else: determine which, if any, alias regions this instruction
-    // observes.
-    InstEffect::Observes(alias_regions_observed(func, inst, opcode))
+    // Everything else, loads included. Look up the memflags once: a volatile
+    // load is a fence too, and otherwise they tell us which, if any, alias
+    // regions this instruction observes.
+    let memflags = func.dfg.insts[inst].memflags_data(&func.dfg);
+    if memflags.is_some_and(|flags| flags.volatile()) {
+        return InstEffect::Fence;
+    }
+    InstEffect::Observes(alias_regions_observed(func, inst, opcode, memflags))
 }
 
 impl LastStores {
@@ -656,25 +671,6 @@ pub struct MemoryState {
 
 const NULL_EXTENT: u32 = 0;
 
-impl MemoryState {
-    /// Get the extent token to key a `MemoryLoc` on, given the last store to
-    /// that location's alias region.
-    fn extent_for(&self, last_store: LastStore) -> u32 {
-        match last_store {
-            // Each of these already names a version of memory all on its own,
-            // function wide, and so doesn't need an additional extent token.
-            LastStore::NoStore | LastStore::Inst(_) => NULL_EXTENT,
-
-            // This one, on the other hand, only names a version of memory
-            // relative to the control-flow join that lost track of it.
-            LastStore::Unknown => {
-                debug_assert_ne!(self.extent, NULL_EXTENT);
-                self.extent
-            }
-        }
-    }
-}
-
 /// A key identifying a unique memory location.
 ///
 /// For the result of a load to be equivalent to the result of another load, or
@@ -688,12 +684,14 @@ struct MemoryLoc {
     /// `LastStore::Unknown` is only valid relative to its last control-flow
     /// join point.
     ///
-    /// An extent is a control-flow join point and everything reachable from it
-    /// through single-predecessor edges. For `LastStore::Unknown`, this
-    /// identifies the area where the bytes in the associated alias region are
-    /// identical to when control entered the join point, and therefore exactly
-    /// the area within which two `LastStore::Unknown`-keyed memory locations
-    /// name the same value.
+    /// For `LastStore::Unknown`, the token distinguishes unknown memory versions
+    /// at different control-flow joins. Named regions can retain their token
+    /// across a join when no path from the immediate dominator's exit writes
+    /// the region and its effective last-store state agrees with the join's
+    /// initial fixpoint snapshot. Otherwise, the region gets a fresh token.
+    /// Different tokens do not imply different bytes, only that equivalence
+    /// has not been established. Reusing a value still requires the full key
+    /// to match and the known value's definition to dominate its use.
     ///
     /// This is necessary because on one hand, we need `LastStore::Unknown` to
     /// be a single bottom value so that `LastStore` and `LastStores` are proper
@@ -825,6 +823,16 @@ pub struct AliasAnalysis<'a> {
 
     /// Counter for minting fresh extent tokens.
     next_extent: u32,
+
+    /// Regions written by each block before optimization, so eliminated stores
+    /// remain conservatively accounted for. `None` means a fence can clobber
+    /// every region.
+    block_clobbers: SecondaryMap<Block, Option<FxHashSet<AliasRegion>>>,
+
+    /// Reusable set of regions written along the paths being searched.
+    clobbers_scratch: FxHashSet<AliasRegion>,
+    pending_scratch: SmallVec<[Block; 8]>,
+    visited_scratch: FxHashSet<Block>,
 }
 
 /// One block's scope on the dominator-tree path currently being walked.
@@ -836,6 +844,9 @@ struct Scope {
     ///
     /// See `MemoryLoc::extent` for details.
     extent: u32,
+
+    /// Per-region tokens inherited by children; see `MemoryLoc::extent`.
+    region_extents: SecondaryMap<AliasRegion, u32>,
 
     /// This block's last-store state on exit, once we have finished walking its
     /// instructions.
@@ -854,6 +865,24 @@ impl<'a> AliasAnalysis<'a> {
         trace!("alias analysis input is:\n{func:?}");
         assert!(domtree.is_valid());
 
+        let block_clobbers = func
+            .layout
+            .blocks()
+            .map(|block| {
+                let mut regions = FxHashSet::default();
+                for inst in func.layout.block_insts(block) {
+                    match classify(func, inst) {
+                        InstEffect::Fence => return (block, None),
+                        InstEffect::Store { region, .. } => {
+                            regions.insert(region);
+                        }
+                        _ => {}
+                    }
+                }
+                (block, Some(regions))
+            })
+            .collect();
+
         let mut analysis = AliasAnalysis {
             domtree,
             post_dom_tree: None,
@@ -862,6 +891,10 @@ impl<'a> AliasAnalysis<'a> {
             mem_values: FxHashMap::default(),
             scopes: SmallVec::new(),
             next_extent: 0,
+            block_clobbers,
+            clobbers_scratch: FxHashSet::default(),
+            pending_scratch: SmallVec::new(),
+            visited_scratch: FxHashSet::default(),
         };
 
         analysis.compute_block_input_states(func);
@@ -1085,12 +1118,123 @@ impl<'a> AliasAnalysis<'a> {
         self.observed_stores = observed_stores;
     }
 
+    /// Get the extent token to key a `MemoryLoc` on for a memory-access instruction.
+    fn extent_for(&self, state: &MemoryState, func: &Function, inst: Inst) -> u32 {
+        match state.stores.get_last_store(func, inst) {
+            // Each of these already names a version of memory all on its own,
+            // function wide, and so doesn't need an additional extent token.
+            LastStore::NoStore | LastStore::Inst(_) => NULL_EXTENT,
+
+            // This one, on the other hand, only names a version of memory
+            // relative to the control-flow join that lost track of it.
+            LastStore::Unknown => {
+                debug_assert_ne!(state.extent, NULL_EXTENT);
+                let scope = self.scopes.last().expect("active alias-analysis scope");
+                func.dfg.insts[inst]
+                    .alias_region(&func.dfg)
+                    .map_or(state.extent, |region| scope.region_extents[region])
+            }
+        }
+    }
+
     /// Get the solved last-store state on entry to the given block.
     fn block_input_stores(&self, block: Block) -> LastStores {
         match self.block_input.get(&block) {
             Some(input) => input.clone(),
             None => LastStores::default(),
         }
+    }
+
+    /// Regions written on paths from `dominator`'s exit to `block`'s entry.
+    /// Return `false` if a fence or missing effects prevent proving which regions
+    /// are untouched. Also give up after 64 blocks to bound the analysis cost.
+    fn clobbers_since(
+        &self,
+        cfg: &ControlFlowGraph,
+        block: Block,
+        dominator: Block,
+        clobbers: &mut FxHashSet<AliasRegion>,
+        pending: &mut SmallVec<[Block; 8]>,
+        visited: &mut FxHashSet<Block>,
+    ) -> bool {
+        debug_assert!(clobbers.is_empty());
+        debug_assert!(pending.is_empty());
+        debug_assert!(visited.is_empty());
+        pending.extend(cfg.pred_iter(block).map(|p| p.block));
+        while let Some(pred) = pending.pop() {
+            if pred == dominator || !self.block_input.contains_key(&pred) || !visited.insert(pred) {
+                continue;
+            }
+            if visited.len() > 64 {
+                return false;
+            }
+            let Some(Some(regions)) = self.block_clobbers.get(pred) else {
+                return false;
+            };
+            clobbers.extend(regions.iter().copied());
+            pending.extend(cfg.pred_iter(pred).map(|p| p.block));
+        }
+        true
+    }
+
+    /// Compute region tokens for a new extent, inheriting unchanged regions when safe.
+    fn compute_region_extents(
+        &mut self,
+        cfg: &ControlFlowGraph,
+        block: Block,
+        stores: &LastStores,
+        extent: u32,
+    ) -> SecondaryMap<AliasRegion, u32> {
+        let mut region_extents = SecondaryMap::with_default(extent);
+        let mut clobbers = core::mem::take(&mut self.clobbers_scratch);
+        let mut pending = core::mem::take(&mut self.pending_scratch);
+        let mut visited = core::mem::take(&mut self.visited_scratch);
+        clobbers.clear();
+        pending.clear();
+        visited.clear();
+        if let Some(parent) = self.scopes.last() {
+            let parent_stores = parent.exit_state.as_ref().expect("finished parent scope");
+            // The parent's and join's fence states must match.
+            // The parent must have an Unknown version.
+            // The path search must identify the regions that may be written.
+            if parent_stores.last_fence == stores.last_fence
+                && (parent_stores.last_fence == LastStore::Unknown
+                    || parent_stores
+                        .regions
+                        .iter()
+                        .any(|(_, slot)| *slot == LastStore::Unknown))
+                && self.clobbers_since(
+                    cfg,
+                    block,
+                    parent.block,
+                    &mut clobbers,
+                    &mut pending,
+                    &mut visited,
+                )
+            {
+                region_extents = parent.region_extents.clone();
+                for &region in &clobbers {
+                    region_extents[region] = extent;
+                }
+                let len = parent_stores
+                    .regions
+                    .keys()
+                    .len()
+                    .max(stores.regions.keys().len());
+                for i in 0..len {
+                    let region = AliasRegion::new(i);
+                    if parent_stores.last_store_for_region(region)
+                        != stores.last_store_for_region(region)
+                    {
+                        region_extents[region] = extent;
+                    }
+                }
+            }
+        }
+        self.clobbers_scratch = clobbers;
+        self.pending_scratch = pending;
+        self.visited_scratch = visited;
+        region_extents
     }
 
     /// Enter the given block's scope, getting its initial memory state.
@@ -1110,7 +1254,7 @@ impl<'a> AliasAnalysis<'a> {
         // memory that its predecessor left behind.
         let only_pred = self.single_reachable_pred(cfg, block);
 
-        let (stores, extent) = match (only_pred, self.scopes.last()) {
+        let (stores, extent, region_extents) = match (only_pred, self.scopes.last()) {
             // With exactly one reachable predecessor, this block's entry state
             // is exactly that predecessor's exit state, which we just finished
             // computing and is strictly more precise than the `block_input`
@@ -1132,20 +1276,24 @@ impl<'a> AliasAnalysis<'a> {
                     .as_ref()
                     .expect("`finish_scope` is always called before descending into a child scope")
                     .clone();
-                (stores, parent.extent)
+                (stores, parent.extent, parent.region_extents.clone())
             }
 
             // Anything else (e.g. a control-flow join, the entry block) falls
             // back to the initial fixpoint's snapshot, and begins a new extent.
             _ => {
                 self.next_extent += 1;
-                (self.block_input_stores(block), self.next_extent)
+                let extent = self.next_extent;
+                let stores = self.block_input_stores(block);
+                let region_extents = self.compute_region_extents(cfg, block, &stores, extent);
+                (stores, extent, region_extents)
             }
         };
 
         self.scopes.push(Scope {
             block,
             extent,
+            region_extents,
             exit_state: None,
         });
 
@@ -1273,7 +1421,7 @@ impl<'a> AliasAnalysis<'a> {
                         let dead_slot = LastStore::Inst(last_store);
                         let dead_loc = MemoryLoc {
                             last_store: dead_slot,
-                            extent: state.extent_for(dead_slot),
+                            extent: NULL_EXTENT,
                             address,
                             offset,
                             ty,
@@ -1323,7 +1471,7 @@ impl<'a> AliasAnalysis<'a> {
 
                 let check_loc = MemoryLoc {
                     last_store,
-                    extent: state.extent_for(last_store),
+                    extent: self.extent_for(state, func, inst),
                     address,
                     offset,
                     ty,
@@ -1344,18 +1492,37 @@ impl<'a> AliasAnalysis<'a> {
                         // paths leading to it go through the original store
                         // instruction.
                         && self.domtree.dominates(def_inst, inst, &func.layout)
+                        // An atomic store still publishes its value to other
+                        // threads and orders the accesses around it, even when
+                        // the bytes do not change.
+                        && !has_memory_fence_semantics(opcode)
                     {
                         trace!("  --> idempotent store of {store_data} to loc {check_loc:?}");
 
-                        // We are removing this idempotent store in favor of the
-                        // original, so if this idempotent store was observed,
-                        // then the original must now be observed as well.
                         if let LastStore::Inst(last_store) = last_store {
+                            // We are removing this idempotent store in favor of
+                            // the original, so if this idempotent store was
+                            // observed, then the original must now be observed
+                            // as well.
                             if let Some(observer) = self.observed_stores.get(&inst).copied() {
                                 let entry =
                                     self.observed_stores.entry(last_store).or_insert(observer);
                                 *entry = Observer::meet(*entry, observer);
                                 trace!("    observed_stores[{last_store:?}] = {entry:?}");
+                            }
+
+                            // And if the `last_store` has a trap code but this
+                            // one doesn't, then we need to additionally mark it
+                            // as observed by many because a later non-trapping
+                            // store can observe whether or not it trapped.
+                            let trap_code =
+                                |i: Inst| func.dfg.insts[i].memflags_trap_code(&func.dfg);
+                            if trap_code(inst).is_none()
+                                && trap_code(last_store).is_some()
+                                && func.dfg.insts[last_store].opcode().can_store()
+                            {
+                                self.observed_stores.insert(last_store, Observer::Many);
+                                trace!("    observed_stores[{last_store:?}] = Many");
                             }
                         }
 
@@ -1367,7 +1534,7 @@ impl<'a> AliasAnalysis<'a> {
                 let this_store = LastStore::Inst(inst);
                 let mem_loc = MemoryLoc {
                     last_store: this_store,
-                    extent: state.extent_for(this_store),
+                    extent: NULL_EXTENT,
                     address,
                     offset,
                     ty,
@@ -1394,7 +1561,7 @@ impl<'a> AliasAnalysis<'a> {
                 let load_result = func.dfg.inst_results(inst)[0];
                 let mem_loc = MemoryLoc {
                     last_store,
-                    extent: state.extent_for(last_store),
+                    extent: self.extent_for(state, func, inst),
                     address,
                     offset,
                     ty,

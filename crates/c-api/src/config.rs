@@ -7,8 +7,8 @@ use std::os::raw::c_char;
 use std::ptr;
 use std::{ffi::CStr, sync::Arc};
 use wasmtime::{
-    Config, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy, RegallocAlgorithm, Result,
-    Strategy,
+    Config, LinearMemory, MemoryCreator, MemoryKind, MemoryRequest, OptLevel, ProfilingStrategy,
+    RegallocAlgorithm, Result, Strategy, bail,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -356,13 +356,26 @@ pub struct wasmtime_linear_memory_t {
     finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
 }
 
-pub type wasmtime_new_memory_callback_t = extern "C" fn(
-    env: *mut std::ffi::c_void,
-    ty: &wasm_memorytype_t,
+#[repr(u8)]
+#[derive(Clone, Copy)]
+pub enum wasmtime_memory_kind_t {
+    WASMTIME_MEMORY_KIND_LINEAR_MEMORY,
+    WASMTIME_MEMORY_KIND_GC_HEAP,
+}
+
+#[repr(C)]
+pub struct wasmtime_memory_request_t<'a> {
+    ty: &'a wasm_memorytype_t,
     minimum: usize,
     maximum: usize,
     reserved_size_in_bytes: usize,
     guard_size_in_bytes: usize,
+    kind: wasmtime_memory_kind_t,
+}
+
+pub type wasmtime_new_memory_callback_t = extern "C" fn(
+    env: *mut std::ffi::c_void,
+    request: &wasmtime_memory_request_t<'_>,
     memory_ret: *mut wasmtime_linear_memory_t,
 ) -> Option<Box<wasmtime_error_t>>;
 
@@ -419,14 +432,7 @@ unsafe impl Send for CHostMemoryCreator {}
 unsafe impl Sync for CHostMemoryCreator {}
 
 unsafe impl MemoryCreator for CHostMemoryCreator {
-    fn new_memory(
-        &self,
-        ty: wasmtime::MemoryType,
-        minimum: usize,
-        maximum: Option<usize>,
-        reserved_size_in_bytes: Option<usize>,
-        guard_size_in_bytes: usize,
-    ) -> Result<Box<dyn wasmtime::LinearMemory>, String> {
+    fn new_memory(&self, request: &MemoryRequest<'_>) -> Result<Box<dyn wasmtime::LinearMemory>> {
         extern "C" fn panic_get_callback(
             _env: *mut std::ffi::c_void,
             _byte_size: &mut usize,
@@ -440,6 +446,21 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
         ) -> Option<Box<wasmtime_error_t>> {
             panic!("a callback must be set");
         }
+        let kind = match request.kind() {
+            MemoryKind::LinearMemory => wasmtime_memory_kind_t::WASMTIME_MEMORY_KIND_LINEAR_MEMORY,
+            MemoryKind::GcHeap => wasmtime_memory_kind_t::WASMTIME_MEMORY_KIND_GC_HEAP,
+            // `MemoryKind` is `#[non_exhaustive]`
+            kind => bail!("memory kind {kind:?} is not supported by the C API"),
+        };
+        let ty = wasm_memorytype_t::new(request.ty());
+        let c_request = wasmtime_memory_request_t {
+            ty: &ty,
+            minimum: request.minimum(),
+            maximum: request.maximum().unwrap_or(usize::MAX),
+            reserved_size_in_bytes: request.reserved_size_in_bytes(),
+            guard_size_in_bytes: request.guard_size_in_bytes(),
+            kind,
+        };
         let mut memory = wasmtime_linear_memory_t {
             env: ptr::null_mut(),
             get_memory: panic_get_callback,
@@ -447,15 +468,7 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
             finalizer: None,
         };
         let cb = self.new_memory;
-        let error = cb(
-            self.foreign.data,
-            &wasm_memorytype_t::new(ty),
-            minimum,
-            maximum.unwrap_or(usize::MAX),
-            reserved_size_in_bytes.unwrap_or(0),
-            guard_size_in_bytes,
-            &mut memory,
-        );
+        let error = cb(self.foreign.data, &c_request, &mut memory);
         match error {
             None => {
                 let foreign = crate::ForeignData {
@@ -468,10 +481,7 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
                     grow_memory: memory.grow_memory,
                 }))
             }
-            Some(err) => {
-                let err: wasmtime::Error = (*err).into();
-                Err(format!("{err}"))
-            }
+            Some(err) => Err((*err).into()),
         }
     }
 }

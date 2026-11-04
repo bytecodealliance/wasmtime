@@ -1,0 +1,64 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; Regression for #14312: a join that only writes another region must not
+;; prevent reuse of a load with an unknown incoming memory version.
+function %unchanged_region_join(i64, i64, i32) -> i32, i32 {
+    region0 = 0 "read"
+    region1 = 1 "write"
+    sig0 = ()
+    fn0 = %callee sig0
+
+block0(v0: i64, v1: i64, v2: i32):
+    brif v2, block1, block2
+block1:
+    call fn0()
+    jump block3
+block2:
+    call fn0()
+    jump block3
+block3:
+    v3 = load.i32 notrap region0 v0
+    brif v2, block4, block5
+block4:
+    store notrap region1 v2, v1
+    jump block6
+block5:
+    jump block6
+block6:
+    v4 = load.i32 notrap region0 v0
+    return v3, v4
+}
+
+; function %unchanged_region_join(i64, i64, i32) -> i32, i32 fast {
+;     region0 = 0 "read"
+;     region1 = 1 "write"
+;     sig0 = () fast
+;     fn0 = %callee sig0
+;
+; block0(v0: i64, v1: i64, v2: i32):
+;     brif v2, block1, block2
+;
+; block1:
+;     call fn0()
+;     jump block3
+;
+; block2:
+;     call fn0()
+;     jump block3
+;
+; block3:
+;     v3 = load.i32 notrap region0 v0
+;     brif.i32 v2, block4, block5
+;
+; block4:
+;     store.i32 notrap region1 v2, v1
+;     jump block6
+;
+; block5:
+;     jump block6
+;
+; block6:
+;     return v3, v3
+; }

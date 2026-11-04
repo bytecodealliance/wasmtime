@@ -2,7 +2,8 @@
 // done if CI decides to do a release build.
 //
 // This is a separate script primarily to write out all the release
-// targets/platforms once and then duplicate them all with a "min" build.
+// targets/platforms once and then optionally duplicate those with a "min" build
+// if configured to do so.
 
 const ubuntu = 'ubuntu-26.04';
 const windows = 'windows-2025';
@@ -18,12 +19,15 @@ const array = [
     // The Rust target that will be used for the build.
     "target": "x86_64-unknown-linux-gnu",
     "env": { "DOCKER_IMAGE": "./ci/docker/x86_64-linux/Dockerfile" },
+    // Whether or not to additionally produce a "min" build for this target.
+    "min": true,
   },
   {
     "build": "aarch64-linux",
     "os": ubuntu,
     "target": "aarch64-unknown-linux-gnu",
     "env": { "DOCKER_IMAGE": "./ci/docker/aarch64-linux/Dockerfile" },
+    "min": true,
   },
   {
     "build": "s390x-linux",
@@ -130,8 +134,11 @@ for (let build of array) {
     build.rust = 'default';
   builds.push(JSON.parse(JSON.stringify(build)));
 
-  // Next generate a "min" build and add it to the builds list. Min builds
-  // require Nightly rust due to some nightly build options that are configured.
+  // Next, if requested, generate a "min" build and add it to the builds list.
+  // Min builds require Nightly rust due to some nightly build options that are
+  // configured.
+  if (!build.min)
+    continue;
   build.build += '-min';
   build.rust = 'wasmtime-ci-pinned-nightly';
   builds.push(build);

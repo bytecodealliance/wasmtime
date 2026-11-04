@@ -175,12 +175,32 @@ pub(crate) enum NewOrExistingInst {
     Existing(Inst),
 }
 
+/// The type paired with an instruction's `InstructionData` throughout the
+/// e-graph: its controlling type variable, or, for a non-polymorphic
+/// instruction that has no controlling type (e.g. `f32const`), the type of its
+/// first result.
+#[inline]
+pub(crate) fn inst_ctrl_type(dfg: &DataFlowGraph, inst: Inst) -> Type {
+    let data = &dfg.insts[inst];
+    if data.opcode().constraints().requires_typevar_operand() {
+        let operand = data
+            .typevar_operand(&dfg.value_lists)
+            .expect("instruction format should have a designated operand");
+        dfg.value_type(operand)
+    } else {
+        match dfg.inst_results_list(inst).first(&dfg.value_lists) {
+            Some(result) => dfg.value_type(result),
+            None => crate::ir::types::INVALID,
+        }
+    }
+}
+
 impl NewOrExistingInst {
     fn get_inst_key<'a>(&'a self, dfg: &'a DataFlowGraph) -> (Type, InstructionData) {
         match self {
             NewOrExistingInst::New(data, ty) => (*ty, *data),
             NewOrExistingInst::Existing(inst) => {
-                let ty = dfg.ctrl_typevar(*inst);
+                let ty = inst_ctrl_type(dfg, *inst);
                 (ty, dfg.insts[*inst])
             }
         }
@@ -250,7 +270,7 @@ where
                 NewOrExistingInst::Existing(inst) => {
                     self.stats.pure_inst_insert_orig += 1;
                     let result = self.func.dfg.first_result(inst);
-                    let ty = self.func.dfg.ctrl_typevar(inst);
+                    let ty = inst_ctrl_type(&self.func.dfg, inst);
                     (inst, result, ty)
                 }
             };
@@ -494,7 +514,13 @@ where
         // First, can we try to deduplicate? We need to keep some copy
         // of the instruction around because it's side-effecting, but
         // we may be able to reuse an earlier instance of it.
-        if is_mergeable_for_egraph(self.func, inst) {
+        //
+        // If we insert this instruction into the GVN map as a new
+        // entry, remember its key: alias analysis below may still
+        // remove it (e.g. a mergeable `readonly` load), in which case
+        // the GVN entry must be updated to name the replacement value
+        // rather than this instruction's (soon-removed) result.
+        let gvn_key = if is_mergeable_for_egraph(self.func, inst) {
             let result = self.func.dfg.inst_results(inst).get(0).copied();
             trace!(" -> mergeable side-effecting op {}", inst);
 
@@ -508,7 +534,7 @@ where
             // skeleton (`Layout`), we need to be mindful of whether
             // our current position is dominated by an instance of the
             // instruction. (See #5796 for details.)
-            let ty = self.func.dfg.ctrl_typevar(inst);
+            let ty = inst_ctrl_type(&self.func.dfg, inst);
             match self
                 .gvn_map
                 .entry(&NullCtx, (ty, self.func.dfg.insts[inst]))
@@ -542,9 +568,12 @@ where
                     }
                     v.insert(result);
                     trace!(" -> inserts as new (no GVN)");
+                    Some((ty, self.func.dfg.insts[inst]))
                 }
             }
-        }
+        } else {
+            None
+        };
 
         // Otherwise, if a load or store, process it with the alias analysis to
         // see if we can optimize it (rewrite in terms of an earlier load or
@@ -562,6 +591,12 @@ where
                 );
                 self.value_to_opt_value[result] = new_result;
                 self.available_block[result] = self.available_block[new_result];
+                if let Some(key) = gvn_key {
+                    let depth = self.gvn_map.depth();
+                    debug_assert!(self.gvn_map.get(&NullCtx, &key).is_some());
+                    self.gvn_map
+                        .insert_with_depth(&NullCtx, key, Some(new_result), depth);
+                }
                 Some(SkeletonInstSimplification::Remove)
             }
             OptResult::IdempotentStore => {

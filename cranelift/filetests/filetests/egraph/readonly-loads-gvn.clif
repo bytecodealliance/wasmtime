@@ -1,0 +1,16 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %f0(i64) -> i32, i32 {
+    fn0 = colocated %ext(i64)
+    
+block0(v0: i64):
+    v1 = load.i32 readonly v0
+    call fn0(v0)
+    v2 = load.i32 readonly v0
+    return v1, v2
+    ; check: v1 = load.i32 readonly v0
+    ; nextln: call fn0(v0)
+    ; nextln:  return v1, v1
+}

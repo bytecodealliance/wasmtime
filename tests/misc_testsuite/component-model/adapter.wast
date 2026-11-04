@@ -176,3 +176,249 @@
 )
 
 (assert_return (invoke "run" (variant.const "a0")) (variant.const "a0"))
+
+;; Exports where `realloc` traps or returns out-of-bounds pointers while the
+;; host lowers arguments.
+(component definition $Traps
+  (type $many (func
+    (param "s1" string) (param "s2" string) (param "s3" string)
+    (param "s4" string) (param "s5" string) (param "s6" string)
+    (param "s7" string) (param "s8" string) (param "s9" string)
+    (param "s10" string)))
+
+  ;; `realloc` traps.
+  (core module $m
+    (memory (export "memory") 1)
+    (func (export "take-many") (param i32))
+    (func (export "take-list") (param i32 i32))
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+      unreachable)
+  )
+  (core instance $i (instantiate $m))
+  (func (export "take-list-unreachable") (param "a" (list u8))
+    (canon lift (core func $i "take-list") (memory (core memory $i "memory"))
+      (realloc (core func $i "realloc"))))
+  (func (export "take-string-unreachable") (param "a" string)
+    (canon lift (core func $i "take-list") (memory (core memory $i "memory"))
+      (realloc (core func $i "realloc"))))
+  (func (export "take-many-unreachable") (type $many)
+    (canon lift (core func $i "take-many") (memory (core memory $i "memory"))
+      (realloc (core func $i "realloc"))))
+
+  ;; `realloc` returns a pointer far beyond the end of memory.
+  (core module $m2
+    (memory (export "memory") 1)
+    (func (export "take-many") (param i32))
+    (func (export "take-list") (param i32 i32))
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+      i32.const 0x3fffff00)
+  )
+  (core instance $i2 (instantiate $m2))
+  (func (export "take-list-base-oob") (param "a" (list u8))
+    (canon lift (core func $i2 "take-list") (memory (core memory $i2 "memory"))
+      (realloc (core func $i2 "realloc"))))
+  (func (export "take-string-base-oob") (param "a" string)
+    (canon lift (core func $i2 "take-list") (memory (core memory $i2 "memory"))
+      (realloc (core func $i2 "realloc"))))
+  (func (export "take-many-base-oob") (type $many)
+    (canon lift (core func $i2 "take-many") (memory (core memory $i2 "memory"))
+      (realloc (core func $i2 "realloc"))))
+
+  ;; `realloc` returns a pointer 4 bytes from the end of memory.
+  (core module $m3
+    (memory (export "memory") 1)
+    (func (export "take-many") (param i32))
+    (func (export "take-list") (param i32 i32))
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+      i32.const 65532)
+  )
+  (core instance $i3 (instantiate $m3))
+  (func (export "take-list-end-oob") (param "a" (list u8))
+    (canon lift (core func $i3 "take-list") (memory (core memory $i3 "memory"))
+      (realloc (core func $i3 "realloc"))))
+  (func (export "take-string-end-oob") (param "a" string)
+    (canon lift (core func $i3 "take-list") (memory (core memory $i3 "memory"))
+      (realloc (core func $i3 "realloc"))))
+  (func (export "take-many-end-oob") (type $many)
+    (canon lift (core func $i3 "take-many") (memory (core memory $i3 "memory"))
+      (realloc (core func $i3 "realloc"))))
+
+  ;; The first allocation, for the space to store all the arguments, is
+  ;; in-bounds, but all further allocations are out of bounds.
+  (core module $m4
+    (memory (export "memory") 1)
+    (func (export "take-many") (param i32))
+    (global $cnt (mut i32) (i32.const 0))
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+      (if (result i32) (global.get $cnt)
+        (then (i32.const 100000))
+        (else
+          (global.set $cnt (i32.const 1))
+          (i32.const 0))))
+  )
+  (core instance $i4 (instantiate $m4))
+  (func (export "take-many-second-oob") (type $many)
+    (canon lift (core func $i4 "take-many") (memory (core memory $i4 "memory"))
+      (realloc (core func $i4 "realloc"))))
+)
+
+(component instance $Traps $Traps)
+(assert_trap (invoke "take-list-unreachable" (list.const)) "unreachable")
+(component instance $Traps $Traps)
+(assert_trap (invoke "take-string-unreachable" (str.const "")) "unreachable")
+(component instance $Traps $Traps)
+(assert_trap
+  (invoke "take-many-unreachable"
+    (str.const "") (str.const "") (str.const "") (str.const "") (str.const "")
+    (str.const "") (str.const "") (str.const "") (str.const "") (str.const ""))
+  "unreachable")
+
+(component instance $Traps $Traps)
+(assert_trap (invoke "take-list-base-oob" (list.const))
+  "realloc return: beyond end of memory")
+(component instance $Traps $Traps)
+(assert_trap (invoke "take-list-base-oob" (list.const (u8.const 1)))
+  "realloc return: beyond end of memory")
+(component instance $Traps $Traps)
+(assert_trap (invoke "take-string-base-oob" (str.const ""))
+  "realloc return: beyond end of memory")
+(component instance $Traps $Traps)
+(assert_trap (invoke "take-string-base-oob" (str.const "x"))
+  "realloc return: beyond end of memory")
+(component instance $Traps $Traps)
+(assert_trap
+  (invoke "take-many-base-oob"
+    (str.const "") (str.const "") (str.const "") (str.const "") (str.const "")
+    (str.const "") (str.const "") (str.const "") (str.const "") (str.const ""))
+  "realloc return: beyond end of memory")
+
+;; Empty things fit at the end of memory, but larger things don't.
+(component instance $Traps $Traps)
+(assert_return (invoke "take-list-end-oob" (list.const)))
+(assert_return (invoke "take-list-end-oob"
+  (list.const (u8.const 1) (u8.const 2) (u8.const 3) (u8.const 4))))
+(assert_trap
+  (invoke "take-list-end-oob"
+    (list.const (u8.const 1) (u8.const 2) (u8.const 3) (u8.const 4) (u8.const 5)))
+  "realloc return: beyond end of memory")
+(component instance $Traps $Traps)
+(assert_return (invoke "take-string-end-oob" (str.const "")))
+(assert_return (invoke "take-string-end-oob" (str.const "abcd")))
+(assert_trap (invoke "take-string-end-oob" (str.const "abcde"))
+  "realloc return: beyond end of memory")
+(component instance $Traps $Traps)
+(assert_trap
+  (invoke "take-many-end-oob"
+    (str.const "") (str.const "") (str.const "") (str.const "") (str.const "")
+    (str.const "") (str.const "") (str.const "") (str.const "") (str.const ""))
+  "realloc return: beyond end of memory")
+
+(component instance $Traps $Traps)
+(assert_trap
+  (invoke "take-many-second-oob"
+    (str.const "") (str.const "") (str.const "") (str.const "") (str.const "")
+    (str.const "") (str.const "") (str.const "") (str.const "") (str.const ""))
+  "realloc return: beyond end of memory")
+(component instance $Traps $Traps)
+(assert_trap
+  (invoke "take-many-second-oob"
+    (str.const "") (str.const "") (str.const "") (str.const "") (str.const "")
+    (str.const "") (str.const "") (str.const "") (str.const "") (str.const "x"))
+  "realloc return: beyond end of memory")
+
+;; Returned lists and strings that are out of bounds.
+(component definition $ListOob
+  (core module $m
+    (memory (export "memory") 1)
+    (func (export "ret-list") (result i32)
+      (i32.store offset=0 (i32.const 8) (i32.const 100000))
+      (i32.store offset=4 (i32.const 8) (i32.const 1))
+      i32.const 8)
+  )
+  (core instance $i (instantiate $m))
+  (func (export "ret-list-u8") (result (list u8))
+    (canon lift (core func $i "ret-list") (memory (core memory $i "memory"))))
+  (func (export "ret-string") (result string)
+    (canon lift (core func $i "ret-list") (memory (core memory $i "memory"))))
+)
+(component instance $ListOob $ListOob)
+(assert_trap (invoke "ret-list-u8") "out of bounds")
+(component instance $ListOob $ListOob)
+(assert_trap (invoke "ret-string") "out of bounds")
+
+;; Misaligned pointers from `realloc` and in return values.
+(component definition $Align
+  (core module $m
+    (memory (export "memory") 1)
+    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+      i32.const 1)
+    (func (export "take-i32") (param i32))
+    (func (export "ret-1") (result i32) i32.const 1)
+    (func (export "ret-unaligned-list") (result i32)
+      (i32.store offset=0 (i32.const 8) (i32.const 1))
+      (i32.store offset=4 (i32.const 8) (i32.const 1))
+      i32.const 8)
+  )
+  (core instance $i (instantiate $m))
+
+  (func (export "many-params")
+    (param "s1" string) (param "s2" string) (param "s3" string) (param "s4" string)
+    (param "s5" string) (param "s6" string) (param "s7" string) (param "s8" string)
+    (param "s9" string) (param "s10" string) (param "s11" string) (param "s12" string)
+    (canon lift (core func $i "take-i32") (memory (core memory $i "memory"))
+      (realloc (core func $i "realloc"))))
+  (func (export "string-ret") (result string)
+    (canon lift (core func $i "ret-1") (memory (core memory $i "memory"))
+      (realloc (core func $i "realloc"))))
+  (func (export "list-u32-ret") (result (list u32))
+    (canon lift (core func $i "ret-unaligned-list") (memory (core memory $i "memory"))
+      (realloc (core func $i "realloc"))))
+)
+(component instance $Align $Align)
+(assert_trap
+  (invoke "many-params"
+    (str.const "") (str.const "") (str.const "") (str.const "")
+    (str.const "") (str.const "") (str.const "") (str.const "")
+    (str.const "") (str.const "") (str.const "") (str.const ""))
+  "realloc return: result not aligned")
+(component instance $Align $Align)
+(assert_trap (invoke "string-ret") "return pointer not aligned")
+(component instance $Align $Align)
+(assert_trap (invoke "list-u32-ret") "list pointer is not aligned")
+
+;; An export of a nested component whose import is satisfied by another nested
+;; component's export, which requires an adapter internal to this component.
+(component
+  (type $t (func (param "a" u32) (result u32)))
+  (component $a
+    (core module $m
+      (func (export "add-five") (param i32) (result i32)
+        local.get 0
+        i32.const 5
+        i32.add)
+    )
+    (core instance $m (instantiate $m))
+    (func (export "add-five") (type $t) (canon lift (core func $m "add-five")))
+  )
+  (component $b
+    (import "interface-v1" (instance $i
+      (export "add-five" (func (type $t)))))
+    (core module $m
+      (func $add-five (import "interface-0.1.0" "add-five") (param i32) (result i32))
+      (func) ;; causes index out of bounds
+      (func (export "run") (result i32) i32.const 0 call $add-five)
+    )
+    (core func $add-five (canon lower (func $i "add-five")))
+    (core instance $i (instantiate 0
+      (with "interface-0.1.0" (instance
+        (export "add-five" (func $add-five))
+      ))
+    ))
+    (func (result u32) (canon lift (core func $i "run")))
+    (export "run" (func 1))
+  )
+  (instance $a (instantiate $a))
+  (instance $b (instantiate $b (with "interface-v1" (instance $a))))
+  (export "run" (func $b "run"))
+)
+(assert_return (invoke "run") (u32.const 5))

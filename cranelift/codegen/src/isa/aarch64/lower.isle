@@ -1334,7 +1334,7 @@
 ;;
 ;; This does not hold true for vector comparisons, which instead produce a
 ;; per-lane mask of either all ones or zeroes. rather than 0 or 1.
-(rule 1 (lower (uextend (fits_in_64 _) (icmp _ cond x @ (value_type (ty_int _)) y)))
+(rule uextend_icmp_int 1 (lower (uextend (fits_in_64 _) (icmp _ cond x @ (value_type (ty_int _)) y)))
       (lower_cond_result_bool (emit_icmp cond x y)))
 (rule 2 (lower (uextend (fits_in_64 _) (fcmp _ cond x @ (value_type $F16) y)))
       (lower_cond_result_bool (emit_fcmp cond x y)))
@@ -2308,7 +2308,7 @@
         (rm Reg (put_in_reg y)))
    (vec_cmp rn rm in_ty cond)))
 
-(rule -2 (lower (icmp _ cond x @ (value_type (ty_int _)) y))
+(rule icmp_int -2 (lower (icmp _ cond x @ (value_type (ty_int _)) y))
   (lower_cond_result_bool (emit_icmp cond x y)))
 
 ;; Helper to put a `CondResult` into a general register.
@@ -3259,7 +3259,7 @@
 ;; mul out, a_ext, b_ext
 ;; cmp out, out, uxt{b,h}
 ;; cset of, ne
-(rule 1 (lower (umul_overflow (fits_in_16 ty) a b))
+(rule umul_overflow_fits_in_16 1 (lower (umul_overflow (fits_in_16 ty) a b))
        (let ((extend ExtendOp (lower_extend_op ty (ArgumentExtension.Uext)))
 
              (a_uext Reg (put_in_reg_zext32 a))
@@ -3275,7 +3275,7 @@
 ;; umull out, a, b
 ;; cmp out, out, uxtw
 ;; cset of, ne
-(rule 2 (lower (umul_overflow $I32 a b))
+(rule umul_overflow_i32 2 (lower (umul_overflow $I32 a b))
        (let (
              (out Reg (umaddl a b (zero_reg)))
              (out_of Reg (with_flags_reg
@@ -3289,7 +3289,7 @@
 ;; umulh tmp, a, b
 ;; cmp tmp, #0
 ;; cset of, ne
-(rule 2 (lower (umul_overflow $I64 a b))
+(rule umul_overflow_i64 2 (lower (umul_overflow $I64 a b))
        (let (
              (out Reg (madd $I64 a b (zero_reg)))
              (tmp Reg (umulh $I64 a b))
@@ -3323,7 +3323,7 @@
 ;; mul out, a_ext, b_ext
 ;; cmp out, out, sxt{b,h}
 ;; cset of, ne
-(rule 1 (lower (smul_overflow (fits_in_16 ty) a b))
+(rule smul_overflow_fits_in_16 1 (lower (smul_overflow (fits_in_16 ty) a b))
        (let ((extend ExtendOp (lower_extend_op ty (ArgumentExtension.Sext)))
 
              (a_sext Reg (put_in_reg_sext32 a))
@@ -3339,7 +3339,7 @@
 ;; smull out, a, b
 ;; cmp out, out, sxtw
 ;; cset of, ne
-(rule 2 (lower (smul_overflow $I32 a b))
+(rule smul_overflow_i32 2 (lower (smul_overflow $I32 a b))
        (let (
              (out Reg (smaddl a b (zero_reg)))
              (out_of Reg (with_flags_reg

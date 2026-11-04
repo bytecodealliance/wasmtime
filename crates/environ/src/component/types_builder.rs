@@ -397,6 +397,13 @@ impl ComponentTypesBuilder {
     ) -> Result<TypeModuleIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
+
+        // Intern all types found in this module as they could show up anywhere
+        // within imports/exports/etc.
+        for id in ty.types.iter() {
+            self.module_types_builder_mut().intern_type(types, *id)?;
+        }
+
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
             result.imports.insert(
@@ -426,17 +433,9 @@ impl ComponentTypesBuilder {
                     .intern_type(types, *id)?
                     .into()
             }),
-            Table(ty) => {
-                self.intern_ref_type(types, ty.element_type)?;
-                EntityType::Table(self.convert_table_type(ty)?)
-            }
+            Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
             Memory(ty) => EntityType::Memory((*ty).into()),
-            Global(ty) => {
-                if let wasmparser::ValType::Ref(r) = ty.content_type {
-                    self.intern_ref_type(types, r)?;
-                }
-                EntityType::Global(self.convert_global_type(ty)?)
-            }
+            Global(ty) => EntityType::Global(self.convert_global_type(ty)?),
             Tag(id) => {
                 let func = self.module_types_builder_mut().intern_type(types, *id)?;
                 let exc = self
@@ -449,15 +448,6 @@ impl ComponentTypesBuilder {
             }
             FuncExact(_) => bail!("custom-descriptors proposal not implemented"),
         })
-    }
-
-    /// Interns the concrete type, if any, referenced by `ty` so that it can
-    /// subsequently be converted with this builder's `TypeConvert` impl.
-    fn intern_ref_type(&mut self, types: TypesRef<'_>, ty: wasmparser::RefType) -> Result<()> {
-        if let Some(id) = ty.type_index().and_then(|i| i.as_core_type_id()) {
-            self.module_types_builder_mut().intern_type(types, id)?;
-        }
-        Ok(())
     }
 
     /// Convert a wasmparser `ComponentDefinedTypeId` into Wasmtime's type representation.
@@ -888,6 +878,11 @@ impl ComponentTypesBuilder {
         self.type_information(ty).handles.has_any()
     }
 
+    /// Returns whether the type specified contains a `string` within it.
+    pub fn ty_contains_string(&self, ty: &InterfaceType) -> bool {
+        self.type_information(ty).has_string
+    }
+
     /// Returns whether the signature of `ty` mentions any handle, in either its
     /// parameters or its results.
     pub fn func_contains_any_handle(&self, ty: TypeFuncIndex) -> bool {
@@ -945,7 +940,11 @@ impl ComponentTypesBuilder {
                 &INFO
             }
             InterfaceType::String => {
-                static INFO: TypeInformation = TypeInformation::string();
+                static INFO: TypeInformation = {
+                    let mut info = TypeInformation::string();
+                    info.has_string = true;
+                    info
+                };
                 &INFO
             }
 
@@ -1125,6 +1124,9 @@ struct TypeInformation {
 
     /// Which handles this type transitively contains, if any.
     handles: Handles,
+
+    /// Whether this type transitively contains a `string`.
+    has_string: bool,
 }
 
 impl TypeInformation {
@@ -1132,6 +1134,7 @@ impl TypeInformation {
         TypeInformation {
             flat: FlatTypesStorage::new(),
             handles: Handles::None,
+            has_string: false,
         }
     }
 
@@ -1158,6 +1161,7 @@ impl TypeInformation {
     fn build_record<'a>(&mut self, types: impl Iterator<Item = &'a TypeInformation>) {
         for info in types {
             self.handles = Handles::join(self.handles, info.handles);
+            self.has_string |= info.has_string;
             match info.flat.as_flat_types() {
                 Some(types) => {
                     for (t32, t64) in types.memory32.iter().zip(types.memory64) {
@@ -1199,6 +1203,7 @@ impl TypeInformation {
                 None => continue,
             };
             self.handles = Handles::join(self.handles, info.handles);
+            self.has_string |= info.has_string;
 
             // If this variant is already unrepresentable in a flat
             // representation then this can be skipped.
@@ -1264,6 +1269,7 @@ impl TypeInformation {
     fn fixed_length_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedLengthList) {
         let element_info = types.type_information(&ty.element);
         self.handles = element_info.handles;
+        self.has_string = element_info.has_string;
         match element_info.flat.as_flat_types() {
             Some(types) => {
                 'outer: for _ in 0..ty.size {
@@ -1319,6 +1325,7 @@ impl TypeInformation {
         *self = TypeInformation::string();
         let info = types.type_information(&ty.element);
         self.handles = info.handles;
+        self.has_string = info.has_string;
     }
 
     fn maps(&mut self, types: &ComponentTypesBuilder, ty: &TypeMap) {
@@ -1328,5 +1335,6 @@ impl TypeInformation {
         let key_info = types.type_information(&ty.key);
         let value_info = types.type_information(&ty.value);
         self.handles = Handles::join(key_info.handles, value_info.handles);
+        self.has_string = key_info.has_string || value_info.has_string;
     }
 }

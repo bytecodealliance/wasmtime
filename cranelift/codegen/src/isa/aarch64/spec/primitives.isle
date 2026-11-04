@@ -595,10 +595,14 @@
 ;; Use the SMTLIB conversion functions to accomplish the same behavior
     (let
         (
+            ;; The operand is converted at its full precision: it is widened to
+            ;; 64 bits and rounded to the destination width `N`. Narrowing it to
+            ;; `N` first would convert only the low bits of a 64-bit operand
+            ;; to a 32-bit float.
             (result
                 (if unsigned
-                    (to_fp_unsigned N (conv_to N (zero_ext 64 op)))
-                    (to_fp N (conv_to N (sign_ext 64 op)))))
+                    (to_fp_unsigned N (zero_ext 64 op))
+                    (to_fp N (sign_ext 64 op))))
         )
         (if (and
                 ;; fbits of 0 means we can use pure integer logic

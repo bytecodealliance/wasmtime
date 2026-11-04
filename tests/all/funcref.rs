@@ -78,31 +78,6 @@ fn pass_funcref_in_and_out_of_wasm() -> wasmtime::Result<()> {
 }
 
 #[test]
-#[cfg_attr(miri, ignore)]
-fn receive_null_funcref_from_wasm() -> wasmtime::Result<()> {
-    let (mut store, module) = ref_types_module(
-        false,
-        r#"
-            (module
-                (func (export "get-null") (result funcref)
-                    ref.null func
-                )
-            )
-        "#,
-    )?;
-
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let get_null = instance.get_func(&mut store, "get-null").unwrap();
-
-    let mut results = [Val::I32(0)];
-    get_null.call(&mut store, &[], &mut results)?;
-    let result_func = results[0].unwrap_funcref();
-    assert!(result_func.is_none());
-
-    Ok(())
-}
-
-#[test]
 fn wrong_store() -> wasmtime::Result<()> {
     let dropped = Arc::new(AtomicBool::new(false));
     {

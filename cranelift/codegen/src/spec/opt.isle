@@ -133,7 +133,10 @@
 (spec (u64_lt x y) (provide (= result (bvult x y))))
 (spec (imm64 x) (provide (= result x)))
 
-(spec (cmp_true ty) (provide (= result (zero_ext (widthof result) #b1))))
+(spec (cmp_true ty)
+    (provide (= result (zero_ext (widthof result) #b1))
+             (= (:bits ty) (widthof result))
+             (= (:lanes ty) (lanesof result))))
 (instantiate cmp_true
     ((args (named Type)) (ret (bv  8)))
     ((args (named Type)) (ret (bv 16)))
@@ -654,7 +657,13 @@
             ((SignedGreaterThanOrEqual) (int2bv 64 5))
             ((NotEqual) (int2bv 64 6))))))
 (macro (icmp_bit c) (if c #x01 #x00))
-(spec (compose_icmp ty v signed x y)
+(spec (compose_icmp rty ty v signed x y)
+    ;; `compose_icmp` is verified as a root term, so the operand type tie is a
+    ;; requirement (assumed here, discharged at the `band`/`bor` call sites).
+    ;; `rty` only selects the constant's type; the result width comes from the
+    ;; instantiation.
+    (require (= (:bits ty) (widthof x))
+             (= (:lanes ty) (lanesof x)))
     (provide (= result
         (if (= v (int2bv 64 0)) #x00
         (if (= v (int2bv 64 1)) (icmp_bit! (= x y))
@@ -665,9 +674,12 @@
         (if (= v (int2bv 64 6)) (icmp_bit! (not (= x y)))
         #x01))))))))))
 
-;; Reached only at `ty = I8` (icmp results are `(bv 8)`), so all operands/result bv8.
+;; `rty` is the comparison's result type (`i8`), `ty` its operand type.
 (instantiate compose_icmp
-    ((args (named Type) (bv 64) Bool (bv 8) (bv 8)) (ret (bv 8))))
+    ((args (named Type) (named Type) (bv 64) Bool (bv  8) (bv  8)) (ret (bv 8)))
+    ((args (named Type) (named Type) (bv 64) Bool (bv 16) (bv 16)) (ret (bv 8)))
+    ((args (named Type) (named Type) (bv 64) Bool (bv 32) (bv 32)) (ret (bv 8)))
+    ((args (named Type) (named Type) (bv 64) Bool (bv 64) (bv 64)) (ret (bv 8))))
 
 ;;;; Bit-manipulation instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; `bitrev` = `rev`. `bmask` broadcasts truthiness to an all-ones/all-zeros mask of

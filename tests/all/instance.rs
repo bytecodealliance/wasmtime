@@ -14,27 +14,6 @@ fn wrong_import_numbers() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn initializes_linear_memory() -> Result<()> {
-    // Test for https://github.com/bytecodealliance/wasmtime/issues/2784
-    let wat = r#"
-        (module
-            (memory (export "memory") 2)
-            (data (i32.const 0) "Hello World!")
-        )"#;
-    let module = Module::new(&Engine::default(), wat)?;
-
-    let mut store = Store::new(module.engine(), ());
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let memory = instance.get_memory(&mut store, "memory").unwrap();
-
-    let mut bytes = [0; 12];
-    memory.read(&store, 0, &mut bytes)?;
-    assert_eq!(bytes, "Hello World!".as_bytes());
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
 #[cfg(target_pointer_width = "64")]
 fn linear_memory_limits() -> Result<()> {
     // this test will allocate 4GB of virtual memory space, and may not work in

@@ -311,6 +311,7 @@ fn trampoline_callable(
         | StreamTransfer
         | ErrorContextTransfer
         | Trap(_)
+        | HostcallFuel
         | EnterSyncCall
         | ExitSyncCall => {
             unreachable!("these trampolines do not exist yet")

@@ -57,6 +57,9 @@ impl From<GetLibcallFn> for HostCallee {
 
 /// How to interpret the results of a host function.
 enum HostResult {
+    /// Normal result, can't trap, just returned to wasm.
+    Normal,
+
     /// The host function returns the sentinel specified which is interpreted
     /// and translated to the real return value.
     Sentinel(TrapSentinel),
@@ -689,6 +692,14 @@ impl<'a> TrampolineCompiler<'a> {
                 let (mut traps, builder) = self.traps();
                 traps.trap(builder, code);
             }
+            Trampoline::HostcallFuel => {
+                self.translate_libcall(
+                    host::hostcall_fuel,
+                    HostResult::Normal,
+                    WasmArgs::InRegisters,
+                    |_, _| {},
+                );
+            }
             Trampoline::EnterSyncCall => {
                 self.translate_libcall(
                     host::enter_sync_call,
@@ -718,6 +729,8 @@ impl<'a> TrampolineCompiler<'a> {
                 start_func_table_idx,
                 start_func_ty_idx,
             } => {
+                // FIXME(#4311): the wasm arguments are `i64` for a 64-bit
+                // table or an `i64` closure, but the libcall takes `u32`s
                 self.translate_libcall(
                     host::thread_new_indirect,
                     TrapSentinel::NegativeOne,
@@ -970,6 +983,10 @@ impl<'a> TrampolineCompiler<'a> {
         let result_ty = result.map(|v| self.builder.func.dfg.value_type(v));
         let expected = self.signature.results();
         match host_result.into() {
+            HostResult::Normal => {
+                assert_eq!(expected.len(), 1);
+                self.abi_store_results(&[result.unwrap()]);
+            }
             HostResult::Sentinel(TrapSentinel::NegativeOne) => {
                 assert_eq!(expected.len(), 1);
                 let (result, result_ty) = (result.unwrap(), result_ty.unwrap());
@@ -1426,6 +1443,7 @@ impl<'a> TrampolineCompiler<'a> {
             | Trampoline::StreamTransfer
             | Trampoline::ErrorContextTransfer
             | Trampoline::Trap(_)
+            | Trampoline::HostcallFuel
             | Trampoline::EnterSyncCall
             | Trampoline::ExitSyncCall
             | Trampoline::Transcoder { .. } => return,

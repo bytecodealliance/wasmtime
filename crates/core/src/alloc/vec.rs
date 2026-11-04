@@ -222,23 +222,8 @@ impl<T> TryVec<T> {
     }
 
     /// Same as [`std::vec::Vec::into_raw_parts`].
-    pub fn into_raw_parts(mut self) -> (*mut T, usize, usize) {
-        // NB: Can't use `Vec::into_raw_parts` until our MSRV is >= 1.93.
-        #[cfg(not(miri))]
-        {
-            let ptr = self.as_mut_ptr();
-            let len = self.len();
-            let cap = self.capacity();
-            mem::forget(self);
-            (ptr, len, cap)
-        }
-        // NB: Miri requires using `into_raw_parts`, but always run on nightly,
-        // so it's fine to use there.
-        #[cfg(miri)]
-        {
-            let _ = &mut self;
-            self.inner.into_raw_parts()
-        }
+    pub fn into_raw_parts(self) -> (*mut T, usize, usize) {
+        self.inner.into_raw_parts()
     }
 
     /// Same as [`std::vec::Vec::from_raw_parts`].

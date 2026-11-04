@@ -166,12 +166,12 @@ impl BlockLoweringOrder {
 
         for block in f.layout.blocks() {
             let start = block_succs.len();
-            visit_block_succs(f, block, |_, succ, from_table| {
+            visit_block_succs(f, block, |_, succ, is_indirect| {
                 block_out_count[block] += 1;
                 block_in_count[succ] += 1;
                 block_succs.push(LoweredBlock::Orig { block: succ });
 
-                if from_table {
+                if is_indirect {
                     indirect_branch_target_clif_blocks.insert(succ);
                 }
             });

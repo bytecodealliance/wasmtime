@@ -425,3 +425,32 @@ fn exn_ref_pre_rejects_foreign_type() {
 
     let _ = ExnRefPre::new(&mut store, foreign_ty);
 }
+
+#[test]
+#[should_panic = "supertype.comes_from_same_engine(engine)"]
+fn struct_type_rejects_foreign_supertype() {
+    let (a, b) = engine_pair();
+    let i32_field = || FieldType::new(Mutability::Const, StorageType::ValType(ValType::I32));
+    let i64_field = || FieldType::new(Mutability::Var, StorageType::ValType(ValType::I64));
+
+    // Give engine A an unrelated type at the same index as the foreign
+    // supertype, so that interpreting the foreign index in engine A's registry
+    // would find this type.
+    let _local_ty = StructType::with_finality_and_supertype(
+        &a,
+        Finality::NonFinal,
+        None,
+        [i64_field(), i64_field(), i64_field()],
+    )
+    .unwrap();
+    let foreign_supertype =
+        StructType::with_finality_and_supertype(&b, Finality::NonFinal, None, [i32_field()])
+            .unwrap();
+
+    let _ = StructType::with_finality_and_supertype(
+        &a,
+        Finality::Final,
+        Some(&foreign_supertype),
+        [i32_field()],
+    );
+}

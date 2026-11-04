@@ -1,4 +1,4 @@
-FROM almalinux:8
+FROM almalinux:8@sha256:2d0f2eb2a83cc09dbc2eb92fade4dbe8f709628149e81aa00aec70630406603b
 
 RUN dnf install -y git gcc make cmake git unzip
 RUN git config --global --add safe.directory '*'

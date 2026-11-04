@@ -171,3 +171,13 @@
   )
 )
 (assert_return (invoke "ref-i31-const") (i32.const 42))
+
+;; A global initialized with a struct whose field refers to another type in
+;; the same rec group.
+(module
+  (rec
+    (type $b (struct))
+    (type $a (struct (field (ref $b)))))
+  (global (ref $a)
+    (struct.new $a (struct.new_default $b)))
+)

@@ -1,6 +1,8 @@
 //! Instruction predicates/properties, shared by various analyses.
 use crate::ir::immediates::Offset32;
-use crate::ir::{self, Block, DataFlowGraph, Function, Inst, InstructionData, Opcode, Type, Value};
+use crate::ir::{
+    self, Block, DataFlowGraph, Function, Inst, InstructionData, MemFlagsData, Opcode, Type, Value,
+};
 
 /// Test whether the given opcode is unsafe to even consider as side-effect-free.
 #[inline(always)]
@@ -55,25 +57,29 @@ fn has_side_effect(func: &Function, inst: Inst) -> bool {
         || (opcode.can_load() && is_volatile_access(func, inst))
 }
 
+fn load_mem_flags(func: &Function, inst: Inst) -> Option<MemFlagsData> {
+    match func.dfg.insts[inst] {
+        InstructionData::Load {
+            opcode: Opcode::Load,
+            flags,
+            ..
+        } => Some(func.dfg.mem_flags[flags]),
+        _ => None,
+    }
+}
+
 /// Does the given instruction behave as a "pure" node with respect to
 /// aegraph semantics?
 ///
 /// - Trivially pure nodes (bitwise arithmetic, etc)
 /// - Loads with the `readonly`, `notrap`, and `can_move` flags set
 pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
-    let is_pure_load = match func.dfg.insts[inst] {
-        InstructionData::Load {
-            opcode: Opcode::Load,
-            flags,
-            ..
-        } => {
-            let flags = func.dfg.mem_flags[flags];
-            // `readonly` and `can_move` each imply not `volatile` (the
-            // verifier rejects the combination), so such a load is never a
-            // volatile access.
-            flags.readonly() && flags.notrap() && flags.can_move()
-        }
-        _ => false,
+    let is_pure_load = match load_mem_flags(func, inst) {
+        // `readonly` and `can_move` each imply not `volatile` (the
+        // verifier rejects the combination), so such a load is never a
+        // volatile access.
+        Some(flags) => flags.readonly() && flags.notrap() && flags.can_move(),
+        None => false,
     };
 
     // Multi-value results do not play nicely with much of the egraph
@@ -98,15 +104,34 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
 /// result.
 pub fn is_mergeable_for_egraph(func: &Function, inst: Inst) -> bool {
     let op = func.dfg.insts[inst].opcode();
+    let is_readonly_load = load_mem_flags(func, inst)
+        .map(|flags| flags.readonly())
+        .unwrap_or(false);
     // We can only merge zero- and one-result operators due to the way that GVN
     // is structured in the egraph implementation.
     func.dfg.inst_results(inst).len() <= 1
         // Loads/stores are handled by alias analysis and not
         // otherwise mergeable.
-        && !op.can_load()
+        //
+        // However, `readonly` loads *are* mergeable. Note that
+        // `is_mergeable` is checked after `is_pure`, and readonly +
+        // notrap + can_move loads are pure. Loads that are just
+        // `readonly` are not pure (we must execute them, for their
+        // potential trap side-effects, and for the same reason we
+        // cannot hoist them arbitrarily), but one `readonly` load
+        // subsuming another *is* a valid reason to make the second
+        // reuse the first's result: `readonly` promises that once we
+        // do the load, any subsequent load of the same address is
+        // always the same.
+        //
+        // We don't let that case fall back to alias analysis because
+        // its analysis is strictly more conservative: e.g. it will
+        // not permit this merging across a call, while `readonly`
+        // still promises that the value is constant across a call.
+        && (!op.can_load() || is_readonly_load)
         && !op.can_store()
         // Can only have idempotent side-effects.
-        && (!has_side_effect(func, inst) || op.side_effects_idempotent())
+        && (!has_side_effect(func, inst) || op.side_effects_idempotent() || is_readonly_load)
 }
 
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,
@@ -180,7 +205,7 @@ pub fn inst_store_data(func: &Function, inst: Inst) -> Option<Value> {
 /// Visit all successors of a block with a given visitor closure. The closure
 /// arguments are the branch instruction that is used to reach the successor,
 /// the successor block itself, and a flag indicating whether the block is
-/// branched to via a table entry.
+/// reached via an indirect branch.
 pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
     f: &Function,
     block: Block,
@@ -206,17 +231,16 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                 let pool = &f.dfg.value_lists;
                 let table = &f.stencil.dfg.jump_tables[*table];
 
-                // The default block is reached via a direct conditional branch,
-                // so it is not part of the table. We visit the default block
-                // first explicitly, to mirror the traversal order of
-                // `JumpTableData::all_branches`, and transitively the order of
-                // `InstructionData::branch_destination`.
+                // The default block is also an indirect branch target on
+                // backends that include it in the jump table (aarch64).
+                // We visit the default block first explicitly, to mirror the
+                // traversal order of `JumpTableData::all_branches`, and
+                // transitively the order of `InstructionData::branch_destination`.
                 //
                 // Additionally, this case is why we are unable to replace this
                 // whole function with a loop over `branch_destination`: we need
-                // to report which branch targets come from the table vs the
-                // default.
-                visit(inst, table.default_block().block(pool), false);
+                // to report which branch targets are reached indirectly.
+                visit(inst, table.default_block().block(pool), true);
 
                 for dest in table.as_slice() {
                     visit(inst, dest.block(pool), true);
@@ -228,9 +252,15 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                 let pool = &f.dfg.value_lists;
                 let exdata = &f.stencil.dfg.exception_tables[*exception];
 
-                for dest in exdata.all_branches() {
-                    visit(inst, dest.block(pool), false);
+                // Exception handlers are resumed into via an indirect branch
+                // from the unwinder, so they are indirect branch targets too.
+                // The last target is the normal-return path, which is reached
+                // directly after the call returns.
+                let (normal, handlers) = exdata.all_branches().split_last().unwrap();
+                for dest in handlers {
+                    visit(inst, dest.block(pool), true);
                 }
+                visit(inst, normal.block(pool), false);
             }
 
             inst => debug_assert!(!inst.opcode().is_branch()),

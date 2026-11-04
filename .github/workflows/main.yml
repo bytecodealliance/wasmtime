@@ -325,8 +325,6 @@ jobs:
           --exclude test-programs-artifacts \
           --exclude cranelift-codegen-meta \
           --exclude wasmtime-wasi-nn \
-          --exclude wasmtime-fuzzing \
-          --exclude wasm-spec-interpreter \
           --exclude calculator \
           --all-features
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
@@ -338,7 +336,7 @@ jobs:
         mv crates/c-api/html gh-pages/c-api
         mv target/doc gh-pages/api
         tar czf gh-pages.tar.gz gh-pages
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: gh-pages
         path: gh-pages.tar.gz
@@ -423,7 +421,8 @@ jobs:
           - name: cranelift-codegen
             checks: |
               -p cranelift-codegen --benches
-              -p cranelift-codegen --no-default-features --features std,unwind,pulley
+              -p cranelift-codegen --no-default-features --features std,unwind,all-arch
+              -p cranelift-codegen --no-default-features --features all-arch
 
           - name: cranelift-entity
             checks: |
@@ -558,8 +557,6 @@ jobs:
           --exclude test-programs-artifacts \
           --exclude wasmtime-wasi-nn \
           --exclude wasmtime-wasi-tls \
-          --exclude wasmtime-fuzzing \
-          --exclude wasm-spec-interpreter \
           --exclude cranelift-isle-veri \
           --exclude calculator \
           --exclude wasi-preview1-component-adapter
@@ -716,7 +713,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.test-nightly
     name: Nightly tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v7
       with:
@@ -757,16 +754,10 @@ jobs:
     - run: test -f report/index.html
 
     # Ensure that fuzzers still build.
-    #
-    # Install the OCaml packages necessary for fuzz targets that use the
-    # `wasm-spec-interpreter`.
     - uses: ./.github/actions/cargo-install
       with:
         crate: cargo-fuzz
         version: 0.13.2
-    - uses: ./.github/actions/apt-get-install
-      with:
-        packages: ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fuzz check --dev --features fuzz-xed
     - run: cargo fuzz check --dev --fuzz-dir ./cranelift/isle/fuzz
     - run: cargo fuzz check --dev --fuzz-dir ./crates/environ/fuzz --features component-model
@@ -1057,24 +1048,6 @@ jobs:
         "OPENSSL_LIB_DIR=$opensslLibDir" | Out-File -FilePath $env:GITHUB_ENV -Append
     - run: cargo test -p wasmtime-wasi-tls --all-features
 
-  # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
-  # `--all-features` brings in OCaml, which is a pain to get setup for all
-  # targets.
-  test_fuzzing:
-    needs: determine
-    if: needs.determine.outputs.run-full
-    name: Test wasmtime-fuzzing
-    runs-on: 'ubuntu-latest'
-    steps:
-    - uses: actions/checkout@v7
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-
-    # Run the tests
-    - run: |
-        cargo test -p wasmtime-fuzzing -p wasm-spec-interpreter
-
   # Test debug (DWARF) related functionality.
   test_debug_dwarf:
     needs: determine
@@ -1155,7 +1128,7 @@ jobs:
       env:
         VERSION: ${{ github.sha }}
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: bins-wasi-preview1-component-adapter
         path: target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.*.wasm
@@ -1210,7 +1183,7 @@ jobs:
         MIN_PLATFORM_EXAMPLE_DISABLE_WASI: 1
 
     # Add the `wasmtime-platform.h` file as a release artifact
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: wasmtime-platform-header
         path: examples/min-platform/embedding/wasmtime-platform.h
@@ -1367,6 +1340,9 @@ jobs:
         # Bump `v1` if the cache format changes. `hashFiles` covers the ISLE
         # sources and the ISLE toolchain itself by hashing the paths and
         # contents of all matching files.
+        #
+        # Note: keep this key in sync with the same key in the
+        # `isle-veri-cache` job in `publish-artifacts.yml`.
         key: isle-veri-cache-v1-${{ hashFiles('cranelift/isle/**/*.rs', 'cranelift/codegen/**/*.isle') }}
         restore-keys: |
           isle-veri-cache-v1-
@@ -1383,7 +1359,7 @@ jobs:
     - name: Package rebuilt cache
       run: tar czf isle-veri-cache.tar.gz -C cranelift/isle/veri cache
     - name: Upload cache tarball as run artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: isle-veri-cache
         path: isle-veri-cache.tar.gz
@@ -1447,7 +1423,7 @@ jobs:
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: bins-${{ matrix.build }}
         path: dist
@@ -1476,7 +1452,6 @@ jobs:
       - test
       - test_capi
       - test_debug_dwarf
-      - test_fuzzing
       - test_nightly
       - build
       - rustfmt
@@ -1516,9 +1491,10 @@ jobs:
   # "automatically-tag-and-release-this-commit" within merged PRs/commits. Once
   # that term is found the current version of `Cargo.toml`, the `wasmtime-cli`
   # Cargo.toml, is created as a tag and the tag is pushed to the repo.
-  # Currently the tag is created through the GitHub API with an access token to
-  # ensure that CI is further triggered for the tag itself which performs the
-  # full release process.
+  # The tag is created with the default `GITHUB_TOKEN`, and events created by
+  # that token do not trigger further workflows. The workflows which perform
+  # the actual release, `publish-to-cratesio.yml` and `publish-artifacts.yml`,
+  # are therefore explicitly dispatched on the new tag afterwards.
   #
   # Note that this depends on the `ci-status` step above which is the "join"
   # point of this workflow for when everything succeeds. the purpose of that is
@@ -1534,6 +1510,9 @@ jobs:
       && github.event_name == 'push'
       && startsWith(github.ref, 'refs/heads/release-')
       && github.repository == 'bytecodealliance/wasmtime'
+    permissions:
+      contents: write
+      actions: write
     steps:
     - uses: actions/checkout@v7
       with:
@@ -1554,17 +1533,17 @@ jobs:
           echo "push_tag=no" >> $GITHUB_OUTPUT
         fi
       id: tag
-    - name: Push the tag
+    - name: Push the tag and start the release
       run: |
-        git_refs_url=$(jq .repository.git_refs_url $GITHUB_EVENT_PATH | tr -d '"' | sed 's/{\/sha}//g')
-        curl -iX POST $git_refs_url \
-          -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-          -d @- << EOF
-        {
-          "ref": "refs/tags/v${{ steps.tag.outputs.version }}",
-          "sha": "${{ steps.tag.outputs.sha }}"
-        }
-        EOF
+        set -ex
+        tag=v${{ steps.tag.outputs.version }}
+        gh api -X POST repos/${{ github.repository }}/git/refs \
+          -f ref=refs/tags/$tag \
+          -f sha=${{ steps.tag.outputs.sha }}
+        gh workflow run publish-to-cratesio.yml --ref $tag
+        gh workflow run publish-artifacts.yml --ref $tag
+      env:
+        GH_TOKEN: ${{ github.token }}
       if: steps.tag.outputs.push_tag == 'yes'
 
   # File an issue on the repo if this run failed and was triggered via
@@ -1580,6 +1559,7 @@ jobs:
       always()
       && needs.ci-status.result != 'success'
       && github.event_name == 'workflow_dispatch'
+      && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
     permissions:
       issues: write
     steps:

@@ -690,6 +690,10 @@ fn enter_sync_call(
     )
 }
 
+fn hostcall_fuel(store: &mut dyn VMStore, _: Instance) -> u64 {
+    u64::try_from(store.hostcall_fuel()).unwrap_or(u64::MAX)
+}
+
 fn exit_sync_call(store: &mut dyn VMStore, instance: Instance) -> Result<()> {
     store
         .component_resource_tables(Some(instance))?

@@ -930,6 +930,24 @@ TEST(component, flags) {
   EXPECT_EQ(f.size(), 3);
 }
 
+TEST(component, assign_from_self_or_child) {
+  Val list = List({Val::string("hello"), uint32_t(2)});
+  const Val &list_alias = list;
+  list = list_alias;
+  ASSERT_TRUE(list.is_list());
+  EXPECT_EQ(list.get_list().size(), 2);
+
+  Val opt = WitOption(Val::string("hello"));
+  const Val &opt_alias = opt;
+  opt = opt_alias;
+  ASSERT_TRUE(opt.is_option());
+  EXPECT_EQ(opt.get_option().value()->get_string(), "hello");
+
+  opt = *opt.get_option().value();
+  ASSERT_TRUE(opt.is_string());
+  EXPECT_EQ(opt.get_string(), "hello");
+}
+
 TEST(component, value_host_resource) {
   static const uint32_t RESOURCE_TYPE = 100;
 

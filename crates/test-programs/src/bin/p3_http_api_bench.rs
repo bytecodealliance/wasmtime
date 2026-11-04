@@ -143,7 +143,9 @@ fn new_outgoing_requests(n: usize) -> (Vec<Request>, Vec<BodyWriters>) {
             let (request, writers) = new_request();
             request.set_path_with_query(Some("/")).unwrap();
             request.set_scheme(Some(&Scheme::Http)).unwrap();
-            request.set_authority(Some("p3-test")).unwrap();
+            request
+                .set_authority(Some("p3-test-immediate-response"))
+                .unwrap();
             (request, writers)
         })
         .unzip()

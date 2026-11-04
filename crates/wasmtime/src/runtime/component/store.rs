@@ -26,7 +26,7 @@ use crate::{
 /// host doesn't mean that it's automatically susceptible to DoS for example.
 const DEFAULT_HOSTCALL_FUEL: usize = 128 << 20;
 
-/// Default per-store cap on simultaneously-live component-model handles.
+/// Default per-store cap on component-model handle-table slots.
 ///
 /// A guest creates these directly (e.g. `resource.new`), so leaving them
 /// unbounded is a DoS vector.
@@ -39,8 +39,16 @@ pub struct ComponentStoreData {
     /// are managed.
     instances: TryPrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
 
-    /// Whether an instance belonging to this store has trapped.
-    trapped: bool,
+    /// Whether an component instance belonging to this store has trapped. This
+    /// can be used to determine if the `Store` is poisoned.
+    ///
+    /// This is only set if a trap occurs while `has_components` is also set.
+    /// Pure core Wasm instances are required to continue running after traps
+    /// so `Store`s with only core modules are never considered poisoned.
+    component_trapped: bool,
+
+    /// Whether a component instance has ever been created in this store.
+    has_components: bool,
 
     /// Total number of component instances in this store, used to track
     /// resources in the instance allocator.
@@ -95,7 +103,8 @@ impl ComponentStoreData {
     pub fn new(engine: &Engine) -> ComponentStoreData {
         ComponentStoreData {
             instances: Default::default(),
-            trapped: false,
+            component_trapped: false,
+            has_components: false,
             num_component_instances: 0,
             component_host_table: Default::default(),
             handle_counter: HandleCounter::new(DEFAULT_MAX_COMPONENT_HANDLES),
@@ -294,6 +303,7 @@ impl StoreData {
         let expected = data.get().id();
         let ret = self.components.instances.push(Some(data))?;
         assert_eq!(expected, ret);
+        self.components.has_components = true;
         Ok(ret)
     }
 
@@ -322,19 +332,24 @@ impl StoreData {
 }
 
 impl StoreOpaque {
-    pub(crate) fn trapped(&self) -> bool {
-        self.store_data().components.trapped
+    #[inline]
+    pub(crate) fn component_trapped(&self) -> bool {
+        self.store_data().components.component_trapped
     }
 
     pub(crate) fn set_trapped(&mut self) {
-        self.store_data_mut().components.trapped = true;
+        let component_data = &mut self.store_data_mut().components;
+        if component_data.has_components {
+            component_data.component_trapped = true;
+        }
     }
 
     /// Determine whether an instance may be entered from the host.
     ///
     /// We return `false` here only `self` has been poisoned due to a trap.
+    #[inline]
     pub(crate) fn may_enter(&mut self) -> bool {
-        !self.trapped()
+        !self.component_trapped()
     }
 
     pub(crate) fn component_data(&self) -> &ComponentStoreData {
@@ -568,7 +583,7 @@ impl<T> Store<T> {
         self.as_context_mut().set_hostcall_fuel(fuel)
     }
 
-    /// Returns the maximum number of simultaneously-live component-model handles
+    /// Returns the maximum number of component-model handle-table slots
     /// permitted in this store.
     ///
     /// This is either the default amount if it hasn't been configured or
@@ -579,7 +594,7 @@ impl<T> Store<T> {
         self.as_context().0.max_component_handles()
     }
 
-    /// Sets the maximum number of simultaneously-live component-model handles
+    /// Sets the maximum number of component-model handle-table slots
     /// permitted in this store.
     ///
     /// Operations such as `resource.new` let a guest allocate handles in
@@ -587,10 +602,13 @@ impl<T> Store<T> {
     /// as it likes. This store-wide limit caps that as a DoS mitigation;
     /// allocating past it traps.
     ///
-    /// The limit counts *live* handles, so dropping a handle (e.g. via
-    /// `resource.drop`) returns budget and steady-state churn is unaffected.
-    /// Lowering it below the current live count does not trap existing handles,
-    /// only blocks new allocations until the count falls back under it.
+    /// The limit counts the slots allocated in each component instance's
+    /// handle table, which is what costs host memory. Dropping a handle (e.g.
+    /// via `resource.drop`) frees its slot for the next handle allocated in
+    /// the same instance, so steady-state churn is unaffected, but tables
+    /// don't shrink: a slot freed in one instance isn't returned for other
+    /// instances to use. Lowering the limit below the current count does not
+    /// trap existing handles, only blocks tables from growing.
     ///
     /// The default value for this is 100,000 handles.
     pub fn set_max_component_handles(&mut self, limit: usize) {

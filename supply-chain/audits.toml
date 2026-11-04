@@ -5280,6 +5280,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.3.0"
 
+[[audits.want]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.0 -> 0.3.2"
+notes = "Mostly idiom-related changes, nothing major."
+
 [[audits.wasi-nn]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -6394,6 +6400,12 @@ criteria = "safe-to-deploy"
 version = "1.0.4"
 notes = "Purely a data crate."
 
+[[audits.webpki-root-certs]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.4 -> 1.0.11"
+notes = "Standard root updates"
+
 [[audits.webpki-roots]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -6415,6 +6427,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.7 -> 1.0.10"
 notes = "Only contains updated certs"
+
+[[audits.webpki-roots]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.10 -> 1.0.11"
+notes = "Removing two more anchors"
 
 [[audits.which]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -6836,6 +6854,11 @@ No major updates to the crate here. Small updates to `unsafe` code which are
 refactorings of what was there prior.
 """
 
+[[audits.zstd]]
+who = "Pat Hickey <p.hickey@f5.com>"
+criteria = "safe-to-deploy"
+delta = "0.13.0 -> 0.14.3"
+
 [[audits.zstd-safe]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -6845,6 +6868,11 @@ Lots of new comments around methods and refactorings for updates in zstd itself.
 Does contain new unsafe code, notably an implementation of an internal trait for
 the standard library `io::Cursor` type.
 """
+
+[[audits.zstd-safe]]
+who = "Pat Hickey <p.hickey@f5.com>"
+criteria = "safe-to-deploy"
+delta = "7.0.0 -> 8.2.0"
 
 [[trusted.aho-corasick]]
 criteria = "safe-to-deploy"

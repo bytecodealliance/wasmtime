@@ -145,7 +145,8 @@ fn check_term_kind(prog: &Program, term: TermId, kind: TermKind, term_name: &str
                 }
             }
             type_inference::Status::Inapplicable(conflict)
-            | type_inference::Status::TypeError(conflict) => {
+            | type_inference::Status::TypeError(conflict)
+            | type_inference::Status::RhsTypeError(conflict) => {
                 let diagnostic = conflict.diagnostic(&conditions, &prog.files);
                 match signature {
                     Some(signature) => {

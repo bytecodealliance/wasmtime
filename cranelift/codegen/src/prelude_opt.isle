@@ -11,8 +11,20 @@
 ;;;;; eclass and enode access ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Extract any node(s) for the given eclass ID.
+;;
+;; The `Type` is the instruction's *controlling* type (not necessarily its
+;; result type).
 (decl multi inst_data_value (Type InstructionData) Value)
 (extern extractor inst_data_value inst_data_value_etor)
+
+;; Bind the type of a `Value` while also matching it against a sub-pattern,
+;; mirroring `has_type` in the lowering prelude. Use this when a rule needs
+;; the *result* type of an instruction differs from its controlling type.
+(spec (has_type ty arg)
+      (provide (= result arg)
+               (= (:bits ty) (widthof arg)) (= (:lanes ty) (lanesof arg))))
+(decl has_type (Type Value) Value)
+(extractor (has_type ty val) (and (value_type ty) val))
 
 ;; An extractor from an `Inst` to its `InstructionData`.
 (decl inst_data (InstructionData) Inst)
@@ -27,7 +39,8 @@
 (extern extractor inst_data_value_tupled inst_data_value_tupled_etor)
 
 ;; Construct a pure node, returning a new (or deduplicated
-;; already-existing) eclass ID.
+;; already-existing) eclass ID. The `Type` is the instruction's controlling
+;; type; see `inst_data_value`.
 (decl make_inst (Type InstructionData) Value)
 (extern constructor make_inst make_inst_ctor)
 

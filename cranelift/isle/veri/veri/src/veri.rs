@@ -793,6 +793,13 @@ pub struct Call {
     pub args: Vec<Symbolic>,
     pub ret: Symbolic,
     pub signatures: Vec<Signature>,
+
+    /// The return value belongs to the right-hand side of the rule. See
+    /// [`Conditions::rhs_exprs`].
+    pub ret_rhs: bool,
+    /// A second value standing for the return value, constrained by the same
+    /// signature. See [`Conditions::contract_facts`].
+    pub contract_ret: Option<Symbolic>,
 }
 
 // Type qualifier, for example derived from an `(as ...)` expression.
@@ -800,6 +807,9 @@ pub struct Call {
 pub struct Qualifier {
     pub value: Symbolic,
     pub ty: Compound,
+    /// The qualifier was introduced by the right-hand side of the rule. See
+    /// [`Conditions::rhs_exprs`].
+    pub rhs: bool,
 }
 
 /// Verification conditions for an expansion.
@@ -816,6 +826,17 @@ pub struct Conditions {
     pub width_domains: Vec<(ExprId, Vec<usize>)>,
     /// Bit-vectors with a known lane count.
     pub lane_counts: Vec<(ExprId, usize)>,
+
+    /// Expressions introduced while evaluating the right-hand side of the
+    /// rule: the constructor calls that build the result, and the contract
+    /// tying that result to the term under expansion.
+    /// Type inference treats these separately from the left-hand side.
+    pub rhs_exprs: HashSet<ExprId>,
+
+    /// The contract of the term under expansion, stated of a fresh return
+    /// value in place of the rule's right-hand side result.
+    /// Specs record typing facts as provides.
+    pub contract_facts: Vec<ExprId>,
 }
 
 impl Conditions {
@@ -907,6 +928,21 @@ impl Conditions {
         println!("}}");
     }
 
+    /// Expressions that depend on the right-hand side: those introduced by it,
+    /// and any computed from them. For example, a state default depends on
+    /// every call in the expansion.
+    pub fn rhs_dependent_exprs(&self) -> HashSet<ExprId> {
+        let mut dependent = HashSet::new();
+        // Sources are always created before the expressions that use them.
+        for (i, expr) in self.exprs.iter().enumerate() {
+            let x = ExprId(i);
+            if self.rhs_exprs.contains(&x) || expr.sources().iter().any(|y| dependent.contains(y)) {
+                dependent.insert(x);
+            }
+        }
+        dependent
+    }
+
     pub fn validate(&self) -> Result<()> {
         // Ensure there are no dangling expressions.
         let reachable = self.reachable();
@@ -928,6 +964,7 @@ impl Conditions {
         let mut stack: Vec<ExprId> = Vec::new();
         stack.extend(&self.assumptions);
         stack.extend(&self.assertions);
+        stack.extend(&self.contract_facts);
 
         while let Some(x) = stack.pop() {
             if reach.contains(&x) {
@@ -1037,6 +1074,52 @@ pub enum TermKind {
     Extractor,
 }
 
+/// Bindings that belong to the right-hand side of the rule.
+///
+/// These are the bindings that nothing on the left-hand side depends on: every
+/// other binding is, directly or transitively, an extractor call, a constraint
+/// on the match, or an input to one of those.
+fn rhs_bindings(expansion: &Expansion) -> HashSet<BindingId> {
+    let mut lhs: HashSet<BindingId> = HashSet::new();
+    let mut work: Vec<BindingId> = Vec::new();
+
+    // Roots of the left-hand side.
+    for constrain in &expansion.constraints {
+        work.extend(constrain.bindings());
+    }
+    for (a, b) in expansion.equalities() {
+        work.push(a);
+        work.push(b);
+    }
+    for (i, binding) in expansion.bindings.iter().enumerate() {
+        if matches!(
+            binding,
+            Some(Binding::Extractor { .. } | Binding::Argument { .. } | Binding::Iterator { .. })
+        ) {
+            work.push(i.try_into().unwrap());
+        }
+    }
+
+    // Everything they depend on.
+    while let Some(id) = work.pop() {
+        if !lhs.insert(id) {
+            continue;
+        }
+        if let Some(binding) = expansion.binding(id) {
+            work.extend(binding.sources().iter().copied());
+        }
+    }
+
+    expansion
+        .bindings
+        .iter()
+        .enumerate()
+        .filter(|(_, binding)| binding.is_some())
+        .map(|(i, _)| i.try_into().unwrap())
+        .filter(|id| !lhs.contains(id))
+        .collect()
+}
+
 fn is_fallible(term: &sema::Term, tyenv: &sema::TypeEnv, kind: TermKind) -> bool {
     match kind {
         TermKind::Constructor => term.is_partial(),
@@ -1050,6 +1133,9 @@ fn is_fallible(term: &sema::Term, tyenv: &sema::TypeEnv, kind: TermKind) -> bool
 enum Invocation {
     Caller,
     Callee,
+
+    /// The callee's contract, evaluated of a fresh return value.
+    Contract,
 }
 
 #[derive(Copy, Clone)]
@@ -1113,6 +1199,16 @@ struct ConditionsBuilder<'a> {
     state_modification_conds: HashMap<String, Vec<ExprId>>,
     binding_value: HashMap<BindingId, Symbolic>,
     expr_map: HashMap<Expr, ExprId>,
+
+    /// Expression deduplication for right-hand side expressions, kept apart
+    /// from `expr_map` so that an expression is never shared between the two
+    /// sides of the rule.
+    rhs_expr_map: HashMap<Expr, ExprId>,
+    /// Bindings that belong to the right-hand side of the rule.
+    rhs_bindings: HashSet<BindingId>,
+    /// Whether expressions are currently being built for the right-hand side.
+    rhs: bool,
+
     conditions: Conditions,
     position_stack: Vec<Pos>,
     in_lane_map: bool,
@@ -1132,6 +1228,9 @@ impl<'a> ConditionsBuilder<'a> {
             state_modification_conds: HashMap::new(),
             binding_value: HashMap::new(),
             expr_map: HashMap::new(),
+            rhs_expr_map: HashMap::new(),
+            rhs_bindings: HashSet::new(),
+            rhs: false,
             conditions: Conditions::default(),
             position_stack: Vec::new(),
             in_lane_map: false,
@@ -1155,19 +1254,24 @@ impl<'a> ConditionsBuilder<'a> {
         }
 
         // Bindings.
+        self.rhs_bindings = rhs_bindings(expansion);
         for (i, binding) in expansion.bindings.iter().enumerate() {
             if let Some(binding) = binding {
                 self.add_binding(i.try_into().unwrap(), binding)?;
             }
         }
 
-        // Callee contract for the term under expansion.
+        // Callee contract for the term under expansion. This ties the
+        // right-hand side result to the term's signature.
+        self.rhs = true;
         self.constructor(
             expansion.result,
             expansion.term,
             &expansion.parameters,
             Invocation::Callee,
         )?;
+        self.rhs = false;
+        self.contract_facts()?;
 
         // Constraints.
         for constrain in &expansion.constraints {
@@ -1190,6 +1294,53 @@ impl<'a> ConditionsBuilder<'a> {
         self.conditions.validate()?;
 
         Ok(self.conditions)
+    }
+
+    /// Evaluate the contract of the term under expansion of a fresh return
+    /// value, in place of the result of the rule's right-hand side.
+    fn contract_facts(&mut self) -> Result<()> {
+        let expansion = self.expansion();
+        let callee = self
+            .conditions
+            .calls
+            .len()
+            .checked_sub(1)
+            .expect("callee call should be recorded");
+        let result = expansion
+            .binding(expansion.result)
+            .expect("result binding should be defined");
+        let binding_type = self.binding_type(result);
+        let fresh = self.alloc_binding(&binding_type, "contract_result".to_string())?;
+        let (domain, ret) = Domain::from_return_value(&fresh);
+        let mut args = Vec::new();
+
+        for parameter in &expansion.parameters {
+            args.push(self.binding_value[parameter].clone());
+        }
+
+        self.call(
+            expansion.term,
+            TermKind::Constructor,
+            &args,
+            ret.clone(),
+            Invocation::Contract,
+            domain,
+        )
+        .with_context(|| {
+            format!(
+                "expanding contract of '{name}'",
+                name = self.prog.term_name(expansion.term)
+            )
+        })?;
+
+        // The fresh value shares the type of the callee's return value.
+        let call = &mut self.conditions.calls[callee];
+
+        assert_eq!(call.term, expansion.term);
+
+        call.contract_ret = Some(ret);
+
+        Ok(())
     }
 
     /// Build conditions for a single term's spec, applied to freshly allocated
@@ -1279,6 +1430,14 @@ impl<'a> ConditionsBuilder<'a> {
             return Ok(());
         }
 
+        // Build the binding's conditions on the side of the rule it belongs to.
+        let rhs = std::mem::replace(&mut self.rhs, self.rhs_bindings.contains(&id));
+        let result = self.add_new_binding(id, binding);
+        self.rhs = rhs;
+        result
+    }
+
+    fn add_new_binding(&mut self, id: BindingId, binding: &Binding) -> Result<()> {
         // Allocate a value.
         let binding_type = self.binding_type(binding);
         let name = format!("b{}", id.index());
@@ -1505,10 +1664,12 @@ impl<'a> ConditionsBuilder<'a> {
                 self.boolean(true)
             };
             // Record condition to determine when the default spec applies.
-            self.state_modification_conds
-                .entry(modifies.state.0.clone())
-                .or_default()
-                .push(cond);
+            if !matches!(invocation, Invocation::Contract) {
+                self.state_modification_conds
+                    .entry(modifies.state.0.clone())
+                    .or_default()
+                    .push(cond);
+            }
         }
 
         let (requires, matches, mut provides) =
@@ -1520,7 +1681,10 @@ impl<'a> ConditionsBuilder<'a> {
             // Matches describe when the function applies.
             let all_matches = self.all(matches);
             let eq = self.exprs_equal(p, all_matches);
-            self.conditions.assumptions.push(eq);
+            match invocation {
+                Invocation::Contract => self.conditions.contract_facts.push(eq),
+                _ => self.conditions.assumptions.push(eq),
+            }
 
             // Provides are conditioned on the match.
             let all_provides = self.all(provides);
@@ -1539,6 +1703,11 @@ impl<'a> ConditionsBuilder<'a> {
             Invocation::Callee => {
                 self.conditions.assumptions.extend(requires);
                 self.conditions.assertions.extend(provides);
+            }
+            Invocation::Contract => {
+                self.conditions.contract_facts.extend(requires);
+                self.conditions.contract_facts.extend(provides);
+                return Ok(());
             }
         }
 
@@ -1635,6 +1804,8 @@ impl<'a> ConditionsBuilder<'a> {
             args,
             ret,
             signatures,
+            ret_rhs: self.rhs,
+            contract_ret: None,
         });
         Ok(())
     }
@@ -2096,6 +2267,7 @@ impl<'a> ConditionsBuilder<'a> {
                 self.conditions.qualifiers.push(Qualifier {
                     value: x.clone(),
                     ty: ty.clone(),
+                    rhs: self.rhs,
                 });
                 Ok(x)
             }
@@ -2767,8 +2939,13 @@ impl<'a> ConditionsBuilder<'a> {
 
     fn dedup_expr(&mut self, expr: Expr) -> ExprId {
         // Dedupe, if pure.
+        let expr_map = if self.rhs {
+            &mut self.rhs_expr_map
+        } else {
+            &mut self.expr_map
+        };
         let maybe_id = if expr.pure() {
-            self.expr_map.get(&expr)
+            expr_map.get(&expr)
         } else {
             None
         };
@@ -2779,7 +2956,10 @@ impl<'a> ConditionsBuilder<'a> {
         } else {
             let id = ExprId(self.conditions.exprs.len());
             self.conditions.exprs.push(expr.clone());
-            self.expr_map.insert(expr, id);
+            expr_map.insert(expr, id);
+            if self.rhs {
+                self.conditions.rhs_exprs.insert(id);
+            }
             id
         };
 

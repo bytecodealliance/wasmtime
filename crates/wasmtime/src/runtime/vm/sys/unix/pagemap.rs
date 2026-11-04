@@ -174,8 +174,13 @@ impl PageMap {
 ///   Note that this is not paired with `Categories::PRESENT`: a page the
 ///   kernel has swapped out is not present but still holds the previous
 ///   instance's contents, so it must be reset (which pages it back in) or
-///   decommitted like any other dirty page. A page that was never touched is
-///   neither written nor present, so nothing is scanned that need not be.
+///   decommitted like any other dirty page.
+///
+/// * `Categories::PRESENT | Categories::SWAPPED` (either) - the page must
+///   actually be backed by something. `WRITTEN` alone is not enough as it
+///   seems to precisely mean "not userfaultfd write-protected". By ensuring a
+///   page is present or swapped it means that there's actually something behind
+///   a PTE.
 ///
 /// * `!Categories::PFNZERO` - if a page is mapped to the zero page then it's
 ///   guaranteed to be readonly and it means that wasm read the memory but
@@ -311,6 +316,9 @@ pub unsafe fn reset_with_pagemap(
             // page/file page as those are inverted above meaning we're
             // searching for pages that specifically don't have those flags.
             .category_mask(Categories::WRITTEN | Categories::PFNZERO | Categories::FILE)
+            // ... but only pages that actually exist, either in memory or in
+            // swap.
+            .category_anyof_mask(Categories::PRESENT | Categories::SWAPPED)
             // Don't return any categories back. This helps group regions
             // together since the reported set of categories is always empty
             // and we otherwise aren't looking for anything in particular.
@@ -500,7 +508,6 @@ mod ioctl {
         ///
         /// For more detail see the `pagemap_scan_is_interesting_page` function
         /// in the Linux kernel source.
-        #[expect(dead_code, reason = "bindings for the future if we need them")]
         pub fn category_anyof_mask(&mut self, flags: Categories) -> &mut PageMapScanBuilder {
             self.pm_scan_arg.category_anyof_mask = flags;
             self
@@ -683,6 +690,11 @@ mod tests {
     use std::fs::File;
     use std::ptr;
 
+    /// Pages backed by something, in memory or in swap. Paired with
+    /// `WRITTEN` in scans because newer kernels also report never-touched
+    /// ptes as `WRITTEN`; see `reset_with_pagemap`.
+    const POPULATED: Categories = Categories::PRESENT.union(Categories::SWAPPED);
+
     struct MmapAnonymous {
         ptr: *mut std::ffi::c_void,
         len: usize,
@@ -760,6 +772,7 @@ mod tests {
                 &fd,
                 PageMapScanBuilder::new(mmap.region())
                     .category_mask(Categories::WRITTEN)
+                    .category_anyof_mask(POPULATED)
                     .return_mask(Categories::all())
                     .build(results.spare_capacity_mut()),
             )
@@ -781,6 +794,7 @@ mod tests {
                 &fd,
                 PageMapScanBuilder::new(mmap.region())
                     .category_mask(Categories::WRITTEN)
+                    .category_anyof_mask(POPULATED)
                     .return_mask(Categories::all())
                     .build(results.spare_capacity_mut()),
             )
@@ -833,6 +847,7 @@ mod tests {
                 &fd,
                 PageMapScanBuilder::new(mmap.region())
                     .category_mask(Categories::WRITTEN)
+                    .category_anyof_mask(POPULATED)
                     .return_mask(Categories::WRITTEN | Categories::PRESENT | Categories::PFNZERO)
                     .build(results.spare_capacity_mut()),
             )
@@ -888,6 +903,7 @@ mod tests {
                 PageMapScanBuilder::new(mmap.region())
                     .category_inverted(Categories::PFNZERO)
                     .category_mask(Categories::WRITTEN | Categories::PFNZERO)
+                    .category_anyof_mask(POPULATED)
                     .return_mask(Categories::WRITTEN | Categories::PRESENT | Categories::PFNZERO)
                     .build(results.spare_capacity_mut()),
             )
@@ -937,13 +953,14 @@ mod tests {
             Categories::WRITTEN | Categories::PFNZERO
         );
 
-        // If we ask for written pages though (which seems synonymous with
-        // present?) then everything should be in one region.
+        // If we ask for written and present pages though then all touched
+        // pages should be in one region. Note that `WRITTEN` alone isn't
+        // enough to end the region on recent kernels.
         let result = unsafe {
             ioctl(
                 &fd,
                 PageMapScanBuilder::new(mmap.region())
-                    .return_mask(Categories::WRITTEN)
+                    .return_mask(Categories::WRITTEN | Categories::PRESENT)
                     .build(results.spare_capacity_mut()),
             )
             .unwrap()
@@ -952,7 +969,10 @@ mod tests {
         assert_eq!(result.walk_end(), mmap.page_end(3));
 
         assert_eq!(result.regions()[0].region(), mmap.page_region(0..4));
-        assert_eq!(result.regions()[0].categories(), Categories::WRITTEN);
+        assert_eq!(
+            result.regions()[0].categories(),
+            Categories::WRITTEN | Categories::PRESENT
+        );
     }
 
     #[test]
@@ -1011,6 +1031,7 @@ mod tests {
                 &fd,
                 PageMapScanBuilder::new(mmap.region())
                     .category_mask(Categories::WRITTEN)
+                    .category_anyof_mask(POPULATED)
                     .return_mask(Categories::WRITTEN | Categories::PFNZERO)
                     .max_pages(2)
                     .build(results.spare_capacity_mut()),
