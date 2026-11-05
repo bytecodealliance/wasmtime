@@ -1504,7 +1504,7 @@ impl CommonOptions {
         Ok(())
     }
 
-    pub fn enable_wasm_features(&self, config: &mut Config) -> Result<()> {
+    fn enable_wasm_features(&self, config: &mut Config) -> Result<()> {
         let all = self.wasm.all_proposals;
         for (feature, option, _) in WASM_FEATURE_OPTIONS {
             let mut value = option(&self.wasm);
