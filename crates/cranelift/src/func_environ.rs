@@ -1753,7 +1753,11 @@ impl FuncEnvironment<'_> {
             2 => builder.ins().load(I16, shadow_flags, shadow_addr, 0),
             4 => builder.ins().load(I32, shadow_flags, shadow_addr, 0),
             8 => builder.ins().load(I64, shadow_flags, shadow_addr, 0),
-            16 => builder.ins().load(I128, shadow_flags, shadow_addr, 0),
+            16 => {
+                let low = builder.ins().load(I64, shadow_flags, shadow_addr, 0);
+                let high = builder.ins().load(I64, shadow_flags, shadow_addr, 8);
+                builder.ins().bor(low, high)
+            }
             _ => unreachable!("unexpected store size {size}"),
         };
 
@@ -1787,14 +1791,21 @@ impl FuncEnvironment<'_> {
         let ty = builder.func.dfg.value_type(value);
         let mut flags = ir::MemFlagsData::new();
         flags.set_endianness(ir::Endianness::Little);
+        if ty.is_vector() {
+            // Split vectors into 64-bit lanes rather than bitcasting them to
+            // `i128`, which not every backend supports. With little-endian
+            // lane order, lane 0 holds the low bits.
+            let lanes = builder.ins().bitcast(I64X2, flags, value);
+            let lo = builder.ins().extractlane(lanes, 0);
+            let hi = builder.ins().extractlane(lanes, 1);
+            return (lo, hi);
+        }
         let bits = match ty {
             F32 => builder.ins().bitcast(I32, flags, value),
             F64 => builder.ins().bitcast(I64, flags, value),
-            ty if ty.is_vector() => builder.ins().bitcast(I128, flags, value),
             _ => value,
         };
         match builder.func.dfg.value_type(bits) {
-            I128 => builder.ins().isplit(bits),
             I64 => (bits, builder.ins().iconst(I64, 0)),
             _ => (
                 builder.ins().uextend(I64, bits),
