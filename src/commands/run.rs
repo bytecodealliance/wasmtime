@@ -420,6 +420,7 @@ impl RunCommand {
             .common
             .wasm
             .timeout
+            .map(|t| *t)
             .unwrap_or(std::time::Duration::MAX);
         let result = tokio::time::timeout(dur, async {
             let mut profiled_modules: Vec<(String, Module)> = Vec::new();
@@ -575,7 +576,7 @@ impl RunCommand {
                 store.set_epoch_deadline(1);
                 let engine = store.engine().clone();
                 thread::spawn(move || {
-                    thread::sleep(timeout);
+                    thread::sleep(*timeout);
                     engine.increment_epoch();
                 });
             }
