@@ -55,6 +55,19 @@
   "allocation size too large")
 (assert_return (invoke $M "a-is-null" (i32.const 0)) (i32.const 1))
 
+;; A trapping segment before any write to an imported table is evaluated in
+;; place, and still traps before the later segment writes the imported table.
+(assert_trap
+  (module
+    (type $a (array (mut i64)))
+    (import "M" "a" (table 2 anyref))
+    (table $l 1 anyref)
+    (elem (table $l) (i32.const 0) anyref
+      (array.new_default $a (i32.const 0x7fffffff)))
+    (elem (table 0) (i32.const 0) anyref (ref.i31 (i32.const 5))))
+  "allocation size too large")
+(assert_return (invoke $M "a-is-null" (i32.const 0)) (i32.const 1))
+
 ;; Out-of-bounds active segments still trap in order: earlier segments stay
 ;; written.
 (assert_trap

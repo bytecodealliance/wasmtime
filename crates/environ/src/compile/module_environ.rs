@@ -743,6 +743,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::ElementSection(elements) => {
                 self.validator.element_section(&elements)?;
 
+                // Whether writes to tables made so far during instantiation
+                // could be observed outside of this instance, which becomes
+                // true once an active segment applies to an imported table.
+                let mut side_effects_visible = false;
+
                 for (index, entry) in elements.into_iter().enumerate() {
                     let wasmparser::Element {
                         kind,
@@ -797,19 +802,21 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             // expressions of all element segments before
                             // executing any active segment's `table.init`
                             // (https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation).
-                            // So if any element expression may trap then stage
-                            // its evaluation into a passive element segment,
-                            // which is evaluated before any active segment is
-                            // applied. Note that this passive segment isn't
-                            // registered in `passive_elem_map` so it's not
-                            // reachable from wasm itself.
-                            let may_trap = match &elements {
-                                TableSegmentElements::Functions(_) => false,
-                                TableSegmentElements::Expressions { exprs, .. } => exprs
-                                    .iter()
-                                    .any(|expr| expr.ops().iter().any(|op| op.may_trap())),
-                            };
-                            let init = if may_trap {
+                            // So if any element expression may trap, and an
+                            // earlier write (including from this segment)
+                            // could be observed, then stage its evaluation
+                            // into a passive element segment, which is
+                            // evaluated before any active segment is applied.
+                            // Note that this passive segment isn't registered
+                            // in `passive_elem_map` so it's not reachable from
+                            // wasm itself.
+                            //
+                            // If no imported table has been written yet then a
+                            // trap is unobservable, so evaluating in place is
+                            // fine and avoids the extra copy.
+                            side_effects_visible |=
+                                self.result.module.is_imported_table(table_index);
+                            let init = if side_effects_visible && elements_may_trap(&elements) {
                                 let len = elements.len();
                                 let index = self
                                     .result
@@ -1329,8 +1336,10 @@ impl ModuleTranslation<'_> {
             if top > self.module.tables[segment.table_index].limits.min {
                 return true;
             }
-            // Only segments whose elements may trap are staged.
-            matches!(segment.init, TableSegmentInit::Staged { .. })
+            match &segment.init {
+                TableSegmentInit::Direct(elements) => elements_may_trap(elements),
+                TableSegmentInit::Staged { .. } => true,
+            }
         })
     }
 
@@ -1756,5 +1765,15 @@ impl ModuleTranslation<'_> {
             ModuleStartup::Always(_) | ModuleStartup::IfMemoriesNeedInit(_) => return,
         };
         self.module.startup = ModuleStartup::IfMemoriesNeedInit(ty);
+    }
+}
+
+/// Returns whether evaluating any element of `elements` may trap.
+fn elements_may_trap(elements: &TableSegmentElements) -> bool {
+    match elements {
+        TableSegmentElements::Functions(_) => false,
+        TableSegmentElements::Expressions { exprs, .. } => exprs
+            .iter()
+            .any(|expr| expr.ops().iter().any(|op| op.may_trap())),
     }
 }

@@ -136,8 +136,11 @@ pub struct TableSegment {
 /// How the values of an active table segment are produced.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum TableSegmentInit {
-    /// The elements cannot trap, so they are evaluated and written directly
-    /// to the table in segment order. These never appear in `vm::Instance`.
+    /// The elements are evaluated and written directly to the table in
+    /// segment order. These never appear in `vm::Instance`.
+    ///
+    /// This is used when the elements cannot trap, or when a trap could not
+    /// be observed because no imported table has been written to yet.
     Direct(TableSegmentElements),
     /// The elements may trap during evaluation, so they are instead evaluated
     /// up-front into this passive element segment's storage alongside all
