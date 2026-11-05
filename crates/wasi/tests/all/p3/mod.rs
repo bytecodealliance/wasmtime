@@ -134,6 +134,46 @@ async fn p3_filesystem_file_read_write_blocking() -> wasmtime::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_filesystem_operations_release_all_lifecycle_values() -> wasmtime::Result<()> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use wasmtime_wasi::filesystem::FilesystemOperation;
+
+    struct CountOnDrop(Arc<AtomicUsize>);
+    impl Drop for CountOnDrop {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    for blocking in [false, true] {
+        let admitted = Arc::new(AtomicUsize::new(0));
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let admitted_by_hook = admitted.clone();
+        let dropped_by_operation = dropped.clone();
+        run_with_builder(
+            P3_FILESYSTEM_FILE_READ_WRITE_COMPONENT,
+            blocking,
+            |builder| {
+                builder.filesystem_operation_hook(move || {
+                    admitted_by_hook.fetch_add(1, Ordering::SeqCst);
+                    Ok(FilesystemOperation::new(CountOnDrop(
+                        dropped_by_operation.clone(),
+                    )))
+                });
+            },
+        )
+        .await?;
+        let admitted = admitted.load(Ordering::SeqCst);
+        assert!(admitted > 0, "P3 filesystem work did not invoke the hook");
+        assert_eq!(dropped.load(Ordering::SeqCst), admitted);
+    }
+    Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_random_imports() -> wasmtime::Result<()> {
     run(P3_RANDOM_IMPORTS_COMPONENT).await
 }

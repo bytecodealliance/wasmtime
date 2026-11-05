@@ -4,7 +4,17 @@ Unreleased.
 
 ### Added
 
+* `wasmtime-wasi` supports embedder-provided owners for active filesystem work
+  and native filesystem handles. Operation hooks retain admission through native
+  work and resource handoff; handle owners retain backing content through idle
+  descriptors, child handles, and preserving native duplicates.
+
 ### Changed
+
+* `wasmtime_wasi::filesystem::File::file` and `Dir::dir` now contain
+  `Arc<FilesystemHandle>` instead of `Arc<std::fs::File>`. Borrowed native-file
+  access remains available through `Deref`. Use `FilesystemHandle::try_clone`
+  to duplicate a native handle while retaining its backing-content owner.
 
 --------------------------------------------------------------------------------
 

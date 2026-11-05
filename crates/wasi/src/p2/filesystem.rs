@@ -19,6 +19,7 @@ impl From<crate::filesystem::ErrorCode> for types::ErrorCode {
             crate::filesystem::ErrorCode::Access => Self::Access,
             crate::filesystem::ErrorCode::Already => Self::Already,
             crate::filesystem::ErrorCode::BadDescriptor => Self::BadDescriptor,
+            crate::filesystem::ErrorCode::WouldBlock => Self::WouldBlock,
             crate::filesystem::ErrorCode::Busy => Self::Busy,
             crate::filesystem::ErrorCode::Exist => Self::Exist,
             crate::filesystem::ErrorCode::FileTooLarge => Self::FileTooLarge,
@@ -124,10 +125,13 @@ impl InputStream for FileInputStream {
 
                 let p = self.position;
                 let size = size.min(self.max_read_size);
-                self.state = ReadState::Waiting(
-                    self.file
-                        .spawn_blocking(move |f| Self::blocking_read(f, p, size)),
-                );
+                self.state = match self
+                    .file
+                    .spawn_blocking(move |f| Self::blocking_read(f, p, size))
+                {
+                    Ok(task) => ReadState::Waiting(task),
+                    Err(error) => ReadState::Error(error.into()),
+                };
                 Ok(Bytes::new())
             }
             ReadState::DataAvailable(b) => {
@@ -161,8 +165,9 @@ impl InputStream for FileInputStream {
             let size = size.min(self.max_read_size);
             self.state = self
                 .file
-                .run_blocking(move |f| Self::blocking_read(f, p, size))
-                .await;
+                .run_blocking(move |f| Ok::<_, io::Error>(Self::blocking_read(f, p, size)))
+                .await
+                .unwrap_or_else(ReadState::Error);
         }
 
         self.read(size)
@@ -195,10 +200,13 @@ impl Pollable for FileInputStream {
 
             const DEFAULT_READ_SIZE: usize = 4096;
             let p = self.position;
-            self.state = ReadState::Waiting(
-                self.file
-                    .spawn_blocking(move |f| Self::blocking_read(f, p, DEFAULT_READ_SIZE)),
-            );
+            self.state = match self
+                .file
+                .spawn_blocking(move |f| Self::blocking_read(f, p, DEFAULT_READ_SIZE))
+            {
+                Ok(task) => ReadState::Waiting(task),
+                Err(error) => ReadState::Error(error.into()),
+            };
         }
 
         self.wait_ready().await
@@ -304,7 +312,8 @@ impl OutputStream for FileOutputStream {
         let m = self.mode;
         self.state = OutputState::Waiting(
             self.file
-                .spawn_blocking(move |f| Self::blocking_write(f, buf, m)),
+                .spawn_blocking(move |f| Self::blocking_write(f, buf, m))
+                .map_err(|e| StreamError::LastOperationFailed(io::Error::from(e).into()))?,
         );
         Ok(())
     }
