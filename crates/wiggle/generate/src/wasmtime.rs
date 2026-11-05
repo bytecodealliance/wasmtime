@@ -119,10 +119,12 @@ fn generate_func(
         let fuel = wiggle::wasmtime_crate::AsContextMut::as_context_mut(&mut caller).hostcall_fuel();
         let (mut mem, ctx) = match &export {
             Some(wiggle::wasmtime_crate::Extern::Memory(m)) => {
-                let (mem, ctx) = m.data_and_store_mut(&mut caller);
+                // Access memory by range, so that only what the host
+                // writes is considered modified.
+                let (mem, ctx) = m.data_ranges_and_store_mut(&mut caller);
                 let ctx = get_cx(ctx);
                 ctx.set_hostcall_fuel(fuel);
-                (wiggle::GuestMemory::Unshared(mem), ctx)
+                (wiggle::GuestMemory::Ranges(mem), ctx)
             }
             Some(wiggle::wasmtime_crate::Extern::SharedMemory(m)) => {
                 let ctx = get_cx(caller.data_mut());

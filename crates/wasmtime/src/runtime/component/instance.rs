@@ -520,6 +520,18 @@ impl Instance {
         }
     }
 
+    /// The `len` bytes at `offset` of the options' memory, if in bounds.
+    pub(crate) fn options_memory_range_mut<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+        options: OptionsIndex,
+        offset: usize,
+        len: usize,
+    ) -> Option<&'a mut [u8]> {
+        let end = offset.checked_add(len)?;
+        self.options_memory_mut(store, options).get_mut(offset..end)
+    }
+
     /// Helper function to simultaneously get a borrow to this instance's
     /// component as well as the store that this component is contained within.
     ///

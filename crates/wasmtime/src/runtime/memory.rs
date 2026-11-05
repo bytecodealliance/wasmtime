@@ -10,6 +10,7 @@ use alloc::sync::Arc;
 use core::any::Any;
 use core::cell::UnsafeCell;
 use core::fmt;
+use core::ops::Range;
 use core::slice;
 use core::time::Duration;
 use wasmtime_environ::{DefinedMemoryIndex, MemoryTunables};
@@ -494,6 +495,90 @@ impl Memory {
             let mut store = store.into();
             let data = &mut *(store.data_mut() as *mut T);
             (self.data_mut(store), data)
+        }
+    }
+
+    /// Returns `range` of this memory as a native Rust slice, or an error if
+    /// it is out of bounds.
+    ///
+    /// Note that this method will consider the entire store context provided as
+    /// borrowed for the duration of the lifetime of the returned slice.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data_range<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContext<'a, T>>,
+        range: Range<usize>,
+    ) -> Result<&'a [u8], MemoryAccessError> {
+        self.data(store)
+            .get(range)
+            .ok_or(MemoryAccessError { _private: () })
+    }
+
+    /// Returns `range` of this memory as a native Rust mutable slice, or an
+    /// error if it is out of bounds.
+    ///
+    /// Unlike [`Memory::data_mut`], which hands out all of memory,
+    /// only this range is borrowed for modification, so that Wasmtime
+    /// knows precisely what the host may modify. Prefer this method
+    /// over `data_mut` plus a sub-slice operation: the additional
+    /// semantic information about written memory may be useful to
+    /// Wasmtime for efficiency reasons in some cases.
+    ///
+    /// Note that this method will consider the entire store context provided as
+    /// borrowed for the duration of the lifetime of the returned slice. See
+    /// [`Memory::data_ranges_and_store_mut`] to access multiple ranges while
+    /// also borrowing the store's data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data_range_mut<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContextMut<'a, T>>,
+        range: Range<usize>,
+    ) -> Result<&'a mut [u8], MemoryAccessError> {
+        let store = store.into();
+        MemoryRanges {
+            memory: *self,
+            store: store.0,
+        }
+        .into_range_mut(range)
+    }
+
+    /// Like [`Memory::data_and_store_mut`], but returns a [`MemoryRanges`]
+    /// through which ranges of memory are read and modified, rather than one
+    /// slice of all of memory.
+    ///
+    /// This is useful for host code that works with the store's `T` while
+    /// accessing several parts of memory, such as the bindings of a WASI
+    /// implementation: as with [`Memory::data_range_mut`], only the ranges
+    /// borrowed for modification are considered modified.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data_ranges_and_store_mut<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContextMut<'a, T>>,
+    ) -> (MemoryRanges<'a>, &'a mut T) {
+        let mut store = store.into();
+        assert!(self.comes_from_same_store(store.0));
+        // SAFETY: as for `data_and_store_mut`, the store's `T` and the rest
+        // of the store are disjoint, and `MemoryRanges` only uses the latter.
+        unsafe {
+            let data = &mut *(store.data_mut() as *mut T);
+            let inner: &'a mut crate::store::StoreInner<T> = store.0;
+            let opaque: &'a mut StoreOpaque = inner;
+            (
+                MemoryRanges {
+                    memory: *self,
+                    store: opaque,
+                },
+                data,
+            )
         }
     }
 
@@ -1636,5 +1721,71 @@ mod tests {
         assert!(mapped[data_start + 5..].iter().all(|b| *b == 0));
 
         Ok(())
+    }
+}
+
+/// Access to ranges of a [`Memory`], from
+/// [`Memory::data_ranges_and_store_mut`].
+///
+/// Ranges are read with [`MemoryRanges::data_range`] (or all of memory with
+/// [`MemoryRanges::data`]) and modified with
+/// [`MemoryRanges::data_range_mut`], which considers only the range it
+/// returns modified.
+pub struct MemoryRanges<'a> {
+    memory: Memory,
+    store: &'a mut StoreOpaque,
+}
+
+impl<'a> MemoryRanges<'a> {
+    /// The length of the memory, in bytes.
+    pub fn len(&self) -> usize {
+        self.memory.internal_data_size(self.store)
+    }
+
+    /// Whether the memory is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// All of the memory, for reading.
+    pub fn data(&self) -> &[u8] {
+        let definition = self.store[self.memory.instance].memory(self.memory.index);
+        // SAFETY: the store owns this non-shared memory, and this borrow of
+        // `self` excludes modification through it.
+        unsafe { slice::from_raw_parts(definition.base.as_ptr(), definition.current_length()) }
+    }
+
+    /// `range` of the memory, for reading, or an error if it is out of
+    /// bounds.
+    pub fn data_range(&self, range: Range<usize>) -> Result<&[u8], MemoryAccessError> {
+        self.data()
+            .get(range)
+            .ok_or(MemoryAccessError { _private: () })
+    }
+
+    /// `range` of the memory, for modification, or an error if it is out of
+    /// bounds. Only this range is considered modified.
+    pub fn data_range_mut(&mut self, range: Range<usize>) -> Result<&mut [u8], MemoryAccessError> {
+        MemoryRanges {
+            memory: self.memory,
+            store: &mut *self.store,
+        }
+        .into_range_mut(range)
+    }
+
+    fn into_range_mut(self, range: Range<usize>) -> Result<&'a mut [u8], MemoryAccessError> {
+        let len = self.len();
+        if range.start > range.end || range.end > len {
+            return Err(MemoryAccessError { _private: () });
+        }
+        let definition = self.store[self.memory.instance].memory(self.memory.index);
+        // SAFETY: the range is in bounds, and the store, which owns this
+        // non-shared memory, is borrowed for the slice's lifetime.
+        unsafe {
+            Ok(slice::from_raw_parts_mut(
+                definition.base.as_ptr().add(range.start),
+                range.len(),
+            ))
+        }
     }
 }

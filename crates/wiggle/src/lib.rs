@@ -43,6 +43,11 @@ pub mod wasmtime_crate {
 pub enum GuestMemory<'a> {
     Unshared(&'a mut [u8]),
     Shared(&'a [UnsafeCell<u8>]),
+    /// An unshared Wasmtime memory accessed by range, so that only the ranges
+    /// written are considered modified (see
+    /// `wasmtime::Memory::data_ranges_and_store_mut`).
+    #[cfg(feature = "wasmtime")]
+    Ranges(wasmtime::MemoryRanges<'a>),
 }
 
 // manual impls are needed because of the `UnsafeCell` in the `Shared` branch
@@ -95,11 +100,11 @@ impl<'a> GuestMemory<'a> {
     /// not valid to read from.
     pub fn as_cow(&self, ptr: GuestPtr<[u8]>) -> Result<Cow<'_, [u8]>, GuestError> {
         match self {
-            GuestMemory::Unshared(_) => match self.as_slice(ptr)? {
+            GuestMemory::Shared(_) => Ok(Cow::Owned(self.to_vec(ptr)?)),
+            _ => match self.as_slice(ptr)? {
                 Some(slice) => Ok(Cow::Borrowed(slice)),
                 None => unreachable!(),
             },
-            GuestMemory::Shared(_) => Ok(Cow::Owned(self.to_vec(ptr)?)),
         }
     }
 
@@ -133,6 +138,8 @@ impl<'a> GuestMemory<'a> {
         match self {
             GuestMemory::Unshared(slice) => Ok(Some(&slice[range])),
             GuestMemory::Shared(_) => Ok(None),
+            #[cfg(feature = "wasmtime")]
+            GuestMemory::Ranges(memory) => Ok(Some(&memory.data()[range])),
         }
     }
 
@@ -154,6 +161,10 @@ impl<'a> GuestMemory<'a> {
         match self {
             GuestMemory::Unshared(slice) => Ok(Some(&mut slice[range])),
             GuestMemory::Shared(_) => Ok(None),
+            #[cfg(feature = "wasmtime")]
+            GuestMemory::Ranges(memory) => Ok(Some(
+                memory.data_range_mut(range).expect("range was validated"),
+            )),
         }
     }
 
@@ -208,7 +219,7 @@ impl<'a> GuestMemory<'a> {
             return Ok(());
         }
 
-        let guest = self.validate_size_align::<T>(ptr.pointer.0, ptr.pointer.1)?;
+        let guest = self.validate_size_align_mut::<T>(ptr.pointer.0, ptr.pointer.1)?;
 
         // SAFETY: in the shared memory case, we copy and accept that
         // the guest data may be concurrently modified. TODO: audit that
@@ -251,9 +262,62 @@ impl<'a> GuestMemory<'a> {
                 unsafe { &*(s as *const [u8] as *const [UnsafeCell<u8>]) }
             }
             GuestMemory::Shared(s) => s,
+            #[cfg(feature = "wasmtime")]
+            GuestMemory::Ranges(memory) => {
+                let s = memory.data();
+                unsafe { &*(s as *const [u8] as *const [UnsafeCell<u8>]) }
+            }
         };
-        let memory = &cells[range.clone()];
+        Self::align_cells(&cells[range.clone()], range)
+    }
 
+    /// Like `validate_size_align`, for writing: with
+    /// `GuestMemory::Ranges`, only the validated range is borrowed for
+    /// modification.
+    pub(crate) fn validate_size_align_mut<T>(
+        &mut self,
+        offset: u32,
+        len: u32,
+    ) -> Result<&[UnsafeCell<T>], GuestError>
+    where
+        T: GuestTypeTransparent,
+    {
+        match self {
+            #[cfg(feature = "wasmtime")]
+            GuestMemory::Ranges(memory) => {
+                let range = {
+                    let len = len
+                        .checked_mul(T::guest_size())
+                        .ok_or(GuestError::PtrOverflow)?;
+                    let region = Region { start: offset, len };
+                    let start = usize::try_from(offset)?;
+                    let end = start
+                        .checked_add(usize::try_from(len)?)
+                        .ok_or(GuestError::PtrOverflow)?;
+                    if end > memory.len() {
+                        return Err(GuestError::PtrOutOfBounds(region));
+                    }
+                    start..end
+                };
+                let s: &mut [u8] = memory
+                    .data_range_mut(range.clone())
+                    .expect("range was validated");
+                let cells = unsafe { &*(s as *const [u8] as *const [UnsafeCell<u8>]) };
+                Self::align_cells(cells, range)
+            }
+            _ => self.validate_size_align(offset, len),
+        }
+    }
+
+    /// Reinterprets `memory`, which holds `range` of guest memory, as `T`s,
+    /// failing if it is misaligned.
+    fn align_cells<T>(
+        memory: &[UnsafeCell<u8>],
+        range: Range<usize>,
+    ) -> Result<&[UnsafeCell<T>], GuestError>
+    where
+        T: GuestTypeTransparent,
+    {
         // ... and then align it to `T`, failing if either the head or tail slices
         // are nonzero in length. This `unsafe` here is from the standard library
         // and should be ok since the input slice is `UnsafeCell<u8>` and the output
@@ -289,6 +353,8 @@ impl<'a> GuestMemory<'a> {
         let oob = match self {
             GuestMemory::Unshared(b) => b.get(range.clone()).is_none(),
             GuestMemory::Shared(b) => b.get(range.clone()).is_none(),
+            #[cfg(feature = "wasmtime")]
+            GuestMemory::Ranges(memory) => range.end > memory.len(),
         };
         if oob {
             Err(GuestError::PtrOutOfBounds(region))
@@ -299,10 +365,7 @@ impl<'a> GuestMemory<'a> {
 
     /// Returns whether this is a shared memory or not.
     pub fn is_shared_memory(&self) -> bool {
-        match self {
-            GuestMemory::Shared(_) => true,
-            GuestMemory::Unshared(_) => false,
-        }
+        matches!(self, GuestMemory::Shared(_))
     }
 }
 

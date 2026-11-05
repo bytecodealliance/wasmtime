@@ -472,7 +472,7 @@ where
             let ptr = unsafe { rest[0].assume_init_ref() };
             Destination::Memory(validate_inbounds_dynamic(
                 &result_tys.abi,
-                lower.as_slice_mut(),
+                lower.as_slice(),
                 ptr,
             )?)
         };
@@ -515,12 +515,12 @@ where
 
         // Load/validate the return pointer, if present.
         let retptr = if !lift.types[fty.results].types.is_empty() {
-            let mut lower = LowerContext::new(store.as_context_mut(), options, instance);
+            let lower = LowerContext::new(store.as_context_mut(), options, instance);
             // SAFETY: see `load_params` below about how the return pointer
             // should be safe to use.
             let ptr = unsafe { rest[0].assume_init_ref() };
             let result_tys = &lower.types[fty.results];
-            validate_inbounds_dynamic(&result_tys.abi, lower.as_slice_mut(), ptr)?
+            validate_inbounds_dynamic(&result_tys.abi, lower.as_slice(), ptr)?
         } else {
             // If there's no return pointer then `R` should have an
             // empty flat representation. In this situation pretend the return
