@@ -1,6 +1,6 @@
 //! Implementation of [`FutureAny`] and [`StreamAny`].
 
-use crate::component::concurrent::futures_and_streams::{self, TransmitOrigin};
+use crate::component::concurrent::futures_and_streams::{self, TransmitCheck, TransmitOrigin};
 use crate::component::func::{LiftContext, LowerContext, desc};
 use crate::component::matching::InstanceType;
 use crate::component::resources::HostResourceIndex;
@@ -147,11 +147,8 @@ unsafe impl Lower for FutureAny {
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        futures_and_streams::lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_flat(
-            cx,
-            InterfaceType::U32,
-            dst,
-        )
+        futures_and_streams::lower_future_to_index(self.idx, cx, ty, TransmitCheck::Dynamic)?
+            .linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
     fn linear_lower_to_memory<T>(
@@ -160,11 +157,8 @@ unsafe impl Lower for FutureAny {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        futures_and_streams::lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
-            cx,
-            InterfaceType::U32,
-            offset,
-        )
+        futures_and_streams::lower_future_to_index(self.idx, cx, ty, TransmitCheck::Dynamic)?
+            .linear_lower_to_memory(cx, InterfaceType::U32, offset)
     }
 }
 
@@ -317,11 +311,8 @@ unsafe impl Lower for StreamAny {
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        futures_and_streams::lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_flat(
-            cx,
-            InterfaceType::U32,
-            dst,
-        )
+        futures_and_streams::lower_stream_to_index(self.idx, cx, ty, TransmitCheck::Dynamic)?
+            .linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
     fn linear_lower_to_memory<T>(
@@ -330,11 +321,8 @@ unsafe impl Lower for StreamAny {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        futures_and_streams::lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
-            cx,
-            InterfaceType::U32,
-            offset,
-        )
+        futures_and_streams::lower_stream_to_index(self.idx, cx, ty, TransmitCheck::Dynamic)?
+            .linear_lower_to_memory(cx, InterfaceType::U32, offset)
     }
 }
 
