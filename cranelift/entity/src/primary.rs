@@ -563,5 +563,4 @@ mod tests {
             Err(slice::GetDisjointMutError::IndexOutOfBounds)
         );
     }
-
 }
