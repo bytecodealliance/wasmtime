@@ -24,7 +24,7 @@ use tokio::{
 };
 use wasmtime::{
     AsContextMut, DebugEvent, DebugHandler, Engine, ExnRef, OwnedRooted, Result, Store,
-    StoreContextMut, Trap,
+    StoreContextMut, Trap, WatchpointHit,
 };
 
 mod host;
@@ -181,6 +181,7 @@ impl<T: Send + 'static> DebugHandler for Handler<T> {
             DebugEvent::Exception(exn) => DebugRunResult::Exception(exn),
             DebugEvent::Trap(trap) => DebugRunResult::Trap(trap),
             DebugEvent::Breakpoint => DebugRunResult::Breakpoint,
+            DebugEvent::Watchpoint(hit) => DebugRunResult::Watchpoint(hit),
             DebugEvent::EpochYield => {
                 // Only pause on epoch yields that were requested via
                 // interrupt(). Other epoch ticks simply yield to the
@@ -517,6 +518,9 @@ pub enum DebugRunResult {
     Trap(Trap),
     /// A breakpoint was reached.
     Breakpoint,
+    /// Wasm is about to write watched memory; the write happens when
+    /// execution continues.
+    Watchpoint(WatchpointHit),
 }
 
 #[cfg(test)]
@@ -712,6 +716,99 @@ mod test {
         assert!(matches!(event, DebugRunResult::Finished));
 
         assert!(debuggee.is_complete());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg_attr(miri, ignore)]
+    async fn watchpoints() -> wasmtime::Result<()> {
+        let _ = env_logger::try_init();
+
+        let mut config = Config::new();
+        config.guest_debug(true);
+        let engine = Engine::new(&config)?;
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                  (memory (export "memory") 1)
+                  (func (export "main")
+                    (i32.store8 (i32.const 7) (i32.const 1))
+                    (i32.store offset=6 (i32.const 0) (i32.const 0x11223344))
+                    (i32.store8 (i32.const 12) (i32.const 2))
+                    (memory.fill (i32.const 0) (i32.const 0xaa) (i32.const 16))))
+            "#,
+        )?;
+
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new_async(&mut store, &module, &[]).await?;
+        let memory = instance.get_memory(&mut store, "memory").unwrap();
+        let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+
+        // Watch bytes [8, 12): the first store is just below the
+        // range, the second overlaps it partially, the third is just
+        // above it, and the fill covers all of it.
+        memory.debug_watch(&mut store, 8..12, true)?;
+
+        let mut debuggee = Debuggee::new(store, move |store| {
+            Box::pin(async move {
+                main.call_async(&mut *store, ()).await?;
+                Ok(())
+            })
+        });
+
+        let event = debuggee.run().await?;
+        let DebugRunResult::Watchpoint(hit) = event else {
+            panic!("expected a watchpoint, got {event:?}");
+        };
+        assert_eq!(
+            hit,
+            WatchpointHit {
+                memory,
+                address: 6,
+                len: 4,
+                value: Some(0x11223344),
+            }
+        );
+        // The event is raised before the write happens.
+        debuggee
+            .with_store(move |store| {
+                assert_eq!(&memory.data(&store)[6..10], &[0, 1, 0, 0]);
+            })
+            .await?;
+
+        let event = debuggee.run().await?;
+        let DebugRunResult::Watchpoint(hit) = event else {
+            panic!("expected a watchpoint, got {event:?}");
+        };
+        assert_eq!(
+            hit,
+            WatchpointHit {
+                memory,
+                address: 0,
+                len: 16,
+                value: None,
+            }
+        );
+        debuggee
+            .with_store(move |mut store| {
+                // The previous write has now happened, but not the
+                // fill.
+                assert_eq!(&memory.data(&store)[6..10], &0x11223344_u32.to_le_bytes());
+                assert_eq!(memory.data(&store)[12], 2);
+                // Stop watching; the rest of execution runs freely.
+                memory.debug_watch(&mut store, 0..16, false).unwrap();
+            })
+            .await?;
+
+        let event = debuggee.run().await?;
+        assert!(matches!(event, DebugRunResult::Finished));
+        debuggee
+            .with_store(move |store| {
+                assert_eq!(&memory.data(&store)[..16], &[0xaa; 16]);
+            })
+            .await?;
 
         Ok(())
     }

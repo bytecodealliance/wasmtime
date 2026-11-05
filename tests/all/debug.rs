@@ -1870,6 +1870,29 @@ async fn fuel_visible_and_mutable_in_debug_handler() -> wasmtime::Result<()> {
     Ok(())
 }
 
+/// Records each watchpoint hit, with the watched memory's first 64 bytes as
+/// the handler sees them.
+#[derive(Clone, Default)]
+struct WatchRecorder(Arc<Mutex<Vec<(u64, u64, Option<u128>, Vec<u8>)>>>);
+
+impl DebugHandler for WatchRecorder {
+    type Data = ();
+    fn handle(
+        &self,
+        store: StoreContextMut<'_, ()>,
+        event: DebugEvent<'_>,
+    ) -> impl Future<Output = ()> + Send {
+        if let DebugEvent::Watchpoint(hit) = event {
+            let memory = hit.memory.data(&store)[..64].to_vec();
+            self.0
+                .lock()
+                .unwrap()
+                .push((hit.address, hit.len, hit.value, memory));
+        }
+        async {}
+    }
+}
+
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn uninit_non_nullable_ref_local_in_single_step() -> Result<()> {
@@ -1977,4 +2000,166 @@ async fn uninit_non_nullable_ref_local_in_single_step() -> Result<()> {
             async {}
         }
     }
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn watchpoints_report_writes_before_they_happen() -> wasmtime::Result<()> {
+    let (module, mut store) = get_module_and_store(
+        |_| {},
+        r#"
+    (module
+      (memory (export "memory") 1)
+      (func (export "main")
+        (i32.store offset=16 (i32.const 0) (i32.const 0x11223344))
+        (i64.store (i32.const 24) (i64.const -1))
+        (v128.store (i32.const 32) (v128.const i64x2 1 2))
+        (f32.store (i32.const 48) (f32.const 1.5))
+        (i32.store8 (i32.const 100) (i32.const 7))
+        (memory.fill (i32.const 40) (i32.const 0xaa) (i32.const 8))))
+    "#,
+    )?;
+    let recorder = WatchRecorder::default();
+    store.set_debug_handler(recorder.clone());
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+
+    // Watch [17, 52): the i32 store overlaps it partially, and the store to
+    // byte 100 not at all.
+    memory.debug_watch(&mut store, 17..52, true)?;
+    main.call_async(&mut store, ()).await?;
+    {
+        let hits = recorder.0.lock().unwrap();
+        let summary = hits
+            .iter()
+            .map(|(address, len, value, _)| (*address, *len, *value))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            summary,
+            [
+                (16, 4, Some(0x11223344)),
+                (24, 8, Some(u128::from(u64::MAX))),
+                (32, 16, Some((2 << 64) | 1)),
+                (48, 4, Some(u128::from(1.5_f32.to_bits()))),
+                (40, 8, None),
+            ]
+        );
+        // Each hit is reported before its write.
+        assert_eq!(&hits[0].3[16..20], &[0; 4]);
+        assert_eq!(&hits[1].3[16..20], &0x11223344_u32.to_le_bytes());
+        assert_eq!(&hits[4].3[40..48], &2_u64.to_le_bytes());
+    }
+    assert_eq!(&memory.data(&store)[40..48], &[0xaa; 8]);
+
+    // Unwatched bytes no longer report writes.
+    recorder.0.lock().unwrap().clear();
+    memory.debug_watch(&mut store, 0..64, false)?;
+    main.call_async(&mut store, ()).await?;
+    assert!(recorder.0.lock().unwrap().is_empty());
+
+    // Watches must be within the memory.
+    assert!(memory.debug_watch(&mut store, 0..65537, true).is_err());
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn watchpoints_on_imported_memory_follow_growth() -> wasmtime::Result<()> {
+    // `$definer` defines and grows the memory, and `$importer` writes to it,
+    // so both instances must find the shadow as it grows.
+    let (definer, mut store) = get_module_and_store(
+        |_| {},
+        r#"
+    (module
+      (memory (export "memory") 1)
+      (func (export "grow") (param i32) (result i32)
+        (memory.grow (local.get 0))))
+    "#,
+    )?;
+    let importer = Module::new(
+        store.engine(),
+        r#"
+    (module
+      (import "" "memory" (memory 1))
+      (func (export "store") (param i32 i32)
+        (i32.store8 (local.get 0) (local.get 1))))
+    "#,
+    )?;
+    let recorder = WatchRecorder::default();
+    store.set_debug_handler(recorder.clone());
+    let definer = Instance::new_async(&mut store, &definer, &[]).await?;
+    let memory = definer.get_memory(&mut store, "memory").unwrap();
+    let importer = Instance::new_async(&mut store, &importer, &[memory.into()]).await?;
+    let grow = definer.get_typed_func::<i32, i32>(&mut store, "grow")?;
+    let store8 = importer.get_typed_func::<(i32, i32), ()>(&mut store, "store")?;
+
+    // Watch a byte, then grow the memory, and watch a byte in the new pages
+    // too.
+    memory.debug_watch(&mut store, 10..11, true)?;
+    assert_eq!(grow.call_async(&mut store, 7).await?, 1);
+    let high = 7 * 65536 + 3;
+    memory.debug_watch(&mut store, high..high + 1, true)?;
+
+    // Writes through the importing instance see both watches, and only
+    // those.
+    store8.call_async(&mut store, (10, 1)).await?;
+    store8.call_async(&mut store, (11, 1)).await?;
+    store8
+        .call_async(&mut store, (i32::try_from(high)?, 1))
+        .await?;
+    let hits = recorder
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(address, len, _, _)| (*address, *len))
+        .collect::<Vec<_>>();
+    assert_eq!(hits, [(10, 1), (high, 1)]);
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn watchpoints_out_of_bounds_stores_trap() -> wasmtime::Result<()> {
+    // Try both mmap- and malloc-backed memories (and so shadows).
+    let configs: [fn(&mut Config); 2] = [
+        |_| {},
+        |config| {
+            config
+                .memory_reservation(0)
+                .memory_guard_size(0)
+                .memory_init_cow(false);
+        },
+    ];
+    for configure in configs {
+        let (module, mut store) = get_module_and_store(
+            configure,
+            r#"
+    (module
+      (memory (export "memory") 1)
+      (func (export "store") (param i32)
+        (i64.store (local.get 0) (i64.const -1))))
+    "#,
+        )?;
+        let recorder = WatchRecorder::default();
+        store.set_debug_handler(recorder.clone());
+        let instance = Instance::new_async(&mut store, &module, &[]).await?;
+        let memory = instance.get_memory(&mut store, "memory").unwrap();
+        let store_i64 = instance.get_typed_func::<i32, ()>(&mut store, "store")?;
+        memory.debug_watch(&mut store, 65528..65536, true)?;
+
+        // A store that is partially or entirely out of bounds traps before
+        // checking for watchpoints.
+        for addr in [65532, 65536, 1 << 20, -1] {
+            let err = store_i64.call_async(&mut store, addr).await.unwrap_err();
+            assert_eq!(err.downcast::<Trap>()?, Trap::MemoryOutOfBounds);
+        }
+        assert!(recorder.0.lock().unwrap().is_empty());
+
+        // An in-bounds store to the same watched bytes is reported.
+        store_i64.call_async(&mut store, 65528).await?;
+        assert_eq!(recorder.0.lock().unwrap().len(), 1);
+    }
+    Ok(())
 }

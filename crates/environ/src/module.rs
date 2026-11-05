@@ -243,6 +243,11 @@ pub struct Module {
     /// Does this module need a GC heap to run?
     pub needs_gc_heap: bool,
 
+    /// Does this module's compiled code check its memories' shadows for
+    /// watchpoints (`Tunables::memory_watchpoints`), and so need a pointer to
+    /// each memory's shadow `VMMemoryDefinition` in its `VMContext`?
+    pub has_shadow_memories: bool,
+
     /// Number of functions that "escape" from this module may need to have a
     /// `VMFuncRef` constructed for them.
     ///
@@ -345,6 +350,7 @@ impl Module {
             num_imported_globals: Default::default(),
             num_imported_tags: Default::default(),
             needs_gc_heap: Default::default(),
+            has_shadow_memories: Default::default(),
             num_escaped_funcs: Default::default(),
             functions: Default::default(),
             tables: Default::default(),
@@ -693,6 +699,7 @@ impl TypeTrace for Module {
             num_imported_tags: _,
             num_escaped_funcs: _,
             needs_gc_heap: _,
+            has_shadow_memories: _,
             functions,
             tables,
             memories: _,
@@ -745,6 +752,7 @@ impl TypeTrace for Module {
             num_imported_tags: _,
             num_escaped_funcs: _,
             needs_gc_heap: _,
+            has_shadow_memories: _,
             functions,
             tables,
             memories: _,

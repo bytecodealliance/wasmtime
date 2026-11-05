@@ -126,6 +126,14 @@ pub(crate) trait OpaqueDebugger {
         data: u64,
     ) -> Result<Option<()>>;
 
+    async fn memory_watch(
+        &mut self,
+        memory: Memory,
+        addr: u64,
+        len: u64,
+        watch: bool,
+    ) -> Result<()>;
+
     async fn global_get(&mut self, global: Global) -> Result<WasmValue>;
     async fn global_set(&mut self, global: Global, val: WasmValue) -> Result<()>;
 
@@ -496,6 +504,33 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
             }
         })
         .await
+    }
+
+    async fn memory_watch(
+        &mut self,
+        memory: Memory,
+        addr: u64,
+        len: u64,
+        watch: bool,
+    ) -> Result<()> {
+        let memory = match memory {
+            Memory::Unshared(memory) => memory,
+            // Shared memories have no shadow and cannot be watched.
+            #[cfg(feature = "threads")]
+            Memory::Shared(_) => return Err(wit::Error::UnsupportedType.into()),
+        };
+        self.with_store(move |mut store| -> Result<()> {
+            let size = u64::try_from(memory.data_size(&store)).unwrap();
+            let end = addr
+                .checked_add(len)
+                .filter(|&end| end <= size)
+                .ok_or(wit::Error::OutOfBounds)?;
+            memory
+                .debug_watch(&mut store, addr..end, watch)
+                .map_err(|_| wit::Error::OutOfBounds)?;
+            Ok(())
+        })
+        .await?
     }
 
     async fn global_get(&mut self, global: Global) -> Result<WasmValue> {

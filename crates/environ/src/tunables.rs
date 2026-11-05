@@ -151,6 +151,10 @@ define_tunables! {
         /// enabled.
         pub concurrency_support: bool,
 
+        /// Whether compiled code checks a linear memory's shadow before each
+        /// store, for watchpoints.
+        pub memory_watchpoints: bool,
+
         /// Whether recording in RR is enabled or not. This is used primarily
         /// to signal checksum computation for compiled artifacts.
         pub recording: bool,
@@ -285,6 +289,7 @@ impl Tunables {
             inlining_sum_size_threshold: 2000,
             debug_guest: false,
             concurrency_support: true,
+            memory_watchpoints: false,
             recording: false,
             asan_stack_switching: false,
             gc_zeal_alloc_counter: None,
@@ -393,6 +398,11 @@ impl<'a> MemoryTunables<'a> {
     /// Create a new `MemoryTunables` view.
     pub fn new(tunables: &'a Tunables, kind: MemoryKind) -> Self {
         Self { tunables, kind }
+    }
+
+    /// Whether compiled code checks this memory's shadow for watchpoints.
+    pub fn watchpoints(&self) -> bool {
+        self.tunables.memory_watchpoints && self.kind == MemoryKind::LinearMemory
     }
 
     /// The virtual memory reservation for this kind of memory.

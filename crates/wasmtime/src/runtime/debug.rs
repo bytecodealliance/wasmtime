@@ -886,6 +886,71 @@ pub enum DebugEvent<'a> {
     Breakpoint,
     /// An epoch yield occurred.
     EpochYield,
+    /// Guest code is about to write watched bytes of a linear memory; see
+    /// [`Memory::debug_watch`](crate::Memory::debug_watch). The write happens
+    /// once the handler returns.
+    Watchpoint(WatchpointHit),
+}
+
+/// A guest write to watched bytes of a linear memory, reported before the
+/// write happens.
+#[derive(Clone, Copy, Debug)]
+pub struct WatchpointHit {
+    /// The memory being written.
+    pub memory: crate::Memory,
+    /// The address of the write's first byte.
+    pub address: u64,
+    /// The number of bytes written, of which at least one is watched.
+    pub len: u64,
+    /// For a store of up to 16 bytes, the bits being stored (in
+    /// little-endian order, so the first byte is the least significant).
+    /// `None` for bulk memory operations.
+    pub value: Option<u128>,
+}
+
+impl PartialEq for WatchpointHit {
+    fn eq(&self, other: &Self) -> bool {
+        self.memory.same(&other.memory)
+            && (self.address, self.len, self.value) == (other.address, other.len, other.value)
+    }
+}
+
+impl Eq for WatchpointHit {}
+
+impl crate::Memory {
+    /// Watches, or stops watching, guest writes to the bytes in `range` of this
+    /// memory. A guest store or bulk memory operation that writes a watched
+    /// byte raises [`DebugEvent::Watchpoint`] before writing. Whether a byte
+    /// is watched is a per-byte property, so unwatching a range unwatches its
+    /// bytes regardless of how they were watched.
+    ///
+    /// Watchpoints require guest debugging to be enabled; bytes beyond the
+    /// memory's current size cannot be watched.
+    pub fn debug_watch(
+        &self,
+        mut store: impl AsContextMut,
+        range: core::ops::Range<u64>,
+        watch: bool,
+    ) -> Result<()> {
+        let store = store.as_context_mut().0.as_store_opaque();
+        let Some(shadow) = self.vm_shadow_mut(store) else {
+            crate::error::bail!("watchpoints require guest debugging");
+        };
+        let bytes = shadow.bytes_mut();
+        let start = usize::try_from(range.start)?;
+        let end = usize::try_from(range.end)?;
+        let Some(bytes) = bytes.get_mut(start..end) else {
+            crate::error::bail!("watchpoint range is out of bounds of the memory");
+        };
+        for byte in bytes {
+            if watch {
+                *byte |= crate::runtime::vm::WATCH_DEBUG;
+            } else {
+                *byte &= !crate::runtime::vm::WATCH_DEBUG;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A handler for debug events.
