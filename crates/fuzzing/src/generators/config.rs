@@ -142,6 +142,7 @@ impl Config {
             compact_imports,
             component_model_async,
             component_model_more_async_builtins,
+            component_model_forward,
             component_model_async_stackful,
             component_model_threading,
             component_model_error_context,
@@ -172,6 +173,7 @@ impl Config {
         self.module_config.component_model_async = component_model_async.unwrap_or(false);
         self.module_config.component_model_more_async_builtins =
             component_model_more_async_builtins.unwrap_or(false);
+        self.module_config.component_model_forward = component_model_forward.unwrap_or(false);
         self.module_config.component_model_async_stackful =
             component_model_async_stackful.unwrap_or(false);
         self.module_config.component_model_threading = component_model_threading.unwrap_or(false);
@@ -337,6 +339,7 @@ impl Config {
         cfg.wasm.component_model_async = Some(self.module_config.component_model_async);
         cfg.wasm.component_model_more_async_builtins =
             Some(self.module_config.component_model_more_async_builtins);
+        cfg.wasm.component_model_forward = Some(self.module_config.component_model_forward);
         cfg.wasm.component_model_async_stackful =
             Some(self.module_config.component_model_async_stackful);
         cfg.wasm.component_model_threading = Some(self.module_config.component_model_threading);

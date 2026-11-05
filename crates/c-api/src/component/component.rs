@@ -62,6 +62,15 @@ pub extern "C" fn wasmtime_config_wasm_component_model_more_async_builtins_set(
 
 #[unsafe(no_mangle)]
 #[cfg(feature = "component-model-async")]
+pub extern "C" fn wasmtime_config_wasm_component_model_forward_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_component_model_forward(enable);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "component-model-async")]
 pub extern "C" fn wasmtime_config_wasm_component_model_async_stackful_set(
     c: &mut wasm_config_t,
     enable: bool,

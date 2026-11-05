@@ -278,6 +278,7 @@ fn trampoline_callable(
         | StreamCancelWrite { instance, .. }
         | StreamDropReadable { instance, .. }
         | StreamDropWritable { instance, .. }
+        | StreamForward { instance, .. }
         | FutureNew { instance, .. }
         | FutureRead { instance, .. }
         | FutureWrite { instance, .. }
@@ -285,6 +286,7 @@ fn trampoline_callable(
         | FutureCancelWrite { instance, .. }
         | FutureDropReadable { instance, .. }
         | FutureDropWritable { instance, .. }
+        | FutureForward { instance, .. }
         | ErrorContextNew { instance, .. }
         | ErrorContextDebugMessage { instance, .. }
         | ErrorContextDrop { instance, .. }
