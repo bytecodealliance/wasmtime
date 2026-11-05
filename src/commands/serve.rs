@@ -28,7 +28,7 @@ use wasmtime::error::Context as _;
 use wasmtime::{
     AsContextMut as _, Engine, Result, Store, StoreContextMut, StoreLimits, UpdateDeadline, bail,
 };
-use wasmtime_cli_flags::opt::WasmtimeOptionValue;
+use wasmtime_cli_flags::opt::{NonzeroDuration, WasmtimeOptionValue};
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 use wasmtime_wasi_http::handler::{
@@ -101,6 +101,10 @@ const DEFAULT_ADDRS: &[std::net::SocketAddr] = &[std::net::SocketAddr::new(
 
 fn parse_duration(s: &str) -> Result<Duration, String> {
     Duration::parse(Some(s)).map_err(|e| e.to_string())
+}
+
+fn parse_nonzero_duration(s: &str) -> Result<NonzeroDuration, String> {
+    NonzeroDuration::parse(Some(s)).map_err(|e| e.to_string())
 }
 
 /// Runs a WebAssembly module
@@ -182,8 +186,8 @@ pub struct ServeCommand {
     /// A number with no suffix or with an `s` suffix is interpreted as seconds;
     /// other accepted suffixes include `ms` (milliseconds), `us` or `μs`
     /// (microseconds), and `ns` (nanoseconds).
-    #[arg(long, value_parser = parse_duration)]
-    post_return_timeout: Option<Duration>,
+    #[arg(long, value_parser = parse_nonzero_duration)]
+    post_return_timeout: Option<NonzeroDuration>,
 
     /// Optional maximum idle time before exiting the process.
     ///
@@ -743,7 +747,7 @@ impl ServeCommand {
             .flatten()
             .min()
         {
-            Some(EPOCH_INTERRUPT_PERIOD.min(t))
+            Some(EPOCH_INTERRUPT_PERIOD.min(*t))
         } else if debuggee_store.is_some() {
             Some(Duration::from_millis(1))
         } else {
@@ -1067,8 +1071,19 @@ impl HandlerState for HostHandlerState {
             .new_store(self.component.engine(), Some(instance_id))?;
         let proxy = self.instantiate_into(&mut store).await?;
 
-        let request_timeout = self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX);
-        let post_return_timeout = self.cmd.post_return_timeout.unwrap_or(request_timeout);
+        let request_timeout = self
+            .cmd
+            .run
+            .common
+            .wasm
+            .timeout
+            .map(|t| *t)
+            .unwrap_or(Duration::MAX);
+        let post_return_timeout = self
+            .cmd
+            .post_return_timeout
+            .map(|t| *t)
+            .unwrap_or(request_timeout);
 
         Ok(Instance {
             store,

@@ -11,8 +11,9 @@
 //! is the [`Config`] type but this additionally serves as a means of creating
 //! that type.
 
+use crate::opt::NonzeroDuration;
 use std::num::NonZeroUsize;
-use std::{fmt, num::NonZeroU32, path::PathBuf, time::Duration};
+use std::{fmt, num::NonZeroU32, path::PathBuf};
 use wasmtime::{Config, Engine, Result, WasmBacktraceDetails, WasmFeatures, bail};
 
 pub mod opt;
@@ -451,7 +452,7 @@ wasmtime_option_group! {
         /// Note that when this option is not set, malicious wasm code may
         /// cause the host process to become unresponsive to inputs including
         /// SIGTERM.
-        pub timeout: Option<Duration>,
+        pub timeout: Option<NonzeroDuration>,
         /// Configures support for all WebAssembly proposals implemented.
         pub all_proposals: Option<bool>,
         /// Configure support for the bulk memory proposal.

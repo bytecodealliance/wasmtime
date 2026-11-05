@@ -517,6 +517,46 @@ impl WasmtimeOptionValue for bool {
     }
 }
 
+/// A duration parsed from CLI options, rejecting zero.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub struct NonzeroDuration(Duration);
+
+impl NonzeroDuration {
+    /// Returns `None` if `duration` is zero.
+    pub fn new(duration: Duration) -> Option<Self> {
+        if duration.is_zero() {
+            None
+        } else {
+            Some(Self(duration))
+        }
+    }
+}
+
+impl std::ops::Deref for NonzeroDuration {
+    type Target = Duration;
+
+    fn deref(&self) -> &Duration {
+        &self.0
+    }
+}
+
+impl WasmtimeOptionValue for NonzeroDuration {
+    const VAL_HELP: &'static str = "=N|Ns|Nms|..";
+
+    fn parse(val: Option<&str>) -> Result<Self> {
+        let duration = <Duration as WasmtimeOptionValue>::parse(val)?;
+        Self::new(duration).ok_or_else(|| format_err!("duration must not be zero"))
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <Duration as WasmtimeOptionValue>::display(&self.0, f)
+    }
+}
+
 impl WasmtimeOptionValue for Duration {
     const VAL_HELP: &'static str = "=N|Ns|Nms|..";
     fn parse(val: Option<&str>) -> Result<Duration> {
@@ -882,11 +922,33 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::WasmtimeOptionValue;
+    use super::{NonzeroDuration, WasmtimeOptionValue};
+    use std::time::Duration;
 
     #[test]
     fn numbers_with_underscores() {
         assert!(<u32 as WasmtimeOptionValue>::parse(Some("123")).is_ok_and(|v| v == 123));
         assert!(<u32 as WasmtimeOptionValue>::parse(Some("1_2_3")).is_ok_and(|v| v == 123));
+    }
+
+    #[test]
+    fn nonzero_durations() {
+        for (input, expected) in [
+            ("0", None),
+            ("0s", None),
+            ("0ms", None),
+            ("0us", None),
+            ("0ns", None),
+            ("1", Some(Duration::from_secs(1))),
+            ("1s", Some(Duration::from_secs(1))),
+            ("1ms", Some(Duration::from_millis(1))),
+            ("1us", Some(Duration::from_micros(1))),
+            ("1ns", Some(Duration::from_nanos(1))),
+        ] {
+            let actual = <NonzeroDuration as WasmtimeOptionValue>::parse(Some(input))
+                .ok()
+                .map(|d| *d);
+            assert_eq!(actual, expected, "input = {input}");
+        }
     }
 }
