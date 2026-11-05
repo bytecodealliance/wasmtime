@@ -1,53 +1,9 @@
 use super::*;
 use std::future::Future;
 use std::pin::pin;
-use std::task::{Context, Poll, Waker};
-use tokio::sync::oneshot;
-
-struct Finished(Option<oneshot::Sender<()>>);
-
-impl Drop for Finished {
-    fn drop(&mut self) {
-        let _ = self.0.take().unwrap().send(());
-    }
-}
-
-#[tokio::test]
-async fn native_work_outlives_initiating_future_and_store() {
-    let file = File::new(
-        tempfile::tempfile().unwrap(),
-        FsPerms::ReadWrite,
-        OpenMode::READ | OpenMode::WRITE,
-        false,
-    );
-    let native = Arc::downgrade(&file.file);
-    let mut store = wasmtime::Store::new(&wasmtime::Engine::default(), file);
-    let (started_tx, started_rx) = oneshot::channel();
-    let (release_tx, release_rx) = std::sync::mpsc::channel();
-    let (finished_tx, finished_rx) = oneshot::channel();
-    {
-        let future = store.data_mut().run_blocking(move |_| {
-            started_tx.send(()).unwrap();
-            release_rx.recv().unwrap();
-            Ok::<_, std::io::Error>(Finished(Some(finished_tx)))
-        });
-        let mut future = pin!(future);
-        assert!(matches!(
-            future
-                .as_mut()
-                .poll(&mut Context::from_waker(Waker::noop())),
-            Poll::Pending
-        ));
-        started_rx.await.unwrap();
-    }
-    drop(store);
-    assert!(native.upgrade().is_some());
-    release_tx.send(()).unwrap();
-    finished_rx.await.unwrap();
-    assert!(native.upgrade().is_none());
-}
-
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::task::{Context, Waker};
+use tokio::sync::oneshot;
 
 #[derive(Default)]
 struct Counts {
@@ -72,27 +28,17 @@ fn tracked_file() -> (File, Arc<Counts>, oneshot::Receiver<()>) {
     let (tx, rx) = oneshot::channel();
     *counts.released.lock().unwrap() = Some(tx);
     let state = counts.clone();
-    let mut ctx = WasiFilesystemCtx::default();
-    ctx.set_operation_hook(move || {
+    let mut file = File::new(
+        tempfile::tempfile().unwrap(),
+        FsPerms::ReadWrite,
+        OpenMode::READ | OpenMode::WRITE,
+        false,
+    );
+    file.operation_hook = Some(Arc::new(move || {
         state.admitted.fetch_add(1, Ordering::SeqCst);
         state.live.fetch_add(1, Ordering::SeqCst);
         Ok(FilesystemOperation::new(Owner(state.clone())))
-    });
-    let mut table = ResourceTable::new();
-    let fd = ctx
-        .push_descriptor(
-            &mut table,
-            Descriptor::File(File::new(
-                tempfile::tempfile().unwrap(),
-                FsPerms::ReadWrite,
-                OpenMode::READ | OpenMode::WRITE,
-                false,
-            )),
-        )
-        .unwrap();
-    let Descriptor::File(file) = table.delete(fd).unwrap() else {
-        unreachable!()
-    };
+    }));
     (file, counts, rx)
 }
 

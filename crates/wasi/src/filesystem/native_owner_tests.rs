@@ -293,6 +293,7 @@ async fn second_directory_content_survives_link_and_rename_workers() {
 async fn native_worker_retains_content_after_store_drop() {
     let (handle, count, released) = owned(tempfile::tempfile().unwrap());
     let file = File::new(handle, FsPerms::ReadOnly, OpenMode::READ, false);
+    let native = Arc::downgrade(&file.file);
     let mut store = wasmtime::Store::new(&wasmtime::Engine::default(), file);
     let (started_tx, started_rx) = oneshot::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
@@ -311,6 +312,7 @@ async fn native_worker_retains_content_after_store_drop() {
         started_rx.await.unwrap();
     }
     drop(store);
+    assert!(native.upgrade().is_some());
     assert_eq!(count.load(Ordering::SeqCst), 0);
     release_tx.send(()).unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(30), released)
@@ -318,6 +320,7 @@ async fn native_worker_retains_content_after_store_drop() {
         .unwrap()
         .unwrap();
     assert_eq!(count.load(Ordering::SeqCst), 1);
+    assert!(native.upgrade().is_none());
 }
 
 #[tokio::test]
@@ -435,21 +438,6 @@ fn completed_unpolled_open_owns_only_successful_native_results() {
             assert_eq!(count.load(Ordering::SeqCst), 1);
         }
     });
-}
-
-#[cfg(feature = "p3")]
-#[test]
-fn directory_iterator_retains_content_after_descriptor_drop() {
-    let temp = tempfile::tempdir().unwrap();
-    std::fs::write(temp.path().join("child"), b"contents").unwrap();
-    let (handle, count, _) = owned(primitives::open_ambient_dir(temp.path()).unwrap());
-    let dir = Dir::new(handle, FsPerms::ReadOnly, OpenMode::READ, true);
-    let mut entries = dir.dir.read_dir().unwrap();
-    drop(dir);
-    assert_eq!(count.load(Ordering::SeqCst), 0);
-    assert!(entries.next().unwrap().is_ok());
-    drop(entries);
-    assert_eq!(count.load(Ordering::SeqCst), 1);
 }
 
 #[cfg(unix)]

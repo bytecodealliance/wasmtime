@@ -13,36 +13,40 @@ impl Drop for CountDrop {
 }
 
 #[test]
-fn terminal_read_releases_operation_but_retains_producer_content() {
-    for overflow in [false, true] {
-        let content = Arc::new(AtomicUsize::new(0));
-        let operation = Arc::new(AtomicUsize::new(0));
-        let (result, mut status) = oneshot::channel();
-        let mut producer = ReadStreamProducer {
-            file: File::new(
-                FilesystemHandle::new(tempfile::tempfile().unwrap(), CountDrop(content.clone())),
-                FsPerms::ReadOnly,
-                OpenMode::READ,
-                false,
-            ),
-            offset: u64::MAX,
-            result: Some(result),
-            task: None,
-            max_read_size: TEST_MAX_IO_SIZE,
-            operation: Some(FilesystemOperation::new(CountDrop(operation.clone()))),
-        };
-        if overflow {
-            assert!(matches!(producer.complete_read(1), StreamResult::Dropped));
-            assert!(matches!(status.try_recv(), Ok(Err(ErrorCode::Overflow))));
-        } else {
-            producer.close(Ok(()));
-            assert!(matches!(status.try_recv(), Ok(Ok(()))));
+fn terminal_read_releases_session_before_producer_drop() {
+    for owned_handle in [false, true] {
+        for overflow in [false, true] {
+            let content = Arc::new(AtomicUsize::new(0));
+            let operation = Arc::new(AtomicUsize::new(0));
+            let native = tempfile::tempfile().unwrap();
+            let handle = if owned_handle {
+                FilesystemHandle::new(native, CountDrop(content.clone()))
+            } else {
+                native.into()
+            };
+            let (result, mut status) = oneshot::channel();
+            let mut producer = ReadStreamProducer {
+                file: File::new(handle, FsPerms::ReadOnly, OpenMode::READ, false),
+                offset: u64::MAX,
+                result: Some(result),
+                task: None,
+                max_read_size: TEST_MAX_IO_SIZE,
+                operation: Some(FilesystemOperation::new(CountDrop(operation.clone()))),
+            };
+            if overflow {
+                assert!(matches!(producer.complete_read(1), StreamResult::Dropped));
+                assert!(matches!(status.try_recv(), Ok(Err(ErrorCode::Overflow))));
+            } else {
+                producer.close(Ok(()));
+                assert!(matches!(status.try_recv(), Ok(Ok(()))));
+            }
+            assert_eq!(operation.load(Ordering::SeqCst), 1);
+            assert_eq!(content.load(Ordering::SeqCst), 0);
+            assert!(producer.file.file.metadata().is_ok());
+            drop(producer);
+            assert_eq!(operation.load(Ordering::SeqCst), 1);
+            assert_eq!(content.load(Ordering::SeqCst), usize::from(owned_handle));
         }
-        assert_eq!(operation.load(Ordering::SeqCst), 1);
-        assert_eq!(content.load(Ordering::SeqCst), 0);
-        assert!(producer.file.file.metadata().is_ok());
-        drop(producer);
-        assert_eq!(content.load(Ordering::SeqCst), 1);
     }
 }
 
@@ -72,30 +76,6 @@ fn terminal_write_and_append_retain_consumer_content() {
         drop(consumer);
         assert_eq!(content.load(Ordering::SeqCst), 1);
     }
-}
-
-#[test]
-fn terminal_read_releases_session_before_producer_drop() {
-    let count = Arc::new(AtomicUsize::new(0));
-    let (result, mut status) = oneshot::channel();
-    let mut producer = ReadStreamProducer {
-        file: File::new(
-            tempfile::tempfile().unwrap(),
-            FsPerms::ReadOnly,
-            OpenMode::READ,
-            false,
-        ),
-        offset: u64::MAX,
-        result: Some(result),
-        task: None,
-        max_read_size: TEST_MAX_IO_SIZE,
-        operation: Some(FilesystemOperation::new(CountDrop(count.clone()))),
-    };
-    assert!(matches!(producer.complete_read(1), StreamResult::Dropped));
-    assert!(matches!(status.try_recv(), Ok(Err(ErrorCode::Overflow))));
-    assert_eq!(count.load(Ordering::SeqCst), 1);
-    drop(producer);
-    assert_eq!(count.load(Ordering::SeqCst), 1);
 }
 
 use futures::FutureExt as _;
@@ -407,42 +387,51 @@ async fn write_and_append_sessions_admit_once_and_release_on_completion() {
 
 #[tokio::test]
 async fn started_read_write_and_append_outlive_store() {
-    for location in [
-        None,
-        Some(WriteLocation::Offset(0)),
-        Some(WriteLocation::End),
-    ] {
-        let (file, counts, released) = file(false, &[1, 2, 3]);
-        let gate = InstalledGate::new(&file.file);
-        let mut store = store();
-        match location {
-            None => {
-                let (stream, mut status) =
-                    read_via_stream(&mut store, Descriptor::File(file), 0, TEST_MAX_IO_SIZE)
-                        .unwrap();
-                status.close(&mut store).unwrap();
-                let _ = collect(stream, &mut store, counts.clone());
+    for owned_handle in [false, true] {
+        for location in [
+            None,
+            Some(WriteLocation::Offset(0)),
+            Some(WriteLocation::End),
+        ] {
+            let (mut file, counts, released) = file(false, &[1, 2, 3]);
+            let content = Arc::new(AtomicUsize::new(0));
+            if owned_handle {
+                let native = std::fs::File::try_clone(&file.file).unwrap();
+                file.file = Arc::new(FilesystemHandle::new(native, CountDrop(content.clone())));
             }
-            Some(location) => {
-                let input = StreamReader::new(&mut store, vec![4, 5, 6]).unwrap();
-                let mut status =
-                    write_via_stream(&mut store, Ok(file), input, location, TEST_MAX_IO_SIZE)
-                        .unwrap();
-                status.close(&mut store).unwrap();
+            let gate = InstalledGate::new(&file.file);
+            let mut store = store();
+            match location {
+                None => {
+                    let (stream, mut status) =
+                        read_via_stream(&mut store, Descriptor::File(file), 0, TEST_MAX_IO_SIZE)
+                            .unwrap();
+                    status.close(&mut store).unwrap();
+                    let _ = collect(stream, &mut store, counts.clone());
+                }
+                Some(location) => {
+                    let input = StreamReader::new(&mut store, vec![4, 5, 6]).unwrap();
+                    let mut status =
+                        write_via_stream(&mut store, Ok(file), input, location, TEST_MAX_IO_SIZE)
+                            .unwrap();
+                    status.close(&mut store).unwrap();
+                }
             }
+            assert!(
+                store
+                    .run_concurrent(async |_| std::future::pending::<()>().await)
+                    .now_or_never()
+                    .is_none()
+            );
+            gate.wait_started();
+            drop(store);
+            assert_eq!(counts.released.load(Ordering::SeqCst), 0);
+            assert_eq!(content.load(Ordering::SeqCst), 0);
+            gate.release();
+            released.recv_timeout(Duration::from_secs(30)).unwrap();
+            assert_eq!(counts.released.load(Ordering::SeqCst), 1);
+            assert_eq!(content.load(Ordering::SeqCst), usize::from(owned_handle));
         }
-        assert!(
-            store
-                .run_concurrent(async |_| std::future::pending::<()>().await)
-                .now_or_never()
-                .is_none()
-        );
-        gate.wait_started();
-        drop(store);
-        assert_eq!(counts.released.load(Ordering::SeqCst), 0);
-        gate.release();
-        released.recv_timeout(Duration::from_secs(30)).unwrap();
-        assert_eq!(counts.released.load(Ordering::SeqCst), 1);
     }
 }
 
@@ -577,32 +566,6 @@ async fn synchronous_directory_keeps_owner_until_iterator_finishes() {
         1
     );
     assert_eq!(counts.released.load(Ordering::SeqCst), 1);
-}
-
-#[tokio::test]
-async fn p3_native_read_keeps_content_after_store_drop() {
-    let content = Arc::new(AtomicUsize::new(0));
-    let (mut file, counts, released) = file(false, &[1, 2, 3]);
-    let native = tempfile::tempfile().unwrap();
-    file.file = Arc::new(FilesystemHandle::new(native, CountDrop(content.clone())));
-    let gate = InstalledGate::new(&file.file);
-    let mut store = store();
-    let (stream, mut status) =
-        read_via_stream(&mut store, Descriptor::File(file), 0, TEST_MAX_IO_SIZE).unwrap();
-    status.close(&mut store).unwrap();
-    let _ = collect(stream, &mut store, counts.clone());
-    assert!(
-        store
-            .run_concurrent(async |_| std::future::pending::<()>().await)
-            .now_or_never()
-            .is_none()
-    );
-    gate.wait_started();
-    drop(store);
-    assert_eq!(content.load(Ordering::SeqCst), 0);
-    gate.release();
-    released.recv_timeout(Duration::from_secs(30)).unwrap();
-    assert_eq!(content.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
