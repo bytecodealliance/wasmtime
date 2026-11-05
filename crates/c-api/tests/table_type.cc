@@ -6,20 +6,25 @@
 using namespace wasmtime;
 
 TEST(TableType, Simple) {
-  TableType ty(ValType::funcref(), 1);
+  TableType ty = TableType::create(ValType::funcref(), 1).unwrap();
   EXPECT_EQ(ty->min(), 1);
   EXPECT_EQ(ty->max(), std::nullopt);
   EXPECT_FALSE(ty->is_64());
   EXPECT_EQ(ty->element(), ValType::funcref());
 
-  ty = TableType(ValType::externref(), 2, 3);
+  ty = TableType::create(ValType::externref(), 2, 3).unwrap();
   EXPECT_EQ(ty->min(), 2);
   EXPECT_EQ(ty->max(), 3);
   EXPECT_EQ(ty->element(), ValType::externref());
 
-  TableType other(ValType::funcref(), 1);
+  TableType other = TableType::create(ValType::funcref(), 1).unwrap();
   other = ty;
   EXPECT_EQ(other->min(), 2);
+}
+
+TEST(TableType, Invalid) {
+  EXPECT_FALSE(TableType::create(ValType::funcref(), 2, 1));
+  EXPECT_FALSE(TableType::create(ValType::i32(), 1));
 }
 
 TEST(TableType, Table64) {
