@@ -430,6 +430,12 @@ information about this check\
             .into());
         }
 
+        // Use of asan compatible codegen required in an asan build, optional
+        // otherwise.
+        if cfg!(asan) && !self.tunables().asan_stack_switching {
+            return Err("asan enabled at compile time: asan stack switching required".into());
+        }
+
         Ok(())
     }
 
