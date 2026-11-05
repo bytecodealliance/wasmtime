@@ -194,10 +194,6 @@ impl Context {
 
         if opt_level != OptLevel::None {
             self.egraph_pass(isa, ctrl_plane)?;
-        } else {
-            // Block ordering checks whether loop analysis is valid, ensure it
-            // is cleared if we don't compute it.
-            self.loop_analysis.clear();
         }
 
         Ok(())

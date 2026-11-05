@@ -324,7 +324,7 @@ impl BlockLoweringOrder {
     /// Group basic blocks from natural loops contiguously, moving any exit
     /// blocks after the main loop body. Since natural loops are dominated by
     /// their loop header, this maintains the dominance order required by
-    /// register allocation.
+    /// lowering, which visits blocks in reverse order to see uses before defs.
     fn group_loops(order: &mut Vec<LoweredBlock>, loops: &LoopAnalysis) {
         if !loops.is_valid() || loops.loops().len() == 0 {
             return;
@@ -349,18 +349,24 @@ impl BlockLoweringOrder {
         for node in order.drain(..) {
             let innermost_loop = match node {
                 LoweredBlock::Orig { block } => {
-                    let r = loop_index(loops.innermost_loop(block));
+                    let lp = loops.innermost_loop(block);
+                    let loop_idx = loop_index(lp);
 
-                    // The first block of a loop is always the loop header. When
-                    // we encounter it, insert a placeholder for the loop in the
-                    // parent loop.
-                    if loop_blocks[r].is_empty() && r != 0 {
-                        let lp = Loop::new(r - 1);
-                        debug_assert!(loops.loop_header(lp) == block);
-                        loop_blocks[loop_index(loops.loop_parent(lp))].push(Item::Loop(r));
+                    // The first block of a loop is always the loop header.
+                    // Since loop analysis only records natural loops with a
+                    // single entry point and not irreducible cycles, this is
+                    // guaranteed to dominate all of the other blocks in the
+                    // loop. When we encounter it, insert a placeholder for the
+                    // loop in the parent loop.
+                    if let Some(lp) = lp {
+                        if loop_blocks[loop_idx].is_empty() {
+                            debug_assert_eq!(loops.loop_header(lp), block);
+                            loop_blocks[loop_index(loops.loop_parent(lp))]
+                                .push(Item::Loop(loop_idx));
+                        }
                     }
 
-                    r
+                    loop_idx
                 }
                 LoweredBlock::CriticalEdge {
                     pred,
@@ -383,13 +389,13 @@ impl BlockLoweringOrder {
 
         // Starting from the root loop, add all blocks in order, recursively
         // expanding inner loops where `Item::Loop` is found.
-        let mut stack: SmallVec<[_; 8]> = smallvec![(0usize, 0usize)];
-        while let Some((r, next)) = stack.pop() {
-            if let Some(&item) = loop_blocks[r].get(next) {
-                stack.push((r, next + 1));
-                match item {
-                    Item::Block(block) => order.push(block),
-                    Item::Loop(child) => stack.push((child, 0)),
+        let mut stack: SmallVec<[_; 8]> = smallvec![loop_blocks[0].iter()];
+        while let Some(iter) = stack.last_mut() {
+            match iter.next() {
+                Some(&Item::Block(block)) => order.push(block),
+                Some(&Item::Loop(child)) => stack.push(loop_blocks[child].iter()),
+                None => {
+                    stack.pop();
                 }
             }
         }
