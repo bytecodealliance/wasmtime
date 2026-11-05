@@ -61,9 +61,10 @@
 //! the other redundancies that this scheme produces.
 
 use crate::dominator_tree::DominatorTree;
-use crate::entity::SecondaryMap;
+use crate::entity::{EntityRef, SecondaryMap};
 use crate::inst_predicates::visit_block_succs;
 use crate::ir::{Block, Function, Inst, Opcode};
+use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::{FxHashMap, FxHashSet};
 use crate::{machinst::*, trace};
 
@@ -148,6 +149,7 @@ impl BlockLoweringOrder {
     pub fn new(
         f: &Function,
         domtree: &DominatorTree,
+        loop_analysis: &LoopAnalysis,
         ctrl_plane: &mut ControlPlane,
     ) -> BlockLoweringOrder {
         trace!("BlockLoweringOrder: function body {:?}", f);
@@ -200,11 +202,8 @@ impl BlockLoweringOrder {
         // lowering order, identifying critical edges to split along the way.
 
         let mut lowered_order = Vec::new();
-        let mut blockindex_by_block = SecondaryMap::with_default(BlockIndex::invalid());
         for &block in domtree.cfg_rpo() {
-            let idx = BlockIndex::new(lowered_order.len());
             lowered_order.push(LoweredBlock::Orig { block });
-            blockindex_by_block[block] = idx;
 
             if block_out_count[block] > 1 {
                 let range = block_succ_range[block].clone();
@@ -232,6 +231,18 @@ impl BlockLoweringOrder {
             }
         }
 
+        // Step 3: group blocks belonging to natural loops together. This
+        // significantly helps register allocator that perform live range
+        // splitting only using the linear instruction order.
+        Self::group_loops(&mut lowered_order, loop_analysis);
+
+        // Step 4: create a mapping between blocks and lowered blocks.
+        let mut blockindex_by_block = SecondaryMap::with_default(BlockIndex::invalid());
+        for (i, lb) in lowered_order.iter().enumerate() {
+            if let LoweredBlock::Orig { block } = *lb {
+                blockindex_by_block[block] = BlockIndex::new(i);
+            }
+        }
         let lb_to_bindex = FxHashMap::from_iter(
             lowered_order
                 .iter()
@@ -239,7 +250,7 @@ impl BlockLoweringOrder {
                 .map(|(i, &lb)| (lb, BlockIndex::new(i))),
         );
 
-        // Step 3: build the successor tables given the lowering order. We can't perform this step
+        // Step 5: build the successor tables given the lowering order. We can't perform this step
         // during the creation of `lowering_order`, as we need `lb_to_bindex` to be fully populated
         // first.
         let mut lowered_succ_indices = Vec::new();
@@ -308,6 +319,86 @@ impl BlockLoweringOrder {
 
         trace!("BlockLoweringOrder: {:#?}", result);
         result
+    }
+
+    /// Group basic blocks from natural loops contiguously, moving any exit
+    /// blocks after the main loop body. Since natural loops are dominated by
+    /// their loop header, this maintains the dominance order required by
+    /// lowering, which visits blocks in reverse order to see uses before defs.
+    fn group_loops(order: &mut Vec<LoweredBlock>, loops: &LoopAnalysis) {
+        if !loops.is_valid() || loops.loops().len() == 0 {
+            return;
+        }
+
+        #[derive(Clone, Copy)]
+        enum Item {
+            Block(LoweredBlock),
+            Loop(usize),
+        }
+
+        // Get a loop index for each loop, with index 0 representing blocks
+        // outside any loop.
+        let loop_index = |lp: Option<Loop>| match lp {
+            Some(lp) => lp.index() + 1,
+            None => 0,
+        };
+
+        // Collect the set of blocks belonging to each loop, while otherwise
+        // preserving the lowered block order.
+        let mut loop_blocks = vec![SmallVec::<[Item; 8]>::new(); loops.loops().len() + 1];
+        for node in order.drain(..) {
+            let innermost_loop = match node {
+                LoweredBlock::Orig { block } => {
+                    let lp = loops.innermost_loop(block);
+                    let loop_idx = loop_index(lp);
+
+                    // The first block of a loop is always the loop header.
+                    // Since loop analysis only records natural loops with a
+                    // single entry point and not irreducible cycles, this is
+                    // guaranteed to dominate all of the other blocks in the
+                    // loop. When we encounter it, insert a placeholder for the
+                    // loop in the parent loop.
+                    if let Some(lp) = lp {
+                        if loop_blocks[loop_idx].is_empty() {
+                            debug_assert_eq!(loops.loop_header(lp), block);
+                            loop_blocks[loop_index(loops.loop_parent(lp))]
+                                .push(Item::Loop(loop_idx));
+                        }
+                    }
+
+                    loop_idx
+                }
+                LoweredBlock::CriticalEdge {
+                    pred,
+                    succ,
+                    succ_idx: _,
+                } => {
+                    // An edge belongs to the common loop region of its
+                    // endpoints. Exit stubs move outside the loop they leave;
+                    // incoming stubs stay outside and backedge stubs stay in.
+                    //
+                    // A critical edge can never be a loop header.
+                    match (loops.innermost_loop(pred), loops.innermost_loop(succ)) {
+                        (Some(a), Some(b)) => loop_index(loops.common_ancestor(a, b)),
+                        _ => 0,
+                    }
+                }
+            };
+            loop_blocks[innermost_loop].push(Item::Block(node));
+        }
+
+        // Starting from the root loop, add all blocks in order, recursively
+        // expanding inner loops where `Item::Loop` is found.
+        let mut stack: SmallVec<[_; 8]> = smallvec![loop_blocks[0].iter()];
+        while let Some(iter) = stack.last_mut() {
+            match iter.next() {
+                Some(&Item::Block(block)) => order.push(block),
+                Some(&Item::Loop(child)) => stack.push(loop_blocks[child].iter()),
+                None => {
+                    stack.pop();
+                }
+            }
+        }
     }
 
     /// Get the lowered order of blocks.
@@ -394,8 +485,81 @@ mod test {
         let mut cfg = ControlFlowGraph::new();
         cfg.compute(&func);
         let dom_tree = DominatorTree::with_function(&func, &cfg);
+        let mut loops = LoopAnalysis::new();
+        loops.compute(&func, &cfg, &dom_tree);
 
-        BlockLoweringOrder::new(&func, &dom_tree, &mut Default::default())
+        BlockLoweringOrder::new(&func, &dom_tree, &loops, &mut Default::default())
+    }
+
+    #[test]
+    fn multiple_latches_and_separate_exits() {
+        //             0
+        //             |
+        //       +---->1<----+
+        //       |    / \    |
+        //       |   2   3   |
+        //       +---|   |---+
+        //           |   |
+        //           4   5
+        //            \ /
+        //             6
+        //
+        // (2 -> 1 and 3 -> 1 are critical backedges and must be split.)
+        //
+        let order = build_test_func(
+            7,
+            &[
+                (0, 1),
+                (1, 2),
+                (1, 3),
+                (2, 1),
+                (2, 4),
+                (3, 1),
+                (3, 5),
+                (4, 6),
+                (5, 6),
+            ],
+        );
+
+        // Both latches and their split backedges stay with the loop; the
+        // separate exits follow the complete loop body.
+        use LoweredBlock::{CriticalEdge, Orig};
+        assert_eq!(
+            order.lowered_order,
+            [
+                Orig {
+                    block: Block::new(0)
+                },
+                Orig {
+                    block: Block::new(1)
+                },
+                Orig {
+                    block: Block::new(3)
+                },
+                CriticalEdge {
+                    pred: Block::new(3),
+                    succ: Block::new(1),
+                    succ_idx: 0,
+                },
+                Orig {
+                    block: Block::new(2)
+                },
+                CriticalEdge {
+                    pred: Block::new(2),
+                    succ: Block::new(1),
+                    succ_idx: 0,
+                },
+                Orig {
+                    block: Block::new(5)
+                },
+                Orig {
+                    block: Block::new(4)
+                },
+                Orig {
+                    block: Block::new(6)
+                },
+            ]
+        );
     }
 
     #[test]
