@@ -313,7 +313,7 @@ impl<'a> CompileInputs<'a> {
         let mut ret = CompileInputs { inputs: vec![] };
 
         let module_index = StaticModuleIndex::from_u32(0);
-        ret.collect_inputs_in_translations(types, [(module_index, translation, functions)]);
+        ret.collect_inputs_in_translations(types, None, [(module_index, translation, functions)]);
 
         ret
     }
@@ -337,7 +337,11 @@ impl<'a> CompileInputs<'a> {
 
         let mut ret = CompileInputs { inputs: vec![] };
 
-        ret.collect_inputs_in_translations(types.module_types_builder(), module_translations);
+        ret.collect_inputs_in_translations(
+            types.module_types_builder(),
+            Some(wasmtime_environ::EnclosingComponent(&component.component)),
+            module_translations,
+        );
         let tunables = engine.tunables();
 
         for i in component
@@ -471,6 +475,7 @@ impl<'a> CompileInputs<'a> {
     fn collect_inputs_in_translations(
         &mut self,
         types: &'a ModuleTypesBuilder,
+        component: Option<wasmtime_environ::EnclosingComponent<'a>>,
         translations: impl IntoIterator<
             Item = (
                 StaticModuleIndex,
@@ -507,7 +512,14 @@ impl<'a> CompileInputs<'a> {
                     let offset = data.original_position();
                     let start_srcloc = FilePos::new(u32::try_from(offset).unwrap());
                     let function = compiler
-                        .compile_function(translation, key, func_body_data, types, &symbol)
+                        .compile_function(
+                            translation,
+                            key,
+                            func_body_data,
+                            types,
+                            component,
+                            &symbol,
+                        )
                         .with_context(|| format!("failed to compile: {symbol}"))?;
 
                     Ok(CompileOutput {

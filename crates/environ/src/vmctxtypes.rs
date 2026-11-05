@@ -393,6 +393,9 @@ macro_rules! vmctx_field_size {
     (($p:expr) VmPtr < $g:ident >) => {
         u32::from($p)
     };
+    (($p:expr) VmPtr < VmPtr < $g:ident >>) => {
+        u32::from($p)
+    };
     // `VMLowering` is a pair of pointers, and is not itself defined by
     // `for_each_vm_type!`.
     (($p:expr) VMLowering) => {

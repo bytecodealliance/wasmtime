@@ -71,6 +71,23 @@ impl core::error::Error for CompileError {
     }
 }
 
+/// The component a core module is being compiled as part of.
+///
+/// A newtype, rather than a bare `&Component`, so that the `Compiler` trait can
+/// name the parameter without depending on `cfg(feature = "component-model")`.
+#[cfg(feature = "component-model")]
+#[derive(Clone, Copy)]
+pub struct EnclosingComponent<'a>(pub &'a crate::component::Component);
+
+/// Stand-in for `EnclosingComponent` when components are disabled at compile
+/// time.
+#[cfg(not(feature = "component-model"))]
+#[derive(Clone, Copy)]
+pub enum EnclosingComponent<'a> {
+    #[doc(hidden)]
+    Never(core::convert::Infallible, core::marker::PhantomData<&'a ()>),
+}
+
 /// Implementation of an incremental compilation's key/value cache store.
 ///
 /// In theory, this could just be Cranelift's `CacheKvStore` trait, but it is not as we want to
@@ -247,12 +264,17 @@ pub trait Compiler: Send + Sync {
     /// The body of the function is available in `data` and configuration
     /// values are also passed in via `tunables`. Type information in
     /// `translation` is all relative to `types`.
+    ///
+    /// `component` is the component this module is being compiled as part of,
+    /// if any. Fused adapters need it to compute offsets within the
+    /// `VMComponentContext` they will run against.
     fn compile_function(
         &self,
         translation: &ModuleTranslation<'_>,
         key: FuncKey,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
+        component: Option<EnclosingComponent<'_>>,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError>;
 

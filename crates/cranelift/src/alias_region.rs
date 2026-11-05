@@ -106,6 +106,7 @@ enum VmType {
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
     )]
     VMTransmitLocalState,
+    HandleTableSlotsArray,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -690,6 +691,7 @@ macro_rules! define_vm_type_alias_region_helpers {
     // and is marked `#[aggregate]` in `for_each_vm_type!` so that no accessor is
     // generated for it at all.
     (@field_ty $pt:expr, VmPtr < $g:ty >) => { $pt };
+    (@field_ty $pt:expr, VmPtr < VmPtr < $g:ty >>) => { $pt };
     (@field_ty $pt:expr, Option < VmPtr < $g:ty >>) => { $pt };
     (@field_ty $pt:expr, AtomicUsize) => { $pt };
     (@field_ty $pt:expr, usize) => { $pt };
@@ -1153,6 +1155,7 @@ macro_rules! define_vmctx_alias_region_helpers {
     // pointer type as an `ir::Type`).
     (@field_ty $pt:expr, u32) => { ir::types::I32 };
     (@field_ty $pt:expr, VmPtr < $g:ident >) => { $pt };
+    (@field_ty $pt:expr, VmPtr < VmPtr < $g:ident >>) => { $pt };
     (@field_ty $pt:expr, VMSharedTypeIndex) => { ir::types::I32 };
     (@field_ty $pt:expr, AtomicU64) => { ir::types::I64 };
     (@field_ty $pt:expr, unsafe extern "C" fn) => { $pt };
@@ -1556,6 +1559,16 @@ where
 
         self.gc_introducer_cache.insert((ty, field), introducer);
         introducer
+    }
+
+    /// Get the `Field` for an element of the out-of-line array that
+    /// `VMStoreContext::handle_table_slots` points at.
+    ///
+    /// The returned `Field` is relative to the array's base pointer.
+    pub fn handle_table_slots_array(&mut self) -> Field<'_, Offsets> {
+        let ty = self.pointer_type;
+        let flags = ir::MemFlagsData::trusted();
+        Field::new(self, VmType::HandleTableSlotsArray, 0, flags, ty)
     }
 
     /// Get the alias region shared by all memories that cross a module boundary
