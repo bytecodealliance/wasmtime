@@ -104,6 +104,23 @@ fn run_coredump_smoketest() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn run_coredump_during_instantiation() -> Result<()> {
+    let coredump_file = NamedTempFile::new()?;
+    let coredump_arg = format!("-Dcoredump={}", coredump_file.path().display());
+    let err = run_wasmtime(&[
+        "run",
+        &coredump_arg,
+        "tests/all/cli_tests/coredump_start_trap.wat",
+    ])
+    .unwrap_err();
+    assert!(err.to_string().contains(&format!(
+        "core dumped at {}",
+        coredump_file.path().display()
+    )));
+    Ok(())
+}
+
 // Running simple wat
 #[test]
 fn run_wasmtime_simple_wat() -> Result<()> {

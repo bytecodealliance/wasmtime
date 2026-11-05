@@ -722,16 +722,16 @@ impl RunCommand {
                 let instance = linker
                     .instantiate_async(&mut *store, &module)
                     .await
-                    .with_context(|| {
-                        format!("failed to instantiate {:?}", self.module_and_args[0])
-                    })?;
+                    .with_context(|| format!("failed to instantiate {:?}", self.module_and_args[0]))
+                    .map_err(|e| self.handle_core_dump(&mut *store, e))?;
 
                 // If `_initialize` is present, meaning a reactor, then invoke
                 // the function.
                 if let Some(func) = instance.get_func(&mut *store, "_initialize") {
                     func.typed::<(), ()>(&store)?
                         .call_async(&mut *store, ())
-                        .await?;
+                        .await
+                        .map_err(|e| self.handle_core_dump(&mut *store, e))?;
                 }
 
                 // Look for the specific function provided or otherwise look for
