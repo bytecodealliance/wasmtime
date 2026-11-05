@@ -27,8 +27,6 @@ where
 {
     /// Create a new slice that takes ownership of `elems`.
     ///
-    /// Use `PrimaryMap::into_boxed_slice()` to create one from outside this
-    /// crate.
     pub(crate) fn new(elems: Box<[V]>) -> Self {
         Self {
             elems,
@@ -142,7 +140,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::primary::PrimaryMap;
     use alloc::vec::Vec;
 
     // `EntityRef` impl for testing.
@@ -162,8 +159,7 @@ mod tests {
     fn basic() {
         let r0 = E(0);
         let r1 = E(1);
-        let p = PrimaryMap::<E, isize>::new();
-        let m = p.into_boxed_slice();
+        let m = BoxedSlice::<E, isize>::new([].into());
 
         let v: Vec<E> = m.keys().collect();
         assert_eq!(v, []);
@@ -174,10 +170,7 @@ mod tests {
 
     #[test]
     fn iter() {
-        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
-        p.push(12);
-        p.push(33);
-        let mut m = p.into_boxed_slice();
+        let mut m = BoxedSlice::<E, usize>::new([12, 33].into());
 
         let mut i = 0;
         for (key, value) in &m {
@@ -203,10 +196,7 @@ mod tests {
 
     #[test]
     fn iter_rev() {
-        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
-        p.push(12);
-        p.push(33);
-        let mut m = p.into_boxed_slice();
+        let mut m = BoxedSlice::<E, usize>::new([12, 33].into());
 
         let mut i = 2;
         for (key, value) in m.iter().rev() {
@@ -232,10 +222,7 @@ mod tests {
     }
     #[test]
     fn keys() {
-        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
-        p.push(12);
-        p.push(33);
-        let m = p.into_boxed_slice();
+        let m = BoxedSlice::<E, usize>::new([12, 33].into());
 
         let mut i = 0;
         for key in m.keys() {
@@ -246,10 +233,7 @@ mod tests {
 
     #[test]
     fn keys_rev() {
-        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
-        p.push(12);
-        p.push(33);
-        let m = p.into_boxed_slice();
+        let m = BoxedSlice::<E, usize>::new([12, 33].into());
 
         let mut i = 2;
         for key in m.keys().rev() {
@@ -260,10 +244,7 @@ mod tests {
 
     #[test]
     fn values() {
-        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
-        p.push(12);
-        p.push(33);
-        let mut m = p.into_boxed_slice();
+        let mut m = BoxedSlice::<E, usize>::new([12, 33].into());
 
         let mut i = 0;
         for value in m.values() {
@@ -287,10 +268,7 @@ mod tests {
 
     #[test]
     fn values_rev() {
-        let mut p: PrimaryMap<E, usize> = PrimaryMap::new();
-        p.push(12);
-        p.push(33);
-        let mut m = p.into_boxed_slice();
+        let mut m = BoxedSlice::<E, usize>::new([12, 33].into());
 
         let mut i = 2;
         for value in m.values().rev() {

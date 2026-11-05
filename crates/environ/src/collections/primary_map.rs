@@ -212,10 +212,6 @@ where
         self.inner.binary_search_values_by_key(b, f)
     }
 
-    /// Same as [`cranelift_entity::PrimaryMap::get_raw_mut`].
-    pub fn get_raw_mut(&mut self, k: K) -> Option<*mut V> {
-        self.inner.get_raw_mut(k)
-    }
 }
 
 impl<K, V> TryExtend<V> for TryPrimaryMap<K, V>
