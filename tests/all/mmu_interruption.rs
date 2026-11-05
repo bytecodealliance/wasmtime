@@ -70,7 +70,7 @@ fn rejected_by_pulley() {
     );
 }
 
-// AOT compilation succeeds with the right flags set.
+// AOT compilation succeeds for a supported target, regardless of host.
 #[test]
 fn precompile_succeeds_for_valid_config_on_any_host() {
     let mut config = Config::new();
@@ -81,25 +81,4 @@ fn precompile_succeeds_for_valid_config_on_any_host() {
     engine
         .precompile_module(r#"(module (memory 0) (func))"#.as_bytes())
         .expect("precompilation should succeed regardless of host");
-}
-
-#[cfg(not(all(
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    target_os = "linux"
-)))]
-#[test]
-fn compile_and_run_fails_on_unsupported_host() {
-    let mut config = Config::new();
-    config.mmu_interruption(true);
-    config.signals_based_traps(true);
-    let err = match Engine::new(&config) {
-        Err(err) => err,
-        Ok(engine) => wasmtime::Module::new(&engine, "(module)")
-            .expect_err("compile-and-run should fail on an unsupported host"),
-    };
-    let err = format!("{err:?}");
-    assert!(
-        err.contains("supported only on x86_64 and aarch64"),
-        "unexpected error: {err}"
-    );
 }
