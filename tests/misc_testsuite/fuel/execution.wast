@@ -1,7 +1,7 @@
 ;;! reference_types = true
 ;;! exceptions = true
 ;;! extended_const = true
-;;! consume_fuel = true
+;;! flags = "-W fuel=1000000000"
 
 (module $Fuel
   (import "wasmtime" "set-fuel" (func $set (param i64)))

@@ -1,7 +1,6 @@
 ;;! component_model_gc = true
 ;;! gc = true
 ;;! reference_types = true
-;;! gc_types = true
 ;;! multi_memory = true
 
 ;; GC calling GC.

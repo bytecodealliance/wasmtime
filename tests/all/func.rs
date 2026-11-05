@@ -1528,7 +1528,7 @@ fn typed_funcs_count_params_correctly_in_error_messages(
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(reference_types, gc_types))]
+#[wasmtime_test(wasm_features(reference_types))]
 #[cfg_attr(miri, ignore)]
 fn calls_with_funcref_and_externref(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;

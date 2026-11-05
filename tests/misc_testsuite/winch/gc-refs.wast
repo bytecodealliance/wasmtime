@@ -1,5 +1,4 @@
 ;;! reference_types = true
-;;! gc_types = true
 
 ;; Winch reference-value support: externref flows through params, results,
 ;; locals, and globals, and survives calls (stack maps). Global reads and

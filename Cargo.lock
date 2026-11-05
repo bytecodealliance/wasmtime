@@ -5123,6 +5123,7 @@ version = "52.0.0-dev"
 dependencies = [
  "arbitrary",
  "arbtest",
+ "clap",
  "env_logger 0.11.5",
  "indexmap 2.14.0",
  "proc-macro2",
@@ -5135,6 +5136,7 @@ dependencies = [
  "wasmparser 0.263.0",
  "wasmprinter",
  "wasmtime",
+ "wasmtime-cli-flags",
  "wasmtime-environ",
  "wasmtime-internal-component-util",
  "wat",

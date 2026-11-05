@@ -632,6 +632,7 @@ run = [
   "wasmtime/runtime",
   "wasmtime/wave",
   "dep:tokio",
+  "wasmtime-cli-flags/runtime",
   "wasmtime-cli-flags/async",
   "wasmtime-wasi-http?/p2",
 ]
@@ -654,6 +655,7 @@ wizer = [
   "dep:wasmtime-wasi",
   "dep:tokio",
   "wasmtime/wave",
+  "wasmtime-cli-flags/runtime",
 ]
 
 [[test]]
