@@ -143,6 +143,7 @@ impl Context {
             result = isa.compile_function(
                 &self.func,
                 &self.domtree,
+                &self.loop_analysis,
                 &mut self.regalloc_ctx,
                 self.want_disasm,
                 ctrl_plane,
@@ -193,6 +194,10 @@ impl Context {
 
         if opt_level != OptLevel::None {
             self.egraph_pass(isa, ctrl_plane)?;
+        } else {
+            // Block ordering checks whether loop analysis is valid, ensure it
+            // is cleared if we don't compute it.
+            self.loop_analysis.clear();
         }
 
         Ok(())
@@ -390,6 +395,7 @@ impl Context {
         // Branch optimizations can invalidate these; recompute them.
         self.compute_cfg();
         self.compute_domtree();
+        self.compute_loop_analysis();
 
         self.verify_if(fisa)?;
 

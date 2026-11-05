@@ -12,6 +12,7 @@ use crate::{
     dominator_tree::DominatorTree,
     ir,
     isa::{IsaFlagsHashKey, OwnedTargetIsa, TargetIsa},
+    loop_analysis::LoopAnalysis,
     machinst::{self, CompiledCode, CompiledCodeStencil, MachInst, SigSet, VCode},
     result::CodegenResult,
     settings::{self as shared_settings, Flags},
@@ -122,6 +123,7 @@ where
         &self,
         func: &ir::Function,
         domtree: &DominatorTree,
+        loop_analysis: &LoopAnalysis,
         regalloc_ctx: &mut regalloc2::Ctx,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<VCode<inst::InstAndKind<P>>> {
@@ -135,6 +137,7 @@ where
         machinst::compile::<Self>(
             func,
             domtree,
+            loop_analysis,
             regalloc_ctx,
             self,
             abi,
@@ -182,11 +185,12 @@ where
         &self,
         func: &ir::Function,
         domtree: &DominatorTree,
+        loop_analysis: &LoopAnalysis,
         regalloc_ctx: &mut regalloc2::Ctx,
         want_disasm: bool,
         ctrl_plane: &mut cranelift_control::ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let vcode = self.compile_vcode(func, domtree, regalloc_ctx, ctrl_plane)?;
+        let vcode = self.compile_vcode(func, domtree, loop_analysis, regalloc_ctx, ctrl_plane)?;
 
         let want_disasm =
             want_disasm || (cfg!(feature = "trace-log") && log::log_enabled!(log::Level::Debug));
