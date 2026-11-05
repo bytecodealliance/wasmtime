@@ -59,7 +59,7 @@ doc = false
 [dependencies]
 wasmtime = { workspace = true, features = ['std'] }
 wasmtime-cache = { workspace = true, optional = true }
-wasmtime-cli-flags = { workspace = true, features = ['clap', 'toml', 'runtime'] }
+wasmtime-cli-flags = { workspace = true, features = ['clap', 'toml'] }
 wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
@@ -655,6 +655,7 @@ wizer = [
   "dep:wasmtime-wasi",
   "dep:tokio",
   "wasmtime/wave",
+  "wasmtime-cli-flags/runtime",
 ]
 
 [[test]]
