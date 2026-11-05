@@ -247,6 +247,7 @@ pub struct ObjectModule {
     known_labels: HashMap<(FuncId, CodeOffset), SymbolId>,
     per_function_section: bool,
     per_data_object_section: bool,
+    macho_custom_sections: HashMap<(String, String), (SectionId, macho::SectionFlags)>,
     #[cfg(feature = "unwind")]
     unwind: Option<crate::unwind::UnwindBuilder>,
 }
@@ -282,6 +283,7 @@ impl ObjectModule {
             known_labels: HashMap::new(),
             per_function_section: builder.per_function_section,
             per_data_object_section: builder.per_data_object_section,
+            macho_custom_sections: HashMap::new(),
             #[cfg(feature = "unwind")]
             unwind,
         }
@@ -559,43 +561,28 @@ impl Module for ObjectModule {
             let (segment, section, macho_flags) =
                 parse_section(custom_section.as_ref().unwrap(), self.object.format())
                     .map_err(ModuleError::Backend)?;
-            let section = self.object.add_section(
-                segment.to_string().into_bytes(),
-                section.to_string().into_bytes(),
-                if decl.writable {
-                    SectionKind::Data
-                } else if relocs.is_empty() {
-                    SectionKind::ReadOnlyData
-                } else {
-                    SectionKind::ReadOnlyDataWithRel
-                },
-            );
-
-            match self.object.section_flags_mut(section) {
-                SectionFlags::MachO { flags, .. } => {
-                    // There are no default flags for the `SectionKind`s that
-                    // we've specified above, so it's fine to override.
-                    //
-                    // (If we don't want to override, we'll have to be careful
-                    // with how we set these, to ensure we set the section
-                    // type properly).
-                    assert_eq!(flags.0, 0);
-                    *flags = macho_flags;
-                }
-                _ => {
-                    if macho_flags.0 != 0 {
-                        unreachable!("unsupported Mach-O flags for this platform: {macho_flags:?}");
-                    }
-                }
-            }
-
-            section
+            let kind = if decl.writable {
+                SectionKind::Data
+            } else if relocs.is_empty() {
+                SectionKind::ReadOnlyData
+            } else {
+                SectionKind::ReadOnlyDataWithRel
+            };
+            self.custom_section(segment, section, kind, macho_flags)?
         };
 
         let align = std::cmp::max(align.unwrap_or(1), self.isa.symbol_alignment());
         let offset = match *init {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");
+            }
+            // Shared Mach-O custom sections can't contain uninitialized data.
+            Init::Zeros { size }
+                if custom_section.is_some()
+                    && self.object.format() == object::BinaryFormat::MachO =>
+            {
+                self.object
+                    .add_symbol_data(symbol, section, &vec![0; size], align)
             }
             Init::Zeros { size } => self
                 .object
@@ -631,6 +618,59 @@ impl Module for ObjectModule {
 }
 
 impl ObjectModule {
+    /// On Mach-O, data objects with the same custom section share it, as an object file can
+    /// have at most 255 sections.
+    fn custom_section(
+        &mut self,
+        segment: &str,
+        section: &str,
+        kind: SectionKind,
+        macho_flags: macho::SectionFlags,
+    ) -> ModuleResult<SectionId> {
+        let is_macho = self.object.format() == object::BinaryFormat::MachO;
+        let key = (segment.to_owned(), section.to_owned());
+        if is_macho {
+            if let Some(&(section_id, flags)) = self.macho_custom_sections.get(&key) {
+                if flags != macho_flags {
+                    return Err(ModuleError::Backend(anyhow!(
+                        "section `{segment},{section}` is used with different section types or attributes"
+                    )));
+                }
+                return Ok(section_id);
+            }
+        }
+
+        let section_id = self.object.add_section(
+            segment.as_bytes().to_vec(),
+            section.as_bytes().to_vec(),
+            kind,
+        );
+
+        match self.object.section_flags_mut(section_id) {
+            SectionFlags::MachO { flags, .. } => {
+                // There are no default flags for the `SectionKind`s that
+                // we've specified above, so it's fine to override.
+                //
+                // (If we don't want to override, we'll have to be careful
+                // with how we set these, to ensure we set the section
+                // type properly).
+                assert_eq!(flags.0, 0);
+                *flags = macho_flags;
+            }
+            _ => {
+                if macho_flags.0 != 0 {
+                    unreachable!("unsupported Mach-O flags for this platform: {macho_flags:?}");
+                }
+            }
+        }
+
+        if is_macho {
+            self.macho_custom_sections
+                .insert(key, (section_id, macho_flags));
+        }
+        Ok(section_id)
+    }
+
     fn define_function_inner(
         &mut self,
         func_id: FuncId,

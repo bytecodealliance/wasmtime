@@ -664,3 +664,81 @@ mod eh_frame {
         );
     }
 }
+
+fn define_data_in_custom_section(
+    module: &mut ObjectModule,
+    name: &str,
+    section: &str,
+    zeroinit: bool,
+) -> ModuleResult<()> {
+    let data_id = module.declare_data(name, Linkage::Local, false, false)?;
+    let mut data_desc = DataDescription::new();
+    if zeroinit {
+        data_desc.define_zeroinit(8);
+    } else {
+        data_desc.define(vec![1; 8].into_boxed_slice());
+    }
+    data_desc.set_custom_section(section);
+    module.define_data(data_id, &data_desc)
+}
+
+#[test]
+fn macho_custom_section_is_shared_between_data_objects() {
+    use object::{Object as _, ObjectSection as _, ObjectSymbol as _};
+
+    let flag_builder = settings::builder();
+    let isa = cranelift_codegen::isa::lookup_by_name("aarch64-apple-darwin")
+        .unwrap()
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
+    let mut module =
+        ObjectModule::new(ObjectBuilder::new(isa, "test", default_libcall_names()).unwrap());
+
+    // More data objects than a Mach-O object file can have sections.
+    for i in 0..300 {
+        define_data_in_custom_section(
+            &mut module,
+            &format!("data{i}"),
+            "__DATA,__custom",
+            i % 2 == 0,
+        )
+        .unwrap();
+    }
+
+    let bytes = module.finish().emit().expect("emit object file");
+    let file = object::File::parse(&*bytes).unwrap();
+
+    let sections: Vec<_> = file
+        .sections()
+        .filter(|s| s.name() == Ok("__custom"))
+        .collect();
+    assert_eq!(sections.len(), 1);
+    let section = &sections[0];
+    assert_eq!(section.size(), 300 * 8);
+
+    let data = section.data().unwrap();
+    for i in 0..300 {
+        let symbol = file.symbol_by_name(&format!("_data{i}")).unwrap();
+        assert_eq!(symbol.section_index(), Some(section.index()));
+        let offset = (symbol.address() - section.address()) as usize;
+        let expected = if i % 2 == 0 { 0 } else { 1 };
+        assert_eq!(data[offset..offset + 8], [expected; 8]);
+    }
+}
+
+#[test]
+fn macho_custom_section_rejects_conflicting_flags() {
+    let flag_builder = settings::builder();
+    let isa = cranelift_codegen::isa::lookup_by_name("aarch64-apple-darwin")
+        .unwrap()
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
+    let mut module =
+        ObjectModule::new(ObjectBuilder::new(isa, "test", default_libcall_names()).unwrap());
+
+    define_data_in_custom_section(&mut module, "a", "__DATA,__custom", false).unwrap();
+    assert!(
+        define_data_in_custom_section(&mut module, "b", "__DATA,__custom,cstring_literals", false)
+            .is_err()
+    );
+}
