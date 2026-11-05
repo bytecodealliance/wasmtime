@@ -122,33 +122,7 @@ pub use crate::runtime::vm::table::{Table, TableElementType};
 #[cfg(feature = "gc")]
 pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
-#[cfg(feature = "component-model")]
-pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
-#[cfg(feature = "gc-copying")]
-pub(crate) use crate::runtime::vm::vmcontext::VMCopyingHeader;
-#[cfg(feature = "gc-copying")]
-pub use crate::runtime::vm::vmcontext::VMCopyingHeapData;
-#[cfg(feature = "gc-drc")]
-pub(crate) use crate::runtime::vm::vmcontext::VMDrcHeader;
-#[cfg(feature = "gc-drc")]
-pub use crate::runtime::vm::vmcontext::VMDrcHeapData;
-#[cfg(feature = "component-model-async")]
-pub use crate::runtime::vm::vmcontext::VMLazyThread;
-#[cfg(feature = "gc-null")]
-pub use crate::runtime::vm::vmcontext::VMNullHeapData;
-#[cfg(feature = "component-model")]
-pub use crate::runtime::vm::vmcontext::VMResourceIndex;
-pub use crate::runtime::vm::vmcontext::{
-    VMArrayCallHostFuncContext, VMCommonStackInformation, VMContRef, VMContext, VMFuncRef,
-    VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMHostArray,
-    VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMPayloads, VMStackLimits, VMStoreContext,
-    VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
-};
-#[cfg(feature = "component-model")]
-pub use crate::runtime::vm::vmcontext::{
-    VMHandleTableSlot, VMScope, VMScopeKind, VMTransmitLocalState, VMTransmitLocalStateKind,
-    VMTypedResource,
-};
+pub use crate::runtime::vm::vmcontext::*;
 #[cfg(has_custom_sync)]
 pub(crate) use sys::capi;
 

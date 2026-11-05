@@ -591,14 +591,12 @@ macro_rules! for_each_vm_type {
             #[repr(C)]
             #[snake_name = vm_typed_resource]
             pub struct VMTypedResource {
-                /// `ty` is biased by one: zero is a host resource, otherwise
-                /// `ty - 1` is the `TypeResourceTableIndex`. This keeps a type
-                /// check in compiled code to one compare against a constant.
-                ty: u32,
+                /// The raw `TypeResourceTableIndex`, or `u32::MAX` for a host resource.
+                pub(crate) ty: u32,
 
                 /// An integer whose meaning is up to whoever defined the
                 /// resource.
-                rep: u32,
+                pub(crate) rep: u32,
             }
 
             /// A call's resource-borrow scope, as stored in a
@@ -612,10 +610,10 @@ macro_rules! for_each_vm_type {
             #[snake_name = vm_scope]
             pub struct VMScope {
                 /// The kind of scope. See the `id`/`host_id` constructors.
-                kind: u32,
+                pub(crate) kind: u32,
 
                 /// The scope's identifier, whose meaning depends on `kind`.
-                id: u32,
+                pub(crate) id: u32,
             }
 
             /// One instance's view of a stream or future handle, as stored in a
@@ -630,10 +628,10 @@ macro_rules! for_each_vm_type {
             pub struct VMTransmitLocalState {
                 /// The kind of transmit state. See the `VMTransmitLocalState`
                 /// constructors for details.
-                kind: u32,
+                pub(crate) kind: u32,
 
                 /// Meaningful only for the `Write` and `Read` kinds.
-                done: u32,
+                pub(crate) done: u32,
             }
 
             /// One slot of a component instance's `HandleTable`.

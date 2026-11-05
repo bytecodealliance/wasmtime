@@ -6,7 +6,8 @@ use crate::runtime::vm::component::{
     CallContext, ComponentInstance, HandleCounter, HandleTable, OwnedComponentInstance,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
-use crate::vm::{VMScope, VMScopeKind};
+use crate::vm::VMScope;
+use crate::vm::component::ScopeKind;
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
 use core::pin::Pin;
 use wasmtime_environ::LAZY_LENDERS_CAPACITY;
@@ -783,8 +784,8 @@ impl ComponentTaskState {
     pub fn call_context(&mut self, id: VMScope) -> Result<&mut CallContext> {
         match self {
             ComponentTaskState::NotConcurrent(state) => match id.kind() {
-                VMScopeKind::Id(id) => Ok(&mut state.scopes[id as usize]),
-                VMScopeKind::HostId(_) => bail_bug!("non-concurrent scope cannot be a host ID"),
+                ScopeKind::Id(id) => Ok(&mut state.scopes[id as usize]),
+                ScopeKind::HostId(_) => bail_bug!("non-concurrent scope cannot be a host ID"),
             },
             #[cfg(feature = "component-model-async")]
             ComponentTaskState::Concurrent(state) => state.call_context(id),

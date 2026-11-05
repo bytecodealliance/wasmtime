@@ -277,7 +277,7 @@ impl<'a> HostResourceTables<'a> {
         ty: TypeResourceTableIndex,
     ) -> Result<u32> {
         self.tables
-            .resource_lower_own(VMTypedResource::component(ty, rep)?)
+            .resource_lower_own(VMTypedResource::component(ty, rep))
     }
 
     /// Lowers a `borrow` resource into the guest, converting the `rep`
@@ -295,7 +295,7 @@ impl<'a> HostResourceTables<'a> {
         ty: TypeResourceTableIndex,
     ) -> Result<u32> {
         self.tables
-            .resource_lower_borrow(VMTypedResource::component(ty, rep)?)
+            .resource_lower_borrow(VMTypedResource::component(ty, rep))
     }
 
     /// Lifts an `own` resource from the `idx` specified from the table `ty`.

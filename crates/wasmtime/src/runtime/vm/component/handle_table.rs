@@ -1,11 +1,38 @@
-use super::TypedResourceIndex;
+use super::{TransmitLocalStateKind, TypedResourceIndex};
 use crate::prelude::TryVec;
-use crate::vm::{
-    VMHandleTableSlot, VMScope, VMTransmitLocalState, VMTransmitLocalStateKind, VMTypedResource,
-};
+use crate::vm::{VMHandleTableSlot, VMScope, VMTransmitLocalState, VMTypedResource, VmSafe};
 use crate::{Result, bail};
 use core::mem;
 use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
+
+// SAFETY: `VMHandleTableSlot` is generated with `#[repr(C, u32)]` and every
+// variant holds only `u32`s and `VmSafe` structs of them.
+unsafe impl VmSafe for VMHandleTableSlot {}
+
+#[cfg(test)]
+mod test_vm_handle_table_slot {
+    use wasmtime_environ::PtrSize;
+
+    /// A lent resource's `lend_count` must sit at the same offset whether the
+    /// handle is an `own` or a `borrow`, because compiled code adjusts it
+    /// without first branching on the slot's tag.
+    ///
+    /// A field inserted ahead of `lend_count` in only one of the two variants
+    /// would silently break that, which is what this guards against.
+    ///
+    /// Every field offset here is itself checked against the real Rust layout
+    /// by the generated `test_vm_type_layouts::vm_handle_table_slot`.
+    #[test]
+    fn lend_count_offset_is_variant_agnostic() {
+        for ptr in [4u8, 8] {
+            let slot = ptr.vm_handle_table_slot();
+            assert_eq!(
+                slot.resource_own().lend_count(),
+                slot.resource_borrow().lend_count(),
+            );
+        }
+    }
+}
 
 /// The maximum handle value is specified in
 /// <https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md>
@@ -396,11 +423,11 @@ impl HandleTable {
                     bail!("handle is a stream of a different type");
                 }
                 let is_done = match state.kind() {
-                    VMTransmitLocalStateKind::Read { done } => done,
-                    VMTransmitLocalStateKind::Write { .. } => {
+                    TransmitLocalStateKind::Read { done } => done,
+                    TransmitLocalStateKind::Write { .. } => {
                         bail!("handle is not a readable end of a stream")
                     }
-                    VMTransmitLocalStateKind::Busy | VMTransmitLocalStateKind::Cancelling => {
+                    TransmitLocalStateKind::Busy | TransmitLocalStateKind::Cancelling => {
                         bail!("cannot remove busy stream")
                     }
                 };
@@ -424,11 +451,11 @@ impl HandleTable {
                     bail!("handle is a stream of a different type");
                 }
                 match state.kind() {
-                    VMTransmitLocalStateKind::Write { .. } => {}
-                    VMTransmitLocalStateKind::Read { .. } => {
+                    TransmitLocalStateKind::Write { .. } => {}
+                    TransmitLocalStateKind::Read { .. } => {
                         bail!("passed read end to `stream.drop-writable`")
                     }
-                    VMTransmitLocalStateKind::Busy | VMTransmitLocalStateKind::Cancelling => {
+                    TransmitLocalStateKind::Busy | TransmitLocalStateKind::Cancelling => {
                         bail!("cannot drop busy stream")
                     }
                 }
@@ -519,11 +546,11 @@ impl HandleTable {
                     bail!("handle is a future of a different type");
                 }
                 let is_done = match state.kind() {
-                    VMTransmitLocalStateKind::Read { done } => done,
-                    VMTransmitLocalStateKind::Write { .. } => {
+                    TransmitLocalStateKind::Read { done } => done,
+                    TransmitLocalStateKind::Write { .. } => {
                         bail!("handle is not a readable end of a future")
                     }
-                    VMTransmitLocalStateKind::Busy | VMTransmitLocalStateKind::Cancelling => {
+                    TransmitLocalStateKind::Busy | TransmitLocalStateKind::Cancelling => {
                         bail!("cannot remove busy future")
                     }
                 };
@@ -549,11 +576,11 @@ impl HandleTable {
                     bail!("handle is a future of a different type");
                 }
                 let is_done = match state.kind() {
-                    VMTransmitLocalStateKind::Write { done } => done,
-                    VMTransmitLocalStateKind::Read { .. } => {
+                    TransmitLocalStateKind::Write { done } => done,
+                    TransmitLocalStateKind::Read { .. } => {
                         bail!("passed read end to `future.drop-writable`")
                     }
-                    VMTransmitLocalStateKind::Busy | VMTransmitLocalStateKind::Cancelling => {
+                    TransmitLocalStateKind::Busy | TransmitLocalStateKind::Cancelling => {
                         bail!("cannot drop busy future")
                     }
                 };

@@ -383,7 +383,7 @@ impl Instance {
     ) -> Result<u32> {
         store
             .component_resource_tables(Some(self))?
-            .resource_new(VMTypedResource::component(ty, rep)?)
+            .resource_new(VMTypedResource::component(ty, rep))
     }
 
     /// Implementation of the `resource.rep` intrinsic for `i32`
@@ -420,7 +420,7 @@ impl Instance {
     ) -> Result<u32> {
         let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_own(TypedResourceIndex::Component { ty: src, index })?;
-        tables.resource_lower_own(VMTypedResource::component(dst, rep)?)
+        tables.resource_lower_own(VMTypedResource::component(dst, rep))
     }
 
     pub(crate) fn resource_transfer_borrow(
@@ -439,7 +439,7 @@ impl Instance {
         // forced anyway.
         let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
-        tables.resource_lower_borrow(VMTypedResource::component(dst, rep)?)
+        tables.resource_lower_borrow(VMTypedResource::component(dst, rep))
     }
 
     /// Variant of `resource_transfer_borrow` for when the destination instance

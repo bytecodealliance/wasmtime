@@ -64,13 +64,14 @@ use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 #[cfg(feature = "gc")]
 use crate::vm::GcRootsList;
+use crate::vm::VMScope;
+use crate::vm::component::ScopeKind;
 use crate::vm::component::{
     CallContext, ComponentInstance, CurrentScope, HandleCounter, InstanceState,
 };
 use crate::vm::{
     AlwaysMut, SendSyncPtr, UncaughtException, VMFuncRef, VMLazyThread, VMMemoryDefinition, VMStore,
 };
-use crate::vm::{VMScope, VMScopeKind};
 use crate::{AsContext, AsContextMut, Result, StoreContext, StoreContextMut, ValRaw, bail};
 use crate::{Instance as ModuleInstance, bail_bug};
 use alloc::borrow::ToOwned;
@@ -6608,11 +6609,11 @@ impl ConcurrentState {
     /// specified task.
     pub fn call_context(&mut self, task: VMScope) -> Result<&mut CallContext> {
         match task.kind() {
-            VMScopeKind::HostId(task) => {
+            ScopeKind::HostId(task) => {
                 let task: TableId<HostTask> = TableId::new(task);
                 Ok(&mut self.get_mut(task)?.call_context)
             }
-            VMScopeKind::Id(task) => {
+            ScopeKind::Id(task) => {
                 let task: TableId<GuestTask> = TableId::new(task);
                 Ok(&mut self.get_mut(task)?.call_context)
             }
