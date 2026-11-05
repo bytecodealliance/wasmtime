@@ -369,6 +369,7 @@ macro_rules! define_vm_types {
             $(
                 $(#[doc = $vdoc:literal])*
                 #[snake_name = $vsnake:ident]
+                $(#[$vattr:meta])*
                 $Variant:ident {
                     $(
                         $(#[doc = $fdoc:literal])*
@@ -395,6 +396,7 @@ macro_rules! define_vm_types {
                 $svis enum $Name {
                     $(
                         $(#[doc = $vdoc])*
+                        $(#[$vattr])*
                         $Variant {
                             $(
                                 $(#[doc = $fdoc])*

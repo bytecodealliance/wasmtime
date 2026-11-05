@@ -64,8 +64,10 @@ use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 #[cfg(feature = "gc")]
 use crate::vm::GcRootsList;
+use crate::vm::VMScope;
+use crate::vm::component::ScopeKind;
 use crate::vm::component::{
-    CallContext, ComponentInstance, CurrentScope, HandleCounter, InstanceState, Scope,
+    CallContext, ComponentInstance, CurrentScope, HandleCounter, InstanceState,
 };
 use crate::vm::{
     AlwaysMut, SendSyncPtr, UncaughtException, VMFuncRef, VMLazyThread, VMMemoryDefinition, VMStore,
@@ -1968,7 +1970,7 @@ impl StoreOpaque {
             .unforced_current_thread
             .guest_task()
         {
-            Some(task) => Scope::Id(task.rep()),
+            Some(task) => VMScope::id(task.rep()),
             None => bail_bug!("replayed deferred frame is not a guest thread"),
         };
         let instance = Instance::from_wasmtime(self, id);
@@ -2765,12 +2767,12 @@ impl StoreOpaque {
         if !self.concurrency_support() {
             return Ok(self
                 .current_scope_id_not_concurrent()?
-                .map(|id| CurrentScope::Id(Scope::Id(id))));
+                .map(|id| CurrentScope::Id(VMScope::id(id))));
         }
 
         Ok(match self.current_thread()? {
-            CurrentThread::Guest(id) => Some(CurrentScope::Id(Scope::Id(id.task.rep()))),
-            CurrentThread::Host(id) => Some(CurrentScope::Id(Scope::HostId(id.rep()))),
+            CurrentThread::Guest(id) => Some(CurrentScope::Id(VMScope::id(id.task.rep()))),
+            CurrentThread::Host(id) => Some(CurrentScope::Id(VMScope::host_id(id.rep()))),
             CurrentThread::DeferredHost(_) => Some(CurrentScope::DeferredHost),
             CurrentThread::None => return Ok(None),
         })
@@ -6605,13 +6607,13 @@ impl ConcurrentState {
 
     /// Used by `ResourceTables` to acquire the current `CallContext` for the
     /// specified task.
-    pub fn call_context(&mut self, task: Scope) -> Result<&mut CallContext> {
-        match task {
-            Scope::HostId(task) => {
+    pub fn call_context(&mut self, task: VMScope) -> Result<&mut CallContext> {
+        match task.kind() {
+            ScopeKind::HostId(task) => {
                 let task: TableId<HostTask> = TableId::new(task);
                 Ok(&mut self.get_mut(task)?.call_context)
             }
-            Scope::Id(task) => {
+            ScopeKind::Id(task) => {
                 let task: TableId<GuestTask> = TableId::new(task);
                 Ok(&mut self.get_mut(task)?.call_context)
             }
@@ -6679,9 +6681,9 @@ impl ConcurrentState {
         }
     }
 
-    pub(crate) fn materialize_current_scope(&mut self) -> Result<Scope> {
+    pub(crate) fn materialize_current_scope(&mut self) -> Result<VMScope> {
         match self.materialize_host_task()? {
-            CurrentThread::Host(id) => Ok(Scope::HostId(id.rep())),
+            CurrentThread::Host(id) => Ok(VMScope::host_id(id.rep())),
             _ => bail_bug!("current scope is not a deferred host scope"),
         }
     }

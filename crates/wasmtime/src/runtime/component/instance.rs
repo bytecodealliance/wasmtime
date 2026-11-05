@@ -9,7 +9,8 @@ use crate::component::{ExportLookup, RuntimeInstance};
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
-use crate::runtime::vm::component::{ComponentInstance, TypedResource, TypedResourceIndex};
+use crate::runtime::vm::VMTypedResource;
+use crate::runtime::vm::component::{ComponentInstance, TypedResourceIndex};
 use crate::runtime::vm::{self, UncaughtException, VMFuncRef, VMStore};
 use crate::store::{AsStoreOpaque, Asyncness, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
@@ -382,7 +383,7 @@ impl Instance {
     ) -> Result<u32> {
         store
             .component_resource_tables(Some(self))?
-            .resource_new(TypedResource::Component { ty, rep })
+            .resource_new(VMTypedResource::component(ty, rep))
     }
 
     /// Implementation of the `resource.rep` intrinsic for `i32`
@@ -419,7 +420,7 @@ impl Instance {
     ) -> Result<u32> {
         let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_own(TypedResourceIndex::Component { ty: src, index })?;
-        tables.resource_lower_own(TypedResource::Component { ty: dst, rep })
+        tables.resource_lower_own(VMTypedResource::component(dst, rep))
     }
 
     pub(crate) fn resource_transfer_borrow(
@@ -438,7 +439,7 @@ impl Instance {
         // forced anyway.
         let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
-        tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
+        tables.resource_lower_borrow(VMTypedResource::component(dst, rep))
     }
 
     /// Variant of `resource_transfer_borrow` for when the destination instance

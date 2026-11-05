@@ -90,6 +90,22 @@ enum VmType {
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
     )]
     VMResourceIndex,
+    VMHandleTableSlot,
+    #[allow(
+        dead_code,
+        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
+    )]
+    VMTypedResource,
+    #[allow(
+        dead_code,
+        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
+    )]
+    VMScope,
+    #[allow(
+        dead_code,
+        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
+    )]
+    VMTransmitLocalState,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -1010,6 +1026,7 @@ macro_rules! define_vm_type_alias_region_helpers {
     (@munch_enum $Name:ident $snake:ident $tag:ident { $($vs:tt)* }
         $(#[doc = $vdoc:literal])*
         #[snake_name = $vsnake:ident]
+        $(#[$vattr:meta])*
         $Variant:ident { $($vbody:tt)* } = $disc:literal ,
         $($rest:tt)*
     ) => {

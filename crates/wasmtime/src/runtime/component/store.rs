@@ -3,9 +3,11 @@ use crate::runtime::component::{HostResourceData, Instance};
 use crate::runtime::vm;
 use crate::runtime::vm::VMResourceIndex;
 use crate::runtime::vm::component::{
-    CallContext, ComponentInstance, HandleCounter, HandleTable, OwnedComponentInstance, Scope,
+    CallContext, ComponentInstance, HandleCounter, HandleTable, OwnedComponentInstance,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
+use crate::vm::VMScope;
+use crate::vm::component::ScopeKind;
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut, bail_bug};
 use core::pin::Pin;
 use wasmtime_environ::LAZY_LENDERS_CAPACITY;
@@ -580,7 +582,7 @@ impl StoreOpaque {
     pub(crate) fn promote_lazy_lends(
         &mut self,
         instance: Instance,
-        scope: vm::component::Scope,
+        scope: vm::VMScope,
         start: usize,
         end: usize,
     ) -> Result<()> {
@@ -779,18 +781,18 @@ pub struct ComponentTasksNotConcurrent {
 }
 
 impl ComponentTaskState {
-    pub fn call_context(&mut self, id: Scope) -> Result<&mut CallContext> {
+    pub fn call_context(&mut self, id: VMScope) -> Result<&mut CallContext> {
         match self {
-            ComponentTaskState::NotConcurrent(state) => match id {
-                Scope::Id(id) => Ok(&mut state.scopes[id as usize]),
-                Scope::HostId(_) => bail_bug!("non-concurrent scope cannot be a host ID"),
+            ComponentTaskState::NotConcurrent(state) => match id.kind() {
+                ScopeKind::Id(id) => Ok(&mut state.scopes[id as usize]),
+                ScopeKind::HostId(_) => bail_bug!("non-concurrent scope cannot be a host ID"),
             },
             #[cfg(feature = "component-model-async")]
             ComponentTaskState::Concurrent(state) => state.call_context(id),
         }
     }
 
-    pub(crate) fn materialize_current_scope(&mut self) -> Result<Scope> {
+    pub(crate) fn materialize_current_scope(&mut self) -> Result<VMScope> {
         match self {
             ComponentTaskState::NotConcurrent(_) => {
                 bail_bug!("a non-concurrent scope cannot be deferred")

@@ -24,7 +24,7 @@ use super::{HandleCounter, HandleTable, InstanceState, RemovedResource};
 use crate::bail_bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
-use crate::runtime::vm::{VMResourceIndex, VMStoreContext};
+use crate::runtime::vm::{VMResourceIndex, VMScope, VMStoreContext, VMTypedResource};
 use core::error::Error;
 use core::fmt;
 use core::mem;
@@ -86,75 +86,10 @@ pub struct ResourceTables<'a> {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CurrentScope {
     /// A scope which already has an ID in the component task state.
-    Id(Scope),
+    Id(VMScope),
     /// A host scope whose task has not yet been materialized.
     #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
     DeferredHost,
-}
-
-/// Identifier for a component call's resource-borrow scope.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum Scope {
-    /// A non-concurrent scope or a concurrent guest-task scope.
-    Id(u32),
-    /// A concurrent host-task scope.
-    HostId(u32),
-}
-
-/// Typed representation of a "rep" for a resource.
-///
-/// All resources in the component model are stored in a single heterogeneous
-/// table so this type is used to disambiguate what everything is. This is the
-/// representation of a resource stored at-rest in memory.
-#[derive(Debug)]
-pub enum TypedResource {
-    /// A resource defined by the host.
-    ///
-    /// The meaning of the 32-bit integer here is up to the embedder, it
-    /// otherwise is not used within the runtime here.
-    Host(u32),
-
-    /// A resource defined within a component.
-    Component {
-        /// This is an integer supplied by the component itself when this
-        /// resource was created. Typically this is a pointer into linear
-        /// memory for a component.
-        rep: u32,
-
-        /// The type of this component resource.
-        ///
-        /// This is used, within the context of a component, to keep track of
-        /// what the type of `rep` is. This is then used when getting/removing
-        /// from the table to ensure that the guest does indeed have the right
-        /// permission to access this slot.
-        ty: TypeResourceTableIndex,
-    },
-}
-
-impl TypedResource {
-    pub(super) fn rep(&self, access_ty: &TypedResourceIndex) -> Result<u32> {
-        match (self, access_ty) {
-            (Self::Host(rep), TypedResourceIndex::Host(_)) => Ok(*rep),
-            (Self::Host(_), expected) => bail!(ResourceTypeMismatch {
-                expected: *expected,
-                found: "host resource",
-            }),
-            (Self::Component { rep, ty }, TypedResourceIndex::Component { ty: expected, .. }) => {
-                if ty == expected {
-                    Ok(*rep)
-                } else {
-                    bail!(ResourceTypeMismatch {
-                        expected: *access_ty,
-                        found: "a different guest-defined resource",
-                    })
-                }
-            }
-            (Self::Component { .. }, expected) => bail!(ResourceTypeMismatch {
-                expected: *expected,
-                found: "guest-defined resource",
-            }),
-        }
-    }
 }
 
 /// An index used to access a resource.
@@ -186,7 +121,7 @@ impl TypedResourceIndex {
         }
     }
 
-    fn desc(&self) -> &'static str {
+    pub(crate) fn desc(&self) -> &'static str {
         match self {
             Self::Host(_) => "host resource",
             Self::Component { .. } => "guest-defined resource",
@@ -211,13 +146,13 @@ impl CallContext {
 impl ResourceTables<'_> {
     fn table_for_resource(
         &mut self,
-        resource: &TypedResource,
+        resource: &VMTypedResource,
     ) -> (&mut HandleTable, &mut HandleCounter) {
-        let table = match resource {
-            TypedResource::Host(_) => &mut *self.host_table,
-            TypedResource::Component { ty, .. } => {
+        let table = match resource.component_ty() {
+            None => &mut *self.host_table,
+            Some(ty) => {
                 let (states, types) = self.guest.as_mut().unwrap();
-                states[types[*ty].unwrap_concrete_instance()].handle_table()
+                states[types[ty].unwrap_concrete_instance()].handle_table()
             }
         };
         (table, &mut *self.handle_counter)
@@ -240,7 +175,7 @@ impl ResourceTables<'_> {
     /// Implementation of the `resource.new` canonical intrinsic.
     ///
     /// Note that this is the same as `resource_lower_own`.
-    pub fn resource_new(&mut self, resource: TypedResource) -> Result<u32> {
+    pub fn resource_new(&mut self, resource: VMTypedResource) -> Result<u32> {
         let (table, counter) = self.table_for_resource(&resource);
         table.resource_own_insert(counter, resource)
     }
@@ -284,7 +219,7 @@ impl ResourceTables<'_> {
     /// the same as `resource_new` implementation-wise.
     ///
     /// This is an implementation of the canonical ABI `lower_own` function.
-    pub fn resource_lower_own(&mut self, resource: TypedResource) -> Result<u32> {
+    pub fn resource_lower_own(&mut self, resource: VMTypedResource) -> Result<u32> {
         let (table, counter) = self.table_for_resource(&resource);
         table.resource_own_insert(counter, resource)
     }
@@ -304,7 +239,7 @@ impl ResourceTables<'_> {
         }
     }
 
-    fn materialize_current_scope(&mut self) -> Result<Scope> {
+    fn materialize_current_scope(&mut self) -> Result<VMScope> {
         let id = match self.current_scope {
             Some(CurrentScope::Id(id)) => return Ok(id),
             Some(CurrentScope::DeferredHost) => self.task_state.materialize_current_scope()?,
@@ -421,7 +356,7 @@ impl ResourceTables<'_> {
     )]
     pub fn promote_lazy_lends(
         &mut self,
-        scope: Scope,
+        scope: VMScope,
         lazy_lenders: &[VMResourceIndex],
     ) -> Result<()> {
         // Fail up front on anything that could otherwise fail partway through
@@ -455,7 +390,7 @@ impl ResourceTables<'_> {
     /// function. The other half of this implementation is located on
     /// `VMComponentContext` which handles the special case of avoiding borrow
     /// tracking entirely.
-    pub fn resource_lower_borrow(&mut self, resource: TypedResource) -> Result<u32> {
+    pub fn resource_lower_borrow(&mut self, resource: VMTypedResource) -> Result<u32> {
         let scope = self.materialize_current_scope()?;
         let cx = self.task_state.call_context(scope)?;
         cx.borrow_count = cx.borrow_count.checked_add(1).unwrap();
@@ -486,9 +421,9 @@ impl ResourceTables<'_> {
 }
 
 #[derive(Debug)]
-struct ResourceTypeMismatch {
-    expected: TypedResourceIndex,
-    found: &'static str,
+pub(crate) struct ResourceTypeMismatch {
+    pub(crate) expected: TypedResourceIndex,
+    pub(crate) found: &'static str,
 }
 
 impl fmt::Display for ResourceTypeMismatch {
