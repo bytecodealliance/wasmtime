@@ -211,7 +211,6 @@ where
     {
         self.inner.binary_search_values_by_key(b, f)
     }
-
 }
 
 impl<K, V> TryExtend<V> for TryPrimaryMap<K, V>
