@@ -1613,6 +1613,111 @@ async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
     Ok(())
 }
 
+/// A component of two core modules, whose exported functions are on different PCs: `$pad`
+/// keeps `f2`'s code off the ones `f1` has.
+const TWO_MODULES: &str = r#"(component
+     (core module $m1
+       (func (export "f1") (param i32 i32) (result i32)
+         local.get 0
+         local.get 1
+         i32.add))
+     (core instance $i1 (instantiate $m1))
+     (core module $m2
+       (func $pad (result i32)
+         i32.const 1
+         i32.const 2
+         i32.add
+         i32.const 3
+         i32.add)
+       (func (export "f2") (param i32 i32) (result i32)
+         local.get 0
+         local.get 1
+         i32.mul))
+     (core instance $i2 (instantiate $m2))
+     (func (export "f1") (param "a" s32) (param "b" s32) (result s32)
+       (canon lift (core func $i1 "f1")))
+     (func (export "f2") (param "a" s32) (param "b" s32) (result s32)
+       (canon lift (core func $i2 "f2"))))"#;
+
+/// Records the PC of each debug event.
+#[derive(Clone)]
+struct RecordPcs(Arc<Mutex<Vec<u32>>>);
+
+impl DebugHandler for RecordPcs {
+    type Data = ();
+    fn handle(
+        &self,
+        mut store: StoreContextMut<'_, ()>,
+        _event: DebugEvent<'_>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        let frame = store.debug_exit_frames().next().unwrap();
+        let (_, pc) = frame
+            .wasm_function_index_and_pc(&mut store)
+            .unwrap()
+            .unwrap();
+        self.0.lock().unwrap().push(pc.raw());
+        async {}
+    }
+}
+
+/// Loads [`TWO_MODULES`], and calls `f1` then `f2`, saying the PCs of each one's events.
+/// `edit` sets breakpoints first, given the component's modules.
+async fn two_modules(
+    edit: impl FnOnce(&mut Store<()>, &[Module]) -> wasmtime::Result<()>,
+) -> wasmtime::Result<(Vec<u32>, Vec<u32>)> {
+    use wasmtime::component::{Component, Linker};
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, TWO_MODULES)?;
+    let linker: Linker<()> = Linker::new(&engine);
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let pcs = Arc::new(Mutex::new(Vec::new()));
+    store.set_debug_handler(RecordPcs(pcs.clone()));
+    let modules = store.debug_all_modules();
+    assert_eq!(modules.len(), 2);
+    edit(&mut store, &modules)?;
+
+    let f1 = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, "f1")?;
+    f1.call_async(&mut store, (3, 5)).await?;
+    let in_f1 = std::mem::take(&mut *pcs.lock().unwrap());
+    let f2 = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, "f2")?;
+    f2.call_async(&mut store, (3, 5)).await?;
+    let in_f2 = std::mem::take(&mut *pcs.lock().unwrap());
+    Ok((in_f1, in_f2))
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn component_breakpoint_survives_single_step() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // Each function's first PC, from a single step through it.
+    let (f1, f2) =
+        two_modules(|store, _| store.edit_breakpoints().unwrap().single_step(true)).await?;
+    assert!(f1.iter().all(|pc| !f2.contains(pc)), "{f1:?} {f2:?}");
+
+    // A breakpoint in either module stops only there, after single-stepping has been on and off.
+    for (at, pc) in [(0, f1[0]), (1, f2[0])] {
+        let events = two_modules(|store, modules| {
+            let mut edit = store.edit_breakpoints().unwrap();
+            edit.add_breakpoint(&modules[at], ModulePC::new(pc))?;
+            edit.single_step(true)?;
+            edit.single_step(false)
+        })
+        .await?;
+        let wanted = if at == 0 {
+            (vec![pc], vec![])
+        } else {
+            (vec![], vec![pc])
+        };
+        assert_eq!(events, wanted, "a breakpoint in module {at}");
+    }
+    Ok(())
+}
+
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn component_module_relative_breakpoint_pcs() -> wasmtime::Result<()> {

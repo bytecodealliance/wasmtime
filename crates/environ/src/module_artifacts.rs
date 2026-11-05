@@ -431,6 +431,19 @@ impl CompiledFunctionsTable {
         if loc.is_empty() { None } else { Some(loc) }
     }
 
+    /// Get the range of the text section that holds all of `namespace`'s
+    /// functions, if it has any.
+    ///
+    /// A namespace's functions are laid out together, so no other function
+    /// falls inside this range.
+    pub fn text_range(&self, namespace: FuncKeyNamespace) -> Option<Range<u32>> {
+        let ns_idx = self.namespace_index(namespace)?;
+        let Range { start, end } = self.func_loc_range(ns_idx);
+        let first = self.func_locs.get(start)?;
+        let last = &self.func_locs[FuncLocIndex::from_u32(end.as_u32() - 1)];
+        Some(first.start..last.start + last.length)
+    }
+
     fn src_loc_index(&self, key: FuncKey) -> Option<SrcLocIndex> {
         let (key_ns, key_index) = key.into_parts();
         if !Self::has_src_locs(key_ns.kind()) {
