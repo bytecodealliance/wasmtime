@@ -168,7 +168,10 @@ impl Val {
             Val::F32(_) => ValType::F32,
             Val::F64(_) => ValType::F64,
             Val::V128(_) => ValType::V128,
-            Val::ExternRef(Some(_)) => ValType::EXTERNREF,
+            Val::ExternRef(Some(e)) => {
+                e.try_gc_ref(store)?;
+                ValType::Ref(RefType::new(false, HeapType::Extern))
+            }
             Val::ExternRef(None) => ValType::NULLEXTERNREF,
             Val::FuncRef(None) => ValType::NULLFUNCREF,
             Val::FuncRef(Some(f)) => ValType::Ref(RefType::new(

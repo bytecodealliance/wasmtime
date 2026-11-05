@@ -2569,6 +2569,24 @@ fn anyref_ty_extern_converted() -> Result<()> {
 }
 
 #[test]
+fn externref_val_ty() -> Result<()> {
+    let mut store = gc_store()?;
+    let live = ExternRef::new(&mut store, 1u32)?;
+    let ty = Val::ExternRef(Some(live)).ty(&store)?;
+    assert!(ValType::eq(
+        &ty,
+        &ValType::Ref(RefType::new(false, HeapType::Extern))
+    ));
+
+    let unrooted = {
+        let mut scope = RootScope::new(&mut store);
+        ExternRef::new(&mut scope, 2u32)?
+    };
+    assert!(Val::ExternRef(Some(unrooted)).ty(&store).is_err());
+    Ok(())
+}
+
+#[test]
 fn anyref_to_raw_struct() -> Result<()> {
     let mut store = gc_store()?;
     let struct_ty = StructType::new(
