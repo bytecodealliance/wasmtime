@@ -8,11 +8,13 @@ using namespace wasmtime;
 TEST(Table, Smoke) {
   Engine engine;
   Store store(engine);
-  Table::create(store, TableType(ValType::funcref(), 1), 3.0).err();
+  Table::create(store, TableType::create(ValType::funcref(), 1).unwrap(), 3.0)
+      .err();
 
   Val null = std::optional<Func>();
-  Table t =
-      Table::create(store, TableType(ValType::funcref(), 1), null).unwrap();
+  Table t = Table::create(
+                store, TableType::create(ValType::funcref(), 1).unwrap(), null)
+                .unwrap();
   EXPECT_FALSE(t.get(store, 1));
   EXPECT_TRUE(t.get(store, 0));
   Val val = *t.get(store, 0);

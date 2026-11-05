@@ -6,6 +6,7 @@
 #define WASMTIME_TYPES_TABLE_HH
 
 #include <optional>
+#include <wasmtime/error.hh>
 #include <wasmtime/table.h>
 #include <wasmtime/types/val.hh>
 
@@ -61,24 +62,21 @@ private:
   TableType(wasm_tabletype_t *ptr) : ptr(ptr), ref(ptr) {}
 
 public:
-  /// Creates a new table type from the specified value type and minimum size.
-  /// The returned table will have no maximum size.
-  TableType(ValType ty, uint32_t min) : ptr(nullptr), ref(nullptr) {
+  /// Creates a new table type from the specified element type, minimum size,
+  /// and optional maximum size.
+  ///
+  /// Returns an error if `ty` isn't a reference type or if `min` is greater
+  /// than `max`.
+  static Result<TableType> create(ValType ty, uint32_t min,
+                                  std::optional<uint32_t> max = std::nullopt) {
     wasm_limits_t limits;
     limits.min = min;
-    limits.max = wasm_limits_max_default;
-    ptr.reset(wasm_tabletype_new(ty.ptr.release(), &limits));
-    ref = ptr.get();
-  }
-  /// Creates a new table type from the specified value type, minimum size, and
-  /// maximum size.
-  TableType(ValType ty, uint32_t min, uint32_t max) // NOLINT
-      : ptr(nullptr), ref(nullptr) {
-    wasm_limits_t limits;
-    limits.min = min;
-    limits.max = max;
-    ptr.reset(wasm_tabletype_new(ty.ptr.release(), &limits));
-    ref = ptr.get();
+    limits.max = max.value_or(wasm_limits_max_default);
+    wasm_tabletype_t *ptr = wasm_tabletype_new(ty.ptr.release(), &limits);
+    if (ptr == nullptr) {
+      return Error("invalid table type");
+    }
+    return TableType(ptr);
   }
   /// Clones the given reference into a new table type.
   TableType(Ref other) : TableType(wasm_tabletype_copy(other.ptr)) {}
