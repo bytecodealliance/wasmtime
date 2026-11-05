@@ -67,6 +67,7 @@ TEST(Config, Smoke) {
   config.memory_may_move(false);
   config.memory_init_cow(false);
   config.native_unwind_info(false);
+  config.asan_compatible_code(false);
   config.macos_use_mach_ports(false);
   config.cranelift_flag_enable("foo");
   config.cranelift_flag_set("foo", "bar");

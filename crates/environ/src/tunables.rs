@@ -165,10 +165,11 @@ define_tunables! {
         /// Whether compiled stack-switching instructions must emit the
         /// AddressSanitizer fiber-switch handshake expected by this runtime.
         ///
-        /// This setting is derived from how Wasmtime was built. It
-        /// ensures that the compiled artifact and runtime are ABI
-        /// compatible, e.g. it prevents running a non-ASan artifact
-        /// on an ASan-enabled runtime.
+        /// This setting defaults to how Wasmtime was built (`cfg(asan)`)
+        /// and can be overridden with `Config::asan_compatible_code`. It is
+        /// checked when deserializing artifacts so that the compiled
+        /// artifact and runtime agree, e.g. it prevents running a non-ASan
+        /// artifact on an ASan-enabled runtime.
         pub asan_stack_switching: bool,
 
         /// An allocation counter that triggers GC when it reaches zero.
