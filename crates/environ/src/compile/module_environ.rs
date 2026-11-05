@@ -1,6 +1,7 @@
 use crate::error::{OutOfMemory, Result, bail};
 use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, Module, TableSegment, TableSegmentElements,
+    TableSegmentInit,
 };
 use crate::prelude::*;
 use crate::{
@@ -743,6 +744,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::ElementSection(elements) => {
                 self.validator.element_section(&elements)?;
 
+                // Whether writes to tables made so far during instantiation
+                // could be observed outside of this instance, which becomes
+                // true once an active segment applies to an imported table.
+                let mut side_effects_visible = false;
+
                 for (index, entry) in elements.into_iter().enumerate() {
                     let wasmparser::Element {
                         kind,
@@ -793,13 +799,45 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let (offset, escaped) = ConstExpr::from_wasmparser(self, offset_expr)?;
                             debug_assert!(escaped.is_empty());
 
+                            // The spec's instantiation evaluates the
+                            // expressions of all element segments before
+                            // executing any active segment's `table.init`
+                            // (https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation).
+                            // So if any element expression may trap, and an
+                            // earlier write (including from this segment)
+                            // could be observed, then stage its evaluation
+                            // into a passive element segment, which is
+                            // evaluated before any active segment is applied.
+                            // Note that this passive segment isn't registered
+                            // in `passive_elem_map` so it's not reachable from
+                            // wasm itself.
+                            //
+                            // If no imported table has been written yet then a
+                            // trap is unobservable, so evaluating in place is
+                            // fine and avoids the extra copy.
+                            side_effects_visible |=
+                                self.result.module.is_imported_table(table_index);
+                            let init = if side_effects_visible && elements_may_trap(&elements) {
+                                let len = elements.len();
+                                let index = self
+                                    .result
+                                    .module
+                                    .passive_elements
+                                    .push((elements.ty(), len))?;
+                                self.result.passive_elements.push(elements);
+                                self.require_startup_func();
+                                TableSegmentInit::Staged { index, len }
+                            } else {
+                                TableSegmentInit::Direct(elements)
+                            };
+
                             self.result
                                 .table_initialization
                                 .segments
                                 .push(TableSegment {
                                     table_index,
                                     offset,
-                                    elements,
+                                    init,
                                 })?;
                             None
                         }
@@ -1292,18 +1330,16 @@ impl ModuleTranslation<'_> {
                 // A dynamic offset cannot be proven to be in bounds here.
                 _ => return true,
             };
-            let top = match offset.checked_add(segment.elements.len()) {
+            let top = match offset.checked_add(segment.init.len()) {
                 Some(top) => top,
                 None => return true,
             };
             if top > self.module.tables[segment.table_index].limits.min {
                 return true;
             }
-            match &segment.elements {
-                TableSegmentElements::Functions(_) => false,
-                TableSegmentElements::Expressions { exprs, .. } => exprs
-                    .iter()
-                    .any(|expr| expr.ops().iter().any(|op| op.may_trap())),
+            match &segment.init {
+                TableSegmentInit::Direct(elements) => elements_may_trap(elements),
+                TableSegmentInit::Staged { .. } => true,
             }
         })
     }
@@ -1645,7 +1681,7 @@ impl ModuleTranslation<'_> {
             // Get the end of this segment. If out-of-bounds, or too
             // large for our dense table representation, then skip the
             // segment.
-            let top = match offset.checked_add(segment.elements.len()) {
+            let top = match offset.checked_add(segment.init.len()) {
                 Some(top) => top,
                 None => break,
             };
@@ -1673,9 +1709,10 @@ impl ModuleTranslation<'_> {
 
             // Function indices can be optimized here, but fully general
             // expressions are deferred to get evaluated at runtime.
-            let function_elements = match &segment.elements {
-                TableSegmentElements::Functions(indices) => indices,
-                TableSegmentElements::Expressions { .. } => break,
+            let function_elements = match &segment.init {
+                TableSegmentInit::Direct(TableSegmentElements::Functions(indices)) => indices,
+                TableSegmentInit::Direct(TableSegmentElements::Expressions { .. })
+                | TableSegmentInit::Staged { .. } => break,
             };
 
             match &self.table_initialization.initial_values[defined_index] {
@@ -1729,5 +1766,15 @@ impl ModuleTranslation<'_> {
             ModuleStartup::Always(_) | ModuleStartup::IfMemoriesNeedInit(_) => return,
         };
         self.module.startup = ModuleStartup::IfMemoriesNeedInit(ty);
+    }
+}
+
+/// Returns whether evaluating any element of `elements` may trap.
+fn elements_may_trap(elements: &TableSegmentElements) -> bool {
+    match elements {
+        TableSegmentElements::Functions(_) => false,
+        TableSegmentElements::Expressions { exprs, .. } => exprs
+            .iter()
+            .any(|expr| expr.ops().iter().any(|op| op.may_trap())),
     }
 }
