@@ -179,7 +179,10 @@ fn spec_test_config(test: &Path) -> TestConfig {
             let test_name = test.file_name().unwrap().to_str().unwrap();
             ret.reference_types = Some(true);
             ret.multi_memory = Some(true);
-            if test_name.contains("simd") {
+            if test_name.contains("simd")
+                || test_name == "array_init_data.wast"
+                || test_name == "array_new_data.wast"
+            {
                 ret.simd = Some(true);
             }
             if test_name.contains("relaxed") {
@@ -587,8 +590,6 @@ impl WastTest {
             // Wasmtime doesn't implement `assert_{invalid,malformed}_custom`
             "spec_testsuite/proposals/extended-name-section/custom/name_annot.wast",
             "spec_testsuite/proposals/extended-name-section/custom/name.wast",
-            // Waiting on WebAssembly/component-model#755 to land
-            "component-model/test/async/zero-length.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;
