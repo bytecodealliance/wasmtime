@@ -1,0 +1,159 @@
+test compile precise-output
+set unwind_info=false
+set is_pic
+target s390x
+
+function %func_addr() -> i64 {
+    fn0 = %my_func(i64) -> i64
+
+block0:
+    v0 = func_addr.i64 fn0
+    return v0
+}
+
+; VCode:
+; block0:
+;   lgrl %r2, %my_func@GOTENT
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgrl %r2, 0 ; reloc_external GOTRel32Dbl %my_func 2
+;   br %r14
+
+function %colocated_func_addr() -> i64 {
+    fn0 = colocated %my_func(i64) -> i64
+
+block0:
+    v0 = func_addr.i64 fn0
+    return v0
+}
+
+; VCode:
+; block0:
+;   lgrl %r2, %my_func@GOTENT
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgrl %r2, 0 ; reloc_external GOTRel32Dbl %my_func 2
+;   br %r14
+
+function %symbol_value() -> i64 {
+    gv0 = symbol %my_global
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   lgrl %r2, %my_global@GOTENT
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgrl %r2, 0 ; reloc_external GOTRel32Dbl %my_global 2
+;   br %r14
+
+function %colocated_symbol_value() -> i64 {
+    gv0 = symbol colocated %my_global
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   lgrl %r2, %my_global@GOTENT
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgrl %r2, 0 ; reloc_external GOTRel32Dbl %my_global 2
+;   br %r14
+
+function %symbol_value_plus_offset() -> i64 {
+    gv0 = symbol %my_global+123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   lgrl %r2, %my_global@GOTENT
+;   aghi %r2, 123
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgrl %r2, 0 ; reloc_external GOTRel32Dbl %my_global 2
+;   aghi %r2, 0x7b
+;   br %r14
+
+function %symbol_value_minus_offset() -> i64 {
+    gv0 = symbol %my_global-123
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   lgrl %r2, %my_global@GOTENT
+;   aghi %r2, -123
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgrl %r2, 0 ; reloc_external GOTRel32Dbl %my_global 2
+;   aghi %r2, -0x7b
+;   br %r14
+
+function %symbol_value_i32_offset() -> i64 {
+    gv0 = symbol %my_global+65536
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   lgrl %r2, %my_global@GOTENT
+;   agfi %r2, 65536
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgrl %r2, 0 ; reloc_external GOTRel32Dbl %my_global 2
+;   agfi %r2, 0x10000
+;   br %r14
+
+function %symbol_value_large_offset() -> i64 {
+    gv0 = symbol %my_global+4294967296
+
+block0:
+    v0 = symbol_value.i64 gv0
+    return v0
+}
+
+; VCode:
+; block0:
+;   lgrl %r2, %my_global@GOTENT
+;   llihl %r3, 1
+;   agr %r2, %r3
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lgrl %r2, 0 ; reloc_external GOTRel32Dbl %my_global 2
+;   llihl %r3, 1
+;   agr %r2, %r3
+;   br %r14
+
