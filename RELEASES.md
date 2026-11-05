@@ -4,7 +4,176 @@ Unreleased.
 
 ### Added
 
+* Cranelift has initial support for 128-bit atomics on AArch64.
+  [#14475](https://github.com/bytecodealliance/wasmtime/pull/14475)
+
+* Cranelift has initial support for 128-bit atomics on s390x.
+  [#14771](https://github.com/bytecodealliance/wasmtime/pull/14771)
+  [#14809](https://github.com/bytecodealliance/wasmtime/pull/14809)
+
+* Cranelift now has an `interrupt_poll` instruction suitable for generating a
+  native signal with an architectural load which the embedder has necessary
+  metadata to redirect execution if necessary.
+  [#14579](https://github.com/bytecodealliance/wasmtime/pull/14579)
+
+* Wasmtime now has the ability to precompute symbol tables with the
+  `GuestProfiler` to greatly improve the cost of capturing profiles across many
+  stores of the same module's intances.
+  [#14753](https://github.com/bytecodealliance/wasmtime/pull/14753)
+
+* Wasmtime now supports filling in unknown imports with functions that return
+  default values.
+  [#14746](https://github.com/bytecodealliance/wasmtime/pull/14746)
+
+* The `WorkerState` trait in `wasmtime-wais-http` now has a `poll` method which
+  can be overridden to hook into polling of guest-based futures.
+  [#14847](https://github.com/bytecodealliance/wasmtime/pull/14847)
+
+* The WIT `map` type can now be used from the C API.
+  [#14840](https://github.com/bytecodealliance/wasmtime/pull/14840)
+
+* The host Rust type used for a WIT `map` type's bindings can now be customized
+  in `bindgen!`.
+  [#14927](https://github.com/bytecodealliance/wasmtime/pull/14927)
+
+* A new `Global::get_numeric` function allows getting the value of a `Global`
+  with a `StoreContext`, but only for numeric values.
+  [#14979](https://github.com/bytecodealliance/wasmtime/pull/14979)
+
+* The `wasmtime serve` subcommand now has a `--post-return-timeout` option.
+  [#14880](https://github.com/bytecodealliance/wasmtime/pull/14880)
+
+* Cranelift now has a `volatile` memory flag.
+  [#14999](https://github.com/bytecodealliance/wasmtime/pull/14999)
+
+* Wasmtime and the CLI now support configuring buffer sizes in WASI to be used
+  instead of having these values hardcoded.
+  [#15095](https://github.com/bytecodealliance/wasmtime/pull/15095)
+
 ### Changed
+
+* Compile-time for may host-defined functions should be improved by a good
+  amount.
+  [#14517](https://github.com/bytecodealliance/wasmtime/pull/14517)
+
+* The performance of returning values from a host function that will never call
+  `realloc` in the guest has been significantly improved.
+  [#14468](https://github.com/bytecodealliance/wasmtime/pull/14468)
+
+* The `{Memory,Table}Type::new` APIs now return a `Result` instead of panicking
+  to represent fallible creation.
+  [#14591](https://github.com/bytecodealliance/wasmtime/pull/14591)
+
+* Buffering of outgoing wasip3 http requests is now configurable.
+  [#14613](https://github.com/bytecodealliance/wasmtime/pull/14613)
+
+* Cranelift now rejects too-large stack slot alignment.
+  [#14650](https://github.com/bytecodealliance/wasmtime/pull/14650)
+
+* Cranelift now rejects struct-args in the `tail` calling convention as this
+  was never actually supported.
+  [#14649](https://github.com/bytecodealliance/wasmtime/pull/14649)
+
+* The behavior of removing directories with a trailing slash has been fixed.
+  [#14662](https://github.com/bytecodealliance/wasmtime/pull/14662)
+  [#14663](https://github.com/bytecodealliance/wasmtime/pull/14663)
+
+* The shared global code register is now omitted in no-singals-based-traps
+  builds of Wasmtime.
+  [#14690](https://github.com/bytecodealliance/wasmtime/pull/14690)
+
+* The `Direct{Source,Destination}::remaining` APIs now return a `Result`.
+  [#14740](https://github.com/bytecodealliance/wasmtime/pull/14740)
+
+* Cranelift's lowering for `{usub,sadd,ssub}_overflow` combined with a branch
+  has been optimized.
+  [#14717](https://github.com/bytecodealliance/wasmtime/pull/14717)
+
+* Cranelift's lowering of the `shuffle` instruction is now more optimal when it
+  can use `pshufb` with just a single operand.
+  [#14849](https://github.com/bytecodealliance/wasmtime/pull/14849)
+
+* Wasmtime's `LinearMemory` trait has been adjusted to be usable with more
+  embedding options.
+  [#14885](https://github.com/bytecodealliance/wasmtime/pull/14885)
+
+* The `wasmtime serve` will now use graceful shutdown when receiving a SIGTERM
+  signal on Unix.
+  [#14904](https://github.com/bytecodealliance/wasmtime/pull/14904)
+
+* Enabling the WebAssembly simd or relaxed-simd features on riscv64 now requires
+  the `has_v` extension to be enabled, and otherwise an error is returned.
+  [#14897](https://github.com/bytecodealliance/wasmtime/pull/14897)
+
+* The number of active fibers within a store is now limited by default.
+  [#14971](https://github.com/bytecodealliance/wasmtime/pull/14971)
+
+* Usage of signal handlers is now automatically disabled on targets where
+  Wasmtime does not have an implementation of pulling out context information.
+  [#14990](https://github.com/bytecodealliance/wasmtime/pull/14990)
+
+* The `ref.func` instruction's implementation is now more optimal.
+  [#14683](https://github.com/bytecodealliance/wasmtime/pull/14683)
+
+* Wasmtime will no longer provide precompiled "min" artifacts for all platforms
+  in CI, just a subset.
+  [#15127](https://github.com/bytecodealliance/wasmtime/pull/15127)
+
+### Fixed
+
+* Zero-length writes in WASIp2 no longer trap.
+  [#14533](https://github.com/bytecodealliance/wasmtime/pull/14533)
+
+* Cache maintenance on AArch64 platforms has been improved.
+  [#14454](https://github.com/bytecodealliance/wasmtime/pull/14454)
+
+* Component-to-component calls now more strictly handle reentrance and
+  `may_leave` conditions according to the spec.
+  [#14542](https://github.com/bytecodealliance/wasmtime/pull/14542)
+  [#14574](https://github.com/bytecodealliance/wasmtime/pull/14574)
+  [#14670](https://github.com/bytecodealliance/wasmtime/pull/14670)
+
+* Components no longer interpret an embedder-returned `ThrownException` error as
+  a raised exception within the component itself.
+  [#14549](https://github.com/bytecodealliance/wasmtime/pull/14549)
+  [#14688](https://github.com/bytecodealliance/wasmtime/pull/14688)
+  [#14689](https://github.com/bytecodealliance/wasmtime/pull/14689)
+
+* More checks are in place to insulate embedders against incorrect management of
+  futures/streams to avoid possibly invalid states a guest may see.
+  [#14552](https://github.com/bytecodealliance/wasmtime/pull/14552)
+
+* Component model guests now correctly trap if `borrow<T>` values are still live
+  when an `async` function returns.
+  [#14580](https://github.com/bytecodealliance/wasmtime/pull/14580)
+
+* Fixed a resource leak with the WASIp2 `outgoing-handler.handle` function.
+  [#14603](https://github.com/bytecodealliance/wasmtime/pull/14603)
+
+* The youngest frame in a stack overflow is now handled better on s390x and
+  Pulley.
+  [#14687](https://github.com/bytecodealliance/wasmtime/pull/14687)
+
+* This release contains a large number of tweaks, adjustments, and primarily
+  fixes for component-model-async behavior. Most of this falls in the category
+  of ensuring that Wasmtime's behavior matches the spec's behavior, but this
+  also includes fixes to host-specific interactions, such as the consequence of
+  cancelling/dropping futures, to make Wasmtime more robust in these situations.
+
+* Similarly this release contains a large number of similar tweaks, adjustments,
+  and fixes for HTTP-related behavior in `wasmtime-wasi-http` and `wasmtime
+  serve`.
+
+* Debugging guests with gdbstub now correctly forwards interrupt requests to the
+  debuggee.
+  [#14776](https://github.com/bytecodealliance/wasmtime/pull/14776)
+
+* Handling of component type ascription on exports has been fixed.
+  [#14865](https://github.com/bytecodealliance/wasmtime/pull/14865)
+
+* Wasmtime's usage of the `PAGEMAP_SCAN` ioctl has been fixed on newer versions
+  of Linux kernels.
+  [#15134](https://github.com/bytecodealliance/wasmtime/pull/15134)
 
 --------------------------------------------------------------------------------
 
