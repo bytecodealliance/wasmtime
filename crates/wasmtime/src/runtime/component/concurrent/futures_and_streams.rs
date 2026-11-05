@@ -4242,6 +4242,8 @@ impl Instance {
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, writer)?;
         let id = TableId::<TransmitHandle>::new(rep);
         log::trace!("guest cancel write {id:?} (handle {writer})");
+
+        // This handle must be "busy" to have anything cancelled.
         match state {
             TransmitLocalState::Write { .. } => {
                 bail!("stream or future write cancelled when no write is pending")
@@ -4251,7 +4253,15 @@ impl Instance {
             }
             TransmitLocalState::Busy => {}
         }
-        let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
+
+        // Double-check that this is indeed the correct handle to cancel a write
+        // from since `Busy` above didn't check that.
+        let state = store.concurrent_state_mut()?;
+        let transmit_id = state.get_mut(id)?.state;
+        if state.get_mut(transmit_id)?.write_handle != id {
+            bail!("passed read end to `{{stream|future}}.cancel-write`")
+        }
+
         let code = self.cancel_write(store, transmit_id, async_)?;
         if !matches!(code, ReturnCode::Blocked) {
             let state =
@@ -4283,6 +4293,8 @@ impl Instance {
             get_mut_by_index_from(self.id().get_mut(store).table_for_transmit(ty), ty, reader)?;
         let id = TableId::<TransmitHandle>::new(rep);
         log::trace!("guest cancel read {id:?} (handle {reader})");
+
+        // This handle must be "busy" to have anything cancelled.
         match state {
             TransmitLocalState::Read { .. } => {
                 bail!("stream or future read cancelled when no read is pending")
@@ -4292,7 +4304,15 @@ impl Instance {
             }
             TransmitLocalState::Busy => {}
         }
-        let transmit_id = store.concurrent_state_mut()?.get_mut(id)?.state;
+
+        // Double-check that this is indeed the correct handle to cancel a read
+        // from since `Busy` above didn't check that.
+        let state = store.concurrent_state_mut()?;
+        let transmit_id = state.get_mut(id)?.state;
+        if state.get_mut(transmit_id)?.read_handle != id {
+            bail!("passed write end to `{{stream|future}}.cancel-read`")
+        }
+
         let code = self.cancel_read(store, transmit_id, async_)?;
         if !matches!(code, ReturnCode::Blocked) {
             let state =
