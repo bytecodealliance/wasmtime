@@ -1047,8 +1047,12 @@ impl Inst {
 
                     // Otherwise, if the offset does not fit into a imm12, we need to materialize it into a
                     // register and load from that.
-                    (Some(_), None, None) => {
-                        let tmp = writable_spilltmp_reg();
+                    (Some(base), None, None) => {
+                        let tmp = if base == spilltmp_reg() {
+                            writable_spilltmp_reg2()
+                        } else {
+                            writable_spilltmp_reg()
+                        };
                         Inst::LoadAddr { rd: tmp, mem: from }.emit(sink, emit_info, state);
                         (tmp.to_reg(), Imm12::ZERO)
                     }
@@ -1122,9 +1126,21 @@ impl Inst {
                 let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
                     (Some(base), Some(imm12)) => (base, imm12),
-                    // Otherwise load the address it into a reg and load from it.
+                    // Otherwise load the address into a scratch register and store to it.
                     _ => {
-                        let tmp = writable_spilltmp_reg();
+                        // Avoid clobbering `base` or `src` when loading a large-offset address.
+                        // Synthesized large stores never occupy both scratch registers simultaneously.
+                        let tmp = if base != Some(spilltmp_reg()) && src != spilltmp_reg() {
+                            writable_spilltmp_reg()
+                        } else {
+                            debug_assert!(
+                                base != Some(spilltmp_reg2()) && src != spilltmp_reg2(),
+                                "base ({base:?}) and src ({src:?}) cannot simultaneously occupy \
+                                 both reserved scratch registers (x30 and x31) in a store with \
+                                 a non-immediate offset"
+                            );
+                            writable_spilltmp_reg2()
+                        };
                         Inst::LoadAddr { rd: tmp, mem: to }.emit(sink, emit_info, state);
                         (tmp.to_reg(), Imm12::ZERO)
                     }
@@ -1585,11 +1601,20 @@ impl Inst {
                         .emit(sink, emit_info, state);
                     }
                     (_, Some(rs), None) => {
-                        let mut insts = Inst::load_constant_u64(rd, offset as u64);
+                        let tmp = if rs == rd.to_reg() {
+                            if rs == spilltmp_reg() {
+                                writable_spilltmp_reg2()
+                            } else {
+                                writable_spilltmp_reg()
+                            }
+                        } else {
+                            rd
+                        };
+                        let mut insts = Inst::load_constant_u64(tmp, offset as u64);
                         insts.push(Inst::AluRRR {
                             alu_op: AluOPRRR::Add,
                             rd,
-                            rs1: rd.to_reg(),
+                            rs1: tmp.to_reg(),
                             rs2: rs,
                         });
                         insts
