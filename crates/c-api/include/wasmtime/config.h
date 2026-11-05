@@ -231,14 +231,6 @@ WASMTIME_CONFIG_PROP(void, wasm_function_references, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_gc, bool)
 
-/**
- * \brief Configures whether the WebAssembly stack switching
- * proposal is enabled.
- *
- * This setting is `false` by default.
- */
-WASMTIME_CONFIG_PROP(void, wasm_stack_switching, bool)
-
 #endif // WASMTIME_FEATURE_GC
 
 /**
@@ -248,6 +240,14 @@ WASMTIME_CONFIG_PROP(void, wasm_stack_switching, bool)
  * time.
  */
 WASMTIME_CONFIG_PROP(void, gc_support, bool)
+
+/**
+ * \brief Configures whether the WebAssembly stack switching
+ * proposal is enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_stack_switching, bool)
 
 /**
  * \brief Configures whether the WebAssembly SIMD proposal is

@@ -433,7 +433,6 @@ class Config {
     wasmtime_config_wasm_memory64_set(ptr.get(), enable);
   }
 
-#ifdef WASMTIME_FEATURE_GC
   /// \brief Configures whether the WebAssembly stack switching proposal is
   /// enabled
   ///
@@ -441,7 +440,6 @@ class Config {
   void wasm_stack_switching(bool enable) {
     wasmtime_config_wasm_stack_switching_set(ptr.get(), enable);
   }
-#endif // WASMTIME_FEATURE_GC
 
 #ifdef WASMTIME_FEATURE_GC
   /// \brief Configures whether the WebAssembly Garbage Collection proposal will
