@@ -986,3 +986,65 @@ fn atomic_wait_massive_timeout() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn data_ranges() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, 5_u32);
+    let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
+
+    memory
+        .data_range_mut(&mut store, 10..13)?
+        .copy_from_slice(b"abc");
+    assert_eq!(memory.data_range(&store, 10..13)?, b"abc");
+    assert_eq!(memory.data_range(&store, 0..0)?, b"");
+    assert_eq!(memory.data_range(&store, 65536..65536)?, b"");
+    assert!(memory.data_range(&store, 65535..65537).is_err());
+    assert!(memory.data_range_mut(&mut store, 70000..70001).is_err());
+    #[allow(clippy::reversed_empty_ranges, reason = "testing invalid ranges")]
+    {
+        assert!(memory.data_range(&store, 5..4).is_err());
+        assert!(memory.data_range_mut(&mut store, 5..4).is_err());
+    }
+
+    // Ranges can be accessed while also borrowing the store's data.
+    let (mut ranges, data) = memory.data_ranges_and_store_data_mut(&mut store);
+    *data += 1;
+    assert_eq!(ranges.len(), 65536);
+    assert_eq!(&ranges.data()[10..13], b"abc");
+    ranges.data_range_mut(11..12)?[0] = b'X';
+    assert_eq!(ranges.data_range(10..13)?, b"aXc");
+    assert!(ranges.data_range_mut(65536..65537).is_err());
+    assert_eq!(*store.data(), 6);
+    assert_eq!(&memory.data(&store)[10..13], b"aXc");
+    Ok(())
+}
+
+/// A memory and a store that it does not belong to.
+fn memory_and_other_store() -> (Memory, Store<()>) {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let memory = Memory::new(&mut store, MemoryType::new(1, None).unwrap()).unwrap();
+    (memory, Store::new(&engine, ()))
+}
+
+#[test]
+#[should_panic = "wrong store"]
+fn data_range_wrong_store() {
+    let (memory, other) = memory_and_other_store();
+    let _ = memory.data_range(&other, 0..1);
+}
+
+#[test]
+#[should_panic = "wrong store"]
+fn data_range_mut_wrong_store() {
+    let (memory, mut other) = memory_and_other_store();
+    let _ = memory.data_range_mut(&mut other, 0..1);
+}
+
+#[test]
+#[should_panic = "comes_from_same_store"]
+fn data_ranges_and_store_data_mut_wrong_store() {
+    let (memory, mut other) = memory_and_other_store();
+    let _ = memory.data_ranges_and_store_data_mut(&mut other);
+}

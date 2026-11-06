@@ -262,9 +262,9 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
             bail!("read pointer not aligned");
         }
         lower
-            .as_slice_mut()
-            .get_mut(address..)
-            .and_then(|b| b.get_mut(..T::SIZE32 * count))
+            .as_slice()
+            .get(address..)
+            .and_then(|b| b.get(..T::SIZE32 * count))
             .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
 
         T::linear_store_list_to_memory(lower, ty, address, &buffer.remaining()[..count])?;
@@ -497,10 +497,12 @@ impl<D: 'static> DirectDestination<'_, D> {
             bail_bug!("expected WriteState::HostReady")
         };
 
-        let memory = instance
-            .options_memory_mut(self.store.0, options)
-            .get_mut(address + guest_offset.as_usize()..)
-            .and_then(|b| b.get_mut(..(count.as_usize() - guest_offset.as_usize())));
+        let memory = instance.options_memory_range_mut(
+            self.store.0,
+            options,
+            address + guest_offset.as_usize(),
+            count.as_usize() - guest_offset.as_usize(),
+        );
         match memory {
             Some(memory) => Ok(memory),
             None => bail_bug!("guest buffer unexpectedly out of bounds"),
@@ -3464,7 +3466,7 @@ impl Instance {
                         &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
                     let ptr = func::validate_inbounds_dynamic(
                         read_abi,
-                        lower.as_slice_mut(),
+                        lower.as_slice(),
                         &ValRaw::u32(read_address.try_into()?),
                     )?;
                     let ty = match read_payload_ty {
@@ -3514,8 +3516,14 @@ impl Instance {
                         let src = write_instance.options_memory(store_opaque, write_options)
                             [write_address..][..write_length_in_bytes]
                             .as_ptr();
-                        let dst = read_instance.options_memory_mut(store_opaque, read_options)
-                            [read_address..][..read_length_in_bytes]
+                        let dst = read_instance
+                            .options_memory_range_mut(
+                                store_opaque,
+                                read_options,
+                                read_address,
+                                read_length_in_bytes,
+                            )
+                            .unwrap()
                             .as_mut_ptr();
 
                         // SAFETY: Both `src` and `dst` have been validated
@@ -4461,7 +4469,7 @@ impl Instance {
         // memory, the ptr+length. This'll need to be updated when `memory64`
         // comes along. (FIXME(#4311))
         let offset = lower_cx
-            .as_slice_mut()
+            .as_slice()
             .get(debug_msg_address..)
             .and_then(|b| b.get(..8))
             .map(|_| debug_msg_address)

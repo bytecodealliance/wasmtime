@@ -4575,14 +4575,16 @@ impl Instance {
                 }
             }
         };
-        let memory = self.options_memory_mut(store, params.options);
         let ptr = crate::component::func::validate_inbounds_dynamic(
             &CanonicalAbiInfo::POINTER_PAIR,
-            memory,
+            self.options_memory(store, params.options),
             &ValRaw::u32(params.payload),
         )?;
-        memory[ptr + 0..][..4].copy_from_slice(&handle.to_le_bytes());
-        memory[ptr + 4..][..4].copy_from_slice(&result.to_le_bytes());
+        let memory = self
+            .options_memory_range_mut(store, params.options, ptr, 8)
+            .unwrap();
+        memory[0..4].copy_from_slice(&handle.to_le_bytes());
+        memory[4..8].copy_from_slice(&result.to_le_bytes());
         Ok(ordinal)
     }
 
