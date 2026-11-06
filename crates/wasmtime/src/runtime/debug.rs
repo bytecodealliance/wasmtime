@@ -1281,11 +1281,13 @@ impl<'a> BreakpointState<'a> {
         Ok(())
     }
 
-    /// Watches, or stops watching, guest writes to the bytes in `range` of
-    /// `memory`. A guest store or bulk memory operation that writes a watched
-    /// byte raises [`DebugEvent::Watchpoint`] before writing. Whether a byte
-    /// is watched is a per-byte property, so unwatching a range unwatches its
-    /// bytes regardless of how they were watched.
+    /// Watches guest writes to the bytes in `range` of `memory`. A guest
+    /// store or bulk memory operation that writes a watched byte raises
+    /// [`DebugEvent::Watchpoint`] before writing.
+    ///
+    /// Whether a byte is watched is a per-byte property: watching an
+    /// already-watched byte has no further effect. See
+    /// [`BreakpointState::unwatch`].
     ///
     /// # Errors
     ///
@@ -1294,13 +1296,25 @@ impl<'a> BreakpointState<'a> {
     /// # Panics
     ///
     /// Panics if `memory` does not belong to this store.
-    pub fn watch(
-        &mut self,
-        memory: crate::Memory,
-        range: core::ops::Range<u64>,
-        watch: bool,
-    ) -> Result<()> {
-        self.store.debug_set_watch(memory, range, watch)
+    pub fn watch(&mut self, memory: crate::Memory, range: core::ops::Range<u64>) -> Result<()> {
+        self.store.debug_set_watch(memory, range, true)
+    }
+
+    /// Stops watching guest writes to the bytes in `range` of `memory`.
+    ///
+    /// Whether a byte is watched is a per-byte property, so this unwatches
+    /// every byte in `range`, regardless of how many (possibly overlapping)
+    /// calls to [`BreakpointState::watch`] watched it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `range` extends beyond the memory's current size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `memory` does not belong to this store.
+    pub fn unwatch(&mut self, memory: crate::Memory, range: core::ops::Range<u64>) -> Result<()> {
+        self.store.debug_set_watch(memory, range, false)
     }
 }
 

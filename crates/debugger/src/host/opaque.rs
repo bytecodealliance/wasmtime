@@ -525,11 +525,15 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 .checked_add(len)
                 .filter(|&end| end <= size)
                 .ok_or(wit::Error::OutOfBounds)?;
-            store
+            let mut breakpoints = store
                 .edit_breakpoints()
-                .ok_or(wit::Error::UnsupportedType)?
-                .watch(memory, addr..end, watch)
-                .map_err(|_| wit::Error::OutOfBounds)?;
+                .ok_or(wit::Error::UnsupportedType)?;
+            let result = if watch {
+                breakpoints.watch(memory, addr..end)
+            } else {
+                breakpoints.unwatch(memory, addr..end)
+            };
+            result.map_err(|_| wit::Error::OutOfBounds)?;
             Ok(())
         })
         .await?

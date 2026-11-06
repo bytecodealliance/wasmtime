@@ -2027,10 +2027,7 @@ async fn watchpoints_report_writes_before_they_happen() -> wasmtime::Result<()> 
 
     // Watch [17, 52): the i32 store overlaps it partially, and the store to
     // byte 100 not at all.
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .watch(memory, 17..52, true)?;
+    store.edit_breakpoints().unwrap().watch(memory, 17..52)?;
     main.call_async(&mut store, ()).await?;
     {
         let hits = recorder.0.lock().unwrap();
@@ -2057,10 +2054,7 @@ async fn watchpoints_report_writes_before_they_happen() -> wasmtime::Result<()> 
 
     // Unwatched bytes no longer report writes.
     recorder.0.lock().unwrap().clear();
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .watch(memory, 0..64, false)?;
+    store.edit_breakpoints().unwrap().unwatch(memory, 0..64)?;
     main.call_async(&mut store, ()).await?;
     assert!(recorder.0.lock().unwrap().is_empty());
 
@@ -2069,7 +2063,7 @@ async fn watchpoints_report_writes_before_they_happen() -> wasmtime::Result<()> 
         store
             .edit_breakpoints()
             .unwrap()
-            .watch(memory, 0..65537, true)
+            .watch(memory, 0..65537)
             .is_err()
     );
     Ok(())
@@ -2108,16 +2102,13 @@ async fn watchpoints_on_imported_memory_follow_growth() -> wasmtime::Result<()> 
 
     // Watch a byte, then grow the memory, and watch a byte in the new pages
     // too.
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .watch(memory, 10..11, true)?;
+    store.edit_breakpoints().unwrap().watch(memory, 10..11)?;
     assert_eq!(grow.call_async(&mut store, 7).await?, 1);
     let high = 7 * 65536 + 3;
     store
         .edit_breakpoints()
         .unwrap()
-        .watch(memory, high..high + 1, true)?;
+        .watch(memory, high..high + 1)?;
 
     // Writes through the importing instance see both watches, and only
     // those.
@@ -2168,7 +2159,7 @@ async fn watchpoints_out_of_bounds_stores_trap() -> wasmtime::Result<()> {
         store
             .edit_breakpoints()
             .unwrap()
-            .watch(memory, 65528..65536, true)?;
+            .watch(memory, 65528..65536)?;
 
         // A store that is partially or entirely out of bounds traps before
         // checking for watchpoints.

@@ -749,10 +749,7 @@ mod test {
         // Watch bytes [8, 12): the first store is just below the
         // range, the second overlaps it partially, the third is just
         // above it, and the fill covers all of it.
-        store
-            .edit_breakpoints()
-            .unwrap()
-            .watch(memory, 8..12, true)?;
+        store.edit_breakpoints().unwrap().watch(memory, 8..12)?;
 
         let mut debuggee = Debuggee::new(store, move |store| {
             Box::pin(async move {
@@ -804,7 +801,7 @@ mod test {
                 store
                     .edit_breakpoints()
                     .unwrap()
-                    .watch(memory, 0..16, false)
+                    .unwatch(memory, 0..16)
                     .unwrap();
             })
             .await?;
