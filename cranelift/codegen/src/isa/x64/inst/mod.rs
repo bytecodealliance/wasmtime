@@ -1519,9 +1519,10 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::CallKnown { .. } | Inst::CallUnknown { .. } | Inst::StackSwitchBasic { .. } => {
-                true
-            }
+            Inst::CallKnown { .. }
+            | Inst::CallUnknown { .. }
+            | Inst::StackSwitchBasic { .. }
+            | Inst::InterruptPoll { .. } => true,
             _ => false,
         }
     }

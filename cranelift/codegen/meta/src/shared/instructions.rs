@@ -420,10 +420,11 @@ fn define_control_flow(
         .operands_out(&[
             Operand::new("next_load_ptr", iAddr).with_doc("memory location to load from next time")
         ])
-        // As with `stack_switch`, this instruction is a call, in that "it
-        // continues execution elsewhere". See reasoning at
-        // https://github.com/bytecodealliance/wasmtime/pull/9078#issuecomment-2273869774.
-        .call()
+        // Unlike `stack_switch` and true call instructions, `interrupt_poll` does
+        // not call a target with arguments or a calling convention; any signal
+        // handler that runs on a fault is transparent to control flow. It is
+        // therefore not classified as a call (`.call()`), though it remains a
+        // safepoint at which user stack maps can be attached.
         .can_load()
         // It may transfer control to something that may store. Declaring this
         // makes us a memory fence.
