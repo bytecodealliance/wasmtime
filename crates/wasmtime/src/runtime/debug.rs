@@ -1260,7 +1260,13 @@ impl<'a> BreakpointEdit<'a> {
         let table = module
             .frame_table()
             .expect("Frame table must be present when guest-debug is enabled");
+        // A component's modules share one code image, and so its frame table: leave the
+        // other modules' code to them, or this module's breakpoints decide theirs.
+        let own_code = module.compiled_module().defined_funcs_text_range();
         for (wasm_pc, patch) in table.breakpoint_patches() {
+            if !own_code.contains(&patch.offset) {
+                continue;
+            }
             let key = BreakpointKey::from_raw(&module, wasm_pc);
             let this_enabled = enabled || key_enabled(&key);
             log::trace!(

@@ -143,6 +143,23 @@ impl CompiledModule {
         self.engine_code.raw_wasm_to_array_trampoline_data(range)
     }
 
+    /// Returns the range of the text section that holds this module's
+    /// defined functions.
+    ///
+    /// A component's modules share one text section, so this excludes the
+    /// other modules' functions.
+    pub fn defined_funcs_text_range(&self) -> Range<usize> {
+        let namespace =
+            FuncKey::DefinedWasmFunction(self.module_index(), DefinedFuncIndex::from_u32(0))
+                .namespace();
+        match self.index.text_range(namespace) {
+            Some(range) => {
+                usize::try_from(range.start).unwrap()..usize::try_from(range.end).unwrap()
+            }
+            None => 0..0,
+        }
+    }
+
     /// Lookups a defined function by a program counter value.
     ///
     /// Returns the defined function index and the relative address of
