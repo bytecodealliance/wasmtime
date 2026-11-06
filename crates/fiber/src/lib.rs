@@ -18,6 +18,9 @@ use core::marker::PhantomData;
 use core::ops::Range;
 use wasmtime_environ::error::Error;
 
+mod raw;
+pub use raw::{RawFiber, RawFiberEntry, RawFiberSnapshot, RawFiberState};
+
 cfg_select! {
     not(feature = "std") => {
         mod nostd;
@@ -27,6 +30,8 @@ cfg_select! {
     miri => {
         mod miri;
         use miri as imp;
+        // Unused by Miri's fibers, but raw fibers refer to it.
+        mod stackswitch;
     }
     windows => {
         mod windows;

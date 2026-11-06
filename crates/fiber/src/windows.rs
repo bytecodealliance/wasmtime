@@ -13,14 +13,22 @@ use windows_sys::Win32::System::Threading::*;
 pub type Error = io::Error;
 
 #[derive(Debug)]
-pub struct FiberStack(usize);
+pub struct FiberStack {
+    pub(crate) size: usize,
+    // Windows allocates a fiber's stack when creating the fiber, so its
+    // location is only known while a raw fiber owns it. See `raw/windows.rs`.
+    pub(crate) raw_range: Option<Range<usize>>,
+}
 
 impl FiberStack {
     pub fn new(size: usize, zeroed: bool) -> io::Result<Self> {
         // We don't support fiber stack zeroing on windows.
         let _ = zeroed;
 
-        Ok(Self(size))
+        Ok(Self {
+            size,
+            raw_range: None,
+        })
     }
 
     pub unsafe fn from_raw_parts(
@@ -40,11 +48,11 @@ impl FiberStack {
     }
 
     pub fn top(&self) -> Option<*mut u8> {
-        None
+        Some(self.raw_range.as_ref()?.end as *mut u8)
     }
 
     pub fn range(&self) -> Option<Range<usize>> {
-        None
+        self.raw_range.clone()
     }
 
     pub fn guard_range(&self) -> Option<Range<*mut u8>> {
@@ -67,17 +75,15 @@ struct StartState {
     result_location: Cell<*const u8>,
 }
 
-const FIBER_FLAG_FLOAT_SWITCH: u32 = 1;
+pub(crate) const FIBER_FLAG_FLOAT_SWITCH: u32 = 1;
 
 unsafe extern "C" {
     #[wasmtime_versioned_export_macros::versioned_link]
     fn wasmtime_fiber_get_current() -> *mut c_void;
 }
 
-unsafe extern "system" fn fiber_start<F, A, B, C>(data: *mut c_void)
-where
-    F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
-{
+/// Sets the current fiber's stack guarantee.
+pub(crate) unsafe fn set_stack_guarantee() {
     unsafe {
         // Set the stack guarantee to be consistent with what Rust expects for threads
         // This value is taken from:
@@ -85,6 +91,71 @@ where
         if SetThreadStackGuarantee(&mut 0x5000) == 0 {
             panic!("failed to set fiber stack guarantee");
         }
+    }
+}
+
+/// Calls `f` with the current fiber, first converting the current thread into
+/// a fiber, and back again afterwards, if it is not one already.
+pub(crate) unsafe fn with_current_fiber(f: impl FnOnce(*mut c_void)) {
+    unsafe {
+        let is_fiber = IsThreadAFiber() != 0;
+        let parent_fiber = if is_fiber {
+            wasmtime_fiber_get_current()
+        } else {
+            // Newer Rust versions use fiber local storage to register an internal hook that
+            // calls thread locals' destructors on thread exit.
+            // This has a limitation: the hook only runs in a regular thread (not in a fiber).
+            // We convert back into a thread once execution returns to this function,
+            // but we must also ensure that the hook is registered before converting into a fiber.
+            // Otherwise, a different fiber could be the first to register the hook,
+            // causing the hook to be called (and skipped) prematurely when that fiber is deleted.
+            struct Guard;
+
+            impl Drop for Guard {
+                fn drop(&mut self) {}
+            }
+            assert!(needs_drop::<Guard>());
+            thread_local!(static GUARD: Guard = Guard);
+            GUARD.with(|_g| {});
+            ConvertThreadToFiber(ptr::null_mut())
+        };
+        assert!(
+            !parent_fiber.is_null(),
+            "failed to make current thread a fiber"
+        );
+        f(parent_fiber);
+        if !is_fiber {
+            let res = ConvertFiberToThread();
+            assert!(res != 0, "failed to convert main thread back");
+        }
+    }
+}
+
+/// Deletes a fiber which is not running.
+pub(crate) unsafe fn delete_fiber(fiber: *mut c_void) {
+    unsafe {
+        let is_fiber = IsThreadAFiber() != 0;
+        if !is_fiber {
+            // DeleteFiber runs FLS destructors. Make those destructors
+            // observe a fiber so Rust does not run thread-local cleanup
+            // for the live thread.
+            let fiber = ConvertThreadToFiber(ptr::null_mut());
+            assert!(!fiber.is_null(), "failed to make current thread a fiber");
+        }
+        DeleteFiber(fiber);
+        if !is_fiber {
+            let res = ConvertFiberToThread();
+            assert!(res != 0, "failed to convert main thread back");
+        }
+    }
+}
+
+unsafe extern "system" fn fiber_start<F, A, B, C>(data: *mut c_void)
+where
+    F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
+{
+    unsafe {
+        set_stack_guarantee();
 
         let state = data.cast::<StartState>();
         let func = Box::from_raw((*state).initial_closure.get().cast::<F>());
@@ -116,7 +187,7 @@ impl Fiber {
 
             let fiber = CreateFiberEx(
                 0,
-                stack.0,
+                stack.size,
                 FIBER_FLAG_FLOAT_SWITCH,
                 Some(fiber_start::<F, A, B, C>),
                 &*state as *const StartState as *mut _,
@@ -133,42 +204,15 @@ impl Fiber {
 
     pub(crate) fn resume<A, B, C>(&self, _stack: &FiberStack, result: &Cell<RunResult<A, B, C>>) {
         unsafe {
-            let is_fiber = IsThreadAFiber() != 0;
-            let parent_fiber = if is_fiber {
-                wasmtime_fiber_get_current()
-            } else {
-                // Newer Rust versions use fiber local storage to register an internal hook that
-                // calls thread locals' destructors on thread exit.
-                // This has a limitation: the hook only runs in a regular thread (not in a fiber).
-                // We convert back into a thread once execution returns to this function,
-                // but we must also ensure that the hook is registered before converting into a fiber.
-                // Otherwise, a different fiber could be the first to register the hook,
-                // causing the hook to be called (and skipped) prematurely when that fiber is deleted.
-                struct Guard;
-
-                impl Drop for Guard {
-                    fn drop(&mut self) {}
-                }
-                assert!(needs_drop::<Guard>());
-                thread_local!(static GUARD: Guard = Guard);
-                GUARD.with(|_g| {});
-                ConvertThreadToFiber(ptr::null_mut())
-            };
-            assert!(
-                !parent_fiber.is_null(),
-                "failed to make current thread a fiber"
-            );
-            self.state
-                .result_location
-                .set(result as *const _ as *const _);
-            self.state.parent.set(parent_fiber);
-            SwitchToFiber(self.fiber);
-            self.state.parent.set(ptr::null_mut());
-            self.state.result_location.set(ptr::null());
-            if !is_fiber {
-                let res = ConvertFiberToThread();
-                assert!(res != 0, "failed to convert main thread back");
-            }
+            with_current_fiber(|parent_fiber| {
+                self.state
+                    .result_location
+                    .set(result as *const _ as *const _);
+                self.state.parent.set(parent_fiber);
+                SwitchToFiber(self.fiber);
+                self.state.parent.set(ptr::null_mut());
+                self.state.result_location.set(ptr::null());
+            });
         }
     }
 
@@ -178,19 +222,7 @@ impl Fiber {
 impl Drop for Fiber {
     fn drop(&mut self) {
         unsafe {
-            let is_fiber = IsThreadAFiber() != 0;
-            if !is_fiber {
-                // DeleteFiber runs FLS destructors. Make those destructors
-                // observe a fiber so Rust does not run thread-local cleanup
-                // for the live thread.
-                let fiber = ConvertThreadToFiber(ptr::null_mut());
-                assert!(!fiber.is_null(), "failed to make current thread a fiber");
-            }
-            DeleteFiber(self.fiber);
-            if !is_fiber {
-                let res = ConvertFiberToThread();
-                assert!(res != 0, "failed to convert main thread back");
-            }
+            delete_fiber(self.fiber);
         }
     }
 }

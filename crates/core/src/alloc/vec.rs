@@ -158,6 +158,20 @@ impl<T> TryVec<T> {
         Ok(())
     }
 
+    /// Same as [`std::vec::Vec::extend_from_slice`] but returns an error on
+    /// allocation failure, in which case `self` is unchanged.
+    ///
+    /// This is limited to `Copy` elements, which can be copied without
+    /// allocating, so that it is a single copy of the slice.
+    pub fn extend_from_slice(&mut self, other: &[T]) -> Result<(), OutOfMemory>
+    where
+        T: Copy,
+    {
+        self.reserve(other.len())?;
+        self.inner.extend_from_slice(other);
+        Ok(())
+    }
+
     /// Same as [`std::vec::Vec::pop`].
     pub fn pop(&mut self) -> Option<T> {
         self.inner.pop()
@@ -482,6 +496,17 @@ where
 mod tests {
     use super::TryVec;
     use crate::error::OutOfMemory;
+
+    #[test]
+    fn test_extend_from_slice() -> Result<(), OutOfMemory> {
+        let mut vec = TryVec::new();
+        vec.extend_from_slice(&[])?;
+        assert!(vec.is_empty());
+        vec.extend_from_slice(&[1, 2])?;
+        vec.extend_from_slice(&[3])?;
+        assert_eq!(*vec, [1, 2, 3]);
+        Ok(())
+    }
 
     #[test]
     fn test_into_boxed_slice() -> Result<(), OutOfMemory> {
