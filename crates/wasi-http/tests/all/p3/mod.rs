@@ -449,6 +449,20 @@ async fn p3_http_outbound_request_forward_duplicate_content_length() -> wasmtime
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_outbound_request_ambiguous_framing() -> wasmtime::Result<()> {
+    for response in crate::shared::ambiguous_responses() {
+        let response = *response;
+        let (server, _) = Server::raw(1, move |_| response.to_vec())?;
+        run_cli(
+            P3_HTTP_OUTBOUND_REQUEST_AMBIGUOUS_FRAMING_COMPONENT,
+            &server,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_outbound_request_content_length() -> wasmtime::Result<()> {
     let server = Server::http1(4)?;
     run_cli(P3_HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await

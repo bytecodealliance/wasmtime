@@ -37,6 +37,15 @@ pub use error::*;
 pub use field_map::*;
 pub use request_options::*;
 
+// RFC 9112 section 6.3: both headers make the message framing ambiguous.
+// HTTP/2 has no transfer-encoding.
+#[cfg(any(feature = "p2", feature = "p3", feature = "component-model-async"))]
+pub(crate) fn has_ambiguous_framing(version: http::Version, headers: &http::HeaderMap) -> bool {
+    version != http::Version::HTTP_2
+        && headers.contains_key(header::TRANSFER_ENCODING)
+        && headers.contains_key(header::CONTENT_LENGTH)
+}
+
 /// Extract the `Content-Length` header value from a [`http::HeaderMap`], returning `None` if it's not
 /// present. This function will return `Err` if it's not possible to parse the `Content-Length`
 /// header.
