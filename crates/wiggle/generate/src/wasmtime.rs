@@ -121,7 +121,7 @@ fn generate_func(
             Some(wiggle::wasmtime_crate::Extern::Memory(m)) => {
                 // Access memory by range, so that only what the host
                 // writes is considered modified.
-                let (mem, ctx) = m.data_ranges_and_store_mut(&mut caller);
+                let (mem, ctx) = m.data_ranges_and_store_data_mut(&mut caller);
                 let ctx = get_cx(ctx);
                 ctx.set_hostcall_fuel(fuel);
                 (wiggle::GuestMemory::Ranges(mem), ctx)

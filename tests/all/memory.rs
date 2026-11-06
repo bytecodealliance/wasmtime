@@ -1008,7 +1008,7 @@ fn data_ranges() -> Result<()> {
     }
 
     // Ranges can be accessed while also borrowing the store's data.
-    let (mut ranges, data) = memory.data_ranges_and_store_mut(&mut store);
+    let (mut ranges, data) = memory.data_ranges_and_store_data_mut(&mut store);
     *data += 1;
     assert_eq!(ranges.len(), 65536);
     assert_eq!(&ranges.data()[10..13], b"abc");

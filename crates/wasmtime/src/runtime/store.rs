@@ -1415,6 +1415,14 @@ impl<T> StoreInner<T> {
         (data, limiter, &mut self.inner)
     }
 
+    /// Borrows the store's `T` and the rest of the store, which are
+    /// disjoint, mutably at the same time.
+    #[inline]
+    pub(crate) fn data_and_opaque_mut(&mut self) -> (&mut T, &mut StoreOpaque) {
+        let (data, _limiter, opaque) = self.data_limiter_and_opaque();
+        (data, opaque)
+    }
+
     #[inline]
     fn data_mut(&mut self) -> &mut T {
         self.data_limiter_and_opaque().0

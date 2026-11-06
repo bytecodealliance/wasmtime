@@ -45,7 +45,7 @@ pub enum GuestMemory<'a> {
     Shared(&'a [UnsafeCell<u8>]),
     /// An unshared Wasmtime memory accessed by range, so that only the ranges
     /// written are considered modified (see
-    /// `wasmtime::Memory::data_ranges_and_store_mut`).
+    /// `wasmtime::Memory::data_ranges_and_store_data_mut`).
     #[cfg(feature = "wasmtime")]
     Ranges(wasmtime::MemoryRanges<'a>),
 }

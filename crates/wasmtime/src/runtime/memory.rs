@@ -529,8 +529,8 @@ impl Memory {
     ///
     /// Note that this method will consider the entire store context provided as
     /// borrowed for the duration of the lifetime of the returned slice. See
-    /// [`Memory::data_ranges_and_store_mut`] to access multiple ranges while
-    /// also borrowing the store's data.
+    /// [`Memory::data_ranges_and_store_data_mut`] to access multiple ranges
+    /// while also borrowing the store's data.
     ///
     /// # Panics
     ///
@@ -550,7 +550,8 @@ impl Memory {
 
     /// Like [`Memory::data_and_store_mut`], but returns a [`MemoryRanges`]
     /// through which ranges of memory are read and modified, rather than one
-    /// slice of all of memory.
+    /// slice of all of memory, alongside the store's data (the `T` in
+    /// [`Store<T>`](crate::Store)).
     ///
     /// This is useful for host code that works with the store's `T` while
     /// accessing several parts of memory, such as the bindings of a WASI
@@ -560,26 +561,20 @@ impl Memory {
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    pub fn data_ranges_and_store_mut<'a, T: 'static>(
+    pub fn data_ranges_and_store_data_mut<'a, T: 'static>(
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> (MemoryRanges<'a>, &'a mut T) {
-        let mut store = store.into();
+        let store = store.into();
         assert!(self.comes_from_same_store(store.0));
-        // SAFETY: as for `data_and_store_mut`, the store's `T` and the rest
-        // of the store are disjoint, and `MemoryRanges` only uses the latter.
-        unsafe {
-            let data = &mut *(store.data_mut() as *mut T);
-            let inner: &'a mut crate::store::StoreInner<T> = store.0;
-            let opaque: &'a mut StoreOpaque = inner;
-            (
-                MemoryRanges {
-                    memory: *self,
-                    store: opaque,
-                },
-                data,
-            )
-        }
+        let (data, opaque) = store.0.data_and_opaque_mut();
+        (
+            MemoryRanges {
+                memory: *self,
+                store: opaque,
+            },
+            data,
+        )
     }
 
     /// Returns the base pointer, in the host's address space, that the memory
@@ -1725,7 +1720,7 @@ mod tests {
 }
 
 /// Access to ranges of a [`Memory`], from
-/// [`Memory::data_ranges_and_store_mut`].
+/// [`Memory::data_ranges_and_store_data_mut`].
 ///
 /// Ranges are read with [`MemoryRanges::data_range`] (or all of memory with
 /// [`MemoryRanges::data`]) and modified with
