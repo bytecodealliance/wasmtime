@@ -2,7 +2,7 @@ use crate::{
     StorageType, Val,
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
-    store::{AutoAssertNoGc, InstanceId},
+    store::{AutoAssertNoGc, InstanceId, StoreOpaque},
 };
 use core::fmt;
 use wasmtime_environ::{DefinedTagIndex, GcStructLayout, VMGcKind};
@@ -133,26 +133,6 @@ impl VMExnRef {
         Self(self.0.unchecked_copy())
     }
 
-    /// Read a field of the given `StorageType` into a `Val`.
-    ///
-    /// `i8` and `i16` fields are zero-extended into `Val::I32(_)`s.
-    ///
-    /// Does not check that the field is actually of type `ty`. That is the
-    /// caller's responsibility. Failure to do so is memory safe, but will lead
-    /// to general incorrectness such as panics and wrong results.
-    ///
-    /// Panics on out-of-bounds accesses.
-    pub fn read_field(
-        &self,
-        store: &mut AutoAssertNoGc,
-        layout: &GcStructLayout,
-        ty: &StorageType,
-        field: usize,
-    ) -> Result<Val> {
-        let offset = layout.fields[field].offset;
-        self.as_gc_ref().read_val(store, ty, offset)
-    }
-
     /// Initialize a field in this exnref that is currently uninitialized.
     ///
     /// Calling this method on an exnref that has already had the
@@ -203,17 +183,13 @@ impl VMExnRef {
     }
 
     /// Get the tag referenced by this exception object.
-    pub fn tag(&self, store: &mut AutoAssertNoGc) -> Result<(InstanceId, DefinedTagIndex)> {
+    pub fn tag(&self, store: &StoreOpaque) -> Result<(InstanceId, DefinedTagIndex)> {
         let layouts = store.engine().gc_runtime().unwrap().layouts();
         let instance_offset = layouts.exception_tag_instance_offset();
         let tag_offset = layouts.exception_tag_defined_offset();
-        let instance = store
-            .require_gc_store_mut()?
-            .gc_object_data(&self.0)?
-            .read_u32(instance_offset)?;
-        let instance = InstanceId::from_u32(instance);
-        let store = store.require_gc_store_mut()?;
-        let tag = store.gc_object_data(&self.0)?.read_u32(tag_offset)?;
+        let data = store.require_gc_store()?.gc_heap.gc_object_data(&self.0)?;
+        let instance = InstanceId::from_u32(data.read_u32(instance_offset)?);
+        let tag = data.read_u32(tag_offset)?;
         let tag = DefinedTagIndex::from_u32(tag);
         Ok((instance, tag))
     }

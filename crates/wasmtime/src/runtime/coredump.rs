@@ -1,8 +1,8 @@
 use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{
-    AsContextMut, FrameInfo, Global, HeapTopType, Instance, Memory, Module, StoreContextMut, Val,
-    ValType, WasmBacktrace, store::StoreOpaque,
+    AsContextMut, FrameInfo, FrozenRef, Global, HeapTopType, Instance, Memory, Module,
+    StoreContextMut, Val, ValType, WasmBacktrace, store::StoreOpaque,
 };
 use std::fmt;
 
@@ -108,7 +108,7 @@ impl WasmCoreDump {
         self._serialize(store, name)
     }
 
-    fn _serialize<T: 'static>(&self, mut store: StoreContextMut<'_, T>, name: &str) -> Vec<u8> {
+    fn _serialize<T: 'static>(&self, store: StoreContextMut<'_, T>, name: &str) -> Vec<u8> {
         let mut core_dump = wasm_encoder::Module::new();
 
         core_dump.section(&wasm_encoder::CoreDumpSection::new(name));
@@ -202,7 +202,7 @@ impl WasmCoreDump {
                         }
                     },
                 };
-                let init = match g.get(&mut store) {
+                let init = match g.get(&store) {
                     Val::I32(x) => wasm_encoder::ConstExpr::i32_const(x),
                     Val::I64(x) => wasm_encoder::ConstExpr::i64_const(x),
                     Val::F32(x) => wasm_encoder::ConstExpr::f32_const(f32::from_bits(x).into()),
@@ -211,13 +211,13 @@ impl WasmCoreDump {
                     Val::FuncRef(_) => {
                         wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::FUNC)
                     }
-                    Val::ExternRef(_) => {
+                    Val::ExternRef(_) | Val::Frozen(FrozenRef::Extern(_)) => {
                         wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::EXTERN)
                     }
-                    Val::AnyRef(_) => {
+                    Val::AnyRef(_) | Val::Frozen(FrozenRef::Any(_)) => {
                         wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::ANY)
                     }
-                    Val::ExnRef(_) => {
+                    Val::ExnRef(_) | Val::Frozen(FrozenRef::Exn(_)) => {
                         wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Abstract {
                             shared: false,
                             ty: wasm_encoder::AbstractHeapType::Exn,

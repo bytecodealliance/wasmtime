@@ -151,7 +151,12 @@ where
     // return value is always provided and if unwind information is provided
     // (e.g. `ret` is a "false"-y value) then it's recorded in TLS for the
     // unwind operation that's about to happen from Cranelift-generated code.
+    // Wasm exits to the host here, and resumes when this returns. Both end the
+    // store's GC epoch, so that `Frozen` references obtained by the host stay
+    // within it.
+    store.store_opaque_mut().bump_gc_epoch();
     let (ret, unwind) = R::maybe_catch_unwind(store, |store| f(store));
+    store.store_opaque_mut().bump_gc_epoch();
     if let Some(mut unwind) = unwind {
         if let UnwindReason::Trap(Ok(trap)) = &mut unwind {
             uncaught_exception.apply(&mut trap.reason);

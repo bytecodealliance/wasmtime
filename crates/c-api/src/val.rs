@@ -116,6 +116,7 @@ impl wasm_val_t {
             Val::ExnRef(_) => crate::abort("creating a wasm_val_t from  an exnref"),
             Val::V128(_) => crate::abort("creating a wasm_val_t from a v128"),
             Val::ContRef(_) => crate::abort("creating a wasm_val_t from a contref"),
+            Val::Frozen(_) => crate::abort("creating a wasm_val_t from a frozen reference"),
         }
     }
 
@@ -338,6 +339,31 @@ impl wasmtime_val_t {
                     v128: val.as_u128().to_le_bytes(),
                 },
             },
+            // C API values own their GC references, so frozen ones are
+            // rooted.
+            #[cfg(feature = "gc")]
+            Val::Frozen(wasmtime::FrozenRef::Any(a)) => wasmtime_val_t {
+                kind: crate::WASMTIME_ANYREF,
+                of: wasmtime_val_union {
+                    anyref: ManuallyDrop::new(a.to_owned_rooted(cx).ok().into()),
+                },
+            },
+            #[cfg(feature = "gc")]
+            Val::Frozen(wasmtime::FrozenRef::Extern(e)) => wasmtime_val_t {
+                kind: crate::WASMTIME_EXTERNREF,
+                of: wasmtime_val_union {
+                    externref: ManuallyDrop::new(e.to_owned_rooted(cx).ok().into()),
+                },
+            },
+            #[cfg(feature = "gc")]
+            Val::Frozen(wasmtime::FrozenRef::Exn(e)) => wasmtime_val_t {
+                kind: crate::WASMTIME_EXNREF,
+                of: wasmtime_val_union {
+                    exnref: ManuallyDrop::new(e.to_owned_rooted(cx).ok().into()),
+                },
+            },
+            #[cfg(not(feature = "gc"))]
+            Val::Frozen(_) => crate::abort("reference types require gc feature"),
             Val::ContRef(_) => crate::abort("contrefs not yet supported in C API (#10248)"),
         }
     }

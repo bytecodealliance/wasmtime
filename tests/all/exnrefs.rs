@@ -122,7 +122,7 @@ fn host_exnref_has_trace_info_for_gc() -> Result<()> {
         // The exnref should stay alive and be traced properly...
         store.gc(None)?;
 
-        assert!(matches!(g.get(&mut store), Val::ExnRef(Some(_))));
+        assert!(matches!(g.get(&store), Val::Frozen(_)));
     }
 
     Ok(())

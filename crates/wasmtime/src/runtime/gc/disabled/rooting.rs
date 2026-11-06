@@ -92,6 +92,10 @@ impl<T: GcRef> Rooted<T> {
         match self.inner {}
     }
 
+    pub fn to_frozen(&self, _store: impl AsContext) -> Result<crate::Frozen<T>> {
+        match self.inner {}
+    }
+
     pub fn rooted_eq(a: Self, _b: Self) -> bool {
         match a.inner {}
     }
@@ -189,6 +193,10 @@ where
     }
 
     pub fn into_rooted(self, _context: impl AsContextMut) -> Rooted<T> {
+        match self.inner {}
+    }
+
+    pub fn to_frozen(&self, _store: impl AsContext) -> Result<crate::Frozen<T>> {
         match self.inner {}
     }
 }

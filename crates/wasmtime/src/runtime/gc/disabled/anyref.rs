@@ -1,4 +1,3 @@
-use crate::runtime::vm::VMGcRef;
 use crate::{
     ArrayRef, AsContext, AsContextMut, EqRef, GcRefImpl, HeapType, I31, OwnedRooted, Result,
     Rooted, StructRef,
@@ -54,13 +53,6 @@ impl From<OwnedRooted<ArrayRef>> for OwnedRooted<AnyRef> {
 impl GcRefImpl for AnyRef {}
 
 impl AnyRef {
-    pub(crate) fn from_cloned_gc_ref(
-        _store: &mut AutoAssertNoGc<'_>,
-        _gc_ref: VMGcRef,
-    ) -> Rooted<Self> {
-        unreachable!()
-    }
-
     pub fn from_raw(_store: impl AsContextMut, raw: u32) -> Option<Rooted<Self>> {
         assert_eq!(raw, 0);
         None

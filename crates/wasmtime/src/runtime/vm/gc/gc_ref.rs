@@ -1,8 +1,6 @@
 use crate::runtime::vm::{FuncRefTableId, GcHeap, GcStore, I31, SendSyncPtr};
-use crate::store::AutoAssertNoGc;
-use crate::{
-    AnyRef, ExnRef, ExternRef, Func, HeapTopType, Result, StorageType, Val, ValType, bail_bug,
-};
+use crate::store::{AutoAssertNoGc, StoreOpaque};
+use crate::{FrozenRef, Func, HeapTopType, Result, StorageType, Val, ValType, bail_bug};
 use core::fmt;
 use core::marker;
 use core::num::NonZeroU32;
@@ -405,13 +403,14 @@ impl VMGcRef {
                 .map_or(false, |h| h.matches_kind(VMGcKind::AnyRef))
     }
 
-    pub fn read_val(
-        &self,
-        store: &mut AutoAssertNoGc,
-        ty: &StorageType,
-        offset: u32,
-    ) -> Result<Val> {
-        let data = store.require_gc_store_mut()?.gc_object_data(self)?;
+    /// Read a value of the given `StorageType` at `offset` within this
+    /// object.
+    ///
+    /// `i8` and `i16` values are zero-extended into `Val::I32(_)`s, and GC
+    /// references are read as `Frozen` references.
+    pub fn read_val(&self, store: &StoreOpaque, ty: &StorageType, offset: u32) -> Result<Val> {
+        let gc_store = store.require_gc_store()?;
+        let data = gc_store.gc_heap.gc_object_data(self)?;
         Ok(match ty {
             StorageType::I8 => Val::I32(data.read_u8(offset)?.into()),
             StorageType::I16 => Val::I32(data.read_u16(offset)?.into()),
@@ -420,35 +419,23 @@ impl VMGcRef {
             StorageType::ValType(ValType::F32) => Val::F32(data.read_u32(offset)?),
             StorageType::ValType(ValType::F64) => Val::F64(data.read_u64(offset)?),
             StorageType::ValType(ValType::V128) => Val::V128(data.read_v128(offset)?),
-            StorageType::ValType(ValType::Ref(r)) => match r.heap_type().top() {
-                HeapTopType::Extern => {
-                    let raw = data.read_u32(offset)?;
-                    Val::ExternRef(ExternRef::_from_raw(store, raw))
+            StorageType::ValType(ValType::Ref(r)) => {
+                let raw = data.read_u32(offset)?;
+                match r.heap_type().top() {
+                    HeapTopType::Func => {
+                        let func_ref_id = match FuncRefTableId::from_raw(raw) {
+                            Some(id) => id,
+                            None => bail_bug!("bad FuncRefTableId"),
+                        };
+                        let func_ref = gc_store.func_ref_table.get_untyped(func_ref_id)?;
+                        Val::FuncRef(unsafe {
+                            func_ref.map(|p| Func::from_vm_func_ref(store.id(), p.as_non_null()))
+                        })
+                    }
+                    HeapTopType::Cont => bail_bug!("continuation references are unsupported"),
+                    top => FrozenRef::val_from_raw(store, top, raw),
                 }
-                HeapTopType::Any => {
-                    let raw = data.read_u32(offset)?;
-                    Val::AnyRef(AnyRef::_from_raw(store, raw))
-                }
-                HeapTopType::Exn => {
-                    let raw = data.read_u32(offset)?;
-                    Val::ExnRef(ExnRef::_from_raw(store, raw))
-                }
-                HeapTopType::Func => {
-                    let func_ref_id = data.read_u32(offset)?;
-                    let func_ref_id = match FuncRefTableId::from_raw(func_ref_id) {
-                        Some(id) => id,
-                        None => bail_bug!("bad FuncRefTableId"),
-                    };
-                    let func_ref = store
-                        .unwrap_gc_store()
-                        .func_ref_table
-                        .get_untyped(func_ref_id)?;
-                    Val::FuncRef(unsafe {
-                        func_ref.map(|p| Func::from_vm_func_ref(store.id(), p.as_non_null()))
-                    })
-                }
-                HeapTopType::Cont => bail_bug!("continuation references are unsupported"),
-            },
+            }
         })
     }
 
@@ -501,6 +488,14 @@ impl VMGcRef {
                     None => 0,
                     Some(x) => x.try_clone_gc_ref(store)?.as_raw_u32(),
                 };
+                store
+                    .require_gc_store_mut()?
+                    .gc_object_data(self)?
+                    .write_u32(offset, x)
+            }
+
+            Val::Frozen(f) => {
+                let x = f.clone_gc_ref(store)?.as_raw_u32();
                 store
                     .require_gc_store_mut()?
                     .gc_object_data(self)?
@@ -591,6 +586,15 @@ impl VMGcRef {
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()))
             }
 
+            Val::Frozen(f) => {
+                let raw = data.read_u32(offset)?;
+                let mut gc_ref = VMGcRef::from_raw_u32(raw);
+                let new = f.gc_ref(store)?;
+                let store = store.require_gc_store_mut()?;
+                store.write_gc_ref(&mut gc_ref, Some(&new))?;
+                let data = store.gc_object_data(self)?;
+                data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()))
+            }
             Val::FuncRef(f) => {
                 let f = f.map(|f| SendSyncPtr::new(f.vm_func_ref(store)));
                 let gcstore = store.require_gc_store_mut()?;

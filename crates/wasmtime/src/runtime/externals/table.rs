@@ -3,8 +3,8 @@ use crate::runtime::vm::{self, GcStore, TableElementType, VMFuncRef, VMGcRef, VM
 use crate::store::{AutoAssertNoGc, StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_table_export;
 use crate::{
-    AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapTopType, Ref, RefType,
-    StoreContextMut, TableType, Trap,
+    AsContext, AsContextMut, FrozenRef, Func, HeapTopType, Ref, RefType, StoreContextMut,
+    TableType, Trap,
 };
 use core::iter;
 use core::ptr::NonNull;
@@ -195,42 +195,64 @@ impl Table {
 
     /// Returns the table element value at `index`.
     ///
+    /// A non-null GC reference is returned as a [`Ref::Frozen`] reference,
+    /// which does not keep its object alive and is only valid until the
+    /// store's GC heap or execution changes; see [`Frozen`](crate::Frozen)
+    /// for how to root it to keep it longer.
+    ///
+    /// This needs mutable access to the store because elements of function
+    /// tables may be initialized lazily (see [`Config::table_lazy_init`]),
+    /// when they are first read. [`Table::get_if_initialized`] reads elements
+    /// with shared access.
+    ///
     /// Returns `None` if `index` is out of bounds.
     ///
     /// # Panics
     ///
     /// Panics if `store` does not own this table.
+    ///
+    /// [`Config::table_lazy_init`]: crate::Config::table_lazy_init
     pub fn get(&self, mut store: impl AsContextMut, index: u64) -> Option<Ref> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        let (table, _gc_store) = self.wasmtime_table(&mut store, [index]);
+        let store = store.as_context_mut().0;
+        let _ = self.wasmtime_table(store, [index]);
+        self._get_if_initialized(store, index)
+    }
+
+    /// Returns the table element value at `index`, like [`Table::get`], but
+    /// without initializing a lazily initialized element of a function
+    /// table.
+    ///
+    /// This only needs shared access to the store, for example to inspect a
+    /// store whose execution is stopped. It returns `None` for an element that
+    /// has yet to be initialized, as well as when `index` is out of bounds.
+    /// Elements are always initialized when [`Config::table_lazy_init`] is
+    /// disabled, and for tables of GC references.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
+    ///
+    /// [`Config::table_lazy_init`]: crate::Config::table_lazy_init
+    pub fn get_if_initialized(&self, store: impl AsContext, index: u64) -> Option<Ref> {
+        self._get_if_initialized(store.as_context().0, index)
+    }
+
+    fn _get_if_initialized(&self, store: &StoreOpaque, index: u64) -> Option<Ref> {
+        self.instance.assert_belongs_to(store.id());
+        let table = store[self.instance].defined_table(self.index);
         match table.element_type() {
             TableElementType::Func => {
-                let ptr = table.get_func(index).ok()?;
-                Some(
-                    // SAFETY: `store` owns this table, so therefore it owns all
-                    // functions within the table too.
-                    ptr.map(|p| unsafe { Func::from_vm_func_ref(store.id(), p) })
-                        .into(),
-                )
+                let ptr = table.get_func_maybe_init(index).ok()??;
+                // SAFETY: `store` owns this table, so therefore it owns all
+                // functions within the table too.
+                Some(Ref::Func(
+                    ptr.map(|p| unsafe { Func::from_vm_func_ref(store.id(), p) }),
+                ))
             }
             TableElementType::GcRef => {
-                let gc_ref = table
-                    .get_gc_ref(index)
-                    .ok()?
-                    .map(|r| r.unchecked_copy())
-                    .map(|r| store.clone_gc_ref(&r));
-                Some(match self.ty_(&store).element().heap_type().top() {
-                    HeapTopType::Extern => {
-                        Ref::Extern(gc_ref.map(|r| ExternRef::from_cloned_gc_ref(&mut store, r)))
-                    }
-                    HeapTopType::Any => {
-                        Ref::Any(gc_ref.map(|r| AnyRef::from_cloned_gc_ref(&mut store, r)))
-                    }
-                    HeapTopType::Exn => {
-                        Ref::Exn(gc_ref.map(|r| ExnRef::from_cloned_gc_ref(&mut store, r)))
-                    }
-                    HeapTopType::Func | HeapTopType::Cont => unreachable!("not GC refs"),
-                })
+                let gc_ref = table.get_gc_ref(index).ok()?;
+                let top = self.ty_(store).element().heap_type().top();
+                FrozenRef::val(store, top, gc_ref).ref_()
             }
             // TODO(#10248) Required to support stack switching in the embedder
             // API.
@@ -267,11 +289,10 @@ impl Table {
             }
             TableElementType::GcRef => {
                 let mut store = AutoAssertNoGc::new(store);
+                // Note that the element is not rooted, which is ok as we're
+                // under an `AutoAssertNoGc` which means that we don't have to
+                // worry about it going away.
                 let element = val.into_table_gc_ref(&mut store, ty.element())?;
-                // Note that `unchecked_copy` should be ok as we're under an
-                // `AutoAssertNoGc` which means that despite this not being
-                // rooted we don't have to worry about it going away.
-                let element = element.map(|r| r.unchecked_copy());
                 let (table, gc_store) = self.wasmtime_table(&mut store, iter::empty());
                 table.set_gc_ref(gc_store, index, element.as_ref())?;
             }
@@ -599,11 +620,13 @@ impl Ref {
         }
     }
 
-    fn into_table_gc_ref<'a>(
+    /// The GC reference to store in a table. The caller must not collect
+    /// garbage while it uses the result, which is not rooted.
+    fn into_table_gc_ref(
         self,
-        store: &'a mut AutoAssertNoGc<'_>,
+        store: &mut AutoAssertNoGc<'_>,
         ty: &RefType,
-    ) -> Result<Option<&'a VMGcRef>> {
+    ) -> Result<Option<VMGcRef>> {
         self.ensure_matches_ty(store, &ty)
             .context("type mismatch: value does not match table element type")?;
 
@@ -613,7 +636,7 @@ impl Ref {
                     assert!(ty.is_nullable());
                     Ok(None)
                 }
-                Some(e) => Ok(Some(e.try_gc_ref(store)?)),
+                Some(e) => Ok(Some(e.try_gc_ref(store)?.unchecked_copy())),
             },
 
             (Ref::Any(a), HeapTopType::Any) => match a {
@@ -621,7 +644,7 @@ impl Ref {
                     assert!(ty.is_nullable());
                     Ok(None)
                 }
-                Some(a) => Ok(Some(a.try_gc_ref(store)?)),
+                Some(a) => Ok(Some(a.try_gc_ref(store)?.unchecked_copy())),
             },
 
             (Ref::Exn(e), HeapTopType::Exn) => match e {
@@ -629,8 +652,10 @@ impl Ref {
                     assert!(ty.is_nullable());
                     Ok(None)
                 }
-                Some(e) => Ok(Some(e.try_gc_ref(store)?)),
+                Some(e) => Ok(Some(e.try_gc_ref(store)?.unchecked_copy())),
             },
+
+            (Ref::Frozen(f), _) => Ok(Some(f.gc_ref(store)?)),
 
             _ => unreachable!("checked that the value matches the type above"),
         }
@@ -639,9 +664,11 @@ impl Ref {
     fn is_zero_pattern(&self) -> bool {
         match self {
             Ref::Extern(None) | Ref::Any(None) | Ref::Exn(None) | Ref::Func(None) => true,
-            Ref::Extern(Some(_)) | Ref::Any(Some(_)) | Ref::Exn(Some(_)) | Ref::Func(Some(_)) => {
-                false
-            }
+            Ref::Extern(Some(_))
+            | Ref::Any(Some(_))
+            | Ref::Exn(Some(_))
+            | Ref::Func(Some(_))
+            | Ref::Frozen(_) => false,
         }
     }
 }
@@ -649,7 +676,7 @@ impl Ref {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Instance, Module, Store};
+    use crate::{ExternRef, Instance, Module, Store};
 
     #[test]
     fn hash_key_is_stable_across_duplicate_store_data_entries() -> Result<()> {
@@ -671,12 +698,12 @@ mod tests {
         let t2 = instance.get_table(&mut store, "t").unwrap();
 
         // That said, they really point to the same table.
-        assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_none());
-        assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_none());
+        assert!(t1.get(&mut store, 0).unwrap().is_null());
+        assert!(t2.get(&mut store, 0).unwrap().is_null());
         let e = ExternRef::new(&mut store, 42)?;
         t1.set(&mut store, 0, e.into())?;
-        assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_some());
-        assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_some());
+        assert!(!t1.get(&mut store, 0).unwrap().is_null());
+        assert!(!t2.get(&mut store, 0).unwrap().is_null());
 
         // And therefore their hash keys are the same.
         assert!(t1.hash_key(&store.as_context().0) == t2.hash_key(&store.as_context().0));

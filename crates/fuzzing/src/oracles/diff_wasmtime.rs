@@ -246,6 +246,9 @@ impl From<Val> for DiffValue {
             Val::AnyRef(r) => DiffValue::AnyRef { null: r.is_none() },
             Val::ExnRef(e) => DiffValue::ExnRef { null: e.is_none() },
             Val::ContRef(c) => DiffValue::ContRef { null: c.is_none() },
+            Val::Frozen(wasmtime::FrozenRef::Extern(_)) => DiffValue::ExternRef { null: false },
+            Val::Frozen(wasmtime::FrozenRef::Any(_)) => DiffValue::AnyRef { null: false },
+            Val::Frozen(wasmtime::FrozenRef::Exn(_)) => DiffValue::ExnRef { null: false },
         }
     }
 }

@@ -68,6 +68,15 @@ pub struct GcStore {
     /// grow-or-collect heuristic.
     pub last_post_gc_allocated_bytes: Option<usize>,
 
+    /// The GC epoch: `Frozen` references into this heap are valid only
+    /// during the epoch in which they were created.
+    ///
+    /// Every entry into and exit from Wasm advances it (see
+    /// `invoke_wasm_and_catch_traps` and `catch_unwind_and_record_trap`), as
+    /// do host-API mutations of GC objects and anything that may free, move,
+    /// or replace objects: collections and write and drop barriers.
+    pub frozen_epoch: GcEpoch,
+
     /// An allocation counter that triggers GC when it reaches zero.
     ///
     /// Decremented on every allocation and when it hits zero, a GC is
@@ -78,6 +87,26 @@ pub struct GcStore {
     /// The initial value to reset the counter to after it triggers.
     #[cfg(gc_zeal)]
     gc_zeal_alloc_counter_init: Option<NonZeroU32>,
+}
+
+/// An epoch of a GC heap; see `GcStore::frozen_epoch`.
+///
+/// `Frozen` references record the epoch in which they were created, and are
+/// valid only while it is current. The epoch is 64 bits wide so that it never
+/// wraps around in practice; a narrower one could, since it advances on every
+/// host call from Wasm, and then a stale frozen reference would be accepted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct GcEpoch(u64);
+
+impl GcEpoch {
+    /// The epoch of a new GC heap.
+    pub const INITIAL: GcEpoch = GcEpoch(0);
+
+    /// The epoch after this one.
+    #[must_use]
+    pub fn next(self) -> GcEpoch {
+        GcEpoch(self.0 + 1)
+    }
 }
 
 /// Convenience type definition for the storage, within a `Store`, of
@@ -118,6 +147,7 @@ impl GcStore {
             #[cfg(feature = "stack-switching")]
             cont_ref_table,
             last_post_gc_allocated_bytes: None,
+            frozen_epoch: GcEpoch::INITIAL,
             #[cfg(gc_zeal)]
             gc_zeal_alloc_counter,
             #[cfg(gc_zeal)]
@@ -144,6 +174,7 @@ impl GcStore {
         gc_host_alloc_types: &StoreGcHostAllocTypes,
         yield_fn: impl AsyncFn(),
     ) -> Result<()> {
+        self.bump_gc_epoch();
         let mut trace_state = GcStoreTraceState {
             host_data_table: &mut self.host_data_table,
             modules,
@@ -245,6 +276,7 @@ impl GcStore {
         // (that is, they are both either null or `i31ref`s) then we can skip
         // the GC barrier.
         if Self::needs_write_barrier(destination, source) {
+            self.bump_gc_epoch();
             self.gc_heap.write_gc_ref(destination, source)?;
         } else {
             *destination = source.map(|s| s.copy_i31());
@@ -255,8 +287,15 @@ impl GcStore {
     /// Drop the given GC reference, performing drop barriers as necessary.
     pub fn drop_gc_ref(&mut self, gc_ref: VMGcRef) {
         if !gc_ref.is_i31() {
+            self.bump_gc_epoch();
             self.gc_heap.drop_gc_ref(gc_ref);
         }
+    }
+
+    /// Advances the GC epoch, invalidating every `Frozen` reference into this
+    /// heap.
+    pub fn bump_gc_epoch(&mut self) {
+        self.frozen_epoch = self.frozen_epoch.next();
     }
 
     /// Hook to call whenever a GC reference is about to be exposed to Wasm.

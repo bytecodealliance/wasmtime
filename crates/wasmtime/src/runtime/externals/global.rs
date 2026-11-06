@@ -1,8 +1,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::{self, VMGlobalDefinition, VMGlobalKind, VMOpaqueContext};
 use crate::{
-    AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, GlobalType, HeapType, Mutability,
-    Ref, Val, ValType,
+    AsContext, AsContextMut, FrozenRef, Func, GlobalType, HeapTopType, Mutability, Val, ValType,
     store::{AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque},
     trampoline::generate_global_export,
 };
@@ -139,24 +138,9 @@ impl Global {
         GlobalType::from_wasmtime_global(store.engine(), self.wasmtime_ty(store))
     }
 
-    /// Returns the current [`Val`] of this global.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `store` does not own this global.
-    pub fn get(&self, mut store: impl AsContextMut) -> Val {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._get(&mut store)
-    }
-
     /// Returns the current [`Val`] of this global if it has a numeric type
     /// (`i32`, `i64`, `f32`, `f64`, or `v128`), or `None` if it holds a
     /// reference.
-    ///
-    /// Unlike [`Global::get`] this only needs shared access to the store since
-    /// reading a numeric value never has to clone a GC reference. That makes
-    /// it usable where only an [`AsContext`] is available, for example from
-    /// epoch or call hooks.
     ///
     /// # Panics
     ///
@@ -179,67 +163,34 @@ impl Global {
         }
     }
 
-    pub(crate) fn _get(&self, store: &mut AutoAssertNoGc<'_>) -> Val {
+    /// Returns the current [`Val`] of this global.
+    ///
+    /// A non-null GC reference is returned as a [`Val::Frozen`] reference,
+    /// which does not keep its object alive and is only valid until the
+    /// store's GC heap or execution changes; see [`Frozen`](crate::Frozen)
+    /// for how to root it to keep it longer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
+    pub fn get(&self, store: impl AsContext) -> Val {
+        let store = store.as_context().0;
         unsafe {
             let definition = self.definition(store).as_ref();
-            match self._ty(&store).content() {
-                ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 | ValType::V128 => self
+            match self._ty(store).content() {
+                ValType::Ref(ref_ty) => match ref_ty.heap_type().top() {
+                    HeapTopType::Func => Val::FuncRef(
+                        definition
+                            .get_func_ref()
+                            .map(|f| Func::from_vm_func_ref(store.id(), f)),
+                    ),
+                    // TODO(#10248) Required to support stack switching in the embedder API.
+                    HeapTopType::Cont => unimplemented!(),
+                    top => FrozenRef::val(store, top, definition.as_gc_ref()),
+                },
+                _ => self
                     ._get_numeric(store)
                     .expect("numeric globals always have a numeric value"),
-                ValType::Ref(ref_ty) => {
-                    let reference: Ref = match ref_ty.heap_type() {
-                        HeapType::Func | HeapType::ConcreteFunc(_) => Ref::Func(
-                            definition
-                                .get_func_ref()
-                                .map(|f| Func::from_vm_func_ref(store.id(), f)),
-                        ),
-
-                        HeapType::NoFunc => Ref::Func(None),
-
-                        HeapType::Extern => Ref::Extern(definition.as_gc_ref().map(|r| {
-                            let r = store.clone_gc_ref(r);
-                            ExternRef::from_cloned_gc_ref(store, r)
-                        })),
-
-                        HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont => {
-                            // TODO(#10248) Required to support stack switching in the embedder API.
-                            unimplemented!()
-                        }
-
-                        HeapType::NoExtern => Ref::Extern(None),
-
-                        HeapType::Exn => definition
-                            .as_gc_ref()
-                            .map(|r| {
-                                let r = store.clone_gc_ref(r);
-                                ExnRef::from_cloned_gc_ref(store, r)
-                            })
-                            .into(),
-
-                        HeapType::Any
-                        | HeapType::Eq
-                        | HeapType::I31
-                        | HeapType::Struct
-                        | HeapType::ConcreteStruct(_)
-                        | HeapType::Array
-                        | HeapType::ConcreteArray(_) => definition
-                            .as_gc_ref()
-                            .map(|r| {
-                                let r = store.clone_gc_ref(r);
-                                AnyRef::from_cloned_gc_ref(store, r)
-                            })
-                            .into(),
-
-                        HeapType::NoExn => Ref::Exn(None),
-
-                        HeapType::None => Ref::Any(None),
-                    };
-                    debug_assert!(
-                        ref_ty.is_nullable() || !reference.is_null(),
-                        "if the type is non-nullable, we better have a non-null reference"
-                    );
-                    reference.into()
-                }
             }
         }
     }
@@ -318,6 +269,10 @@ impl Global {
                     };
                     let new = new.as_ref();
                     definition.write_gc_ref(&mut store, new)?;
+                }
+                Val::Frozen(f) => {
+                    let new = f.gc_ref(&store)?;
+                    definition.write_gc_ref(&mut store, Some(&new))?;
                 }
                 Val::ContRef(None) => {
                     // Allow null continuation references for globals - these are just placeholders

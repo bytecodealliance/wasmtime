@@ -1,5 +1,6 @@
 //! Working with GC `array` objects.
 
+use crate::Frozen;
 use crate::runtime::vm::VMGcRef;
 use crate::store::{Asyncness, StoreId, StoreResourceLimiter};
 #[cfg(feature = "async")]
@@ -10,7 +11,7 @@ use crate::{
     ArrayType, AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
     OwnedRooted, RefType, Rooted, Val, ValRaw, ValType, WasmTy, bail_bug,
     prelude::*,
-    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
+    store::{AutoAssertNoGc, StoreOpaque},
 };
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{GcArrayLayout, VMGcKind, VMSharedTypeIndex};
@@ -836,7 +837,8 @@ impl ArrayRef {
     /// Get the values of this array's elements.
     ///
     /// Note that `i8` and `i16` element values are zero-extended into
-    /// `Val::I32(_)`s.
+    /// `Val::I32(_)`s. GC references are returned frozen, as for
+    /// [`ArrayRef::get`].
     ///
     /// # Errors
     ///
@@ -845,69 +847,22 @@ impl ArrayRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn elems<'a, T: 'static>(
-        &'a self,
-        store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
-        self._elems(store.into().0)
+    pub fn elems(&self, store: impl AsContext) -> Result<alloc::vec::IntoIter<Val>> {
+        let store = store.as_context().0;
+        let frozen = self.frozen(store)?;
+        let elems = (0..frozen.len(store)?)
+            .map(|i| frozen.get(store, i))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(elems.into_iter())
     }
 
-    pub(crate) fn _elems<'a>(
-        &'a self,
-        store: &'a mut StoreOpaque,
-    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
-        assert!(self.comes_from_same_store(store));
-        let store = AutoAssertNoGc::new(store);
-
-        let gc_ref = self.inner.try_gc_ref(&store)?;
-        let header = store.require_gc_store()?.header(gc_ref)?;
-        debug_assert!(header.matches_kind(VMGcKind::ArrayRef));
-
-        let len = self._len(&store)?;
-
-        return Ok(Elems {
-            arrayref: self,
-            store,
-            index: 0,
-            len,
-        });
-
-        struct Elems<'a, 'b> {
-            arrayref: &'a ArrayRef,
-            store: AutoAssertNoGc<'b>,
-            index: u32,
-            len: u32,
-        }
-
-        impl Iterator for Elems<'_, '_> {
-            type Item = Val;
-
-            #[inline]
-            fn next(&mut self) -> Option<Self::Item> {
-                let i = self.index;
-                debug_assert!(i <= self.len);
-                if i >= self.len {
-                    return None;
-                }
-                self.index += 1;
-                self.arrayref._get(&mut self.store, i).ok()
-            }
-
-            #[inline]
-            fn size_hint(&self) -> (usize, Option<usize>) {
-                let len = self.len - self.index;
-                let len = usize::try_from(len).unwrap();
-                (len, Some(len))
-            }
-        }
-
-        impl ExactSizeIterator for Elems<'_, '_> {
-            #[inline]
-            fn len(&self) -> usize {
-                let len = self.len - self.index;
-                usize::try_from(len).unwrap()
-            }
-        }
+    /// A frozen reference to this array.
+    fn frozen(&self, store: &StoreOpaque) -> Result<Frozen<ArrayRef>> {
+        assert!(
+            self.comes_from_same_store(store),
+            "attempted to use an array with the wrong store",
+        );
+        Ok(Frozen::new(store, self.inner.try_gc_ref(store)?))
     }
 
     fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
@@ -939,6 +894,11 @@ impl ArrayRef {
     /// Note that `i8` and `i16` field values are zero-extended into
     /// `Val::I32(_)`s.
     ///
+    /// A non-null GC reference is returned as a [`Val::Frozen`] reference,
+    /// which does not keep its object alive and is only valid until the
+    /// store's GC heap or execution changes; see [`Frozen`] for how to root
+    /// it to keep it longer.
+    ///
     /// # Errors
     ///
     /// Returns an `Err(_)` if the index is out of bounds or this reference has
@@ -947,25 +907,9 @@ impl ArrayRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn get(&self, mut store: impl AsContextMut, index: u32) -> Result<Val> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._get(&mut store, index)
-    }
-
-    pub(crate) fn _get(&self, store: &mut AutoAssertNoGc<'_>, index: u32) -> Result<Val> {
-        assert!(
-            self.comes_from_same_store(store),
-            "attempted to use an array with the wrong store",
-        );
-        let arrayref = self.arrayref(store)?.unchecked_copy();
-        let field_ty = self.field_ty(store)?;
-        let layout = self.layout(store)?;
-        let len = arrayref.len(store)?;
-        ensure!(
-            index < len,
-            "index out of bounds: the length is {len} but the index is {index}"
-        );
-        arrayref.read_elem(store, &layout, field_ty.element_type(), index)
+    pub fn get(&self, store: impl AsContext, index: u32) -> Result<Val> {
+        let store = store.as_context().0;
+        self.frozen(store)?.get(store, index)
     }
 
     /// Set this array's `index`th element.
@@ -988,7 +932,11 @@ impl ArrayRef {
     /// Panics if either this reference or the given `value` is associated with
     /// a different store.
     pub fn set(&self, mut store: impl AsContextMut, index: u32, value: Val) -> Result<()> {
-        self._set(store.as_context_mut().0, index, value)
+        let store = store.as_context_mut().0;
+        let result = self._set(store, index, value);
+        // Writing `value`, which may be frozen itself, ends the GC epoch.
+        store.bump_gc_epoch();
+        result
     }
 
     pub(crate) fn _set(&self, store: &mut StoreOpaque, index: u32, value: Val) -> Result<()> {

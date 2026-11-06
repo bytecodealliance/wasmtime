@@ -3497,6 +3497,7 @@ fn miri_gc_smoke_test() -> Result<()> {
         store.gc(None)?;
 
         let assert_field_value = |store: &mut Store<_>, val: Val, field: i32| -> Result<()> {
+            let val = val.to_rooted(&mut *store)?;
             let s = val.anyref().unwrap().unwrap().unwrap_struct(&store)?;
             let f = s.field(store, 0)?;
             assert_eq!(f.unwrap_i32(), field);

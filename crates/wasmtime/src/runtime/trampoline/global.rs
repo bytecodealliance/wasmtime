@@ -68,6 +68,10 @@ pub fn generate_global_export(
                 let new = new.as_ref();
                 global.write_gc_ref(&mut store, new)?;
             }
+            Val::Frozen(f) => {
+                let new = f.gc_ref(&store)?;
+                global.write_gc_ref(&mut store, Some(&new))?;
+            }
             Val::ContRef(None) => {
                 // Allow null continuation references for trampoline globals - these are just placeholders
                 global.write_gc_ref(&mut store, None)?;

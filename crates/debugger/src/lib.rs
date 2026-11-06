@@ -23,8 +23,8 @@ use tokio::{
     task::JoinHandle,
 };
 use wasmtime::{
-    AsContextMut, DebugEvent, DebugHandler, Engine, ExnRef, OwnedRooted, Result, Store,
-    StoreContextMut, Trap, WatchpointHit,
+    AsContextMut, DebugEvent, DebugHandler, Engine, ExnRef, Frozen, Result, Store, StoreContextMut,
+    Trap, WatchpointHit,
 };
 
 mod host;
@@ -178,7 +178,10 @@ impl<T: Send + 'static> DebugHandler for Handler<T> {
 
         let result = match event {
             DebugEvent::HostcallError(_) => DebugRunResult::HostcallError,
-            DebugEvent::Exception(exn) => DebugRunResult::Exception(exn),
+            DebugEvent::Exception(exn) => DebugRunResult::Exception(
+                exn.to_frozen(&store)
+                    .expect("the event's exception is rooted"),
+            ),
             DebugEvent::Trap(trap) => DebugRunResult::Trap(trap),
             DebugEvent::Breakpoint => DebugRunResult::Breakpoint,
             DebugEvent::Watchpoint(hit) => DebugRunResult::Watchpoint(hit),
@@ -512,8 +515,8 @@ pub enum DebugRunResult {
     /// Wasm execution was interrupted by an epoch change.
     EpochYield,
     /// An exception is thrown by Wasm. The current state is at the
-    /// throw-point.
-    Exception(OwnedRooted<ExnRef>),
+    /// throw-point. The exception can be read until execution resumes.
+    Exception(Frozen<ExnRef>),
     /// A Wasm trap occurred.
     Trap(Trap),
     /// A breakpoint was reached.
