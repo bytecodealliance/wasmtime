@@ -2729,7 +2729,8 @@ impl Config {
         // Stack switching is emitted inline in compiled Wasm. In
         // ASan-enabled builds the compiler must arrange the
         // corresponding fiber switch handshake around every such
-        // instruction.
+        // instruction. This defaults to how Wasmtime itself was built
+        // but can be overridden with `Config::asan_compatible_code`.
         tunables.asan_stack_switching = cfg!(asan);
 
         // By default this is enabled with the Cargo feature, and if the feature
@@ -3444,6 +3445,36 @@ impl Config {
     /// [`StreamReader`]: crate::component::StreamReader
     pub fn concurrency_support(&mut self, enable: bool) -> &mut Self {
         self.tunables.concurrency_support = Some(enable);
+        self
+    }
+
+    /// Configures whether compiled code is compatible with a Wasmtime runtime
+    /// built with AddressSanitizer (ASan) enabled.
+    ///
+    /// Some code Wasmtime generates must cooperate with ASan's bookkeeping
+    /// when it runs inside an ASan-instrumented host. For example,
+    /// stack-switching instructions must tell ASan about every switch between
+    /// stacks. When this option is enabled the generated code includes those
+    /// hooks. A runtime built without ASan treats them as no-ops.
+    ///
+    /// This option is part of a compiled artifact's compatibility key.
+    /// Artifacts produced by [`Module::serialize`] or
+    /// [`Component::serialize`] can only be deserialized by an [`Engine`]
+    /// with the same setting. Code compiled without this option must not run
+    /// in an ASan-enabled runtime.
+    ///
+    /// This option is useful when compiling code outside of ASan, for
+    /// example with `Engine::precompile_module`, that will later run in a
+    /// Wasmtime built with `-Zsanitizer=address`.
+    ///
+    /// This option defaults to `true` if Wasmtime itself was built with ASan
+    /// and `false` otherwise.
+    ///
+    /// [`Engine`]: crate::Engine
+    /// [`Module::serialize`]: crate::Module::serialize
+    /// [`Component::serialize`]: crate::component::Component::serialize
+    pub fn asan_compatible_code(&mut self, enable: bool) -> &mut Self {
+        self.tunables.asan_stack_switching = Some(enable);
         self
     }
 
@@ -5096,6 +5127,11 @@ impl Engine {
     /// Returns the configured [`Config::concurrency_support`] value.
     pub fn get_concurrency_support(&self) -> bool {
         self.tunables().concurrency_support
+    }
+
+    /// Returns the configured [`Config::asan_compatible_code`] value.
+    pub fn get_asan_compatible_code(&self) -> bool {
+        self.tunables().asan_stack_switching
     }
 
     /// Returns the configured [`Config::epoch_interruption`] value.

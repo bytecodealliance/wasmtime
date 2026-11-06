@@ -583,6 +583,14 @@ class Config {
     wasmtime_config_native_unwind_info_set(ptr.get(), enable);
   }
 
+  /// \brief Configures whether compiled code is compatible with a Wasmtime
+  /// runtime built with AddressSanitizer.
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.asan_compatible_code
+  void asan_compatible_code(bool enable) {
+    wasmtime_config_asan_compatible_code_set(ptr.get(), enable);
+  }
+
   /// \brief Configures whether mach ports are used on macOS
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.macos_use_mach_ports
