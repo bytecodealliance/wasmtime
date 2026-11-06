@@ -128,30 +128,6 @@ impl VMArrayRef {
         store.unwrap_gc_store().array_len(self)
     }
 
-    /// Read an element of the given `StorageType` into a `Val`.
-    ///
-    /// `i8` and `i16` fields are zero-extended into `Val::I32(_)`s.
-    ///
-    /// Does not check that this array's elements are actually of type
-    /// `ty`. That is the caller's responsibility. Failure to do so is memory
-    /// safe, but will lead to general incorrectness such as panics and wrong
-    /// results.
-    ///
-    /// Returns an error on out-of-bounds accesses.
-    pub fn read_elem(
-        &self,
-        store: &mut AutoAssertNoGc,
-        layout: &GcArrayLayout,
-        ty: &StorageType,
-        index: u32,
-    ) -> Result<Val> {
-        let offset = match layout.elem_offset(index) {
-            Some(offset) => offset,
-            None => bail_bug!("out-of-bounds array element index"),
-        };
-        self.as_gc_ref().read_val(store, ty, offset)
-    }
-
     /// Write the given value into this array at the given offset.
     ///
     /// Returns an error if `val` is a GC reference that has since been

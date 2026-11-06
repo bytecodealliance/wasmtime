@@ -518,9 +518,11 @@ impl WastContext {
             #[cfg(feature = "component-model")]
             Export::Component(..) => bail!("no global named `{field}`"),
         };
-        Ok(Outcome::Ok(Results::Core(vec![
-            global.get(&mut self.core_store),
-        ])))
+        // Root any GC reference, which `Global::get` returns frozen, to keep
+        // it valid while the result is checked.
+        let value = global.get(&self.core_store);
+        let value = value.to_rooted(&mut self.core_store)?;
+        Ok(Outcome::Ok(Results::Core(vec![value])))
     }
 
     fn assert_return(&mut self, result: Outcome, results: &[Const]) -> Result<()> {

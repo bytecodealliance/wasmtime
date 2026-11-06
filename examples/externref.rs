@@ -47,9 +47,12 @@ fn main() -> Result<()> {
     println!("Touching `externref` table...");
     let table = instance.get_table(&mut store, "table").unwrap();
     table.set(&mut store, 3, Some(externref).into())?;
+    // Accessors return GC references "frozen": cheap, but only valid until
+    // the store's GC heap or execution next changes. Root them to keep them.
     let elem = table
         .get(&mut store, 3)
         .unwrap() // assert in bounds
+        .to_rooted(&mut store)?
         .unwrap_extern() // assert it's an externref table
         .copied()
         .unwrap(); // assert the externref isn't null
@@ -58,8 +61,9 @@ fn main() -> Result<()> {
     println!("Touching `externref` global...");
     let global = instance.get_global(&mut store, "global").unwrap();
     global.set(&mut store, Some(externref).into())?;
-    let global_val = global.get(&mut store).unwrap_externref().copied().unwrap();
-    assert!(Rooted::ref_eq(&store, &global_val, &externref)?);
+    // A frozen reference can also be used directly, as long as it is valid.
+    let global_val = global.get(&store).unwrap_frozen_externref().unwrap();
+    assert_eq!(global_val, externref.to_frozen(&store)?);
 
     println!("Calling `externref` func...");
     let func = instance.get_typed_func::<Option<Rooted<ExternRef>>, Option<Rooted<ExternRef>>>(

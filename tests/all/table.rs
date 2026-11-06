@@ -144,7 +144,7 @@ fn i31ref_table_get() -> Result<()> {
         for init in inits {
             let table = Table::new(&mut store, table_ty.clone(), init.clone())?;
             for i in 0..10 {
-                let val = table.get(&mut store, i).unwrap();
+                let val = table.get(&mut store, i).unwrap().to_rooted(&mut store)?;
                 assert_eq!(init.is_null(), val.is_null());
                 assert_eq!(
                     init.as_any()
@@ -194,7 +194,7 @@ fn i31ref_table_set() -> Result<()> {
                 let table = Table::new(&mut store, table_ty.clone(), init.clone())?;
                 for i in 0..10 {
                     table.set(&mut store, i, expected.clone())?;
-                    let actual = table.get(&mut store, i).unwrap();
+                    let actual = table.get(&mut store, i).unwrap().to_rooted(&mut store)?;
                     assert_eq!(expected.is_null(), actual.is_null());
                     assert_eq!(
                         expected
@@ -240,7 +240,7 @@ fn i31ref_table_grow() -> Result<()> {
         let grow_val = AnyRef::from_i31(&mut store, expected);
         table.grow(&mut store, 10, grow_val.into())?;
         for i in 10..20 {
-            let actual = table.get(&mut store, i).unwrap();
+            let actual = table.get(&mut store, i).unwrap().to_rooted(&mut store)?;
             assert_eq!(
                 actual
                     .as_any()
@@ -277,11 +277,11 @@ fn i31ref_table_fill() -> Result<()> {
     table.fill(&mut store, dst, fill_val.into(), len)?;
 
     for i in 0..dst {
-        let actual = table.get(&mut store, i).unwrap();
+        let actual = table.get(&mut store, i).unwrap().to_rooted(&mut store)?;
         assert!(actual.as_any().expect("is anyref").is_none());
     }
     for i in dst..dst + len {
-        let actual = table.get(&mut store, i).unwrap();
+        let actual = table.get(&mut store, i).unwrap().to_rooted(&mut store)?;
         assert_eq!(
             actual
                 .as_any()
@@ -294,7 +294,7 @@ fn i31ref_table_fill() -> Result<()> {
         );
     }
     for i in dst + len..10 {
-        let actual = table.get(&mut store, i).unwrap();
+        let actual = table.get(&mut store, i).unwrap().to_rooted(&mut store)?;
         assert!(actual.as_any().expect("is anyref").is_none());
     }
 
@@ -325,11 +325,17 @@ fn i31ref_table_copy() -> Result<()> {
     )?;
 
     for i in 0..dst_index {
-        let actual = dst_table.get(&mut store, i).unwrap();
+        let actual = dst_table
+            .get(&mut store, i)
+            .unwrap()
+            .to_rooted(&mut store)?;
         assert!(actual.as_any().expect("is anyref").is_none());
     }
     for i in dst_index..dst_index + len {
-        let actual = dst_table.get(&mut store, i).unwrap();
+        let actual = dst_table
+            .get(&mut store, i)
+            .unwrap()
+            .to_rooted(&mut store)?;
         assert_eq!(
             actual
                 .as_any()
@@ -342,7 +348,10 @@ fn i31ref_table_copy() -> Result<()> {
         );
     }
     for i in dst_index + len..10 {
-        let actual = dst_table.get(&mut store, i).unwrap();
+        let actual = dst_table
+            .get(&mut store, i)
+            .unwrap()
+            .to_rooted(&mut store)?;
         assert!(actual.as_any().expect("is anyref").is_none());
     }
 

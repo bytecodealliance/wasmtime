@@ -660,7 +660,7 @@ fn host_sets_array_global() -> Result<()> {
     g.set(&mut store, a0.into())?;
 
     // Get the global from the host.
-    let val = g.get(&mut store);
+    let val = g.get(&store).to_rooted(&mut store)?;
     let anyref = val.unwrap_anyref().expect("non-null");
     let a1 = anyref.unwrap_array(&store)?;
     assert_eq!(a1.len(&store)?, 1);
@@ -712,7 +712,7 @@ fn wasm_sets_array_global() -> Result<()> {
 
     // Get the global from the host.
     let g = instance.get_global(&mut store, "g").unwrap();
-    let val = g.get(&mut store);
+    let val = g.get(&store).to_rooted(&mut store)?;
     let anyref = val.unwrap_anyref().expect("non-null");
     let a1 = anyref.unwrap_array(&store)?;
     assert_eq!(a1.len(&store)?, 1);
@@ -760,7 +760,10 @@ fn host_sets_array_in_table() -> Result<()> {
     t.set(&mut store, 0, a0.into())?;
 
     // Get the global from the host.
-    let val = t.get(&mut store, 0).expect("in bounds");
+    let val = t
+        .get(&mut store, 0)
+        .expect("in bounds")
+        .to_rooted(&mut store)?;
     let anyref = val.unwrap_any().expect("non-null");
     let a1 = anyref.unwrap_array(&store)?;
     assert_eq!(a1.len(&store)?, 1);
@@ -814,7 +817,10 @@ fn wasm_sets_array_in_table() -> Result<()> {
 
     // Get the global from the host.
     let t = instance.get_table(&mut store, "t").unwrap();
-    let val = t.get(&mut store, 0).expect("in bounds");
+    let val = t
+        .get(&mut store, 0)
+        .expect("in bounds")
+        .to_rooted(&mut store)?;
     let anyref = val.unwrap_any().expect("non-null");
     let a1 = anyref.unwrap_array(&store)?;
     assert_eq!(a1.len(&mut store)?, 1);
@@ -862,7 +868,7 @@ fn instantiate_with_array_global() -> Result<()> {
     let g = Global::new(&mut store, global_ty.clone(), Val::AnyRef(None))?;
     let instance = Instance::new(&mut store, &module, &[g.into()])?;
     let g = instance.get_global(&mut store, "g").expect("export exists");
-    let val = g.get(&mut store);
+    let val = g.get(&store).to_rooted(&mut store)?;
     assert!(val.unwrap_anyref().is_none());
 
     // Instantiate with a non-null-ref global.
@@ -871,7 +877,7 @@ fn instantiate_with_array_global() -> Result<()> {
     let g = Global::new(&mut store, global_ty, a0.into())?;
     let instance = Instance::new(&mut store, &module, &[g.into()])?;
     let g = instance.get_global(&mut store, "g").expect("export exists");
-    let val = g.get(&mut store);
+    let val = g.get(&store).to_rooted(&mut store)?;
     let anyref = val.unwrap_anyref().expect("non-null");
     let a1 = anyref.unwrap_array(&store)?;
     assert_eq!(a1.len(&mut store)?, 1);
@@ -1040,7 +1046,7 @@ fn host_arrayref_has_trace_info_for_gc() -> Result<()> {
         // The arrayref should stay alive and be traced properly...
         store.gc(None)?;
 
-        assert!(matches!(g.get(&mut store), Val::AnyRef(Some(_))));
+        assert!(matches!(g.get(&store), Val::Frozen(_)));
     }
 
     Ok(())

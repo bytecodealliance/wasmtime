@@ -344,9 +344,12 @@ interface debuggee {
     clone: func() -> wasm-func;
   }
 
+  /// An exception object. One read from the debuggee, rather than made with
+  /// `make`, refers to it as it is paused: once it resumes or steps, using
+  /// the handle fails with `invalid-entity`.
   resource wasm-exception {
     /// Get the tag of this exception.
-    get-tag: func(d: borrow<debuggee>) -> wasm-tag;
+    get-tag: func(d: borrow<debuggee>) -> result<wasm-tag, error>;
 
     /// Get the payload values of this exception.
     get-values: func(d: borrow<debuggee>) -> result<list<wasm-value>, error>;

@@ -3,14 +3,14 @@
 
 use crate::host::wit;
 use crate::host::{
-    api::{Memory, WasmValue},
+    api::{Memory, WasmException, WasmValue},
     bindings::val_type_to_wasm_type,
 };
 #[cfg(feature = "threads")]
 use std::sync::atomic::{AtomicU8, Ordering};
 use wasmtime::{
     Engine, ExnRef, ExnRefPre, ExnType, FrameHandle, Func, FuncType, Global, Instance, Module,
-    OwnedRooted, Result, Table, Tag, TagType, Val, ValType,
+    OwnedRooted, Result, Table, Tag, TagType, ValType,
 };
 
 #[cfg(feature = "threads")]
@@ -147,8 +147,8 @@ pub(crate) trait OpaqueDebugger {
     async fn tag_params(&mut self, tag: Tag) -> Result<Vec<wit::WasmType>>;
     async fn tag_new(&mut self, engine: Engine, params: Vec<ValType>) -> Result<Tag>;
 
-    async fn exnref_get_tag(&mut self, exn: OwnedRooted<ExnRef>) -> Result<Tag>;
-    async fn exnref_get_fields(&mut self, exn: OwnedRooted<ExnRef>) -> Result<Vec<WasmValue>>;
+    async fn exnref_get_tag(&mut self, exn: WasmException) -> Result<Tag>;
+    async fn exnref_get_fields(&mut self, exn: WasmException) -> Result<Vec<WasmValue>>;
     async fn exnref_new(&mut self, tag: Tag, fields: Vec<WasmValue>)
     -> Result<OwnedRooted<ExnRef>>;
 
@@ -534,16 +534,13 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
     }
 
     async fn global_get(&mut self, global: Global) -> Result<WasmValue> {
-        self.with_store(move |mut store| {
-            let val = global.get(&mut store);
-            WasmValue::new(&mut store, val)
-        })
-        .await?
+        self.with_store(move |store| WasmValue::new(global.get(&store)))
+            .await?
     }
 
     async fn global_set(&mut self, global: Global, val: WasmValue) -> Result<()> {
         self.with_store(move |mut store| -> Result<()> {
-            let v = val.into_val(&mut store);
+            let v = val.into_val(&mut store)?;
             global
                 .set(&mut store, v)
                 .map_err(|_| wit::Error::MismatchedType)?;
@@ -561,14 +558,14 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
             let val = table
                 .get(&mut store, index)
                 .ok_or(wit::Error::OutOfBounds)?;
-            WasmValue::new(&mut store, val.into())
+            WasmValue::new(val.into())
         })
         .await?
     }
 
     async fn table_set_element(&mut self, table: Table, index: u64, val: WasmValue) -> Result<()> {
         self.with_store(move |mut store| -> Result<()> {
-            let v = val.into_val(&mut store);
+            let v = val.into_val(&mut store)?;
             let r = v.ref_().ok_or(wit::Error::MismatchedType)?;
             table
                 .set(&mut store, index, r)
@@ -618,20 +615,17 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
         .await?
     }
 
-    async fn exnref_get_tag(&mut self, exn: OwnedRooted<ExnRef>) -> Result<Tag> {
-        self.with_store(move |mut store| exn.tag(&mut store).expect("reference must be rooted"))
-            .await
+    async fn exnref_get_tag(&mut self, exn: WasmException) -> Result<Tag> {
+        self.with_store(move |store| exn.to_frozen(&store)?.tag(&store))
+            .await?
     }
 
-    async fn exnref_get_fields(&mut self, exn: OwnedRooted<ExnRef>) -> Result<Vec<WasmValue>> {
-        self.with_store(move |mut store| {
-            let fields = exn
-                .fields(&mut store)
-                .expect("reference must be rooted")
-                .collect::<Vec<Val>>();
-            fields
+    async fn exnref_get_fields(&mut self, exn: WasmException) -> Result<Vec<WasmValue>> {
+        self.with_store(move |store| {
+            exn.to_frozen(&store)?
+                .fields(&store)?
                 .into_iter()
-                .map(|v| WasmValue::new(&mut store, v))
+                .map(WasmValue::new)
                 .collect::<Result<Vec<_>>>()
         })
         .await?
@@ -649,7 +643,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
             let field_vals = fields
                 .into_iter()
                 .map(|v| v.into_val(&mut store))
-                .collect::<Vec<_>>();
+                .collect::<Result<Vec<_>>>()?;
             let exn = ExnRef::new(&mut store, &allocator, &tag, &field_vals)
                 .map_err(|_| wit::Error::AllocFailure)?;
             Ok(exn.to_owned_rooted(&mut store).unwrap())
@@ -684,10 +678,8 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 .map_err(|_| wit::Error::InvalidFrame)?;
             let mut result = vec![];
             for i in 0..n_locals {
-                let val = frame
-                    .local(&mut store, i)
-                    .expect("checked for validity above");
-                result.push(WasmValue::new(&mut store, val)?);
+                let val = frame.local(&store, i).expect("checked for validity above");
+                result.push(WasmValue::new(val)?);
             }
             Ok(result)
         })
@@ -701,10 +693,8 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 .map_err(|_| wit::Error::InvalidFrame)?;
             let mut result = vec![];
             for i in 0..n_stacks {
-                let val = frame
-                    .stack(&mut store, i)
-                    .expect("checked for validity above");
-                result.push(WasmValue::new(&mut store, val)?);
+                let val = frame.stack(&store, i).expect("checked for validity above");
+                result.push(WasmValue::new(val)?);
             }
             Ok(result)
         })

@@ -166,11 +166,11 @@ fn get_set_externref_globals_via_api() -> wasmtime::Result<()> {
         GlobalType::new(ValType::EXTERNREF, Mutability::Var),
         Val::ExternRef(None),
     )?;
-    assert!(global.get(&mut store).unwrap_externref().is_none());
+    assert!(global.get(&store).unwrap_externref().is_none());
 
     let hello = ExternRef::new(&mut store, "hello".to_string())?;
     global.set(&mut store, hello.into())?;
-    let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
+    let r = global.get(&store).unwrap_frozen_externref().unwrap();
     assert!(
         r.data(&store)?
             .expect("should have host data")
@@ -192,7 +192,7 @@ fn get_set_externref_globals_via_api() -> wasmtime::Result<()> {
         GlobalType::new(ValType::EXTERNREF, Mutability::Const),
         externref.into(),
     )?;
-    let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
+    let r = global.get(&store).unwrap_frozen_externref().unwrap();
     assert!(r.data(&store)?.expect("should have host data").is::<i32>());
     assert_eq!(
         r.data(&store)?
@@ -318,6 +318,7 @@ fn create_get_set_externref_tables_via_api() -> wasmtime::Result<()> {
         *table
             .get(&mut store, 5)
             .unwrap()
+            .to_rooted(&mut store)?
             .unwrap_extern()
             .unwrap()
             .data(&store)?
@@ -357,6 +358,7 @@ fn fill_externref_tables_via_api() -> wasmtime::Result<()> {
             *table
                 .get(&mut store, i)
                 .unwrap()
+                .to_rooted(&mut store)?
                 .unwrap_extern()
                 .unwrap()
                 .data(&store)?

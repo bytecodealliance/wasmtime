@@ -488,7 +488,7 @@ fn host_sets_struct_global() -> Result<()> {
     g.set(&mut store, s0.into())?;
 
     // Get the global from the host.
-    let val = g.get(&mut store);
+    let val = g.get(&store).to_rooted(&mut store)?;
     let anyref = val.unwrap_anyref().expect("non-null");
     let s1 = anyref.unwrap_struct(&store)?;
     assert_eq!(s1.field(&mut store, 0)?.unwrap_i32(), 42);
@@ -538,7 +538,7 @@ fn wasm_sets_struct_global() -> Result<()> {
 
     // Get the global from the host.
     let g = instance.get_global(&mut store, "g").unwrap();
-    let val = g.get(&mut store);
+    let val = g.get(&store).to_rooted(&mut store)?;
     let anyref = val.unwrap_anyref().expect("non-null");
     let s1 = anyref.unwrap_struct(&store)?;
     assert_eq!(s1.field(&mut store, 0)?.unwrap_i32(), 42);
@@ -584,7 +584,10 @@ fn host_sets_struct_in_table() -> Result<()> {
     t.set(&mut store, 0, s0.into())?;
 
     // Get the global from the host.
-    let val = t.get(&mut store, 0).expect("in bounds");
+    let val = t
+        .get(&mut store, 0)
+        .expect("in bounds")
+        .to_rooted(&mut store)?;
     let anyref = val.unwrap_any().expect("non-null");
     let s1 = anyref.unwrap_struct(&store)?;
     assert_eq!(s1.field(&mut store, 0)?.unwrap_i32(), 42);
@@ -636,7 +639,10 @@ fn wasm_sets_struct_in_table() -> Result<()> {
 
     // Get the global from the host.
     let t = instance.get_table(&mut store, "t").unwrap();
-    let val = t.get(&mut store, 0).expect("in bounds");
+    let val = t
+        .get(&mut store, 0)
+        .expect("in bounds")
+        .to_rooted(&mut store)?;
     let anyref = val.unwrap_any().expect("non-null");
     let s1 = anyref.unwrap_struct(&store)?;
     assert_eq!(s1.field(&mut store, 0)?.unwrap_i32(), 42);
@@ -682,7 +688,7 @@ fn instantiate_with_struct_global() -> Result<()> {
     let g = Global::new(&mut store, global_ty.clone(), Val::AnyRef(None))?;
     let instance = Instance::new(&mut store, &module, &[g.into()])?;
     let g = instance.get_global(&mut store, "g").expect("export exists");
-    let val = g.get(&mut store);
+    let val = g.get(&store).to_rooted(&mut store)?;
     assert!(val.unwrap_anyref().is_none());
 
     // Instantiate with a non-null-ref global.
@@ -691,7 +697,7 @@ fn instantiate_with_struct_global() -> Result<()> {
     let g = Global::new(&mut store, global_ty, s0.into())?;
     let instance = Instance::new(&mut store, &module, &[g.into()])?;
     let g = instance.get_global(&mut store, "g").expect("export exists");
-    let val = g.get(&mut store);
+    let val = g.get(&store).to_rooted(&mut store)?;
     let anyref = val.unwrap_anyref().expect("non-null");
     let s1 = anyref.unwrap_struct(&store)?;
     assert_eq!(s1.field(&mut store, 0)?.unwrap_i32(), 42);
@@ -929,7 +935,7 @@ fn host_structref_has_trace_info_for_gc() -> Result<()> {
         // The structref should stay alive and be traced properly...
         store.gc(None)?;
 
-        assert!(matches!(g.get(&mut store), Val::AnyRef(Some(_))));
+        assert!(matches!(g.get(&store), Val::Frozen(_)));
     }
 
     Ok(())

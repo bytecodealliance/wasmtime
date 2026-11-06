@@ -1,6 +1,7 @@
 //! Working with GC `struct` objects.
 #![cfg(feature = "gc")]
 
+use crate::Frozen;
 use crate::runtime::vm::VMGcRef;
 use crate::store::{Asyncness, StoreId};
 #[cfg(feature = "async")]
@@ -11,7 +12,7 @@ use crate::{
     AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
     OwnedRooted, RefType, Rooted, StructType, Val, ValRaw, ValType, WasmTy, bail_bug,
     prelude::*,
-    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque, StoreResourceLimiter},
+    store::{AutoAssertNoGc, StoreOpaque, StoreResourceLimiter},
 };
 use alloc::sync::Arc;
 use core::mem::{self, MaybeUninit};
@@ -437,7 +438,8 @@ impl StructRef {
     /// Get the values of this struct's fields.
     ///
     /// Note that `i8` and `i16` field values are zero-extended into
-    /// `Val::I32(_)`s.
+    /// `Val::I32(_)`s. GC references are returned frozen, as for
+    /// [`StructRef::field`].
     ///
     /// # Errors
     ///
@@ -446,75 +448,15 @@ impl StructRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn fields<'a, T: 'static>(
-        &'a self,
-        store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
-        self._fields(store.into().0)
+    pub fn fields(&self, store: impl AsContext) -> Result<alloc::vec::IntoIter<Val>> {
+        let store = store.as_context().0;
+        Ok(self.frozen(store)?.fields(store)?.into_iter())
     }
 
-    pub(crate) fn _fields<'a>(
-        &'a self,
-        store: &'a mut StoreOpaque,
-    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
+    /// A frozen reference to this struct.
+    fn frozen(&self, store: &StoreOpaque) -> Result<Frozen<StructRef>> {
         assert!(self.comes_from_same_store(store));
-        let store = AutoAssertNoGc::new(store);
-
-        let gc_ref = self.inner.try_gc_ref(&store)?;
-        let header = store.require_gc_store()?.header(gc_ref)?;
-        debug_assert!(header.matches_kind(VMGcKind::StructRef));
-
-        let index = match header.ty() {
-            Some(index) => index,
-            None => bail_bug!("structrefs should have concrete types"),
-        };
-        let ty = match StructType::from_shared_type_index(store.engine(), index) {
-            Some(ty) => ty,
-            None => bail_bug!("invalid struct type index"),
-        };
-        let len = ty.fields().len();
-
-        return Ok(Fields {
-            structref: self,
-            store,
-            index: 0,
-            len,
-        });
-
-        struct Fields<'a, 'b> {
-            structref: &'a StructRef,
-            store: AutoAssertNoGc<'b>,
-            index: usize,
-            len: usize,
-        }
-
-        impl Iterator for Fields<'_, '_> {
-            type Item = Val;
-
-            #[inline]
-            fn next(&mut self) -> Option<Self::Item> {
-                let i = self.index;
-                debug_assert!(i <= self.len);
-                if i >= self.len {
-                    return None;
-                }
-                self.index += 1;
-                self.structref._field(&mut self.store, i).ok()
-            }
-
-            #[inline]
-            fn size_hint(&self) -> (usize, Option<usize>) {
-                let len = self.len - self.index;
-                (len, Some(len))
-            }
-        }
-
-        impl ExactSizeIterator for Fields<'_, '_> {
-            #[inline]
-            fn len(&self) -> usize {
-                self.len - self.index
-            }
-        }
+        Ok(Frozen::new(store, self.inner.try_gc_ref(store)?))
     }
 
     fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
@@ -552,6 +494,11 @@ impl StructRef {
     /// Note that `i8` and `i16` field values are zero-extended into
     /// `Val::I32(_)`s.
     ///
+    /// A non-null GC reference is returned as a [`Val::Frozen`] reference,
+    /// which does not keep its object alive and is only valid until the
+    /// store's GC heap or execution changes; see [`Frozen`] for how to root
+    /// it to keep it longer.
+    ///
     /// # Errors
     ///
     /// Returns an `Err(_)` if the index is out of bounds or this reference has
@@ -560,17 +507,9 @@ impl StructRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn field(&self, mut store: impl AsContextMut, index: usize) -> Result<Val> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._field(&mut store, index)
-    }
-
-    pub(crate) fn _field(&self, store: &mut AutoAssertNoGc<'_>, index: usize) -> Result<Val> {
-        assert!(self.comes_from_same_store(store));
-        let structref = self.structref(store)?.unchecked_copy();
-        let field_ty = self.field_ty(store, index)?;
-        let layout = self.layout(store)?;
-        structref.read_field(store, &layout, field_ty.element_type(), index)
+    pub fn field(&self, store: impl AsContext, index: usize) -> Result<Val> {
+        let store = store.as_context().0;
+        self.frozen(store)?.field(store, index)
     }
 
     /// Set this struct's `index`th field.
@@ -593,7 +532,11 @@ impl StructRef {
     ///
     /// Panics if this reference is associated with a different store.
     pub fn set_field(&self, mut store: impl AsContextMut, index: usize, value: Val) -> Result<()> {
-        self._set_field(store.as_context_mut().0, index, value)
+        let store = store.as_context_mut().0;
+        let result = self._set_field(store, index, value);
+        // Writing `value`, which may be frozen itself, ends the GC epoch.
+        store.bump_gc_epoch();
+        result
     }
 
     pub(crate) fn _set_field(

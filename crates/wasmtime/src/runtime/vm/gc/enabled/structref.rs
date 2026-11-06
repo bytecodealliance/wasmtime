@@ -123,26 +123,6 @@ impl VMStructRef {
         Self(self.0.unchecked_copy())
     }
 
-    /// Read a field of the given `StorageType` into a `Val`.
-    ///
-    /// `i8` and `i16` fields are zero-extended into `Val::I32(_)`s.
-    ///
-    /// Does not check that the field is actually of type `ty`. That is the
-    /// caller's responsibility. Failure to do so is memory safe, but will lead
-    /// to general incorrectness such as panics and wrong results.
-    ///
-    /// Panics on out-of-bounds accesses.
-    pub fn read_field(
-        &self,
-        store: &mut AutoAssertNoGc,
-        layout: &GcStructLayout,
-        ty: &StorageType,
-        field: usize,
-    ) -> Result<Val> {
-        let offset = layout.fields[field].offset;
-        self.as_gc_ref().read_val(store, ty, offset)
-    }
-
     /// Write the given value into this struct at the given offset.
     ///
     /// Returns an error if `val` is a GC reference that has since been

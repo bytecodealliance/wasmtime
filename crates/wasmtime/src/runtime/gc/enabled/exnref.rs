@@ -1,5 +1,6 @@
 //! Implementation of `exnref` in Wasmtime.
 
+use crate::Frozen;
 use crate::runtime::vm::VMGcRef;
 use crate::store::{Asyncness, StoreId, StoreResourceLimiter};
 #[cfg(feature = "async")]
@@ -10,8 +11,7 @@ use crate::{
     ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque},
 };
-use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, bail_bug, prelude::*};
-use alloc::sync::Arc;
+use crate::{ExnType, GcHeapOutOfMemory, Tag, bail_bug, prelude::*};
 use core::mem;
 use core::mem::MaybeUninit;
 use wasmtime_environ::{GcStructLayout, VMGcKind, VMSharedTypeIndex};
@@ -484,6 +484,8 @@ impl ExnRef {
 
     /// Get the values of this exception object's fields.
     ///
+    /// GC references are returned frozen, as for [`ExnRef::field`].
+    ///
     /// # Errors
     ///
     /// Return an error if this reference has been unrooted.
@@ -491,75 +493,15 @@ impl ExnRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn fields<'a, T: 'static>(
-        &'a self,
-        store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
-        self._fields(store.into().0)
+    pub fn fields(&self, store: impl AsContext) -> Result<alloc::vec::IntoIter<Val>> {
+        let store = store.as_context().0;
+        Ok(self.frozen(store)?.fields(store)?.into_iter())
     }
 
-    pub(crate) fn _fields<'a>(
-        &'a self,
-        store: &'a mut StoreOpaque,
-    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
+    /// A frozen reference to this exception object.
+    fn frozen(&self, store: &StoreOpaque) -> Result<Frozen<ExnRef>> {
         assert!(self.comes_from_same_store(store));
-        let store = AutoAssertNoGc::new(store);
-
-        let gc_ref = self.inner.try_gc_ref(&store)?;
-        let header = store.require_gc_store()?.header(gc_ref)?;
-        debug_assert!(header.matches_kind(VMGcKind::ExnRef));
-
-        let index = match header.ty() {
-            Some(index) => index,
-            None => bail_bug!("exnrefs should have concrete types"),
-        };
-        let ty = match ExnType::from_shared_type_index(store.engine(), index) {
-            Some(ty) => ty,
-            None => bail_bug!("invalid exception type index"),
-        };
-        let len = ty.fields().len();
-
-        return Ok(Fields {
-            exnref: self,
-            store,
-            index: 0,
-            len,
-        });
-
-        struct Fields<'a, 'b> {
-            exnref: &'a ExnRef,
-            store: AutoAssertNoGc<'b>,
-            index: usize,
-            len: usize,
-        }
-
-        impl Iterator for Fields<'_, '_> {
-            type Item = Val;
-
-            #[inline]
-            fn next(&mut self) -> Option<Self::Item> {
-                let i = self.index;
-                debug_assert!(i <= self.len);
-                if i >= self.len {
-                    return None;
-                }
-                self.index += 1;
-                self.exnref._field(&mut self.store, i).ok()
-            }
-
-            #[inline]
-            fn size_hint(&self) -> (usize, Option<usize>) {
-                let len = self.len - self.index;
-                (len, Some(len))
-            }
-        }
-
-        impl ExactSizeIterator for Fields<'_, '_> {
-            #[inline]
-            fn len(&self) -> usize {
-                self.len - self.index
-            }
-        }
+        Ok(Frozen::new(store, self.inner.try_gc_ref(store)?))
     }
 
     fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
@@ -575,24 +517,12 @@ impl ExnRef {
         Ok(gc_ref.as_exnref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<Arc<GcStructLayout>> {
-        assert!(self.comes_from_same_store(&store));
-        let type_index = self.type_index(store)?;
-        super::gc_struct_layout(store.engine(), type_index)
-    }
-
-    fn field_ty(&self, store: &StoreOpaque, field: usize) -> Result<FieldType> {
-        let ty = self._ty(store)?;
-        match ty.field(field) {
-            Some(f) => Ok(f),
-            None => {
-                let len = ty.fields().len();
-                bail!("cannot access field {field}: exn only has {len} fields")
-            }
-        }
-    }
-
     /// Get this exception object's `index`th field.
+    ///
+    /// A non-null GC reference is returned as a [`Val::Frozen`] reference,
+    /// which does not keep its object alive and is only valid until the
+    /// store's GC heap or execution changes; see [`Frozen`] for how to root
+    /// it to keep it longer.
     ///
     /// # Errors
     ///
@@ -602,17 +532,9 @@ impl ExnRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn field(&self, mut store: impl AsContextMut, index: usize) -> Result<Val> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._field(&mut store, index)
-    }
-
-    pub(crate) fn _field(&self, store: &mut AutoAssertNoGc<'_>, index: usize) -> Result<Val> {
-        assert!(self.comes_from_same_store(store));
-        let exnref = self.exnref(store)?.unchecked_copy();
-        let field_ty = self.field_ty(store, index)?;
-        let layout = self.layout(store)?;
-        exnref.read_field(store, &layout, field_ty.element_type(), index)
+    pub fn field(&self, store: impl AsContext, index: usize) -> Result<Val> {
+        let store = store.as_context().0;
+        self.frozen(store)?.field(store, index)
     }
 
     /// Get this exception object's associated tag.
@@ -625,10 +547,10 @@ impl ExnRef {
     ///
     /// Panics if this reference is associated with a different store.
     pub fn tag(&self, mut store: impl AsContextMut) -> Result<Tag> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        let store = AutoAssertNoGc::new(store.as_context_mut().0);
         assert!(self.comes_from_same_store(&store));
         let exnref = self.exnref(&store)?.unchecked_copy();
-        let (instance, index) = exnref.tag(&mut store)?;
+        let (instance, index) = exnref.tag(&store)?;
         match Tag::from_raw_indices(&*store, instance, index) {
             Some(tag) => Ok(tag),
             None => bail_bug!("invalid tag indices in exception object"),

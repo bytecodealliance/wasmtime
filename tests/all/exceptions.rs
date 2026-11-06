@@ -188,11 +188,7 @@ fn thrown_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
     assert!(!dropped.load(Relaxed));
 
     let exn = store.take_pending_exception().unwrap();
-    let payload = exn
-        .field(&mut store, 0)?
-        .unwrap_externref()
-        .copied()
-        .unwrap();
+    let payload = exn.field(&store, 0)?.unwrap_frozen_externref().unwrap();
     assert!(payload.data(&store)?.is_some());
 
     Ok(())
@@ -628,15 +624,15 @@ fn catch_ref_preserves_externref_payload(config: &mut Config) -> wasmtime::Resul
         .and_then(|data| data.downcast_ref::<u32>().copied());
     assert_eq!(caught_data, Some(0xDECAF));
 
-    let field = exnref.field(&mut store, 0)?;
-    let field = field
-        .unwrap_externref()
+    let field = exnref
+        .field(&store, 0)?
+        .unwrap_frozen_externref()
         .expect("the exception payload should not be null");
     let field_data = field
         .data(&store)?
         .and_then(|data| data.downcast_ref::<u32>().copied());
     assert_eq!(field_data, Some(0xDECAF));
-    assert_eq!(exnref.field(&mut store, 1)?.unwrap_i32(), 42);
+    assert_eq!(exnref.field(&store, 1)?.unwrap_i32(), 42);
     Ok(())
 }
 

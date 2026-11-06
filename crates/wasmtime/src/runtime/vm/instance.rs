@@ -1124,6 +1124,11 @@ impl Instance {
         self.get_defined_table(idx)
     }
 
+    /// Get a locally-defined table, without lazily initializing it.
+    pub(crate) fn defined_table(&self, index: DefinedTableIndex) -> &Table {
+        &self.tables[index].1
+    }
+
     /// Get a locally-defined table.
     pub(crate) fn get_defined_table(self: Pin<&mut Self>, index: DefinedTableIndex) -> &mut Table {
         &mut self.tables_mut()[index].1
@@ -1517,6 +1522,17 @@ impl Instance {
             EntityIndex::Function(i) => {
                 Export::Function(unsafe { self.get_exported_func(registry, store, i) })
             }
+            _ => self.get_export_by_index(store, export).unwrap(),
+        }
+    }
+
+    /// Like `get_export_by_index_mut`, but with only shared access to the
+    /// instance, so it returns `None` for functions: looking up a function
+    /// may need to lazily initialize its `VMFuncRef`, which needs mutable
+    /// access.
+    pub fn get_export_by_index(&self, store: StoreId, export: EntityIndex) -> Option<Export> {
+        Some(match export {
+            EntityIndex::Function(_) => return None,
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(store, i)),
             EntityIndex::Table(i) => Export::Table(self.get_exported_table(store, i)),
             EntityIndex::Memory(i) => match self.get_exported_memory(store, i) {
@@ -1524,7 +1540,7 @@ impl Instance {
                 ExportMemory::Shared(m, i) => Export::SharedMemory(m, i),
             },
             EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(store, i)),
-        }
+        })
     }
 
     fn store_mut(self: Pin<&mut Self>) -> &mut Option<VMStoreRawPtr> {

@@ -1104,6 +1104,7 @@ impl RunCommand {
                 Val::ExnRef(Some(_)) => println!("<exnref>"),
                 Val::ContRef(None) => println!("<null contref>"),
                 Val::ContRef(Some(_)) => println!("<contref>"),
+                Val::Frozen(_) => println!("<frozen reference>"),
             }
         }
 

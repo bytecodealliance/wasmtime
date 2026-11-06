@@ -1621,6 +1621,11 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "debug")]
+    pub(crate) fn frame_data_cache(&self) -> &FrameDataCache {
+        &self.frame_data_cache
+    }
+
+    #[cfg(feature = "debug")]
     pub(crate) fn frame_data_cache_mut_and_registry(
         &mut self,
     ) -> (&mut FrameDataCache, &ModuleRegistry) {
@@ -1766,7 +1771,7 @@ impl StoreOpaque {
     }
 
     /// Get all instances (ignoring dummy instances) within this store.
-    pub fn all_instances<'a>(&'a mut self) -> impl ExactSizeIterator<Item = Instance> + 'a {
+    pub fn all_instances<'a>(&'a self) -> impl ExactSizeIterator<Item = Instance> + 'a {
         let instances = self
             .instances
             .iter()
@@ -1855,6 +1860,16 @@ impl StoreOpaque {
             None
         } else {
             self.gc_store.as_mut()
+        }
+    }
+
+    /// Advances the store's GC epoch, invalidating every
+    /// [`Frozen`](crate::Frozen) reference into its GC heap; see
+    /// `GcStore::frozen_epoch`.
+    #[inline]
+    pub(crate) fn bump_gc_epoch(&mut self) {
+        if let Some(gc_store) = &mut self.gc_store {
+            gc_store.bump_gc_epoch();
         }
     }
 

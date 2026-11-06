@@ -3,9 +3,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{
-    AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle,
-    Func, Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Result, Store,
-    StoreContextMut, Trap, Val, ValType,
+    AnyRef, AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine, Extern,
+    FrameHandle, Frozen, FrozenRef, Func, Global, GlobalType, Inlining, Instance, Module, ModulePC,
+    Mutability, Ref, Result, Store, StoreContextMut, Trap, Val, ValType,
 };
 
 use crate::async_functions::PollOnce;
@@ -225,7 +225,7 @@ fn stack_values_dead_gc_ref() -> wasmtime::Result<()> {
         |mut caller: Caller<'_, ()>| {
             let stack = caller.debug_exit_frames().next().unwrap();
             assert_eq!(stack.num_stacks(&mut caller)?, 1);
-            assert!(stack.stack(&mut caller, 0)?.unwrap_anyref().is_some());
+            assert!(stack.stack(&caller, 0)?.unwrap_frozen_anyref().is_some());
             let stack = stack.parent(&mut caller)?;
             assert!(stack.is_none());
             Ok(())
@@ -263,14 +263,111 @@ fn gc_access_during_call() -> wasmtime::Result<()> {
             // alive here because it is rooted in the
             // debug-instrumentation slot.
             let s = stack
-                .local(&mut caller, 0)?
-                .unwrap_any_ref()
+                .local(&caller, 0)?
+                .unwrap_frozen_anyref()
                 .unwrap()
-                .unwrap_struct(&caller)
+                .as_struct(&caller)?
                 .unwrap();
-            assert_eq!(s.field(&mut caller, 0).unwrap().unwrap_i32(), 42);
+            assert_eq!(s.field(&caller, 0).unwrap().unwrap_i32(), 42);
             let stack = stack.parent(&mut caller)?;
             assert!(stack.is_none());
+            Ok(())
+        },
+    )
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn frozen_gc_refs_read_with_shared_access() -> wasmtime::Result<()> {
+    let seen = Arc::new(Mutex::new(Vec::<Frozen<AnyRef>>::new()));
+    let seen2 = seen.clone();
+    test_stack_values(
+        r#"
+    (module
+      (type $s (struct (field i32) (field (ref null $s))))
+      (type $a (array i8))
+      (import "" "host" (func))
+      (global $g (export "g") (mut anyref) (ref.null any))
+      (table $t (export "t") 1 anyref)
+      (func (export "main")
+        (local $l (ref null $s))
+        (local $i i31ref)
+        (local.set $l (struct.new $s (i32.const 1)
+                        (struct.new $s (i32.const 2) (ref.null $s))))
+        (local.set $i (ref.i31 (i32.const 7)))
+        (global.set $g (array.new_fixed $a 2 (i32.const 3) (i32.const 260)))
+        (table.set $t (i32.const 0) (local.get $l))
+        (call 0)
+        (call 0)))
+    "#,
+        |config| {
+            config.wasm_gc(true);
+        },
+        move |mut caller: Caller<'_, ()>| {
+            let frame = caller.debug_exit_frames().next().unwrap();
+            let instance = frame.instance(&mut caller)?;
+            let global = instance.get_global(&mut caller, "g").unwrap();
+            let table = instance.get_table(&mut caller, "t").unwrap();
+            let mut seen = seen2.lock().unwrap();
+            if let Some(stale) = seen.first() {
+                // Guest code ran since the previous call.
+                assert!(!stale.is_valid(&caller));
+                assert!(seen[1].is_valid(&caller), "i31s stay valid");
+                return Ok(());
+            }
+
+            // Only shared access to the store is needed.
+            let store = &caller;
+            let list = frame.local(store, 0)?.unwrap_frozen_anyref().unwrap();
+            let node = list.as_struct(store)?.unwrap();
+            assert_eq!(node.field(store, 0)?.unwrap_i32(), 1);
+            let next = node.field(store, 1)?.unwrap_frozen_anyref().unwrap();
+            let next = next.as_struct(store)?.unwrap();
+            assert_eq!(next.fields(store)?[0].unwrap_i32(), 2);
+            // Null references read as usual.
+            assert!(matches!(next.field(store, 1)?, Val::AnyRef(None)));
+            assert!(node.field(store, 2).is_err());
+
+            let i31 = frame.local(store, 1)?.unwrap_frozen_anyref().unwrap();
+            assert_eq!(i31.as_i31(store)?.unwrap().get_u32(), 7);
+            assert!(i31.as_struct(store)?.is_none());
+
+            let array = global.get(store).unwrap_frozen_anyref().unwrap();
+            let array = array.as_array(store)?.unwrap();
+            assert_eq!(array.len(store)?, 2);
+            assert_eq!(array.get(store, 1)?.unwrap_i32(), 4);
+            assert!(array.get(store, 2).is_err());
+
+            // References are compared by identity.
+            let element = Val::from(table.get_if_initialized(store, 0).unwrap());
+            assert_eq!(element.unwrap_frozen_anyref(), Some(list));
+            assert_eq!(Frozen::<AnyRef>::from(node), list);
+            assert!(table.get_if_initialized(store, 1).is_none());
+
+            // They can be rooted for the rooted APIs, and other APIs take
+            // them as they do rooted references.
+            let rooted = list.to_rooted(&mut caller)?;
+            assert_eq!(rooted.to_frozen(&caller)?, list);
+            let frozen = Val::Frozen(FrozenRef::Any(i31));
+            assert!(frozen.matches_ty(&caller, &ValType::ANYREF)?);
+            assert!(!frozen.matches_ty(&caller, &ValType::EXTERNREF)?);
+            global.set(&mut caller, frozen)?;
+            let i31_global = global.get(&caller).unwrap_frozen_anyref().unwrap();
+            assert_eq!(i31_global.as_i31(&caller)?.unwrap().get_u32(), 7);
+
+            // A collection may move or free objects.
+            caller.as_context_mut().gc(None)?;
+            assert!(!list.is_valid(&caller));
+            assert!(node.field(&caller, 0).is_err());
+            assert!(
+                table
+                    .set(&mut caller, 0, Ref::Frozen(FrozenRef::Any(list)))
+                    .is_err()
+            );
+            assert!(i31.is_valid(&caller));
+            let list = frame.local(&caller, 0)?.unwrap_frozen_anyref().unwrap();
+            assert!(list.as_struct(&caller)?.is_some());
+            seen.extend([list, i31]);
             Ok(())
         },
     )
@@ -488,7 +585,7 @@ fn private_entity_access() -> wasmtime::Result<()> {
     assert_eq!(m.data(&mut store)[1024], 1);
 
     let t = instance.debug_table(&mut store, 0).unwrap();
-    let t_val = t.get(&mut store, 1).unwrap();
+    let t_val = t.get(&mut store, 1).unwrap().to_rooted(&mut store)?;
     let t_val = t_val.as_any().unwrap().unwrap().unwrap_i31(&store).unwrap();
     assert_eq!(t_val.get_u32(), 100);
 
@@ -1984,9 +2081,9 @@ async fn uninit_non_nullable_ref_local_in_single_step() -> Result<()> {
                     // entry for `$r`, whether or not it's been set yet.
                     store.gc(None).unwrap();
                     let is_set = frame
-                        .local(&mut store, 0)
+                        .local(&store, 0)
                         .unwrap()
-                        .unwrap_any_ref()
+                        .unwrap_frozen_anyref()
                         .is_some();
                     if is_set {
                         self.init_steps.fetch_add(1, Ordering::Relaxed);

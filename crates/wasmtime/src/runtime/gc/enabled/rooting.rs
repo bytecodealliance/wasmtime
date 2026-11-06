@@ -145,16 +145,30 @@
 //! allows us to update the *actual* GC pointers in the `RootSet` and
 //! support moving GCs (again, as mentioned above).
 //!
+//! ## Frozen References
+//!
+//! Rooting is a separate, explicit step from reading a GC reference out of the
+//! store. Accessors such as `Global::get` and `StructRef::field` return GC
+//! references as [`Frozen<T>`][crate::Frozen] references, which are not roots:
+//! they are just the object's raw GC reference and a snapshot of the store's
+//! GC epoch, which advances whenever objects may be freed or moved (including
+//! on every entry into and exit from Wasm). A frozen reference is only usable
+//! during the epoch it was created in, so it can never observe a freed or moved
+//! object; using it afterwards returns an error. Callers that need an object
+//! to stay alive longer root it explicitly, as a `Rooted<T>` or an
+//! `OwnedRooted<T>`.
+//!
 //! ## Unrooted References
 //!
-//! We generally don't expose *unrooted* GC references in the Wasmtime API at
-//! this time -- and I expect it will be a very long time before we do, but in
-//! the limit we may want to let users define their own GC-managed types that
-//! participate in GC tracing and all that -- so we don't have to worry about
-//! failure to root an object causing use-after-free bugs or failing to update a
-//! GC root pointer after a moving GC as long as users stick to our safe rooting
-//! APIs. (The one exception is `ValRaw`, which does hold raw GC references. But
-//! with `ValRaw` all bets are off and safety is 100% up to the user.)
+//! Other than frozen references, we generally don't expose *unrooted* GC
+//! references in the Wasmtime API at this time -- and I expect it will be a
+//! very long time before we do, but in the limit we may want to let users
+//! define their own GC-managed types that participate in GC tracing and all
+//! that -- so we don't have to worry about failure to root an object causing
+//! use-after-free bugs or failing to update a GC root pointer after a moving GC
+//! as long as users stick to our safe rooting APIs. (The one exception is
+//! `ValRaw`, which does hold raw GC references. But with `ValRaw` all bets are
+//! off and safety is 100% up to the user.)
 //!
 //! We do, however, have to worry about these things internally. So first of
 //! all, try to avoid ever working with unrooted GC references if you
@@ -163,7 +177,7 @@
 
 use crate::runtime::vm::{GcRootsList, GcStore, VMGcRef};
 use crate::{
-    AsContext, AsContextMut, GcRef, Result, RootedGcRef,
+    AsContext, AsContextMut, Frozen, GcRef, Result, RootedGcRef,
     error::OutOfMemory,
     store::{AsStoreOpaque, AutoAssertNoGc, StoreId, StoreOpaque},
 };
@@ -1076,6 +1090,21 @@ impl<T: GcRef> Rooted<T> {
         Ok(OwnedRooted::new(&mut store, gc_ref)?)
     }
 
+    /// A [`Frozen`] reference to this object, for reading it with only shared
+    /// access to the store during the store's current GC epoch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this object has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this object is not associated with the given store.
+    pub fn to_frozen(&self, store: impl AsContext) -> Result<Frozen<T>> {
+        let store = store.as_context().0;
+        Ok(Frozen::new(store, self.try_gc_ref(store)?))
+    }
+
     /// Are these two `Rooted<T>`s the same GC root?
     ///
     /// Note that this function can return `false` even when `a` and `b` are
@@ -1317,7 +1346,7 @@ impl<T: GcRef> Rooted<T> {
 /// implements [`AsContext`][crate::AsContext] and
 /// [`AsContextMut`][crate::AsContextMut] in terms of its underlying
 /// `C`. Therefore, `RootScope<C>` can be used anywhere you would use the
-/// underlying `C`, for example in the [`Global::get`][crate::Global::get]
+/// underlying `C`, for example in the [`Frozen::to_rooted`][crate::Frozen::to_rooted]
 /// method. Any `Rooted<T>`s created by a method that a `RootScope<C>` was
 /// passed as context to are tied to the `RootScope<C>`'s scope and
 /// automatically unrooted when the scope is dropped.
@@ -1739,6 +1768,21 @@ where
         let mut store = AutoAssertNoGc::new(store);
         let gc_ref = self.clone_gc_ref(&mut store).unwrap();
         Rooted::new(&mut store, gc_ref)
+    }
+
+    /// A [`Frozen`] reference to this object, for reading it with only shared
+    /// access to the store during the store's current GC epoch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this object has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this object is not associated with the given store.
+    pub fn to_frozen(&self, store: impl AsContext) -> Result<Frozen<T>> {
+        let store = store.as_context().0;
+        Ok(Frozen::new(store, self.try_gc_ref(store)?))
     }
 
     /// Are these two GC roots referencing the same underlying GC object?

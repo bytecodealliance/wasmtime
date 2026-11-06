@@ -183,7 +183,7 @@ fn i31ref_global_get() -> Result<()> {
                 val,
             )?;
 
-            let got = global.get(&mut store);
+            let got = global.get(&store).to_rooted(&mut store)?;
 
             let val = val
                 .anyref()
@@ -223,7 +223,7 @@ fn i31ref_global_set() -> Result<()> {
 
             let new_val = Val::from(new_val);
             global.set(&mut store, new_val)?;
-            let got = global.get(&mut store);
+            let got = global.get(&store).to_rooted(&mut store)?;
 
             let new_val = new_val
                 .anyref()
@@ -307,7 +307,7 @@ fn i31ref_as_anyref_global_get() -> Result<()> {
                 val,
             )?;
 
-            let got = global.get(&mut store);
+            let got = global.get(&store).to_rooted(&mut store)?;
 
             let val = val
                 .anyref()
@@ -347,7 +347,7 @@ fn i31ref_as_anyref_global_set() -> Result<()> {
 
             let new_val = Val::from(new_val);
             global.set(&mut store, new_val)?;
-            let got = global.get(&mut store);
+            let got = global.get(&store).to_rooted(&mut store)?;
 
             let new_val = new_val
                 .anyref()

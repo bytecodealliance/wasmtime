@@ -1,7 +1,8 @@
+use crate::runtime::vm::VMGcRef;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapTopType, HeapType,
-    RefType, Rooted, StructRef, V128, ValType, prelude::*,
+    AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Frozen, Func, HeapTopType,
+    HeapType, RefType, Rooted, StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
 
@@ -62,6 +63,141 @@ pub enum Val {
     /// Note: This is currently a stub implementation as continuation objects
     /// are not yet fully integrated with the GC system. See #10248.
     ContRef(Option<ContRef>),
+
+    /// A non-null GC reference, as a [`Frozen`] reference.
+    ///
+    /// Accessors that read GC references out of the store, such as
+    /// [`Global::get`] and [`StructRef::field`], return these (and null
+    /// references as usual). They are valid until the store's GC heap or
+    /// execution changes; see [`Frozen`]. Other APIs accept them while they
+    /// are valid, as they do rooted references, and [`Val::to_rooted`] roots
+    /// them to keep them longer.
+    ///
+    /// [`Global::get`]: crate::Global::get
+    /// [`StructRef::field`]: crate::StructRef::field
+    Frozen(FrozenRef),
+}
+
+/// A non-null [`Frozen`] reference in one of Wasm's GC type hierarchies; see
+/// [`Val::Frozen`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FrozenRef {
+    /// An external reference.
+    Extern(Frozen<ExternRef>),
+    /// An internal reference.
+    Any(Frozen<AnyRef>),
+    /// An exception reference.
+    Exn(Frozen<ExnRef>),
+}
+
+impl FrozenRef {
+    /// Is this reference still valid?
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn is_valid(&self, store: impl AsContext) -> bool {
+        self.gc_ref(store.as_context().0).is_ok()
+    }
+
+    /// The internal reference, if this is one.
+    pub fn as_any(&self) -> Option<Frozen<AnyRef>> {
+        match self {
+            FrozenRef::Any(a) => Some(*a),
+            _ => None,
+        }
+    }
+
+    /// The exception reference, if this is one.
+    pub fn as_exn(&self) -> Option<Frozen<ExnRef>> {
+        match self {
+            FrozenRef::Exn(e) => Some(*e),
+            _ => None,
+        }
+    }
+
+    /// The external reference, if this is one.
+    pub fn as_extern(&self) -> Option<Frozen<ExternRef>> {
+        match self {
+            FrozenRef::Extern(e) => Some(*e),
+            _ => None,
+        }
+    }
+
+    /// Roots the referenced object in the current LIFO rooting scope; see
+    /// [`Frozen::to_rooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this reference is no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn to_rooted(&self, mut store: impl AsContextMut) -> Result<Ref> {
+        let store = store.as_context_mut();
+        Ok(match self {
+            FrozenRef::Extern(e) => Ref::Extern(Some(e.to_rooted(store)?)),
+            FrozenRef::Any(a) => Ref::Any(Some(a.to_rooted(store)?)),
+            FrozenRef::Exn(e) => Ref::Exn(Some(e.to_rooted(store)?)),
+        })
+    }
+
+    /// The referenced object, if this reference is still valid.
+    pub(crate) fn gc_ref(&self, store: &StoreOpaque) -> Result<VMGcRef> {
+        match self {
+            FrozenRef::Extern(e) => e.gc_ref(store),
+            FrozenRef::Any(a) => a.gc_ref(store),
+            FrozenRef::Exn(e) => e.gc_ref(store),
+        }
+    }
+
+    /// The referenced object, cloned for storing it somewhere, if this
+    /// reference is still valid.
+    pub(crate) fn clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
+        let gc_ref = self.gc_ref(store)?;
+        Ok(store.clone_gc_ref(&gc_ref))
+    }
+
+    fn heap_type(&self, store: &StoreOpaque) -> Result<HeapType> {
+        Ok(match self {
+            FrozenRef::Extern(e) => {
+                e.gc_ref(store)?;
+                HeapType::Extern
+            }
+            FrozenRef::Any(a) => a._ty(store)?,
+            FrozenRef::Exn(e) => {
+                e.gc_ref(store)?;
+                HeapType::Exn
+            }
+        })
+    }
+
+    /// A value of type `top` for the GC reference `gc_ref`, frozen.
+    pub(crate) fn val(store: &StoreOpaque, top: HeapTopType, gc_ref: Option<&VMGcRef>) -> Val {
+        let Some(gc_ref) = gc_ref else {
+            return Val::null_ref(&top.into());
+        };
+        Val::Frozen(match top {
+            HeapTopType::Extern => FrozenRef::Extern(Frozen::new(store, gc_ref)),
+            HeapTopType::Any => FrozenRef::Any(Frozen::new(store, gc_ref)),
+            HeapTopType::Exn => FrozenRef::Exn(Frozen::new(store, gc_ref)),
+            HeapTopType::Func | HeapTopType::Cont => unreachable!("not GC references"),
+        })
+    }
+
+    /// Like `FrozenRef::val`, for a GC reference's raw bits.
+    pub(crate) fn val_from_raw(store: &StoreOpaque, top: HeapTopType, raw: u32) -> Val {
+        Self::val(store, top, VMGcRef::from_raw_u32(raw).as_ref())
+    }
+
+    fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
+        match self {
+            FrozenRef::Extern(e) => e.comes_from_same_store(store),
+            FrozenRef::Any(a) => a.comes_from_same_store(store),
+            FrozenRef::Exn(e) => e.comes_from_same_store(store),
+        }
+    }
 }
 
 macro_rules! accessors {
@@ -185,6 +321,7 @@ impl Val {
                 e.try_gc_ref(store)?;
                 ValType::Ref(RefType::new(false, HeapType::Exn))
             }
+            Val::Frozen(f) => ValType::Ref(RefType::new(false, f.heap_type(store)?)),
             Val::ContRef(_) => {
                 // TODO(#10248): Return proper continuation reference type when available
                 return Err(crate::format_err!(
@@ -221,6 +358,7 @@ impl Val {
             }
             (Val::AnyRef(a), ValType::Ref(ref_ty)) => Ref::from(*a)._matches_ty(store, ref_ty)?,
             (Val::ExnRef(e), ValType::Ref(ref_ty)) => Ref::from(*e)._matches_ty(store, ref_ty)?,
+            (Val::Frozen(f), ValType::Ref(ref_ty)) => Ref::Frozen(*f)._matches_ty(store, ref_ty)?,
 
             (Val::I32(_), _)
             | (Val::I64(_), _)
@@ -231,6 +369,7 @@ impl Val {
             | (Val::ExternRef(_), _)
             | (Val::AnyRef(_), _)
             | (Val::ExnRef(_), _)
+            | (Val::Frozen(_), _)
             | (Val::ContRef(_), _) => false,
         })
     }
@@ -288,6 +427,18 @@ impl Val {
                 Some(f) => f.to_raw_(store),
                 None => ptr::null_mut(),
             })),
+            Val::Frozen(f) => {
+                let gc_ref = f.clone_gc_ref(store)?;
+                let raw = store
+                    .unwrap_gc_store_mut()
+                    .expose_gc_ref_to_wasm(gc_ref)?
+                    .get();
+                Ok(match f {
+                    FrozenRef::Extern(_) => ValRaw::externref(raw),
+                    FrozenRef::Any(_) => ValRaw::anyref(raw),
+                    FrozenRef::Exn(_) => ValRaw::exnref(raw),
+                })
+            }
             Val::ContRef(_) => {
                 // TODO(#10248): Implement proper continuation reference to_raw conversion
                 Err(crate::format_err!(
@@ -386,6 +537,7 @@ impl Val {
             Val::ExternRef(e) => Some(Ref::Extern(e)),
             Val::AnyRef(a) => Some(Ref::Any(a)),
             Val::ExnRef(e) => Some(Ref::Exn(e)),
+            Val::Frozen(f) => Some(Ref::Frozen(f)),
             Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => None,
             Val::ContRef(_) => None, // TODO(#10248): Return proper Ref::Cont when available
         }
@@ -515,6 +667,99 @@ impl Val {
         self.funcref().expect("expected funcref")
     }
 
+    /// Attempt to access the underlying frozen `anyref` value of this `Val`,
+    /// as returned by an accessor such as [`Global::get`](crate::Global::get).
+    ///
+    /// If this is not a null `anyref` or a frozen one, then `None` is
+    /// returned.
+    ///
+    /// If this is a null `anyref`, then `Some(None)` is returned.
+    ///
+    /// If this is a frozen `anyref`, then `Some(Some(..))` is returned.
+    #[inline]
+    pub fn frozen_anyref(&self) -> Option<Option<Frozen<AnyRef>>> {
+        match self {
+            Val::AnyRef(None) => Some(None),
+            Val::Frozen(FrozenRef::Any(a)) => Some(Some(*a)),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying frozen `anyref` value of this `Val`; see
+    /// [`Val::frozen_anyref`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not a null or frozen `anyref`.
+    #[inline]
+    pub fn unwrap_frozen_anyref(&self) -> Option<Frozen<AnyRef>> {
+        self.frozen_anyref().expect("expected frozen anyref")
+    }
+
+    /// Attempt to access the underlying frozen `exnref` value of this `Val`;
+    /// see [`Val::frozen_anyref`].
+    #[inline]
+    pub fn frozen_exnref(&self) -> Option<Option<Frozen<ExnRef>>> {
+        match self {
+            Val::ExnRef(None) => Some(None),
+            Val::Frozen(FrozenRef::Exn(e)) => Some(Some(*e)),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying frozen `exnref` value of this `Val`; see
+    /// [`Val::frozen_anyref`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not a null or frozen `exnref`.
+    #[inline]
+    pub fn unwrap_frozen_exnref(&self) -> Option<Frozen<ExnRef>> {
+        self.frozen_exnref().expect("expected frozen exnref")
+    }
+
+    /// Attempt to access the underlying frozen `externref` value of this
+    /// `Val`; see [`Val::frozen_anyref`].
+    #[inline]
+    pub fn frozen_externref(&self) -> Option<Option<Frozen<ExternRef>>> {
+        match self {
+            Val::ExternRef(None) => Some(None),
+            Val::Frozen(FrozenRef::Extern(e)) => Some(Some(*e)),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying frozen `externref` value of this `Val`; see
+    /// [`Val::frozen_anyref`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not a null or frozen `externref`.
+    #[inline]
+    pub fn unwrap_frozen_externref(&self) -> Option<Frozen<ExternRef>> {
+        self.frozen_externref().expect("expected frozen externref")
+    }
+
+    /// Roots this value's GC reference in the current LIFO rooting scope if
+    /// it is [frozen](Val::Frozen), to keep it alive and usable after the
+    /// frozen reference becomes invalid. Other values are returned as they
+    /// are.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this value is a frozen reference that is no longer
+    /// valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this value is associated with a different store.
+    pub fn to_rooted(&self, store: impl AsContextMut) -> Result<Val> {
+        match self {
+            Val::Frozen(f) => Ok(f.to_rooted(store)?.into()),
+            v => Ok(*v),
+        }
+    }
+
     #[inline]
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
@@ -529,6 +774,8 @@ impl Val {
 
             Val::ExnRef(Some(e)) => e.comes_from_same_store(store),
             Val::ExnRef(None) => true,
+
+            Val::Frozen(f) => f.comes_from_same_store(store),
 
             // Integers, floats, and vectors have no association with any
             // particular store, so they're always considered as "yes I came
@@ -577,6 +824,7 @@ impl From<Ref> for Val {
             Ref::Func(f) => Val::FuncRef(f),
             Ref::Any(a) => Val::AnyRef(a),
             Ref::Exn(e) => Val::ExnRef(e),
+            Ref::Frozen(f) => Val::Frozen(f),
         }
     }
 }
@@ -771,6 +1019,24 @@ pub enum Ref {
     /// `catch_ref` clauses on `try_table` instructions, or as
     /// allocated via the host API.
     Exn(Option<Rooted<ExnRef>>),
+
+    /// A non-null GC reference, as a [`Frozen`] reference; see
+    /// [`Val::Frozen`].
+    Frozen(FrozenRef),
+}
+
+impl From<FrozenRef> for Ref {
+    #[inline]
+    fn from(f: FrozenRef) -> Ref {
+        Ref::Frozen(f)
+    }
+}
+
+impl From<FrozenRef> for Val {
+    #[inline]
+    fn from(f: FrozenRef) -> Val {
+        Val::Frozen(f)
+    }
 }
 
 impl From<Func> for Ref {
@@ -875,9 +1141,11 @@ impl Ref {
     pub fn is_null(&self) -> bool {
         match self {
             Ref::Any(None) | Ref::Extern(None) | Ref::Func(None) | Ref::Exn(None) => true,
-            Ref::Any(Some(_)) | Ref::Extern(Some(_)) | Ref::Func(Some(_)) | Ref::Exn(Some(_)) => {
-                false
-            }
+            Ref::Any(Some(_))
+            | Ref::Extern(Some(_))
+            | Ref::Func(Some(_))
+            | Ref::Exn(Some(_))
+            | Ref::Frozen(_) => false,
         }
     }
 
@@ -1059,6 +1327,8 @@ impl Ref {
                     e.try_gc_ref(store)?;
                     HeapType::Exn
                 }
+
+                Ref::Frozen(f) => f.heap_type(store)?,
             },
         ))
     }
@@ -1130,6 +1400,8 @@ impl Ref {
             (Ref::Exn(None), HeapType::Exn) => true,
             (Ref::Exn(None), HeapType::NoExn) => true,
             (Ref::Exn(_), _) => false,
+
+            (Ref::Frozen(f), heap_ty) => f.heap_type(store)?.matches(heap_ty),
         })
     }
 
@@ -1148,6 +1420,24 @@ impl Ref {
         }
     }
 
+    /// Roots this reference in the current LIFO rooting scope if it is
+    /// [frozen](Ref::Frozen); see [`Val::to_rooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this is a frozen reference that is no longer
+    /// valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn to_rooted(&self, store: impl AsContextMut) -> Result<Ref> {
+        match self {
+            Ref::Frozen(f) => f.to_rooted(store),
+            r => Ok(r.clone()),
+        }
+    }
+
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
             Ref::Func(Some(f)) => f.comes_from_same_store(store),
@@ -1158,6 +1448,7 @@ impl Ref {
             Ref::Any(None) => true,
             Ref::Exn(Some(e)) => e.comes_from_same_store(store),
             Ref::Exn(None) => true,
+            Ref::Frozen(f) => f.comes_from_same_store(store),
         }
     }
 }
@@ -1170,15 +1461,20 @@ mod tests {
     fn size_of_val() {
         // Try to keep tabs on the size of `Val` and make sure we don't grow its
         // size.
+        //
+        // The largest variant is `Frozen`: a `Frozen` reference holds a 64-bit
+        // store ID, a 64-bit GC epoch, and a 32-bit raw reference, and
+        // `FrozenRef` adds a tag. On x86, `u64` is only 4-byte aligned, so
+        // this packs into 24 bytes; elsewhere padding makes it 32.
         let expected = if cfg!(target_arch = "x86_64")
             || cfg!(target_arch = "aarch64")
             || cfg!(target_arch = "s390x")
             || cfg!(target_arch = "riscv64")
             || cfg!(target_arch = "arm")
         {
-            24
+            32
         } else if cfg!(target_arch = "x86") {
-            20
+            24
         } else {
             panic!("unsupported architecture")
         };
@@ -1189,15 +1485,20 @@ mod tests {
     fn size_of_ref() {
         // Try to keep tabs on the size of `Ref` and make sure we don't grow its
         // size.
+        //
+        // The largest variant is `Frozen`: a `Frozen` reference holds a 64-bit
+        // store ID, a 64-bit GC epoch, and a 32-bit raw reference, and
+        // `FrozenRef` adds a tag. On x86, `u64` is only 4-byte aligned, so
+        // this packs into 24 bytes; elsewhere padding makes it 32.
         let expected = if cfg!(target_arch = "x86_64")
             || cfg!(target_arch = "aarch64")
             || cfg!(target_arch = "s390x")
             || cfg!(target_arch = "riscv64")
             || cfg!(target_arch = "arm")
         {
-            24
+            32
         } else if cfg!(target_arch = "x86") {
-            20
+            24
         } else {
             panic!("unsupported architecture")
         };
