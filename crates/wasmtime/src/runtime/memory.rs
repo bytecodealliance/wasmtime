@@ -723,25 +723,28 @@ impl Memory {
     ///
     /// It is semantically the same as writing zeros over those pages: the
     /// size of the memory does not change and the discarded range remains
-    /// accessible. Rather than writing to the pages, however, this hands them
-    /// back to the operating system (for example with `madvise(MADV_DONTNEED)`
-    /// on Linux), so they stop counting towards the process's resident memory
-    /// until they are next written.
+    /// accessible. How the pages are zeroed is up to the memory's
+    /// [`LinearMemory::discard`] implementation:
+    ///
+    /// * Memories that Wasmtime maps itself with virtual memory hand the pages
+    ///   back to the operating system (for example with
+    ///   `madvise(MADV_DONTNEED)` on Linux), so they stop counting towards the
+    ///   process's resident memory until they are next written.
+    /// * Memories in configurations without virtual memory are zeroed by
+    ///   writing to them, which releases no memory.
+    /// * Memories created by a custom [`MemoryCreator`] are zeroed by writing
+    ///   to them too, unless their [`LinearMemory`] implementation overrides
+    ///   [`LinearMemory::discard`].
     ///
     /// This is useful for embedders that know a guest has freed a large region
     /// of its linear memory, for example through a cooperating allocator.
     ///
-    /// Discarding is not free: it is at least one system call, and on
-    /// multi-threaded hosts the operating system may need to interrupt other
-    /// threads to flush their TLBs. Reading or writing a discarded page later
-    /// takes a page fault to bring in a fresh zero page. This method is
-    /// intended for large ranges released infrequently, not as a replacement
-    /// for zeroing small amounts of memory.
-    ///
-    /// Memories created by a custom [`MemoryCreator`] are zeroed by writing to
-    /// them, since Wasmtime does not control how they are mapped, as are
-    /// memories in configurations without virtual memory. The result is the
-    /// same but no memory is released.
+    /// Handing pages back to the operating system is not free: it is at least
+    /// one system call, and on multi-threaded hosts the operating system may
+    /// need to interrupt other threads to flush their TLBs. Reading or writing
+    /// a discarded page later takes a page fault to bring in a fresh zero page.
+    /// This method is intended for large ranges released infrequently, not as
+    /// a replacement for zeroing small amounts of memory.
     ///
     /// [`memory.discard`]: https://github.com/WebAssembly/memory-control/blob/main/proposals/memory-control/discard.md
     ///
@@ -994,9 +997,9 @@ pub unsafe trait LinearMemory: Any + Send + Sync {
     /// Sets `len` bytes of this memory starting at `offset` to zero, releasing
     /// the physical memory that backed them if this memory is able to.
     ///
-    /// This is called by [`Memory::discard`]. The range is always within
-    /// [`byte_size`](LinearMemory::byte_size), and Wasmtime only passes
-    /// offsets and lengths that are multiples of the Wasm page size.
+    /// This is called by [`Memory::discard`], which checks the range first:
+    /// it is always within [`byte_size`](LinearMemory::byte_size), and its
+    /// offset and length are multiples of the Wasm page size.
     ///
     /// The default implementation writes zeros over the range, which is always
     /// correct but releases no memory. An implementation backed by virtual

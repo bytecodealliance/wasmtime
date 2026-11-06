@@ -435,14 +435,15 @@ pub struct MemoryImageSlot {
     /// `self.accessible` and `self.static_size` is inaccessible.
     dirty: bool,
 
-    /// Whether `discard` replaced part of `image`'s copy-on-write mapping with
-    /// anonymous zero memory.
+    /// Whether `discard` mapped anonymous zero memory over part of `image`.
     ///
-    /// With `DecommitBehavior::RestoreOriginalMapping` a reset restores
-    /// whatever mapping a page has, so such pages would come back as zeros
-    /// rather than as the image's contents. When this is set the reset removes
-    /// the image instead, as resets do on other platforms, and the next
-    /// instantiation maps it again.
+    /// With `DecommitBehavior::RestoreOriginalMapping`, decommitting a page
+    /// that is backed by the image restores the image's contents. That is why
+    /// `discard` maps anonymous memory over those pages instead, but it also
+    /// means that they are no longer backed by the image, so a reset would
+    /// leave them zero rather than restore the image. When this is set the
+    /// reset removes the image instead, as resets do on other platforms, and
+    /// the next instantiation maps it again.
     image_discarded: bool,
 
     /// The MPK protection key that this slot's stripe was colored with, if the
@@ -648,7 +649,8 @@ impl MemoryImageSlot {
     /// the operating system.
     ///
     /// Returns an error if `offset` or `len` is not a multiple of the host page
-    /// size. The range must be within the accessible part of this slot.
+    /// size. Panics if the range is not within the accessible part of this
+    /// slot; callers check bounds first.
     pub(crate) fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
         let start = HostAlignedByteCount::new(offset)?;
         let len = HostAlignedByteCount::new(len)?;
@@ -663,6 +665,10 @@ impl MemoryImageSlot {
             // of the range backed by the image would bring back the image's
             // contents rather than zeros, so that part is mapped over with
             // anonymous zero memory.
+            //
+            // The rest of the range is decommitted with `madvise`, which keeps
+            // its existing mapping and that mapping's protection key. Only the
+            // part mapped over is a fresh mapping that needs the key back.
             (DecommitBehavior::RestoreOriginalMapping, Some(image)) => {
                 let remapped = unsafe { image.discard_at(self.base.as_mut_ptr(), start..end)? };
                 if remapped.start < remapped.end {

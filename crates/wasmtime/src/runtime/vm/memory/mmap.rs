@@ -277,6 +277,13 @@ unsafe impl LinearMemory for MmapMemory {
         Ok(true)
     }
 
+    /// Discards `len` bytes at `offset`, which must be multiples of the host
+    /// page size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the range is out of bounds of this memory. Callers check
+    /// bounds first, as `Memory::discard` does.
     fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
         // The Wasm page size is a multiple of the host page size, so a range
         // aligned to the former is aligned to the latter.

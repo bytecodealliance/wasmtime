@@ -83,7 +83,8 @@ pub unsafe fn discard_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
                 use rustix::mm::{madvise, Advice};
 
                 // On Linux, this is enough to cause the kernel to initialize
-                // the pages to 0 on next access
+                // the pages to 0 on next access, or restore the original
+                // mapping (see `decommit_behavior` below).
                 madvise(ptr.cast(), len, Advice::LinuxDontNeed)?;
             }
             _ => {
