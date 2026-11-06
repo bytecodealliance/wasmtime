@@ -7,11 +7,11 @@
 ;; written again) or all 11 if the host consumed the rest. Either way
 ;; "456789\n" ends up on stdout.
 (component
-  (import "wasi:cli/types@0.3.0" (instance $types
+  (import "wasi:cli/types@0.3.2" (instance $types
     (type $e (enum "io" "illegal-byte-sequence" "pipe"))
     (export "error-code" (type (eq $e)))))
   (alias export $types "error-code" (type $ec))
-  (import "wasi:cli/stdout@0.3.0" (instance $stdout
+  (import "wasi:cli/stdout@0.3.2" (instance $stdout
     (export "error-code" (type $ec2 (eq $ec)))
     (export "write-via-stream" (func
       (param "data" (stream u8)) (result (future (result (error $ec2))))))))
@@ -101,5 +101,5 @@
   (func $run async (result (result))
     (canon lift (core func $i "run") async (callback (core func $i "cb"))))
   (instance $run (export "run" (func $run)))
-  (export "wasi:cli/run@0.3.0" (instance $run))
+  (export "wasi:cli/run@0.3.2" (instance $run))
 )

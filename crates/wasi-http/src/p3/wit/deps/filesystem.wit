@@ -1,4 +1,4 @@
-package wasi:filesystem@0.3.0;
+package wasi:filesystem@0.3.2;
 
 /// WASI filesystem is a filesystem API primarily intended to let users run WASI
 /// programs that access their files on their existing filesystems, without
@@ -38,7 +38,7 @@ package wasi:filesystem@0.3.0;
 @since(version = 0.3.0)
 interface types {
   @since(version = 0.3.0)
-  use wasi:clocks/system-clock@0.3.0.{instant};
+  use wasi:clocks/system-clock@0.3.2.{instant};
 
   /// File size or length of a region within a file.
   @since(version = 0.3.0)
@@ -565,9 +565,9 @@ interface preopens {
 @since(version = 0.3.0)
 world imports {
   @since(version = 0.3.0)
-  import wasi:clocks/types@0.3.0;
+  import wasi:clocks/types@0.3.2;
   @since(version = 0.3.0)
-  import wasi:clocks/system-clock@0.3.0;
+  import wasi:clocks/system-clock@0.3.2;
   @since(version = 0.3.0)
   import types;
   @since(version = 0.3.0)

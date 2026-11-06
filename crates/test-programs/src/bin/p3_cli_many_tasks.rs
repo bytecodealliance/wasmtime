@@ -1,6 +1,6 @@
 use test_programs::p3::wasi as wasip3;
 
-#[link(wasm_import_module = "wasi:clocks/monotonic-clock@0.3.0")]
+#[link(wasm_import_module = "wasi:clocks/monotonic-clock@0.3.2")]
 unsafe extern "C" {
     #[link_name = "[async-lower]wait-for"]
     fn wait_for(dur: u64) -> u32;
