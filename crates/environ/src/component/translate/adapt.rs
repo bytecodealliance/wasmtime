@@ -325,8 +325,8 @@ fn fact_import_to_core_def(
         fact::Import::ResourceTransferBorrow => {
             simple_intrinsic(dfg::Trampoline::ResourceTransferBorrow)
         }
-        fact::Import::ResourceTransferBorrowToOwner => {
-            simple_intrinsic(dfg::Trampoline::ResourceTransferBorrowToOwner)
+        fact::Import::ResourceTransferBorrowToOwner { ty } => {
+            simple_intrinsic(dfg::Trampoline::ResourceTransferBorrowToOwner { ty: *ty })
         }
         fact::Import::PrepareCall { memory } => simple_intrinsic(dfg::Trampoline::PrepareCall {
             memory: memory.as_ref().map(|v| dfg.memories.push(unwrap_memory(v))),

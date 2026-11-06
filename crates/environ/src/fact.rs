@@ -87,7 +87,7 @@ pub struct Module<'a> {
     /// Cached versions of imported trampolines for working with resources.
     imported_resource_transfer_own: Option<FuncIndex>,
     imported_resource_transfer_borrow: Option<FuncIndex>,
-    imported_resource_transfer_borrow_to_owner: Option<FuncIndex>,
+    imported_resource_transfer_borrow_to_owner: HashMap<TypeResourceTableIndex, FuncIndex>,
 
     // Cached versions of imported trampolines for working with the async ABI.
     imported_start_calls: HashMap<(Option<FuncIndex>, Option<FuncIndex>, Vec<ValType>), FuncIndex>,
@@ -301,7 +301,7 @@ impl<'a> Module<'a> {
             helper_worklist: Vec::new(),
             imported_resource_transfer_own: None,
             imported_resource_transfer_borrow: None,
-            imported_resource_transfer_borrow_to_owner: None,
+            imported_resource_transfer_borrow_to_owner: HashMap::new(),
             imported_start_calls: HashMap::new(),
             imported_future_transfer: None,
             imported_stream_transfer: None,
@@ -710,14 +710,28 @@ impl<'a> Module<'a> {
             .resource_owned_by_own_instance(ty, |idx| self.component.defined_resource_instance(idx))
     }
 
-    fn import_resource_transfer_borrow_to_owner(&mut self) -> FuncIndex {
-        self.import_simple(
+    fn import_resource_transfer_borrow_to_owner(
+        &mut self,
+        ty: TypeResourceTableIndex,
+    ) -> FuncIndex {
+        self.import_simple_get_and_set(
             "resource",
-            "transfer-borrow-to-owner",
-            &[ValType::I32, ValType::I32],
+            &format!("transfer-borrow-to-owner{}", ty.as_u32()),
             &[ValType::I32],
-            Import::ResourceTransferBorrowToOwner,
-            |me| &mut me.imported_resource_transfer_borrow_to_owner,
+            &[ValType::I32],
+            Import::ResourceTransferBorrowToOwner { ty },
+            |me| {
+                me.imported_resource_transfer_borrow_to_owner
+                    .get(&ty)
+                    .copied()
+            },
+            |me, v| {
+                assert!(
+                    me.imported_resource_transfer_borrow_to_owner
+                        .insert(ty, v)
+                        .is_none()
+                )
+            },
         )
     }
 
@@ -942,7 +956,10 @@ pub enum Import {
     ResourceTransferBorrow,
     /// Lifts a borrowed resource for a destination which owns the resource and
     /// therefore receives its representation rather than a handle.
-    ResourceTransferBorrowToOwner,
+    ResourceTransferBorrowToOwner {
+        /// The resource table the borrow is being transferred out of.
+        ty: TypeResourceTableIndex,
+    },
     /// An intrinsic used by FACT-generated modules to begin a call involving
     /// an async-lowered import and/or an async-lifted export.
     PrepareCall {
