@@ -418,6 +418,60 @@ fn x86_64_colocated_symbol_address_uses_non_branch_relocation() {
 // ---------- `.eh_frame` emission tests ----------
 
 #[cfg(feature = "unwind")]
+#[test]
+fn macho_data_objects_share_custom_section() {
+    use object::{Object as _, ObjectSection as _};
+
+    let flag_builder = settings::builder();
+    let isa_builder = cranelift_codegen::isa::lookup_by_name("aarch64-apple-darwin").unwrap();
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
+    let mut module =
+        ObjectModule::new(ObjectBuilder::new(isa, "test", default_libcall_names()).unwrap());
+
+    // More data objects than the 255 sections a Mach-O object can hold.
+    let count = 300;
+    for i in 0..count {
+        let data_id = module
+            .declare_data(&format!("ctor_{i}"), Linkage::Local, false, false)
+            .unwrap();
+        let mut data_desc = DataDescription::new();
+        data_desc.define(vec![0; 8].into_boxed_slice());
+        data_desc.set_custom_section("__DATA,__mod_init_func,mod_init_funcs");
+        module.define_data(data_id, &data_desc).unwrap();
+    }
+
+    let other_id = module
+        .declare_data("other", Linkage::Local, false, false)
+        .unwrap();
+    let mut other_desc = DataDescription::new();
+    other_desc.define(vec![0; 4].into_boxed_slice());
+    other_desc.set_custom_section("__DATA,__other");
+    module.define_data(other_id, &other_desc).unwrap();
+
+    let bytes = module.finish().emit().expect("emit object file");
+    let file = object::File::parse(&*bytes).expect("parse emitted object");
+
+    let init_sections: Vec<_> = file
+        .sections()
+        .filter(|s| s.name() == Ok("__mod_init_func"))
+        .collect();
+    assert_eq!(init_sections.len(), 1);
+    assert_eq!(init_sections[0].size(), count * 8);
+    let object::SectionFlags::MachO { flags, .. } = init_sections[0].flags() else {
+        panic!("expected Mach-O section flags");
+    };
+    assert_eq!(flags, object::macho::S_MOD_INIT_FUNC_POINTERS.into());
+
+    let other_sections: Vec<_> = file
+        .sections()
+        .filter(|s| s.name() == Ok("__other"))
+        .collect();
+    assert_eq!(other_sections.len(), 1);
+    assert_eq!(other_sections[0].size(), 4);
+}
+
 mod eh_frame {
     use super::*;
     use cranelift_codegen::settings::Configurable as _;
