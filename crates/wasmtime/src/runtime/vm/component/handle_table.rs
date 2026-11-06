@@ -1,8 +1,9 @@
 use super::{TransmitLocalStateKind, TypedResourceIndex};
 use crate::prelude::TryVec;
-use crate::vm::{VMHandleTableSlot, VMScope, VMTransmitLocalState, VMTypedResource, VmSafe};
+use crate::vm::{VMHandleTableSlot, VMScope, VMTransmitLocalState, VMTypedResource, VmPtr, VmSafe};
 use crate::{Result, bail};
 use core::mem;
+use core::ptr::NonNull;
 use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
 
 // SAFETY: `VMHandleTableSlot` is generated with `#[repr(C, u32)]` and every
@@ -114,6 +115,13 @@ impl Default for HandleTable {
 }
 
 impl HandleTable {
+    /// This table's slots, as compiled code reads them.
+    pub fn slots_ptr(&mut self) -> VmPtr<VMHandleTableSlot> {
+        // An empty `TryVec`'s pointer is dangling but well-aligned; a table
+        // with no slots has none for compiled code to reach.
+        VmPtr::from(NonNull::new(self.slots.as_mut_ptr()).unwrap())
+    }
+
     /// Returns whether or not this table is empty.
     pub fn is_empty(&self) -> bool {
         self.slots
@@ -121,39 +129,41 @@ impl HandleTable {
             .all(|slot| matches!(slot, VMHandleTableSlot::Free { .. }))
     }
 
-    fn insert(&mut self, counter: &mut HandleCounter, slot: VMHandleTableSlot) -> Result<u32> {
-        let next = self.next;
-
-        // The component model reserves index 0 as never allocatable so add one
-        // to the table index to start the numbering at 1 instead. Also note
-        // that the component model places an upper-limit per-table on the
-        // maximum allowed index.
-        //
-        // First check to make sure the returned handle is in-bounds, then do
-        // the actual allocation below.
-        if next + 1 >= MAX_HANDLE {
-            bail!("cannot allocate another handle: index overflow");
+    /// Begins inserting into this table, which compiled code reads through
+    /// `vm_ptr`, re-publishing the table's slots there whenever they move.
+    ///
+    /// # Safety
+    ///
+    /// `vm_ptr` must be the `VMComponentContext` entry through which compiled
+    /// code reads this table's slots, or else compiled code may later read
+    /// through a stale pointer.
+    pub unsafe fn insert<'a>(
+        &'a mut self,
+        counter: &'a mut HandleCounter,
+        vm_ptr: &'a mut VmPtr<VMHandleTableSlot>,
+    ) -> HandleTableInsertion<'a> {
+        HandleTableInsertion {
+            table: self,
+            counter,
+            vm_ptr: Some(vm_ptr),
         }
+    }
 
-        // Growing the table is charged to the store-wide cap; `MAX_HANDLE`
-        // alone scales with the guest-controlled instance count. Reusing a
-        // free slot was already charged when it was allocated. See
-        // `HandleCounter`.
-        if next as usize == self.slots.len() {
-            if counter.used >= counter.limit {
-                bail!("cannot allocate another handle: store handle limit exceeded");
-            }
-            self.slots.push(VMHandleTableSlot::Free {
-                next: next.checked_add(1).unwrap(),
-            })?;
-            counter.used += 1;
+    /// Begins inserting into this table, which compiled code never reads.
+    ///
+    /// # Safety
+    ///
+    /// This table's slots must never be published to compiled code, or else
+    /// compiled code may later read through a stale pointer.
+    pub unsafe fn insert_unpublished<'a>(
+        &'a mut self,
+        counter: &'a mut HandleCounter,
+    ) -> HandleTableInsertion<'a> {
+        HandleTableInsertion {
+            table: self,
+            counter,
+            vm_ptr: None,
         }
-        self.next = match mem::replace(&mut self.slots[next as usize], slot) {
-            VMHandleTableSlot::Free { next } => next,
-            _ => unreachable!(),
-        };
-
-        Ok(next + 1)
     }
 
     /// Frees the slot at `idx` for reuse by a later `insert` into this table.
@@ -182,41 +192,6 @@ impl HandleTable {
             None | Some(VMHandleTableSlot::Free { .. }) => bail!("unknown handle index {idx}"),
             Some(slot) => Ok(slot),
         }
-    }
-
-    /// Inserts a new `own` resource into this table whose type/rep are
-    /// specified by `resource`.
-    pub fn resource_own_insert(
-        &mut self,
-        counter: &mut HandleCounter,
-        resource: VMTypedResource,
-    ) -> Result<u32> {
-        self.insert(
-            counter,
-            VMHandleTableSlot::ResourceOwn {
-                resource,
-                lend_count: 0,
-            },
-        )
-    }
-
-    /// Inserts a new `borrow` resource into this table whose type/rep are
-    /// specified by `resource`. The `scope` specified is used by
-    /// `CallContexts` to manage lending information.
-    pub fn resource_borrow_insert(
-        &mut self,
-        counter: &mut HandleCounter,
-        resource: VMTypedResource,
-        scope: VMScope,
-    ) -> Result<u32> {
-        self.insert(
-            counter,
-            VMHandleTableSlot::ResourceBorrow {
-                resource,
-                scope,
-                lend_count: 0,
-            },
-        )
     }
 
     /// Returns the internal "rep" of the resource specified by `idx`.
@@ -344,46 +319,6 @@ impl HandleTable {
         Ok(ret)
     }
 
-    /// Inserts a readable-end stream of type `ty` and with the specified `rep`
-    /// into this table.
-    ///
-    /// Returns the table-local index of the stream.
-    pub fn stream_insert_read(
-        &mut self,
-        counter: &mut HandleCounter,
-        ty: TypeStreamTableIndex,
-        rep: u32,
-    ) -> Result<u32> {
-        self.insert(
-            counter,
-            VMHandleTableSlot::Stream {
-                rep,
-                ty: ty.as_u32(),
-                state: VMTransmitLocalState::read(false),
-            },
-        )
-    }
-
-    /// Inserts a writable-end stream of type `ty` and with the specified `rep`
-    /// into this table.
-    ///
-    /// Returns the table-local index of the stream.
-    pub fn stream_insert_write(
-        &mut self,
-        counter: &mut HandleCounter,
-        ty: TypeStreamTableIndex,
-        rep: u32,
-    ) -> Result<u32> {
-        self.insert(
-            counter,
-            VMHandleTableSlot::Stream {
-                rep,
-                ty: ty.as_u32(),
-                state: VMTransmitLocalState::write(false),
-            },
-        )
-    }
-
     /// Returns the `rep` and `state` associated with the stream pointed to by
     /// `idx`.
     ///
@@ -465,46 +400,6 @@ impl HandleTable {
         };
         self.remove(idx)?;
         Ok(ret)
-    }
-
-    /// Inserts a readable-end future of type `ty` and with the specified `rep`
-    /// into this table.
-    ///
-    /// Returns the table-local index of the future.
-    pub fn future_insert_read(
-        &mut self,
-        counter: &mut HandleCounter,
-        ty: TypeFutureTableIndex,
-        rep: u32,
-    ) -> Result<u32> {
-        self.insert(
-            counter,
-            VMHandleTableSlot::Future {
-                rep,
-                ty: ty.as_u32(),
-                state: VMTransmitLocalState::read(false),
-            },
-        )
-    }
-
-    /// Inserts a writable-end future of type `ty` and with the specified `rep`
-    /// into this table.
-    ///
-    /// Returns the table-local index of the future.
-    pub fn future_insert_write(
-        &mut self,
-        counter: &mut HandleCounter,
-        ty: TypeFutureTableIndex,
-        rep: u32,
-    ) -> Result<u32> {
-        self.insert(
-            counter,
-            VMHandleTableSlot::Future {
-                rep,
-                ty: ty.as_u32(),
-                state: VMTransmitLocalState::write(false),
-            },
-        )
     }
 
     /// Returns the `rep` and `state` associated with the future pointed to by
@@ -592,12 +487,6 @@ impl HandleTable {
         Ok(ret)
     }
 
-    /// Inserts the error-context `rep` into this table, returning the index it
-    /// now resides at.
-    pub fn error_context_insert(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
-        self.insert(counter, VMHandleTableSlot::ErrorContext { rep })
-    }
-
     /// Returns the `rep` of an error-context pointed to by `idx`.
     pub fn error_context_rep(&mut self, idx: u32) -> Result<u32> {
         match self.get_mut(idx)? {
@@ -616,16 +505,6 @@ impl HandleTable {
         };
         self.remove(idx)?;
         Ok(rep)
-    }
-
-    /// Inserts `rep` as a guest subtask into this table.
-    pub fn subtask_insert_guest(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
-        self.insert(counter, VMHandleTableSlot::GuestTask { rep })
-    }
-
-    /// Inserts `rep` as a host subtask into this table.
-    pub fn subtask_insert_host(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
-        self.insert(counter, VMHandleTableSlot::HostTask { rep })
     }
 
     /// Returns the `rep` of the subtask at `idx` as well as if it's a host
@@ -647,11 +526,6 @@ impl HandleTable {
         };
         self.remove(idx)?;
         Ok(ret)
-    }
-
-    /// Inserts `rep` as a waitable set into this table.
-    pub fn waitable_set_insert(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
-        self.insert(counter, VMHandleTableSlot::WaitableSet { rep })
     }
 
     /// Returns the `rep` of an waitable-set pointed to by `idx`.
@@ -687,6 +561,145 @@ impl HandleTable {
     }
 }
 
+/// An in-progress insertion into a `HandleTable`, created by
+/// `HandleTable::insert` or `HandleTable::insert_unpublished`.
+///
+/// Keeps the copy of the table's slots pointer that compiled code reads, if
+/// any, up to date as the table grows.
+#[must_use]
+pub struct HandleTableInsertion<'a> {
+    table: &'a mut HandleTable,
+    counter: &'a mut HandleCounter,
+    /// `None` when compiled code never reads `table`.
+    vm_ptr: Option<&'a mut VmPtr<VMHandleTableSlot>>,
+}
+
+impl HandleTableInsertion<'_> {
+    fn insert(&mut self, slot: VMHandleTableSlot) -> Result<u32> {
+        let table = &mut *self.table;
+        let next = table.next;
+
+        // The component model reserves index 0 as never allocatable so add one
+        // to the table index to start the numbering at 1 instead. Also note
+        // that the component model places an upper-limit per-table on the
+        // maximum allowed index.
+        //
+        // First check to make sure the returned handle is in-bounds, then do
+        // the actual allocation below.
+        if next + 1 >= MAX_HANDLE {
+            bail!("cannot allocate another handle: index overflow");
+        }
+
+        // Growing the table is charged to the store-wide cap; `MAX_HANDLE`
+        // alone scales with the guest-controlled instance count. Reusing a
+        // free slot was already charged when it was allocated. See
+        // `HandleCounter`.
+        if next as usize == table.slots.len() {
+            if self.counter.used >= self.counter.limit {
+                bail!("cannot allocate another handle: store handle limit exceeded");
+            }
+            table.slots.push(VMHandleTableSlot::Free {
+                next: next.checked_add(1).unwrap(),
+            })?;
+            self.counter.used += 1;
+            if let Some(vm_ptr) = &mut self.vm_ptr {
+                **vm_ptr = table.slots_ptr();
+            }
+        }
+        table.next = match mem::replace(&mut table.slots[next as usize], slot) {
+            VMHandleTableSlot::Free { next } => next,
+            _ => unreachable!(),
+        };
+
+        Ok(next + 1)
+    }
+
+    /// Inserts a new `own` resource whose type/rep are specified by
+    /// `resource`.
+    pub fn resource_own(&mut self, resource: VMTypedResource) -> Result<u32> {
+        self.insert(VMHandleTableSlot::ResourceOwn {
+            resource,
+            lend_count: 0,
+        })
+    }
+
+    /// Inserts a new `borrow` resource whose type/rep are specified by
+    /// `resource`. The `scope` specified is used by `CallContexts` to manage
+    /// lending information.
+    pub fn resource_borrow(&mut self, resource: VMTypedResource, scope: VMScope) -> Result<u32> {
+        self.insert(VMHandleTableSlot::ResourceBorrow {
+            resource,
+            scope,
+            lend_count: 0,
+        })
+    }
+
+    /// Inserts a readable-end stream of type `ty` and with the specified `rep`.
+    ///
+    /// Returns the table-local index of the stream.
+    pub fn stream_read(&mut self, ty: TypeStreamTableIndex, rep: u32) -> Result<u32> {
+        self.insert(VMHandleTableSlot::Stream {
+            rep,
+            ty: ty.as_u32(),
+            state: VMTransmitLocalState::read(false),
+        })
+    }
+
+    /// Inserts a writable-end stream of type `ty` and with the specified `rep`.
+    ///
+    /// Returns the table-local index of the stream.
+    pub fn stream_write(&mut self, ty: TypeStreamTableIndex, rep: u32) -> Result<u32> {
+        self.insert(VMHandleTableSlot::Stream {
+            rep,
+            ty: ty.as_u32(),
+            state: VMTransmitLocalState::write(false),
+        })
+    }
+
+    /// Inserts a readable-end future of type `ty` and with the specified `rep`.
+    ///
+    /// Returns the table-local index of the future.
+    pub fn future_read(&mut self, ty: TypeFutureTableIndex, rep: u32) -> Result<u32> {
+        self.insert(VMHandleTableSlot::Future {
+            rep,
+            ty: ty.as_u32(),
+            state: VMTransmitLocalState::read(false),
+        })
+    }
+
+    /// Inserts a writable-end future of type `ty` and with the specified `rep`.
+    ///
+    /// Returns the table-local index of the future.
+    pub fn future_write(&mut self, ty: TypeFutureTableIndex, rep: u32) -> Result<u32> {
+        self.insert(VMHandleTableSlot::Future {
+            rep,
+            ty: ty.as_u32(),
+            state: VMTransmitLocalState::write(false),
+        })
+    }
+
+    /// Inserts the error-context `rep`, returning the index it now resides at.
+    pub fn error_context(&mut self, rep: u32) -> Result<u32> {
+        self.insert(VMHandleTableSlot::ErrorContext { rep })
+    }
+
+    /// Inserts `rep` as a guest subtask.
+    pub fn subtask_guest(&mut self, rep: u32) -> Result<u32> {
+        self.insert(VMHandleTableSlot::GuestTask { rep })
+    }
+
+    /// Inserts `rep` as a host subtask.
+    pub fn subtask_host(&mut self, rep: u32) -> Result<u32> {
+        self.insert(VMHandleTableSlot::HostTask { rep })
+    }
+
+    /// Inserts `rep` as a waitable set.
+    pub fn waitable_set(&mut self, rep: u32) -> Result<u32> {
+        self.insert(VMHandleTableSlot::WaitableSet { rep })
+    }
+}
+
+/// A table of guest threads, which compiled code never reads.
 #[derive(Default)]
 #[cfg(feature = "component-model-async")]
 pub struct ThreadHandleTable(HandleTable);
@@ -696,8 +709,8 @@ impl ThreadHandleTable {
     /// Inserts the guest thread `rep` into this table, returning the index it
     /// now resides at.
     pub fn guest_thread_insert(&mut self, counter: &mut HandleCounter, rep: u32) -> Result<u32> {
-        self.0
-            .insert(counter, VMHandleTableSlot::GuestThread { rep })
+        // SAFETY: a `ThreadHandleTable` is never published to compiled code.
+        unsafe { self.0.insert_unpublished(counter) }.insert(VMHandleTableSlot::GuestThread { rep })
     }
 
     /// Returns the `rep` of a guest thread pointed to by `idx`.

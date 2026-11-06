@@ -20,11 +20,13 @@
 //! about ABI details can be found in lifting/lowering throughout Wasmtime,
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
-use super::{HandleCounter, HandleTable, InstanceState, RemovedResource};
+use super::{HandleCounter, HandleTable, HandleTableInsertion, InstanceState, RemovedResource};
 use crate::bail_bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
-use crate::runtime::vm::{VMResourceIndex, VMScope, VMStoreContext, VMTypedResource};
+use crate::runtime::vm::{
+    VMHandleTableSlot, VMResourceIndex, VMScope, VMStoreContext, VMTypedResource, VmPtr,
+};
 use core::error::Error;
 use core::fmt;
 use core::mem;
@@ -56,9 +58,13 @@ pub struct ResourceTables<'a> {
     /// embedder-originating operations though such as
     /// `ResourceAny::resource_drop` which won't consult this table as it's
     /// only operating over the host table.
+    ///
+    /// The slice holds the `VMComponentContext` entries through which compiled
+    /// code reads each instance's handle table.
     pub guest: Option<(
         &'a mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &'a ComponentTypes,
+        &'a mut [VmPtr<VMHandleTableSlot>],
     )>,
 
     /// Runtime state for resources currently owned by the host.
@@ -144,18 +150,23 @@ impl CallContext {
 }
 
 impl ResourceTables<'_> {
-    fn table_for_resource(
-        &mut self,
-        resource: &VMTypedResource,
-    ) -> (&mut HandleTable, &mut HandleCounter) {
-        let table = match resource.component_ty() {
-            None => &mut *self.host_table,
+    fn insertion_for_resource(&mut self, resource: &VMTypedResource) -> HandleTableInsertion<'_> {
+        let counter = &mut *self.handle_counter;
+        match resource.component_ty() {
+            // SAFETY: the host table is never published to compiled code.
+            None => unsafe { self.host_table.insert_unpublished(counter) },
             Some(ty) => {
-                let (states, types) = self.guest.as_mut().unwrap();
-                states[types[ty].unwrap_concrete_instance()].handle_table()
+                let (states, types, published) = self.guest.as_mut().unwrap();
+                let i = types[ty].unwrap_concrete_instance();
+                // SAFETY: `published[i]` is where compiled code reads instance
+                // `i`'s handle table.
+                unsafe {
+                    states[i]
+                        .handle_table()
+                        .insert(counter, &mut published[i.as_u32() as usize])
+                }
             }
-        };
-        (table, &mut *self.handle_counter)
+        }
     }
 
     fn table_for_index(
@@ -165,7 +176,7 @@ impl ResourceTables<'_> {
         let table = match index {
             TypedResourceIndex::Host(_) => &mut *self.host_table,
             TypedResourceIndex::Component { ty, .. } => {
-                let (states, types) = self.guest.as_mut().unwrap();
+                let (states, types, _published) = self.guest.as_mut().unwrap();
                 states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
         };
@@ -176,8 +187,8 @@ impl ResourceTables<'_> {
     ///
     /// Note that this is the same as `resource_lower_own`.
     pub fn resource_new(&mut self, resource: VMTypedResource) -> Result<u32> {
-        let (table, counter) = self.table_for_resource(&resource);
-        table.resource_own_insert(counter, resource)
+        self.insertion_for_resource(&resource)
+            .resource_own(resource)
     }
 
     /// Implementation of the `resource.rep` canonical intrinsic.
@@ -220,8 +231,8 @@ impl ResourceTables<'_> {
     ///
     /// This is an implementation of the canonical ABI `lower_own` function.
     pub fn resource_lower_own(&mut self, resource: VMTypedResource) -> Result<u32> {
-        let (table, counter) = self.table_for_resource(&resource);
-        table.resource_own_insert(counter, resource)
+        self.insertion_for_resource(&resource)
+            .resource_own(resource)
     }
 
     /// Attempts to remove an "own" handle from the specified table and its
@@ -394,8 +405,8 @@ impl ResourceTables<'_> {
         let scope = self.materialize_current_scope()?;
         let cx = self.task_state.call_context(scope)?;
         cx.borrow_count = cx.borrow_count.checked_add(1).unwrap();
-        let (table, counter) = self.table_for_resource(&resource);
-        table.resource_borrow_insert(counter, resource, scope)
+        self.insertion_for_resource(&resource)
+            .resource_borrow(resource, scope)
     }
 
     /// Validates that the current scope can be exited.
