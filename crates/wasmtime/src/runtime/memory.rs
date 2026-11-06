@@ -710,17 +710,23 @@ impl Memory {
         }
     }
 
-    /// Sets `count` pages of this memory starting at page `start` to zero, and
-    /// returns the physical memory that backed them to the operating system
-    /// where possible.
+    /// Sets the pages of this memory that `len` bytes starting at `offset`
+    /// touch to zero, and returns the physical memory that backed them to the
+    /// operating system where possible.
     ///
     /// This is the host-side equivalent of the [`memory.discard`] instruction
-    /// from the memory-control proposal. It is semantically the same as
-    /// writing zeros over those pages: the size of the memory does not
-    /// change and the discarded range remains accessible. Rather than writing
-    /// to the pages, however, this hands them back to the operating system (for
-    /// example with `madvise(MADV_DONTNEED)` on Linux), so they stop counting
-    /// towards the process's resident memory until they are next written.
+    /// from the memory-control proposal. The range is rounded out to whole
+    /// pages: `offset` is rounded down and `offset + len` is rounded up to a
+    /// multiple of this memory's page size, so every page the range touches is
+    /// discarded, including bytes on those pages outside of the range. A `len`
+    /// of zero discards nothing.
+    ///
+    /// It is semantically the same as writing zeros over those pages: the
+    /// size of the memory does not change and the discarded range remains
+    /// accessible. Rather than writing to the pages, however, this hands them
+    /// back to the operating system (for example with `madvise(MADV_DONTNEED)`
+    /// on Linux), so they stop counting towards the process's resident memory
+    /// until they are next written.
     ///
     /// This is useful for embedders that know a guest has freed a large region
     /// of its linear memory, for example through a cooperating allocator.
@@ -737,13 +743,14 @@ impl Memory {
     /// memories in configurations without virtual memory. The result is the
     /// same but no memory is released.
     ///
-    /// [`memory.discard`]: https://github.com/WebAssembly/memory-control
+    /// [`memory.discard`]: https://github.com/WebAssembly/memory-control/blob/main/proposals/memory-control/discard.md
     ///
     /// # Errors
     ///
-    /// Returns an error if:
+    /// Returns an error, and leaves the memory unchanged, if:
     ///
-    /// * `start + count` is beyond the current size of this memory, in pages,
+    /// * `offset + len` is beyond the current size of this memory, in bytes,
+    ///   either as given or once rounded up to a whole page,
     /// * this memory uses a [custom page size](crate::MemoryTypeBuilder::page_size_log2),
     /// * or the operating system fails to discard the pages.
     ///
@@ -762,22 +769,28 @@ impl Memory {
     /// let instance = Instance::new(&mut store, &module, &[])?;
     /// let memory = instance.get_memory(&mut store, "mem").unwrap();
     ///
-    /// memory.data_mut(&mut store)[0x10000..].fill(0xff);
+    /// memory.data_mut(&mut store).fill(0xff);
     /// // Discard the second page.
-    /// memory.discard(&mut store, 1, 1)?;
+    /// memory.discard(&mut store, 0x10000, 0x10000)?;
+    /// assert!(memory.data(&store)[..0x10000].iter().all(|b| *b == 0xff));
     /// assert!(memory.data(&store)[0x10000..].iter().all(|b| *b == 0));
     /// assert_eq!(memory.size(&store), 2);
     ///
-    /// // The pages must be within the memory.
-    /// assert!(memory.discard(&mut store, 1, 2).is_err());
+    /// // A range that isn't page-aligned discards every page it touches.
+    /// memory.data_mut(&mut store).fill(0xff);
+    /// memory.discard(&mut store, 0xff00, 0x200)?;
+    /// assert!(memory.data(&store).iter().all(|b| *b == 0));
+    ///
+    /// // The range must be within the memory.
+    /// assert!(memory.discard(&mut store, 0x10000, 0x10001).is_err());
     /// # Ok(())
     /// # }
     /// ```
-    pub fn discard(&self, mut store: impl AsContextMut, start: u64, count: u64) -> Result<()> {
+    pub fn discard(&self, mut store: impl AsContextMut, offset: usize, len: usize) -> Result<()> {
         let store = store.as_context_mut().0;
         self.instance
             .get_mut(store)
-            .memory_discard(self.index, start, count)
+            .memory_discard(self.index, offset, len)
     }
 
     /// Creates a new memory from its raw component parts.

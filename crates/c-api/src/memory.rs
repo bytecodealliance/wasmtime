@@ -138,10 +138,10 @@ pub extern "C" fn wasmtime_memory_grow(
 pub extern "C" fn wasmtime_memory_discard(
     store: WasmtimeStoreContextMut<'_>,
     mem: &Memory,
-    start: u64,
-    count: u64,
+    offset: usize,
+    len: usize,
 ) -> Option<Box<wasmtime_error_t>> {
-    handle_result(mem.discard(store, start, count), |()| {})
+    handle_result(mem.discard(store, offset, len), |()| {})
 }
 
 #[unsafe(no_mangle)]

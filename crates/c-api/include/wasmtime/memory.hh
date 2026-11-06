@@ -76,13 +76,14 @@ public:
     return prev;
   }
 
-  /// Zeroes `count` WebAssembly pages starting at page `start`, and returns the
+  /// Zeroes the pages that `len` bytes at `offset` touch, and returns the
   /// physical memory behind them to the operating system where possible.
   ///
-  /// The size of this memory does not change.
-  Result<std::monostate> discard(Store::Context cx, uint64_t start,
-                                 uint64_t count) const {
-    auto *error = wasmtime_memory_discard(cx.ptr, &memory, start, count);
+  /// The range is rounded out to whole pages. The size of this memory does not
+  /// change.
+  Result<std::monostate> discard(Store::Context cx, size_t offset,
+                                 size_t len) const {
+    auto *error = wasmtime_memory_discard(cx.ptr, &memory, offset, len);
     if (error != nullptr) {
       return Error(error);
     }

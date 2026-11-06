@@ -1033,7 +1033,7 @@ fn check_discard_with_image(store: &mut Store<()>, module: &Module) -> Result<()
     }
 
     // Entirely inside the image.
-    memory.discard(&mut *store, 2, 1)?;
+    memory.discard(&mut *store, 0x20000, 0x10000)?;
     assert!(
         memory.data(&store)[0x20000..0x30000]
             .iter()
@@ -1044,13 +1044,13 @@ fn check_discard_with_image(store: &mut Store<()>, module: &Module) -> Result<()
     assert_eq!(memory.data(&store)[0x10100], 0xa5);
 
     // Across the start of the image.
-    memory.discard(&mut *store, 0, 2)?;
+    memory.discard(&mut *store, 0, 0x20000)?;
     assert!(memory.data(&store)[..0x30000].iter().all(|b| *b == 0));
     assert_eq!(load.call(&mut *store, 0x10000)?, 0);
 
     // After the image.
     assert_eq!(memory.data(&store)[0x30100], 0xa5);
-    memory.discard(&mut *store, 3, 1)?;
+    memory.discard(&mut *store, 0x30000, 0x10000)?;
     assert!(memory.data(&store).iter().all(|b| *b == 0));
     assert_eq!(load.call(&mut *store, 0x30100)?, 0);
 
@@ -1066,23 +1066,72 @@ fn discard_errors() -> Result<()> {
     let engine = Engine::default();
     let mut store = Store::new(&engine, ());
     let memory = Memory::new(&mut store, MemoryType::new(2, None)?)?;
-
-    // Out of bounds, including overflow.
-    assert!(memory.discard(&mut store, 2, 1).is_err());
-    assert!(memory.discard(&mut store, 1, 2).is_err());
-    assert!(memory.discard(&mut store, 0, 3).is_err());
-    assert!(memory.discard(&mut store, u64::MAX, u64::MAX).is_err());
-    assert!(memory.discard(&mut store, 1, u64::MAX).is_err());
-
-    // Empty ranges are fine anywhere within bounds, including at the end.
-    memory.discard(&mut store, 0, 0)?;
-    memory.discard(&mut store, 2, 0)?;
-    memory.discard(&mut store, 0, 2)?;
-
-    // A failed discard leaves memory unchanged.
+    let size = 2 * WASM_PAGE;
     memory.data_mut(&mut store).fill(1);
-    assert!(memory.discard(&mut store, 1, 2).is_err());
+
+    // Out of bounds, aligned or not, including overflow. A failed discard
+    // leaves memory unchanged.
+    assert!(memory.discard(&mut store, size, 1).is_err());
+    assert!(memory.discard(&mut store, size + 1, 0).is_err());
+    assert!(memory.discard(&mut store, 0, size + 1).is_err());
+    assert!(
+        memory
+            .discard(&mut store, WASM_PAGE, WASM_PAGE + 1)
+            .is_err()
+    );
+    assert!(
+        memory
+            .discard(&mut store, WASM_PAGE + 0x100, WASM_PAGE)
+            .is_err()
+    );
+    assert!(memory.discard(&mut store, 1, usize::MAX).is_err());
+    assert!(memory.discard(&mut store, usize::MAX, usize::MAX).is_err());
     assert!(memory.data(&store).iter().all(|b| *b == 1));
+
+    // Empty ranges discard nothing, anywhere within bounds, including at an
+    // unaligned offset and at the end.
+    memory.discard(&mut store, 0, 0)?;
+    memory.discard(&mut store, 0x123, 0)?;
+    memory.discard(&mut store, WASM_PAGE, 0)?;
+    memory.discard(&mut store, size, 0)?;
+    assert!(memory.data(&store).iter().all(|b| *b == 1));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_rounds_to_pages() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let memory = Memory::new(&mut store, MemoryType::new(4, None)?)?;
+
+    // An offset and a length, and the pages they discard.
+    let cases = [
+        (0x10000, 0x10000, 1..2),
+        // Unaligned start.
+        (0x10100, 0xff00, 1..2),
+        // Unaligned end.
+        (0x10000, 0x100, 1..2),
+        // Unaligned start and end within one page.
+        (0x10100, 1, 1..2),
+        // Across a page boundary.
+        (0xf000, 0x2000, 0..2),
+        // Unaligned start and end across three pages.
+        (0x1ffff, 0x10002, 1..4),
+        // Up to the end of the memory.
+        (0x30001, 0xffff, 3..4),
+    ];
+    for (offset, len, pages) in cases {
+        memory.data_mut(&mut store).fill(0xa5);
+        memory.discard(&mut store, offset, len)?;
+        for (page, bytes) in memory.data(&store).chunks(WASM_PAGE).enumerate() {
+            let expected = if pages.contains(&page) { 0 } else { 0xa5 };
+            assert!(
+                bytes.iter().all(|b| *b == expected),
+                "discarding {len:#x} bytes at {offset:#x}: page {page} should be {expected:#x}"
+            );
+        }
+    }
     Ok(())
 }
 
@@ -1121,7 +1170,7 @@ fn discard_zeroes(config: &mut Config) -> Result<()> {
     let memory = Memory::new(&mut store, MemoryType::new(4, None)?)?;
     memory.data_mut(&mut store).fill(0xa5);
 
-    memory.discard(&mut store, 1, 2)?;
+    memory.discard(&mut store, WASM_PAGE, 2 * WASM_PAGE)?;
     let data = memory.data(&store);
     assert!(data[..WASM_PAGE].iter().all(|b| *b == 0xa5));
     assert!(data[WASM_PAGE..3 * WASM_PAGE].iter().all(|b| *b == 0));
@@ -1135,7 +1184,7 @@ fn discard_zeroes(config: &mut Config) -> Result<()> {
             .iter()
             .all(|b| *b == 0x5a)
     );
-    memory.discard(&mut store, 0, 4)?;
+    memory.discard(&mut store, 0, 4 * WASM_PAGE)?;
     assert!(memory.data(&store).iter().all(|b| *b == 0));
     Ok(())
 }
@@ -1155,7 +1204,7 @@ fn discard_then_grow(config: &mut Config) -> Result<()> {
         let memory = Memory::new(&mut store, MemoryType::new(2, None)?)?;
         memory.data_mut(&mut store).fill(0xa5);
 
-        memory.discard(&mut store, 1, 1)?;
+        memory.discard(&mut store, WASM_PAGE, WASM_PAGE)?;
         memory.grow(&mut store, 30)?;
         let data = memory.data(&store);
         assert_eq!(data.len(), 32 * WASM_PAGE);
@@ -1163,7 +1212,7 @@ fn discard_then_grow(config: &mut Config) -> Result<()> {
         assert!(data[WASM_PAGE..].iter().all(|b| *b == 0));
 
         memory.data_mut(&mut store)[16 * WASM_PAGE..].fill(0x5a);
-        memory.discard(&mut store, 16, 16)?;
+        memory.discard(&mut store, 16 * WASM_PAGE, 16 * WASM_PAGE)?;
         assert!(memory.data(&store)[WASM_PAGE..].iter().all(|b| *b == 0));
     }
     Ok(())
@@ -1200,7 +1249,7 @@ fn discard_with_image_then_grow() -> Result<()> {
         let instance = Instance::new(&mut store, &module, &[])?;
         let memory = instance.get_memory(&mut store, "m").unwrap();
 
-        memory.discard(&mut store, 2, 1)?;
+        memory.discard(&mut store, 2 * WASM_PAGE, WASM_PAGE)?;
         memory.grow(&mut store, 4)?;
         let data = memory.data(&store);
         assert_eq!(&data[0x10000..0x10005], b"first");

@@ -804,10 +804,10 @@ impl Instance {
     pub(crate) fn memory_discard(
         self: Pin<&mut Self>,
         idx: DefinedMemoryIndex,
-        start: u64,
-        count: u64,
+        offset: usize,
+        len: usize,
     ) -> Result<()> {
-        self.get_defined_memory_mut(idx).discard(start, count)
+        self.get_defined_memory_mut(idx).discard(offset, len)
     }
 
     /// Performs a grow operation on the `table_index` specified using `grow`.

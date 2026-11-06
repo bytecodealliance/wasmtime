@@ -358,10 +358,10 @@ fn host_memory_discard() -> Result<()> {
     let memory = instance.get_memory(&mut store, "memory").unwrap();
 
     memory.data_mut(&mut store).fill(0xa5);
-    memory.discard(&mut store, 1, 1)?;
+    memory.discard(&mut store, 0x10000, 0x10000)?;
     assert!(memory.data(&store)[..0x10000].iter().all(|b| *b == 0xa5));
     assert!(memory.data(&store)[0x10000..].iter().all(|b| *b == 0));
-    assert!(memory.discard(&mut store, 1, 2).is_err());
+    assert!(memory.discard(&mut store, 0x10000, 0x10001).is_err());
     Ok(())
 }
 

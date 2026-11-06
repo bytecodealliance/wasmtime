@@ -1702,7 +1702,7 @@ fn memory_discard_and_reuse() -> Result<()> {
             assert!(data[0x30000..].iter().all(|b| *b == 0));
 
             memory.data_mut(&mut store).fill(0xa5);
-            memory.discard(&mut store, 1, 2)?;
+            memory.discard(&mut store, PAGE, 2 * PAGE)?;
             let data = memory.data(&store);
             assert!(data[..PAGE].iter().all(|b| *b == 0xa5));
             assert!(data[PAGE..3 * PAGE].iter().all(|b| *b == 0));
@@ -1750,13 +1750,13 @@ fn memory_discard_then_grow() -> Result<()> {
         let memory = instance.get_memory(&mut store, "m").unwrap();
         assert_eq!(&memory.data(&store)[0x10000..0x10005], b"image");
         memory.data_mut(&mut store).fill(0xa5);
-        memory.discard(&mut store, 1, 1)?;
+        memory.discard(&mut store, PAGE, PAGE)?;
         memory.grow(&mut store, 6)?;
         let data = memory.data(&store);
         assert!(data[..PAGE].iter().all(|b| *b == 0xa5));
         assert!(data[PAGE..].iter().all(|b| *b == 0));
         memory.data_mut(&mut store).fill(0x5a);
-        memory.discard(&mut store, 0, 8)?;
+        memory.discard(&mut store, 0, 8 * PAGE)?;
         assert!(memory.data(&store).iter().all(|b| *b == 0));
     }
     Ok(())
