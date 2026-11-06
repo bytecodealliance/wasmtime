@@ -408,6 +408,32 @@
 (rule (lower (ssub_sat (multi_lane 16 8) x y))
       (x64_psubsw x y))
 
+;; There is no instruction for signed saturating subtraction of 32-bit or
+;; 64-bit lanes, so detect overflow and select the saturated value. A lane
+;; overflows exactly when the operands have different signs and the sign of the
+;; difference differs from the sign of the minuend, i.e. when the sign bit of
+;; `(x ^ y) & (x ^ diff)` is set. On overflow the difference's sign is the
+;; opposite of the minuend's, so the saturated value is `MAX` when the
+;; difference is negative and `MIN` otherwise.
+(rule (lower (ssub_sat ty @ (multi_lane 32 4) x y))
+      (let ((diff Xmm (x64_psubd x y)))
+        (lower_ssub_sat_wide ty x y diff)))
+
+(rule (lower (ssub_sat ty @ (multi_lane 64 2) x y))
+      (let ((diff Xmm (x64_psubq x y)))
+        (lower_ssub_sat_wide ty x y diff)))
+
+(decl lower_ssub_sat_wide (Type Xmm Xmm Xmm) Xmm)
+(rule (lower_ssub_sat_wide ty x y diff)
+      (let ((diff_sign Xmm (vec_sign_mask ty diff))
+            (sat Xmm (x64_pxor diff_sign (min_signed_const ty)))
+            (x_xor_y Xmm (x64_pxor x y))
+            (x_xor_diff Xmm (x64_pxor x diff))
+            (overflow Xmm (vec_sign_mask ty (x64_pand x_xor_y x_xor_diff)))
+            (change Xmm (x64_pxor diff sat))
+            (masked_change Xmm (x64_pand overflow change)))
+        (x64_pxor diff masked_change)))
+
 ;;;; Rules for `usub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (usub_sat (multi_lane 8 16) x y))
