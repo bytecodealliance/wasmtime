@@ -14,7 +14,7 @@ pub type Error = io::Error;
 
 #[derive(Debug)]
 pub struct FiberStack {
-    size: usize,
+    pub(crate) size: usize,
     // Windows allocates a fiber's stack when creating the fiber, so its
     // location is only known while a raw fiber owns it. See `raw/windows.rs`.
     pub(crate) raw_range: Option<Range<usize>>,

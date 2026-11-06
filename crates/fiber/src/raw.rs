@@ -34,8 +34,8 @@
 //!   its stack).
 
 use crate::FiberStack;
-use alloc::vec::Vec;
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
+use wasmtime_environ::collections::TryVec;
 use wasmtime_environ::error::{Error, Result, bail, ensure};
 
 cfg_select! {
@@ -67,8 +67,8 @@ pub enum RawFiberState {
     /// The fiber suspended itself and may be resumed.
     Suspended,
     /// The fiber suspended for the last time, as recorded by
-    /// [`RawFiber::finish`]. It may not be resumed unless an earlier snapshot
-    /// is restored first.
+    /// [`RawFiber::finish`]. It has no continuation, so it may not be resumed
+    /// or snapshotted unless an earlier snapshot is restored first.
     Terminal,
 }
 
@@ -77,19 +77,32 @@ pub enum RawFiberState {
 pub struct RawFiber {
     stack: FiberStack,
     state: RawFiberState,
-    id: usize,
+    id: RawFiberId,
     sys: sys::Fiber,
 }
 
 /// A copy of a stopped [`RawFiber`]'s stack and lifecycle state.
 pub struct RawFiberSnapshot {
-    fiber: usize,
+    fiber: RawFiberId,
     sp: usize,
-    bytes: Vec<u8>,
+    bytes: TryVec<u8>,
     state: RawFiberState,
 }
 
-static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+/// A process-unique identifier of a [`RawFiber`], by which snapshots are
+/// matched to the fiber they were taken from.
+///
+/// This is 64 bits wide so that it never wraps around in practice: a
+/// reused ID would let a snapshot be restored onto a different fiber.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct RawFiberId(u64);
+
+impl RawFiberId {
+    fn new() -> Self {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+        RawFiberId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 impl RawFiber {
     /// Whether raw fibers are supported on this platform and configuration.
@@ -136,7 +149,7 @@ impl RawFiber {
         Ok(RawFiber {
             stack,
             state: RawFiberState::Initial,
-            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+            id: RawFiberId::new(),
             sys,
         })
     }
@@ -216,14 +229,32 @@ impl RawFiber {
         self.switch_arg().cast::<usize>().wrapping_sub(2)
     }
 
+    /// The stack pointer at which this fiber will resume.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the fiber is terminal: it will not resume, so it has no
+    /// continuation to inspect.
     fn saved_sp(&self) -> usize {
+        assert_ne!(
+            self.state,
+            RawFiberState::Terminal,
+            "a terminal raw fiber has no saved stack pointer"
+        );
         // SAFETY: the reserved slot is initialized when the fiber is created
         // and maintained by the switch routine.
         unsafe { self.saved_sp_slot().read() }
     }
 
     /// Copies this stopped fiber's stack and lifecycle state.
+    ///
+    /// Returns an error if the fiber is terminal: it has no continuation to
+    /// copy.
     pub fn snapshot(&self) -> Result<RawFiberSnapshot> {
+        ensure!(
+            self.state != RawFiberState::Terminal,
+            "cannot snapshot a terminal raw fiber"
+        );
         let top = self.switch_arg() as usize;
         let sp = self.saved_sp();
         let range = self.stack.range();
@@ -232,13 +263,10 @@ impl RawFiber {
             "raw fiber has an invalid saved stack pointer"
         );
         let len = top - sp;
-        let mut bytes = Vec::new();
-        bytes
-            .try_reserve_exact(len)
-            .map_err(|_| wasmtime_environ::error::OutOfMemory::new(len))?;
+        let mut bytes = TryVec::new();
         // SAFETY: `sp..top` is within this fiber's stack, which is not
         // running because `self` is borrowed here.
-        bytes.extend_from_slice(unsafe { core::slice::from_raw_parts(sp as *const u8, len) });
+        bytes.extend_from_slice(unsafe { core::slice::from_raw_parts(sp as *const u8, len) })?;
         Ok(RawFiberSnapshot {
             fiber: self.id,
             sp,
@@ -273,8 +301,8 @@ impl RawFiber {
                 snapshot.bytes.len(),
             );
         }
-        debug_assert_eq!(self.saved_sp(), snapshot.sp);
         self.state = snapshot.state;
+        debug_assert_eq!(self.saved_sp(), snapshot.sp);
         Ok(())
     }
 
@@ -283,7 +311,17 @@ impl RawFiber {
     ///
     /// Returns `None` if the fiber has not suspended or if this is not
     /// implemented for the current architecture.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the fiber is terminal: it will not resume, so it has no
+    /// continuation to inspect.
     pub fn suspended_frame(&self) -> Option<(usize, usize)> {
+        assert_ne!(
+            self.state,
+            RawFiberState::Terminal,
+            "a terminal raw fiber has no suspended frame"
+        );
         let (fp, pc) = sys::SUSPENDED_FRAME?;
         if self.state == RawFiberState::Initial {
             return None;
@@ -377,6 +415,7 @@ mod tests {
         assert_eq!(fiber.state(), RawFiberState::Terminal);
         assert!(unsafe { fiber.resume() }.is_err());
         assert!(fiber.finish().is_err());
+        assert!(fiber.snapshot().is_err());
         // A terminal fiber is destroyed without being resumed.
         drop(fiber.into_stack());
     }
@@ -482,6 +521,22 @@ mod tests {
         unsafe { fiber.restore(&snapshot).unwrap() };
         unsafe { fiber.resume().unwrap() };
         assert_eq!(shared.0.load(core::sync::atomic::Ordering::Relaxed), 3);
+    }
+
+    #[test]
+    fn terminal_fiber_has_no_suspended_frame() {
+        let shared = Shared::default();
+        let Some(mut fiber) = fiber(&shared) else {
+            return;
+        };
+        for _ in 0..4 {
+            unsafe { fiber.resume().unwrap() };
+        }
+        fiber.finish().unwrap();
+        let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+            fiber.suspended_frame();
+        }));
+        assert!(result.is_err());
     }
 
     #[test]
