@@ -634,8 +634,9 @@ impl ComponentInstance {
     /// afterwards `HandleTableInsertion` keeps it current.
     pub(crate) fn publish_handle_tables(self: Pin<&mut Self>) {
         let (states, _types, published) = self.instance_states_and_published();
-        for (i, state) in states.iter_mut() {
-            published[i.as_u32() as usize] = state.handle_table().slots_ptr();
+        for (instance, state) in states.iter_mut() {
+            let i = usize::try_from(instance.as_u32()).unwrap();
+            published[i] = state.handle_table().slots_ptr();
         }
     }
 
