@@ -1019,3 +1019,32 @@ fn data_ranges() -> Result<()> {
     assert_eq!(&memory.data(&store)[10..13], b"aXc");
     Ok(())
 }
+
+/// A memory and a store that it does not belong to.
+fn memory_and_other_store() -> (Memory, Store<()>) {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let memory = Memory::new(&mut store, MemoryType::new(1, None).unwrap()).unwrap();
+    (memory, Store::new(&engine, ()))
+}
+
+#[test]
+#[should_panic = "wrong store"]
+fn data_range_wrong_store() {
+    let (memory, other) = memory_and_other_store();
+    let _ = memory.data_range(&other, 0..1);
+}
+
+#[test]
+#[should_panic = "wrong store"]
+fn data_range_mut_wrong_store() {
+    let (memory, mut other) = memory_and_other_store();
+    let _ = memory.data_range_mut(&mut other, 0..1);
+}
+
+#[test]
+#[should_panic = "comes_from_same_store"]
+fn data_ranges_and_store_data_mut_wrong_store() {
+    let (memory, mut other) = memory_and_other_store();
+    let _ = memory.data_ranges_and_store_data_mut(&mut other);
+}
