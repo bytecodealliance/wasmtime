@@ -472,6 +472,19 @@ WASMTIME_CONFIG_PROP(void, memory_reservation_for_growth, uint64_t)
  */
 WASMTIME_CONFIG_PROP(void, native_unwind_info, bool)
 
+/**
+ * \brief Configures whether compiled code is compatible with a Wasmtime runtime
+ * built with AddressSanitizer.
+ *
+ * This option defaults to whether this Wasmtime was itself built with
+ * AddressSanitizer. Compiled artifacts can only be deserialized by an engine
+ * with the same setting.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.asan_compatible_code
+ */
+WASMTIME_CONFIG_PROP(void, asan_compatible_code, bool)
+
 #ifdef WASMTIME_FEATURE_CACHE
 
 /**
