@@ -1441,6 +1441,10 @@ impl FuncEnvironment<'_> {
     /// is here to ensure that in the face of heap corruption that there's no
     /// possible UB within Cranelift and/or the runtime.
     fn gc_memflags(&mut self, func: &mut ir::Function) -> ir::MemFlagsData {
+        // We are emitting code to access the GC heap so we better have marked
+        // this function as requiring eager allocation of the GC heap.
+        assert!(self.needs_gc_heap);
+
         let region = self.alias_regions.gc_heap_region(func);
         ir::MemFlagsData::new()
             .with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT))
@@ -1477,12 +1481,15 @@ impl FuncEnvironment<'_> {
         result
     }
 
-    /// Get or create the global for our GC heap's base pointer.
     /// Get the GC heap's base.
     pub(crate) fn get_gc_heap_base(
         &mut self,
         builder: &mut FunctionBuilder,
     ) -> WasmResult<ir::Value> {
+        // This function accesses the GC heap, so make sure it is allocated at
+        // this module's instantiation.
+        self.needs_gc_heap = true;
+
         let mut flags = ir::MemFlagsData::trusted();
         let memory_tunables =
             wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
@@ -1512,6 +1519,10 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
     ) -> WasmResult<ir::Value> {
+        // This function accesses the GC heap, so make sure it is allocated at
+        // this module's instantiation.
+        self.needs_gc_heap = true;
+
         let store_context_ptr = self.get_vmstore_context_ptr(builder);
         Ok(self
             .alias_regions
@@ -1520,6 +1531,10 @@ impl FuncEnvironment<'_> {
 
     /// Get or create the `Heap` for our GC heap.
     fn get_gc_heap(&mut self, func: &mut ir::Function) -> Heap {
+        // This function accesses the GC heap, so make sure it is allocated at
+        // this module's instantiation.
+        self.needs_gc_heap = true;
+
         if let Some(heap) = self.gc_heap {
             return heap;
         }
@@ -1584,6 +1599,11 @@ impl FuncEnvironment<'_> {
 
         let gc_heap = self.get_gc_heap(&mut builder.func);
         let gc_heap = self.heaps[gc_heap].clone();
+
+        // We are emitting code to access the GC heap so we better have marked
+        // this function as requiring eager allocation of the GC heap.
+        assert!(self.needs_gc_heap);
+
         let result = match crate::bounds_checks::bounds_check_and_compute_addr(
             builder,
             self,

@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::task::{Context, Poll};
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 
 struct SetFlagOnDrop(Arc<AtomicBool>);
 
@@ -3889,6 +3890,63 @@ fn gc_during_epoch(wat: &str) -> Result<()> {
             Ok(got) => assert_eq!(got, 7 * n, "iteration {i} read back {got}"),
             Err(e) => panic!("iteration {i} failed: {e:?}"),
         }
+    }
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(gc))]
+#[cfg_attr(miri, ignore)]
+fn ghsa_43j2_gcp4_m22g_dangling_gc_heap_base_pointer(config: &mut Config) -> Result<()> {
+    for collector in [
+        Collector::DeferredReferenceCounting,
+        Collector::Null,
+        Collector::Copying,
+    ] {
+        eprintln!("collector: {collector:?}");
+        config.collector(collector);
+
+        // Configure the GC heap as never moving so that load instructions we
+        // emit to read its base pointer are marked `readonly` and `can_move`.
+        config.gc_heap_may_move(false);
+        let engine = Engine::new(config)?;
+
+        // Even though we never construct a `GcCompiler` during Wasm-to-CLIF
+        // translation for this module, it will still access the GC heap, and we
+        // should therefore allocate the GC heap before any Wasm code starts
+        // running. Otherwise, the Wasm code can read the dangling GC heap base
+        // pointer before the GC heap is allocated, and, because the base
+        // pointer loads are marked `readonly` and `can_move`, keep that
+        // dangling base pointer around for the whole function.
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                  (import "" "make_ref" (func $make_ref (result externref)))
+                  (func (export "run")
+                    loop
+                      call $make_ref
+                      any.convert_extern
+                      ref.cast structref    ;; Should trap on this cast.
+                      br_on_null 0
+                      unreachable
+                    end
+                  )
+                )
+            "#,
+        )?;
+
+        let mut store = Store::new(&engine, ());
+        let make_ref = Func::wrap(
+            &mut store,
+            |mut caller: Caller<'_, ()>| -> Result<Option<Rooted<ExternRef>>> {
+                Ok(Some(ExternRef::new(&mut caller, ())?))
+            },
+        );
+        let instance = Instance::new(&mut store, &module, &[make_ref.into()])?;
+        let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+        let err = run.call(&mut store, ()).unwrap_err();
+        assert_eq!(err.downcast::<Trap>()?, Trap::CastFailure);
     }
     Ok(())
 }
