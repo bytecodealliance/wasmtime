@@ -9,6 +9,7 @@ use core::fmt;
 pub use registry::{GraphRegistry, InMemoryRegistry};
 use std::path::Path;
 use std::sync::Arc;
+use wasmtime::component::{FixedHostHeapUsage, HostHeapUsage};
 use wasmtime::format_err;
 
 /// Construct an in-memory registry from the available backends and a list of
@@ -65,12 +66,14 @@ impl std::ops::Deref for Graph {
     }
 }
 
+impl FixedHostHeapUsage for TensorType {}
+
 /// A host-side tensor.
 ///
 /// Eventually, this may be defined in each backend as they gain the ability to
 /// hold tensors on various devices (TODO:
 /// https://github.com/WebAssembly/wasi-nn/pull/70).
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, HostHeapUsage)]
 pub struct Tensor {
     pub dimensions: Vec<u32>,
     pub ty: TensorType,
@@ -160,3 +163,7 @@ impl Tensor {
         }
     }
 }
+
+// Backend graphs and execution contexts live in external ML runtimes and are out of scope.
+impl FixedHostHeapUsage for Graph {}
+impl FixedHostHeapUsage for ExecutionContext {}

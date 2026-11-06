@@ -22,13 +22,14 @@ fn get_fields<'a>(
         .context("failed to get fields from table")
 }
 
-fn get_fields_mut<'a>(
-    table: &'a mut ResourceTable,
+fn update_fields<R>(
+    table: &mut ResourceTable,
     fields: &Resource<Fields>,
-) -> HeaderResult<&'a mut Fields> {
+    f: impl FnOnce(&mut Fields) -> R,
+) -> HeaderResult<R> {
     table
-        .get_mut(&fields)
-        .context("failed to get fields from table")
+        .update(fields, f)
+        .context("failed to update fields in table")
         .map_err(crate::p3::HeaderError::trap)
 }
 
@@ -55,29 +56,11 @@ fn get_request<'a>(
     table.get(req).context("failed to get request from table")
 }
 
-fn get_request_mut<'a>(
-    table: &'a mut ResourceTable,
-    req: &Resource<Request>,
-) -> wasmtime::Result<&'a mut Request> {
-    table
-        .get_mut(req)
-        .context("failed to get request from table")
-}
-
 fn get_response<'a>(
     table: &'a ResourceTable,
     res: &Resource<Response>,
 ) -> wasmtime::Result<&'a Response> {
     table.get(res).context("failed to get response from table")
-}
-
-fn get_response_mut<'a>(
-    table: &'a mut ResourceTable,
-    res: &Resource<Response>,
-) -> wasmtime::Result<&'a mut Response> {
-    table
-        .get_mut(res)
-        .context("failed to get response from table")
 }
 
 fn get_request_options<'a>(
@@ -158,12 +141,16 @@ impl HostFields for WasiHttpCtxView<'_> {
         name: FieldName,
         values: Vec<FieldValue>,
     ) -> HeaderResult<()> {
-        get_fields_mut(self.table, &fields)?.set(self.hooks, name, values)?;
+        update_fields(self.table, &fields, |fields| {
+            fields.set(self.hooks, name, values)
+        })??;
         Ok(())
     }
 
     fn delete(&mut self, fields: Resource<Fields>, name: FieldName) -> HeaderResult<()> {
-        get_fields_mut(self.table, &fields)?.remove_all(self.hooks, name)?;
+        update_fields(self.table, &fields, |fields| {
+            fields.remove_all(self.hooks, name)
+        })??;
         Ok(())
     }
 
@@ -173,10 +160,13 @@ impl HostFields for WasiHttpCtxView<'_> {
         name: FieldName,
     ) -> HeaderResult<Vec<FieldValue>> {
         let name = name.parse().or(Err(HeaderError::InvalidSyntax))?;
-        let values = get_fields_mut(self.table, &fields)?
-            .remove_all(self.hooks, name)?
-            .into_iter();
-        Ok(values.map(|value| value.as_bytes().into()).collect())
+        let values = update_fields(self.table, &fields, |fields| {
+            fields.remove_all(self.hooks, name)
+        })??;
+        Ok(values
+            .into_iter()
+            .map(|value| value.as_bytes().into())
+            .collect())
     }
 
     fn append(
@@ -185,7 +175,9 @@ impl HostFields for WasiHttpCtxView<'_> {
         name: FieldName,
         value: FieldValue,
     ) -> HeaderResult<()> {
-        get_fields_mut(self.table, &fields)?.append(self.hooks, name, value)?;
+        update_fields(self.table, &fields, |fields| {
+            fields.append(self.hooks, name, value)
+        })??;
         Ok(())
     }
 
@@ -290,12 +282,13 @@ impl HostRequest for WasiHttpCtxView<'_> {
         req: Resource<Request>,
         method: Method,
     ) -> wasmtime::Result<Result<(), ()>> {
-        let req = get_request_mut(self.table, &req)?;
-        let Ok(method) = method.try_into() else {
-            return Ok(Err(()));
-        };
-        req.method = method;
-        Ok(Ok(()))
+        Ok(self.table.update(&req, |req| {
+            let Ok(method) = method.try_into() else {
+                return Err(());
+            };
+            req.method = method;
+            Ok(())
+        })?)
     }
 
     fn get_path_with_query(&mut self, req: Resource<Request>) -> wasmtime::Result<Option<String>> {
@@ -310,17 +303,17 @@ impl HostRequest for WasiHttpCtxView<'_> {
         req: Resource<Request>,
         path_with_query: Option<String>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        let req = get_request_mut(self.table, &req)?;
-
-        let Some(path_with_query) = path_with_query else {
-            req.path_with_query = None;
-            return Ok(Ok(()));
-        };
-        let Some(path_with_query) = crate::parse_path_with_query(&path_with_query) else {
-            return Ok(Err(()));
-        };
-        req.path_with_query = Some(path_with_query);
-        Ok(Ok(()))
+        Ok(self.table.update(&req, |req| {
+            let Some(path_with_query) = path_with_query else {
+                req.path_with_query = None;
+                return Ok(());
+            };
+            let Some(path_with_query) = crate::parse_path_with_query(&path_with_query) else {
+                return Err(());
+            };
+            req.path_with_query = Some(path_with_query);
+            Ok(())
+        })?)
     }
 
     fn get_scheme(&mut self, req: Resource<Request>) -> wasmtime::Result<Option<Scheme>> {
@@ -333,16 +326,17 @@ impl HostRequest for WasiHttpCtxView<'_> {
         req: Resource<Request>,
         scheme: Option<Scheme>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        let req = get_request_mut(self.table, &req)?;
-        let Some(scheme) = scheme else {
-            req.scheme = None;
-            return Ok(Ok(()));
-        };
-        let Ok(scheme) = scheme.try_into() else {
-            return Ok(Err(()));
-        };
-        req.scheme = Some(scheme);
-        Ok(Ok(()))
+        Ok(self.table.update(&req, |req| {
+            let Some(scheme) = scheme else {
+                req.scheme = None;
+                return Ok(());
+            };
+            let Ok(scheme) = scheme.try_into() else {
+                return Err(());
+            };
+            req.scheme = Some(scheme);
+            Ok(())
+        })?)
     }
 
     fn get_authority(&mut self, req: Resource<Request>) -> wasmtime::Result<Option<String>> {
@@ -355,16 +349,17 @@ impl HostRequest for WasiHttpCtxView<'_> {
         req: Resource<Request>,
         authority: Option<String>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        let req = get_request_mut(self.table, &req)?;
-        let Some(authority) = authority else {
-            req.authority = None;
-            return Ok(Ok(()));
-        };
-        let Ok(authority) = crate::parse_authority(authority) else {
-            return Ok(Err(()));
-        };
-        req.authority = Some(authority);
-        Ok(Ok(()))
+        Ok(self.table.update(&req, |req| {
+            let Some(authority) = authority else {
+                req.authority = None;
+                return Ok(());
+            };
+            let Ok(authority) = crate::parse_authority(authority) else {
+                return Err(());
+            };
+            req.authority = Some(authority);
+            Ok(())
+        })?)
     }
 
     fn get_options(
@@ -551,10 +546,9 @@ impl HostResponse for WasiHttpCtxView<'_> {
         res: Resource<Response>,
         status_code: StatusCode,
     ) -> wasmtime::Result<Result<(), ()>> {
-        let res = get_response_mut(self.table, &res)?;
         match http::StatusCode::from_u16(status_code) {
             Ok(status) if matches!(status_code, 100..=599) => {
-                res.status = status;
+                self.table.update(&res, |res| res.status = status)?;
                 Ok(Ok(()))
             }
             _ => Ok(Err(())),

@@ -7,7 +7,7 @@ use crate::p3::bindings::cli::{
     terminal_stdin, terminal_stdout,
 };
 use crate::{NamedId, WasiCtxNamedView};
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, FixedHostHeapUsage, Linker};
 
 /// Add all WASI interfaces from this module into the `linker` provided.
 ///
@@ -235,5 +235,7 @@ where
     Ok(())
 }
 
+#[derive(FixedHostHeapUsage)]
 pub struct TerminalInput;
+#[derive(FixedHostHeapUsage)]
 pub struct TerminalOutput;

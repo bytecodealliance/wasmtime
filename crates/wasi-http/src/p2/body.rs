@@ -11,6 +11,7 @@ use std::mem;
 use std::task::{Context, Poll};
 use std::{pin::Pin, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
+use wasmtime::component::{FixedHostHeapUsage, HostHeapUsage};
 use wasmtime::format_err;
 use wasmtime_wasi::p2::{InputStream, OutputStream, Pollable, StreamError};
 use wasmtime_wasi::runtime::{AbortOnDropJoinHandle, poll_noop};
@@ -646,6 +647,19 @@ impl Pollable for BodyWriteStream {
         let _ = self.writer.reserve().await;
     }
 }
+
+impl HostHeapUsage for HostIncomingBodyStream {
+    fn heap_size_of_children(&self) -> usize {
+        // Track buffered frame bytes awaiting consumption. Internal hyper body
+        // framing and timers are not tracked.
+        self.buffer.len()
+    }
+}
+
+impl FixedHostHeapUsage for BodyWriteStream {}
+impl FixedHostHeapUsage for HostIncomingBody {}
+impl FixedHostHeapUsage for HostFutureTrailers {}
+impl FixedHostHeapUsage for HostOutgoingBody {}
 
 #[cfg(test)]
 mod tests {

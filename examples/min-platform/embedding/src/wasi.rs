@@ -31,7 +31,7 @@ use core::fmt::Write as _;
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker};
-use wasmtime::component::{Component, Linker, Resource, ResourceTable};
+use wasmtime::component::{Component, FixedHostHeapUsage, Linker, Resource, ResourceTable};
 use wasmtime::{Engine, Result, Store, bail};
 use wasmtime_wasi_io::{
     IoView,
@@ -277,10 +277,15 @@ impl Pollable for Deadline {
         self.clone().await
     }
 }
+impl FixedHostHeapUsage for Deadline {}
 
 // An input-stream which is never ready for reading is used to implement
 // stdin.
 struct NeverReadable;
+impl FixedHostHeapUsage for NeverReadable {}
+// Log growth is not accounted for or bounded here; production
+// embeddings should cap it.
+impl FixedHostHeapUsage for WriteLog {}
 #[wasmtime_wasi_io::async_trait]
 impl Pollable for NeverReadable {
     async fn ready(&mut self) {

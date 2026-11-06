@@ -9,6 +9,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{self, AsyncWrite};
 use wasmtime::Result;
+use wasmtime::component::FixedHostHeapUsage;
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi_io::streams::StreamError;
@@ -204,6 +205,8 @@ impl CustomOutputStream {
 
 /// The number of bytes `check_write` permits and `write` accepts in one call.
 const WRITE_BUDGET: usize = 64 * 1024;
+
+impl FixedHostHeapUsage for CustomOutputStream {}
 
 #[async_trait::async_trait]
 impl wasmtime_wasi::p2::Pollable for CustomOutputStream {

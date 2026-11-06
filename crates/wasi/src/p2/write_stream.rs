@@ -3,6 +3,7 @@ use bytes::Bytes;
 use std::pin::pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
+use wasmtime::component::FixedHostHeapUsage;
 use wasmtime::format_err;
 
 #[derive(Debug)]
@@ -205,6 +206,10 @@ impl OutputStream for AsyncWriteStream {
         }
     }
 }
+
+// Bounded by the stream's configured write budget.
+impl FixedHostHeapUsage for AsyncWriteStream {}
+
 #[async_trait::async_trait]
 impl Pollable for AsyncWriteStream {
     async fn ready(&mut self) {

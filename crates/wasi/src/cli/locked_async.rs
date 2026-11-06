@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll, ready};
 use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::sync::{Mutex, OwnedMutexGuard};
+use wasmtime::component::FixedHostHeapUsage;
 use wasmtime_wasi_io::streams::{InputStream, OutputStream};
 
 /// An impl of [`StdinStream`] built on top of [`AsyncRead`].
@@ -84,6 +85,10 @@ impl InputStream for AsyncStdinStream {
         }
     }
 }
+
+// Stdio streams share a single Arc<Mutex<...>> across handles and are bounded
+// by a single read chunk / write budget.
+impl FixedHostHeapUsage for AsyncStdinStream {}
 
 #[async_trait::async_trait]
 impl p2::Pollable for AsyncStdinStream {
@@ -196,6 +201,8 @@ impl OutputStream for AsyncStdoutStream {
         }
     }
 }
+
+impl FixedHostHeapUsage for AsyncStdoutStream {}
 
 #[async_trait::async_trait]
 impl p2::Pollable for AsyncStdoutStream {

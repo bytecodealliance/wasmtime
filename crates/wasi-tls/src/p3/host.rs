@@ -7,7 +7,9 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::{io::AsyncWriteExt as _, sync::oneshot};
 use wasmtime::StoreContextMut;
-use wasmtime::component::{Access, Accessor, FutureProducer, FutureReader, Resource, StreamReader};
+use wasmtime::component::{
+    Access, Accessor, FixedHostHeapUsage, FutureProducer, FutureReader, Resource, StreamReader,
+};
 
 /// Host-side state stored for `wasi:tls/client` `connector` resources.
 pub struct Connector {
@@ -15,6 +17,8 @@ pub struct Connector {
     send: Option<pipe::Writer>,
     recv: Option<pipe::Reader>,
 }
+
+impl FixedHostHeapUsage for Connector {}
 
 impl<'a> bindings::tls::client::Host for WasiTlsCtxView<'a> {}
 impl<'a> bindings::tls::types::Host for WasiTlsCtxView<'a> {}

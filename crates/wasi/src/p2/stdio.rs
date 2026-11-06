@@ -3,7 +3,7 @@ use crate::p2::bindings::cli::{
     stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
     terminal_stdout,
 };
-use wasmtime::component::Resource;
+use wasmtime::component::{FixedHostHeapUsage, Resource};
 use wasmtime_wasi_io::streams;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,7 +33,9 @@ impl stderr::Host for WasiCliCtxView<'_> {
     }
 }
 
+#[derive(FixedHostHeapUsage)]
 pub struct TerminalInput;
+#[derive(FixedHostHeapUsage)]
 pub struct TerminalOutput;
 
 impl terminal_input::Host for WasiCliCtxView<'_> {}

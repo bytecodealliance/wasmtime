@@ -1,4 +1,5 @@
 use super::Resource;
+use super::resources::{FixedHostHeapUsage, HostHeapUsage};
 use crate::prelude::*;
 use alloc::collections::{BTreeMap, BTreeSet};
 use core::any::Any;
@@ -7,8 +8,9 @@ use core::marker::PhantomData;
 use core::mem;
 use sealed::{DefaultTombstone, DeleteWithTombstone};
 
-#[derive(Debug)]
 /// Errors returned by operations on `ResourceTable`
+#[derive(Debug)]
+#[non_exhaustive]
 pub enum ResourceTableError {
     /// ResourceTable has no free keys
     Full,
@@ -19,6 +21,8 @@ pub enum ResourceTableError {
     /// Resource cannot be deleted because child resources exist in the table. Consult wit docs for
     /// the particular resource to see which methods may return child resources.
     HasChildren,
+    /// The host heap memory limit for this table has been exceeded.
+    HostMemoryLimitExceeded,
 }
 
 impl fmt::Display for ResourceTableError {
@@ -28,6 +32,9 @@ impl fmt::Display for ResourceTableError {
             Self::NotPresent => write!(f, "resource not present"),
             Self::WrongType => write!(f, "resource is of another type"),
             Self::HasChildren => write!(f, "resource has children"),
+            Self::HostMemoryLimitExceeded => {
+                write!(f, "host heap memory limit exceeded for resource table")
+            }
         }
     }
 }
@@ -42,6 +49,12 @@ pub struct ResourceTable<D: DeleteWithTombstone = DefaultTombstone> {
     free_count: usize,
     max_capacity: usize,
     live: usize,
+    /// The current total host heap usage, in bytes, of all resources in the table.
+    current_host_heap_usage: usize,
+    /// An optional maximum limit on total host heap usage, in bytes. If `Some`,
+    /// any `push` or `update` that would exceed this limit will result in
+    /// [`ResourceTableError::HostMemoryLimitExceeded`].
+    max_host_heap_usage: Option<usize>,
     _tombstone: PhantomData<D>,
 }
 
@@ -108,14 +121,22 @@ struct TableEntry {
     parent: Option<u32>,
     /// The indices of any children of this entry.
     children: BTreeSet<u32>,
+    /// The host heap usage, in bytes, currently charged to the table for this
+    /// entry.
+    ///
+    /// `update` uses this to compute the change in usage and `delete` releases
+    /// it, so the table total stays consistent even if the entry was mutated
+    /// through an untracked path such as `get_any_mut`.
+    host_heap_usage: usize,
 }
 
 impl TableEntry {
-    fn new(entry: Box<dyn Any + Send>, parent: Option<u32>) -> Self {
+    fn new(entry: Box<dyn Any + Send>, parent: Option<u32>, host_heap_usage: usize) -> Self {
         Self {
             entry,
             parent,
             children: BTreeSet::new(),
+            host_heap_usage,
         }
     }
     fn add_child(&mut self, child: u32) {
@@ -126,6 +147,13 @@ impl TableEntry {
         let was_removed = self.children.remove(&child);
         debug_assert!(was_removed);
     }
+}
+
+#[inline]
+fn total_host_size<T: HostHeapUsage + ?Sized>(val: &T) -> Result<usize, ResourceTableError> {
+    size_of_val(val)
+        .checked_add(val.heap_size_of_children())
+        .ok_or(ResourceTableError::HostMemoryLimitExceeded)
 }
 
 impl ResourceTable {
@@ -148,6 +176,8 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
             free_count: 0,
             max_capacity: DEFAULT_MAX_CAPACITY,
             live: 0,
+            current_host_heap_usage: 0,
+            max_host_heap_usage: None,
             _tombstone: PhantomData,
         }
     }
@@ -197,13 +227,54 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
         self.max_capacity = max;
     }
 
+    /// Returns the configured maximum host heap usage, in bytes, if any.
+    pub fn max_host_heap_usage(&self) -> Option<usize> {
+        self.max_host_heap_usage
+    }
+
+    /// Set the maximum allowed total host heap usage for this table.
+    ///
+    /// This option provides an umbrella mechanism for protecting hosts against
+    /// guests that may try to make calls that allocate excessive host memory.
+    /// Once the limit is hit for a given table, the guest will trap. Hosts may
+    /// monitor the current usage via [`Self::current_host_heap_usage`].
+    ///
+    /// Pass `None` to remove any previously set limit.
+    pub fn set_max_host_heap_usage(&mut self, max: Option<usize>) {
+        self.max_host_heap_usage = max;
+    }
+
+    /// Total host heap usage, in bytes, of resources in this table.
+    pub fn current_host_heap_usage(&self) -> usize {
+        self.current_host_heap_usage
+    }
+
+    /// Charge `bytes` to the table, failing if that would exceed the limit.
+    fn reserve(&mut self, bytes: usize) -> Result<(), ResourceTableError> {
+        let new_usage = self
+            .current_host_heap_usage
+            .checked_add(bytes)
+            .ok_or(ResourceTableError::HostMemoryLimitExceeded)?;
+        if self.max_host_heap_usage.is_some_and(|max| new_usage > max) {
+            return Err(ResourceTableError::HostMemoryLimitExceeded);
+        }
+        self.current_host_heap_usage = new_usage;
+        Ok(())
+    }
+
+    /// Release `bytes` previously charged to the table.
+    fn release(&mut self, bytes: usize) {
+        debug_assert!(bytes <= self.current_host_heap_usage);
+        self.current_host_heap_usage = self.current_host_heap_usage.saturating_sub(bytes);
+    }
+
     /// Inserts a new value `T` into this table, returning a corresponding
     /// `Resource<T>` which can be used to refer to it after it was inserted.
     pub fn push<T>(&mut self, entry: T) -> Result<Resource<T>, ResourceTableError>
     where
-        T: Send + 'static,
+        T: Send + 'static + HostHeapUsage,
     {
-        let idx = self.push_(TableEntry::new(Box::new(entry), None))?;
+        let idx = self.push_with_parent(entry, None)?;
         Ok(Resource::new_own(idx))
     }
 
@@ -225,18 +296,14 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
     #[inline]
     fn free_entry(&mut self, ix: usize) -> TableEntry {
-        if D::DELETE_WITH_TOMBSTONE {
+        let removed_entry = if D::DELETE_WITH_TOMBSTONE {
             // Instead of making this entry available for reuse, we leave a
             // tombstone in debug mode.  This helps detect use-after-delete and
             // double-delete bugs.
             match mem::replace(
                 &mut self.entries[ix],
                 Entry::Occupied {
-                    entry: TableEntry {
-                        entry: Box::new(Tombstone),
-                        parent: None,
-                        children: BTreeSet::new(),
-                    },
+                    entry: TableEntry::new(Box::new(Tombstone), None, 0),
                 },
             ) {
                 Entry::Occupied { entry } => {
@@ -263,10 +330,26 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
             self.live -= 1;
 
             entry
-        }
+        };
+        self.release(removed_entry.host_heap_usage);
+        removed_entry
     }
 
-    /// Push a new entry into the table, returning its handle. This will prefer to use free entries
+    fn push_with_parent<T>(
+        &mut self,
+        entry: T,
+        parent: Option<u32>,
+    ) -> Result<u32, ResourceTableError>
+    where
+        T: Send + 'static + HostHeapUsage,
+    {
+        let usage = total_host_size(&entry)?;
+        self.reserve(usage)?;
+        let e = TableEntry::new(Box::new(entry), parent, usage);
+        self.push_(e).inspect_err(|_| self.release(usage))
+    }
+
+    /// Insert an entry into the table, returning its handle. This will prefer to use free entries
     /// if they exist, falling back on pushing new entries onto the end of the table.
     fn push_(&mut self, e: TableEntry) -> Result<u32, ResourceTableError> {
         if let Some(free) = self.pop_free_list() {
@@ -323,12 +406,12 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
         parent: &Resource<U>,
     ) -> Result<Resource<T>, ResourceTableError>
     where
-        T: Send + 'static,
+        T: Send + 'static + HostHeapUsage,
         U: 'static,
     {
         let parent = parent.rep();
         self.occupied(parent)?;
-        let child = self.push_(TableEntry::new(Box::new(entry), Some(parent)))?;
+        let child = self.push_with_parent(entry, Some(parent))?;
         self.occupied_mut(parent)?.add_child(child);
         Ok(Resource::new_own(child))
     }
@@ -374,9 +457,12 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
         Ok(&*r.entry)
     }
 
-    /// Get an mutable reference to a resource of a given type at a given
-    /// index.
-    pub fn get_mut<T: Any + Sized>(
+    /// Get a mutable reference to a resource of a given type at a given index.
+    ///
+    /// This method is only available for types that implement
+    /// [`FixedHostHeapUsage`]. For types whose heap footprint can vary with
+    /// mutation, use [`update`](ResourceTable::update) instead.
+    pub fn get_mut<T: Any + Sized + FixedHostHeapUsage>(
         &mut self,
         key: &Resource<T>,
     ) -> Result<&mut T, ResourceTableError> {
@@ -389,6 +475,72 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
     pub fn get_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, ResourceTableError> {
         let r = self.occupied_mut(key)?;
         Ok(&mut *r.entry)
+    }
+
+    /// Mutate a variable-size resource in place and recompute its host heap
+    /// usage.
+    ///
+    /// Use this method for types that implement [`HostHeapUsage`] without
+    /// [`FixedHostHeapUsage`] (for example, types with owned `Vec`, `String`,
+    /// or `HashMap` fields). For fixed-size types, use [`get_mut`](ResourceTable::get_mut).
+    ///
+    /// After `updater` returns, the resource's size is recomputed and the
+    /// table's running total is updated. If the resource grew and the table
+    /// total exceeds the configured maximum,
+    /// [`ResourceTableError::HostMemoryLimitExceeded`] is returned (and should
+    /// be treated as a guest trap by host bindings; see
+    /// [`set_max_host_heap_usage`](ResourceTable::set_max_host_heap_usage) for
+    /// soft-limit behavior).
+    ///
+    /// ```
+    /// use wasmtime::component::{HostHeapUsage, ResourceTable};
+    ///
+    /// #[derive(HostHeapUsage)]
+    /// struct Item {
+    ///     payload: Option<Vec<u8>>,
+    /// }
+    ///
+    /// let mut table = ResourceTable::new();
+    /// let id = table.push(Item { payload: Some(vec![1, 2, 3]) })?;
+    /// let taken = table.update(&id, |r| r.payload.take())?;
+    /// assert_eq!(taken, Some(vec![1, 2, 3]));
+    /// # Ok::<(), wasmtime::component::ResourceTableError>(())
+    /// ```
+    pub fn update<T, F, R>(
+        &mut self,
+        resource: &Resource<T>,
+        updater: F,
+    ) -> Result<R, ResourceTableError>
+    where
+        T: Any + Sized + HostHeapUsage,
+        F: FnOnce(&mut T) -> R,
+    {
+        let current_total = self.current_host_heap_usage;
+        let entry = self.occupied_mut(resource.rep())?;
+        let t = entry
+            .entry
+            .downcast_mut::<T>()
+            .ok_or(ResourceTableError::WrongType)?;
+        let result = updater(t);
+        let raw_new_usage = total_host_size(t);
+        let old_usage = entry.host_heap_usage;
+        let other_usage = current_total - old_usage;
+        let max_add = usize::MAX - other_usage;
+        let (new_usage, overflowed) = match raw_new_usage {
+            Ok(u) if u <= max_add => (u, false),
+            Ok(_) | Err(_) => (max_add, true),
+        };
+        entry.host_heap_usage = new_usage;
+        self.current_host_heap_usage = other_usage + new_usage;
+        if overflowed
+            || (new_usage > old_usage
+                && self
+                    .max_host_heap_usage
+                    .is_some_and(|max| self.current_host_heap_usage > max))
+        {
+            return Err(ResourceTableError::HostMemoryLimitExceeded);
+        }
+        Ok(result)
     }
 
     /// Remove the specified entry from the table.
@@ -520,6 +672,159 @@ pub fn test_free_list() {
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 2);
     assert_eq!(table.len(), 3);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Tracked(usize);
+    impl HostHeapUsage for Tracked {
+        fn heap_size_of_children(&self) -> usize {
+            self.0
+        }
+    }
+
+    const TRACKED_INLINE: usize = size_of::<Tracked>();
+
+    struct Fixed(u64);
+    impl FixedHostHeapUsage for Fixed {}
+
+    #[test]
+    fn test_heap_usage_push_child_and_delete() {
+        let mut table = ResourceTable::new();
+        assert_eq!(table.current_host_heap_usage(), 0);
+
+        let parent = table.push(Tracked(100)).unwrap();
+        assert_eq!(table.current_host_heap_usage(), TRACKED_INLINE + 100);
+
+        let child = table.push_child(Tracked(200), &parent).unwrap();
+        assert_eq!(table.current_host_heap_usage(), 2 * TRACKED_INLINE + 300);
+
+        table.delete(child).unwrap();
+        assert_eq!(table.current_host_heap_usage(), TRACKED_INLINE + 100);
+
+        table.delete(parent).unwrap();
+        assert_eq!(table.current_host_heap_usage(), 0);
+
+        // Fixed-size resources mutated via get_mut keep constant accounting.
+        let fixed_size = size_of::<Fixed>();
+        let r = table.push(Fixed(1)).unwrap();
+        assert_eq!(table.current_host_heap_usage(), fixed_size);
+        table.get_mut(&r).unwrap().0 = 42;
+        assert_eq!(table.current_host_heap_usage(), fixed_size);
+        table.delete(r).unwrap();
+        assert_eq!(table.current_host_heap_usage(), 0);
+    }
+
+    #[test]
+    fn test_heap_usage_limits() {
+        let mut table = ResourceTable::new();
+        let entry_size = TRACKED_INLINE + 100;
+        table.set_max_host_heap_usage(Some(2 * entry_size));
+        assert_eq!(table.max_host_heap_usage(), Some(2 * entry_size));
+
+        let parent = table.push(Tracked(100)).unwrap();
+        let child = table.push_child(Tracked(100), &parent).unwrap();
+        assert_eq!(table.current_host_heap_usage(), 2 * entry_size);
+
+        // Exceeding the limit fails for both push and push_child.
+        assert!(matches!(
+            table.push(Tracked(1)),
+            Err(ResourceTableError::HostMemoryLimitExceeded)
+        ));
+        assert!(matches!(
+            table.push_child(Tracked(1), &parent),
+            Err(ResourceTableError::HostMemoryLimitExceeded)
+        ));
+        assert_eq!(table.current_host_heap_usage(), 2 * entry_size);
+
+        // Removing the limit allows further pushes.
+        table.set_max_host_heap_usage(None);
+        assert_eq!(table.max_host_heap_usage(), None);
+        let extra = table.push(Tracked(50)).unwrap();
+        assert_eq!(
+            table.current_host_heap_usage(),
+            2 * entry_size + TRACKED_INLINE + 50
+        );
+
+        table.delete(extra).unwrap();
+        table.delete(child).unwrap();
+        table.delete(parent).unwrap();
+        assert_eq!(table.current_host_heap_usage(), 0);
+    }
+
+    #[test]
+    fn test_update() {
+        let mut table = ResourceTable::new();
+        table.set_max_host_heap_usage(Some(TRACKED_INLINE + 250));
+
+        let r = table.push(Tracked(100)).unwrap();
+        assert_eq!(table.current_host_heap_usage(), TRACKED_INLINE + 100);
+
+        // Grow and shrink within the limit.
+        table.update(&r, |t| t.0 = 200).unwrap();
+        assert_eq!(table.current_host_heap_usage(), TRACKED_INLINE + 200);
+        table.update(&r, |t| t.0 = 50).unwrap();
+        assert_eq!(table.current_host_heap_usage(), TRACKED_INLINE + 50);
+
+        // Growing past the limit returns HostMemoryLimitExceeded while keeping
+        // the post-mutation size recorded so delete releases the exact amount.
+        let err = table.update(&r, |t| t.0 = 300).unwrap_err();
+        assert!(matches!(err, ResourceTableError::HostMemoryLimitExceeded));
+        assert_eq!(table.current_host_heap_usage(), TRACKED_INLINE + 300);
+
+        // Shrinking while over the limit succeeds.
+        table.update(&r, |t| t.0 = 280).unwrap();
+        assert_eq!(table.current_host_heap_usage(), TRACKED_INLINE + 280);
+
+        table.delete(r).unwrap();
+        assert_eq!(table.current_host_heap_usage(), 0);
+    }
+
+    #[test]
+    fn test_heap_usage_error_rollbacks() {
+        let mut table = ResourceTable::new();
+        table.set_max_capacity(2);
+        table.set_max_host_heap_usage(Some(1000));
+
+        let a = table.push(Tracked(100)).unwrap();
+        let b = table.push(Tracked(100)).unwrap();
+        assert_eq!(table.current_host_heap_usage(), 2 * (TRACKED_INLINE + 100));
+
+        // Push when table is full rolls back reserved usage.
+        assert!(matches!(
+            table.push(Tracked(100)),
+            Err(ResourceTableError::Full)
+        ));
+        assert_eq!(table.current_host_heap_usage(), 2 * (TRACKED_INLINE + 100));
+
+        // Untracked mutation via get_any_mut still releases original charged bytes.
+        table
+            .get_any_mut(a.rep())
+            .unwrap()
+            .downcast_mut::<Tracked>()
+            .unwrap()
+            .0 = 150;
+        table.delete(a).unwrap();
+        assert_eq!(table.current_host_heap_usage(), TRACKED_INLINE + 100);
+
+        // Wrong-type delete still releases the entry's charged bytes.
+        let wrong = Resource::<Fixed>::new_own(b.rep());
+        assert!(matches!(
+            table.delete(wrong),
+            Err(ResourceTableError::WrongType)
+        ));
+        assert_eq!(table.current_host_heap_usage(), 0);
+
+        // push_child with missing parent does not leak usage.
+        let stale = Resource::<Tracked>::new_own(b.rep());
+        assert!(matches!(
+            table.push_child(Tracked(100), &stale),
+            Err(ResourceTableError::NotPresent)
+        ));
+        assert_eq!(table.current_host_heap_usage(), 0);
+    }
 }
 
 #[test]

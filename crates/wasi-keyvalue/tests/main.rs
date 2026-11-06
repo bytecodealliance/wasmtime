@@ -1,7 +1,7 @@
 use test_programs_artifacts::{KEYVALUE_MAIN_COMPONENT, foreach_keyvalue};
 use wasmtime::{
     Result, Store,
-    component::{Component, Linker, ResourceTable},
+    component::{Component, Linker, ResourceTable, ResourceTableError},
     format_err,
 };
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::bindings::Command};
@@ -63,4 +63,32 @@ async fn keyvalue_main() -> Result<()> {
         },
     )
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn keyvalue_host_heap_limit() -> Result<()> {
+    let mut table = ResourceTable::new();
+    // Small limit so test program traps with `HostMemoryLimitExceeded` on both
+    // 32-bit and 64-bit targets.
+    table.set_max_host_heap_usage(Some(64));
+
+    let err = run_wasi(
+        KEYVALUE_MAIN_COMPONENT,
+        Ctx {
+            table,
+            wasi_ctx: WasiCtx::builder().inherit_stderr().build(),
+            wasi_keyvalue_ctx: WasiKeyValueCtxBuilder::new()
+                .in_memory_data([("atomics_key", "5")])
+                .build(),
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.downcast_ref::<ResourceTableError>()
+            .is_some_and(|e| matches!(e, ResourceTableError::HostMemoryLimitExceeded)),
+        "expected HostMemoryLimitExceeded trap, got: {err:#}",
+    );
+    Ok(())
 }

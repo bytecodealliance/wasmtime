@@ -10,7 +10,7 @@ use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::body::Body;
 use wasmtime::Result;
-use wasmtime::component::Resource;
+use wasmtime::component::{FixedHostHeapUsage, HostHeapUsage, Resource};
 use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
 
@@ -262,3 +262,36 @@ impl Pollable for HostFutureIncomingResponse {
         }
     }
 }
+
+impl HostHeapUsage for HostIncomingRequest {
+    fn heap_size_of_children(&self) -> usize {
+        let uri_approx = self.uri.scheme_str().map_or(0, str::len)
+            + self.uri.host().map_or(0, str::len)
+            + self.uri.path_and_query().map_or(0, |pq| pq.as_str().len());
+        self.authority.heap_size_of_children() + uri_approx + self.headers.heap_size_of_children()
+    }
+}
+
+impl FixedHostHeapUsage for HostResponseOutparam {}
+
+impl HostHeapUsage for HostOutgoingResponse {
+    fn heap_size_of_children(&self) -> usize {
+        self.headers.heap_size_of_children()
+    }
+}
+
+impl HostHeapUsage for HostOutgoingRequest {
+    fn heap_size_of_children(&self) -> usize {
+        self.authority.heap_size_of_children()
+            + self.path_with_query.heap_size_of_children()
+            + self.headers.heap_size_of_children()
+    }
+}
+
+impl HostHeapUsage for HostIncomingResponse {
+    fn heap_size_of_children(&self) -> usize {
+        self.headers.heap_size_of_children()
+    }
+}
+
+impl FixedHostHeapUsage for HostFutureIncomingResponse {}

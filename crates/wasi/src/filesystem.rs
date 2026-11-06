@@ -8,7 +8,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tracing::debug;
-use wasmtime::component::{HasData, Resource, ResourceTable};
+use wasmtime::component::{FixedHostHeapUsage, HasData, Resource, ResourceTable};
 use wasmtime::error::Context as _;
 
 #[cfg(unix)]
@@ -1329,3 +1329,6 @@ pub trait WasiFilesystemNamedView: Send + 'static {
     /// separate tables those lookups fail or find another context's resources.
     fn filesystem(&mut self, id: NamedId) -> WasiFilesystemCtxView<'_>;
 }
+
+// Descriptor wraps Arc<File/Dir> OS handles whose backing state lives in kernel space.
+impl FixedHostHeapUsage for Descriptor {}

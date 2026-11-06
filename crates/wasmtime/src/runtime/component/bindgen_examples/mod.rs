@@ -315,10 +315,12 @@ pub mod _3_interface_imports;
 ///
 /// ```rust
 /// use wasmtime::Result;
-/// use wasmtime::component::{bindgen, ResourceTable, Resource};
+/// use wasmtime::component::{bindgen, FixedHostHeapUsage, ResourceTable, Resource};
 /// use example::imported_resources::logging::{Level, Host, HostLogger};
 ///
 #[doc = include_str!("./_4_imported_resources.rs")]
+///
+/// impl FixedHostHeapUsage for MyLogger {}
 ///
 /// #[derive(Default)]
 /// struct MyState {
@@ -535,12 +537,14 @@ pub mod _6_exported_resources;
 /// ```rust
 /// use wasmtime::{
 ///     Config, Engine, Result, Store,
-///     component::{bindgen, Component, HasSelf, Linker, ResourceTable},
+///     component::{bindgen, Component, FixedHostHeapUsage, HasSelf, Linker, ResourceTable},
 /// };
 ///
 #[doc = include_str!("./_7_async.rs")]
 ///
 /// use self::example::resource_async::logging::{self as bindings, Level};
+///
+/// impl FixedHostHeapUsage for MyLogger {}
 ///
 /// #[derive(Default)]
 /// struct State {

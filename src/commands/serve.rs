@@ -23,7 +23,7 @@ use std::{
 use tokio::io::{self, AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
-use wasmtime::component::{Component, Linker, TaskGroupId};
+use wasmtime::component::{Component, FixedHostHeapUsage, Linker, TaskGroupId};
 use wasmtime::error::Context as _;
 use wasmtime::{
     AsContextMut as _, Engine, Result, Store, StoreContextMut, StoreLimits, UpdateDeadline, bail,
@@ -1610,6 +1610,8 @@ struct LogStream {
     output: Output,
     state: Arc<LogStreamState>,
 }
+
+impl FixedHostHeapUsage for LogStream {}
 
 struct LogStreamState {
     prefix: String,

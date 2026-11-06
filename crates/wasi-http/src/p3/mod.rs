@@ -34,7 +34,7 @@ use crate::{FieldMapError, WasiHttp, WasiHttpNamed, WasiHttpNamedView, WasiHttpV
 use bindings::http::{client, types};
 use core::ops::Deref;
 use std::sync::Arc;
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, FixedHostHeapUsage, Linker};
 use wasmtime_wasi::{NamedId, TrappableError, WasiCtxNamedView};
 
 pub(crate) type HttpResult<T> = Result<T, HttpError>;
@@ -301,3 +301,8 @@ impl<T> MaybeMutable<T> {
         }
     }
 }
+
+// `MaybeMutable<T>` holds `Arc<T>`, whose heap allocation is a single fixed-size
+// `T` when `T: FixedHostHeapUsage`. Even if `get_mut()` clones the inner `Arc`
+// via `Arc::make_mut`, each table entry owns at most one `T` allocation.
+impl<T: FixedHostHeapUsage> FixedHostHeapUsage for MaybeMutable<T> {}
