@@ -30,10 +30,13 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         assert_eq!(res.status, 200);
         let method = res.header("x-wasmtime-test-method").unwrap();
         assert_eq!(std::str::from_utf8(method).unwrap(), "GET");
+        // HTTP/1.1 sends path and query only, while HTTP/2 clients may send
+        // the absolute form, so accept either.
         let uri = res.header("x-wasmtime-test-uri").unwrap();
-        assert_eq!(
-            std::str::from_utf8(uri).unwrap(),
-            format!("/get?some=arg&goes=here")
+        let uri = std::str::from_utf8(uri).unwrap();
+        assert!(
+            uri.ends_with("/get?some=arg&goes=here"),
+            "unexpected request URI: {uri}"
         );
         assert_eq!(res.body, b"");
         Ok(())

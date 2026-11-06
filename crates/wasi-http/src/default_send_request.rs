@@ -2,7 +2,7 @@ use crate::{Error, RequestOptions};
 use bytes::Bytes;
 use core::future::poll_fn;
 use core::pin::{Pin, pin};
-use core::task::{Poll, ready};
+use core::task::{Context, Poll, ready};
 use http::uri::Scheme;
 use http::{Request, Response};
 use http_body::Body;
@@ -32,8 +32,44 @@ impl<T> TokioStream for T where T: AsyncRead + AsyncWrite + Send + Sync + Unpin 
 ///
 /// This function performs no `Content-Length` validation.
 pub async fn default_send_request(
+    req: Request<impl Body<Data = Bytes, Error = Error> + Send + 'static>,
+    options: Option<RequestOptions>,
+) -> Result<
+    (
+        Response<impl Body<Data = Bytes, Error = Error>>,
+        impl Future<Output = Result<(), Error>> + Send,
+    ),
+    Error,
+> {
+    default_send_request_with_http2(req, options, crate::Http2Config::default()).await
+}
+
+fn between_bytes_timeout_or_1ns(t: Duration) -> Duration {
+    if t == Duration::ZERO {
+        Duration::new(0, 1)
+    } else {
+        t
+    }
+}
+
+/// Use an executor to drive HTTP/2 client connections.
+#[derive(Clone, Copy, Debug)]
+struct TokioExecutor;
+
+impl<F> hyper::rt::Executor<F> for TokioExecutor
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    fn execute(&self, fut: F) {
+        tokio::spawn(fut);
+    }
+}
+
+/// Like [`default_send_request`], but with explicit HTTP/2 negotiation behavior.
+pub async fn default_send_request_with_http2(
     mut req: Request<impl Body<Data = Bytes, Error = Error> + Send + 'static>,
     options: Option<RequestOptions>,
+    http2: crate::Http2Config,
 ) -> Result<
     (
         Response<impl Body<Data = Bytes, Error = Error>>,
@@ -54,48 +90,65 @@ pub async fn default_send_request(
     let connect_timeout = options
         .and_then(|r| r.connect_timeout)
         .unwrap_or(Duration::from_secs(600));
-
     let first_byte_timeout = options
         .and_then(|r| r.first_byte_timeout)
         .unwrap_or(Duration::from_secs(600));
-
     let between_bytes_timeout = options
         .and_then(|r| r.between_bytes_timeout)
         .unwrap_or(Duration::from_secs(600));
 
     // `connect_timeout` covers everything up to a usable connection: the TCP
     // connect, the TLS handshake, and the HTTP handshake.
-    let connect = async {
+    let establish = async {
         let stream = TcpStream::connect(&authority)
             .await
             .map_err(Error::Connect)?;
-        let stream = if use_tls {
+        let (stream, negotiated_h2): (Box<dyn TokioStream>, bool) = if use_tls {
             // derived from https://github.com/rustls/rustls/blob/main/examples/src/bin/simpleclient.rs
             let root_cert_store = rustls::RootCertStore {
                 roots: webpki_roots::TLS_SERVER_ROOTS.into(),
             };
-            let config = rustls::ClientConfig::builder()
+            let mut config = rustls::ClientConfig::builder()
                 .with_root_certificates(root_cert_store)
                 .with_no_client_auth();
+            if http2.alpn {
+                config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+            }
             let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
             let domain = tls_server_name(&authority)?;
             let stream = connector
                 .connect(domain, stream)
                 .await
                 .map_err(Error::Tls)?;
-            stream.boxed()
+            let negotiated_h2 = stream.get_ref().1.alpn_protocol() == Some(b"h2");
+            (stream.boxed(), negotiated_h2)
         } else {
-            stream.boxed()
+            (stream.boxed(), false)
         };
-        // TODO: we should plumb the builder through the http context, and use it here
-        hyper::client::conn::http1::Builder::new()
-            .handshake(crate::io::TokioIo::new(stream))
-            .await
-            .map_err(Error::from)
+        let use_http2 = negotiated_h2 || (!use_tls && http2.prior_knowledge);
+        Ok::<_, Error>((stream, use_http2))
     };
-    let (mut sender, conn) = tokio::time::timeout(connect_timeout, connect)
+    let (stream, use_http2) = tokio::time::timeout(connect_timeout, establish)
         .await
         .map_err(|_| Error::ConnectionTimeout)??;
+
+    if use_http2 {
+        return send_http2(
+            req,
+            stream,
+            connect_timeout,
+            first_byte_timeout,
+            between_bytes_timeout,
+        )
+        .await;
+    }
+
+    let (mut sender, conn) = tokio::time::timeout(
+        connect_timeout,
+        hyper::client::conn::http1::Builder::new().handshake(crate::io::TokioIo::new(stream)),
+    )
+    .await
+    .map_err(|_| Error::ConnectionTimeout)??;
 
     // at this point, the request contains the scheme and the authority, but
     // the http packet should only include those if addressing a proxy, so
@@ -110,62 +163,22 @@ pub async fn default_send_request(
         .build()
         .expect("comes from valid request");
 
+    let (response, conn): (
+        Pin<Box<dyn Future<Output = Result<Response<hyper::body::Incoming>, hyper::Error>> + Send>>,
+        Pin<Box<dyn Future<Output = Result<(), hyper::Error>> + Send>>,
+    ) = (
+        Box::pin(async move { sender.send_request(req).await }),
+        Box::pin(async move { conn.await }),
+    );
+
     let send = async move {
-        use core::task::Context;
-
-        /// Wrapper around [hyper::body::Incoming] used to
-        /// account for request option timeout configuration
-        struct IncomingResponseBody {
-            incoming: hyper::body::Incoming,
-            timeout: tokio::time::Interval,
-        }
-        impl http_body::Body for IncomingResponseBody {
-            type Data = <hyper::body::Incoming as http_body::Body>::Data;
-            type Error = Error;
-
-            fn poll_frame(
-                mut self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-            ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-                match Pin::new(&mut self.as_mut().incoming).poll_frame(cx) {
-                    Poll::Ready(None) => Poll::Ready(None),
-                    Poll::Ready(Some(Err(err))) => {
-                        let err = if err.is_timeout() {
-                            Error::HttpResponseTimeout
-                        } else {
-                            Error::from(err)
-                        };
-                        Poll::Ready(Some(Err(err)))
-                    }
-                    Poll::Ready(Some(Ok(frame))) => {
-                        self.timeout.reset();
-                        Poll::Ready(Some(Ok(frame)))
-                    }
-                    Poll::Pending => {
-                        ready!(self.timeout.poll_tick(cx));
-                        Poll::Ready(Some(Err(Error::ConnectionReadTimeout)))
-                    }
-                }
-            }
-            fn is_end_stream(&self) -> bool {
-                self.incoming.is_end_stream()
-            }
-            fn size_hint(&self) -> http_body::SizeHint {
-                self.incoming.size_hint()
-            }
-        }
-
-        let res = tokio::time::timeout(first_byte_timeout, sender.send_request(req))
+        let res = tokio::time::timeout(first_byte_timeout, response)
             .await
             .map_err(|_| Error::ConnectionReadTimeout)?
             .map_err(Error::from)?;
         // Tokio panics on an `interval` with a zero duration, so clamp it to a
         // 1ns timeout which is sort of effectively zero anyway.
-        let between_bytes_timeout = if between_bytes_timeout == Duration::ZERO {
-            Duration::new(0, 1)
-        } else {
-            between_bytes_timeout
-        };
+        let between_bytes_timeout = between_bytes_timeout_or_1ns(between_bytes_timeout);
         let mut timeout = tokio::time::interval(between_bytes_timeout);
         timeout.reset();
         Ok(res.map(|incoming| IncomingResponseBody { incoming, timeout }))
@@ -194,7 +207,7 @@ pub async fn default_send_request(
         }
     })
     .await?;
-    Ok((res, async move {
+    let io = Box::pin(async move {
         let Some(conn) = conn.take() else {
             // `hyper` connection has already completed
             return Ok(());
@@ -206,7 +219,103 @@ pub async fn default_send_request(
             return Err(err.into());
         }
         Ok(())
-    }))
+    }) as Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+    Ok((res, io))
+}
+
+/// Wrapper around [hyper::body::Incoming] used to account for request option
+/// timeout configuration.
+struct IncomingResponseBody {
+    incoming: hyper::body::Incoming,
+    timeout: tokio::time::Interval,
+}
+
+impl http_body::Body for IncomingResponseBody {
+    type Data = <hyper::body::Incoming as http_body::Body>::Data;
+    type Error = Error;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        match Pin::new(&mut self.as_mut().incoming).poll_frame(cx) {
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Ready(Some(Err(err))) => {
+                let err = if err.is_timeout() {
+                    Error::HttpResponseTimeout
+                } else {
+                    Error::from(err)
+                };
+                Poll::Ready(Some(Err(err)))
+            }
+            Poll::Ready(Some(Ok(frame))) => {
+                self.timeout.reset();
+                Poll::Ready(Some(Ok(frame)))
+            }
+            Poll::Pending => {
+                ready!(self.timeout.poll_tick(cx));
+                Poll::Ready(Some(Err(Error::ConnectionReadTimeout)))
+            }
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.incoming.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.incoming.size_hint()
+    }
+}
+
+/// Sends `req` over an HTTP/2 connection and keeps driving it until the caller
+/// drops the returned future.
+#[cfg_attr(not(feature = "default-send-request"), allow(dead_code))]
+async fn send_http2(
+    req: Request<impl Body<Data = Bytes, Error = Error> + Send + 'static>,
+    stream: Box<dyn TokioStream>,
+    connect_timeout: Duration,
+    first_byte_timeout: Duration,
+    between_bytes_timeout: Duration,
+) -> Result<
+    (
+        Response<IncomingResponseBody>,
+        Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>,
+    ),
+    Error,
+> {
+    let req = req.map(|body| http_body_util::BodyExt::boxed_unsync(body));
+    let (mut sender, conn) = tokio::time::timeout(
+        connect_timeout,
+        hyper::client::conn::http2::Builder::new(TokioExecutor)
+            .handshake(crate::io::TokioIo::new(stream)),
+    )
+    .await
+    .map_err(|_| Error::ConnectionTimeout)??;
+    let mut conn = Box::pin(conn);
+    let res = tokio::time::timeout(first_byte_timeout, async {
+        use futures::FutureExt as _;
+        use futures::future::{Either, select};
+        match select(sender.send_request(req).boxed(), &mut conn).await {
+            Either::Left((res, _)) => res.map_err(Error::from),
+            Either::Right((done, _)) => {
+                done.map_err(Error::from)?;
+                Err(Error::ConnectionReadTimeout)
+            }
+        }
+    })
+    .await
+    .map_err(|_| Error::ConnectionReadTimeout)??;
+    let mut timeout = tokio::time::interval(between_bytes_timeout_or_1ns(between_bytes_timeout));
+    timeout.reset();
+    let io = Box::pin(async move {
+        let _ = conn.await;
+        Ok(())
+    }) as Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+    Ok((
+        res.map(|incoming| IncomingResponseBody { incoming, timeout }),
+        io,
+    ))
 }
 
 /// Resolve the rustls [`ServerName`] used for TLS certificate verification from

@@ -122,6 +122,24 @@ pub struct WasiHttpCtxView<'a> {
 /// consumption.
 const DEFAULT_FIELD_SIZE_LIMIT: usize = 128 * 1024;
 
+/// How outgoing requests should negotiate HTTP/2.
+#[derive(Debug, Clone, Copy)]
+pub struct Http2Config {
+    /// For `https://` requests, offer `h2` via ALPN and use it when the peer selects it.
+    pub alpn: bool,
+    /// For `http://` requests, speak HTTP/2 with prior knowledge instead of HTTP/1.1.
+    pub prior_knowledge: bool,
+}
+
+impl Default for Http2Config {
+    fn default() -> Self {
+        Self {
+            alpn: false,
+            prior_knowledge: false,
+        }
+    }
+}
+
 /// Capture the state necessary for use in the wasi-http API implementation.
 #[derive(Debug, Clone)]
 pub struct WasiHttpCtx {
@@ -248,6 +266,11 @@ pub trait WasiHttpHooks: Send {
         Some(Scheme::HTTPS)
     }
 
+    /// How outgoing requests should negotiate HTTP/2.
+    fn http2_config(&self) -> Http2Config {
+        Http2Config::default()
+    }
+
     /// Send an outgoing request.
     ///
     /// This function will be used by the `wasi:http/handler#handle` implementation.
@@ -279,10 +302,11 @@ pub trait WasiHttpHooks: Send {
             > + Send,
     > {
         _ = fut;
+        let http2 = self.http2_config();
         Box::new(async move {
             use http_body_util::BodyExt;
 
-            let (res, io) = crate::default_send_request(request, options).await?;
+            let (res, io) = crate::default_send_request_with_http2(request, options, http2).await?;
             Ok((
                 res.map(BodyExt::boxed_unsync),
                 Box::new(io) as Box<dyn Future<Output = _> + Send>,

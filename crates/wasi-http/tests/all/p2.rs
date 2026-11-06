@@ -734,3 +734,67 @@ async fn wasi_http_fields_limit_incoming_request() -> Result<()> {
 
     Ok(())
 }
+
+/// An outgoing request must be able to reach a peer that only speaks HTTP/2 by
+/// using HTTP/2 with prior knowledge for plaintext connections.
+#[test_log::test(tokio::test)]
+async fn outbound_request_http2_prior_knowledge() -> Result<()> {
+    use http_body_util::{BodyExt as _, Empty};
+    use wasmtime_wasi_http::Http2Config;
+
+    let server = Server::http2(1)?;
+
+    let req = http::Request::get(format!("http://{}/", server.addr())).body(
+        Empty::<bytes::Bytes>::new()
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    )?;
+    let (res, io) = wasmtime_wasi_http::default_send_request_with_http2(
+        req,
+        None,
+        Http2Config {
+            alpn: false,
+            prior_knowledge: true,
+        },
+    )
+    .await?;
+    assert_eq!(res.status(), 200);
+    drop(res);
+    drop(io);
+    // `Server` joins its accept loop on drop, but an HTTP/2 connection is
+    // long-lived, so detach the mock server rather than waiting for the loop.
+    std::mem::forget(server);
+
+    Ok(())
+}
+
+/// Without prior knowledge, a plaintext request keeps using HTTP/1.1, so the
+/// same HTTP/2-only test server must reject it.
+#[test_log::test(tokio::test)]
+async fn outbound_request_without_prior_knowledge_keeps_http1() -> Result<()> {
+    use http_body_util::{BodyExt as _, Empty};
+    use wasmtime_wasi_http::Http2Config;
+
+    let server = Server::http2(1)?;
+
+    let req = http::Request::get(format!("http://{}/", server.addr())).body(
+        Empty::<bytes::Bytes>::new()
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    )?;
+    let res = wasmtime_wasi_http::default_send_request_with_http2(
+        req,
+        None,
+        Http2Config {
+            alpn: false,
+            prior_knowledge: false,
+        },
+    )
+    .await;
+    assert!(
+        res.is_err(),
+        "HTTP/1.1 must not succeed against an HTTP/2-only server"
+    );
+
+    Ok(())
+}
