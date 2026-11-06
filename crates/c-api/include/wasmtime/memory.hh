@@ -76,6 +76,20 @@ public:
     return prev;
   }
 
+  /// Zeroes the pages that `len` bytes at `offset` touch, and returns the
+  /// physical memory behind them to the operating system where possible.
+  ///
+  /// The range is rounded out to whole pages. The size of this memory does not
+  /// change.
+  Result<std::monostate> discard(Store::Context cx, size_t offset,
+                                 size_t len) const {
+    auto *error = wasmtime_memory_discard(cx.ptr, &memory, offset, len);
+    if (error != nullptr) {
+      return Error(error);
+    }
+    return std::monostate();
+  }
+
   /// Returns the size of a page, in bytes, for this memory.
   ///
   /// WebAssembly memories are made up of a whole number of pages, so the byte

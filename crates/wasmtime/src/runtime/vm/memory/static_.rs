@@ -112,4 +112,9 @@ unsafe impl LinearMemory for StaticMemory {
     fn as_ptr(&self) -> *mut u8 {
         self.base.as_ptr()
     }
+
+    fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
+        // The slot knows which of its pages are backed by its image.
+        self.image_slot.discard(offset, len)
+    }
 }

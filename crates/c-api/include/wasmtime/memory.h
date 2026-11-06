@@ -127,6 +127,31 @@ wasmtime_memory_grow(wasmtime_context_t *store, const wasmtime_memory_t *memory,
                      uint64_t delta, uint64_t *prev_size);
 
 /**
+ * \brief Zeroes the pages of the specified memory that `len` bytes at `offset`
+ * touch, and returns the physical memory behind them to the operating system
+ * where possible.
+ *
+ * \param store the store that owns `memory`
+ * \param memory the memory to discard pages of
+ * \param offset the offset, in bytes, of the range to discard
+ * \param len the length, in bytes, of the range to discard
+ *
+ * The range is rounded out to whole pages: `offset` is rounded down and
+ * `offset + len` up to a multiple of the memory's page size. A `len` of zero
+ * discards nothing. The size of the memory does not change, and the pages read
+ * as zeros afterwards. If the range is out of bounds, or the memory uses a
+ * custom page size, an error is returned and the memory is unchanged.
+ * Otherwise `NULL` is returned.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Memory.html#method.discard.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_memory_discard(wasmtime_context_t *store,
+                        const wasmtime_memory_t *memory, size_t offset,
+                        size_t len);
+
+/**
  * \brief Returns the size of a page, in bytes, for this memory.
  *
  * \param store the store that owns `memory`

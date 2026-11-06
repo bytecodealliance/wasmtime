@@ -49,6 +49,13 @@ pub unsafe fn decommit_pages(iov: &[iovec]) -> io::Result<()> {
     Ok(())
 }
 
+pub unsafe fn discard_pages(ptr: *mut u8, len: usize) -> io::Result<()> {
+    unsafe {
+        std::ptr::write_bytes(ptr, 0, len);
+    }
+    Ok(())
+}
+
 pub fn get_page_size() -> usize {
     4096
 }

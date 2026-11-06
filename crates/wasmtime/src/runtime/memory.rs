@@ -710,6 +710,92 @@ impl Memory {
         }
     }
 
+    /// Sets the pages of this memory that `len` bytes starting at `offset`
+    /// touch to zero, and returns the physical memory that backed them to the
+    /// operating system where possible.
+    ///
+    /// This is the host-side equivalent of the [`memory.discard`] instruction
+    /// from the memory-control proposal. The range is rounded out to whole
+    /// pages: `offset` is rounded down and `offset + len` is rounded up to a
+    /// multiple of this memory's page size, so every page the range touches is
+    /// discarded, including bytes on those pages outside of the range. A `len`
+    /// of zero discards nothing.
+    ///
+    /// It is semantically the same as writing zeros over those pages: the
+    /// size of the memory does not change and the discarded range remains
+    /// accessible. How the pages are zeroed is up to the memory's
+    /// [`LinearMemory::discard`] implementation:
+    ///
+    /// * Memories that Wasmtime maps itself with virtual memory hand the pages
+    ///   back to the operating system (for example with
+    ///   `madvise(MADV_DONTNEED)` on Linux), so they stop counting towards the
+    ///   process's resident memory until they are next written.
+    /// * Memories in configurations without virtual memory are zeroed by
+    ///   writing to them, which releases no memory.
+    /// * Memories created by a custom [`MemoryCreator`] are zeroed by writing
+    ///   to them too, unless their [`LinearMemory`] implementation overrides
+    ///   [`LinearMemory::discard`].
+    ///
+    /// This is useful for embedders that know a guest has freed a large region
+    /// of its linear memory, for example through a cooperating allocator.
+    ///
+    /// Handing pages back to the operating system is not free: it is at least
+    /// one system call, and on multi-threaded hosts the operating system may
+    /// need to interrupt other threads to flush their TLBs. Reading or writing
+    /// a discarded page later takes a page fault to bring in a fresh zero page.
+    /// This method is intended for large ranges released infrequently, not as
+    /// a replacement for zeroing small amounts of memory.
+    ///
+    /// [`memory.discard`]: https://github.com/WebAssembly/memory-control/blob/main/proposals/memory-control/discard.md
+    ///
+    /// # Errors
+    ///
+    /// Returns an error, and leaves the memory unchanged, if:
+    ///
+    /// * `offset + len` is beyond the current size of this memory, in bytes,
+    ///   either as given or once rounded up to a whole page,
+    /// * this memory uses a [custom page size](crate::MemoryTypeBuilder::page_size_log2),
+    /// * or the operating system fails to discard the pages.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> Result<()> {
+    /// let engine = Engine::default();
+    /// let mut store = Store::new(&engine, ());
+    /// let module = Module::new(&engine, "(module (memory (export \"mem\") 2))")?;
+    /// let instance = Instance::new(&mut store, &module, &[])?;
+    /// let memory = instance.get_memory(&mut store, "mem").unwrap();
+    ///
+    /// memory.data_mut(&mut store).fill(0xff);
+    /// // Discard the second page.
+    /// memory.discard(&mut store, 0x10000, 0x10000)?;
+    /// assert!(memory.data(&store)[..0x10000].iter().all(|b| *b == 0xff));
+    /// assert!(memory.data(&store)[0x10000..].iter().all(|b| *b == 0));
+    /// assert_eq!(memory.size(&store), 2);
+    ///
+    /// // A range that isn't page-aligned discards every page it touches.
+    /// memory.data_mut(&mut store).fill(0xff);
+    /// memory.discard(&mut store, 0xff00, 0x200)?;
+    /// assert!(memory.data(&store).iter().all(|b| *b == 0));
+    ///
+    /// // The range must be within the memory.
+    /// assert!(memory.discard(&mut store, 0x10000, 0x10001).is_err());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn discard(&self, mut store: impl AsContextMut, offset: usize, len: usize) -> Result<()> {
+        let store = store.as_context_mut().0;
+        self.instance
+            .get_mut(store)
+            .memory_discard(self.index, offset, len)
+    }
+
     /// Creates a new memory from its raw component parts.
     ///
     /// # Safety
@@ -906,6 +992,33 @@ pub unsafe trait LinearMemory: Any + Send + Sync {
     fn init_from_image(&mut self, image: &MemoryImage) -> Result<bool> {
         let _ = image;
         Ok(false)
+    }
+
+    /// Sets `len` bytes of this memory starting at `offset` to zero, releasing
+    /// the physical memory that backed them if this memory is able to.
+    ///
+    /// This is called by [`Memory::discard`], which checks the range first:
+    /// it is always within [`byte_size`](LinearMemory::byte_size), and its
+    /// offset and length are multiples of the Wasm page size.
+    ///
+    /// The default implementation writes zeros over the range, which is always
+    /// correct but releases no memory. An implementation backed by virtual
+    /// memory may instead replace the range with fresh zero pages. Either way
+    /// the bytes in the range must read as zero afterwards, and the memory's
+    /// size and base pointer must not change.
+    fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
+        assert!(
+            offset
+                .checked_add(len)
+                .is_some_and(|end| end <= self.byte_size())
+        );
+        // SAFETY: the range is within the first `byte_size` bytes, which are
+        // allocated and writable, and `&mut self` means nothing else is
+        // accessing them.
+        unsafe {
+            self.as_ptr().add(offset).write_bytes(0, len);
+        }
+        Ok(())
     }
 }
 

@@ -1,8 +1,10 @@
 use rayon::prelude::*;
+use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering::SeqCst};
 use std::thread;
 use std::time::Duration;
+use wasmtime::error::Context as _;
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
@@ -984,5 +986,330 @@ fn atomic_wait_massive_timeout() -> Result<()> {
 
     t.join().unwrap();
 
+    Ok(())
+}
+
+const WASM_PAGE: usize = 0x10000;
+
+/// A memory of four Wasm pages whose initialization image covers pages 1 and
+/// 2, with `load` to read it from compiled code.
+const DISCARD_IMAGE_WAT: &str = r#"
+    (module
+        (memory (export "m") 4 8)
+        (func (export "load") (param i32) (result i32)
+            (i32.load8_u (local.get 0)))
+        (data (i32.const 0x10000) "first")
+        (data (i32.const 0x2fffb) "last!")
+    )
+"#;
+
+/// Compiles `DISCARD_IMAGE_WAT`, loading it from a file when `from_file` so
+/// that copy-on-write images are used on every platform, not only where an
+/// anonymous image can be created in memory.
+fn discard_image_module(engine: &Engine, from_file: bool) -> Result<Module> {
+    let module = Module::new(engine, DISCARD_IMAGE_WAT)?;
+    if !from_file {
+        return Ok(module);
+    }
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("module.cwasm");
+    std::fs::write(&path, module.serialize()?)?;
+    unsafe { Module::deserialize_file(engine, &path) }
+}
+
+/// Each way a discarded range can overlap the image of `DISCARD_IMAGE_WAT`,
+/// which covers pages 1 and 2, as a range of pages.
+const DISCARD_IMAGE_OVERLAPS: [(&str, Range<usize>); 7] = [
+    ("before the image", 0..1),
+    ("across the start of the image", 0..2),
+    ("inside the image", 2..3),
+    ("exactly the image", 1..3),
+    ("across the end of the image", 2..4),
+    ("containing the image", 0..4),
+    ("after the image", 3..4),
+];
+
+/// Instantiates `module`, an instance of `DISCARD_IMAGE_WAT`, and discards
+/// `pages` of its memory, checking that they read back as zero from both the
+/// host and compiled code while the rest is untouched.
+///
+/// When `dirty`, every page is written first, so that the discard has
+/// resident pages to release, including copy-on-write copies of the image.
+/// Otherwise the pages are as instantiation left them.
+fn check_discard_with_image(
+    store: &mut Store<()>,
+    module: &Module,
+    pages: Range<usize>,
+    dirty: bool,
+) -> Result<()> {
+    let instance = Instance::new(&mut *store, module, &[])?;
+    let memory = instance.get_memory(&mut *store, "m").unwrap();
+    let load = instance.get_typed_func::<u32, u32>(&mut *store, "load")?;
+
+    assert_eq!(&memory.data(&store)[0x10000..0x10005], b"first");
+    assert_eq!(&memory.data(&store)[0x2fffb..0x30000], b"last!");
+    if dirty {
+        memory.data_mut(&mut *store).fill(0xa5);
+    }
+
+    let range = pages.start * WASM_PAGE..pages.end * WASM_PAGE;
+    let mut expected = memory.data(&store).to_vec();
+    expected[range.clone()].fill(0);
+    memory.discard(&mut *store, range.start, range.len())?;
+    assert!(memory.data(&store) == &expected[..]);
+    for addr in [range.start, range.end - 1, 0x10000, 0x2fffb] {
+        let addr32 = u32::try_from(addr).unwrap();
+        assert_eq!(load.call(&mut *store, addr32)?, u32::from(expected[addr]));
+    }
+
+    // Discarded pages are ordinary memory again once written.
+    memory.write(&mut *store, range.start, b"again")?;
+    let start = u32::try_from(range.start).unwrap();
+    assert_eq!(load.call(&mut *store, start)?, u32::from(b'a'));
+    Ok(())
+}
+
+/// Runs `check_discard_with_image` for every overlap, dirty and clean, each in
+/// a store of its own so that a pooling allocator's slot is reset and reused
+/// between them.
+fn check_discard_with_image_overlaps(engine: &Engine, module: &Module) -> Result<()> {
+    for (name, pages) in DISCARD_IMAGE_OVERLAPS {
+        for dirty in [false, true] {
+            let mut store = Store::new(engine, ());
+            check_discard_with_image(&mut store, module, pages.clone(), dirty)
+                .with_context(|| format!("discarding pages {pages:?}, {name}, dirty: {dirty}"))?;
+        }
+    }
+
+    // The image is intact for the next instance.
+    let mut store = Store::new(engine, ());
+    let instance = Instance::new(&mut store, module, &[])?;
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+    let data = memory.data(&store);
+    assert_eq!(&data[0x10000..0x10005], b"first");
+    assert_eq!(&data[0x2fffb..0x30000], b"last!");
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_errors() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let memory = Memory::new(&mut store, MemoryType::new(2, None)?)?;
+    let size = 2 * WASM_PAGE;
+    memory.data_mut(&mut store).fill(1);
+
+    // Out of bounds, aligned or not, including overflow. A failed discard
+    // leaves memory unchanged.
+    assert!(memory.discard(&mut store, size, 1).is_err());
+    assert!(memory.discard(&mut store, size + 1, 0).is_err());
+    assert!(memory.discard(&mut store, 0, size + 1).is_err());
+    assert!(
+        memory
+            .discard(&mut store, WASM_PAGE, WASM_PAGE + 1)
+            .is_err()
+    );
+    assert!(
+        memory
+            .discard(&mut store, WASM_PAGE + 0x100, WASM_PAGE)
+            .is_err()
+    );
+    assert!(memory.discard(&mut store, 1, usize::MAX).is_err());
+    assert!(memory.discard(&mut store, usize::MAX, usize::MAX).is_err());
+    assert!(memory.data(&store).iter().all(|b| *b == 1));
+
+    // Empty ranges discard nothing, anywhere within bounds, including at an
+    // unaligned offset and at the end.
+    memory.discard(&mut store, 0, 0)?;
+    memory.discard(&mut store, 0x123, 0)?;
+    memory.discard(&mut store, WASM_PAGE, 0)?;
+    memory.discard(&mut store, size, 0)?;
+    assert!(memory.data(&store).iter().all(|b| *b == 1));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_rounds_to_pages() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let memory = Memory::new(&mut store, MemoryType::new(4, None)?)?;
+
+    // An offset and a length, and the pages they discard.
+    let cases = [
+        (0x10000, 0x10000, 1..2),
+        // Unaligned start.
+        (0x10100, 0xff00, 1..2),
+        // Unaligned end.
+        (0x10000, 0x100, 1..2),
+        // Unaligned start and end within one page.
+        (0x10100, 1, 1..2),
+        // Across a page boundary.
+        (0xf000, 0x2000, 0..2),
+        // Unaligned start and end across three pages.
+        (0x1ffff, 0x10002, 1..4),
+        // Up to the end of the memory.
+        (0x30001, 0xffff, 3..4),
+    ];
+    for (offset, len, pages) in cases {
+        memory.data_mut(&mut store).fill(0xa5);
+        memory.discard(&mut store, offset, len)?;
+        for (page, bytes) in memory.data(&store).chunks(WASM_PAGE).enumerate() {
+            let expected = if pages.contains(&page) { 0 } else { 0xa5 };
+            assert!(
+                bytes.iter().all(|b| *b == expected),
+                "discarding {len:#x} bytes at {offset:#x}: page {page} should be {expected:#x}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_custom_page_size() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_custom_page_sizes(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let ty = MemoryTypeBuilder::new()
+        .page_size_log2(0)
+        .min(2 * WASM_PAGE as u64)
+        .build()?;
+    let memory = Memory::new(&mut store, ty)?;
+    let err = memory.discard(&mut store, 0, 1).unwrap_err();
+    assert!(format!("{err:?}").contains("custom page size"), "{err:?}");
+
+    // Also through a module declaring its page size.
+    let module = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 0x20000 (pagesize 1)))"#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+    assert!(memory.discard(&mut store, 0, 1).is_err());
+    Ok(())
+}
+
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn discard_zeroes(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+    let memory = Memory::new(&mut store, MemoryType::new(4, None)?)?;
+    memory.data_mut(&mut store).fill(0xa5);
+
+    memory.discard(&mut store, WASM_PAGE, 2 * WASM_PAGE)?;
+    let data = memory.data(&store);
+    assert!(data[..WASM_PAGE].iter().all(|b| *b == 0xa5));
+    assert!(data[WASM_PAGE..3 * WASM_PAGE].iter().all(|b| *b == 0));
+    assert!(data[3 * WASM_PAGE..].iter().all(|b| *b == 0xa5));
+    assert_eq!(memory.size(&store), 4);
+
+    // Discarded pages can be written again, and discarding them again works.
+    memory.data_mut(&mut store)[WASM_PAGE..2 * WASM_PAGE].fill(0x5a);
+    assert!(
+        memory.data(&store)[WASM_PAGE..2 * WASM_PAGE]
+            .iter()
+            .all(|b| *b == 0x5a)
+    );
+    memory.discard(&mut store, 0, 4 * WASM_PAGE)?;
+    assert!(memory.data(&store).iter().all(|b| *b == 0));
+    Ok(())
+}
+
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn discard_then_grow(config: &mut Config) -> Result<()> {
+    // Small reservations so that growth also has to move the memory.
+    for reservation in [0, 1 << 20, 4 << 30] {
+        if reservation > (1 << 20) && cfg!(target_pointer_width = "32") {
+            continue;
+        }
+        config.memory_reservation(reservation);
+        config.memory_reservation_for_growth(0);
+        let engine = Engine::new(config)?;
+        let mut store = Store::new(&engine, ());
+        let memory = Memory::new(&mut store, MemoryType::new(2, None)?)?;
+        memory.data_mut(&mut store).fill(0xa5);
+
+        memory.discard(&mut store, WASM_PAGE, WASM_PAGE)?;
+        memory.grow(&mut store, 30)?;
+        let data = memory.data(&store);
+        assert_eq!(data.len(), 32 * WASM_PAGE);
+        assert!(data[..WASM_PAGE].iter().all(|b| *b == 0xa5));
+        assert!(data[WASM_PAGE..].iter().all(|b| *b == 0));
+
+        memory.data_mut(&mut store)[16 * WASM_PAGE..].fill(0x5a);
+        memory.discard(&mut store, 16 * WASM_PAGE, 16 * WASM_PAGE)?;
+        assert!(memory.data(&store)[WASM_PAGE..].iter().all(|b| *b == 0));
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_with_image() -> Result<()> {
+    for cow in [true, false] {
+        for from_file in [true, false] {
+            let mut config = Config::new();
+            config.memory_init_cow(cow);
+            let engine = Engine::new(&config)?;
+            let module = discard_image_module(&engine, from_file)?;
+            check_discard_with_image_overlaps(&engine, &module)
+                .with_context(|| format!("cow: {cow}, from_file: {from_file}"))?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_with_image_pooling() -> Result<()> {
+    if crate::skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+    // With and without keeping memory resident, which resets a slot by
+    // writing to it rather than by decommitting it.
+    for keep_resident in [0, 2 * WASM_PAGE, 4 * WASM_PAGE] {
+        for from_file in [true, false] {
+            let mut pool = crate::small_pool_config();
+            pool.max_memory_size(8 * WASM_PAGE)
+                .linear_memory_keep_resident(keep_resident);
+            let mut config = Config::new();
+            config.allocation_strategy(pool);
+            let engine = Engine::new(&config)?;
+            let module = discard_image_module(&engine, from_file)?;
+            check_discard_with_image_overlaps(&engine, &module).with_context(|| {
+                format!("keep_resident: {keep_resident:#x}, from_file: {from_file}")
+            })?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn discard_with_image_then_grow() -> Result<()> {
+    for from_file in [true, false] {
+        // A reservation smaller than the grown memory so that growth moves
+        // the memory out of its image's mapping.
+        let mut config = Config::new();
+        config.memory_reservation(4 * WASM_PAGE as u64);
+        config.memory_reservation_for_growth(0);
+        let engine = Engine::new(&config)?;
+        let module = discard_image_module(&engine, from_file)?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let memory = instance.get_memory(&mut store, "m").unwrap();
+
+        memory.discard(&mut store, 2 * WASM_PAGE, WASM_PAGE)?;
+        memory.grow(&mut store, 4)?;
+        let data = memory.data(&store);
+        assert_eq!(&data[0x10000..0x10005], b"first");
+        assert!(data[0x20000..].iter().all(|b| *b == 0));
+    }
     Ok(())
 }

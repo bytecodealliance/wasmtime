@@ -480,6 +480,42 @@ impl Memory {
             Memory::Shared(mem) => mem.ty(),
         }
     }
+
+    /// Implementation of `wasmtime::Memory::discard`: zeroes the pages that
+    /// `len` bytes at `offset` touch, returning the memory behind them to the
+    /// operating system where possible.
+    pub fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
+        let mem = match self {
+            Memory::Local(mem) => mem,
+            Memory::Shared(_) => bail!("cannot discard pages of a shared memory"),
+        };
+        if mem.ty().page_size_log2 != wasmtime_environ::Memory::DEFAULT_PAGE_SIZE_LOG2 {
+            bail!("cannot discard pages of a memory with a custom page size");
+        }
+        let size = mem.byte_size();
+        let page_size = usize::try_from(mem.ty().page_size()).unwrap();
+
+        let end = match offset.checked_add(len) {
+            Some(end) if end <= size => end,
+            _ => bail!(
+                "discarding {len} bytes at offset {offset} is out of bounds of memory of                  {size} bytes"
+            ),
+        };
+        if len == 0 {
+            return Ok(());
+        }
+
+        // Round the range out to whole pages, so that every page the range
+        // touches is discarded.
+        let start = offset - offset % page_size;
+        let end = match end.checked_next_multiple_of(page_size) {
+            Some(end) if end <= size => end,
+            _ => bail!(
+                "discarding {len} bytes at offset {offset}, rounded to whole pages, is out of                  bounds of memory of {size} bytes"
+            ),
+        };
+        mem.discard(start, end - start)
+    }
 }
 
 /// An owned allocation of a wasm linear memory.
@@ -696,6 +732,15 @@ impl LocalMemory {
         let end =
             base + self.alloc.byte_capacity().max(self.memory_reservation) + self.memory_guard_size;
         base..end
+    }
+
+    /// Zeroes `len` bytes at `offset`, which `Memory::discard` has checked
+    /// are in bounds and aligned to the Wasm page size.
+    fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
+        if len == 0 {
+            return Ok(());
+        }
+        self.alloc.discard(offset, len)
     }
 
     /// Assume the inner allocation is a [`StaticMemory`] created for a pooling allocator and unwrap

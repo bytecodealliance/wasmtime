@@ -201,6 +201,41 @@ impl MemoryImage {
         }
     }
 
+    /// Discards `range` of a linear memory at `base` into which this image is
+    /// mapped, where `vm::discard_pages` restores the original mapping
+    /// (`DecommitBehavior::RestoreOriginalMapping`).
+    ///
+    /// Restoring the part of `range` that is mapped from this image would
+    /// bring back the image's contents rather than zeros, so that part is
+    /// mapped over with anonymous zero memory instead, and the rest is
+    /// discarded with `vm::discard_pages`. Returns the part that was mapped
+    /// over, which is empty if `range` doesn't overlap the image.
+    ///
+    /// # Safety
+    ///
+    /// The caller must exclusively own `range` of the memory at `base`, and
+    /// nothing may hold references into it.
+    pub(crate) unsafe fn discard_at(
+        &self,
+        base: *mut u8,
+        range: Range<HostAlignedByteCount>,
+    ) -> Result<Range<HostAlignedByteCount>> {
+        let image_end = self.linear_memory_offset.checked_add(self.len)?;
+        let overlap = range.start.max(self.linear_memory_offset)..range.end.min(image_end);
+        unsafe {
+            if overlap.start >= overlap.end {
+                discard_range(base, range.clone())?;
+                return Ok(range.start..range.start);
+            }
+            discard_range(base, range.start..overlap.start)?;
+            let len = overlap.end.checked_sub(overlap.start)?;
+            self.source
+                .remap_as_zeros_at(base.add(overlap.start.byte_count()), len.byte_count())?;
+            discard_range(base, overlap.end..range.end)?;
+        }
+        Ok(overlap)
+    }
+
     unsafe fn remap_as_zeros_at(&self, base: *mut u8) -> Result<()> {
         unsafe {
             self.source.remap_as_zeros_at(
@@ -210,6 +245,19 @@ impl MemoryImage {
         }
         Ok(())
     }
+}
+
+/// Discards `range` of the memory at `base` with `vm::discard_pages`.
+///
+/// # Safety
+///
+/// As for `vm::discard_pages`.
+unsafe fn discard_range(base: *mut u8, range: Range<HostAlignedByteCount>) -> Result<()> {
+    let len = range.end.checked_sub(range.start)?;
+    unsafe {
+        vm::discard_pages(base.add(range.start.byte_count()), len.byte_count())?;
+    }
+    Ok(())
 }
 
 impl ModuleMemoryImages {
@@ -387,6 +435,17 @@ pub struct MemoryImageSlot {
     /// `self.accessible` and `self.static_size` is inaccessible.
     dirty: bool,
 
+    /// Whether `discard` mapped anonymous zero memory over part of `image`.
+    ///
+    /// With `DecommitBehavior::RestoreOriginalMapping`, decommitting a page
+    /// that is backed by the image restores the image's contents. That is why
+    /// `discard` maps anonymous memory over those pages instead, but it also
+    /// means that they are no longer backed by the image, so a reset would
+    /// leave them zero rather than restore the image. When this is set the
+    /// reset removes the image instead, as resets do on other platforms, and
+    /// the next instantiation maps it again.
+    image_discarded: bool,
+
     /// The MPK protection key that this slot's stripe was colored with, if the
     /// pooling allocator is striping memory with protection keys.
     ///
@@ -432,6 +491,7 @@ impl MemoryImageSlot {
             accessible,
             image: None,
             dirty: false,
+            image_discarded: false,
             pkey,
         }
     }
@@ -485,6 +545,7 @@ impl MemoryImageSlot {
         memory_tunables: &MemoryTunables<'_>,
     ) -> Result<()> {
         assert!(!self.dirty);
+        debug_assert!(!self.image_discarded);
         assert!(
             initial_size_bytes <= self.static_size,
             "initial_size_bytes <= self.static_size failed: \
@@ -578,6 +639,58 @@ impl MemoryImageSlot {
             // protection key over the image's range, so restore it.
             self.reapply_pkey(image.linear_memory_offset, image.len, true)?;
             self.image = None;
+            self.image_discarded = false;
+        }
+        Ok(())
+    }
+
+    /// Discards the pages in `offset..offset + len` of linear memory: their
+    /// contents become zero and the physical memory behind them is returned to
+    /// the operating system.
+    ///
+    /// Returns an error if `offset` or `len` is not a multiple of the host page
+    /// size. Panics if the range is not within the accessible part of this
+    /// slot; callers check bounds first.
+    pub(crate) fn discard(&mut self, offset: usize, len: usize) -> Result<()> {
+        let start = HostAlignedByteCount::new(offset)?;
+        let len = HostAlignedByteCount::new(len)?;
+        let end = start.checked_add(len)?;
+        assert!(end <= self.accessible);
+        if len.is_zero() {
+            return Ok(());
+        }
+
+        match (vm::decommit_behavior(), &self.image) {
+            // Decommitting restores the original mapping, which for the part
+            // of the range backed by the image would bring back the image's
+            // contents rather than zeros, so that part is mapped over with
+            // anonymous zero memory.
+            //
+            // The rest of the range is decommitted with `madvise`, which keeps
+            // its existing mapping and that mapping's protection key. Only the
+            // part mapped over is a fresh mapping that needs the key back.
+            (DecommitBehavior::RestoreOriginalMapping, Some(image)) => {
+                let remapped = unsafe { image.discard_at(self.base.as_mut_ptr(), start..end)? };
+                if remapped.start < remapped.end {
+                    let remapped_len = remapped.end.checked_sub(remapped.start)?;
+                    self.reapply_pkey(remapped.start, remapped_len, true)?;
+                    self.image_discarded = true;
+                }
+            }
+            (DecommitBehavior::RestoreOriginalMapping, None) => unsafe {
+                discard_range(self.base.as_mut_ptr(), start..end)?;
+            },
+
+            // Decommitting replaces the range with anonymous zero memory,
+            // including any part of it that was mapped from the image, which
+            // is exactly what's wanted here. That replacement is a fresh
+            // `mmap`, so restore this slot's protection key across it.
+            (DecommitBehavior::Zero, _) => {
+                unsafe {
+                    discard_range(self.base.as_mut_ptr(), start..end)?;
+                }
+                self.reapply_pkey(start, len, true)?;
+            }
         }
         Ok(())
     }
@@ -634,6 +747,12 @@ impl MemoryImageSlot {
                 Ok(0)
             }
             DecommitBehavior::RestoreOriginalMapping => {
+                // If `discard` mapped anonymous memory over part of the image
+                // then the image is no longer intact, so remove it. The next
+                // instantiation maps it again.
+                if self.image_discarded {
+                    self.remove_image()?;
+                }
                 let bytes_resident =
                     unsafe { self.reset_with_original_mapping(pagemap, keep_resident, decommit) };
                 Ok(bytes_resident)
@@ -831,6 +950,7 @@ impl MemoryImageSlot {
         self.reapply_pkey(HostAlignedByteCount::ZERO, static_size, false)?;
 
         self.image = None;
+        self.image_discarded = false;
         self.accessible = HostAlignedByteCount::ZERO;
 
         Ok(())
@@ -1105,6 +1225,76 @@ mod test {
             .unwrap();
         let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
+    }
+
+    #[test]
+    fn discard_over_image() {
+        let page_size = host_page_size();
+        let ty = dummy_memory();
+        let tunables = Tunables {
+            memory_reservation: 4 << 30,
+            ..Tunables::default_miri()
+        };
+        let tunables = MemoryTunables::new(&tunables, MemoryKind::LinearMemory);
+        let mmap = mmap_4mib_inaccessible();
+        let mut memfd = MemoryImageSlot::create(
+            mmap.zero_offset(),
+            HostAlignedByteCount::ZERO,
+            4 << 20,
+            None,
+        );
+
+        // A two-page image starting at the second page.
+        let mut data = vec![0; page_size + 4];
+        data[..4].copy_from_slice(&[1, 2, 3, 4]);
+        data[page_size..].copy_from_slice(&[5, 6, 7, 8]);
+        let image = Arc::new(create_memfd_with_data(page_size, &data).unwrap());
+
+        for keep_resident in [0, page_size, 4 * page_size] {
+            let keep_resident = HostAlignedByteCount::new(keep_resident).unwrap();
+            memfd
+                .instantiate(64 << 10, Some(&image), &ty, &tunables)
+                .unwrap();
+            assert!(memfd.has_image());
+            unsafe {
+                with_slice_mut(&mmap, 0..65536, move |slice| {
+                    assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
+                    assert_eq!(&[5, 6, 7, 8], &slice[2 * page_size..][..4]);
+                    slice[..4 * page_size].fill(9);
+                });
+            }
+
+            // Discard the page before the image and the image's first page:
+            // both must read back as zero, not as the image's contents.
+            memfd.discard(0, 2 * page_size).unwrap();
+            let slice = unsafe { mmap.slice(0..65536) };
+            assert!(slice[..2 * page_size].iter().all(|b| *b == 0));
+            assert!(slice[2 * page_size..4 * page_size].iter().all(|b| *b == 9));
+
+            // Discard the image's second page and the page after it.
+            memfd.discard(2 * page_size, 2 * page_size).unwrap();
+            let slice = unsafe { mmap.slice(0..65536) };
+            assert!(slice[..4 * page_size].iter().all(|b| *b == 0));
+
+            // Resetting the slot removes the image and leaves only zeros.
+            memfd
+                .clear_and_remain_ready(None, keep_resident, decommit)
+                .unwrap();
+            assert!(!memfd.has_image());
+            let slice = unsafe { mmap.slice(0..65536) };
+            assert!(slice[..4 * page_size].iter().all(|b| *b == 0));
+        }
+
+        // The next instantiation maps the image again.
+        memfd
+            .instantiate(64 << 10, Some(&image), &ty, &tunables)
+            .unwrap();
+        assert!(memfd.has_image());
+        let slice = unsafe { mmap.slice(0..65536) };
+        assert_eq!(&[0, 0, 0, 0], &slice[..4]);
+        assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
+        assert_eq!(&[5, 6, 7, 8], &slice[2 * page_size..][..4]);
+        assert!(slice[3 * page_size..].iter().all(|b| *b == 0));
     }
 
     #[test]
