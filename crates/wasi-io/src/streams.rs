@@ -240,6 +240,9 @@ pub trait OutputStream: Pollable {
     /// Returning an Err which downcasts to a [`StreamError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
     fn write_zeroes(&mut self, nelem: usize) -> StreamResult<()> {
+        if nelem == 0 {
+            return self.write(Bytes::new());
+        }
         let n = self.check_write()?;
         if nelem > n {
             return Err(StreamError::trap(

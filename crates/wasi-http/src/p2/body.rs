@@ -577,6 +577,13 @@ impl BodyWriteStream {
 #[async_trait::async_trait]
 impl OutputStream for BodyWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
+        if bytes.is_empty() {
+            return if self.writer.is_closed() {
+                Err(StreamError::Closed)
+            } else {
+                Ok(())
+            };
+        }
         let len = bytes.len();
         if len > self.write_budget {
             return Err(StreamError::Trap(format_err!("write exceeded budget")));
