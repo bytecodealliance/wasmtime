@@ -11,67 +11,122 @@ fn instance_imports<'c>(
     })
 }
 
-/// Composes `main_wasm` with the compile-time builtins it imports.
-///
-/// Each imported builtin is instantiated once and satisfies every instance
-/// import named after it, including other builtins' imports. Other imports,
-/// such as the unsafe intrinsics, remain imports, merged by name.
-fn compose(
-    main_wasm: &[u8],
-    builtins: &HashMap<Cow<'_, str>, Cow<'_, [u8]>>,
-    features: wasmparser::WasmFeatures,
-) -> Result<Vec<u8>> {
-    let mut validator = wasmparser::Validator::new_with_features(features);
-    let mut graph = CompositionGraph::new();
+/// A composition of the main Wasm with compile-time builtins.
+struct Composition<'b> {
+    builtins: &'b HashMap<Cow<'b, str>, Cow<'b, [u8]>>,
+    validator: wasmparser::Validator,
+    graph: CompositionGraph<'b>,
+    /// The builtins instantiated so far.
+    instances: Vec<(&'b str, InstanceId)>,
+    /// The builtins whose imports are being connected, outermost first.
+    stack: Vec<&'b str>,
+}
 
-    let main = wasm_compose::graph::Component::from_bytes(&mut validator, "main", main_wasm)
-        .to_wasmtime_result()?;
-    let main_imports: Vec<String> = instance_imports(&main)
-        .map(|(_, name)| name.to_owned())
-        .collect();
-    let main = graph.add_component(main).to_wasmtime_result()?;
-    let main = graph.instantiate(main).to_wasmtime_result()?;
+impl<'b> Composition<'b> {
+    /// Connects each instance import of `target` that names a builtin to that
+    /// builtin's instance, in declaration order, so the output is
+    /// deterministic.
+    fn connect_builtins(&mut self, target: InstanceId) -> Result<()> {
+        // Look up the builtins first, since instantiating them needs the graph
+        // mutably.
+        let (_, component) = self.graph.get_component_of_instance(target).unwrap();
+        let builtins = self.builtins;
+        let imports: Vec<(ImportIndex, &'b str)> = instance_imports(component)
+            .filter_map(|(import, name)| Some((import, &**builtins.get_key_value(name)?.0)))
+            .collect();
 
-    // Instantiate in import order, so the output doesn't depend on hash map
-    // order.
-    let mut instances: Vec<(&str, InstanceId)> = Vec::new();
-    for name in &main_imports {
-        let Some((name, bytes)) = builtins.get_key_value(name.as_str()) else {
-            continue;
-        };
+        for (import, name) in imports {
+            let source = self.instantiate(name)?;
+
+            // wasm-compose's errors name the import but not the importer, which
+            // is the builtin on top of the stack, if any.
+            self.graph
+                .connect(source, None::<ExportIndex>, target, import)
+                .to_wasmtime_result()
+                .with_context(|| match self.stack.last() {
+                    Some(importer) => format!(
+                        "failed to link compile-time builtin `{name}` into compile-time \
+                         builtin `{importer}`"
+                    ),
+                    None => {
+                        format!("failed to link compile-time builtin `{name}` into the main Wasm")
+                    }
+                })?;
+        }
+
+        Ok(())
+    }
+
+    /// Returns the instance of the builtin `name`, instantiating it and
+    /// connecting its own builtin imports the first time.
+    fn instantiate(&mut self, name: &'b str) -> Result<InstanceId> {
+        // wasm-compose would only report a cycle by label, so name the
+        // builtins here.
+        if let Some(start) = self.stack.iter().position(|&builtin| builtin == name) {
+            let cycle: Vec<String> = self.stack[start..]
+                .iter()
+                .chain([&name])
+                .map(|builtin| format!("`{builtin}`"))
+                .collect();
+            bail!(
+                "compile-time builtins form an import cycle: {}",
+                cycle.join(" -> ")
+            );
+        }
+
+        if let Some(&(_, instance)) = self.instances.iter().find(|&&(builtin, _)| builtin == name) {
+            return Ok(instance);
+        }
 
         // Graph labels must be unique and valid but aren't encoded, so number
         // them rather than reuse import names, which could clash with `main`.
-        let label = format!("builtin{}", instances.len());
+        let label = format!("builtin{}", self.instances.len());
 
         // wasm-compose's errors use the label, so name the builtin here.
-        let component = wasm_compose::graph::Component::from_bytes(&mut validator, label, &**bytes)
-            .to_wasmtime_result()
-            .with_context(|| format!("invalid compile-time builtin `{name}`"))?;
-        let component = graph.add_component(component).to_wasmtime_result()?;
+        let component = wasm_compose::graph::Component::from_bytes(
+            &mut self.validator,
+            label,
+            &*self.builtins[name],
+        )
+        .to_wasmtime_result()
+        .with_context(|| format!("invalid compile-time builtin `{name}`"))?;
+        let component = self.graph.add_component(component).to_wasmtime_result()?;
+        let instance = self.graph.instantiate(component).to_wasmtime_result()?;
+        self.instances.push((name, instance));
 
-        instances.push((name, graph.instantiate(component).to_wasmtime_result()?));
+        self.stack.push(name);
+        self.connect_builtins(instance)?;
+        self.stack.pop();
+
+        Ok(instance)
     }
+}
 
-    // Collect the connections first, since connecting needs the graph
-    // mutably.
-    let mut connections: Vec<(InstanceId, InstanceId, ImportIndex)> = Vec::new();
-    for target in core::iter::once(main).chain(instances.iter().map(|&(_, instance)| instance)) {
-        let (_, component) = graph.get_component_of_instance(target).unwrap();
-        for (import, name) in instance_imports(component) {
-            if let Some(&(_, source)) = instances.iter().find(|&&(builtin, _)| builtin == name) {
-                connections.push((source, target, import));
-            }
-        }
-    }
+/// Composes `main_wasm` with the compile-time builtins it imports, directly or
+/// through other builtins. Other imports, such as the unsafe intrinsics,
+/// remain imports, merged by name.
+fn compose<'b>(
+    main_wasm: &'b [u8],
+    builtins: &'b HashMap<Cow<'b, str>, Cow<'b, [u8]>>,
+    features: wasmparser::WasmFeatures,
+) -> Result<Vec<u8>> {
+    let mut composition = Composition {
+        builtins,
+        validator: wasmparser::Validator::new_with_features(features),
+        graph: CompositionGraph::new(),
+        instances: Vec::new(),
+        stack: Vec::new(),
+    };
 
-    for (source, target, import) in connections {
-        graph
-            .connect(source, None::<ExportIndex>, target, import)
+    let main =
+        wasm_compose::graph::Component::from_bytes(&mut composition.validator, "main", main_wasm)
             .to_wasmtime_result()?;
-    }
+    let main = composition.graph.add_component(main).to_wasmtime_result()?;
+    let main = composition.graph.instantiate(main).to_wasmtime_result()?;
+    composition.connect_builtins(main)?;
 
-    graph
+    composition
+        .graph
         .encode(EncodeOptions {
             define_components: true,
             export: Some(main),
@@ -177,6 +232,11 @@ impl<'a> CodeBuilder<'a> {
     ///   [trusted compute base]), and
     ///
     /// * is linked into guest Wasm programs at compile-time.
+    ///
+    /// Compile-time builtins may import other compile-time builtins, but not
+    /// in a cycle. Every builtin that the main Wasm imports, directly or
+    /// through other builtins, is instantiated once, and that instance
+    /// satisfies every import of it.
     ///
     /// Any imports satisfied by a compile-time builtin during compilation will
     /// not show up in the resulting component's
