@@ -92,7 +92,7 @@ use crate::runtime::vm::{
 };
 use crate::trampoline::VMHostGlobalContext;
 #[cfg(feature = "debug")]
-use crate::{BreakpointState, DebugHandler, FrameDataCache};
+use crate::{Breakpoints, DebugHandler, FrameDataCache};
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Table};
 use core::convert::Infallible;
@@ -532,7 +532,7 @@ pub struct StoreOpaque {
     /// handler defined above, if any, has a chance to perform some
     /// logic before returning to allow execution to resume.
     #[cfg(feature = "debug")]
-    breakpoints: BreakpointState,
+    breakpoints: Breakpoints,
 
     /// The debug PC-to-FrameData cache for this store.
     ///
@@ -1619,12 +1619,12 @@ impl StoreOpaque {
     #[cfg(feature = "debug")]
     pub(crate) fn breakpoints_and_registry_and_engine_mut(
         &mut self,
-    ) -> (&mut BreakpointState, &mut ModuleRegistry, &Engine) {
+    ) -> (&mut Breakpoints, &mut ModuleRegistry, &Engine) {
         (&mut self.breakpoints, &mut self.modules, &self.engine)
     }
 
     #[cfg(feature = "debug")]
-    pub(crate) fn breakpoints_and_registry(&self) -> (&BreakpointState, &ModuleRegistry) {
+    pub(crate) fn breakpoints_and_registry(&self) -> (&Breakpoints, &ModuleRegistry) {
         (&self.breakpoints, &self.modules)
     }
 

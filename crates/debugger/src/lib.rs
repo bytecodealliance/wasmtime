@@ -749,7 +749,7 @@ mod test {
         // Watch bytes [8, 12): the first store is just below the
         // range, the second overlaps it partially, the third is just
         // above it, and the fill covers all of it.
-        memory.debug_watch(&mut store, 8..12, true)?;
+        store.edit_breakpoints().unwrap().watch(memory, 8..12)?;
 
         let mut debuggee = Debuggee::new(store, move |store| {
             Box::pin(async move {
@@ -792,13 +792,17 @@ mod test {
             }
         );
         debuggee
-            .with_store(move |mut store| {
+            .with_store(move |store| {
                 // The previous write has now happened, but not the
                 // fill.
                 assert_eq!(&memory.data(&store)[6..10], &0x11223344_u32.to_le_bytes());
                 assert_eq!(memory.data(&store)[12], 2);
                 // Stop watching; the rest of execution runs freely.
-                memory.debug_watch(&mut store, 0..16, false).unwrap();
+                store
+                    .edit_breakpoints()
+                    .unwrap()
+                    .unwatch(memory, 0..16)
+                    .unwrap();
             })
             .await?;
 

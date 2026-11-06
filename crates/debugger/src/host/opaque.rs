@@ -519,15 +519,21 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
             #[cfg(feature = "threads")]
             Memory::Shared(_) => return Err(wit::Error::UnsupportedType.into()),
         };
-        self.with_store(move |mut store| -> Result<()> {
+        self.with_store(move |store| -> Result<()> {
             let size = u64::try_from(memory.data_size(&store)).unwrap();
             let end = addr
                 .checked_add(len)
                 .filter(|&end| end <= size)
                 .ok_or(wit::Error::OutOfBounds)?;
-            memory
-                .debug_watch(&mut store, addr..end, watch)
-                .map_err(|_| wit::Error::OutOfBounds)?;
+            let mut breakpoints = store
+                .edit_breakpoints()
+                .ok_or(wit::Error::UnsupportedType)?;
+            let result = if watch {
+                breakpoints.watch(memory, addr..end)
+            } else {
+                breakpoints.unwatch(memory, addr..end)
+            };
+            result.map_err(|_| wit::Error::OutOfBounds)?;
             Ok(())
         })
         .await?
