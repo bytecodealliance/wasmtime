@@ -736,7 +736,7 @@ impl wasmtime_environ::Compiler for Compiler {
             }
         }
 
-        let mut breakpoint_table: Vec<(ModulePC, Range<u32>)> = Vec::new();
+        let mut breakpoint_table: Vec<(StaticModuleIndex, ModulePC, Range<u32>)> = Vec::new();
         let mut nop_units = None;
 
         let mut ret = Vec::with_capacity(funcs.len());
@@ -799,7 +799,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // may appear in multiple functions (due to inlining) so it is
         // only now that we can aggregate all appearances of a PC
         // together for breakpoint metadata indexed by that PC.
-        breakpoint_table.sort_by_key(|(wasm_pc, _text_range)| *wasm_pc);
+        breakpoint_table.sort_by_key(|(_module, wasm_pc, _text_range)| *wasm_pc);
 
         builder.finish(|text| {
             if !breakpoint_table.is_empty() {
@@ -817,11 +817,11 @@ impl wasmtime_environ::Compiler for Compiler {
                     }
                 };
 
-                for (wasm_pc, text_range) in &breakpoint_table {
+                for (module, wasm_pc, text_range) in &breakpoint_table {
                     let start = usize::try_from(text_range.start).unwrap();
                     let end = usize::try_from(text_range.end).unwrap();
                     let text = &mut text[start..end];
-                    frame_tables.add_breakpoint_patch(*wasm_pc, text_range.start, text);
+                    frame_tables.add_breakpoint_patch(*module, *wasm_pc, text_range.start, text);
                     fill_with_nops(text);
                 }
             }
@@ -1888,13 +1888,13 @@ fn clif_to_env_frame_tables<'a>(
 /// Wasmtime's serialized metadata.
 fn clif_to_env_breakpoints(
     range: Range<u64>,
-    breakpoint_patches: impl Iterator<Item = (ModulePC, Range<u32>)>,
-    patch_table: &mut Vec<(ModulePC, Range<u32>)>,
+    breakpoint_patches: impl Iterator<Item = (StaticModuleIndex, ModulePC, Range<u32>)>,
+    patch_table: &mut Vec<(StaticModuleIndex, ModulePC, Range<u32>)>,
 ) -> Result<()> {
-    patch_table.extend(breakpoint_patches.map(|(wasm_pc, offset_range)| {
+    patch_table.extend(breakpoint_patches.map(|(module, wasm_pc, offset_range)| {
         let start = offset_range.start + u32::try_from(range.start).unwrap();
         let end = offset_range.end + u32::try_from(range.start).unwrap();
-        (wasm_pc, start..end)
+        (module, wasm_pc, start..end)
     }));
     Ok(())
 }
