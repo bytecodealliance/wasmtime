@@ -627,17 +627,17 @@ impl ObjectModule {
         kind: SectionKind,
         macho_flags: macho::SectionFlags,
     ) -> ModuleResult<SectionId> {
-        let is_macho = self.object.format() == object::BinaryFormat::MachO;
-        let key = (segment.to_owned(), section.to_owned());
-        if is_macho {
-            if let Some(&(section_id, flags)) = self.macho_custom_sections.get(&key) {
-                if flags != macho_flags {
-                    return Err(ModuleError::Backend(anyhow!(
-                        "section `{segment},{section}` is used with different section types or attributes"
-                    )));
-                }
-                return Ok(section_id);
+        let macho_key = (self.object.format() == object::BinaryFormat::MachO)
+            .then(|| (segment.to_owned(), section.to_owned()));
+        if let Some(key) = &macho_key
+            && let Some(&(section_id, flags)) = self.macho_custom_sections.get(key)
+        {
+            if flags != macho_flags {
+                return Err(ModuleError::Backend(anyhow!(
+                    "section `{segment},{section}` is used with different section types or attributes"
+                )));
             }
+            return Ok(section_id);
         }
 
         let section_id = self.object.add_section(
@@ -664,7 +664,7 @@ impl ObjectModule {
             }
         }
 
-        if is_macho {
+        if let Some(key) = macho_key {
             self.macho_custom_sections
                 .insert(key, (section_id, macho_flags));
         }
