@@ -494,6 +494,10 @@ impl<'a> Elaborator<'a> {
                     let inst = func.dfg.value_def(arg.value).inst().unwrap();
                     debug_assert_eq!(func.dfg.inst_results(inst).len(), 1);
                     let new_inst = func.dfg.clone_inst(inst);
+                    let srcloc = func.srclocs[inst];
+                    if !srcloc.is_default() {
+                        func.srclocs[new_inst] = srcloc;
+                    }
                     func.layout.insert_inst(new_inst, before);
                     let new_result = func.dfg.inst_results(new_inst)[0];
                     *v.insert(new_result)
@@ -721,6 +725,10 @@ impl<'a> Elaborator<'a> {
                     let inst = if self.func.layout.inst_block(inst).is_some() || remat_arg {
                         // Clone the inst!
                         let new_inst = self.func.dfg.clone_inst(inst);
+                        let srcloc = self.func.srclocs[inst];
+                        if !srcloc.is_default() {
+                            self.func.srclocs[new_inst] = srcloc;
+                        }
                         trace!(
                             " -> inst {} already has a location; cloned to {}",
                             inst, new_inst
