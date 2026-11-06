@@ -1,40 +1,11 @@
 //! Raw fibers: fibers whose entry point and suspension points are machine code
 //! supplied by the caller rather than a Rust closure.
 //!
-//! Raw fibers provide one key capability that ordinary fibers, which
-//! wrap a Rust closure, do not: the ability to snapshot and
-//! resume. (This capability is useful for Wasmtime features like
-//! record/replay with reversible execution.)
-//!
-//! A raw fiber requires an entry point that is an `extern "C"`
-//! function with a particular signature (two opaque pointer args),
-//! and that *never returns*. Unlike ordinary fibers, this entry-point
-//! function is the first and only frame on the fiber stack when it
-//! starts executing.
-//!
-//! A raw fiber's state -- stack and SP -- can be snapshotted and
-//! restored, potentially multiple times ("multi-shot
-//! continuations"). The safety of this is fairly subtle and has the
-//! following requirements:
-//!
-//! - No Rust-compiled frame must exist anywhere on the fiber stack
-//!   (because multiple returns from a function call in Rust are
-//!   UB). This implies, in practice, either handwritten assembly or
-//!   machine code that the user otherwise completely controls
-//!   (e.g. Cranelift-compiled code in Wasmtime).
-//! - Any live pointers that may be in registers or on the stack
-//!   (i.e., live anywhere in the executing code) continue to be live
-//!   when execution is rewound to an earlier snapshot. In practice,
-//!   it is safest to have "completely invariant pointers": e.g., VM
-//!   data structures or memories/heaps that stay at the same address
-//!   for the lifetime of a fiber.
-//! - The raw fiber entry point must never return. Instead, it can implement
-//!   termination by yielding one final time, having set some state so that
-//!   the rest of the runtime will then know to drop the raw fiber (thus freeing
-//!   its stack).
+//! See [`RawFiber`] for what raw fibers can do and the contract their code
+//! must uphold.
 
 use crate::FiberStack;
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::Ordering;
 use wasmtime_environ::collections::TryVec;
 use wasmtime_environ::error::{Error, Result, bail, ensure};
 
@@ -72,8 +43,39 @@ pub enum RawFiberState {
     Terminal,
 }
 
-/// A fiber running caller-supplied machine code. See the [module
-/// documentation](self) for its contract.
+/// A fiber running caller-supplied machine code.
+///
+/// Raw fibers provide one key capability that ordinary fibers, which
+/// wrap a Rust closure, do not: the ability to snapshot and
+/// resume. (This capability is useful for Wasmtime features like
+/// record/replay with reversible execution.)
+///
+/// A raw fiber requires an entry point that is an `extern "C"`
+/// function with a particular signature (two opaque pointer args),
+/// and that *never returns*. Unlike ordinary fibers, this entry-point
+/// function is the first and only frame on the fiber stack when it
+/// starts executing.
+///
+/// A raw fiber's state -- stack and SP -- can be snapshotted and
+/// restored, potentially multiple times ("multi-shot
+/// continuations"). The safety of this is fairly subtle and has the
+/// following requirements:
+///
+/// - No Rust-compiled frame must exist anywhere on the fiber stack
+///   (because multiple returns from a function call in Rust are
+///   UB). This implies, in practice, either handwritten assembly or
+///   machine code that the user otherwise completely controls
+///   (e.g. Cranelift-compiled code in Wasmtime).
+/// - Any live pointers that may be in registers or on the stack
+///   (i.e., live anywhere in the executing code) continue to be live
+///   when execution is rewound to an earlier snapshot. In practice,
+///   it is safest to have "completely invariant pointers": e.g., VM
+///   data structures or memories/heaps that stay at the same address
+///   for the lifetime of a fiber.
+/// - The raw fiber entry point must never return. Instead, it can implement
+///   termination by yielding one final time, having set some state so that
+///   the rest of the runtime will then know to drop the raw fiber (thus freeing
+///   its stack).
 pub struct RawFiber {
     stack: FiberStack,
     state: RawFiberState,
@@ -92,15 +94,39 @@ pub struct RawFiberSnapshot {
 /// A process-unique identifier of a [`RawFiber`], by which snapshots are
 /// matched to the fiber they were taken from.
 ///
-/// This is 64 bits wide so that it never wraps around in practice: a
-/// reused ID would let a snapshot be restored onto a different fiber.
+/// IDs must never be reused, since a reused ID would let a snapshot be
+/// restored onto a different fiber. Where 64-bit atomics are available, IDs
+/// are 64 bits wide, so they never run out in practice; elsewhere, allocating
+/// an ID panics once a 32-bit counter is exhausted rather than wrapping.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 struct RawFiberId(u64);
 
 impl RawFiberId {
     fn new() -> Self {
-        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-        RawFiberId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
+        cfg_select! {
+            target_has_atomic = "64" => {
+                use core::sync::atomic::AtomicU64;
+                static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+                RawFiberId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
+            }
+            _ => {
+                use core::sync::atomic::AtomicU32;
+                static NEXT_ID: AtomicU32 = AtomicU32::new(0);
+                let mut id = NEXT_ID.load(Ordering::Relaxed);
+                loop {
+                    let next = id.checked_add(1).expect("raw fiber IDs exhausted");
+                    match NEXT_ID.compare_exchange_weak(
+                        id,
+                        next,
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
+                    ) {
+                        Ok(_) => break RawFiberId(u64::from(id)),
+                        Err(actual) => id = actual,
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -286,7 +312,7 @@ impl RawFiber {
     /// # Safety
     ///
     /// The snapshot must have been taken at a point eligible for restoration,
-    /// as described in the [module documentation](self).
+    /// as described in the [`RawFiber`] documentation.
     pub unsafe fn restore(&mut self, snapshot: &RawFiberSnapshot) -> Result<()> {
         if snapshot.fiber != self.id {
             bail!("raw fiber snapshot belongs to a different fiber");
