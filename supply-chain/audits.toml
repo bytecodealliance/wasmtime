@@ -3123,6 +3123,11 @@ who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-deploy"
 version = "0.3.31"
 
+[[audits.futures]]
+who = "Pat Hickey <p.hickey@f5.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+
 [[audits.futures-channel]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -3133,6 +3138,11 @@ notes = "build.rs is just detecting the target and setting cfg. unsafety is for 
 who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-deploy"
 version = "0.3.31"
+
+[[audits.futures-channel]]
+who = "Pat Hickey <p.hickey@f5.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
 
 [[audits.futures-core]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -3156,6 +3166,11 @@ who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-deploy"
 version = "0.3.31"
 
+[[audits.futures-executor]]
+who = "Pat Hickey <p.hickey@f5.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+
 [[audits.futures-io]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -3165,6 +3180,11 @@ version = "0.3.27"
 who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-deploy"
 version = "0.3.31"
+
+[[audits.futures-io]]
+who = "Pat Hickey <p.hickey@f5.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
 
 [[audits.futures-lite]]
 who = "Chris Fallin <chris@cfallin.org>"
@@ -3177,6 +3197,11 @@ who = "Joel Dice <joel.dice@gmail.com>"
 criteria = "safe-to-deploy"
 version = "0.3.31"
 
+[[audits.futures-macro]]
+who = "Pat Hickey <p.hickey@f5.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+
 [[audits.futures-sink]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -3186,6 +3211,11 @@ version = "0.3.27"
 who = "Pat Hickey <pat@moreproductive.org>"
 criteria = "safe-to-deploy"
 delta = "0.3.28 -> 0.3.31"
+
+[[audits.futures-sink]]
+who = "Pat Hickey <p.hickey@f5.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
 
 [[audits.futures-task]]
 who = "Pat Hickey <pat@moreproductive.org>"
