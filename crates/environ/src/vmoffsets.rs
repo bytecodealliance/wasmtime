@@ -62,6 +62,7 @@ macro_rules! define_vm_type_offsets {
     // references; and `VMGlobalKind` is a `repr(C, u32)` enum with a `u32`
     // payload.
     (@size ($p:expr) VmPtr < $g:ty >) => { u32::from($p) };
+    (@size ($p:expr) VmPtr < VmPtr < $g:ty >>) => { u32::from($p) };
     (@size ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@size ($p:expr) AtomicUsize) => { u32::from($p) };
     (@size ($p:expr) usize) => { u32::from($p) };
@@ -122,6 +123,7 @@ macro_rules! define_vm_type_offsets {
     // with 64-bit fields must therefore put them first and force their own alignment with
     // `#[repr(C, align(8))]`, as `VMStoreContext` does.
     (@align ($p:expr) VmPtr < $g:ty >) => { u32::from($p) };
+    (@align ($p:expr) VmPtr < VmPtr < $g:ty >>) => { u32::from($p) };
     (@align ($p:expr) Option < VmPtr < $g:ty >>) => { u32::from($p) };
     (@align ($p:expr) AtomicUsize) => { u32::from($p) };
     (@align ($p:expr) usize) => { u32::from($p) };

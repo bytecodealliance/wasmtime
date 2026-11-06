@@ -264,6 +264,16 @@ pub struct FuncEnvironment<'module_environment> {
 
     /// Cached alias regions for alias analysis.
     pub(crate) alias_regions: AliasRegions<VMOffsets<u8>>,
+
+    /// Alias regions for the enclosing component's offsets.
+    ///
+    /// Present only when this module is being compiled as part of a component.
+    #[allow(
+        dead_code,
+        reason = "read by the fused-adapter fast paths in a follow-up commit"
+    )]
+    pub(crate) component_regions:
+        Option<AliasRegions<wasmtime_environ::component::VMComponentOffsets<u8>>>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -275,6 +285,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         key: FuncKey,
         func_index: Option<FuncIndex>,
         func_body_offset: u64,
+        component: Option<wasmtime_environ::EnclosingComponent<'_>>,
     ) -> Self {
         let tunables = compiler.tunables();
         let builtin_functions = BuiltinFunctions::new(compiler);
@@ -291,7 +302,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         let isa = compiler.isa();
         let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
+        let component_regions = component.map(|c| {
+            AliasRegions::new(wasmtime_environ::component::VMComponentOffsets::new(
+                isa.pointer_bytes(),
+                c.0,
+            ))
+        });
         Self {
+            component_regions,
             key,
             isa,
             module: &translation.module,

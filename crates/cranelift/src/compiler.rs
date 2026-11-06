@@ -445,7 +445,7 @@ impl Compiler {
         context.func.signature = wasm_call_signature(&*self.isa, ty, &self.tunables);
         let (namespace, index) = key.into_raw_parts();
         context.func.name = UserFuncName::User(UserExternalName { namespace, index });
-        let mut func_env = FuncEnvironment::new(self, translation, types, ty, key, None, 0);
+        let mut func_env = FuncEnvironment::new(self, translation, types, ty, key, None, 0, None);
         compiler
             .cx
             .func_translator
@@ -491,6 +491,7 @@ impl wasmtime_environ::Compiler for Compiler {
         key: FuncKey,
         input: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
+        component: Option<wasmtime_environ::EnclosingComponent<'_>>,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         log::trace!("compiling Wasm function: {key:?} = {symbol:?}");
@@ -531,6 +532,7 @@ impl wasmtime_environ::Compiler for Compiler {
             key,
             Some(func_index),
             func_body_offset,
+            component,
         );
 
         // The `stack_limit` global value below is the implementation of stack
