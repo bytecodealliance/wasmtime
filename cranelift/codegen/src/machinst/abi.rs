@@ -2269,7 +2269,9 @@ impl<M: ABIMachineSpec> Callee<M> {
             // establishes live-ranges for in-register arguments and
             // constrains them at the start of the function to the
             // locations defined by the ABI.
-            Some(M::gen_args(core::mem::take(&mut self.reg_args).into_boxed_slice()))
+            Some(M::gen_args(
+                core::mem::take(&mut self.reg_args).into_boxed_slice(),
+            ))
         } else {
             None
         }
