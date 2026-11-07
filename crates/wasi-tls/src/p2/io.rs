@@ -283,6 +283,11 @@ where
     }
 
     fn write(&mut self, mut bytes: bytes::Bytes) -> StreamResult<()> {
+        if bytes.is_empty() {
+            self.check_write()?;
+            return Ok(());
+        }
+
         let WriteState::Ready(_, permit) = self else {
             return Err(StreamError::Trap(wasmtime::format_err!(
                 "unpermitted: must call check_write first"
@@ -293,10 +298,6 @@ where
                 "not permitted to write {} bytes",
                 bytes.len()
             )));
-        }
-
-        if bytes.is_empty() {
-            return Ok(());
         }
 
         let WriteState::Ready(mut stream, _) = std::mem::replace(self, WriteState::Closed) else {

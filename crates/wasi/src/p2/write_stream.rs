@@ -168,6 +168,9 @@ impl OutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let mut state = self.worker.state();
         state.check_error()?;
+        if bytes.is_empty() {
+            return Ok(());
+        }
         if state.flush_pending {
             return Err(StreamError::Trap(format_err!(
                 "write not permitted while flush pending"
