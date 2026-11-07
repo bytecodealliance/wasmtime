@@ -1,7 +1,8 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use wasmtime::*;
+use wasmtime_bench_util::Timer;
 
 fn measure_execution_time(c: &mut Criterion) {
     // Baseline performance: a single measurement covers both initializing
@@ -23,10 +24,7 @@ fn measure_execution_time(c: &mut Criterion) {
         let (engine, module) = test_setup();
         b.iter_custom(move |iters| {
             (0..iters)
-                .map(|_| {
-                    let (init, _call) = eager_thread_instantiate(engine.clone(), module.clone());
-                    init
-                })
+                .map(|_| eager_thread_instantiate(engine.clone(), module.clone(), Measure::Init))
                 .sum()
         })
     });
@@ -37,10 +35,7 @@ fn measure_execution_time(c: &mut Criterion) {
         let (engine, module) = test_setup();
         b.iter_custom(move |iters| {
             (0..iters)
-                .map(|_| {
-                    let (_init, call) = eager_thread_instantiate(engine.clone(), module.clone());
-                    call
-                })
+                .map(|_| eager_thread_instantiate(engine.clone(), module.clone(), Measure::Call))
                 .sum()
         })
     });
@@ -54,9 +49,9 @@ fn duration_of_call(engine: &Engine, module: &Module) -> Duration {
     let f = inst.get_func(&mut store, "f").expect("get f");
     let f = f.typed::<(), ()>(&store).expect("type f");
 
-    let call = Instant::now();
+    let call = Timer::start();
     f.call(&mut store, ()).expect("call f");
-    call.elapsed()
+    call.stop()
 }
 
 /// When wasmtime first runs a function on a thread, it needs to initialize
@@ -68,17 +63,29 @@ fn lazy_thread_instantiate(engine: Engine, module: Module) -> Duration {
         .join()
         .expect("thread joins")
 }
-/// This benchmark spawns a new thread, and records the duration to eagerly
-/// initializes the thread local resources. It then creates a store and
-/// instance, and records the duration it took to execute the first function
-/// call.
-fn eager_thread_instantiate(engine: Engine, module: Module) -> (Duration, Duration) {
-    thread::spawn(move || {
-        let init_start = Instant::now();
-        Engine::tls_eager_initialize();
-        let init_duration = init_start.elapsed();
+/// Which region of [`eager_thread_instantiate`] to time.
+#[derive(Clone, Copy)]
+enum Measure {
+    Init,
+    Call,
+}
 
-        (init_duration, duration_of_call(&engine, &module))
+/// This benchmark spawns a new thread, and eagerly initializes the thread local
+/// resources. For [`Measure::Init`] it returns how long that took. For
+/// [`Measure::Call`] it then creates a store and instance, and returns how long
+/// the first function call took. A benchmark times only one region, so that
+/// under Callgrind it makes one measurement.
+fn eager_thread_instantiate(engine: Engine, module: Module, measure: Measure) -> Duration {
+    thread::spawn(move || match measure {
+        Measure::Init => {
+            let init = Timer::start();
+            Engine::tls_eager_initialize();
+            init.stop()
+        }
+        Measure::Call => {
+            Engine::tls_eager_initialize();
+            duration_of_call(&engine, &module)
+        }
     })
     .join()
     .expect("thread joins")

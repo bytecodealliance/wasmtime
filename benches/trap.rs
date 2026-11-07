@@ -1,5 +1,6 @@
 use criterion::*;
 use wasmtime::*;
+use wasmtime_bench_util::Timer;
 
 criterion_main!(benches);
 criterion_group!(benches, bench_traps);
@@ -69,11 +70,11 @@ fn bench_multi_threaded_traps(c: &mut Criterion) {
 
                     // Measure how long it takes to do `iters` worth of traps
                     // while there is a bunch of background work going on.
-                    let start = std::time::Instant::now();
+                    let start = Timer::start();
                     for _ in 0..iters {
                         assert!(f.call(&mut store, ()).is_err());
                     }
-                    let elapsed = start.elapsed();
+                    let elapsed = start.stop();
 
                     // Clean up all of our background threads.
                     threads.into_iter().for_each(|(handle, done_sender)| {
@@ -109,11 +110,11 @@ fn bench_many_modules_registered_traps(c: &mut Criterion) {
                     let instance = Instance::new(&mut store, modules.last().unwrap(), &[]).unwrap();
                     let f = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
 
-                    let start = std::time::Instant::now();
+                    let start = Timer::start();
                     for _ in 0..iters {
                         assert!(f.call(&mut store, ()).is_err());
                     }
-                    start.elapsed()
+                    start.stop()
                 });
             },
         );
@@ -139,11 +140,11 @@ fn bench_many_stack_frames_traps(c: &mut Criterion) {
                     let instance = Instance::new(&mut store, &module, &[]).unwrap();
                     let f = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
 
-                    let start = std::time::Instant::now();
+                    let start = Timer::start();
                     for _ in 0..iters {
                         assert!(f.call(&mut store, ()).is_err());
                     }
-                    start.elapsed()
+                    start.stop()
                 });
             },
         );
@@ -199,11 +200,11 @@ fn bench_host_wasm_frames_traps(c: &mut Criterion) {
                         .get_typed_func::<(i32,), ()>(&mut store, "f")
                         .unwrap();
 
-                    let start = std::time::Instant::now();
+                    let start = Timer::start();
                     for _ in 0..iters {
                         assert!(f.call(&mut store, (num_stack_frames as i32,)).is_err());
                     }
-                    start.elapsed()
+                    start.stop()
                 });
             },
         );
