@@ -63,8 +63,8 @@
 ;;
 ;;                                 block2(v43: i64):
 ;; @0030                               store.f32 user2 little region5 v4, v43
-;;                                     v57 = iconst.i64 4
-;;                                     v58 = iadd v43, v57  ; v57 = 4
+;; @0030                               v57 = iconst.i64 4
+;; @0030                               v58 = iadd v43, v57  ; v57 = 4
 ;; @0030                               v46 = icmp eq v58, v40
 ;; @0030                               brif v46, block3, block2(v58)
 ;;
@@ -168,10 +168,10 @@
 ;; @0052                               brif v55, block3, block2(v29)
 ;;
 ;;                                 block2(v43: i64):
-;;                                     v57 = f32const 0x1.000000p0
+;; @004b                               v57 = f32const 0x1.000000p0
 ;; @0052                               store user2 little region5 v57, v43  ; v57 = 0x1.000000p0
-;;                                     v58 = iconst.i64 4
-;;                                     v59 = iadd v43, v58  ; v58 = 4
+;; @0052                               v58 = iconst.i64 4
+;; @0052                               v59 = iadd v43, v58  ; v58 = 4
 ;; @0052                               v46 = icmp eq v59, v40
 ;; @0052                               brif v46, block3, block2(v59)
 ;;

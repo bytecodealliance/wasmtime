@@ -471,7 +471,7 @@
 ;;                                     jump block71
 ;;
 ;;                                 block71:
-;;                                     v134 = iconst.i64 1
-;;                                     v135 = iadd.i64 v6, v134  ; v134 = 1
+;; @0595                               v134 = iconst.i64 1
+;; @0597                               v135 = iadd.i64 v6, v134  ; v134 = 1
 ;; @059a                               jump block2(v135)
 ;; }
