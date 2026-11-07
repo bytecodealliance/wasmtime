@@ -197,13 +197,23 @@ impl From<std::io::Error> for FilesystemError {
     }
 }
 
+impl From<crate::filesystem::FilesystemOperationError> for FilesystemError {
+    fn from(error: crate::filesystem::FilesystemOperationError) -> Self {
+        match error {
+            crate::filesystem::FilesystemOperationError::Rejected => types::ErrorCode::Busy.into(),
+        }
+    }
+}
+
 impl From<crate::filesystem::ErrorCode> for types::ErrorCode {
     fn from(error: crate::filesystem::ErrorCode) -> Self {
         match error {
             crate::filesystem::ErrorCode::Access => Self::Access,
             crate::filesystem::ErrorCode::Already => Self::Already,
             crate::filesystem::ErrorCode::BadDescriptor => Self::BadDescriptor,
-            crate::filesystem::ErrorCode::Busy => Self::Busy,
+            crate::filesystem::ErrorCode::Busy | crate::filesystem::ErrorCode::WouldBlock => {
+                Self::Busy
+            }
             crate::filesystem::ErrorCode::Exist => Self::Exist,
             crate::filesystem::ErrorCode::FileTooLarge => Self::FileTooLarge,
             crate::filesystem::ErrorCode::IllegalByteSequence => Self::IllegalByteSequence,
