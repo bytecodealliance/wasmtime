@@ -68,7 +68,7 @@ pub async fn default_send_request(
     let connect = async {
         let stream = TcpStream::connect(&authority)
             .await
-            .map_err(Error::Connect)?;
+            .map_err(|e| Error::Connect(e.into()))?;
         let stream = if use_tls {
             // derived from https://github.com/rustls/rustls/blob/main/examples/src/bin/simpleclient.rs
             let root_cert_store = rustls::RootCertStore {
@@ -82,7 +82,7 @@ pub async fn default_send_request(
             let stream = connector
                 .connect(domain, stream)
                 .await
-                .map_err(Error::Tls)?;
+                .map_err(|e| Error::Tls(e.into()))?;
             stream.boxed()
         } else {
             stream.boxed()

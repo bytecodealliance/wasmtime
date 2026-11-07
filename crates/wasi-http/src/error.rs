@@ -1,19 +1,23 @@
 use std::fmt;
 use std::io;
+use std::sync::Arc;
 
 /// Error type for `wasi:http` embedder interactions.
 ///
 /// This error type is a superset of the wasip2/wasip3 error types for example
 /// and is the error that the embedder interacts with for all operations.
-#[derive(Debug)]
+///
+/// Errors from other crates which cannot be cloned are wrapped in [`Arc`] so
+/// that this error can be.
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 #[expect(missing_docs, reason = "too cluttered")]
 pub enum Error {
-    Hyper(hyper::Error),
-    Connect(io::Error),
-    Tls(io::Error),
+    Hyper(Arc<hyper::Error>),
+    Connect(Arc<io::Error>),
+    Tls(Arc<io::Error>),
     #[cfg(feature = "default-send-request")]
-    InvalidDnsNameError(rustls::pki_types::InvalidDnsNameError),
+    InvalidDnsNameError(Arc<rustls::pki_types::InvalidDnsNameError>),
     HttpRequestBodySize(Option<u64>),
 
     DnsTimeout,
@@ -79,7 +83,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 impl From<hyper::Error> for Error {
     fn from(err: hyper::Error) -> Self {
-        Self::Hyper(err)
+        Self::Hyper(Arc::new(err))
     }
 }
 
@@ -92,7 +96,7 @@ impl From<std::convert::Infallible> for Error {
 #[cfg(feature = "default-send-request")]
 impl From<rustls::pki_types::InvalidDnsNameError> for Error {
     fn from(err: rustls::pki_types::InvalidDnsNameError) -> Self {
-        Self::InvalidDnsNameError(err)
+        Self::InvalidDnsNameError(Arc::new(err))
     }
 }
 

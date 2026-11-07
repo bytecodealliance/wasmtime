@@ -697,78 +697,113 @@ where
     }
 }
 
-/// A wrapper around [http_body::Body], which validates `Content-Length`
-pub(crate) struct BodyWithContentLength<T, E> {
+/// A wrapper around [http_body::Body], which optionally validates
+/// `Content-Length` and sends a copy of the first error on a channel. The
+/// channel is closed without an error once the body finishes successfully.
+pub(crate) struct BodyWithErrorReport<T> {
     body: T,
-    error_tx: Option<oneshot::Sender<E>>,
-    make_error: fn(Option<u64>) -> E,
+    error_tx: Option<oneshot::Sender<Error>>,
+    content_length: Option<ContentLength>,
+}
+
+/// `Content-Length` validation state of a [BodyWithErrorReport]
+struct ContentLength {
+    make_error: fn(Option<u64>) -> Error,
     /// Limit of bytes to be sent
     limit: u64,
     /// Number of bytes sent
     sent: u64,
 }
 
-impl<T, E> BodyWithContentLength<T, E> {
-    /// Sends the error constructed by [Self::make_error] on [Self::error_tx].
-    /// Does nothing if an error has already been sent on [Self::error_tx].
-    fn send_error<V>(&mut self, sent: Option<u64>) -> Poll<Option<Result<V, E>>> {
-        if let Some(error_tx) = self.error_tx.take() {
-            _ = error_tx.send((self.make_error)(sent));
+impl ContentLength {
+    /// Records `n` more bytes as sent, returning an error if that exceeds
+    /// [Self::limit].
+    fn record(&mut self, n: usize) -> Result<(), Error> {
+        let sent = self
+            .sent
+            .saturating_add(u64::try_from(n).unwrap_or(u64::MAX));
+        if sent > self.limit {
+            return Err((self.make_error)(Some(sent)));
         }
-        Poll::Ready(Some(Err((self.make_error)(sent))))
+        self.sent = sent;
+        Ok(())
     }
 }
 
-impl<T, E> http_body::Body for BodyWithContentLength<T, E>
+impl<T> http_body::Body for BodyWithErrorReport<T>
 where
-    T: http_body::Body<Data = Bytes, Error = E> + Unpin,
+    T: http_body::Body<Data = Bytes, Error = Error> + Unpin,
 {
     type Data = T::Data;
     type Error = T::Error;
 
     #[inline]
     fn poll_frame(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-        match ready!(Pin::new(&mut self.as_mut().body).poll_frame(cx)) {
+        let this = self.get_mut();
+        let res = match ready!(Pin::new(&mut this.body).poll_frame(cx)) {
             Some(Ok(frame)) => {
-                let Some(data) = frame.data_ref() else {
-                    return Poll::Ready(Some(Ok(frame)));
-                };
-                let Ok(sent) = data.len().try_into() else {
-                    return self.send_error(None);
-                };
-                let Some(sent) = self.sent.checked_add(sent) else {
-                    return self.send_error(None);
-                };
-                if sent > self.limit {
-                    return self.send_error(Some(sent));
+                // If we got a data frame have content length set, track the
+                // size.
+                if let (Some(content_length), Some(data)) =
+                    (&mut this.content_length, frame.data_ref())
+                {
+                    match content_length.record(data.len()) {
+                        Ok(()) => Some(Ok(frame)),
+                        Err(err) => Some(Err(err)),
+                    }
+                // Otherwise this wasn't a data frame, or we don't have content
+                // length set, so just pass the the frame as is.
+                } else {
+                    Some(Ok(frame))
                 }
-                self.sent = sent;
-                Poll::Ready(Some(Ok(frame)))
             }
-            Some(Err(err)) => Poll::Ready(Some(Err(err))),
-            None if self.limit != self.sent => {
-                // short write
-                let sent = self.sent;
-                self.send_error(Some(sent))
+            Some(Err(err)) => Some(Err(err)),
+            // If we've hit the end, check the content length
+            None => {
+                if let Some(content_length) = &this.content_length
+                    && content_length.sent != content_length.limit
+                {
+                    // short write
+                    Some(Err((content_length.make_error)(Some(content_length.sent))))
+                } else {
+                    None
+                }
             }
-            None => Poll::Ready(None),
+        };
+        match &res {
+            Some(Err(err)) => {
+                if let Some(error_tx) = this.error_tx.take() {
+                    _ = error_tx.send(err.clone());
+                }
+            }
+            None => this.error_tx = None,
+            Some(Ok(..)) => {}
         }
+        Poll::Ready(res)
     }
 
     #[inline]
     fn is_end_stream(&self) -> bool {
-        // Do not report end of stream before `limit` bytes were sent, otherwise
-        // the consumer might stop polling before a short write is detected in
-        // `poll_frame`.
-        self.sent == self.limit && self.body.is_end_stream()
+        match &self.content_length {
+            // Do not report end of stream before `limit` bytes were sent,
+            // otherwise the consumer might stop polling before a short write is
+            // detected in `poll_frame`.
+            Some(content_length) if content_length.sent != content_length.limit => false,
+            _ => self.body.is_end_stream(),
+        }
     }
 
     #[inline]
     fn size_hint(&self) -> http_body::SizeHint {
-        http_body::SizeHint::with_exact(self.limit.saturating_sub(self.sent))
+        match &self.content_length {
+            Some(content_length) => http_body::SizeHint::with_exact(
+                content_length.limit.saturating_sub(content_length.sent),
+            ),
+            None => self.body.size_hint(),
+        }
     }
 }
 
@@ -839,21 +874,26 @@ pub(crate) trait BodyExt {
         }
     }
 
-    fn with_content_length<E>(
+    /// Reports the first error of this body on `error_tx`. If `content_length`
+    /// is set, the body is also validated against it, with `make_error`
+    /// constructing the error for a mismatch.
+    fn with_error_report(
         self,
-        limit: u64,
-        error_tx: oneshot::Sender<E>,
-        make_error: fn(Option<u64>) -> E,
-    ) -> BodyWithContentLength<Self, E>
+        error_tx: oneshot::Sender<Error>,
+        content_length: Option<u64>,
+        make_error: fn(Option<u64>) -> Error,
+    ) -> BodyWithErrorReport<Self>
     where
         Self: Sized,
     {
-        BodyWithContentLength {
+        BodyWithErrorReport {
             body: self,
             error_tx: Some(error_tx),
-            make_error,
-            limit,
-            sent: 0,
+            content_length: content_length.map(|limit| ContentLength {
+                make_error,
+                limit,
+                sent: 0,
+            }),
         }
     }
 }
@@ -880,7 +920,7 @@ mod tests {
         let (error_tx, mut error_rx) = oneshot::channel();
         let body = Full::new(Bytes::from_static(b"hello"))
             .map_err(|never| match never {})
-            .with_content_length(10, error_tx, Error::HttpResponseBodySize);
+            .with_error_report(error_tx, Some(10), Error::HttpResponseBodySize);
         let mut body = pin!(body);
         assert!(!body.is_end_stream());
         assert_eq!(body.size_hint().exact(), Some(10));
@@ -910,7 +950,7 @@ mod tests {
         let (error_tx, mut error_rx) = oneshot::channel();
         let body = Full::new(Bytes::from_static(b"helloworld"))
             .map_err(|never| match never {})
-            .with_content_length(3, error_tx, Error::HttpResponseBodySize);
+            .with_error_report(error_tx, Some(3), Error::HttpResponseBodySize);
         let mut body = pin!(body);
         assert!(!body.is_end_stream());
         assert_eq!(body.size_hint().exact(), Some(3));
@@ -932,7 +972,7 @@ mod tests {
         let (error_tx, mut error_rx) = oneshot::channel();
         let body = Full::new(Bytes::from_static(b"hello"))
             .map_err(|never| match never {})
-            .with_content_length(5, error_tx, Error::HttpResponseBodySize);
+            .with_error_report(error_tx, Some(5), Error::HttpResponseBodySize);
         let mut body = pin!(body);
         assert!(!body.is_end_stream());
         assert_eq!(body.size_hint().exact(), Some(5));
@@ -949,6 +989,63 @@ mod tests {
             Poll::Ready(None)
         ));
         assert!(error_rx.try_recv().is_err());
+    }
+
+    /// An error returned by the body is passed through, and a copy of it is
+    /// reported on the channel.
+    #[test]
+    fn error_report_body_error() {
+        let (error_tx, mut error_rx) = oneshot::channel();
+        let body = http_body_util::StreamBody::new(futures::stream::iter([
+            Ok(http_body::Frame::data(Bytes::from_static(b"hello"))),
+            Err(Error::ConnectionTerminated),
+        ]))
+        .with_error_report(error_tx, None, Error::HttpResponseBodySize);
+        let mut body = pin!(body);
+
+        let mut cx = Context::from_waker(Waker::noop());
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Ok(frame))) => assert_eq!(frame.into_data().unwrap(), "hello"),
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(matches!(
+            error_rx.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Err(Error::ConnectionTerminated))) => {}
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(matches!(
+            error_rx.try_recv(),
+            Ok(Error::ConnectionTerminated)
+        ));
+    }
+
+    /// A body without a `Content-Length` which finishes successfully closes the
+    /// channel without an error.
+    #[test]
+    fn error_report_success() {
+        let (error_tx, mut error_rx) = oneshot::channel();
+        let body = Full::new(Bytes::from_static(b"hello"))
+            .map_err(|never| match never {})
+            .with_error_report(error_tx, None, Error::HttpResponseBodySize);
+        let mut body = pin!(body);
+        assert_eq!(body.size_hint().exact(), Some(5));
+
+        let mut cx = Context::from_waker(Waker::noop());
+        match body.as_mut().poll_frame(&mut cx) {
+            Poll::Ready(Some(Ok(frame))) => assert_eq!(frame.into_data().unwrap(), "hello"),
+            other => panic!("unexpected poll result: {other:?}"),
+        }
+        assert!(matches!(
+            body.as_mut().poll_frame(&mut cx),
+            Poll::Ready(None)
+        ));
+        assert!(matches!(
+            error_rx.try_recv(),
+            Err(oneshot::error::TryRecvError::Closed)
+        ));
     }
 
     /// `mpsc::channel` panics above `Semaphore::MAX_PERMITS` and at zero, so the
