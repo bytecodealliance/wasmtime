@@ -55,7 +55,11 @@
 //!
 //! impl WasiView for MyState {
 //!     fn ctx(&mut self) -> WasiCtxView<'_> {
-//!         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+//!         WasiCtxView {
+//!             ctx: &mut self.ctx,
+//!             table: &mut self.table,
+//!             hooks: Default::default(),
+//!         }
 //!     }
 //! }
 //!
@@ -125,7 +129,11 @@
 ///
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///         WasiCtxView {
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///             hooks: Default::default(),
+///         }
 ///     }
 /// }
 ///
@@ -251,7 +259,11 @@ pub mod sync {
     ///
     /// impl WasiView for MyState {
     ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-    ///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+    ///         WasiCtxView {
+    ///             ctx: &mut self.ctx,
+    ///             table: &mut self.table,
+    ///             hooks: Default::default(),
+    ///         }
     ///     }
     /// }
     /// ```
@@ -316,7 +328,11 @@ pub mod sync {
     ///
     /// impl WasiView for MyState {
     ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-    ///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+    ///         WasiCtxView {
+    ///             ctx: &mut self.ctx,
+    ///             table: &mut self.table,
+    ///             hooks: Default::default(),
+    ///         }
     ///     }
     /// }
     /// ```
@@ -366,6 +382,7 @@ mod async_io {
             "wasi:filesystem/types.[method]descriptor.unlink-file-at": async | tracing | trappable,
             "wasi:filesystem/types.[method]descriptor.write": async | tracing | trappable,
             "wasi:filesystem/types.[method]directory-entry-stream.read-directory-entry": async | tracing | trappable,
+            "wasi:sockets/tcp-create-socket.create-tcp-socket": async | tracing | trappable,
             "wasi:sockets/udp-create-socket.create-udp-socket": async | tracing | trappable,
             "wasi:sockets/tcp.[method]tcp-socket.start-bind": async | tracing | trappable,
             "wasi:sockets/tcp.[method]tcp-socket.start-listen": async | tracing | trappable,
@@ -500,7 +517,11 @@ pub use self::async_io::wasi::*;
 ///
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///         WasiCtxView {
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///             hooks: Default::default(),
+///         }
 ///     }
 /// }
 /// ```
@@ -566,7 +587,11 @@ pub use self::async_io::Command;
 ///
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///         WasiCtxView {
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///             hooks: Default::default(),
+///         }
 ///     }
 /// }
 /// ```

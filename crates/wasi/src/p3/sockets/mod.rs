@@ -58,6 +58,7 @@ pub type SocketError = TrappableError<types::ErrorCode>;
 ///         WasiSocketsCtxView {
 ///             ctx: &mut self.sockets,
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }
@@ -150,6 +151,7 @@ where
 ///         WasiSocketsCtxView {
 ///             ctx: &mut self.contexts[id.0],
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }

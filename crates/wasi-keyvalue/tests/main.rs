@@ -18,6 +18,7 @@ impl WasiView for Ctx {
         WasiCtxView {
             ctx: &mut self.wasi_ctx,
             table: &mut self.table,
+            hooks: Default::default(),
         }
     }
 }

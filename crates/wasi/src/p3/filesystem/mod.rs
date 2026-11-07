@@ -59,6 +59,7 @@ pub type FilesystemError = TrappableError<types::ErrorCode>;
 ///         WasiFilesystemCtxView {
 ///             ctx: &mut self.filesystem,
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }
@@ -151,6 +152,7 @@ where
 ///         WasiFilesystemCtxView {
 ///             ctx: &mut self.contexts[id.0],
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }

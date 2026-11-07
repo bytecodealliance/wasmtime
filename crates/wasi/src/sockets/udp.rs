@@ -5,6 +5,7 @@ use crate::sockets::{
     is_valid_remote_address, set_receive_buffer_size, set_send_buffer_size, set_unicast_hop_limit,
     unspecified_addr,
 };
+use crate::{Permitted, WasiPermit};
 use rustix::fd::AsFd;
 use rustix::io::Errno;
 use std::net::SocketAddr;
@@ -21,7 +22,7 @@ pub(crate) const MAX_DATAGRAM_SIZE: usize = u16::MAX as usize;
 /// The inner state is wrapped in an Arc because the same underlying socket is
 /// used for implementing the stream types.
 pub struct UdpSocket {
-    socket: Arc<tokio::net::UdpSocket>,
+    socket: Arc<Permitted<tokio::net::UdpSocket>>,
     family: SocketAddressFamily,
 
     /// The checks to perform before doing any noteworthy syscall.
@@ -41,6 +42,7 @@ impl UdpSocket {
     pub(crate) async fn new(
         cx: &WasiSocketsCtx,
         family: SocketAddressFamily,
+        permit: Box<dyn WasiPermit>,
     ) -> Result<Self, ErrorCode> {
         cx.allowed_network_uses.check_allowed_udp()?;
 
@@ -58,7 +60,7 @@ impl UdpSocket {
         socket.writable().await?;
 
         Ok(Self {
-            socket: Arc::new(socket),
+            socket: Arc::new(Permitted::new(socket, permit)),
             is_bound: false,
             remote_addr: None,
             permissions: cx.socket_addr_check.clone(),
@@ -104,7 +106,7 @@ impl UdpSocket {
 
         self.permissions.check(addr, SocketAddrUse::UdpBind).await?;
 
-        bind(&self.socket, addr)?;
+        bind(&**self.socket, addr)?;
         Ok(())
     }
 
@@ -134,7 +136,7 @@ impl UdpSocket {
                 .await?;
         }
 
-        let result = connect(&self.socket, addr);
+        let result = connect(&**self.socket, addr);
         self.update_remote_address();
         result.map_err(|e| e.into())
     }
@@ -152,7 +154,7 @@ impl UdpSocket {
         // manually settle the `is_bound` state here:
         self.is_bound = true;
 
-        let result = disconnect(&self.socket);
+        let result = disconnect(&**self.socket);
         self.update_remote_address();
         result.map_err(|e| e.into())
     }
@@ -263,32 +265,32 @@ impl UdpSocket {
     }
 
     pub(crate) fn unicast_hop_limit(&self) -> Result<u8, ErrorCode> {
-        let n = get_unicast_hop_limit(&self.socket, self.family)?;
+        let n = get_unicast_hop_limit(&**self.socket, self.family)?;
         Ok(n)
     }
 
     pub(crate) fn set_unicast_hop_limit(&self, value: u8) -> Result<(), ErrorCode> {
-        set_unicast_hop_limit(&self.socket, self.family, value)?;
+        set_unicast_hop_limit(&**self.socket, self.family, value)?;
         Ok(())
     }
 
     pub(crate) fn receive_buffer_size(&self) -> Result<u64, ErrorCode> {
-        let n = get_receive_buffer_size(&self.socket)?;
+        let n = get_receive_buffer_size(&**self.socket)?;
         Ok(n)
     }
 
     pub(crate) fn set_receive_buffer_size(&self, value: u64) -> Result<(), ErrorCode> {
-        set_receive_buffer_size(&self.socket, value)?;
+        set_receive_buffer_size(&**self.socket, value)?;
         Ok(())
     }
 
     pub(crate) fn send_buffer_size(&self) -> Result<u64, ErrorCode> {
-        let n = get_send_buffer_size(&self.socket)?;
+        let n = get_send_buffer_size(&**self.socket)?;
         Ok(n)
     }
 
     pub(crate) fn set_send_buffer_size(&self, value: u64) -> Result<(), ErrorCode> {
-        set_send_buffer_size(&self.socket, value)?;
+        set_send_buffer_size(&**self.socket, value)?;
         Ok(())
     }
 }
