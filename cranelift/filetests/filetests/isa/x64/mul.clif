@@ -237,8 +237,7 @@ block0(v0: i8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movq %rdi, %rax
-;   mulb (%rip) ;; implicit: %ax
+;   imull $0x61, %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -248,17 +247,10 @@ block0(v0: i8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   mulb 0xa(%rip)
+;   imull $0x61, %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %ah, (%rcx)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
 
 function %imul_i16_const(i16) -> i16{
 block0(v0: i16):
@@ -699,4 +691,3 @@ block0:
 ;   andb (%rax), %al
 ;   addb %al, (%rax)
 ;   .byte 0x00
-
