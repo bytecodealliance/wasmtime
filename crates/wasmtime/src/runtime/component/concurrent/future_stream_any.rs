@@ -147,7 +147,7 @@ unsafe impl Lower for FutureAny {
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        futures_and_streams::lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_flat(
+        futures_and_streams::lower_future_to_index(self.idx, cx, ty, false)?.linear_lower_to_flat(
             cx,
             InterfaceType::U32,
             dst,
@@ -160,7 +160,7 @@ unsafe impl Lower for FutureAny {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        futures_and_streams::lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
+        futures_and_streams::lower_future_to_index(self.idx, cx, ty, false)?.linear_lower_to_memory(
             cx,
             InterfaceType::U32,
             offset,
@@ -317,7 +317,7 @@ unsafe impl Lower for StreamAny {
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        futures_and_streams::lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_flat(
+        futures_and_streams::lower_stream_to_index(self.idx, cx, ty, false)?.linear_lower_to_flat(
             cx,
             InterfaceType::U32,
             dst,
@@ -330,7 +330,7 @@ unsafe impl Lower for StreamAny {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        futures_and_streams::lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
+        futures_and_streams::lower_stream_to_index(self.idx, cx, ty, false)?.linear_lower_to_memory(
             cx,
             InterfaceType::U32,
             offset,

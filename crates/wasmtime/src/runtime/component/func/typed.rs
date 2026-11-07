@@ -600,7 +600,7 @@ pub unsafe trait Lower: ComponentType {
     /// For example this is the component's "view" of the type that is being
     /// lowered. This is guaranteed to have passed a `typecheck` earlier.
     ///
-    /// This will only be called if `typecheck` passes for `Op::Lower`.
+    /// It is invalid to call this unless `T::typecheck` passes for `ty`.
     #[doc(hidden)]
     fn linear_lower_to_flat<T>(
         &self,
@@ -626,7 +626,7 @@ pub unsafe trait Lower: ComponentType {
     /// information passed to `lower` above, and is the component's own view of
     /// what the resulting type should be.
     ///
-    /// This will only be called if `typecheck` passes for `Op::Lower`.
+    /// It is invalid to call this unless `T::typecheck` passes for `ty`.
     #[doc(hidden)]
     fn linear_lower_to_memory<T>(
         &self,
@@ -643,6 +643,8 @@ pub unsafe trait Lower: ComponentType {
     /// This is primarily here to get overridden for implementations of integers
     /// which can avoid some extra fluff and use a pattern that's more easily
     /// optimizable by LLVM.
+    ///
+    /// It is invalid to call this unless `T::typecheck` passes for `ty`.
     #[doc(hidden)]
     fn linear_store_list_to_memory<T>(
         cx: &mut LowerContext<'_, T>,

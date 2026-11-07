@@ -2493,6 +2493,24 @@ async fn lower_stream_payload_type_mismatch() -> wasmtime::Result<()> {
     let (stream,) = new.call_async(&mut store, ()).await?;
     assert!(take.call_async(&mut store, (stream,)).await.is_err());
 
+    // The same through a typed reader re-typed via `StreamAny`, whose
+    // `StreamReader<StreamAny>` type doesn't match the items it was created
+    // with.
+    let (mut store, instance) = instantiate().await?;
+    let echo = instance
+        .get_typed_func::<(StreamReader<StreamReader<String>>,), (StreamReader<StreamAny>,)>(
+            &mut store,
+            "echo-stream",
+        )?;
+    let take =
+        instance.get_typed_func::<(StreamReader<StreamAny>,), ()>(&mut store, "take-stream-u32")?;
+    let inner = StreamReader::new(&mut store, vec!["hello".to_string()])?;
+    let outer = StreamReader::new(&mut store, vec![inner])?;
+    let (outer,) = echo.call_async(&mut store, (outer,)).await?;
+    let outer = StreamAny::try_from_stream_reader(&mut store, outer)?
+        .try_into_stream_reader::<StreamAny>()?;
+    assert!(take.call_async(&mut store, (outer,)).await.is_err());
+
     // A matching payload type is still accepted.
     let (mut store, instance) = instantiate().await?;
     let echo = instance
