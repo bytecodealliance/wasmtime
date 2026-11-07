@@ -213,22 +213,22 @@
 ;; @0139                               trap user4
 ;;
 ;;                                 block12:
-;;                                     v80 = iconst.i32 3
-;;                                     v81 = band.i32 v3, v80  ; v80 = 3
+;; @011b                               v80 = iconst.i32 3
+;; @0141                               v81 = band.i32 v3, v80  ; v80 = 3
 ;; @0142                               trapnz v81, user36
 ;; @0142                               jump block16
 ;;
 ;;                                 block16:
 ;; @014c                               v40 = load.i64 notrap aligned readonly can_move region6 v0+72
 ;; @014c                               v41 = load.i64 notrap aligned region8 v40+8
-;;                                     v82 = iconst.i64 16
-;;                                     v83 = ushr v41, v82  ; v82 = 16
+;; @0128                               v82 = iconst.i64 16
+;; @014c                               v83 = ushr v41, v82  ; v82 = 16
 ;; @014c                               v44 = ireduce.i32 v83
 ;; @014e                               v45 = uextend.i64 v44
-;;                                     v84 = ishl v45, v82  ; v82 = 16
+;; @0151                               v84 = ishl v45, v82  ; v82 = 16
 ;; @0154                               v48 = uextend.i64 v3
 ;;                                     v85 = iconst.i64 8
-;;                                     v86 = iadd v48, v85  ; v85 = 8
+;; @0158                               v86 = iadd v48, v85  ; v85 = 8
 ;; @0159                               v52 = icmp uge v84, v86
 ;; @015a                               brif v52, block17, block19
 ;;

@@ -69,8 +69,8 @@
 ;;                                 block2:
 ;;                                     v52 = iconst.i32 0x0400_0020
 ;; @003a                               v25 = load.i64 notrap aligned readonly can_move region5 v19+32
-;;                                     v58 = band.i32 v14, v51  ; v51 = -8
-;;                                     v59 = uextend.i64 v58
+;; @003a                               v58 = band.i32 v14, v51  ; v51 = -8
+;; @003a                               v59 = uextend.i64 v58
 ;; @003a                               v27 = iadd v25, v59
 ;; @003a                               store user2 region8 v52, v27  ; v52 = 0x0400_0020
 ;; @003a                               v30 = load.i64 notrap aligned readonly can_move region6 v0+40
