@@ -1639,6 +1639,26 @@ const TWO_MODULES: &str = r#"(component
      (func (export "f2") (param "a" s32) (param "b" s32) (result s32)
        (canon lift (core func $i2 "f2"))))"#;
 
+/// A component whose `f1` calls `g` in another module, so that inlining can copy `g`'s
+/// code (and its breakpoint sites) into `f1`. `$m2` comes first, so it is module 0, and
+/// `g`'s `i32.mul` is at 0x26.
+const CALL_ACROSS_MODULES: &str = r#"(component
+     (core module $m2
+       (func (export "g") (param i32 i32) (result i32)
+         local.get 0
+         local.get 1
+         i32.mul))
+     (core instance $i2 (instantiate $m2))
+     (core module $m1
+       (import "m" "g" (func $g (param i32 i32) (result i32)))
+       (func (export "f1") (param i32 i32) (result i32)
+         local.get 0
+         local.get 1
+         call $g))
+     (core instance $i1 (instantiate $m1 (with "m" (instance $i2))))
+     (func (export "f1") (param "a" s32) (param "b" s32) (result s32)
+       (canon lift (core func $i1 "f1"))))"#;
+
 /// Records the PC of each debug event.
 #[derive(Clone)]
 struct RecordPcs(Arc<Mutex<Vec<u32>>>);
@@ -1660,17 +1680,21 @@ impl DebugHandler for RecordPcs {
     }
 }
 
-/// Loads [`TWO_MODULES`], and calls `f1` then `f2`, saying the PCs of each one's events.
-/// `edit` sets breakpoints first, given the component's modules.
-async fn two_modules(
+/// Loads the component `wat`, and calls each of `exports` in turn, saying the PCs of each
+/// one's events. `edit` sets breakpoints first, given the component's modules.
+async fn run_component(
+    wat: &str,
+    inlining: Inlining,
+    exports: &[&str],
     edit: impl FnOnce(&mut Store<()>, &[Module]) -> wasmtime::Result<()>,
-) -> wasmtime::Result<(Vec<u32>, Vec<u32>)> {
+) -> wasmtime::Result<Vec<Vec<u32>>> {
     use wasmtime::component::{Component, Linker};
 
     let mut config = Config::default();
     config.guest_debug(true);
+    config.compiler_inlining(inlining);
     let engine = Engine::new(&config)?;
-    let component = Component::new(&engine, TWO_MODULES)?;
+    let component = Component::new(&engine, wat)?;
     let linker: Linker<()> = Linker::new(&engine);
     let mut store = Store::new(&engine, ());
     let instance = linker.instantiate_async(&mut store, &component).await?;
@@ -1680,13 +1704,20 @@ async fn two_modules(
     assert_eq!(modules.len(), 2);
     edit(&mut store, &modules)?;
 
-    let f1 = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, "f1")?;
-    f1.call_async(&mut store, (3, 5)).await?;
-    let in_f1 = std::mem::take(&mut *pcs.lock().unwrap());
-    let f2 = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, "f2")?;
-    f2.call_async(&mut store, (3, 5)).await?;
-    let in_f2 = std::mem::take(&mut *pcs.lock().unwrap());
-    Ok((in_f1, in_f2))
+    let mut events = Vec::new();
+    for name in exports {
+        let func = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, *name)?;
+        func.call_async(&mut store, (3, 5)).await?;
+        events.push(std::mem::take(&mut *pcs.lock().unwrap()));
+    }
+    Ok(events)
+}
+
+/// Runs [`TWO_MODULES`], calling `f1` (in module 0) then `f2` (in module 1).
+async fn two_modules(
+    edit: impl FnOnce(&mut Store<()>, &[Module]) -> wasmtime::Result<()>,
+) -> wasmtime::Result<Vec<Vec<u32>>> {
+    run_component(TWO_MODULES, Inlining::No, &["f1", "f2"], edit).await
 }
 
 #[tokio::test]
@@ -1695,8 +1726,8 @@ async fn component_breakpoint_survives_single_step() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
     // Each function's first PC, from a single step through it.
-    let (f1, f2) =
-        two_modules(|store, _| store.edit_breakpoints().unwrap().single_step(true)).await?;
+    let steps = two_modules(|store, _| store.edit_breakpoints().unwrap().single_step(true)).await?;
+    let (f1, f2) = (&steps[0], &steps[1]);
     assert!(f1.iter().all(|pc| !f2.contains(pc)), "{f1:?} {f2:?}");
 
     // A breakpoint in either module stops only there, after single-stepping has been on and off.
@@ -1708,12 +1739,29 @@ async fn component_breakpoint_survives_single_step() -> wasmtime::Result<()> {
             edit.single_step(false)
         })
         .await?;
-        let wanted = if at == 0 {
-            (vec![pc], vec![])
-        } else {
-            (vec![], vec![pc])
-        };
+        let mut wanted = [vec![], vec![]];
+        wanted[at].push(pc);
         assert_eq!(events, wanted, "a breakpoint in module {at}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn component_inlined_breakpoint_survives_single_step() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // A breakpoint in `g` stops in it when called from `f1`, whether or not it was inlined
+    // into `f1`'s module, and after single-stepping has been on and off.
+    for inlining in [Inlining::No, Inlining::Yes] {
+        let events = run_component(CALL_ACROSS_MODULES, inlining, &["f1"], |store, modules| {
+            let mut edit = store.edit_breakpoints().unwrap();
+            edit.add_breakpoint(&modules[0], ModulePC::new(0x26))?;
+            edit.single_step(true)?;
+            edit.single_step(false)
+        })
+        .await?;
+        assert_eq!(events, [vec![0x26]], "with {inlining:?}");
     }
     Ok(())
 }
