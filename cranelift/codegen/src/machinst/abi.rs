@@ -118,7 +118,7 @@ use smallvec::smallvec;
 pub type SmallInstVec<I> = SmallVec<[I; 4]>;
 
 /// A type used by backends to track argument-binding info in the "args"
-/// pseudoinst. The pseudoinst holds a vec of `ArgPair` structs.
+/// pseudoinst. The pseudoinst holds a boxed slice of `ArgPair` structs.
 #[derive(Clone, Debug)]
 pub struct ArgPair {
     /// The vreg that is defined by this args pseudoinst.
@@ -129,7 +129,7 @@ pub struct ArgPair {
 }
 
 /// A type used by backends to track return register binding info in the "ret"
-/// pseudoinst. The pseudoinst holds a vec of `RetPair` structs.
+/// pseudoinst. The pseudoinst holds a boxed slice of `RetPair` structs.
 #[derive(Clone, Debug)]
 pub struct RetPair {
     /// The vreg that is returned by this pseudionst.
@@ -438,11 +438,11 @@ pub trait ABIMachineSpec {
 
     /// Generate an "args" pseudo-instruction to capture input args in
     /// registers.
-    fn gen_args(args: Vec<ArgPair>) -> Self::I;
+    fn gen_args(args: Box<[ArgPair]>) -> Self::I;
 
     /// Generate a "rets" pseudo-instruction that moves vregs to return
     /// registers.
-    fn gen_rets(rets: Vec<RetPair>) -> Self::I;
+    fn gen_rets(rets: Box<[RetPair]>) -> Self::I;
 
     /// Generate an add-with-immediate. Note that even if this uses a scratch
     /// register, it must satisfy two requirements:
@@ -1837,7 +1837,7 @@ impl<M: ABIMachineSpec> Callee<M> {
     }
 
     /// Generate a return instruction.
-    pub fn gen_rets(&self, rets: Vec<RetPair>) -> M::I {
+    pub fn gen_rets(&self, rets: Box<[RetPair]>) -> M::I {
         M::gen_rets(rets)
     }
 
@@ -2269,7 +2269,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             // establishes live-ranges for in-register arguments and
             // constrains them at the start of the function to the
             // locations defined by the ABI.
-            Some(M::gen_args(core::mem::take(&mut self.reg_args)))
+            Some(M::gen_args(core::mem::take(&mut self.reg_args).into_boxed_slice()))
         } else {
             None
         }

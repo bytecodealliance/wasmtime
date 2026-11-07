@@ -27,8 +27,8 @@ use regalloc2::PReg;
 use smallvec::SmallVec;
 
 type Unit = ();
-type VecArgPair = Vec<ArgPair>;
-type VecRetPair = Vec<RetPair>;
+type VecArgPair = Box<[ArgPair]>;
+type VecRetPair = Box<[RetPair]>;
 type BoxCallInfo = Box<CallInfo<PulleyCall>>;
 type BoxCallIndInfo = Box<CallInfo<XReg>>;
 type BoxCallIndirectHostInfo = Box<CallInfo<ExternalName>>;

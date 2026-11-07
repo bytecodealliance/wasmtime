@@ -41,7 +41,7 @@ type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxExternalName = Box<ExternalName>;
-type VecArgPair = Vec<ArgPair>;
+type VecArgPair = Box<[ArgPair]>;
 type BoxAtomicCAS128Args = Box<AtomicCAS128Args>;
 
 /// The main entry point for lowering with ISLE.
