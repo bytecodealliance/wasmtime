@@ -638,14 +638,42 @@ mod tests {
         }
     }
 
+    // Test conversions that trap. These are tested here instead of in Clif runtests because runtests can't test
+    // trapping behavior.
     #[test]
-    fn fcvt_to_int_i128_out_of_range_traps_with_overflow() {
-        for (op, ty, x) in [
-            ("fcvt_to_sint", "f32", "0x1.fffffep127"),
-            ("fcvt_to_sint", "f64", "0x1.0p127"),
-            ("fcvt_to_sint", "f64", "-0x1.0000000000001p127"),
-            ("fcvt_to_uint", "f64", "0x1.0p128"),
-            ("fcvt_to_uint", "f32", "-0x1.0"),
+    fn fcvt_to_int_i128_traps() {
+        const OVERFLOW: TrapCode = TrapCode::INTEGER_OVERFLOW;
+        const BAD: TrapCode = TrapCode::BAD_CONVERSION_TO_INTEGER;
+        for (op, ty, x, trap) in [
+            // Signed: the range is [-2^127, 2^127).
+            ("fcvt_to_sint", "f32", "0x1.0p127", OVERFLOW),
+            ("fcvt_to_sint", "f32", "0x1.fffffep127", OVERFLOW),
+            ("fcvt_to_sint", "f32", "-0x1.000002p127", OVERFLOW),
+            ("fcvt_to_sint", "f32", "-0x1.fffffep127", OVERFLOW),
+            ("fcvt_to_sint", "f32", "+Inf", OVERFLOW),
+            ("fcvt_to_sint", "f32", "-Inf", OVERFLOW),
+            ("fcvt_to_sint", "f32", "+NaN", BAD),
+            ("fcvt_to_sint", "f64", "0x1.0p127", OVERFLOW),
+            ("fcvt_to_sint", "f64", "-0x1.0000000000001p127", OVERFLOW),
+            ("fcvt_to_sint", "f64", "0x1.fffffffffffffp1023", OVERFLOW),
+            ("fcvt_to_sint", "f64", "-0x1.fffffffffffffp1023", OVERFLOW),
+            ("fcvt_to_sint", "f64", "+Inf", OVERFLOW),
+            ("fcvt_to_sint", "f64", "-Inf", OVERFLOW),
+            ("fcvt_to_sint", "f64", "-NaN", BAD),
+            // Unsigned: the range is [0, 2^128). Every finite f32 below
+            // -1.0 is out of range, but none above: f32::MAX < 2^128.
+            ("fcvt_to_uint", "f32", "-0x1.0", OVERFLOW),
+            ("fcvt_to_uint", "f32", "-0x1.fffffep127", OVERFLOW),
+            ("fcvt_to_uint", "f32", "+Inf", OVERFLOW),
+            ("fcvt_to_uint", "f32", "-Inf", OVERFLOW),
+            ("fcvt_to_uint", "f32", "+NaN", BAD),
+            ("fcvt_to_uint", "f64", "-0x1.0", OVERFLOW),
+            ("fcvt_to_uint", "f64", "-0x1.fffffffffffffp1023", OVERFLOW),
+            ("fcvt_to_uint", "f64", "-Inf", OVERFLOW),
+            ("fcvt_to_uint", "f64", "0x1.0p128", OVERFLOW),
+            ("fcvt_to_uint", "f64", "0x1.fffffffffffffp1023", OVERFLOW),
+            ("fcvt_to_uint", "f64", "+Inf", OVERFLOW),
+            ("fcvt_to_uint", "f64", "-NaN", BAD),
         ] {
             let code = format!(
                 "function %test() -> i128 {{
@@ -662,10 +690,11 @@ mod tests {
             let state = InterpreterState::default().with_function_store(env);
             let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-            match result {
-                ControlFlow::Trap(CraneliftTrap::User(TrapCode::INTEGER_OVERFLOW)) => {}
-                _ => panic!("{op}.i128 {x}: unexpected ControlFlow: {result:?}"),
-            }
+            assert_eq!(
+                result,
+                ControlFlow::Trap(CraneliftTrap::User(trap)),
+                "{op}.i128 {ty} {x}"
+            );
         }
     }
 
