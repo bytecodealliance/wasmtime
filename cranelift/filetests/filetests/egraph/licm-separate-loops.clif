@@ -1,0 +1,46 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %separate_loops(i64) -> i64 {
+block0(v0: i64):
+    v6 = iconst.i64 1
+    jump block1(v0)
+
+block1(v1: i64):
+    v2 = isub v1, v6
+    brif v2, block1(v2), block2
+
+block2 cold:
+    jump block3(v0)
+
+block3(v3: i64) cold:
+    v4 = ushr v0, v0
+    v5 = isub v3, v4
+    brif v5, block3(v5), block4
+
+block4:
+    return v5
+}
+
+; function %separate_loops(i64) -> i64 fast {
+; block0(v0: i64):
+;     v6 = iconst.i64 1
+;     jump block1(v0)
+;
+; block1(v1: i64):
+;     v7 = iconst.i64 1
+;     v8 = isub v1, v7  ; v7 = 1
+;     brif v8, block1(v8), block2
+;
+; block2 cold:
+;     v4 = ushr.i64 v0, v0
+;     jump block3(v0)
+;
+; block3(v3: i64) cold:
+;     v5 = isub v3, v4
+;     brif v5, block3(v5), block4
+;
+; block4:
+;     return v5
+; }
