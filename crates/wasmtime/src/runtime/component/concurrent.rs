@@ -2997,6 +2997,42 @@ impl Instance {
                 task.exited = true;
                 task.callback = None;
 
+                // Purge every queued work item belonging to the exiting
+                // thread. The thread has returned `Exit`, so it will never
+                // re-enter its callback, but `ResumeThread` and `GuestCall`
+                // items targeting it may still sit in the high/low-priority
+                // queues or in the switch-item slots. Resuming one would run
+                // stale guest code past the thread's end (observed: a fiber
+                // resumed past its thread's end parked forever on
+                // `thread.suspend`, holding the instance's `do_not_enter` and
+                // refusing every later call). Items targeting *other* threads
+                // of the same task must stay: those threads are still live
+                // (e.g. a child spawned with `thread.new` that has not run
+                // yet), and dropping their items deadlocks the event loop
+                // waiting for a `task.return` that never happens.
+                // `ResumeFiber` items are deliberately left in place: their
+                // `StoreFiber` may never have started, and dropping it via
+                // `retain` would skip the `dispose` path `Drop` asserts on.
+                {
+                    let state = store.concurrent_state_mut()?;
+                    let thread_id = guest_thread.thread;
+                    let matches = |item: &WorkItem| match item {
+                        WorkItem::ResumeThread { thread, .. }
+                        | WorkItem::GuestCall {
+                            call: GuestCall { thread, .. },
+                            ..
+                        } => thread.thread == thread_id,
+                        _ => false,
+                    };
+                    state.high_priority.retain(|item| !matches(item));
+                    state.low_priority.retain(|item| !matches(item));
+                    for slot in [&mut state.switch_item, &mut state.next_switch_item] {
+                        if matches!(slot, Some(item) if matches(item)) {
+                            *slot = None;
+                        }
+                    }
+                }
+
                 // Since we're async-typed, returning control to our caller
                 // won't help resolve any outstanding sync-typed call which
                 // might be in progress, so we may need to switch or trap before
