@@ -11,7 +11,8 @@ block0(v0: f32):
 ; run: %fcvt_to_uint_i128(0x1.0p31) == 2147483648
 ; run: %fcvt_to_uint_i128(0x1.fffffp31) == 4294965248
 ; run: %fcvt_to_uint_i128(0x1.0p63) == 9223372036854775808
-; run: %fcvt_to_uint_i128(0x1.fffffep127) == 170141183460469231731687303715884105727
+; run: %fcvt_to_uint_i128(0x1.0p127) == 170141183460469231731687303715884105728
+; run: %fcvt_to_uint_i128(0x1.fffffep127) == 340282346638528859811704183484516925440
 
 function %fcvt_to_sint_i128(f32) -> i128 {
 block0(v0: f32):
@@ -25,7 +26,8 @@ block0(v0: f32):
 ; run: %fcvt_to_sint_i128(-0x1.fffffp31) == -4294965248
 ; run: %fcvt_to_sint_i128(0x1.0p63) == 9223372036854775808
 ; run: %fcvt_to_sint_i128(-0x1.0p63) == -9223372036854775808
-; run: %fcvt_to_sint_i128(0x1.fffffep127) == 170141183460469231731687303715884105727
+; run: %fcvt_to_sint_i128(0x1.fffffep126) == 170141173319264429905852091742258462720
+; run: %fcvt_to_sint_i128(-0x1.0p127) == -170141183460469231731687303715884105728
 
 function %fcvt_to_uint_sat_i128(f32) -> i128 {
 block0(v0: f32):
@@ -37,7 +39,8 @@ block0(v0: f32):
 ; run: %fcvt_to_uint_sat_i128(0x1.0p31) == 2147483648
 ; run: %fcvt_to_uint_sat_i128(0x1.fffffp31) == 4294965248
 ; run: %fcvt_to_uint_sat_i128(-0x1.fffffp31) == 0
-; run: %fcvt_to_uint_sat_i128(0x1.fffffep127) == 170141183460469231731687303715884105727
+; run: %fcvt_to_uint_sat_i128(0x1.0p127) == 170141183460469231731687303715884105728
+; run: %fcvt_to_uint_sat_i128(0x1.fffffep127) == 340282346638528859811704183484516925440
 
 function %fcvt_to_sint_sat_i128(f32) -> i128 {
 block0(v0: f32):
@@ -50,3 +53,4 @@ block0(v0: f32):
 ; run: %fcvt_to_sint_sat_i128(0x1.fffffp31) == 4294965248
 ; run: %fcvt_to_sint_sat_i128(-0x1.fffffp31) == -4294965248
 ; run: %fcvt_to_sint_sat_i128(0x1.fffffep127) == 170141183460469231731687303715884105727
+; run: %fcvt_to_sint_sat_i128(-0x1.fffffep127) == -170141183460469231731687303715884105728

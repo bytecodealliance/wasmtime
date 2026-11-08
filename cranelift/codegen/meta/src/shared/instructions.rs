@@ -3193,9 +3193,9 @@ pub(crate) fn define(
             r#"
         Converts floating point scalars to unsigned integer.
 
-        Only operates on `x` if it is a scalar. If `x` is NaN or if
-        the unsigned integral value cannot be represented in the result
-        type, this instruction traps.
+        Only operates on `x` if it is a scalar. This instruction traps if
+        `x` is NaN, or if it cannot be represented in the result type
+        after being truncated toward 0.
 
         "#,
             &formats.unary,
@@ -3212,9 +3212,9 @@ pub(crate) fn define(
             r#"
         Converts floating point scalars to signed integer.
 
-        Only operates on `x` if it is a scalar. If `x` is NaN or if
-        the unsigned integral value cannot be represented in the result
-        type, this instruction traps.
+        Only operates on `x` if it is a scalar. This instruction traps if
+        `x` is NaN, or if it cannot be represented in the result type
+        after being truncated toward 0.
 
         "#,
             &formats.unary,

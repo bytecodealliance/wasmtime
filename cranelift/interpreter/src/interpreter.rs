@@ -638,6 +638,37 @@ mod tests {
         }
     }
 
+    #[test]
+    fn fcvt_to_int_i128_out_of_range_traps_with_overflow() {
+        for (op, ty, x) in [
+            ("fcvt_to_sint", "f32", "0x1.fffffep127"),
+            ("fcvt_to_sint", "f64", "0x1.0p127"),
+            ("fcvt_to_sint", "f64", "-0x1.0000000000001p127"),
+            ("fcvt_to_uint", "f64", "0x1.0p128"),
+            ("fcvt_to_uint", "f32", "-0x1.0"),
+        ] {
+            let code = format!(
+                "function %test() -> i128 {{
+                block0:
+                    v0 = {ty}const {x}
+                    v1 = {op}.i128 v0
+                    return v1
+                }}"
+            );
+
+            let func = parse_functions(&code).unwrap().into_iter().next().unwrap();
+            let mut env = FunctionStore::default();
+            env.add(func.name.to_string(), &func);
+            let state = InterpreterState::default().with_function_store(env);
+            let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
+
+            match result {
+                ControlFlow::Trap(CraneliftTrap::User(TrapCode::INTEGER_OVERFLOW)) => {}
+                _ => panic!("{op}.i128 {x}: unexpected ControlFlow: {result:?}"),
+            }
+        }
+    }
+
     // This test verifies that functions can refer to each other using the function store. A double indirection is
     // required, which is tricky to get right: a referenced function is a FuncRef when called but a FuncIndex inside the
     // function store. This test would preferably be a CLIF filetest but the filetest infrastructure only looks at a
