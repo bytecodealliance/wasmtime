@@ -4567,6 +4567,7 @@ dependencies = [
  "cranelift-native",
  "encoding_rs",
  "env_logger 0.11.5",
+ "foldhash 0.2.0",
  "futures",
  "fxprof-processed-profile",
  "gimli 0.33.0",

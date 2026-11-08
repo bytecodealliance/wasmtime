@@ -9,8 +9,8 @@ use crate::store::{
 };
 use crate::type_registry::RegisteredType;
 use crate::vm::{
-    self, Backtrace, Frame, GcRootsList, GcStore, InstanceAllocationRequest, NopHasher,
-    SendSyncPtr, StoreGcHostAllocTypes, TraceInfo, VMGcRef,
+    self, Backtrace, Frame, GcRootsList, GcStore, InstanceAllocationRequest, SendSyncPtr,
+    StoreGcHostAllocTypes, TraceInfo, VMGcRef,
 };
 use crate::{
     Engine, ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, Tag,
@@ -64,7 +64,7 @@ pub(crate) struct StoreGcData {
     /// solution" where supertypes are stored inline in a compiled-code-visible
     /// location which means that a libcall isn't needed at all (nor
     /// synchronization) to determine subtype/supertype relationships.
-    subtype_check_cache: HashMap<u64, bool, NopHasher>,
+    subtype_check_cache: HashMap<u64, bool, foldhash::fast::FixedState>,
 }
 
 impl<T> Store<T> {
