@@ -1401,6 +1401,13 @@ impl<T> StoreContextMut<'_, T> {
         const MAX_TURNS_WITHOUT_YIELD: usize = 128;
         let mut turns_without_yield = 0;
 
+        // A caller-future result which became ready but had to be deferred
+        // because urgent work (a switch item or the high-priority queue) was
+        // still pending. It is completed at the end of the first pass where
+        // both urgent queues are empty and `ConcurrentState::futures` has
+        // fully drained.
+        let mut deferred: Option<R> = None;
+
         loop {
             // Take `ConcurrentState::futures` out of the store so we can poll
             // it while also safely giving any of the futures inside access to
@@ -1424,10 +1431,32 @@ impl<T> StoreContextMut<'_, T> {
             }
 
             let result = future::poll_fn(|cx| {
-                // First, poll the future we were passed as an argument and
-                // return immediately if it's ready.
-                if let Poll::Ready(value) = tls::set(reset.store.0, || future.as_mut().poll(cx)) {
-                    return Poll::Ready(Ok(PollResult::Complete(value)));
+                // First, poll the future we were passed as an argument — but
+                // at most once per pass, and never re-poll a result we've
+                // already taken. If it is ready while urgent work is pending,
+                // defer its completion: those items are typically fibers
+                // parked awaiting a completion ack (e.g. a guest thread which
+                // just ran `task.return` and now awaits the host's subtask
+                // event). Completing the caller future first would abandon
+                // that queue: `poll_until` returns, the parked fiber is never
+                // unwound, `exit_instance` never runs, and the next call into
+                // the same instance is refused forever. The deferred result is
+                // completed below, once both urgent queues are empty and
+                // `ConcurrentState::futures` has fully drained (every ack
+                // task's future must be polled at least once before its
+                // completion event can fire).
+                if deferred.is_none() {
+                    let urgent = {
+                        let state = reset.store.0.concurrent_state_mut()?;
+                        state.switch_item.is_some() || !state.high_priority.is_empty()
+                    };
+                    if let Poll::Ready(value) = tls::set(reset.store.0, || future.as_mut().poll(cx))
+                    {
+                        if !urgent {
+                            return Poll::Ready(Ok(PollResult::Complete(value)));
+                        }
+                        deferred = Some(value);
+                    }
                 }
 
                 // If the store has been poisoned by a trap, either before this
@@ -1504,6 +1533,14 @@ impl<T> StoreContextMut<'_, T> {
                         }))
                     }
                     Poll::Ready(false) => {
+                        // `ConcurrentState::futures` has fully drained. If a
+                        // deferred caller result exists, complete it now: both
+                        // urgent queues are empty (checked above) and every
+                        // ack task has had at least one poll, so completion is
+                        // safe.
+                        if let Some(value) = deferred.take() {
+                            return Poll::Ready(Ok(PollResult::Complete(value)));
+                        }
                         // Poll the future we were passed one last time
                         // in case one of `ConcurrentState::futures` had
                         // the side effect of unblocking it.
