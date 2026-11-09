@@ -117,11 +117,12 @@
 ;;                                 block6:
 ;; @0025                               v157 = uextend.i64 v181
 ;; @0025                               v160 = iadd.i64 v20, v157
-;; @0025                               v162 = iadd v160, v313  ; v313 = 8
-;; @0025                               v163 = load.i64 user2 region8 v162
-;; @0025                               v318 = iconst.i64 1
-;; @0025                               v165 = iadd v163, v318  ; v318 = 1
-;; @0025                               store user2 region8 v165, v162
+;; @0025                               v318 = iconst.i64 8
+;; @0025                               v319 = iadd v160, v318  ; v318 = 8
+;; @0025                               v163 = load.i64 user2 region8 v319
+;; @0025                               v320 = iconst.i64 1
+;; @0025                               v165 = iadd v163, v320  ; v320 = 1
+;; @0025                               store user2 region8 v165, v319
 ;; @0025                               jump block7
 ;;
 ;;                                 block7:
