@@ -25,7 +25,7 @@ use crate::bail_bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
 use crate::runtime::vm::{
-    VMHandleTableSlot, VMResourceIndex, VMScope, VMStoreContext, VMTypedResource, VmPtr,
+    VMHandleTable, VMResourceIndex, VMScope, VMStoreContext, VMTypedResource,
 };
 use core::error::Error;
 use core::fmt;
@@ -64,7 +64,7 @@ pub struct ResourceTables<'a> {
     pub guest: Option<(
         &'a mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &'a ComponentTypes,
-        &'a mut [VmPtr<VMHandleTableSlot>],
+        &'a mut [VMHandleTable],
     )>,
 
     /// Runtime state for resources currently owned by the host.

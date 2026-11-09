@@ -85,16 +85,9 @@ enum VmType {
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
     )]
     VMAsanStackSupport,
-    #[allow(
-        dead_code,
-        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
-    )]
     VMResourceIndex,
+    VMHandleTable,
     VMHandleTableSlot,
-    #[allow(
-        dead_code,
-        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
-    )]
     VMTypedResource,
     #[allow(
         dead_code,
@@ -106,7 +99,6 @@ enum VmType {
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
     )]
     VMTransmitLocalState,
-    HandleTableSlotsArray,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -1559,16 +1551,6 @@ where
 
         self.gc_introducer_cache.insert((ty, field), introducer);
         introducer
-    }
-
-    /// Get the `Field` for an element of the out-of-line array that
-    /// `VMStoreContext::handle_table_slots` points at.
-    ///
-    /// The returned `Field` is relative to the array's base pointer.
-    pub fn handle_table_slots_array(&mut self) -> Field<'_, Offsets> {
-        let ty = self.pointer_type;
-        let flags = ir::MemFlagsData::trusted();
-        Field::new(self, VmType::HandleTableSlotsArray, 0, flags, ty)
     }
 
     /// Get the alias region shared by all memories that cross a module boundary

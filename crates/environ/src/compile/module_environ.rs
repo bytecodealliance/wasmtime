@@ -45,12 +45,18 @@ pub struct ModuleEnvironment<'a, 'data> {
 pub enum FactInlineIntrinsic {
     /// `enter-sync-call`: push a deferred component-model thread inline.
     EnterSyncCall,
+
     /// `exit-sync-call`: pop the deferred thread inline on the fast path, or
     /// fall back to the out-of-line `exit-sync-call` libcall when the thread
     /// was promoted.
     ExitSyncCall,
+
     /// `trap`: raise the given trap.
     Trap(Trap),
+
+    /// An intrinsic that only exists for components.
+    #[cfg(feature = "component-model")]
+    Component(crate::component::FactComponentIntrinsic),
 }
 
 /// A statically-known function import.

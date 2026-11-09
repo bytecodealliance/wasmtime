@@ -1,3 +1,4 @@
+pub(crate) mod component_sync_call;
 mod gc;
 pub(crate) mod stack_switching;
 
@@ -268,10 +269,6 @@ pub struct FuncEnvironment<'module_environment> {
     /// Alias regions for the enclosing component's offsets.
     ///
     /// Present only when this module is being compiled as part of a component.
-    #[allow(
-        dead_code,
-        reason = "read by the fused-adapter fast paths in a follow-up commit"
-    )]
     pub(crate) component_regions:
         Option<AliasRegions<wasmtime_environ::component::VMComponentOffsets<u8>>>,
 }
@@ -2302,6 +2299,19 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                             &real_call_args,
                         )));
                     }
+
+                    #[cfg(feature = "component-model")]
+                    FactInlineIntrinsic::Component(intrinsic) => {
+                        if let Some(rets) = self.lower_fact_component_intrinsic(
+                            *intrinsic,
+                            callee_index,
+                            sig_ref,
+                            &real_call_args,
+                        ) {
+                            return Ok(Reachability::Reachable(rets));
+                        }
+                    }
+
                     FactInlineIntrinsic::EnterSyncCall | FactInlineIntrinsic::ExitSyncCall => {}
                 }
                 let import_off = self.env.offsets.imported_functions().at(callee_index);
@@ -2364,11 +2374,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// callee_instance]`.
     fn lower_fact_enter_sync_call(&mut self, real_call_args: &[ir::Value]) -> CallRets {
         let vmctx = self.env.vmctx_val(&mut self.builder.cursor());
-        let slot = crate::component_sync_call::enter(
+        let slot = component_sync_call::enter(
             self.builder,
             &mut self.env.alias_regions,
             vmctx,
-            crate::component_sync_call::EnterArgs {
+            component_sync_call::EnterArgs {
                 callee_async: real_call_args[2],
                 callee_instance: real_call_args[3],
             },
@@ -2377,6 +2387,44 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         debug_assert!(self.env.fact_sync_call_slot.is_none());
         self.env.fact_sync_call_slot = Some(slot);
         CallRets::new()
+    }
+
+    /// Inline lowering of a FACT adapter's component-model-specific
+    /// intrinsics.
+    ///
+    /// Returns `None` when the intrinsic must instead be called out-of-line.
+    #[cfg(feature = "component-model")]
+    fn lower_fact_component_intrinsic(
+        &mut self,
+        intrinsic: wasmtime_environ::component::FactComponentIntrinsic,
+        callee_index: FuncIndex,
+        sig_ref: ir::SigRef,
+        real_call_args: &[ir::Value],
+    ) -> Option<CallRets> {
+        use wasmtime_environ::component::FactComponentIntrinsic;
+        match intrinsic {
+            FactComponentIntrinsic::ResourceTransferBorrowToOwner { ty, instance } => {
+                // Needs an enclosing deferred frame to record into.
+                if !self.env.tunables.concurrency_support || self.env.fact_sync_call_slot.is_none()
+                {
+                    return None;
+                }
+                debug_assert!(!self.tail);
+                let rep = component_sync_call::transfer_borrow_to_owner(
+                    self.builder,
+                    self.env,
+                    self.srcloc,
+                    ty,
+                    instance,
+                    callee_index,
+                    sig_ref,
+                    real_call_args,
+                );
+                let mut out = CallRets::new();
+                out.push(rep);
+                Some(out)
+            }
+        }
     }
 
     /// Inline lowering of a FACT adapter's `exit-sync-call` intrinsic, the
@@ -2393,12 +2441,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             .take()
             .expect("inline exit-sync-call without a matching enter-sync-call");
         let vmctx = self.env.vmctx_val(&mut self.builder.cursor());
-        let slow = crate::component_sync_call::exit(
-            self.builder,
-            &mut self.env.alias_regions,
-            vmctx,
-            slot,
-        );
+        let slow =
+            component_sync_call::exit(self.builder, &mut self.env.alias_regions, vmctx, slot);
 
         let import_off = self.env.offsets.imported_functions().at(callee_index);
         let func_addr = self
