@@ -708,10 +708,12 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 Trampoline::ResourceTransferBorrowToOwner { ty } => {
                                     let instance =
                                         self.types.types()[ty].unwrap_concrete_instance();
-                                    FactInlineIntrinsic::ResourceTransferBorrowToOwner {
-                                        ty,
-                                        instance,
-                                    }
+                                    FactInlineIntrinsic::from(
+                                        FactComponentIntrinsic::ResourceTransferBorrowToOwner {
+                                            ty,
+                                            instance,
+                                        },
+                                    )
                                     .into()
                                 }
                                 _ => continue,

@@ -1,5 +1,6 @@
 //! Shared translation of the component model's `{enter,exit}-sync-call`
-//! intrinsics.
+//! intrinsics, and of the `resource.transfer-borrow-to-owner` that fused
+//! adapters make between them.
 //!
 //! Two different places wrap a synchronous call into another component
 //! instance with these intrinsics: fused adapters, whose calls are translated
@@ -18,6 +19,13 @@
 //! lives here: the `VMDeferredThread` layout and, in particular, the
 //! `context.{get,set}` slot save/zero/restore, which has to match what the host
 //! does for a non-deferred thread in `StoreOpaque::set_thread`.
+//!
+//! Between `enter` and `exit`, a fused adapter lending a `borrow` to the
+//! resource's owning instance uses `transfer_borrow_to_owner`. Instead of
+//! creating a real lend, it records the handle in the store's lazy lenders,
+//! which `exit` discards wholesale and the host promotes into real lends only
+//! if it forces the deferred thread. Anything else, such as a promoted thread,
+//! a full lazy lenders array, or an invalid handle, falls back to the libcall.
 
 use super::{Call, FuncEnvironment};
 use crate::alias_region::AliasRegions;

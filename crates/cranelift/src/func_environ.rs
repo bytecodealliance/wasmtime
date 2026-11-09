@@ -2301,25 +2301,18 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     }
 
                     #[cfg(feature = "component-model")]
-                    FactInlineIntrinsic::ResourceTransferBorrowToOwner { ty, instance }
-                        if self.env.tunables.concurrency_support
-                            && self.env.fact_sync_call_slot.is_some() =>
-                    {
-                        debug_assert!(!self.tail);
-                        return Ok(Reachability::Reachable(
-                            self.lower_fact_resource_transfer_borrow_to_owner(
-                                *ty,
-                                *instance,
-                                callee_index,
-                                sig_ref,
-                                &real_call_args,
-                            ),
-                        ));
+                    FactInlineIntrinsic::Component(intrinsic) => {
+                        if let Some(rets) = self.lower_fact_component_intrinsic(
+                            *intrinsic,
+                            callee_index,
+                            sig_ref,
+                            &real_call_args,
+                        ) {
+                            return Ok(Reachability::Reachable(rets));
+                        }
                     }
 
                     FactInlineIntrinsic::EnterSyncCall | FactInlineIntrinsic::ExitSyncCall => {}
-                    #[cfg(feature = "component-model")]
-                    FactInlineIntrinsic::ResourceTransferBorrowToOwner { .. } => {}
                 }
                 let import_off = self.env.offsets.imported_functions().at(callee_index);
                 let func_addr = self
@@ -2396,32 +2389,42 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         CallRets::new()
     }
 
-    /// Inline lowering of a FACT adapter's
-    /// `resource.transfer-borrow-to-owner` intrinsic.
+    /// Inline lowering of a FACT adapter's component-model-specific
+    /// intrinsics.
     ///
-    /// `real_call_args` is `[callee_vmctx, caller_vmctx, handle_index]`.
+    /// Returns `None` when the intrinsic must instead be called out-of-line.
     #[cfg(feature = "component-model")]
-    fn lower_fact_resource_transfer_borrow_to_owner(
+    fn lower_fact_component_intrinsic(
         &mut self,
-        ty: wasmtime_environ::component::TypeResourceTableIndex,
-        instance: wasmtime_environ::component::RuntimeComponentInstanceIndex,
+        intrinsic: wasmtime_environ::component::FactComponentIntrinsic,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         real_call_args: &[ir::Value],
-    ) -> CallRets {
-        let rep = component_sync_call::transfer_borrow_to_owner(
-            self.builder,
-            self.env,
-            self.srcloc,
-            ty,
-            instance,
-            callee_index,
-            sig_ref,
-            real_call_args,
-        );
-        let mut out = CallRets::new();
-        out.push(rep);
-        out
+    ) -> Option<CallRets> {
+        use wasmtime_environ::component::FactComponentIntrinsic;
+        match intrinsic {
+            FactComponentIntrinsic::ResourceTransferBorrowToOwner { ty, instance } => {
+                // Needs an enclosing deferred frame to record into.
+                if !self.env.tunables.concurrency_support || self.env.fact_sync_call_slot.is_none()
+                {
+                    return None;
+                }
+                debug_assert!(!self.tail);
+                let rep = component_sync_call::transfer_borrow_to_owner(
+                    self.builder,
+                    self.env,
+                    self.srcloc,
+                    ty,
+                    instance,
+                    callee_index,
+                    sig_ref,
+                    real_call_args,
+                );
+                let mut out = CallRets::new();
+                out.push(rep);
+                Some(out)
+            }
+        }
     }
 
     /// Inline lowering of a FACT adapter's `exit-sync-call` intrinsic, the

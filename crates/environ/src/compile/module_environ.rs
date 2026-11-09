@@ -54,15 +54,9 @@ pub enum FactInlineIntrinsic {
     /// `trap`: raise the given trap.
     Trap(Trap),
 
-    /// `resource.transfer-borrow-to-owner`: lazily lend a `borrow` to its
-    /// resource's owning instance, or fall back to the libcall.
+    /// An intrinsic that only exists for components.
     #[cfg(feature = "component-model")]
-    ResourceTransferBorrowToOwner {
-        /// The resource type of the handle being lent.
-        ty: crate::component::TypeResourceTableIndex,
-        /// The component instance owning `ty`'s handle table.
-        instance: crate::component::RuntimeComponentInstanceIndex,
-    },
+    Component(crate::component::FactComponentIntrinsic),
 }
 
 /// A statically-known function import.
