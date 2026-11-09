@@ -2919,12 +2919,16 @@ impl Config {
         }
 
         // Validate that the configuration of reservation/guards is sensible
-        // enough to ever possibly actually get allocated. If this overflows a
-        // u64 then there's no hope.
+        // enough to ever possibly actually get allocated. If this doesn't fit
+        // in the target's address space then there's no hope.
         let guard_regions = if tunables.guard_before_linear_memory {
             2
         } else {
             1
+        };
+        let max_size = match self.compiler_target().pointer_width() {
+            Ok(width) if width.bits() < 64 => (1 << width.bits()) - 1,
+            _ => u64::MAX,
         };
         for (what, reservation, guard_size) in [
             (
@@ -2941,11 +2945,11 @@ impl Config {
             if guard_size
                 .checked_mul(guard_regions)
                 .and_then(|g| g.checked_add(reservation))
-                .is_none()
+                .is_none_or(|size| size > max_size)
             {
                 bail!(
                     "`{what}_reservation` ({reservation}) plus `{what}_guard_size` \
-                     ({guard_size}) overflows"
+                     ({guard_size}) overflows the target's address space"
                 );
             }
         }
