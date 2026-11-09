@@ -1,13 +1,8 @@
 test inline precise-output
 target x86_64
 
-;; `interrupt_poll` is not a call instruction (it has no callee, arguments,
-;; or calling convention), but it is a safepoint that can hold user stack maps.
-;; When a function containing `interrupt_poll` is inlined, the poll instruction
-;; must not trip the inliner's unknown-call assertion, and its stack map must
-;; be preserved and remapped into the caller's stack slot space. When inlined
-;; at a `try_call` site, `interrupt_poll` must not be treated as a call whose
-;; exception table needs fixing up.
+;; Verify that interrupt_poll is preserved during inlining and that
+;; its user stack maps are copied and remapped into the caller.
 
 ;; A callee with a poll and its own stack map, inlined at a normal call site
 ;; that also has a stack map. The two maps should be merged.

@@ -662,10 +662,8 @@ pub(crate) fn emit(
             // can later distinguish whether a segfault is its fault.
             sink.add_trap(*trap_code);
 
-            // The stack map (if any) is associated with the address of the
-            // load itself, not the following instruction: a signal handler
-            // that observes the fault resumes by re-executing the load, so
-            // that is the PC at which the suspended frame is inspected.
+            // SIGSEGV reports the PC of the faulting load, so the stack map
+            // is associated with the load itself.
             if let Some(stack_map) = stack_map {
                 sink.push_user_stack_map(state, sink.cur_offset(), stack_map);
             }
