@@ -1973,17 +1973,7 @@ impl TrampolineCompiler<'_> {
     // Helper function to cast a core wasm input to a host pointer type
     // which will go into the host libcall.
     fn cast_to_pointer(&mut self, val: ir::Value, is64: bool) -> ir::Value {
-        let pointer_type = self.isa.pointer_type();
-        let host64 = pointer_type == ir::types::I64;
-        if is64 == host64 {
-            val
-        } else if !is64 {
-            assert!(host64);
-            self.builder.ins().uextend(pointer_type, val)
-        } else {
-            assert!(!host64);
-            self.builder.ins().ireduce(pointer_type, val)
-        }
+        crate::cast_to_pointer(&mut self.builder, self.isa.pointer_type(), val, is64)
     }
 
     // Helper to cast a host pointer integer type to the destination type.

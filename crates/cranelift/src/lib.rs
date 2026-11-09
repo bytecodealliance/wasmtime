@@ -22,6 +22,7 @@ use cranelift_codegen::{
     settings,
 };
 use cranelift_entity::PrimaryMap;
+use cranelift_frontend::FunctionBuilder;
 
 use target_lexicon::Architecture;
 use wasmtime_environ::{
@@ -155,6 +156,26 @@ fn unbarriered_load_type_at_offset(
 ) -> ir::Value {
     let ir_ty = value_type(isa, ty);
     pos.ins().load(ir_ty, flags, base, offset)
+}
+
+/// Casts `val`, an `i64` if `is64` and an `i32` otherwise, to `pointer_type`.
+fn cast_to_pointer(
+    builder: &mut FunctionBuilder<'_>,
+    pointer_type: ir::Type,
+    val: ir::Value,
+    val_is_64: bool,
+) -> ir::Value {
+    debug_assert!(pointer_type == ir::types::I32 || pointer_type == ir::types::I64);
+    let pointer_is_64 = pointer_type == ir::types::I64;
+    if val_is_64 == pointer_is_64 {
+        val
+    } else if !val_is_64 {
+        assert!(pointer_is_64);
+        builder.ins().uextend(pointer_type, val)
+    } else {
+        assert!(!pointer_is_64);
+        builder.ins().ireduce(pointer_type, val)
+    }
 }
 
 /// Returns the corresponding cranelift type for the provided wasm type.

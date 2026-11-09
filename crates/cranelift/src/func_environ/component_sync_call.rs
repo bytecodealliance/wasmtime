@@ -417,7 +417,7 @@ fn bounds_check_handle_table_slot(
     let pointer_type = alias_regions.pointer_type();
     // Handle 0 wraps to `u32::MAX` and fails the bounds check.
     let slot_index = builder.ins().iadd_imm_s(index, -1);
-    let slot_index = builder.ins().uextend(pointer_type, slot_index);
+    let slot_index = crate::cast_to_pointer(builder, pointer_type, slot_index, false);
     let slots_len = alias_regions
         .vm_handle_table()
         .current_slots()
