@@ -1,3 +1,22 @@
+## 36.0.21
+
+Released 2026-11-12.
+
+### Fixed
+
+* Unbounded host memory growth via empty writes to `AsyncWriteStream` in
+  `wasmtime-wasi` has been fixed.
+  [GHSA-5m8g-xhq4-4h93](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5m8g-xhq4-4h93)
+
+* Panic in `Caller::get_module_export` when a host function isn't called from
+  WebAssembly as been fixed.
+  [GHSA-hj27-mpw9-ff4c](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hj27-mpw9-ff4c)
+
+* Empty Body Writes can result in unbound heap usage with HTTP/2 has been fixed.
+  [GHSA-f8mm-ggr3-89wh](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-f8mm-ggr3-89wh)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.20
 
 Released 2026-10-29.
