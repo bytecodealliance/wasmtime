@@ -50,10 +50,10 @@ pub(crate) struct Elaborator<'a> {
     /// Stack of loops whose headers dominate the current elaboration
     /// path, outermost first.
     loop_stack: SmallVec<[LoopStackEntry; 8]>,
-    /// How many of the entries in `loop_stack` actually contain the current
-    /// block in their loop.
+    /// Stack index just past the innermost loop containing the current block.
     ///
-    /// Valid LICM hoisting targets are `loop_stack[..active_loop_depth]`.
+    /// Search `loop_stack[..active_loop_depth]` for LICM targets, checking loop
+    /// membership since earlier entries may be loops we have already exited.
     ///
     /// This is not *strictly* necessary for correctness, and we could hoist to
     /// anything in `loop_stack` because they all dominate the block we are
@@ -262,11 +262,10 @@ impl<'a> Elaborator<'a> {
     /// Not every block dominated by a loop header is inside that loop: a block
     /// that cannot reach the backedge, such as one that only traps or returns,
     /// is dominated by the header but is not a member of the natural loop. This
-    /// function finds how much of the loop stack actually contains this block;
-    /// the rest is not available to hoist out of.
+    /// function finds the innermost loop on the stack containing this block.
     ///
-    /// Returns `depth` where every loop in `self.loop_stack[..depth]` contains
-    /// `block`.
+    /// Returns its stack index + 1, or zero if none contains `block`. Earlier
+    /// entries still need a membership check.
     fn find_active_loop_depth(&self, block: Block) -> usize {
         let mut lp = self.loop_analysis.innermost_loop(block);
         while let Some(l) = lp {
@@ -634,8 +633,10 @@ impl<'a> Elaborator<'a> {
                             let hoist_level = self.loop_stack[..active_loop_depth]
                                 .iter()
                                 .position(|loop_entry| {
-                                    self.domtree
-                                        .block_dominates(value.in_block, loop_entry.hoist_block)
+                                    self.loop_analysis.is_in_loop(self.cur_block, loop_entry.lp)
+                                        && self
+                                            .domtree
+                                            .block_dominates(value.in_block, loop_entry.hoist_block)
                                 })
                                 .unwrap_or(active_loop_depth);
                             trace!(
