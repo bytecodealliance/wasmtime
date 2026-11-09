@@ -32,7 +32,7 @@ type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type BoxExternalName = Box<ExternalName>;
 type VecMachLabel = Vec<MachLabel>;
-type VecArgPair = Box<[ArgPair]>;
+type BoxedSliceArgPair = Box<[ArgPair]>;
 
 pub(crate) struct RV64IsleContext<'a, 'b, I, B>
 where
