@@ -502,11 +502,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
         Inst::gen_extend(to_reg, from_reg, op, to)
     }
 
-    fn gen_args(args: Vec<ArgPair>) -> Inst {
+    fn gen_args(args: Box<[ArgPair]>) -> Inst {
         Inst::Args { args }
     }
 
-    fn gen_rets(rets: Vec<RetPair>) -> Inst {
+    fn gen_rets(rets: Box<[RetPair]>) -> Inst {
         Inst::Rets { rets }
     }
 
