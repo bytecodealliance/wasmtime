@@ -59,16 +59,16 @@
 ;;
 ;;                                 block2(v8: i32):
 ;; @0030                               call_indirect.i64 sig0, v6(v5, v0)
-;;                                     v20 = iconst.i32 0
+;; @0028                               v20 = iconst.i32 0
 ;; @0036                               v9 = iadd.i32 v2, v8
 ;; @0039                               v11 = uextend.i64 v9
-;;                                     v21 = iconst.i64 0x0001_0000
-;;                                     v22 = icmp ugt v11, v21  ; v21 = 0x0001_0000
+;; @0039                               v21 = iconst.i64 0x0001_0000
+;; @0039                               v22 = icmp ugt v11, v21  ; v21 = 0x0001_0000
 ;; @0039                               v15 = iadd.i64 v14, v11
-;;                                     v23 = iconst.i64 0
-;;                                     v24 = select_spectre_guard v22, v23, v15  ; v23 = 0
+;; @0039                               v23 = iconst.i64 0
+;; @0039                               v24 = select_spectre_guard v22, v23, v15  ; v23 = 0
 ;; @0039                               store little region6 v20, v24  ; v20 = 0
-;;                                     v25 = iconst.i32 1
-;;                                     v26 = iadd v8, v25  ; v25 = 1
+;; @003e                               v25 = iconst.i32 1
+;; @0040                               v26 = iadd v8, v25  ; v25 = 1
 ;; @0043                               jump block2(v26)
 ;; }

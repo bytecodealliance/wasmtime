@@ -33,7 +33,7 @@
 ;; @001e                               brif v10, block2, block3(v8)
 ;;
 ;;                                 block2:
-;;                                     v61 = iadd.i64 v6, v7  ; v7 = 1
+;; @001e                               v61 = iadd.i64 v6, v7  ; v7 = 1
 ;; @001e                               store notrap aligned region2 v61, v5
 ;; @001e                               v12 = call fn0(v0)
 ;; @001e                               v14 = load.i64 notrap aligned region2 v5
@@ -57,8 +57,8 @@
 ;; @0025                               v44 = iconst.i64 4
 ;; @0025                               v45 = iadd v43, v44  ; v44 = 4
 ;; @0025                               v49 = iadd v45, v20
-;;                                     v62 = iconst.i64 0
-;;                                     v63 = icmp sge v49, v62  ; v62 = 0
+;; @001e                               v62 = iconst.i64 0
+;; @0025                               v63 = icmp sge v49, v62  ; v62 = 0
 ;; @0025                               brif v63, block4, block5(v49)
 ;;
 ;;                                 block4:

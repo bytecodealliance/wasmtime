@@ -36,7 +36,7 @@
 ;;                                 block2:
 ;; @0024                               v7 = iconst.i32 1
 ;; @0024                               v8 = band.i32 v2, v7  ; v7 = 1
-;;                                     v34 = iconst.i32 0
+;; @0024                               v34 = iconst.i32 0
 ;; @0024                               brif v8, block4(v34), block3  ; v34 = 0
 ;;
 ;;                                 block3:
@@ -48,7 +48,7 @@
 ;; @0024                               v17 = iconst.i32 -1342177280
 ;; @0024                               v18 = band v16, v17  ; v17 = -1342177280
 ;; @0024                               v19 = icmp eq v18, v17  ; v17 = -1342177280
-;;                                     v35 = iconst.i32 0
+;; @0024                               v35 = iconst.i32 0
 ;; @0024                               brif v19, block5, block4(v35)  ; v35 = 0
 ;;
 ;;                                 block5:
@@ -90,7 +90,7 @@
 ;;                                 block2:
 ;; @002c                               v7 = iconst.i32 1
 ;; @002c                               v8 = band.i32 v2, v7  ; v7 = 1
-;;                                     v34 = iconst.i32 0
+;; @002c                               v34 = iconst.i32 0
 ;; @002c                               brif v8, block4(v34), block3  ; v34 = 0
 ;;
 ;;                                 block3:
@@ -102,7 +102,7 @@
 ;; @002c                               v17 = iconst.i32 -1342177280
 ;; @002c                               v18 = band v16, v17  ; v17 = -1342177280
 ;; @002c                               v19 = icmp eq v18, v17  ; v17 = -1342177280
-;;                                     v35 = iconst.i32 0
+;; @002c                               v35 = iconst.i32 0
 ;; @002c                               brif v19, block5, block4(v35)  ; v35 = 0
 ;;
 ;;                                 block5:
