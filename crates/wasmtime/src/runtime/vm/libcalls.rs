@@ -662,7 +662,6 @@ unsafe fn get_interned_contref(
     Ok(())
 }
 
-#[cfg(feature = "gc")]
 fn is_subtype(
     store: &mut dyn VMStore,
     _instance: InstanceId,
