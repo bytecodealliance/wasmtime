@@ -176,33 +176,29 @@
 ;; wasm[1]::function[3]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    0x48(%rdi), %rcx
-;;       movq    0xe8(%rcx), %rax
-;;       movl    (%rax), %edx
-;;       testl   %edx, %edx
-;;       je      0x16d
-;;  119: movq    0x48(%rcx), %rcx
-;;       movq    8(%rcx), %rcx
-;;       movq    0x68(%rcx), %rcx
-;;       movq    8(%rcx), %rdx
-;;       xorq    %rsi, %rsi
-;;       cmpq    %rdx, %rsi
-;;       jae     0x168
-;;  135: movl    (%rax), %edi
-;;       testl   %edi, %edi
-;;       je      0x16f
-;;  13f: movq    8(%rcx), %rdi
-;;       cmpq    %rdi, %rsi
-;;       jae     0x171
-;;  14c: movq    (%rcx), %rdi
-;;       movzbq  (%rdi, %rsi), %r8
-;;       addb    $1, %r8b
-;;       movb    %r8b, (%rdi, %rsi)
-;;       addq    $1, %rsi
+;;       movq    0x48(%rdi), %rax
+;;       movq    0xe8(%rax), %rcx
+;;       movl    (%rcx), %ecx
+;;       testl   %ecx, %ecx
+;;       je      0x163
+;;  119: movq    0x48(%rax), %rax
+;;       movq    8(%rax), %rax
+;;       movq    0x68(%rax), %rax
+;;       movq    8(%rax), %rcx
+;;       xorq    %rdx, %rdx
+;;       cmpq    %rcx, %rdx
+;;       jae     0x15e
+;;  135: movq    8(%rax), %rsi
+;;       cmpq    %rsi, %rdx
+;;       jae     0x165
+;;  142: movq    (%rax), %rsi
+;;       movzbq  (%rsi, %rdx), %rdi
+;;       addb    $1, %dil
+;;       movb    %dil, (%rsi, %rdx)
+;;       addq    $1, %rdx
 ;;       jmp     0x12c
-;;  168: movq    %rbp, %rsp
+;;  15e: movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  16d: ud2
-;;  16f: ud2
-;;  171: ud2
+;;  163: ud2
+;;  165: ud2
