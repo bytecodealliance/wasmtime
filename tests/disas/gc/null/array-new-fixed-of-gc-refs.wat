@@ -72,10 +72,10 @@
 ;;                                     v254 = iconst.i32 24
 ;; @0025                               v61 = uadd_overflow_trap v252, v254, user2  ; v254 = 24
 ;;                                     v130 = load.i32 notrap aligned region11 v131
-;; @0025                               v62 = uextend.i64 v61
-;; @0025                               v65 = iadd v32, v62
+;; @0025                               v64 = uextend.i64 v61
+;; @0025                               v67 = iadd v32, v64
 ;;                                     v135 = iconst.i64 12
-;; @0025                               v68 = isub v65, v135  ; v135 = 12
+;; @0025                               v68 = isub v67, v135  ; v135 = 12
 ;; @0025                               store user2 little region8 v130, v68
 ;; @0025                               v76 = load.i32 user2 readonly region8 v40
 ;; @0025                               v69 = iconst.i32 1
@@ -93,12 +93,12 @@
 ;; @0025                               v85 = uadd_overflow_trap v204, v6, user2  ; v6 = 12
 ;; @0025                               v89 = uadd_overflow_trap v252, v85, user2
 ;;                                     v128 = load.i32 notrap aligned region10 v132
-;; @0025                               v90 = uextend.i64 v89
-;; @0025                               v93 = iadd v32, v90
+;; @0025                               v92 = uextend.i64 v89
+;; @0025                               v95 = iadd v32, v92
 ;;                                     v216 = iconst.i32 16
-;; @0025                               v94 = isub v85, v216  ; v216 = 16
-;; @0025                               v95 = uextend.i64 v94
-;; @0025                               v96 = isub v93, v95
+;; @0025                               v90 = isub v85, v216  ; v216 = 16
+;; @0025                               v91 = uextend.i64 v90
+;; @0025                               v96 = isub v95, v91
 ;; @0025                               store user2 little region8 v128, v96
 ;; @0025                               v104 = load.i32 user2 readonly region8 v40
 ;;                                     v222 = icmp ugt v104, v175  ; v175 = 2
@@ -111,12 +111,12 @@
 ;; @0025                               v113 = uadd_overflow_trap v230, v6, user2  ; v6 = 12
 ;; @0025                               v117 = uadd_overflow_trap v252, v113, user2
 ;;                                     v126 = load.i32 notrap aligned region9 v133
-;; @0025                               v118 = uextend.i64 v117
-;; @0025                               v121 = iadd v32, v118
+;; @0025                               v120 = uextend.i64 v117
+;; @0025                               v123 = iadd v32, v120
 ;;                                     v246 = iconst.i32 20
-;; @0025                               v122 = isub v113, v246  ; v246 = 20
-;; @0025                               v123 = uextend.i64 v122
-;; @0025                               v124 = isub v121, v123
+;; @0025                               v118 = isub v113, v246  ; v246 = 20
+;; @0025                               v119 = uextend.i64 v118
+;; @0025                               v124 = isub v123, v119
 ;; @0025                               store user2 little region8 v126, v124
 ;; @0029                               jump block1
 ;;
