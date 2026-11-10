@@ -310,7 +310,7 @@ impl OutputStream for FileOutputStream {
     }
     /// Specialized blocking_* variant to bypass tokio's task spawning & joining
     /// overhead on synchronous file I/O.
-    async fn blocking_write_and_flush(&mut self, buf: Bytes) -> StreamResult<()> {
+    async fn blocking_write_and_flush(&mut self, mut buf: Bytes) -> StreamResult<()> {
         self.ready().await;
 
         match self.state {
@@ -324,23 +324,30 @@ impl OutputStream for FileOutputStream {
         }
 
         let m = self.mode;
-        match self
-            .file
-            .run_blocking(move |f| Self::blocking_write(f, buf, m))
-            .await
-        {
-            Ok(nwritten) => {
-                if let FileOutputMode::Position(p) = &mut self.mode {
-                    *p += nwritten as u64;
+        loop {
+            let len = buf.len().min(self.max_write_size);
+            let chunk = buf.split_to(len);
+            match self
+                .file
+                .run_blocking(move |f| Self::blocking_write(f, chunk, m))
+                .await
+            {
+                Ok(nwritten) => {
+                    if let FileOutputMode::Position(p) = &mut self.mode {
+                        *p += nwritten as u64;
+                    }
+                    self.state = OutputState::Ready;
                 }
-                self.state = OutputState::Ready;
-                Ok(())
+                Err(e) => {
+                    self.state = OutputState::Closed;
+                    return Err(StreamError::LastOperationFailed(e.into()));
+                }
             }
-            Err(e) => {
-                self.state = OutputState::Closed;
-                Err(StreamError::LastOperationFailed(e.into()))
+            if buf.is_empty() {
+                break;
             }
         }
+        Ok(())
     }
     fn flush(&mut self) -> Result<(), StreamError> {
         match self.state {
