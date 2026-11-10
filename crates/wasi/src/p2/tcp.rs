@@ -317,6 +317,31 @@ impl OutputStream for TcpWriter {
         self.state.lock().unwrap().write(bytes)
     }
 
+    async fn blocking_write_and_flush(&mut self, mut bytes: bytes::Bytes) -> StreamResult<()> {
+        // A zero-length write needs no permit, so don't wait for capacity.
+        if bytes.is_empty() {
+            return self.write(bytes);
+        }
+
+        loop {
+            let permit = self.write_ready().await?;
+            let len = bytes.len().min(permit);
+            let chunk = bytes.split_to(len);
+            self.write(chunk)?;
+            if bytes.is_empty() {
+                break;
+            }
+        }
+        match self.flush() {
+            Ok(()) | Err(StreamError::Closed) => {}
+            Err(e) => return Err(e),
+        }
+        match self.write_ready().await {
+            Ok(_) | Err(StreamError::Closed) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
     fn flush(&mut self) -> StreamResult<()> {
         self.state.lock().unwrap().flush()
     }
