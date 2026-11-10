@@ -119,7 +119,6 @@ macro_rules! foreach_builtin_function {
 
             // Returns whether `actual_engine_type` is a subtype of
             // `expected_engine_type`.
-            #[cfg(feature = "gc")]
             is_subtype(
                 vmctx: vmctx,
                 actual_engine_type: u32,

@@ -2,7 +2,6 @@
 
 use crate::RootSet;
 use crate::error::{Context, ensure};
-use crate::hash_map::HashMap;
 use crate::module::ModuleRegistry;
 use crate::store::{
     Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
@@ -44,28 +43,6 @@ pub(crate) struct StoreGcData {
     /// refinement of `VMGcRef`, but rooting APIs right now make it difficult to
     /// work with that directly so this is stored as `VMGcRef` instead.
     pending_exception: Option<VMGcRef>,
-
-    /// A store-local cache of engine-level subtype checks.
-    ///
-    /// Dynamic subtype checks (e.g. for `ref.cast` instructions) consult the
-    /// engine's type registry, which is protected by a read-write lock.
-    /// Testing locally shows that parallel readers take a significant
-    /// performance hit when using this lock (as measured with `wasmtime
-    /// serve`). Thus this cache is intended to serve as a fast path where the
-    /// lock need not be hit at all.
-    ///
-    /// Note that the size of this cache is currently bounded to a fixed size.
-    /// Once this cache is full then all future consultations which aren't in
-    /// the cache go upstream to the engine itself (slow). In the future
-    /// this'll either be removed entirely (see #13484) or will have some sort
-    /// of LRU-like behavior.
-    ///
-    /// FIXME(#13484) this field is a temporary workaround for a "true
-    /// solution" where supertypes are stored inline in a compiled-code-visible
-    /// location which means that a libcall isn't needed at all (nor
-    /// synchronization) to determine subtype/supertype relationships.
-    subtype_check_cache:
-        HashMap<(VMSharedTypeIndex, VMSharedTypeIndex), bool, foldhash::fast::FixedState>,
 }
 
 impl<T> Store<T> {
@@ -1078,36 +1055,6 @@ impl StoreOpaque {
         self.gc_data
             .gc_roots
             .exit_lifo_scope(self.gc_store.as_mut(), scope);
-    }
-
-    /// Is type `sub` a subtype of `sup`?
-    ///
-    /// Equivalent to `self.engine().signatures().is_subtype(sub, sup)` but
-    /// caches results store-locally to avoid contention on the engine's type
-    /// registry lock. See the documentation of the `subtype_check_cache` field
-    /// for details.
-    pub(crate) fn is_subtype_cached(
-        &mut self,
-        sub: VMSharedTypeIndex,
-        sup: VMSharedTypeIndex,
-    ) -> bool {
-        const MAX_SIZE: usize = 1 << 16; // 64k entries
-
-        let key = (sub, sup);
-        let engine_answer = || self.engine.signatures().is_subtype(sub, sup);
-        if self.gc_data.subtype_check_cache.len() < MAX_SIZE {
-            *self
-                .gc_data
-                .subtype_check_cache
-                .entry(key)
-                .or_insert_with(engine_answer)
-        } else {
-            self.gc_data
-                .subtype_check_cache
-                .get(&key)
-                .copied()
-                .unwrap_or_else(engine_answer)
-        }
     }
 }
 
