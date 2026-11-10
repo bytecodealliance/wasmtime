@@ -75,17 +75,17 @@
 ;;                                     v255 = iconst.i32 24
 ;; @0025                               v61 = uadd_overflow_trap v253, v255, user2  ; v255 = 24
 ;;                                     v130 = load.i32 notrap aligned region14 v131
-;; @0025                               v62 = uextend.i64 v61
-;; @0025                               v65 = iadd v32, v62
+;; @0025                               v64 = uextend.i64 v61
+;; @0025                               v67 = iadd v32, v64
 ;;                                     v135 = iconst.i64 12
-;; @0025                               v68 = isub v65, v135  ; v135 = 12
+;; @0025                               v68 = isub v67, v135  ; v135 = 12
 ;; @0025                               store user2 little region11 v130, v68
 ;;                                     v128 = load.i32 notrap aligned region13 v132
-;; @0025                               v96 = isub v65, v39  ; v39 = 8
+;; @0025                               v96 = isub v67, v39  ; v39 = 8
 ;; @0025                               store user2 little region11 v128, v96
 ;;                                     v126 = load.i32 notrap aligned region12 v133
 ;; @0025                               v8 = iconst.i64 4
-;; @0025                               v124 = isub v65, v8  ; v8 = 4
+;; @0025                               v124 = isub v67, v8  ; v8 = 4
 ;; @0025                               store user2 little region11 v126, v124
 ;; @0029                               jump block1
 ;;
