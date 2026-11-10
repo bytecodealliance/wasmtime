@@ -123,6 +123,26 @@ fn main() -> Result<()> {
         "#,
     )?;
 
+    let simple_subtype = engine.precompile_module(
+        br#"
+            (module
+                (type $a (sub (func)))
+                (type $b (sub $a (func)))
+                (type $c (func (param i32)))
+                (table 2 funcref)
+                (func $b (type $b))
+                (func $c (type $c))
+                (elem (i32.const 0) func $b $c)
+                (func (export "call_subtype")
+                    (call_indirect (type $a) (i32.const 0)))
+                (func (export "call_mismatch")
+                    (call_indirect (type $a) (i32.const 1)))
+                (func (export "test") (param i32) (result i32)
+                    (ref.test (ref $a) (table.get (local.get 0))))
+            )
+        "#,
+    )?;
+
     // Next is an example of running this embedding, which also serves as test
     // that basic functionality actually works.
     //
@@ -163,6 +183,8 @@ fn main() -> Result<()> {
                 usize,
                 *const u8,
                 usize,
+                *const u8,
+                usize,
             ) -> usize,
         > = lib
             .get(b"run")
@@ -180,6 +202,8 @@ fn main() -> Result<()> {
             simple_host_fn.len(),
             simple_floats.as_ptr(),
             simple_floats.len(),
+            simple_subtype.as_ptr(),
+            simple_subtype.len(),
         );
         error_buf.set_len(len);
 
