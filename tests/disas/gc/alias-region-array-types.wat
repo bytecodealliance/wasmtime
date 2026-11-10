@@ -74,11 +74,11 @@
 ;; @002e                               v19 = iconst.i32 12
 ;; @002e                               v20 = uadd_overflow_trap v83, v19, user2  ; v19 = 12
 ;; @002e                               v24 = uadd_overflow_trap v2, v20, user2
-;; @002e                               v25 = uextend.i64 v24
-;; @002e                               v28 = iadd v7, v25
-;; @002e                               v29 = isub v20, v19  ; v19 = 12
-;; @002e                               v30 = uextend.i64 v29
-;; @002e                               v31 = isub v28, v30
+;; @002e                               v27 = uextend.i64 v24
+;; @002e                               v30 = iadd v7, v27
+;; @002e                               v25 = isub v20, v19  ; v19 = 12
+;; @002e                               v26 = uextend.i64 v25
+;; @002e                               v31 = isub v30, v26
 ;; @002e                               v32 = load.i32 user2 little region5 v31
 ;; @0031                               call fn0(v0, v0, v32), stack_map=[i32 @ ss0+0]
 ;;                                     v67 = load.i32 notrap aligned region7 v68
@@ -95,11 +95,11 @@
 ;;                                     v109 = ishl v40, v82  ; v82 = 2
 ;; @0037                               v49 = uadd_overflow_trap v109, v19, user2  ; v19 = 12
 ;; @0037                               v53 = uadd_overflow_trap v67, v49, user2
-;; @0037                               v54 = uextend.i64 v53
-;; @0037                               v57 = iadd v7, v54
-;; @0037                               v58 = isub v49, v19  ; v19 = 12
-;; @0037                               v59 = uextend.i64 v58
-;; @0037                               v60 = isub v57, v59
+;; @0037                               v56 = uextend.i64 v53
+;; @0037                               v59 = iadd v7, v56
+;; @0037                               v54 = isub v49, v19  ; v19 = 12
+;; @0037                               v55 = uextend.i64 v54
+;; @0037                               v60 = isub v59, v55
 ;; @0037                               v61 = load.i32 user2 little region6 v60
 ;; @003a                               call fn0(v0, v0, v61)
 ;; @003c                               jump block1

@@ -42,15 +42,15 @@
 ;; @0025                               store user2 region5 v5, v24  ; v5 = 3
 ;; @0025                               trapz v18, user16
 ;; @0025                               v45 = uadd_overflow_trap v18, v119, user2  ; v119 = 56
-;; @0025                               v46 = uextend.i64 v45
-;; @0025                               v49 = iadd v20, v46
-;; @0025                               v52 = isub v49, v110  ; v110 = 24
+;; @0025                               v48 = uextend.i64 v45
+;; @0025                               v51 = iadd v20, v48
+;; @0025                               v52 = isub v51, v110  ; v110 = 24
 ;; @0025                               store user2 little region7 v2, v52
 ;;                                     v178 = iconst.i64 16
-;; @0025                               v80 = isub v49, v178  ; v178 = 16
+;; @0025                               v80 = isub v51, v178  ; v178 = 16
 ;; @0025                               store user2 little region7 v3, v80
 ;; @0025                               v8 = iconst.i64 8
-;; @0025                               v108 = isub v49, v8  ; v8 = 8
+;; @0025                               v108 = isub v51, v8  ; v8 = 8
 ;; @0025                               store user2 little region7 v4, v108
 ;; @0029                               jump block1
 ;;
