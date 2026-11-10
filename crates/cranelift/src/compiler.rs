@@ -274,24 +274,7 @@ impl Compiler {
             &[callee_vmctx, caller_vmctx, args_base, args_len],
         );
 
-        // Increment the "execution version" on the VMStoreContext if
-        // guest debugging is enabled.
-        if self.tunables.debug_guest {
-            let vmstore_ctx_ptr = alias_regions
-                .vmctx()
-                .store_context()
-                .load(&mut builder.cursor(), caller_vmctx);
-            let old_version = alias_regions
-                .vm_store_context()
-                .execution_version()
-                .load(&mut builder.cursor(), vmstore_ctx_ptr);
-            let new_version = builder.ins().iadd_imm_s(old_version, 1);
-            alias_regions.vm_store_context().execution_version().store(
-                &mut builder.cursor(),
-                vmstore_ctx_ptr,
-                new_version,
-            );
-        }
+        self.bump_execution_version(&mut builder, &mut alias_regions, caller_vmctx);
 
         // Invoke `raise` if the callee (host) returned an error.
         let succeeded = builder.func.dfg.inst_results(call)[0];
@@ -381,6 +364,8 @@ impl Compiler {
             host_sig,
         );
         let results = builder.func.dfg.inst_results(call).to_vec();
+
+        self.bump_execution_version(&mut builder, &mut alias_regions, vmctx);
 
         // Libcalls do not explicitly jump/raise on traps but instead return a
         // code indicating whether they trapped or not. This means that it's the
@@ -1330,6 +1315,39 @@ impl Compiler {
                     })
                 }),
         }
+    }
+
+    /// Increments the "execution version" in the `VMStoreContext` if guest
+    /// debugging is enabled.
+    ///
+    /// This must be done whenever execution resumes in Wasm after the host
+    /// has had a chance to run (and thus possibly capture `FrameHandle`s),
+    /// so that any such handles are invalidated.
+    fn bump_execution_version<O>(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        alias_regions: &mut AliasRegions<O>,
+        vmctx: ir::Value,
+    ) where
+        O: GetPtrSize,
+    {
+        if !self.tunables.debug_guest {
+            return;
+        }
+        let vmstore_ctx_ptr = alias_regions
+            .vmctx()
+            .store_context()
+            .load(&mut builder.cursor(), vmctx);
+        let old_version = alias_regions
+            .vm_store_context()
+            .execution_version()
+            .load(&mut builder.cursor(), vmstore_ctx_ptr);
+        let new_version = builder.ins().iadd_imm_s(old_version, 1);
+        alias_regions.vm_store_context().execution_version().store(
+            &mut builder.cursor(),
+            vmstore_ctx_ptr,
+            new_version,
+        );
     }
 
     /// Invokes the `raise` libcall in `vmctx` if the `succeeded` value

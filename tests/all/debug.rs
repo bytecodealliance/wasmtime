@@ -1226,6 +1226,76 @@ async fn invalidated_frame_handles_in_dropped_future() -> wasmtime::Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn invalidated_frame_handles_from_breakpoint() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // Frame handles captured during a breakpoint/single-step event
+    // (delivered via a builtin, not a host call) must be invalidated
+    // once execution resumes.
+    let (module, mut store) = get_module_and_store(
+        |_config| {},
+        r#"
+    (module
+      (func (export "main") (result i32)
+        (local i32)
+        i32.const 123
+        local.set 0
+        local.get 0))
+        "#,
+    )?;
+
+    #[derive(Clone)]
+    struct H {
+        handle: Arc<Mutex<Option<FrameHandle>>>,
+        events: Arc<AtomicUsize>,
+    }
+    impl DebugHandler for H {
+        type Data = ();
+        async fn handle(&self, mut store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+            if !matches!(event, DebugEvent::Breakpoint) {
+                return;
+            }
+            self.events.fetch_add(1, Ordering::Relaxed);
+            let mut handle = self.handle.lock().unwrap();
+            if let Some(old) = handle.as_ref() {
+                // The handle from the previous step must be invalid,
+                // even though its frame is still live.
+                assert!(!old.is_valid(&mut store));
+                assert!(old.local(&mut store, 0).is_err());
+            } else {
+                let frame = store.debug_exit_frames().next().unwrap();
+                assert!(frame.is_valid(&mut store));
+                *handle = Some(frame);
+            }
+        }
+    }
+
+    let handle = Arc::new(Mutex::new(None));
+    let events = Arc::new(AtomicUsize::new(0));
+    store.edit_breakpoints().unwrap().single_step(true).unwrap();
+    store.set_debug_handler(H {
+        handle: handle.clone(),
+        events: events.clone(),
+    });
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let main = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [Val::I32(0)];
+    main.call_async(&mut store, &[], &mut results).await?;
+    assert_eq!(results[0].unwrap_i32(), 123);
+    assert!(events.load(Ordering::Relaxed) > 1);
+
+    // After the frame has returned, the handle must still be invalid
+    // and must not read the dead frame.
+    let frame = handle.lock().unwrap().take().unwrap();
+    assert!(!frame.is_valid(&mut store));
+    assert!(frame.local(&mut store, 0).is_err());
+
+    Ok(())
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn module_bytecode() -> wasmtime::Result<()> {
