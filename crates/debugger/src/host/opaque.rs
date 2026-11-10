@@ -631,10 +631,14 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
 
     async fn exnref_get_fields(&mut self, exn: OwnedRooted<ExnRef>) -> Result<Vec<WasmValue>> {
         self.with_store(move |mut store| {
-            let fields = exn
+            let mut fields = exn
                 .fields(&mut store)
                 .expect("reference must be rooted")
                 .collect::<Vec<Val>>();
+            // The fields are unrooted, and converting each one below roots
+            // it, which would invalidate the rest, so root them all at once
+            // first.
+            Val::ensure_all_rooted(&mut store, &mut fields)?;
             fields
                 .into_iter()
                 .map(|v| WasmValue::new(&mut store, v))

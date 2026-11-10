@@ -4,7 +4,7 @@ use crate::store::{AutoAssertNoGc, StoreInstanceId, StoreOpaque, StoreResourceLi
 use crate::trampoline::generate_table_export;
 use crate::{
     AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapTopType, Ref, RefType,
-    StoreContextMut, TableType, Trap,
+    StoreContextMut, TableType, Trap, Unrooted,
 };
 use core::iter;
 use core::ptr::NonNull;
@@ -132,6 +132,7 @@ impl Table {
         ty: TableType,
         init: Ref,
     ) -> Result<Table> {
+        init.validate_rooted()?;
         init.ensure_matches_ty(store, ty.element())
             .context("type mismatch: value does not match table element type")?;
         store.bump_table_count()?;
@@ -197,12 +198,17 @@ impl Table {
     ///
     /// Returns `None` if `index` is out of bounds.
     ///
+    /// A GC reference is returned as an unrooted reference
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes; root it with [`Ref::ensure_rooted`]
+    /// to keep it for longer.
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this table.
     pub fn get(&self, mut store: impl AsContextMut, index: u64) -> Option<Ref> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        let (table, _gc_store) = self.wasmtime_table(&mut store, [index]);
+        let store = store.as_context_mut().0;
+        let (table, _gc_store) = self.wasmtime_table(store, [index]);
         match table.element_type() {
             TableElementType::Func => {
                 let ptr = table.get_func(index).ok()?;
@@ -214,20 +220,19 @@ impl Table {
                 )
             }
             TableElementType::GcRef => {
-                let gc_ref = table
-                    .get_gc_ref(index)
-                    .ok()?
-                    .map(|r| r.unchecked_copy())
-                    .map(|r| store.clone_gc_ref(&r));
-                Some(match self.ty_(&store).element().heap_type().top() {
+                // Note that `unchecked_copy` is ok, since we only use the copy
+                // to create an unrooted reference just below, and nothing
+                // happens to the store in between.
+                let gc_ref = table.get_gc_ref(index).ok()?.map(|r| r.unchecked_copy());
+                Some(match self.ty_(store).element().heap_type().top() {
                     HeapTopType::Extern => {
-                        Ref::from(gc_ref.map(|r| ExternRef::from_cloned_gc_ref(&mut store, r)))
+                        Ref::from(gc_ref.map(|r| Unrooted::<ExternRef>::new(store, &r)))
                     }
                     HeapTopType::Any => {
-                        Ref::from(gc_ref.map(|r| AnyRef::from_cloned_gc_ref(&mut store, r)))
+                        Ref::from(gc_ref.map(|r| Unrooted::<AnyRef>::new(store, &r)))
                     }
                     HeapTopType::Exn => {
-                        Ref::from(gc_ref.map(|r| ExnRef::from_cloned_gc_ref(&mut store, r)))
+                        Ref::from(gc_ref.map(|r| Unrooted::<ExnRef>::new(store, &r)))
                     }
                     HeapTopType::Func | HeapTopType::Cont => unreachable!("not GC refs"),
                 })
@@ -258,6 +263,7 @@ impl Table {
     }
 
     pub(crate) fn set_(&self, store: &mut StoreOpaque, index: u64, val: Ref) -> Result<()> {
+        val.validate_rooted()?;
         let ty = self.ty_(store);
         match element_type(&ty) {
             TableElementType::Func => {
@@ -337,6 +343,7 @@ impl Table {
         // First, type-check to make sure that `init` does indeed match this
         // table's element type.
         let ty = self.ty_(store);
+        init.validate_rooted()?;
         init.ensure_matches_ty(store, ty.element())
             .context("type mismatch: value does not match table element type")?;
 
@@ -433,7 +440,11 @@ impl Table {
         let mut copy_elem = |src: u64, dst: u64| -> Result<()> {
             let scope = store.enter_gc_lifo_scope();
             let result = match src_table.get(&mut *store, src) {
-                Some(val) => dst_table.set(&mut *store, dst, val),
+                // `get` returns an unrooted reference, which must be rooted
+                // (within the scope above) before `set` can store it.
+                Some(mut val) => val
+                    .ensure_rooted(&mut *store)
+                    .and_then(|()| dst_table.set(&mut *store, dst, val)),
                 None => Err(Trap::TableOutOfBounds.into()),
             };
             store.exit_gc_lifo_scope(scope);
@@ -487,6 +498,7 @@ impl Table {
         len: u64,
     ) -> Result<()> {
         let ty = self.ty_(store);
+        val.validate_rooted()?;
         val.ensure_matches_ty(store, ty.element())
             .context("type mismatch: value does not match table element type")?;
         let end = dst.checked_add(len).ok_or(Trap::TableOutOfBounds)?;

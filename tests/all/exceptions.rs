@@ -193,7 +193,7 @@ fn thrown_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
         .unwrap_externref()
         .copied()
         .unwrap();
-    assert!(payload.unwrap_rooted().data(&store)?.is_some());
+    assert!(payload.unwrap_unrooted().data(&store)?.is_some());
 
     Ok(())
 }
@@ -633,7 +633,7 @@ fn catch_ref_preserves_externref_payload(config: &mut Config) -> wasmtime::Resul
         .unwrap_externref()
         .expect("the exception payload should not be null");
     let field_data = field
-        .unwrap_rooted()
+        .unwrap_unrooted()
         .data(&store)?
         .and_then(|data| data.downcast_ref::<u32>().copied());
     assert_eq!(field_data, Some(0xDECAF));

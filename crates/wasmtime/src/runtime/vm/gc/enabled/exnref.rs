@@ -2,7 +2,7 @@ use crate::{
     StorageType, Val,
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
-    store::{AutoAssertNoGc, InstanceId},
+    store::{AutoAssertNoGc, InstanceId, StoreOpaque},
 };
 use core::fmt;
 use wasmtime_environ::{DefinedTagIndex, GcStructLayout, VMGcKind};
@@ -144,7 +144,7 @@ impl VMExnRef {
     /// Panics on out-of-bounds accesses.
     pub fn read_field(
         &self,
-        store: &mut AutoAssertNoGc,
+        store: &StoreOpaque,
         layout: &GcStructLayout,
         ty: &StorageType,
         field: usize,
@@ -194,25 +194,25 @@ impl VMExnRef {
         let tag_offset = layouts.exception_tag_defined_offset();
         let store = store.require_gc_store_mut()?;
         store
-            .gc_object_data(&self.0)?
+            .gc_object_data_mut(&self.0)?
             .write_u32(instance_offset, instance.as_u32())?;
         store
-            .gc_object_data(&self.0)?
+            .gc_object_data_mut(&self.0)?
             .write_u32(tag_offset, tag.as_u32())?;
         Ok(())
     }
 
     /// Get the tag referenced by this exception object.
-    pub fn tag(&self, store: &mut AutoAssertNoGc) -> Result<(InstanceId, DefinedTagIndex)> {
+    pub fn tag(&self, store: &StoreOpaque) -> Result<(InstanceId, DefinedTagIndex)> {
         let layouts = store.engine().gc_runtime().unwrap().layouts();
         let instance_offset = layouts.exception_tag_instance_offset();
         let tag_offset = layouts.exception_tag_defined_offset();
         let instance = store
-            .require_gc_store_mut()?
+            .require_gc_store()?
             .gc_object_data(&self.0)?
             .read_u32(instance_offset)?;
         let instance = InstanceId::from_u32(instance);
-        let store = store.require_gc_store_mut()?;
+        let store = store.require_gc_store()?;
         let tag = store.gc_object_data(&self.0)?.read_u32(tag_offset)?;
         let tag = DefinedTagIndex::from_u32(tag);
         Ok((instance, tag))

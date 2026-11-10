@@ -1,6 +1,6 @@
 use crate::{
     AsContext, AsContextMut, GcRefImpl, Result, StructType, Val,
-    store::{StoreContextMut, StoreOpaque},
+    store::{StoreContext, StoreOpaque},
 };
 
 /// Support for `StructRefPre` disabled at compile time because the `gc` cargo
@@ -28,13 +28,13 @@ impl StructRef {
 
     pub fn fields<'a, T: 'static>(
         &self,
-        _store: impl Into<StoreContextMut<'a, T>>,
+        _store: impl Into<StoreContext<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a + '_> {
         match *self {}
         Ok([].into_iter())
     }
 
-    pub fn field(&self, _store: impl AsContextMut, _index: usize) -> Result<Val> {
+    pub fn field(&self, _store: impl AsContext, _index: usize) -> Result<Val> {
         match *self {}
     }
 

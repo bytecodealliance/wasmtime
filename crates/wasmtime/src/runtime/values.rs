@@ -1,7 +1,7 @@
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapTopType, HeapType,
-    MaybeRooted, RefType, Rooted, StructRef, V128, ValType, prelude::*,
+    MaybeRooted, RefType, Rooted, StructRef, Unrooted, V128, ValType, prelude::*,
 };
 use core::ptr;
 
@@ -299,6 +299,10 @@ impl Val {
 
     /// Convenience method to convert a [`ValRaw`] into a [`Val`].
     ///
+    /// GC references are rooted in the current LIFO rooting scope
+    /// ([`MaybeRooted::Rooted`]), since nothing else keeps a raw value's
+    /// object alive.
+    ///
     /// # Unsafety
     ///
     /// This method is unsafe for the reasons that [`ExternRef::from_raw`] and
@@ -364,6 +368,52 @@ impl Val {
                 ref_.into()
             }
         }
+    }
+
+    /// Like [`Self::_from_raw`], but GC references are returned as unrooted
+    /// references, without changing the store's GC heap.
+    ///
+    /// # Safety
+    ///
+    /// Same as [`Self::from_raw`].
+    pub(crate) unsafe fn _from_raw_unrooted(
+        store: &mut StoreOpaque,
+        raw: ValRaw,
+        ty: &ValType,
+    ) -> Val {
+        let ref_ty = match ty {
+            ValType::I32 => return Val::I32(raw.get_i32()),
+            ValType::I64 => return Val::I64(raw.get_i64()),
+            ValType::F32 => return Val::F32(raw.get_f32()),
+            ValType::F64 => return Val::F64(raw.get_f64()),
+            ValType::V128 => return Val::V128(raw.get_v128().into()),
+            ValType::Ref(ref_ty) => ref_ty,
+        };
+        let ref_ = match ref_ty.heap_type().top() {
+            // SAFETY: it's a safety contract of this function that the funcref
+            // is valid and owned by the provided store.
+            HeapTopType::Func => unsafe { Func::_from_raw(store, raw.get_funcref()).into() },
+            HeapTopType::Extern => Ref::from(Unrooted::<ExternRef>::from_raw_u32(
+                store,
+                raw.get_externref(),
+            )),
+            HeapTopType::Any => {
+                Ref::from(Unrooted::<AnyRef>::from_raw_u32(store, raw.get_anyref()))
+            }
+            HeapTopType::Exn => {
+                Ref::from(Unrooted::<ExnRef>::from_raw_u32(store, raw.get_exnref()))
+            }
+            HeapTopType::Cont => {
+                // TODO(#10248): Required to support stack switching in the embedder API.
+                unimplemented!()
+            }
+        };
+        assert!(
+            ref_ty.is_nullable() || !ref_.is_null(),
+            "if the type is not nullable, we shouldn't get null; got \
+             type = {ref_ty}, ref = {ref_:?}"
+        );
+        ref_.into()
     }
 
     accessors! {
@@ -515,6 +565,159 @@ impl Val {
         self.funcref().expect("expected funcref")
     }
 
+    /// Root any unrooted GC reference in this value, in place, in the current
+    /// LIFO rooting scope.
+    ///
+    /// Afterwards, any GC reference in this value is a
+    /// [`MaybeRooted::Rooted`], and so stays valid until that scope exits.
+    /// Values that are not GC references, or that are already rooted, are left
+    /// unchanged.
+    ///
+    /// Rooting a reference invalidates every other unrooted reference into the
+    /// store's GC heap; use [`Val::ensure_all_rooted`] to root several values
+    /// at once.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this value holds an unrooted GC reference that is
+    /// no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this value is associated with a different store.
+    pub fn ensure_rooted(&mut self, mut store: impl AsContextMut) -> Result<()> {
+        self._ensure_rooted(store.as_context_mut().0)
+    }
+
+    pub(crate) fn _ensure_rooted(&mut self, store: &mut StoreOpaque) -> Result<()> {
+        match self {
+            Val::ExternRef(Some(r)) => {
+                r._ensure_rooted(store)?;
+            }
+            Val::AnyRef(Some(r)) => {
+                r._ensure_rooted(store)?;
+            }
+            Val::ExnRef(Some(r)) => {
+                r._ensure_rooted(store)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Root, in place, every GC reference in `vals` that is not rooted
+    /// already, in the current LIFO rooting scope; see [`Val::ensure_rooted`].
+    ///
+    /// Any single rooting operation, such as [`Val::ensure_rooted`],
+    /// changes the store's GC heap, and so invalidates *every*
+    /// unrooted reference into it, not just the one that was
+    /// rooted. Rooting a list of values one at a time therefore fails
+    /// at the second unrooted reference. This function solves for
+    /// that use-case by providing a batched rooting operation.
+    ///
+    /// See also [`Rooted::to_all_rooted`] and
+    /// [`OwnedRooted::to_all_owned_rooted`](crate::OwnedRooted::to_all_owned_rooted) for lists of [`Unrooted`]
+    /// references.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error, and roots nothing, if any of `vals` holds an unrooted
+    /// GC reference that is no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any of `vals` is associated with a different store.
+    pub fn ensure_all_rooted(mut store: impl AsContextMut, vals: &mut [Val]) -> Result<()> {
+        let store = store.as_context_mut().0;
+        for val in vals.iter() {
+            match val {
+                Val::ExternRef(Some(r)) => {
+                    r.try_gc_ref(store)?;
+                }
+                Val::AnyRef(Some(r)) => {
+                    r.try_gc_ref(store)?;
+                }
+                Val::ExnRef(Some(r)) => {
+                    r.try_gc_ref(store)?;
+                }
+                _ => {}
+            }
+        }
+        let mut store = AutoAssertNoGc::new(store);
+        for val in vals {
+            match val {
+                Val::ExternRef(Some(r)) => r.ensure_rooted_prevalidated(&mut store),
+                Val::AnyRef(Some(r)) => r.ensure_rooted_prevalidated(&mut store),
+                Val::ExnRef(Some(r)) => r.ensure_rooted_prevalidated(&mut store),
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Return an error if this value holds a GC reference that is not rooted.
+    ///
+    /// APIs that take GC values to store or pass along, such as
+    /// [`StructRef::new`] or [`Func::call`], use this to check that their
+    /// values are rooted; see [`Val::ensure_rooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this value holds an unrooted GC reference.
+    pub fn validate_rooted(&self) -> Result<()> {
+        match self {
+            Val::ExternRef(Some(r)) => {
+                r.validate_rooted()?;
+            }
+            Val::AnyRef(Some(r)) => {
+                r.validate_rooted()?;
+            }
+            Val::ExnRef(Some(r)) => {
+                r.validate_rooted()?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Get a copy of this value in which any GC reference is rooted; see
+    /// [`Val::ensure_rooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this value holds an unrooted GC reference that is
+    /// no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this value is associated with a different store.
+    pub fn to_rooted(&self, store: impl AsContextMut) -> Result<Val> {
+        let mut val = *self;
+        val.ensure_rooted(store)?;
+        Ok(val)
+    }
+
+    /// Get a copy of this value in which any GC reference is unrooted, and so
+    /// valid until the store's GC heap next changes; see [`Unrooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this value holds a GC reference that is no longer
+    /// valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this value is associated with a different store.
+    pub fn to_unrooted(&self, store: impl AsContext) -> Result<Val> {
+        let store = store.as_context().0;
+        Ok(match self {
+            Val::ExternRef(Some(r)) => Val::from(r._to_unrooted(store)?),
+            Val::AnyRef(Some(r)) => Val::from(r._to_unrooted(store)?),
+            Val::ExnRef(Some(r)) => Val::from(r._to_unrooted(store)?),
+            _ => *self,
+        })
+    }
+
     #[inline]
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
@@ -609,6 +812,20 @@ impl From<Option<MaybeRooted<ExternRef>>> for Val {
     }
 }
 
+impl From<Unrooted<ExternRef>> for Val {
+    #[inline]
+    fn from(val: Unrooted<ExternRef>) -> Val {
+        Val::ExternRef(Some(val.into()))
+    }
+}
+
+impl From<Option<Unrooted<ExternRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Unrooted<ExternRef>>) -> Val {
+        Val::ExternRef(val.map(Into::into))
+    }
+}
+
 impl From<Rooted<AnyRef>> for Val {
     #[inline]
     fn from(val: Rooted<AnyRef>) -> Val {
@@ -637,6 +854,20 @@ impl From<Option<MaybeRooted<AnyRef>>> for Val {
     }
 }
 
+impl From<Unrooted<AnyRef>> for Val {
+    #[inline]
+    fn from(val: Unrooted<AnyRef>) -> Val {
+        Val::AnyRef(Some(val.into()))
+    }
+}
+
+impl From<Option<Unrooted<AnyRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Unrooted<AnyRef>>) -> Val {
+        Val::AnyRef(val.map(Into::into))
+    }
+}
+
 impl From<Rooted<StructRef>> for Val {
     #[inline]
     fn from(val: Rooted<StructRef>) -> Val {
@@ -661,6 +892,20 @@ impl From<MaybeRooted<StructRef>> for Val {
 impl From<Option<MaybeRooted<StructRef>>> for Val {
     #[inline]
     fn from(val: Option<MaybeRooted<StructRef>>) -> Val {
+        Val::AnyRef(val.map(Into::into))
+    }
+}
+
+impl From<Unrooted<StructRef>> for Val {
+    #[inline]
+    fn from(val: Unrooted<StructRef>) -> Val {
+        Val::AnyRef(Some(val.into()))
+    }
+}
+
+impl From<Option<Unrooted<StructRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Unrooted<StructRef>>) -> Val {
         Val::AnyRef(val.map(Into::into))
     }
 }
@@ -693,6 +938,20 @@ impl From<Option<MaybeRooted<ArrayRef>>> for Val {
     }
 }
 
+impl From<Unrooted<ArrayRef>> for Val {
+    #[inline]
+    fn from(val: Unrooted<ArrayRef>) -> Val {
+        Val::AnyRef(Some(val.into()))
+    }
+}
+
+impl From<Option<Unrooted<ArrayRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Unrooted<ArrayRef>>) -> Val {
+        Val::AnyRef(val.map(Into::into))
+    }
+}
+
 impl From<Rooted<ExnRef>> for Val {
     #[inline]
     fn from(val: Rooted<ExnRef>) -> Val {
@@ -718,6 +977,20 @@ impl From<Option<MaybeRooted<ExnRef>>> for Val {
     #[inline]
     fn from(val: Option<MaybeRooted<ExnRef>>) -> Val {
         Val::ExnRef(val)
+    }
+}
+
+impl From<Unrooted<ExnRef>> for Val {
+    #[inline]
+    fn from(val: Unrooted<ExnRef>) -> Val {
+        Val::ExnRef(Some(val.into()))
+    }
+}
+
+impl From<Option<Unrooted<ExnRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Unrooted<ExnRef>>) -> Val {
+        Val::ExnRef(val.map(Into::into))
     }
 }
 
@@ -885,6 +1158,20 @@ impl From<Option<MaybeRooted<ExternRef>>> for Ref {
     }
 }
 
+impl From<Unrooted<ExternRef>> for Ref {
+    #[inline]
+    fn from(e: Unrooted<ExternRef>) -> Ref {
+        Ref::Extern(Some(e.into()))
+    }
+}
+
+impl From<Option<Unrooted<ExternRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Unrooted<ExternRef>>) -> Ref {
+        Ref::Extern(e.map(Into::into))
+    }
+}
+
 impl From<Rooted<AnyRef>> for Ref {
     #[inline]
     fn from(e: Rooted<AnyRef>) -> Ref {
@@ -913,6 +1200,20 @@ impl From<Option<MaybeRooted<AnyRef>>> for Ref {
     }
 }
 
+impl From<Unrooted<AnyRef>> for Ref {
+    #[inline]
+    fn from(e: Unrooted<AnyRef>) -> Ref {
+        Ref::Any(Some(e.into()))
+    }
+}
+
+impl From<Option<Unrooted<AnyRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Unrooted<AnyRef>>) -> Ref {
+        Ref::Any(e.map(Into::into))
+    }
+}
+
 impl From<Rooted<StructRef>> for Ref {
     #[inline]
     fn from(e: Rooted<StructRef>) -> Ref {
@@ -937,6 +1238,20 @@ impl From<MaybeRooted<StructRef>> for Ref {
 impl From<Option<MaybeRooted<StructRef>>> for Ref {
     #[inline]
     fn from(e: Option<MaybeRooted<StructRef>>) -> Ref {
+        Ref::Any(e.map(Into::into))
+    }
+}
+
+impl From<Unrooted<StructRef>> for Ref {
+    #[inline]
+    fn from(e: Unrooted<StructRef>) -> Ref {
+        Ref::Any(Some(e.into()))
+    }
+}
+
+impl From<Option<Unrooted<StructRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Unrooted<StructRef>>) -> Ref {
         Ref::Any(e.map(Into::into))
     }
 }
@@ -969,6 +1284,20 @@ impl From<Option<MaybeRooted<ArrayRef>>> for Ref {
     }
 }
 
+impl From<Unrooted<ArrayRef>> for Ref {
+    #[inline]
+    fn from(e: Unrooted<ArrayRef>) -> Ref {
+        Ref::Any(Some(e.into()))
+    }
+}
+
+impl From<Option<Unrooted<ArrayRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Unrooted<ArrayRef>>) -> Ref {
+        Ref::Any(e.map(Into::into))
+    }
+}
+
 impl From<Rooted<ExnRef>> for Ref {
     #[inline]
     fn from(e: Rooted<ExnRef>) -> Ref {
@@ -994,6 +1323,20 @@ impl From<Option<MaybeRooted<ExnRef>>> for Ref {
     #[inline]
     fn from(e: Option<MaybeRooted<ExnRef>>) -> Ref {
         Ref::Exn(e)
+    }
+}
+
+impl From<Unrooted<ExnRef>> for Ref {
+    #[inline]
+    fn from(e: Unrooted<ExnRef>) -> Ref {
+        Ref::Exn(Some(e.into()))
+    }
+}
+
+impl From<Option<Unrooted<ExnRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Unrooted<ExnRef>>) -> Ref {
+        Ref::Exn(e.map(Into::into))
     }
 }
 
@@ -1273,6 +1616,93 @@ impl Ref {
         }
     }
 
+    /// Root this reference, in place, if it is an unrooted GC reference; see
+    /// [`Val::ensure_rooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this is an unrooted GC reference that is no longer
+    /// valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn ensure_rooted(&mut self, mut store: impl AsContextMut) -> Result<()> {
+        let store = store.as_context_mut().0;
+        match self {
+            Ref::Extern(Some(r)) => {
+                r._ensure_rooted(store)?;
+            }
+            Ref::Any(Some(r)) => {
+                r._ensure_rooted(store)?;
+            }
+            Ref::Exn(Some(r)) => {
+                r._ensure_rooted(store)?;
+            }
+            Ref::Extern(None) | Ref::Any(None) | Ref::Exn(None) | Ref::Func(_) => {}
+        }
+        Ok(())
+    }
+
+    /// Return an error if this is a GC reference that is not rooted; see
+    /// [`Val::validate_rooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this is an unrooted GC reference.
+    pub fn validate_rooted(&self) -> Result<()> {
+        match self {
+            Ref::Extern(Some(r)) => {
+                r.validate_rooted()?;
+            }
+            Ref::Any(Some(r)) => {
+                r.validate_rooted()?;
+            }
+            Ref::Exn(Some(r)) => {
+                r.validate_rooted()?;
+            }
+            Ref::Extern(None) | Ref::Any(None) | Ref::Exn(None) | Ref::Func(_) => {}
+        }
+        Ok(())
+    }
+
+    /// Get a copy of this reference that is rooted if it is a GC reference;
+    /// see [`Ref::ensure_rooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this is an unrooted GC reference that is no longer
+    /// valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn to_rooted(&self, store: impl AsContextMut) -> Result<Ref> {
+        let mut r = self.clone();
+        r.ensure_rooted(store)?;
+        Ok(r)
+    }
+
+    /// Get a copy of this reference that is unrooted if it is a GC reference;
+    /// see [`Val::to_unrooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this is a GC reference that is no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn to_unrooted(&self, store: impl AsContext) -> Result<Ref> {
+        let store = store.as_context().0;
+        Ok(match self {
+            Ref::Extern(Some(r)) => Ref::from(r._to_unrooted(store)?),
+            Ref::Any(Some(r)) => Ref::from(r._to_unrooted(store)?),
+            Ref::Exn(Some(r)) => Ref::from(r._to_unrooted(store)?),
+            Ref::Extern(None) | Ref::Any(None) | Ref::Exn(None) | Ref::Func(_) => self.clone(),
+        })
+    }
+
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
             Ref::Func(Some(f)) => f.comes_from_same_store(store),
@@ -1301,9 +1731,9 @@ mod tests {
             || cfg!(target_arch = "riscv64")
             || cfg!(target_arch = "arm")
         {
-            24
+            32
         } else if cfg!(target_arch = "x86") {
-            20
+            28
         } else {
             panic!("unsupported architecture")
         };
@@ -1320,9 +1750,9 @@ mod tests {
             || cfg!(target_arch = "riscv64")
             || cfg!(target_arch = "arm")
         {
-            24
+            32
         } else if cfg!(target_arch = "x86") {
-            20
+            28
         } else {
             panic!("unsupported architecture")
         };

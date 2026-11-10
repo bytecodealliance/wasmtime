@@ -11,7 +11,7 @@ use crate::{
     AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
     OwnedRooted, RefType, Rooted, StructType, Val, ValRaw, ValType, WasmTy, bail_bug,
     prelude::*,
-    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque, StoreResourceLimiter},
+    store::{AutoAssertNoGc, StoreContext, StoreOpaque, StoreResourceLimiter},
 };
 use alloc::sync::Arc;
 use core::mem::{self, MaybeUninit};
@@ -221,6 +221,10 @@ impl StructRef {
     /// If the given `fields` values' types do not match the field types of the
     /// `allocator`'s struct type, an error is returned.
     ///
+    /// If the `fields` values holds a GC reference that is not rooted, an error is
+    /// returned, since allocating may collect garbage; see
+    /// [`Val::ensure_rooted`].
+    ///
     /// If the allocation cannot be satisfied because the GC heap is currently
     /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
     /// error is returned. The allocation might succeed on a second attempt if
@@ -265,6 +269,10 @@ impl StructRef {
     ///
     /// If the given `fields` values' types do not match the field types of the
     /// `allocator`'s struct type, an error is returned.
+    ///
+    /// If the `fields` values holds a GC reference that is not rooted, an error is
+    /// returned, since allocating may collect garbage; see
+    /// [`Val::ensure_rooted`].
     ///
     /// If the allocation cannot be satisfied because the GC heap is currently
     /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
@@ -317,6 +325,8 @@ impl StructRef {
                 val.comes_from_same_store(store),
                 "field value comes from the wrong store",
             );
+            // Allocation may collect garbage, so the values must be rooted.
+            val.validate_rooted().context("unrooted field value")?;
             let ty = ty.element_type().unpack();
             val.ensure_matches_ty(store, ty)
                 .context("field type mismatch")?;
@@ -439,6 +449,12 @@ impl StructRef {
     /// Note that `i8` and `i16` field values are zero-extended into
     /// `Val::I32(_)`s.
     ///
+    /// GC references are returned as unrooted references
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes; root them with
+    /// [`Val::ensure_rooted`] or [`Val::ensure_all_rooted`] to keep them for
+    /// longer.
+    ///
     /// # Errors
     ///
     /// Return an error if this reference has been unrooted.
@@ -448,19 +464,18 @@ impl StructRef {
     /// Panics if this reference is associated with a different store.
     pub fn fields<'a, T: 'static>(
         &'a self,
-        store: impl Into<StoreContextMut<'a, T>>,
+        store: impl Into<StoreContext<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         self._fields(store.into().0)
     }
 
     pub(crate) fn _fields<'a>(
         &'a self,
-        store: &'a mut StoreOpaque,
+        store: &'a StoreOpaque,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         assert!(self.comes_from_same_store(store));
-        let store = AutoAssertNoGc::new(store);
 
-        let gc_ref = self.inner.try_gc_ref(&store)?;
+        let gc_ref = self.inner.try_gc_ref(store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.matches_kind(VMGcKind::StructRef));
 
@@ -481,14 +496,14 @@ impl StructRef {
             len,
         });
 
-        struct Fields<'a, 'b> {
+        struct Fields<'a> {
             structref: &'a StructRef,
-            store: AutoAssertNoGc<'b>,
+            store: &'a StoreOpaque,
             index: usize,
             len: usize,
         }
 
-        impl Iterator for Fields<'_, '_> {
+        impl Iterator for Fields<'_> {
             type Item = Val;
 
             #[inline]
@@ -499,7 +514,7 @@ impl StructRef {
                     return None;
                 }
                 self.index += 1;
-                self.structref._field(&mut self.store, i).ok()
+                self.structref._field(self.store, i).ok()
             }
 
             #[inline]
@@ -509,7 +524,7 @@ impl StructRef {
             }
         }
 
-        impl ExactSizeIterator for Fields<'_, '_> {
+        impl ExactSizeIterator for Fields<'_> {
             #[inline]
             fn len(&self) -> usize {
                 self.len - self.index
@@ -517,20 +532,20 @@ impl StructRef {
         }
     }
 
-    fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
+    fn header<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcHeader> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
         Ok(store.require_gc_store()?.header(gc_ref)?)
     }
 
-    fn structref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMStructRef> {
+    fn structref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMStructRef> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
         debug_assert!(self.header(store)?.matches_kind(VMGcKind::StructRef));
         Ok(gc_ref.as_structref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<Arc<GcStructLayout>> {
+    fn layout(&self, store: &StoreOpaque) -> Result<Arc<GcStructLayout>> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
         super::gc_struct_layout(store.engine(), type_index)
@@ -552,6 +567,12 @@ impl StructRef {
     /// Note that `i8` and `i16` field values are zero-extended into
     /// `Val::I32(_)`s.
     ///
+    /// GC references are returned as unrooted references
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes; root them with
+    /// [`Val::ensure_rooted`] or [`Val::ensure_all_rooted`] to keep them for
+    /// longer.
+    ///
     /// # Errors
     ///
     /// Returns an `Err(_)` if the index is out of bounds or this reference has
@@ -560,14 +581,13 @@ impl StructRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn field(&self, mut store: impl AsContextMut, index: usize) -> Result<Val> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._field(&mut store, index)
+    pub fn field(&self, store: impl AsContext, index: usize) -> Result<Val> {
+        self._field(store.as_context().0, index)
     }
 
-    pub(crate) fn _field(&self, store: &mut AutoAssertNoGc<'_>, index: usize) -> Result<Val> {
+    pub(crate) fn _field(&self, store: &StoreOpaque, index: usize) -> Result<Val> {
         assert!(self.comes_from_same_store(store));
-        let structref = self.structref(store)?.unchecked_copy();
+        let structref = self.structref(store)?;
         let field_ty = self.field_ty(store, index)?;
         let layout = self.layout(store)?;
         structref.read_field(store, &layout, field_ty.element_type(), index)
@@ -603,6 +623,9 @@ impl StructRef {
         value: Val,
     ) -> Result<()> {
         assert!(self.comes_from_same_store(store));
+        value
+            .validate_rooted()
+            .with_context(|| format!("cannot set field {index}: unrooted value"))?;
         let mut store = AutoAssertNoGc::new(store);
 
         let field_ty = self.field_ty(&store, index)?;
@@ -640,7 +663,7 @@ impl StructRef {
         store: &mut AutoAssertNoGc<'_>,
         gc_ref: VMGcRef,
     ) -> Rooted<Self> {
-        debug_assert!(gc_ref.is_structref(&*store.unwrap_gc_store().gc_heap));
+        debug_assert!(gc_ref.is_structref(&**store.unwrap_gc_store().gc_heap.get()));
         Rooted::new(store, gc_ref)
     }
 }

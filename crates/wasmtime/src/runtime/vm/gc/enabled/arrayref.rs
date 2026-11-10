@@ -140,7 +140,7 @@ impl VMArrayRef {
     /// Returns an error on out-of-bounds accesses.
     pub fn read_elem(
         &self,
-        store: &mut AutoAssertNoGc,
+        store: &StoreOpaque,
         layout: &GcArrayLayout,
         ty: &StorageType,
         index: u32,

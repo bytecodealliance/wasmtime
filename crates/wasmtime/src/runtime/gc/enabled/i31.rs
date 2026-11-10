@@ -63,8 +63,8 @@ use core::mem::MaybeUninit;
 /// let mut results = [Val::null_any_ref()];
 /// inc_i31.call(&mut store, &[val], &mut results)?;
 /// let nullable_anyref = results[0].unwrap_anyref();
-/// let anyref = nullable_anyref.unwrap().unwrap_rooted();
-/// let i31 = anyref.unwrap_i31(&store)?;
+/// let anyref = nullable_anyref.unwrap().unwrap_unrooted();
+/// let i31 = anyref.as_i31(&store)?.unwrap();
 /// assert_eq!(i31.get_u32(), 0x1235);
 ///
 /// // Alternatively, we can use the typed function API to make this all a lot

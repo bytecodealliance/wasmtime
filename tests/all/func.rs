@@ -1633,10 +1633,11 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> wasmtime::Result<()>
         ],
         &mut results,
     )?;
-    assert_my_externref(
-        &store,
-        results[0].unwrap_externref().map(|e| e.unwrap_rooted()),
-    );
+    let externref = results[0]
+        .unwrap_externref()
+        .map(|e| e.to_rooted(&mut store))
+        .transpose()?;
+    assert_my_externref(&store, externref);
     assert!(results[1].unwrap_funcref().is_none());
 
     // funcref=Some, externref=Some
@@ -1651,10 +1652,11 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> wasmtime::Result<()>
         ],
         &mut results,
     )?;
-    assert_my_externref(
-        &store,
-        results[0].unwrap_externref().map(|e| e.unwrap_rooted()),
-    );
+    let externref = results[0]
+        .unwrap_externref()
+        .map(|e| e.to_rooted(&mut store))
+        .transpose()?;
+    assert_my_externref(&store, externref);
     assert_my_funcref(&mut store, results[1].unwrap_funcref())?;
 
     Ok(())

@@ -3501,7 +3501,7 @@ fn miri_gc_smoke_test() -> Result<()> {
                 .anyref()
                 .unwrap()
                 .unwrap()
-                .unwrap_rooted()
+                .to_rooted(&mut *store)?
                 .unwrap_struct(&store)?;
             let f = s.field(store, 0)?;
             assert_eq!(f.unwrap_i32(), field);
@@ -4103,7 +4103,8 @@ fn winch_drc_i31_wrapped_as_externref_skips_global_barriers() -> Result<()> {
     let externref = results[0]
         .unwrap_externref()
         .expect("global.get returned null");
-    let anyref = AnyRef::convert_extern(&mut store, externref.unwrap_rooted())?;
+    let externref = externref.to_rooted(&mut store)?;
+    let anyref = AnyRef::convert_extern(&mut store, externref)?;
     assert_eq!(anyref.unwrap_i31(&store)?.get_u32(), 0x1234);
 
     // Replacing the i31-backed externref exercises the old-value side of the
@@ -4220,7 +4221,7 @@ fn winch_ref_params_and_results_across_gc() -> Result<()> {
                 let id = v
                     .unwrap_externref()
                     .expect("result became null")
-                    .unwrap_rooted()
+                    .unwrap_unrooted()
                     .data(&store)?
                     .and_then(|d| d.downcast_ref::<u32>().copied());
                 assert_eq!(

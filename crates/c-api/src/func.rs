@@ -370,7 +370,11 @@ pub unsafe extern "C" fn wasmtime_func_call(
     // can. As a result we catch panics here and transform them to traps to
     // allow the caller to have any insulation possible against Rust panics.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        func.call(&mut store, wt_params, wt_results)
+        func.call(&mut store, wt_params, wt_results)?;
+        // The results are unrooted, and converting each one to a C value
+        // below roots it, which would invalidate the rest, so root them all
+        // at once first.
+        Val::ensure_all_rooted(&mut store, wt_results)
     }));
     match result {
         Ok(Ok(())) => {
