@@ -299,14 +299,6 @@
 (decl pure value_used (Value) bool)
 (extern constructor value_used value_used)
 
-;; Returns whether the instruction defining the given value can be folded into
-;; the lowering of the current instruction, which then also computes the value
-;; and gives it as an opportunistic def, without the definition being expected
-;; to be lowered separately as well (which would compute the value twice).
-;; This is a heuristic; see `Lower::value_def_foldable`.
-(decl pure value_def_foldable (Value) bool)
-(extern constructor value_def_foldable value_def_foldable)
-
 ;; Extract the first result value of the given instruction.
 (decl first_result (Value) Inst)
 (extern extractor first_result first_result)

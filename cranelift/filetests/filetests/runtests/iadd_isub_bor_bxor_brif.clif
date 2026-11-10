@@ -2,8 +2,9 @@ test interpret
 test run
 target x86_64
 
-;; `brif` on an `iadd`/`isub`/`bor`/`bxor` result uses the op's own flags. The
-;; wrap-to-zero cases catch flags taken from an op wider than the type.
+;; `brif` on a 32- or 64-bit `iadd`/`isub`/`bor`/`bxor` result uses the op's own
+;; flags; 8- and 16-bit results still use a `test`. The wrap-to-zero cases
+;; check that the branch sees the result at the width of its type.
 
 function %iadd_brif_i8(i8, i8) -> i8, i8 {
 block0(v0: i8, v1: i8):

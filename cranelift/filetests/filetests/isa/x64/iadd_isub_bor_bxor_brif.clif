@@ -2,9 +2,9 @@ test compile precise-output
 set opt_level=speed
 target x86_64
 
-;; Branching on the result of an `iadd`, `isub`, `bor` or `bxor` being
-;; nonzero uses the flags set by the operation itself, without a separate
-;; `test` of the result (issue #11125).
+;; Branching on the result of a 32- or 64-bit `iadd`, `isub`, `bor` or `bxor`
+;; being nonzero uses the flags set by the operation itself, without a separate
+;; `test` of the result (issue #11125). 8- and 16-bit values still use a `test`.
 
 function %iadd_isub_bor_bxor_brif_i32(i32, i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32, v3: i32):
@@ -95,7 +95,7 @@ block5:
 ;   popq %rbp
 ;   retq
 
-function %iadd_brif_i8_i16(i8, i8, i16, i16) -> i32 {
+function %iadd_brif_i8_i16_not_folded(i8, i8, i16, i16) -> i32 {
 block0(v0: i8, v1: i8, v2: i16, v3: i16):
   v4 = iadd v0, v1
   brif v4, block1, block3
@@ -117,12 +117,14 @@ block3:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   addb %sil, %dil
+;   addl %esi, %edi
+;   testb %dil, %dil
 ;   jnz     label2; j label1
 ; block1:
 ;   jmp     label4
 ; block2:
-;   addw %cx, %dx
+;   addl %ecx, %edx
+;   testw %dx, %dx
 ;   jnz     label5; j label3
 ; block3:
 ;   jmp     label4
@@ -142,17 +144,19 @@ block3:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   addb %sil, %dil
-;   je 0x16
-; block2: ; offset 0xd
-;   addw %cx, %dx
-;   jne 0x20
-; block3: ; offset 0x16
+;   addl %esi, %edi
+;   testb %dil, %dil
+;   je 0x1a
+; block2: ; offset 0xf
+;   addl %ecx, %edx
+;   testw %dx, %dx
+;   jne 0x24
+; block3: ; offset 0x1a
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block4: ; offset 0x20
+; block4: ; offset 0x24
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -377,9 +381,10 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
+;   movq %rdi, %r8
+;   orq %rsi, %r8
+;   movq %r8, (%rdx)
 ;   orq %rsi, %rdi
-;   movq %rdi, (%rdx)
-;   testq %rdi, %rdi
 ;   jnz     label2; j label1
 ; block1:
 ;   movl $0x2, %eax
@@ -397,16 +402,17 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   movq %rdi, %r8
+;   orq %rsi, %r8
+;   movq %r8, (%rdx) ; trap: heap_oob
 ;   orq %rsi, %rdi
-;   movq %rdi, (%rdx) ; trap: heap_oob
-;   testq %rdi, %rdi
-;   jne 0x1d
-; block2: ; offset 0x13
+;   jne 0x20
+; block2: ; offset 0x16
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block3: ; offset 0x1d
+; block3: ; offset 0x20
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -434,14 +440,15 @@ block3:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   xorl %esi, %edi
-;   movl %edi, (%rcx)
+;   movq %rdi, %r8
+;   xorl %esi, %r8d
+;   movl %r8d, (%rcx)
 ;   testl %edx, %edx
 ;   jnz     label2; j label1
 ; block1:
 ;   jmp     label5
 ; block2:
-;   testl %edi, %edi
+;   xorl %esi, %edi
 ;   jnz     label3; j label4
 ; block3:
 ;   jmp     label5
@@ -461,19 +468,20 @@ block3:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   xorl %esi, %edi
-;   movl %edi, (%rcx) ; trap: heap_oob
+;   movq %rdi, %r8
+;   xorl %esi, %r8d
+;   movl %r8d, (%rcx) ; trap: heap_oob
 ;   testl %edx, %edx
-;   je 0x22
-; block2: ; offset 0x10
-;   testl %edi, %edi
-;   jne 0x22
-; block3: ; offset 0x18
+;   je 0x27
+; block2: ; offset 0x15
+;   xorl %esi, %edi
+;   jne 0x27
+; block3: ; offset 0x1d
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block4: ; offset 0x22
+; block4: ; offset 0x27
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -499,10 +507,11 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   orl %esi, %edi
+;   movq %rdi, %r9
+;   orl %esi, %r9d
 ;   cmovnel %edx, %ecx
 ;   movl %ecx, (%r8)
-;   testl %edi, %edi
+;   orl %esi, %edi
 ;   jnz     label2; j label1
 ; block1:
 ;   movl $0x2, %eax
@@ -520,17 +529,18 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   orl %esi, %edi
+;   movq %rdi, %r9
+;   orl %esi, %r9d
 ;   cmovnel %edx, %ecx
 ;   movl %ecx, (%r8) ; trap: heap_oob
-;   testl %edi, %edi
-;   jne 0x1e
-; block2: ; offset 0x14
+;   orl %esi, %edi
+;   jne 0x22
+; block2: ; offset 0x18
 ;   movl $2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block3: ; offset 0x1e
+; block3: ; offset 0x22
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
