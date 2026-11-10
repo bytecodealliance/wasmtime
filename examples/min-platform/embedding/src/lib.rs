@@ -31,6 +31,8 @@ pub unsafe extern "C" fn run(
     simple_host_fn_size: usize,
     simple_floats_module: *const u8,
     simple_floats_size: usize,
+    simple_subtype_module: *const u8,
+    simple_subtype_size: usize,
 ) -> usize {
     unsafe {
         let buf = core::slice::from_raw_parts_mut(error_buf, error_size);
@@ -39,7 +41,15 @@ pub unsafe extern "C" fn run(
         let simple_host_fn =
             core::slice::from_raw_parts(simple_host_fn_module, simple_host_fn_size);
         let simple_floats = core::slice::from_raw_parts(simple_floats_module, simple_floats_size);
-        match run_result(smoke, simple_add, simple_host_fn, simple_floats) {
+        let simple_subtype =
+            core::slice::from_raw_parts(simple_subtype_module, simple_subtype_size);
+        match run_result(
+            smoke,
+            simple_add,
+            simple_host_fn,
+            simple_floats,
+            simple_subtype,
+        ) {
             Ok(()) => 0,
             Err(e) => {
                 let msg = format!("{e:?}");
@@ -116,11 +126,13 @@ fn run_result(
     simple_add_module: &[u8],
     simple_host_fn_module: &[u8],
     simple_floats_module: &[u8],
+    simple_subtype_module: &[u8],
 ) -> Result<()> {
     smoke(smoke_module)?;
     simple_add(simple_add_module)?;
     simple_host_fn(simple_host_fn_module)?;
     simple_floats(simple_floats_module)?;
+    simple_subtype(simple_subtype_module)?;
     Ok(())
 }
 
@@ -241,6 +253,25 @@ fn simple_floats(module: &[u8]) -> Result<()> {
     let instance = Linker::new(&engine).instantiate(&mut store, &module)?;
     let func = instance.get_typed_func::<(f32, f32), f32>(&mut store, "frob")?;
     ensure!(func.call(&mut store, (1.4, 3.2))? == 5.);
+    Ok(())
+}
+
+fn simple_subtype(module: &[u8]) -> Result<()> {
+    let engine = Engine::new(&config())?;
+    let module = deserialize(&engine, module)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &module)?;
+
+    let call_subtype = instance.get_typed_func::<(), ()>(&mut store, "call_subtype")?;
+    call_subtype.call(&mut store, ())?;
+
+    let call_mismatch = instance.get_typed_func::<(), ()>(&mut store, "call_mismatch")?;
+    let err = call_mismatch.call(&mut store, ()).unwrap_err();
+    ensure!(err.downcast_ref::<Trap>() == Some(&Trap::BadSignature));
+
+    let test = instance.get_typed_func::<u32, u32>(&mut store, "test")?;
+    ensure!(test.call(&mut store, 0)? == 1);
+    ensure!(test.call(&mut store, 1)? == 0);
     Ok(())
 }
 
