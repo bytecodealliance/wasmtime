@@ -1,4 +1,3 @@
-use crate::runtime::vm::VMGcRef;
 use crate::{
     AsContextMut, GcRefImpl, Result, Rooted, StoreContext, StoreContextMut, store::AutoAssertNoGc,
 };
@@ -11,13 +10,6 @@ pub enum ExternRef {}
 impl GcRefImpl for ExternRef {}
 
 impl ExternRef {
-    pub(crate) fn from_cloned_gc_ref(
-        _store: &mut AutoAssertNoGc<'_>,
-        _gc_ref: VMGcRef,
-    ) -> Rooted<Self> {
-        unreachable!()
-    }
-
     pub fn data<'a, T: 'static>(
         &self,
         _store: impl Into<StoreContext<'a, T>>,

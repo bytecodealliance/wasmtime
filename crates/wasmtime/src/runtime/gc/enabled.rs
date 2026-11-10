@@ -9,6 +9,7 @@ mod externref;
 mod i31;
 mod rooting;
 mod structref;
+mod unrooted;
 
 pub use anyref::*;
 pub use arrayref::*;
@@ -18,6 +19,7 @@ pub use externref::*;
 pub use i31::*;
 pub use rooting::*;
 pub use structref::*;
+pub use unrooted::*;
 
 use crate::{Engine, bail_bug, prelude::*};
 use alloc::sync::Arc;

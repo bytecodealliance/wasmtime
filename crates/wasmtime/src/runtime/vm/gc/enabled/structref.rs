@@ -2,7 +2,7 @@ use crate::{
     StorageType, Val,
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
-    store::AutoAssertNoGc,
+    store::{AutoAssertNoGc, StoreOpaque},
 };
 use core::fmt;
 use wasmtime_environ::{GcStructLayout, VMGcKind};
@@ -134,7 +134,7 @@ impl VMStructRef {
     /// Panics on out-of-bounds accesses.
     pub fn read_field(
         &self,
-        store: &mut AutoAssertNoGc,
+        store: &StoreOpaque,
         layout: &GcStructLayout,
         ty: &StorageType,
         field: usize,

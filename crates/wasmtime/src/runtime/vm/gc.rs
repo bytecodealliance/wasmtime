@@ -30,6 +30,7 @@ use crate::bail_bug;
 use crate::hash_map::HashMap;
 use crate::module::ModuleRegistry;
 use crate::prelude::*;
+use crate::runtime::epoch_state::EpochState;
 use crate::runtime::vm::{GcHeapAllocationIndex, VMMemoryDefinition};
 use crate::store::Asyncness;
 use crate::type_registry::RegisteredType;
@@ -51,7 +52,16 @@ pub struct GcStore {
     pub allocation_index: GcHeapAllocationIndex,
 
     /// The actual GC heap.
-    pub gc_heap: Box<dyn GcHeap>,
+    ///
+    /// This is wrapped in an `EpochState` so that every mutation of
+    /// the heap invalidates the `Unrooted` references into it (which
+    /// hold `EpochStateHandle`s). Mutations from within host APIs
+    /// that are implemented in Wasmtime runtime code do this
+    /// automatically, via the `get_mut` method on this
+    /// container. Compiled Wasm code accesses the GC heap directly,
+    /// so we invoke `GcStore::invalidate_unrooted_refs` around every
+    /// Wasm entry/exit.
+    pub gc_heap: EpochState<Box<dyn GcHeap>>,
 
     /// The `externref` host data table for this GC heap.
     pub host_data_table: ExternRefHostDataTable,
@@ -112,7 +122,7 @@ impl GcStore {
 
         Self {
             allocation_index,
-            gc_heap,
+            gc_heap: EpochState::new(gc_heap),
             host_data_table,
             func_ref_table,
             #[cfg(feature = "stack-switching")]
@@ -127,18 +137,18 @@ impl GcStore {
 
     /// Get the `VMMemoryDefinition` for this GC heap.
     pub fn vmmemory_definition(&self) -> VMMemoryDefinition {
-        self.gc_heap.vmmemory()
+        self.gc_heap.get().vmmemory()
     }
 
     /// Get the current capacity (in bytes) of this GC heap.
     pub fn gc_heap_capacity(&self) -> usize {
-        self.gc_heap.heap_slice().len()
+        self.gc_heap.get().heap_slice().len()
     }
 
     /// Get the number of bytes that can be allocated into this GC heap before
     /// a collection is required.
     pub fn gc_heap_allocatable_bytes(&self) -> usize {
-        self.gc_heap.allocatable_bytes()
+        self.gc_heap.get().allocatable_bytes()
     }
 
     /// Asynchronously perform garbage collection within this heap.
@@ -155,10 +165,10 @@ impl GcStore {
             modules,
             gc_host_alloc_types,
         };
-        let collection = self.gc_heap.gc(roots, &mut trace_state);
+        let collection = self.gc_heap.get_mut().gc(roots, &mut trace_state);
         collect_async(collection, asyncness, yield_fn).await?;
         self.last_post_gc_allocated_bytes = Some({
-            let size = self.gc_heap.allocated_bytes();
+            let size = self.gc_heap.get().allocated_bytes();
             log::trace!("After collection, GC heap's allocated bytes = {size:#x} bytes");
             size
         });
@@ -177,7 +187,7 @@ impl GcStore {
     /// Get the header of the given GC reference.
     pub fn header(&self, gc_ref: &VMGcRef) -> Result<&VMGcHeader> {
         debug_assert!(!gc_ref.is_i31());
-        self.gc_heap.header(gc_ref)
+        self.gc_heap.get().header(gc_ref)
     }
 
     /// Clone a GC reference, calling GC write barriers as necessary.
@@ -185,7 +195,7 @@ impl GcStore {
         if gc_ref.is_i31() {
             gc_ref.copy_i31()
         } else {
-            self.gc_heap.clone_gc_ref(gc_ref)
+            self.gc_heap.get_mut().clone_gc_ref(gc_ref)
         }
     }
 
@@ -251,7 +261,7 @@ impl GcStore {
         // (that is, they are both either null or `i31ref`s) then we can skip
         // the GC barrier.
         if Self::needs_write_barrier(destination, source) {
-            self.gc_heap.write_gc_ref(destination, source)?;
+            self.gc_heap.get_mut().write_gc_ref(destination, source)?;
         } else {
             *destination = source.map(|s| s.copy_i31());
         }
@@ -261,8 +271,25 @@ impl GcStore {
     /// Drop the given GC reference, performing drop barriers as necessary.
     pub fn drop_gc_ref(&mut self, gc_ref: VMGcRef) {
         if !gc_ref.is_i31() {
-            self.gc_heap.drop_gc_ref(gc_ref);
+            self.gc_heap.get_mut().drop_gc_ref(gc_ref);
         }
+    }
+
+    /// Hook to invalidate unrooted refs.
+    ///
+    /// Ordinarily this happens automatically via
+    /// `EpochState::get_mut()`; but Wasm execution can write the GC
+    /// heap directly, so we call this hook around Wasm entry/exit.
+    ///
+    /// (NOTE: technically we don't need to invalidate unrooted refs
+    /// solely due to Wasm execution *as long as* collection happens
+    /// in runtime code where `get_mut()` is invoked: currently no
+    /// compiled Wasm code directly moves or frees an object, so every
+    /// pointer should remain valid. But we probably don't want to be
+    /// in the business of baking that in and minding a complex
+    /// distributed invariant...)
+    pub fn invalidate_unrooted_refs(&mut self) {
+        self.gc_heap.invalidate_handles();
     }
 
     /// Hook to call whenever a GC reference is about to be exposed to Wasm.
@@ -274,7 +301,7 @@ impl GcStore {
         let raw = gc_ref.as_raw_non_zero_u32();
         if !gc_ref.is_i31() {
             log::trace!("exposing GC ref to Wasm: {gc_ref:p}");
-            self.gc_heap.expose_gc_ref_to_wasm(gc_ref)?;
+            self.gc_heap.get_mut().expose_gc_ref_to_wasm(gc_ref)?;
         }
         Ok(raw)
     }
@@ -295,7 +322,7 @@ impl GcStore {
         value: Box<dyn Any + Send + Sync>,
     ) -> Result<Result<VMExternRef, (Box<dyn Any + Send + Sync>, u64)>> {
         let host_data_id = self.host_data_table.alloc(value);
-        match self.gc_heap.alloc_externref(host_data_id)? {
+        match self.gc_heap.get_mut().alloc_externref(host_data_id)? {
             Ok(x) => Ok(Ok(x)),
             Err(n) => Ok(Err((self.host_data_table.dealloc(host_data_id)?, n))),
         }
@@ -307,7 +334,7 @@ impl GcStore {
     /// associated with a different heap is memory safe but will lead to general
     /// incorrectness such as panics and wrong results.
     pub fn externref_host_data(&self, externref: &VMExternRef) -> Result<&(dyn Any + Send + Sync)> {
-        let host_data_id = self.gc_heap.externref_host_data(externref)?;
+        let host_data_id = self.gc_heap.get().externref_host_data(externref)?;
         self.host_data_table.get(host_data_id)
     }
 
@@ -320,7 +347,7 @@ impl GcStore {
         &mut self,
         externref: &VMExternRef,
     ) -> Result<&mut (dyn Any + Send + Sync)> {
-        let host_data_id = self.gc_heap.externref_host_data(externref)?;
+        let host_data_id = self.gc_heap.get().externref_host_data(externref)?;
         self.host_data_table.get_mut(host_data_id)
     }
 
@@ -344,7 +371,7 @@ impl GcStore {
             }
         }
 
-        self.gc_heap.alloc_raw(header, layout)
+        self.gc_heap.get_mut().alloc_raw(header, layout)
     }
 
     /// Allocate an uninitialized struct with the given type index and layout.
@@ -359,20 +386,30 @@ impl GcStore {
         layout: &GcStructLayout,
     ) -> Result<Result<VMStructRef, u64>> {
         self.gc_heap
+            .get_mut()
             .alloc_uninit_struct_or_exn(ty, layout)
             .map(|r| r.map(|r| r.into_structref_unchecked()))
     }
 
     /// Deallocate an uninitialized struct.
     pub fn dealloc_uninit_struct(&mut self, structref: VMStructRef) -> Result<()> {
-        self.gc_heap.dealloc_uninit_struct_or_exn(structref.into())
+        self.gc_heap
+            .get_mut()
+            .dealloc_uninit_struct_or_exn(structref.into())
     }
 
     /// Get the data for the given object reference.
     ///
     /// Panics when the structref and its size is out of the GC heap bounds.
-    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcObjectData> {
-        self.gc_heap.gc_object_data_mut(gc_ref)
+    pub fn gc_object_data(&self, gc_ref: &VMGcRef) -> Result<&VMGcObjectData> {
+        self.gc_heap.get().gc_object_data(gc_ref)
+    }
+
+    /// Get the data for the given object reference, for mutating it.
+    ///
+    /// Panics when the structref and its size is out of the GC heap bounds.
+    pub fn gc_object_data_mut(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcObjectData> {
+        self.gc_heap.get_mut().gc_object_data_mut(gc_ref)
     }
 
     /// Allocate an uninitialized array with the given type index.
@@ -387,17 +424,17 @@ impl GcStore {
         len: u32,
         layout: &GcArrayLayout,
     ) -> Result<Result<VMArrayRef, u64>> {
-        self.gc_heap.alloc_uninit_array(ty, len, layout)
+        self.gc_heap.get_mut().alloc_uninit_array(ty, len, layout)
     }
 
     /// Deallocate an uninitialized array.
     pub fn dealloc_uninit_array(&mut self, arrayref: VMArrayRef) -> Result<()> {
-        self.gc_heap.dealloc_uninit_array(arrayref)
+        self.gc_heap.get_mut().dealloc_uninit_array(arrayref)
     }
 
     /// Get the length of the given array.
     pub fn array_len(&self, arrayref: &VMArrayRef) -> Result<u32> {
-        self.gc_heap.array_len(arrayref)
+        self.gc_heap.get().array_len(arrayref)
     }
 
     /// Allocate an uninitialized exception object with the given type
@@ -413,13 +450,16 @@ impl GcStore {
         layout: &GcStructLayout,
     ) -> Result<Result<VMExnRef, u64>> {
         self.gc_heap
+            .get_mut()
             .alloc_uninit_struct_or_exn(ty, layout)
             .map(|r| r.map(|r| r.into_exnref_unchecked()))
     }
 
     /// Deallocate an uninitialized exception object.
     pub fn dealloc_uninit_exn(&mut self, exnref: VMExnRef) -> Result<()> {
-        self.gc_heap.dealloc_uninit_struct_or_exn(exnref.into())
+        self.gc_heap
+            .get_mut()
+            .dealloc_uninit_struct_or_exn(exnref.into())
     }
 
     #[cfg(feature = "gc")]

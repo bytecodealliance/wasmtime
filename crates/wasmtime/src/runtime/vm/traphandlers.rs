@@ -151,6 +151,11 @@ where
     // return value is always provided and if unwind information is provided
     // (e.g. `ret` is a "false"-y value) then it's recorded in TLS for the
     // unwind operation that's about to happen from Cranelift-generated code.
+    //
+    // Control is passing from Wasm to the host, so first invalidate unrooted
+    // GC references, as a deferred effect of the Wasm that just ran; see
+    // `StoreOpaque::invalidate_unrooted_gc_refs`.
+    store.store_opaque_mut().invalidate_unrooted_gc_refs();
     let (ret, unwind) = R::maybe_catch_unwind(store, |store| f(store));
     if let Some(mut unwind) = unwind {
         if let UnwindReason::Trap(Ok(trap)) = &mut unwind {
@@ -520,6 +525,12 @@ where
                 ExecutorRef::Native => closure(caller, None),
             }
         });
+
+    // Control is returning from Wasm to the host, however Wasm finished
+    // (returning, trapping, or unwinding a panic, which is resumed below), so
+    // invalidate unrooted GC references, as a deferred effect of the Wasm that
+    // just ran; see `StoreOpaque::invalidate_unrooted_gc_refs`.
+    store.0.invalidate_unrooted_gc_refs();
 
     match result {
         Ok(x) => Ok(x),

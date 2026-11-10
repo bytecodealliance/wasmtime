@@ -7,10 +7,10 @@ use crate::store::StoreId;
 use crate::vm::{Activation, Backtrace};
 use crate::{
     AnyRef, AsContextMut, CodeMemory, ExnRef, Extern, ExternRef, Func, Instance, Module,
-    OwnedRooted, StoreContext, StoreContextMut, Val,
+    OwnedRooted, StoreContext, StoreContextMut, Unrooted, Val,
     code::StoreCodePC,
     module::ModuleRegistry,
-    store::{AutoAssertNoGc, StoreOpaque},
+    store::StoreOpaque,
     vm::{CompiledModuleId, VMContext},
 };
 use crate::{Caller, Result, Store};
@@ -617,6 +617,11 @@ impl FrameHandle {
 
     /// Get the type and value of the given local in this frame.
     ///
+    /// A GC reference is returned as an unrooted reference
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes, for example when execution resumes;
+    /// root it with [`Val::ensure_rooted`] to keep it for longer.
+    ///
     /// # Panics
     ///
     /// Panics if the index is out-of-range (greater than
@@ -640,6 +645,9 @@ impl FrameHandle {
     /// from there are more recently pushed values.  In other words,
     /// index order reads the Wasm virtual machine's abstract stack
     /// state left-to-right.
+    ///
+    /// A GC reference is returned as an unrooted reference, as with
+    /// [`FrameHandle::local`].
     pub fn stack(&self, mut store: impl AsContextMut, index: u32) -> Result<Val> {
         let store = store.as_context_mut();
         let frame_data = self.frame_data(store.0.as_store_opaque())?;
@@ -839,22 +847,16 @@ unsafe fn read_value(
             Val::V128(value.into())
         }
         FrameValType::AnyRef => {
-            let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { (address as *const u32).read_unaligned() };
-            let value = AnyRef::_from_raw(&mut nogc, value);
-            Val::from(value)
+            Val::from(Unrooted::<AnyRef>::from_raw_u32(store, value))
         }
         FrameValType::ExnRef => {
-            let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { (address as *const u32).read_unaligned() };
-            let value = ExnRef::_from_raw(&mut nogc, value);
-            Val::from(value)
+            Val::from(Unrooted::<ExnRef>::from_raw_u32(store, value))
         }
         FrameValType::ExternRef => {
-            let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { (address as *const u32).read_unaligned() };
-            let value = ExternRef::_from_raw(&mut nogc, value);
-            Val::from(value)
+            Val::from(Unrooted::<ExternRef>::from_raw_u32(store, value))
         }
         FrameValType::FuncRef => {
             let value = unsafe { (address as *const *mut c_void).read_unaligned() };

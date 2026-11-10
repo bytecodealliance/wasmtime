@@ -420,8 +420,8 @@ impl ExternRef {
     ) -> Rooted<Self> {
         if !gc_ref.is_i31() {
             assert!(
-                gc_ref.is_extern_ref(&*store.unwrap_gc_store().gc_heap)
-                    || gc_ref.is_any_ref(&*store.unwrap_gc_store().gc_heap),
+                gc_ref.is_extern_ref(&**store.unwrap_gc_store().gc_heap.get())
+                    || gc_ref.is_any_ref(&**store.unwrap_gc_store().gc_heap.get()),
                 "GC reference {gc_ref:#p} should be an externref or anyref"
             );
         }
@@ -470,7 +470,7 @@ impl ExternRef {
             return Ok(None);
         }
         let gc_store = store.require_gc_store()?;
-        if let Some(externref) = gc_ref.as_externref(&*gc_store.gc_heap) {
+        if let Some(externref) = gc_ref.as_externref(&**gc_store.gc_heap.get()) {
             Ok(Some(gc_store.externref_host_data(externref)?))
         } else {
             Ok(None)
@@ -524,7 +524,7 @@ impl ExternRef {
             return Ok(None);
         }
         let gc_store = store.require_gc_store_mut()?;
-        if let Some(externref) = gc_ref.as_externref(&*gc_store.gc_heap) {
+        if let Some(externref) = gc_ref.as_externref(&**gc_store.gc_heap.get()) {
             Ok(Some(gc_store.externref_host_data_mut(externref)?))
         } else {
             Ok(None)
