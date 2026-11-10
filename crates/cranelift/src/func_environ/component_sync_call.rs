@@ -330,8 +330,18 @@ pub fn transfer_borrow_to_owner(
         .wasm_call()
         .relative_to(import_off)
         .load(&mut builder.cursor(), vmctx);
-    let rets =
-        Call::new(builder, env, srcloc).indirect_call_inst(sig_ref, func_addr, real_call_args);
+    // A plain call, not a `try_call`, even inside the adapter's exception
+    // barrier: the host intrinsic never unwinds an exception into us.
+    debug_assert!(
+        env.translation
+            .imported_funcs_never_throw
+            .contains(callee_index)
+    );
+    let rets = Call::new_never_throw(builder, env, srcloc).indirect_call_inst(
+        sig_ref,
+        func_addr,
+        real_call_args,
+    );
     builder.ins().jump(join_block, &[rets[0].into()]);
 
     builder.switch_to_block(join_block);

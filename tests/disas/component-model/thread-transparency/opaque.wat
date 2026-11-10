@@ -129,15 +129,15 @@
 ;;                                     v21 = load.i64 notrap aligned region13 v15+152
 ;;                                     store notrap aligned region14 v21, v14+24
 ;;                                     store notrap aligned region5 v14, v15+136
-;;                                     jump block16
+;;                                     jump block15
 ;;
-;;                                 block16:
+;;                                 block15:
 ;;                                     v22 = load.i64 notrap aligned readonly can_move region2 v3+72
 ;;                                     v24 = load.i64 notrap aligned readonly can_move region0 v22+8
 ;;                                     v25 = load.i32 notrap aligned region9 v24+128
-;;                                     jump block17
+;;                                     jump block16
 ;;
-;;                                 block17:
+;;                                 block16:
 ;;                                     jump block11
 ;;
 ;;                                 block11:
@@ -159,13 +159,13 @@
 ;;                                     jump block3
 ;;
 ;;                                 block3:
-;;                                     jump block18
+;;                                     jump block17
 ;;
-;;                                 block18:
+;;                                 block17:
 ;; @0125                               jump block1
 ;;
 ;;                                 block1:
 ;; @0120                               v2 = iconst.i32 1234
-;;                                     v40 = iadd.i32 v25, v2  ; v2 = 1234
-;; @0125                               return v40
+;;                                     v38 = iadd.i32 v25, v2  ; v2 = 1234
+;; @0125                               return v38
 ;; }
