@@ -829,6 +829,10 @@ macro_rules! isle_lower_prelude_methods {
             self.lower_ctx.value_lowered_used(val)
         }
 
+        fn value_def_foldable(&mut self, val: Value) -> bool {
+            self.lower_ctx.value_def_foldable(val)
+        }
+
         fn block_exn_successor_label(&mut self, block: &Block, exn_succ: u64) -> MachLabel {
             // The first N successors are the exceptional edges, and
             // the normal return is last; so the `exn_succ`'th

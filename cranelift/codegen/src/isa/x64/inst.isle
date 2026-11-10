@@ -1877,13 +1877,17 @@
 ;; simply the ones currently used in Cranelift's lowerings.
 
 ;; Some operations produce flags.
-(type ProduceFlagsOp (enum (Add) (Sub)))
+(type ProduceFlagsOp (enum (Add) (Sub) (Or) (Xor)))
 
 (decl x64_produce_flags (ProduceFlagsOp Type Gpr GprMemImm) ProducesFlags)
 (rule (x64_produce_flags (ProduceFlagsOp.Add) ty src1 src2)
       (x64_add_with_flags_paired ty src1 src2))
 (rule (x64_produce_flags (ProduceFlagsOp.Sub) ty src1 src2)
       (x64_sub_with_flags_paired ty src1 src2))
+(rule (x64_produce_flags (ProduceFlagsOp.Or) ty src1 src2)
+      (x64_or_with_flags_paired ty src1 src2))
+(rule (x64_produce_flags (ProduceFlagsOp.Xor) ty src1 src2)
+      (x64_xor_with_flags_paired ty src1 src2))
 
 ;; This should only be use for instructions that _do_ produce flags that can be
 ;; consumed later. It is semantically "unsafe" and must be used correctly.
@@ -2214,29 +2218,50 @@
 (rule (x64_or_with_flags_paired_side_effect ty src1 src2)
       (asm_produce_flags_side_effect (x64_or_raw ty src1 src2)))
 
-;; Helper for emitting `xor` instructions.
-(decl x64_xor (Type Gpr GprMemImm) Gpr)
+;; When using `or` for its flags (SF, ZF, PF) and its result, we track that
+;; the flags are changed. As with `add`, this uses the exact operand width
+;; rather than the "dependency-breaking" rules, so that the flags reflect only
+;; the low `ty` bits.
+(decl x64_or_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_or_with_flags_paired ty src1 src2)
+      (asm_produce_flags (x64_or_raw ty src1 src2)))
+
+;; Helper for emitting raw `xor` instructions.
+(decl x64_xor_raw (Type Gpr GprMemImm) AssemblerOutputs)
 
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
-(rule 3 (x64_xor $I32 src1 (is_simm8 src2))   (x64_xorl_mi_sxb src1 src2))
-(rule 3 (x64_xor $I64 src1 (is_simm8 src2))   (x64_xorq_mi_sxb src1 src2))
+(rule 2 (x64_xor_raw $I32 src1 (is_simm8 src2))   (x64_xorl_mi_sxb_raw src1 src2))
+(rule 2 (x64_xor_raw $I64 src1 (is_simm8 src2))   (x64_xorq_mi_sxb_raw src1 src2))
 
 ;; Match the remaining immediates.
-(rule 2 (x64_xor $I8  src1 (is_imm8 src2))    (x64_xorb_mi src1 src2))
-(rule 2 (x64_xor $I16 src1 (is_imm16 src2))   (x64_xorw_mi src1 src2))
-(rule 2 (x64_xor $I32 src1 (is_imm32 src2))   (x64_xorl_mi src1 src2))
-(rule 2 (x64_xor $I64 src1 (is_simm32 src2))  (x64_xorq_mi_sxl src1 src2))
-
-;; Use wider instructions than necessary for 8/16-bit register-to-register
-;; operations to avoid CPU false dependencies.
-(rule 1 (x64_xor $I8  src1 (is_gpr src2))     (x64_xorl_rm src1 src2))
-(rule 1 (x64_xor $I16 src1 (is_gpr src2))     (x64_xorl_rm src1 src2))
+(rule 1 (x64_xor_raw $I8  src1 (is_imm8 src2))    (x64_xorb_mi_raw src1 src2))
+(rule 1 (x64_xor_raw $I16 src1 (is_imm16 src2))   (x64_xorw_mi_raw src1 src2))
+(rule 1 (x64_xor_raw $I32 src1 (is_imm32 src2))   (x64_xorl_mi_raw src1 src2))
+(rule 1 (x64_xor_raw $I64 src1 (is_simm32 src2))  (x64_xorq_mi_sxl_raw src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_xor ty @ $I8  src1 (is_gpr_mem src2)) (x64_xorb_rm src1 (gpr_mem_8_for_ty  ty src2)))
-(rule 0 (x64_xor ty @ $I16 src1 (is_gpr_mem src2)) (x64_xorw_rm src1 (gpr_mem_16_for_ty ty src2)))
-(rule 0 (x64_xor ty @ $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm src1 (gpr_mem_32_for_ty ty src2)))
-(rule 0 (x64_xor ty @ $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm src1 (gpr_mem_64_for_ty ty src2)))
+(rule 0 (x64_xor_raw ty @ $I8  src1 (is_gpr_mem src2)) (x64_xorb_rm_raw src1 (gpr_mem_8_for_ty  ty src2)))
+(rule 0 (x64_xor_raw ty @ $I16 src1 (is_gpr_mem src2)) (x64_xorw_rm_raw src1 (gpr_mem_16_for_ty ty src2)))
+(rule 0 (x64_xor_raw ty @ $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm_raw src1 (gpr_mem_32_for_ty ty src2)))
+(rule 0 (x64_xor_raw ty @ $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm_raw src1 (gpr_mem_64_for_ty ty src2)))
+
+;; When flags are not considered, we can use wider instructions than necessary
+;; for 8/16-bit register-to-register operations to avoid CPU false dependencies.
+(decl x64_xor_break_deps (Type Gpr GprMemImm) AssemblerOutputs)
+(rule 1 (x64_xor_break_deps $I8  src1 (is_gpr src2)) (x64_xorl_rm_raw src1 src2))
+(rule 1 (x64_xor_break_deps $I16 src1 (is_gpr src2)) (x64_xorl_rm_raw src1 src2))
+(rule 0 (x64_xor_break_deps ty   src1 src2)          (x64_xor_raw ty src1 src2))
+
+;; Normal use of `xor` returns a `Gpr` register.
+(decl x64_xor (Type Gpr GprMemImm) Gpr)
+(rule (x64_xor ty src1 src2)
+      (emit_ret_gpr (x64_xor_break_deps ty src1 src2)))
+
+;; When using `xor` for its flags (SF, ZF, PF) and its result, we track that
+;; the flags are changed. This uses the exact operand width, as for `or`.
+(decl x64_xor_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_xor_with_flags_paired ty src1 src2)
+      (asm_produce_flags (x64_xor_raw ty src1 src2)))
 
 ;; Helper for `andn` instructions
 ;;
@@ -3891,6 +3916,57 @@
 (rule 2 (is_nonzero (uextend _ (vany_true _ vec))) (is_vany_true vec))
 (rule 2 (is_nonzero (band _ a @ (value_type (ty_int (fits_in_64 ty))) b))
       (is_nonzero_band ty a b))
+
+;; `add`, `sub`, `or` and `xor` set ZF according to their result, so testing
+;; the result of an `iadd`, `isub`, `bor` or `bxor` for nonzero can use the
+;; flags of the operation itself instead of a separate `test`. The operation's
+;; result is given as an opportunistic def, so that when the value also has
+;; uses that have already been lowered (e.g., after a branch), the operation
+;; need not be emitted a second time for them. We only do this when the
+;; definition is not expected to be lowered on its own as well (see
+;; `value_def_foldable`): otherwise the operation would be emitted twice,
+;; which is no better than the `test` it saves.
+;;
+;; Note that these use the exact operand width (not the wider
+;; "dependency-breaking" forms used for 8- and 16-bit values elsewhere) so
+;; that ZF only reflects the low `ty` bits. Only the zero/nonzero conditions
+;; are produced here: OF and CF after an `add` or `sub` differ from those of a
+;; `test` of the result, so e.g. signed comparisons against zero cannot use
+;; these flags.
+(rule 2 (is_nonzero val @ (iadd (ty_int (fits_in_64 ty)) x y))
+      (if-let true (value_def_foldable val))
+      (is_nonzero_alu val (ProduceFlagsOp.Add) ty x y))
+(rule 2 (is_nonzero val @ (isub (ty_int (fits_in_64 ty)) x y))
+      (if-let true (value_def_foldable val))
+      (is_nonzero_alu val (ProduceFlagsOp.Sub) ty x y))
+(rule 2 (is_nonzero val @ (bor (ty_int (fits_in_64 ty)) x y))
+      (if-let true (value_def_foldable val))
+      (is_nonzero_alu val (ProduceFlagsOp.Or) ty x y))
+(rule 2 (is_nonzero val @ (bxor (ty_int (fits_in_64 ty)) x y))
+      (if-let true (value_def_foldable val))
+      (is_nonzero_alu val (ProduceFlagsOp.Xor) ty x y))
+
+;; Helper for the above: `val` is the result of `op` applied to `x` and `y`.
+(decl is_nonzero_alu (Value ProduceFlagsOp Type Value Value) CondResult)
+(rule 0 (is_nonzero_alu val op ty x y)
+      (CondResult.CC
+        (produces_flags_opportunistic_def (x64_produce_flags op ty x y) val)
+        (CC.NZ)))
+
+;; `add`, `or` and `xor` are commutative, so a load on the left-hand side can
+;; be sunk too.
+(rule 1 (is_nonzero_alu val op @ (ProduceFlagsOp.Add) ty (sinkable_load x) y)
+      (CondResult.CC
+        (produces_flags_opportunistic_def (x64_produce_flags op ty y x) val)
+        (CC.NZ)))
+(rule 1 (is_nonzero_alu val op @ (ProduceFlagsOp.Or) ty (sinkable_load x) y)
+      (CondResult.CC
+        (produces_flags_opportunistic_def (x64_produce_flags op ty y x) val)
+        (CC.NZ)))
+(rule 1 (is_nonzero_alu val op @ (ProduceFlagsOp.Xor) ty (sinkable_load x) y)
+      (CondResult.CC
+        (produces_flags_opportunistic_def (x64_produce_flags op ty y x) val)
+        (CC.NZ)))
 
 ;; Using the flags output of `uadd_overflow`, `usub_overflow`, `sadd_overflow`
 ;; or `ssub_overflow` can produce a `CC` and give an opportunistic def of the

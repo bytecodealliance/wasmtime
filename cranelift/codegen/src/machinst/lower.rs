@@ -201,6 +201,10 @@ pub struct Lower<'func, I: VCodeInst> {
     /// See doc comment on `ValueUseState` for more details.
     value_ir_uses: SecondaryMap<Value, ValueUseState>,
 
+    /// Exact number of direct uses of each SSA value in the input IR (as
+    /// instruction operands, including block-call arguments).
+    value_ir_use_counts: SecondaryMap<Value, u32>,
+
     /// Actual uses of each SSA value so far, incremented while lowering.
     value_lowered_uses: SecondaryMap<Value, u32>,
 
@@ -494,7 +498,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             block_end_colors[bb] = InstColor::new(cur_color);
         }
 
-        let value_ir_uses = compute_use_states(f, sret_param);
+        let (value_ir_uses, value_ir_use_counts) = compute_use_states(f, sret_param);
 
         Ok(Lower {
             f,
@@ -505,6 +509,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             block_end_colors,
             side_effect_inst_entry_colors,
             value_ir_uses,
+            value_ir_use_counts,
             value_lowered_uses: SecondaryMap::default(),
             opportunistic_defs: FxHashMap::default(),
             inst_sunk: FxHashSet::default(),
@@ -1376,6 +1381,30 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.value_lowered_uses[val] > 0
     }
 
+    /// Can the instruction defining `val` be folded into the lowering of the
+    /// current instruction, which then computes `val` itself and gives it as
+    /// an opportunistic def (see `opportunistic_def`), without the
+    /// definition also being lowered on its own?
+    ///
+    /// We expect this when `val` is defined in the current block and all of
+    /// its uses, other than the one being folded, have already been lowered
+    /// (because they come later in this block or are in other blocks): then
+    /// the opportunistic def will be taken when the scan reaches the
+    /// definition. This is a heuristic, as it compares IR uses with lowered
+    /// uses, which need not correspond exactly. Folding is correct either
+    /// way; this only avoids computing the value twice in the common case.
+    pub(crate) fn value_def_foldable(&self, val: Value) -> bool {
+        let ValueDef::Result(def_inst, _) = self.f.dfg.value_def(val) else {
+            return false;
+        };
+        let cur_block = self
+            .cur_inst
+            .and_then(|inst| self.f.layout.inst_block(inst));
+        cur_block.is_some()
+            && self.f.layout.inst_block(def_inst) == cur_block
+            && self.value_ir_use_counts[val] <= self.value_lowered_uses[val] + 1
+    }
+
     pub fn block_successor_label(&self, block: Block, succ: usize) -> MachLabel {
         trace!("block_successor_label: block {block} succ {succ}");
         let lowered = self
@@ -1404,11 +1433,12 @@ fn map_to_first_result(f: &Function, val: Value) -> Value {
 
 /// Pre-analysis: compute `value_ir_uses`. See comment on
 /// `ValueUseState` for a description of what this analysis
-/// computes.
+/// computes. Also returns the exact number of direct uses of each
+/// value.
 fn compute_use_states(
     f: &Function,
     sret_param: Option<Value>,
-) -> SecondaryMap<Value, ValueUseState> {
+) -> (SecondaryMap<Value, ValueUseState>, SecondaryMap<Value, u32>) {
     // We perform the analysis without recursion, so we don't
     // overflow the stack on long chains of ops in the input.
     //
@@ -1427,6 +1457,7 @@ fn compute_use_states(
     // efficient than a full indirect-use-counting pass.
 
     let mut value_ir_uses = SecondaryMap::with_default(ValueUseState::Unused);
+    let mut value_ir_use_counts = SecondaryMap::with_default(0u32);
 
     // Step 1: call `mark_use` on every use. When a value is used
     // multiple times, it is pushed into `multiple_stack`, which we
@@ -1470,6 +1501,7 @@ fn compute_use_states(
         // additional use on each operand.
         for arg in f.dfg.inst_values(inst) {
             debug_assert!(f.dfg.value_is_real(arg));
+            value_ir_use_counts[arg] += 1;
             mark_use(arg, &mut multiple_stack);
         }
     }
@@ -1485,7 +1517,7 @@ fn compute_use_states(
         }
     }
 
-    value_ir_uses
+    (value_ir_uses, value_ir_use_counts)
 }
 
 /// Function-level queries.
@@ -1826,7 +1858,7 @@ mod tests {
         pos.ins().return_(&[v4, v5]);
         let func = pos.func;
 
-        let uses = super::compute_use_states(&func, None);
+        let (uses, _) = super::compute_use_states(&func, None);
         assert_eq!(uses[v1], ValueUseState::Multiple);
         assert_eq!(uses[v2], ValueUseState::Multiple);
         assert_eq!(uses[v3], ValueUseState::Multiple);
@@ -1848,7 +1880,7 @@ mod tests {
         pos.ins().return_(&[v6]);
         let func = pos.func;
 
-        let uses = super::compute_use_states(&func, None);
+        let (uses, _) = super::compute_use_states(&func, None);
         assert_eq!(uses[v1], ValueUseState::Multiple);
         assert_eq!(uses[v2], ValueUseState::Once);
         assert_eq!(uses[v3], ValueUseState::Once);
