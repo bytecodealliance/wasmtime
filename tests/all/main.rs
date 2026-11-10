@@ -41,6 +41,7 @@ mod limits;
 mod linker;
 mod memory;
 mod memory_creator;
+mod metering_preserve;
 mod missing_async;
 mod mmu_interruption;
 mod module;
