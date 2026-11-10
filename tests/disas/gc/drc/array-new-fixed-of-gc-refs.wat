@@ -76,10 +76,10 @@
 ;; @0025                               jump block3
 ;;
 ;;                                 block3:
-;; @0025                               v46 = uextend.i64 v45
-;; @0025                               v49 = iadd.i64 v20, v46
+;; @0025                               v48 = uextend.i64 v45
+;; @0025                               v51 = iadd.i64 v20, v48
 ;;                                     v206 = iconst.i64 12
-;; @0025                               v52 = isub v49, v206  ; v206 = 12
+;; @0025                               v52 = isub v51, v206  ; v206 = 12
 ;; @0025                               store.i32 user2 little region7 v201, v52
 ;;                                     v191 = load.i32 notrap aligned region10 v203
 ;;                                     v307 = iconst.i32 1
@@ -103,7 +103,7 @@
 ;;
 ;;                                 block5:
 ;;                                     v313 = iconst.i64 8
-;; @0025                               v101 = isub.i64 v49, v313  ; v313 = 8
+;; @0025                               v101 = isub.i64 v51, v313  ; v313 = 8
 ;; @0025                               store.i32 user2 little region7 v191, v101
 ;;                                     v181 = load.i32 notrap aligned region9 v204
 ;;                                     v314 = iconst.i32 1
@@ -126,7 +126,7 @@
 ;;
 ;;                                 block7:
 ;; @0025                               v8 = iconst.i64 4
-;; @0025                               v150 = isub.i64 v49, v8  ; v8 = 4
+;; @0025                               v150 = isub.i64 v51, v8  ; v8 = 4
 ;; @0025                               store.i32 user2 little region7 v181, v150
 ;; @0029                               jump block1
 ;;

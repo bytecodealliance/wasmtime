@@ -87,7 +87,7 @@ pub fn bounds_check_and_compute_addr(
         BoundsCheck::StaticOffset {
             offset,
             access_size,
-        } => bounds_check_field_access(builder, env, heap, index, offset, access_size, trap),
+        } => bounds_check_field_access(builder, env, heap, index, offset, None, access_size, trap),
 
         BoundsCheck::StaticObjectField {
             offset,
@@ -108,6 +108,7 @@ pub fn bounds_check_and_compute_addr(
                     heap,
                     index,
                     0,
+                    None,
                     object_size,
                     trap,
                 ) {
@@ -120,7 +121,7 @@ pub fn bounds_check_and_compute_addr(
             }
 
             // Otherwise, bounds check just this one field's access.
-            bounds_check_field_access(builder, env, heap, index, offset, access_size, trap)
+            bounds_check_field_access(builder, env, heap, index, offset, None, access_size, trap)
         }
 
         // Compute the index of the end of the object, bounds check that and get
@@ -136,19 +137,6 @@ pub fn bounds_check_and_compute_addr(
             assert_eq!(builder.func.dfg.value_type(object_size), ir::types::I32);
 
             let index_and_object_size = builder.ins().uadd_overflow_trap(index, object_size, trap);
-            let ptr_just_after_obj = match bounds_check_field_access(
-                builder,
-                env,
-                heap,
-                index_and_object_size,
-                0,
-                0,
-                trap,
-            ) {
-                Reachable(v) => v,
-                u @ Unreachable => return u,
-            };
-
             let backwards_offset = builder.ins().isub(object_size, offset);
             let backwards_offset = cast_index_to_pointer_ty(
                 backwards_offset,
@@ -158,8 +146,16 @@ pub fn bounds_check_and_compute_addr(
                 trap,
             );
 
-            let field_ptr = builder.ins().isub(ptr_just_after_obj, backwards_offset);
-            Reachable(field_ptr)
+            bounds_check_field_access(
+                builder,
+                env,
+                heap,
+                index_and_object_size,
+                0,
+                Some(backwards_offset),
+                0,
+                trap,
+            )
         }
     }
 }
@@ -170,6 +166,7 @@ fn bounds_check_field_access(
     heap: &HeapData,
     index: ir::Value,
     offset: u32,
+    backwards_offset: Option<ir::Value>,
     access_size: u8,
     trap: ir::TrapCode,
 ) -> Reachability<ir::Value> {
@@ -310,6 +307,7 @@ fn bounds_check_field_access(
             env.pointer_type(),
             index,
             offset,
+            backwards_offset,
         ));
     }
 
@@ -322,6 +320,7 @@ fn bounds_check_field_access(
             env.pointer_type(),
             index,
             offset,
+            backwards_offset,
         ));
     }
 
@@ -372,6 +371,7 @@ fn bounds_check_field_access(
             heap,
             index,
             offset,
+            backwards_offset,
             oob_behavior,
             oob,
             trap,
@@ -397,6 +397,7 @@ fn bounds_check_field_access(
             heap,
             index,
             offset,
+            backwards_offset,
             oob_behavior,
             oob,
             trap,
@@ -437,6 +438,7 @@ fn bounds_check_field_access(
             heap,
             index,
             offset,
+            backwards_offset,
             oob_behavior,
             oob,
             trap,
@@ -462,6 +464,7 @@ fn bounds_check_field_access(
             heap,
             index,
             offset,
+            backwards_offset,
             oob_behavior,
             oob,
             trap,
@@ -487,6 +490,7 @@ fn bounds_check_field_access(
         heap,
         index,
         offset,
+        backwards_offset,
         oob_behavior,
         oob,
         trap,
@@ -590,6 +594,7 @@ fn explicit_check_oob_condition_and_compute_addr(
     heap: &HeapData,
     index: ir::Value,
     offset: u32,
+    backwards_offset: Option<ir::Value>,
     oob_behavior: OobBehavior,
     // The `i8` boolean value that is non-zero when the heap access is out of
     // bounds (and therefore we should trap) and is zero when the heap access is
@@ -602,7 +607,14 @@ fn explicit_check_oob_condition_and_compute_addr(
     }
     let addr_ty = env.pointer_type();
 
-    let mut addr = compute_addr(&mut builder.cursor(), heap, addr_ty, index, offset);
+    let mut addr = compute_addr(
+        &mut builder.cursor(),
+        heap,
+        addr_ty,
+        index,
+        offset,
+        backwards_offset,
+    );
 
     if let OobBehavior::ConditionallyLoadFromZero {
         select_spectre_guard,
@@ -639,18 +651,28 @@ fn explicit_check_oob_condition_and_compute_addr(
 /// * `addr_ty` - the host's pointer type
 /// * `index` - the raw wasm index, of type `addr_ty`
 /// * `offset` - a static offset to add to `index`
+/// * `backwards_offset` - an optional dynamic offset, of type `addr_ty`, to
+///   subtract from the address
 pub fn compute_addr(
     pos: &mut FuncCursor,
     heap: &HeapData,
     addr_ty: ir::Type,
     index: ir::Value,
     offset: u32,
+    backwards_offset: Option<ir::Value>,
 ) -> ir::Value {
     debug_assert_eq!(pos.func.dfg.value_type(index), addr_ty);
 
     let vmctx = vmctx(pos);
     let heap_base = heap.base.emit(pos, vmctx);
-    let base_and_index = pos.ins().iadd(heap_base, index);
+    let mut base_and_index = pos.ins().iadd(heap_base, index);
+
+    // NB: Like the static offset below, this subtraction must happen *before*
+    // the `select_spectre_guard`, if any, so that an out-of-bounds access
+    // faults on NULL.
+    if let Some(backwards_offset) = backwards_offset {
+        base_and_index = pos.ins().isub(base_and_index, backwards_offset);
+    }
 
     if offset == 0 {
         base_and_index
