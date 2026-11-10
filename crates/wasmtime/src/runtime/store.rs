@@ -107,6 +107,7 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 #[cfg(any(feature = "async", feature = "gc"))]
 use core::task::Poll;
+use wasmtime_core::undo::Undo;
 use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
 
 mod context;
@@ -1449,14 +1450,16 @@ impl<T> StoreInner<T> {
         }
 
         // Temporarily take the configured behavior to avoid mutably borrowing
-        // multiple times.
-        if let Some(mut call_hook) = self.call_hook.take() {
-            let result = self.invoke_call_hook(&mut call_hook, s);
-            self.call_hook = Some(call_hook);
-            return result;
+        // multiple times, and put it back when done, even if the hook panics.
+        let call_hook = self.call_hook.take();
+        let mut undo = Undo::new((self, call_hook), |(store, call_hook)| {
+            store.call_hook = call_hook;
+        });
+        let (store, call_hook) = &mut *undo;
+        match call_hook {
+            Some(call_hook) => store.invoke_call_hook(call_hook, s),
+            None => Ok(()),
         }
-
-        Ok(())
     }
 
     fn invoke_call_hook(&mut self, call_hook: &mut CallHookInner<T>, s: CallHook) -> Result<()> {
@@ -2445,15 +2448,15 @@ unsafe impl<T> VMStore for StoreInner<T> {
     fn new_epoch_updated_deadline(&mut self) -> Result<UpdateDeadline> {
         // Temporarily take the configured behavior to avoid mutably borrowing
         // multiple times.
-        let mut behavior = self.epoch_deadline_behavior.take();
-        let update = match &mut behavior {
-            Some(callback) => callback(StoreHookState::new((&mut *self).as_context_mut())),
+        let behavior = self.epoch_deadline_behavior.take();
+        let mut undo = Undo::new((self, behavior), |(store, behavior)| {
+            store.epoch_deadline_behavior = behavior;
+        });
+        let (store, behavior) = &mut *undo;
+        match behavior {
+            Some(callback) => callback(StoreHookState::new((&mut **store).as_context_mut())),
             None => Ok(UpdateDeadline::Interrupt),
-        };
-
-        // Put back the original behavior which was replaced by `take`.
-        self.epoch_deadline_behavior = behavior;
-        update
+        }
     }
 
     #[cfg(feature = "debug")]
