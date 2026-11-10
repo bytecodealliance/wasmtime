@@ -2220,42 +2220,45 @@
 (rule (x64_or_with_flags_paired ty src1 src2)
       (asm_produce_flags (x64_or_raw ty src1 src2)))
 
-;; Helper for emitting raw `xor` instructions.
-(decl x64_xor_raw (Type Gpr GprMemImm) AssemblerOutputs)
+;; Helper for emitting `xor` instructions.
+(decl x64_xor (Type Gpr GprMemImm) Gpr)
 
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
-(rule 2 (x64_xor_raw $I32 src1 (is_simm8 src2))   (x64_xorl_mi_sxb_raw src1 src2))
-(rule 2 (x64_xor_raw $I64 src1 (is_simm8 src2))   (x64_xorq_mi_sxb_raw src1 src2))
+(rule 3 (x64_xor $I32 src1 (is_simm8 src2))   (x64_xorl_mi_sxb src1 src2))
+(rule 3 (x64_xor $I64 src1 (is_simm8 src2))   (x64_xorq_mi_sxb src1 src2))
 
 ;; Match the remaining immediates.
-(rule 1 (x64_xor_raw $I8  src1 (is_imm8 src2))    (x64_xorb_mi_raw src1 src2))
-(rule 1 (x64_xor_raw $I16 src1 (is_imm16 src2))   (x64_xorw_mi_raw src1 src2))
-(rule 1 (x64_xor_raw $I32 src1 (is_imm32 src2))   (x64_xorl_mi_raw src1 src2))
-(rule 1 (x64_xor_raw $I64 src1 (is_simm32 src2))  (x64_xorq_mi_sxl_raw src1 src2))
+(rule 2 (x64_xor $I8  src1 (is_imm8 src2))    (x64_xorb_mi src1 src2))
+(rule 2 (x64_xor $I16 src1 (is_imm16 src2))   (x64_xorw_mi src1 src2))
+(rule 2 (x64_xor $I32 src1 (is_imm32 src2))   (x64_xorl_mi src1 src2))
+(rule 2 (x64_xor $I64 src1 (is_simm32 src2))  (x64_xorq_mi_sxl src1 src2))
+
+;; Use wider instructions than necessary for 8/16-bit register-to-register
+;; operations to avoid CPU false dependencies.
+(rule 1 (x64_xor $I8  src1 (is_gpr src2))     (x64_xorl_rm src1 src2))
+(rule 1 (x64_xor $I16 src1 (is_gpr src2))     (x64_xorl_rm src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_xor_raw ty @ $I8  src1 (is_gpr_mem src2)) (x64_xorb_rm_raw src1 (gpr_mem_8_for_ty  ty src2)))
-(rule 0 (x64_xor_raw ty @ $I16 src1 (is_gpr_mem src2)) (x64_xorw_rm_raw src1 (gpr_mem_16_for_ty ty src2)))
-(rule 0 (x64_xor_raw ty @ $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm_raw src1 (gpr_mem_32_for_ty ty src2)))
-(rule 0 (x64_xor_raw ty @ $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm_raw src1 (gpr_mem_64_for_ty ty src2)))
+(rule 0 (x64_xor ty @ $I8  src1 (is_gpr_mem src2)) (x64_xorb_rm src1 (gpr_mem_8_for_ty  ty src2)))
+(rule 0 (x64_xor ty @ $I16 src1 (is_gpr_mem src2)) (x64_xorw_rm src1 (gpr_mem_16_for_ty ty src2)))
+(rule 0 (x64_xor ty @ $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm src1 (gpr_mem_32_for_ty ty src2)))
+(rule 0 (x64_xor ty @ $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm src1 (gpr_mem_64_for_ty ty src2)))
 
-;; When flags are not considered, we can use wider instructions than necessary
-;; for 8/16-bit register-to-register operations to avoid CPU false dependencies.
-(decl x64_xor_break_deps (Type Gpr GprMemImm) AssemblerOutputs)
-(rule 1 (x64_xor_break_deps $I8  src1 (is_gpr src2)) (x64_xorl_rm_raw src1 src2))
-(rule 1 (x64_xor_break_deps $I16 src1 (is_gpr src2)) (x64_xorl_rm_raw src1 src2))
-(rule 0 (x64_xor_break_deps ty   src1 src2)          (x64_xor_raw ty src1 src2))
-
-;; Normal use of `xor` returns a `Gpr` register.
-(decl x64_xor (Type Gpr GprMemImm) Gpr)
-(rule (x64_xor ty src1 src2)
-      (emit_ret_gpr (x64_xor_break_deps ty src1 src2)))
-
-;; When using `xor` for its flags (SF, ZF, PF) and its result, we track that
-;; the flags are changed.
+;; When using a 32- or 64-bit `xor` for its flags (SF, ZF, PF) and its result,
+;; we track that the flags are changed. The encodings match those of `x64_xor`.
 (decl x64_xor_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
-(rule (x64_xor_with_flags_paired ty src1 src2)
-      (asm_produce_flags (x64_xor_raw ty src1 src2)))
+(rule 2 (x64_xor_with_flags_paired $I32 src1 (is_simm8 src2))
+      (asm_produce_flags (x64_xorl_mi_sxb_raw src1 src2)))
+(rule 2 (x64_xor_with_flags_paired $I64 src1 (is_simm8 src2))
+      (asm_produce_flags (x64_xorq_mi_sxb_raw src1 src2)))
+(rule 1 (x64_xor_with_flags_paired $I32 src1 (is_imm32 src2))
+      (asm_produce_flags (x64_xorl_mi_raw src1 src2)))
+(rule 1 (x64_xor_with_flags_paired $I64 src1 (is_simm32 src2))
+      (asm_produce_flags (x64_xorq_mi_sxl_raw src1 src2)))
+(rule 0 (x64_xor_with_flags_paired ty @ $I32 src1 (is_gpr_mem src2))
+      (asm_produce_flags (x64_xorl_rm_raw src1 (gpr_mem_32_for_ty ty src2))))
+(rule 0 (x64_xor_with_flags_paired ty @ $I64 src1 (is_gpr_mem src2))
+      (asm_produce_flags (x64_xorq_rm_raw src1 (gpr_mem_64_for_ty ty src2))))
 
 ;; Helper for `andn` instructions
 ;;
