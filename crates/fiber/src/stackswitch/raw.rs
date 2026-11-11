@@ -2,30 +2,16 @@
 //! suspended context on the fiber's stack in the reserved-slot layout
 //! documented in `unix.rs`.
 
-use super::RawFiberEntry;
-use crate::stackswitch::{
-    RAW_FIBERS, wasmtime_fiber_init, wasmtime_fiber_switch, wasmtime_fiber_switch_,
-};
+use super::{RAW_FIBERS, wasmtime_fiber_init, wasmtime_fiber_switch};
+use crate::RawFiberEntry;
 use wasmtime_environ::error::{Result, format_err};
+
+pub(crate) use super::SUSPENDED_FRAME;
+pub(crate) use super::wasmtime_fiber_switch_ as switch_routine;
 
 pub fn supported() -> bool {
     RAW_FIBERS
 }
-
-pub fn switch_routine() -> unsafe extern "C" fn(*mut u8) {
-    wasmtime_fiber_switch_
-}
-
-// Indices, in words from the saved stack pointer, of the frame
-// pointer and return address that the switch routine spills. Keep
-// in sync with `wasmtime_fiber_switch_` in `stackswitch/*.rs`.
-pub const SUSPENDED_FRAME: Option<(usize, usize)> = if cfg!(target_arch = "x86_64") {
-    Some((5, 6))
-} else if cfg!(target_arch = "aarch64") {
-    Some((18, 19))
-} else {
-    None
-};
 
 pub struct Fiber;
 

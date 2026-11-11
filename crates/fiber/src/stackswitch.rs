@@ -4,6 +4,9 @@
 // included modules below; their symbols are visible in the binary and
 // accessed via the `extern "C"` declarations below that.
 
+/// Raw fibers on top of the routines here.
+pub(crate) mod raw;
+
 cfg_select! {
     // Miri uses another fiber implementation, but raw fibers still refer to
     // the routines here.
@@ -88,6 +91,7 @@ mod supported {
 mod unsupported {
     pub const SUPPORTED_ARCH: bool = false;
     pub const RAW_FIBERS: bool = false;
+    pub const SUSPENDED_FRAME: Option<(usize, usize)> = None;
 
     pub(crate) unsafe fn wasmtime_fiber_init(
         _top_of_stack: *mut u8,

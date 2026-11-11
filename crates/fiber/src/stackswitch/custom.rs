@@ -26,6 +26,7 @@ pub(crate) const SUPPORTED_ARCH: bool = true;
 // The embedder's routines need not use the stack layout that raw fiber
 // snapshots depend on.
 pub(crate) const RAW_FIBERS: bool = false;
+pub(crate) const SUSPENDED_FRAME: Option<(usize, usize)> = None;
 
 pub(crate) unsafe extern "C" fn wasmtime_fiber_switch_(_top_of_stack: *mut u8) {
     unreachable!()
