@@ -34,13 +34,16 @@ pub extern "C" fn wasm_valtype_kind(vt: &wasm_valtype_t) -> wasm_valkind_t {
         ValType::I64 => WASM_I64,
         ValType::F32 => WASM_F32,
         ValType::F64 => WASM_F64,
-        // TODO
-        ValType::V128 => crate::abort("support for v128 "),
+        ValType::V128 => crate::abort_unsupported(
+            "`wasm_valtype_kind` cannot represent `v128`, use `wasmtime_valtype_new` instead",
+        ),
         ValType::Ref(r) => match (r.is_nullable(), r.heap_type()) {
             (true, HeapType::Extern) => WASM_EXTERNREF,
             (true, HeapType::Func) => WASM_FUNCREF,
-            // TODO
-            _ => crate::abort("support for non-externref and non-funcref references"),
+            _ => crate::abort_unsupported(
+                "`wasm_valtype_kind` cannot represent reference types other than \
+                 `externref` and `funcref`, use `wasmtime_valtype_new` instead",
+            ),
         },
     }
 }
