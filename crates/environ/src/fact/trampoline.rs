@@ -4006,7 +4006,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
     /// function is wrapped in a `try_table` whose `catch_all` clause
     /// traps. This catches exceptions thrown not only by the callee
     /// itself but also by any other guest functions the adapter
-    /// invokes (e.g. `realloc`).
+    /// invokes (e.g. `realloc`). Calls to host intrinsics inside the
+    /// barrier are compiled as plain calls, since the host turns any
+    /// exception into a trap rather than unwinding it into the adapter.
     ///
     /// The generated structure, completed by `exit_exception_barrier`,
     /// is:

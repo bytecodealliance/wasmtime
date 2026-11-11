@@ -2118,6 +2118,9 @@ struct Call<'a, 'func, 'module_env> {
     env: &'a mut FuncEnvironment<'module_env>,
     srcloc: ir::SourceLoc,
     tail: bool,
+    /// Whether the callee may unwind a Wasm exception into this call, and so
+    /// needs the enclosing `try_table`'s handlers.
+    may_throw: bool,
 }
 
 enum CheckIndirectCallTypeSignature {
@@ -2144,6 +2147,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             env,
             srcloc,
             tail: false,
+            may_throw: true,
         }
     }
 
@@ -2158,46 +2162,97 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             env,
             srcloc,
             tail: true,
+            may_throw: true,
         }
+    }
+
+    /// Configure whether this call may ever throw a Wasm exception or not.
+    ///
+    /// By default, it is conservatively assumed that calls may throw.
+    pub fn may_throw(mut self, may_throw: bool) -> Self {
+        self.may_throw = may_throw;
+        self
     }
 
     /// Do a Wasm-level direct call to the given callee function.
     pub fn direct_call(
-        mut self,
+        self,
         callee_index: FuncIndex,
         sig_ref: ir::SigRef,
         wasm_call_args: &[ir::Value],
     ) -> WasmResult<Reachability<CallRets>> {
-        let mut real_call_args = Vec::with_capacity(wasm_call_args.len() + 2);
+        let real_call_args = Vec::with_capacity(wasm_call_args.len() + 2);
         let caller_vmctx = self
             .builder
             .func
             .special_param(ArgumentPurpose::VMContext)
             .unwrap();
 
-        // Handle direct calls to locally-defined functions.
         if let Some(def_func_index) = self.env.module.defined_func_index(callee_index) {
-            // First append the callee vmctx address, which is the same as the caller vmctx in
-            // this case.
-            real_call_args.push(caller_vmctx);
-
-            // Then append the caller vmctx address.
-            real_call_args.push(caller_vmctx);
-
-            // Then append the regular call arguments.
-            real_call_args.extend_from_slice(wasm_call_args);
-
-            // Finally, make the direct call!
-            let callee = self
-                .env
-                .get_or_create_defined_func_ref(self.builder.func, def_func_index);
-            return Ok(Reachability::Reachable(
-                self.direct_call_inst(callee, &real_call_args),
-            ));
+            self.direct_call_defined_function(
+                wasm_call_args,
+                real_call_args,
+                caller_vmctx,
+                def_func_index,
+            )
+        } else {
+            self.direct_call_imported_function(
+                callee_index,
+                sig_ref,
+                wasm_call_args,
+                real_call_args,
+                caller_vmctx,
+            )
         }
+    }
 
-        // Handle direct calls to imported functions. We use an indirect call
-        // so that we don't have to patch the code at runtime.
+    /// Emit code for direct calls to defined functions.
+    fn direct_call_defined_function(
+        mut self,
+        wasm_call_args: &[ir::Value],
+        mut real_call_args: Vec<ir::Value>,
+        caller_vmctx: ir::Value,
+        def_func_index: DefinedFuncIndex,
+    ) -> Result<Reachability<SmallVec<[ir::Value; 4]>>, wasmtime_environ::WasmError> {
+        // First append the callee vmctx address, which is the same as the caller vmctx in
+        // this case.
+        real_call_args.push(caller_vmctx);
+
+        // Then append the caller vmctx address.
+        real_call_args.push(caller_vmctx);
+
+        // Then append the regular call arguments.
+        real_call_args.extend_from_slice(wasm_call_args);
+
+        // Finally, make the direct call!
+        let callee = self
+            .env
+            .get_or_create_defined_func_ref(self.builder.func, def_func_index);
+        Ok(Reachability::Reachable(
+            self.direct_call_inst(callee, &real_call_args),
+        ))
+    }
+
+    /// Emit code for direct calls to imported functions.
+    fn direct_call_imported_function(
+        mut self,
+        callee_index: FuncIndex,
+        sig_ref: ir::SigRef,
+        wasm_call_args: &[ir::Value],
+        mut real_call_args: Vec<ir::Value>,
+        caller_vmctx: ir::Value,
+    ) -> Result<Reachability<SmallVec<[ir::Value; 4]>>, wasmtime_environ::WasmError> {
+        // Host intrinsics turn exceptions into traps rather than unwinding them
+        // into us, so a plain `call` suffices even inside a `try_table`, which
+        // avoids `try_call`'s clobber-everything ABI.
+        if self
+            .env
+            .translation
+            .imported_funcs_never_throw
+            .contains(callee_index)
+        {
+            self = self.may_throw(false);
+        }
 
         // First append the callee vmctx address.
         //
@@ -2314,17 +2369,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
                     FactInlineIntrinsic::EnterSyncCall | FactInlineIntrinsic::ExitSyncCall => {}
                 }
-                let import_off = self.env.offsets.imported_functions().at(callee_index);
-                let func_addr = self
-                    .env
-                    .alias_regions
-                    .vm_function_import()
-                    .wasm_call()
-                    .relative_to(import_off)
-                    .load(&mut self.builder.cursor(), vmctx);
-                Ok(Reachability::Reachable(self.indirect_call_inst(
+                Ok(Reachability::Reachable(self.imported_call_inst(
+                    callee_index,
                     sig_ref,
-                    func_addr,
                     &real_call_args,
                 )))
             }
@@ -2334,21 +2381,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // Unknown import function or this module is instantiated many times
             // and with different functions. Either way, we have to do the
             // indirect call.
-            None => {
-                let import_off = self.env.offsets.imported_functions().at(callee_index);
-                let func_addr = self
-                    .env
-                    .alias_regions
-                    .vm_function_import()
-                    .wasm_call()
-                    .relative_to(import_off)
-                    .load(&mut self.builder.cursor(), vmctx);
-                Ok(Reachability::Reachable(self.indirect_call_inst(
-                    sig_ref,
-                    func_addr,
-                    &real_call_args,
-                )))
-            }
+            None => Ok(Reachability::Reachable(self.imported_call_inst(
+                callee_index,
+                sig_ref,
+                &real_call_args,
+            ))),
         }
     }
 
@@ -2411,9 +2448,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 }
                 debug_assert!(!self.tail);
                 let rep = component_sync_call::transfer_borrow_to_owner(
-                    self.builder,
-                    self.env,
-                    self.srcloc,
+                    self,
                     ty,
                     instance,
                     callee_index,
@@ -2444,15 +2479,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let slow =
             component_sync_call::exit(self.builder, &mut self.env.alias_regions, vmctx, slot);
 
-        let import_off = self.env.offsets.imported_functions().at(callee_index);
-        let func_addr = self
-            .env
-            .alias_regions
-            .vm_function_import()
-            .wasm_call()
-            .relative_to(import_off)
-            .load(&mut self.builder.cursor(), vmctx);
-        self.indirect_call_inst(sig_ref, func_addr, real_call_args);
+        self.imported_call_inst(callee_index, sig_ref, real_call_args);
 
         slow.finish(self.builder);
         CallRets::new()
@@ -2732,7 +2759,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         &mut self,
         sig: ir::SigRef,
     ) -> Option<(ir::ExceptionTable, Block, CallRets)> {
-        if !self.tail && !self.env.stacks.handlers.is_empty() {
+        if !self.tail && self.may_throw && !self.env.stacks.handlers.is_empty() {
             let continuation_block = self.builder.create_block();
             let mut args = vec![];
             let mut results = smallvec![];
@@ -2819,6 +2846,26 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             self.attach_tags(inst);
             results
         }
+    }
+
+    /// Call the imported function `callee_index` through its
+    /// `VMFunctionImport`, with the full `real_call_args`.
+    fn imported_call_inst(
+        &mut self,
+        callee_index: FuncIndex,
+        sig_ref: ir::SigRef,
+        real_call_args: &[ir::Value],
+    ) -> CallRets {
+        let vmctx = self.caller_vmctx();
+        let import_off = self.env.offsets.imported_functions().at(callee_index);
+        let func_addr = self
+            .env
+            .alias_regions
+            .vm_function_import()
+            .wasm_call()
+            .relative_to(import_off)
+            .load(&mut self.builder.cursor(), vmctx);
+        self.indirect_call_inst(sig_ref, func_addr, real_call_args)
     }
 
     fn indirect_call_inst(

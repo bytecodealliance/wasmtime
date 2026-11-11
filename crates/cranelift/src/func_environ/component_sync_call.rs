@@ -27,7 +27,7 @@
 //! if it forces the deferred thread. Anything else, such as a promoted thread,
 //! a full lazy lenders array, or an invalid handle, falls back to the libcall.
 
-use super::{Call, FuncEnvironment};
+use super::Call;
 use crate::alias_region::AliasRegions;
 use crate::trap::TranslateTrap;
 use cranelift_codegen::ir::condcodes::IntCC;
@@ -251,16 +251,16 @@ where
 /// imported intrinsic `callee_index` with `real_call_args` when the fast path
 /// does not apply. `real_call_args` is `[callee_vmctx, caller_vmctx,
 /// handle_index]`.
-pub fn transfer_borrow_to_owner(
-    builder: &mut FunctionBuilder<'_>,
-    env: &mut FuncEnvironment<'_>,
-    srcloc: ir::SourceLoc,
+pub(super) fn transfer_borrow_to_owner(
+    call: &mut Call<'_, '_, '_>,
     ty: TypeResourceTableIndex,
     instance: RuntimeComponentInstanceIndex,
     callee_index: FuncIndex,
     sig_ref: ir::SigRef,
     real_call_args: &[ir::Value],
 ) -> ir::Value {
+    let builder = &mut *call.builder;
+    let env = &mut *call.env;
     let slot = env
         .fact_sync_call_slot
         .expect("inline to-owner borrow without an enclosing enter-sync-call");
@@ -323,15 +323,8 @@ pub fn transfer_borrow_to_owner(
     builder.switch_to_block(slow_block);
     builder.set_cold_block(slow_block);
     builder.seal_block(slow_block);
-    let import_off = env.offsets.imported_functions().at(callee_index);
-    let func_addr = env
-        .alias_regions
-        .vm_function_import()
-        .wasm_call()
-        .relative_to(import_off)
-        .load(&mut builder.cursor(), vmctx);
-    let rets =
-        Call::new(builder, env, srcloc).indirect_call_inst(sig_ref, func_addr, real_call_args);
+    let rets = call.imported_call_inst(callee_index, sig_ref, real_call_args);
+    let builder = &mut *call.builder;
     builder.ins().jump(join_block, &[rets[0].into()]);
 
     builder.switch_to_block(join_block);

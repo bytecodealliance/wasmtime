@@ -171,21 +171,19 @@
 ;;                                 block9 cold:
 ;; @0100                               v54 = load.i64 notrap aligned readonly can_move region23 v0+152
 ;; @00f4                               v79 = load.i64 notrap aligned readonly can_move region4 v0+104
-;; @0100                               try_call_indirect v54(v79, v0, v2), sig2, block16(ret0), [ context v0, default: block6(exn0) ]
-;;
-;;                                 block16(v55: i32):
+;; @0100                               v55 = call_indirect sig2, v54(v79, v0, v2)
 ;; @0100                               jump block10(v55)
 ;;
 ;;                                 block10(v23: i32):
 ;; @0102                               v56 = load.i64 notrap aligned readonly can_move region4 v0+72
-;; @0102                               try_call fn0(v56, v0, v23), sig2, block17(ret0), [ context v0, default: block6(exn0) ]
+;; @0102                               try_call fn0(v56, v0, v23), sig2, block16(ret0), [ context v0, default: block6(exn0) ]
 ;;
-;;                                 block17(v57: i32):
+;;                                 block16(v57: i32):
 ;; @0106                               v61 = load.i64 notrap aligned region5 v13+136
 ;; @0106                               v62 = icmp eq v61, v12
-;; @0106                               brif v62, block18, block19
+;; @0106                               brif v62, block17, block18
 ;;
-;;                                 block18:
+;;                                 block17:
 ;; @0106                               v63 = load.i64 notrap aligned region6 v12
 ;; @0106                               store notrap aligned region5 v63, v13+136
 ;; @0106                               v64 = load.i64 notrap aligned region14 v12+24
@@ -194,17 +192,15 @@
 ;; @0106                               store notrap aligned region9 v65, v13+128
 ;; @0106                               v66 = load.i32 notrap aligned region12 v12+20
 ;; @0106                               store notrap aligned region11 v66, v13+132
-;; @0106                               jump block20
+;; @0106                               jump block19
 ;;
-;;                                 block19 cold:
+;;                                 block18 cold:
 ;; @0106                               v67 = load.i64 notrap aligned readonly can_move region23 v0+184
 ;; @00f4                               v80 = load.i64 notrap aligned readonly can_move region4 v0+104
-;; @0106                               try_call_indirect v67(v80, v0), sig0, block21, [ context v0, default: block6(exn0) ]
+;; @0106                               call_indirect sig0, v67(v80, v0)
+;; @0106                               jump block19
 ;;
-;;                                 block21:
-;; @0106                               jump block20
-;;
-;;                                 block20:
+;;                                 block19:
 ;; @010a                               jump block5
 ;;
 ;;                                 block5:
