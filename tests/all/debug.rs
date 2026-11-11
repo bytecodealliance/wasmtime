@@ -3,9 +3,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{
-    AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle,
-    Func, Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Result, Store,
-    StoreContextMut, Trap, Val, ValType,
+    AnyRef, AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine, Extern,
+    FrameHandle, Func, Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability,
+    Result, Rooted, Store, StoreContextMut, Trap, Val, ValType,
 };
 
 use crate::async_functions::PollOnce;
@@ -2012,6 +2012,34 @@ fn gc_in_func_without_program_points() -> wasmtime::Result<()> {
         )?;
         let mut store = Store::new(&engine, ());
         Instance::new(&mut store, &module, &[])?;
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn gc_in_libcall_uses_correct_stack_shape() -> wasmtime::Result<()> {
+    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+        let mut config = Config::default();
+        config.guest_debug(true).wasm_gc(true).collector(collector);
+        let engine = Engine::new(&config)?;
+        let module = Module::new(
+            &engine,
+            r#"
+            (module
+              (type $s (struct (field i32)))
+              (func (export "main") (param $n i32) (result anyref)
+                (loop $l
+                  (drop (struct.new $s (i32.const 0x30)))
+                  (br_if $l (local.tee $n (i32.sub (local.get $n) (i32.const 1)))))
+                (ref.null any)))
+            "#,
+        )?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let main = instance.get_typed_func::<i32, Option<Rooted<AnyRef>>>(&mut store, "main")?;
+        let result = main.call(&mut store, 10000)?;
+        assert!(result.is_none());
     }
     Ok(())
 }
