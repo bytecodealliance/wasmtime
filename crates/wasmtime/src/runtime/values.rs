@@ -1,7 +1,7 @@
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapTopType, HeapType,
-    RefType, Rooted, StructRef, V128, ValType, prelude::*,
+    MaybeRooted, RefType, Rooted, StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
 
@@ -49,13 +49,13 @@ pub enum Val {
     FuncRef(Option<Func>),
 
     /// An external reference.
-    ExternRef(Option<Rooted<ExternRef>>),
+    ExternRef(Option<MaybeRooted<ExternRef>>),
 
     /// An internal reference.
-    AnyRef(Option<Rooted<AnyRef>>),
+    AnyRef(Option<MaybeRooted<AnyRef>>),
 
     /// An exception reference.
-    ExnRef(Option<Rooted<ExnRef>>),
+    ExnRef(Option<MaybeRooted<ExnRef>>),
 
     /// A continuation reference.
     ///
@@ -272,18 +272,18 @@ impl Val {
             Val::F32(u) => Ok(ValRaw::f32(*u)),
             Val::F64(u) => Ok(ValRaw::f64(*u)),
             Val::V128(b) => Ok(ValRaw::v128(b.as_u128())),
-            Val::ExternRef(e) => Ok(ValRaw::externref(match e {
-                None => 0,
-                Some(e) => e._to_raw(store)?,
-            })),
-            Val::AnyRef(e) => Ok(ValRaw::anyref(match e {
-                None => 0,
-                Some(e) => e._to_raw(store)?,
-            })),
-            Val::ExnRef(e) => Ok(ValRaw::exnref(match e {
-                None => 0,
-                Some(e) => e._to_raw(store)?,
-            })),
+            Val::ExternRef(e) => Ok(ValRaw::externref(MaybeRooted::option_to_raw(
+                e.as_ref(),
+                store,
+            )?)),
+            Val::AnyRef(e) => Ok(ValRaw::anyref(MaybeRooted::option_to_raw(
+                e.as_ref(),
+                store,
+            )?)),
+            Val::ExnRef(e) => Ok(ValRaw::exnref(MaybeRooted::option_to_raw(
+                e.as_ref(),
+                store,
+            )?)),
             Val::FuncRef(f) => Ok(ValRaw::funcref(match f {
                 Some(f) => f.to_raw_(store),
                 None => ptr::null_mut(),
@@ -373,8 +373,8 @@ impl Val {
         (F32(f32) f32 unwrap_f32 f32::from_bits(*e))
         (F64(f64) f64 unwrap_f64 f64::from_bits(*e))
         (FuncRef(Option<&Func>) func_ref unwrap_func_ref e.as_ref())
-        (ExternRef(Option<&Rooted<ExternRef>>) extern_ref unwrap_extern_ref e.as_ref())
-        (AnyRef(Option<&Rooted<AnyRef>>) any_ref unwrap_any_ref e.as_ref())
+        (ExternRef(Option<&MaybeRooted<ExternRef>>) extern_ref unwrap_extern_ref e.as_ref())
+        (AnyRef(Option<&MaybeRooted<AnyRef>>) any_ref unwrap_any_ref e.as_ref())
         (V128(V128) v128 unwrap_v128 *e)
     }
 
@@ -399,7 +399,7 @@ impl Val {
     ///
     /// If this is a non-null `externref`, then `Some(Some(..))` is returned.
     #[inline]
-    pub fn externref(&self) -> Option<Option<&Rooted<ExternRef>>> {
+    pub fn externref(&self) -> Option<Option<&MaybeRooted<ExternRef>>> {
         match self {
             Val::ExternRef(None) => Some(None),
             Val::ExternRef(Some(e)) => Some(Some(e)),
@@ -418,7 +418,7 @@ impl Val {
     ///
     /// Panics if `self` is not a (nullable) `externref`.
     #[inline]
-    pub fn unwrap_externref(&self) -> Option<&Rooted<ExternRef>> {
+    pub fn unwrap_externref(&self) -> Option<&MaybeRooted<ExternRef>> {
         self.externref().expect("expected externref")
     }
 
@@ -430,7 +430,7 @@ impl Val {
     ///
     /// If this is a non-null `anyref`, then `Some(Some(..))` is returned.
     #[inline]
-    pub fn anyref(&self) -> Option<Option<&Rooted<AnyRef>>> {
+    pub fn anyref(&self) -> Option<Option<&MaybeRooted<AnyRef>>> {
         match self {
             Val::AnyRef(None) => Some(None),
             Val::AnyRef(Some(e)) => Some(Some(e)),
@@ -449,7 +449,7 @@ impl Val {
     ///
     /// Panics if `self` is not a (nullable) `anyref`.
     #[inline]
-    pub fn unwrap_anyref(&self) -> Option<&Rooted<AnyRef>> {
+    pub fn unwrap_anyref(&self) -> Option<&MaybeRooted<AnyRef>> {
         self.anyref().expect("expected anyref")
     }
 
@@ -461,7 +461,7 @@ impl Val {
     ///
     /// If this is a non-null `exnref`, then `Some(Some(..))` is returned.
     #[inline]
-    pub fn exnref(&self) -> Option<Option<&Rooted<ExnRef>>> {
+    pub fn exnref(&self) -> Option<Option<&MaybeRooted<ExnRef>>> {
         match self {
             Val::ExnRef(None) => Some(None),
             Val::ExnRef(Some(e)) => Some(Some(e)),
@@ -480,7 +480,7 @@ impl Val {
     ///
     /// Panics if `self` is not a (nullable) `exnref`.
     #[inline]
-    pub fn unwrap_exnref(&self) -> Option<&Rooted<ExnRef>> {
+    pub fn unwrap_exnref(&self) -> Option<&MaybeRooted<ExnRef>> {
         self.exnref().expect("expected exnref")
     }
 
@@ -584,13 +584,27 @@ impl From<Ref> for Val {
 impl From<Rooted<ExternRef>> for Val {
     #[inline]
     fn from(val: Rooted<ExternRef>) -> Val {
-        Val::ExternRef(Some(val))
+        Val::ExternRef(Some(val.into()))
     }
 }
 
 impl From<Option<Rooted<ExternRef>>> for Val {
     #[inline]
     fn from(val: Option<Rooted<ExternRef>>) -> Val {
+        Val::ExternRef(val.map(Into::into))
+    }
+}
+
+impl From<MaybeRooted<ExternRef>> for Val {
+    #[inline]
+    fn from(val: MaybeRooted<ExternRef>) -> Val {
+        Val::ExternRef(Some(val))
+    }
+}
+
+impl From<Option<MaybeRooted<ExternRef>>> for Val {
+    #[inline]
+    fn from(val: Option<MaybeRooted<ExternRef>>) -> Val {
         Val::ExternRef(val)
     }
 }
@@ -598,13 +612,27 @@ impl From<Option<Rooted<ExternRef>>> for Val {
 impl From<Rooted<AnyRef>> for Val {
     #[inline]
     fn from(val: Rooted<AnyRef>) -> Val {
-        Val::AnyRef(Some(val))
+        Val::AnyRef(Some(val.into()))
     }
 }
 
 impl From<Option<Rooted<AnyRef>>> for Val {
     #[inline]
     fn from(val: Option<Rooted<AnyRef>>) -> Val {
+        Val::AnyRef(val.map(Into::into))
+    }
+}
+
+impl From<MaybeRooted<AnyRef>> for Val {
+    #[inline]
+    fn from(val: MaybeRooted<AnyRef>) -> Val {
+        Val::AnyRef(Some(val))
+    }
+}
+
+impl From<Option<MaybeRooted<AnyRef>>> for Val {
+    #[inline]
+    fn from(val: Option<MaybeRooted<AnyRef>>) -> Val {
         Val::AnyRef(val)
     }
 }
@@ -623,6 +651,20 @@ impl From<Option<Rooted<StructRef>>> for Val {
     }
 }
 
+impl From<MaybeRooted<StructRef>> for Val {
+    #[inline]
+    fn from(val: MaybeRooted<StructRef>) -> Val {
+        Val::AnyRef(Some(val.into()))
+    }
+}
+
+impl From<Option<MaybeRooted<StructRef>>> for Val {
+    #[inline]
+    fn from(val: Option<MaybeRooted<StructRef>>) -> Val {
+        Val::AnyRef(val.map(Into::into))
+    }
+}
+
 impl From<Rooted<ArrayRef>> for Val {
     #[inline]
     fn from(val: Rooted<ArrayRef>) -> Val {
@@ -637,16 +679,44 @@ impl From<Option<Rooted<ArrayRef>>> for Val {
     }
 }
 
+impl From<MaybeRooted<ArrayRef>> for Val {
+    #[inline]
+    fn from(val: MaybeRooted<ArrayRef>) -> Val {
+        Val::AnyRef(Some(val.into()))
+    }
+}
+
+impl From<Option<MaybeRooted<ArrayRef>>> for Val {
+    #[inline]
+    fn from(val: Option<MaybeRooted<ArrayRef>>) -> Val {
+        Val::AnyRef(val.map(Into::into))
+    }
+}
+
 impl From<Rooted<ExnRef>> for Val {
     #[inline]
     fn from(val: Rooted<ExnRef>) -> Val {
-        Val::ExnRef(Some(val))
+        Val::ExnRef(Some(val.into()))
     }
 }
 
 impl From<Option<Rooted<ExnRef>>> for Val {
     #[inline]
     fn from(val: Option<Rooted<ExnRef>>) -> Val {
+        Val::ExnRef(val.map(Into::into))
+    }
+}
+
+impl From<MaybeRooted<ExnRef>> for Val {
+    #[inline]
+    fn from(val: MaybeRooted<ExnRef>) -> Val {
+        Val::ExnRef(Some(val))
+    }
+}
+
+impl From<Option<MaybeRooted<ExnRef>>> for Val {
+    #[inline]
+    fn from(val: Option<MaybeRooted<ExnRef>>) -> Val {
         Val::ExnRef(val)
     }
 }
@@ -752,7 +822,7 @@ pub enum Ref {
     ///
     /// Wasm can create null external references via the `ref.null extern`
     /// instruction.
-    Extern(Option<Rooted<ExternRef>>),
+    Extern(Option<MaybeRooted<ExternRef>>),
 
     /// An internal reference.
     ///
@@ -762,7 +832,7 @@ pub enum Ref {
     ///
     /// Unlike `externref`, Wasm guests can directly allocate `anyref`s, and
     /// does not need to rely on the host to do that.
-    Any(Option<Rooted<AnyRef>>),
+    Any(Option<MaybeRooted<AnyRef>>),
 
     /// An exception-object reference.
     ///
@@ -770,7 +840,7 @@ pub enum Ref {
     /// values. These are references to exception objects as caught by
     /// `catch_ref` clauses on `try_table` instructions, or as
     /// allocated via the host API.
-    Exn(Option<Rooted<ExnRef>>),
+    Exn(Option<MaybeRooted<ExnRef>>),
 }
 
 impl From<Func> for Ref {
@@ -790,13 +860,27 @@ impl From<Option<Func>> for Ref {
 impl From<Rooted<ExternRef>> for Ref {
     #[inline]
     fn from(e: Rooted<ExternRef>) -> Ref {
-        Ref::Extern(Some(e))
+        Ref::Extern(Some(e.into()))
     }
 }
 
 impl From<Option<Rooted<ExternRef>>> for Ref {
     #[inline]
     fn from(e: Option<Rooted<ExternRef>>) -> Ref {
+        Ref::Extern(e.map(Into::into))
+    }
+}
+
+impl From<MaybeRooted<ExternRef>> for Ref {
+    #[inline]
+    fn from(e: MaybeRooted<ExternRef>) -> Ref {
+        Ref::Extern(Some(e))
+    }
+}
+
+impl From<Option<MaybeRooted<ExternRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<MaybeRooted<ExternRef>>) -> Ref {
         Ref::Extern(e)
     }
 }
@@ -804,13 +888,27 @@ impl From<Option<Rooted<ExternRef>>> for Ref {
 impl From<Rooted<AnyRef>> for Ref {
     #[inline]
     fn from(e: Rooted<AnyRef>) -> Ref {
-        Ref::Any(Some(e))
+        Ref::Any(Some(e.into()))
     }
 }
 
 impl From<Option<Rooted<AnyRef>>> for Ref {
     #[inline]
     fn from(e: Option<Rooted<AnyRef>>) -> Ref {
+        Ref::Any(e.map(Into::into))
+    }
+}
+
+impl From<MaybeRooted<AnyRef>> for Ref {
+    #[inline]
+    fn from(e: MaybeRooted<AnyRef>) -> Ref {
+        Ref::Any(Some(e))
+    }
+}
+
+impl From<Option<MaybeRooted<AnyRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<MaybeRooted<AnyRef>>) -> Ref {
         Ref::Any(e)
     }
 }
@@ -829,6 +927,20 @@ impl From<Option<Rooted<StructRef>>> for Ref {
     }
 }
 
+impl From<MaybeRooted<StructRef>> for Ref {
+    #[inline]
+    fn from(e: MaybeRooted<StructRef>) -> Ref {
+        Ref::Any(Some(e.into()))
+    }
+}
+
+impl From<Option<MaybeRooted<StructRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<MaybeRooted<StructRef>>) -> Ref {
+        Ref::Any(e.map(Into::into))
+    }
+}
+
 impl From<Rooted<ArrayRef>> for Ref {
     #[inline]
     fn from(e: Rooted<ArrayRef>) -> Ref {
@@ -843,16 +955,44 @@ impl From<Option<Rooted<ArrayRef>>> for Ref {
     }
 }
 
+impl From<MaybeRooted<ArrayRef>> for Ref {
+    #[inline]
+    fn from(e: MaybeRooted<ArrayRef>) -> Ref {
+        Ref::Any(Some(e.into()))
+    }
+}
+
+impl From<Option<MaybeRooted<ArrayRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<MaybeRooted<ArrayRef>>) -> Ref {
+        Ref::Any(e.map(Into::into))
+    }
+}
+
 impl From<Rooted<ExnRef>> for Ref {
     #[inline]
     fn from(e: Rooted<ExnRef>) -> Ref {
-        Ref::Exn(Some(e))
+        Ref::Exn(Some(e.into()))
     }
 }
 
 impl From<Option<Rooted<ExnRef>>> for Ref {
     #[inline]
     fn from(e: Option<Rooted<ExnRef>>) -> Ref {
+        Ref::Exn(e.map(Into::into))
+    }
+}
+
+impl From<MaybeRooted<ExnRef>> for Ref {
+    #[inline]
+    fn from(e: MaybeRooted<ExnRef>) -> Ref {
+        Ref::Exn(Some(e))
+    }
+}
+
+impl From<Option<MaybeRooted<ExnRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<MaybeRooted<ExnRef>>) -> Ref {
         Ref::Exn(e)
     }
 }
@@ -902,7 +1042,7 @@ impl Ref {
     ///
     /// Returns `Some(Some(_))` if this `Ref` is a non-null `extern` reference.
     #[inline]
-    pub fn as_extern(&self) -> Option<Option<&Rooted<ExternRef>>> {
+    pub fn as_extern(&self) -> Option<Option<&MaybeRooted<ExternRef>>> {
         match self {
             Ref::Extern(e) => Some(e.as_ref()),
             _ => None,
@@ -916,7 +1056,7 @@ impl Ref {
     ///
     /// Returns `Some(_)` if this `Ref` is a non-null `extern` reference.
     #[inline]
-    pub fn unwrap_extern(&self) -> Option<&Rooted<ExternRef>> {
+    pub fn unwrap_extern(&self) -> Option<&MaybeRooted<ExternRef>> {
         self.as_extern()
             .expect("Ref::unwrap_extern on non-extern reference")
     }
@@ -936,7 +1076,7 @@ impl Ref {
     ///
     /// Returns `Some(Some(_))` if this `Ref` is a non-null `any` reference.
     #[inline]
-    pub fn as_any(&self) -> Option<Option<&Rooted<AnyRef>>> {
+    pub fn as_any(&self) -> Option<Option<&MaybeRooted<AnyRef>>> {
         match self {
             Ref::Any(e) => Some(e.as_ref()),
             _ => None,
@@ -950,7 +1090,7 @@ impl Ref {
     ///
     /// Returns `Some(_)` if this `Ref` is a non-null `any` reference.
     #[inline]
-    pub fn unwrap_any(&self) -> Option<&Rooted<AnyRef>> {
+    pub fn unwrap_any(&self) -> Option<&MaybeRooted<AnyRef>> {
         self.as_any().expect("Ref::unwrap_any on non-any reference")
     }
 
@@ -969,7 +1109,7 @@ impl Ref {
     ///
     /// Returns `Some(Some(_))` if this `Ref` is a non-null `exn` reference.
     #[inline]
-    pub fn as_exn(&self) -> Option<Option<&Rooted<ExnRef>>> {
+    pub fn as_exn(&self) -> Option<Option<&MaybeRooted<ExnRef>>> {
         match self {
             Ref::Exn(e) => Some(e.as_ref()),
             _ => None,
@@ -983,7 +1123,7 @@ impl Ref {
     ///
     /// Returns `Some(_)` if this `Ref` is a non-null `exn` reference.
     #[inline]
-    pub fn unwrap_exn(&self) -> Option<&Rooted<ExnRef>> {
+    pub fn unwrap_exn(&self) -> Option<&MaybeRooted<ExnRef>> {
         self.as_exn().expect("Ref::unwrap_exn on non-exn reference")
     }
 
@@ -1094,26 +1234,11 @@ impl Ref {
             (Ref::Func(Some(f)), HeapType::ConcreteFunc(func_ty)) => f._matches_ty(store, func_ty),
             (Ref::Func(_), _) => false,
 
-            (Ref::Any(Some(a)), HeapType::Any) => {
-                a.try_gc_ref(store)?;
-                true
-            }
-            (Ref::Any(None), HeapType::Any) => true,
-            (Ref::Any(Some(a)), HeapType::I31) => a._is_i31(store)?,
-            (Ref::Any(Some(a)), HeapType::Struct) => a._is_struct(store)?,
-            (Ref::Any(Some(a)), HeapType::ConcreteStruct(_ty)) => match a._as_struct(store)? {
-                None => false,
-                Some(s) => s._matches_ty(store, _ty)?,
-            },
-            (Ref::Any(Some(a)), HeapType::Eq) => a._is_eqref(store)?,
-            (Ref::Any(Some(a)), HeapType::Array) => a._is_array(store)?,
-            (Ref::Any(Some(a)), HeapType::ConcreteArray(_ty)) => match a._as_array(store)? {
-                None => false,
-                Some(a) => a._matches_ty(store, _ty)?,
-            },
+            (Ref::Any(Some(a)), ty) => a._ty(store)?.matches(ty),
             (
                 Ref::Any(None),
-                HeapType::None
+                HeapType::Any
+                | HeapType::None
                 | HeapType::I31
                 | HeapType::ConcreteStruct(_)
                 | HeapType::Struct
@@ -1121,7 +1246,7 @@ impl Ref {
                 | HeapType::Array
                 | HeapType::Eq,
             ) => true,
-            (Ref::Any(_), _) => false,
+            (Ref::Any(None), _) => false,
 
             (Ref::Exn(Some(e)), HeapType::Exn) => {
                 e.try_gc_ref(store)?;

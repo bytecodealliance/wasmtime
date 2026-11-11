@@ -266,6 +266,7 @@ fn gc_access_during_call() -> wasmtime::Result<()> {
                 .local(&mut caller, 0)?
                 .unwrap_any_ref()
                 .unwrap()
+                .unwrap_rooted()
                 .unwrap_struct(&caller)
                 .unwrap();
             assert_eq!(s.field(&mut caller, 0).unwrap().unwrap_i32(), 42);
@@ -489,7 +490,13 @@ fn private_entity_access() -> wasmtime::Result<()> {
 
     let t = instance.debug_table(&mut store, 0).unwrap();
     let t_val = t.get(&mut store, 1).unwrap();
-    let t_val = t_val.as_any().unwrap().unwrap().unwrap_i31(&store).unwrap();
+    let t_val = t_val
+        .as_any()
+        .unwrap()
+        .unwrap()
+        .unwrap_rooted()
+        .unwrap_i31(&store)
+        .unwrap();
     assert_eq!(t_val.get_u32(), 100);
 
     let tag = instance.debug_tag(&mut store, 0).unwrap();

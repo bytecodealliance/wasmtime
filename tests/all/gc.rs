@@ -66,7 +66,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
 
         let r = ExternRef::new(&mut scope, SetFlagOnDrop(inner_dropped.clone()))?;
         {
-            let args = [Val::I32(5), Val::ExternRef(Some(r))];
+            let args = [Val::I32(5), Val::ExternRef(Some(r.into()))];
             func.call(&mut scope, &args, &mut [Val::I32(0)])?;
         }
 
@@ -116,7 +116,7 @@ fn wasm_dropping_refs() -> Result<()> {
     for _ in 0..4096 {
         let mut scope = RootScope::new(&mut store);
         let r = ExternRef::new(&mut scope, CountDrops(num_refs_dropped.clone()))?;
-        let args = [Val::ExternRef(Some(r))];
+        let args = [Val::ExternRef(Some(r.into()))];
         drop_ref.call(&mut scope, &args, &mut [])?;
     }
 
@@ -250,7 +250,7 @@ fn drop_externref_via_table_set() -> Result<()> {
         let bar = ExternRef::new(&mut scope, SetFlagOnDrop(bar_is_dropped.clone()))?;
 
         {
-            let args = vec![Val::ExternRef(Some(foo))];
+            let args = vec![Val::ExternRef(Some(foo.into()))];
             table_set.call(&mut scope, &args, &mut [])?;
         }
 
@@ -259,7 +259,7 @@ fn drop_externref_via_table_set() -> Result<()> {
         assert!(!bar_is_dropped.load(SeqCst));
 
         {
-            let args = vec![Val::ExternRef(Some(bar))];
+            let args = vec![Val::ExternRef(Some(bar.into()))];
             table_set.call(&mut scope, &args, &mut [])?;
         }
     }
@@ -1068,41 +1068,41 @@ fn ref_matches() -> Result<()> {
         (Ref::Any(None), RefType::ANYREF, true),
         (Ref::Func(None), RefType::ANYREF, false),
         // non-null structref
-        (Ref::Any(Some(s)), RefType::NULLFUNCREF, false),
-        (Ref::Any(Some(s)), func_ref_ty.clone(), false),
-        (Ref::Any(Some(s)), RefType::FUNCREF, false),
-        (Ref::Any(Some(s)), RefType::NULLEXTERNREF, false),
-        (Ref::Any(Some(s)), RefType::EXTERNREF, false),
-        (Ref::Any(Some(s)), RefType::NULLREF, false),
-        (Ref::Any(Some(s)), RefType::STRUCTREF, true),
-        (Ref::Any(Some(s)), RefType::ARRAYREF, false),
-        (Ref::Any(Some(s)), RefType::I31REF, false),
-        (Ref::Any(Some(s)), RefType::EQREF, true),
-        (Ref::Any(Some(s)), RefType::ANYREF, true),
+        (Ref::Any(Some(s.into())), RefType::NULLFUNCREF, false),
+        (Ref::Any(Some(s.into())), func_ref_ty.clone(), false),
+        (Ref::Any(Some(s.into())), RefType::FUNCREF, false),
+        (Ref::Any(Some(s.into())), RefType::NULLEXTERNREF, false),
+        (Ref::Any(Some(s.into())), RefType::EXTERNREF, false),
+        (Ref::Any(Some(s.into())), RefType::NULLREF, false),
+        (Ref::Any(Some(s.into())), RefType::STRUCTREF, true),
+        (Ref::Any(Some(s.into())), RefType::ARRAYREF, false),
+        (Ref::Any(Some(s.into())), RefType::I31REF, false),
+        (Ref::Any(Some(s.into())), RefType::EQREF, true),
+        (Ref::Any(Some(s.into())), RefType::ANYREF, true),
         // non-null arrayref
-        (Ref::Any(Some(a)), RefType::NULLFUNCREF, false),
-        (Ref::Any(Some(a)), func_ref_ty.clone(), false),
-        (Ref::Any(Some(a)), RefType::FUNCREF, false),
-        (Ref::Any(Some(a)), RefType::NULLEXTERNREF, false),
-        (Ref::Any(Some(a)), RefType::EXTERNREF, false),
-        (Ref::Any(Some(a)), RefType::NULLREF, false),
-        (Ref::Any(Some(a)), RefType::STRUCTREF, false),
-        (Ref::Any(Some(a)), RefType::ARRAYREF, true),
-        (Ref::Any(Some(a)), RefType::I31REF, false),
-        (Ref::Any(Some(a)), RefType::EQREF, true),
-        (Ref::Any(Some(a)), RefType::ANYREF, true),
+        (Ref::Any(Some(a.into())), RefType::NULLFUNCREF, false),
+        (Ref::Any(Some(a.into())), func_ref_ty.clone(), false),
+        (Ref::Any(Some(a.into())), RefType::FUNCREF, false),
+        (Ref::Any(Some(a.into())), RefType::NULLEXTERNREF, false),
+        (Ref::Any(Some(a.into())), RefType::EXTERNREF, false),
+        (Ref::Any(Some(a.into())), RefType::NULLREF, false),
+        (Ref::Any(Some(a.into())), RefType::STRUCTREF, false),
+        (Ref::Any(Some(a.into())), RefType::ARRAYREF, true),
+        (Ref::Any(Some(a.into())), RefType::I31REF, false),
+        (Ref::Any(Some(a.into())), RefType::EQREF, true),
+        (Ref::Any(Some(a.into())), RefType::ANYREF, true),
         // non-null i31ref
-        (Ref::Any(Some(i31)), RefType::NULLFUNCREF, false),
-        (Ref::Any(Some(i31)), func_ref_ty.clone(), false),
-        (Ref::Any(Some(i31)), RefType::FUNCREF, false),
-        (Ref::Any(Some(i31)), RefType::NULLEXTERNREF, false),
-        (Ref::Any(Some(i31)), RefType::EXTERNREF, false),
-        (Ref::Any(Some(i31)), RefType::NULLREF, false),
-        (Ref::Any(Some(i31)), RefType::STRUCTREF, false),
-        (Ref::Any(Some(i31)), RefType::ARRAYREF, false),
-        (Ref::Any(Some(i31)), RefType::I31REF, true),
-        (Ref::Any(Some(i31)), RefType::EQREF, true),
-        (Ref::Any(Some(i31)), RefType::ANYREF, true),
+        (Ref::Any(Some(i31.into())), RefType::NULLFUNCREF, false),
+        (Ref::Any(Some(i31.into())), func_ref_ty.clone(), false),
+        (Ref::Any(Some(i31.into())), RefType::FUNCREF, false),
+        (Ref::Any(Some(i31.into())), RefType::NULLEXTERNREF, false),
+        (Ref::Any(Some(i31.into())), RefType::EXTERNREF, false),
+        (Ref::Any(Some(i31.into())), RefType::NULLREF, false),
+        (Ref::Any(Some(i31.into())), RefType::STRUCTREF, false),
+        (Ref::Any(Some(i31.into())), RefType::ARRAYREF, false),
+        (Ref::Any(Some(i31.into())), RefType::I31REF, true),
+        (Ref::Any(Some(i31.into())), RefType::EQREF, true),
+        (Ref::Any(Some(i31.into())), RefType::ANYREF, true),
         // non-null funcref
         (Ref::Func(Some(f)), RefType::NULLFUNCREF, false),
         (Ref::Func(Some(f)), func_ref_ty.clone(), true),
@@ -1116,17 +1116,17 @@ fn ref_matches() -> Result<()> {
         (Ref::Func(Some(f)), RefType::EQREF, false),
         (Ref::Func(Some(f)), RefType::ANYREF, false),
         // non-null externref
-        (Ref::Extern(Some(e)), RefType::NULLFUNCREF, false),
-        (Ref::Extern(Some(e)), func_ref_ty.clone(), false),
-        (Ref::Extern(Some(e)), RefType::FUNCREF, false),
-        (Ref::Extern(Some(e)), RefType::NULLEXTERNREF, false),
-        (Ref::Extern(Some(e)), RefType::EXTERNREF, true),
-        (Ref::Extern(Some(e)), RefType::NULLREF, false),
-        (Ref::Extern(Some(e)), RefType::STRUCTREF, false),
-        (Ref::Extern(Some(e)), RefType::ARRAYREF, false),
-        (Ref::Extern(Some(e)), RefType::I31REF, false),
-        (Ref::Extern(Some(e)), RefType::EQREF, false),
-        (Ref::Extern(Some(e)), RefType::ANYREF, false),
+        (Ref::Extern(Some(e.into())), RefType::NULLFUNCREF, false),
+        (Ref::Extern(Some(e.into())), func_ref_ty.clone(), false),
+        (Ref::Extern(Some(e.into())), RefType::FUNCREF, false),
+        (Ref::Extern(Some(e.into())), RefType::NULLEXTERNREF, false),
+        (Ref::Extern(Some(e.into())), RefType::EXTERNREF, true),
+        (Ref::Extern(Some(e.into())), RefType::NULLREF, false),
+        (Ref::Extern(Some(e.into())), RefType::STRUCTREF, false),
+        (Ref::Extern(Some(e.into())), RefType::ARRAYREF, false),
+        (Ref::Extern(Some(e.into())), RefType::I31REF, false),
+        (Ref::Extern(Some(e.into())), RefType::EQREF, false),
+        (Ref::Extern(Some(e.into())), RefType::ANYREF, false),
     ] {
         let actual = val.matches_ty(&mut store, &ty)?;
         assert_eq!(
@@ -2572,7 +2572,7 @@ fn anyref_ty_extern_converted() -> Result<()> {
 fn externref_val_ty() -> Result<()> {
     let mut store = gc_store()?;
     let live = ExternRef::new(&mut store, 1u32)?;
-    let ty = Val::ExternRef(Some(live)).ty(&store)?;
+    let ty = Val::ExternRef(Some(live.into())).ty(&store)?;
     assert!(ValType::eq(
         &ty,
         &ValType::Ref(RefType::new(false, HeapType::Extern))
@@ -2582,7 +2582,7 @@ fn externref_val_ty() -> Result<()> {
         let mut scope = RootScope::new(&mut store);
         ExternRef::new(&mut scope, 2u32)?
     };
-    assert!(Val::ExternRef(Some(unrooted)).ty(&store).is_err());
+    assert!(Val::ExternRef(Some(unrooted.into())).ty(&store).is_err());
     Ok(())
 }
 
@@ -3075,7 +3075,7 @@ fn typed_func_nonnull_returns_externref() -> Result<()> {
         ValType::Ref(RefType::new(false, HeapType::Extern)),
         Mutability::Const,
     );
-    let global = Global::new(&mut store, global_ty, Val::ExternRef(Some(ext)))?;
+    let global = Global::new(&mut store, global_ty, Val::ExternRef(Some(ext.into())))?;
     let instance = Instance::new(&mut store, &module, &[global.into()])?;
     let f = instance.get_typed_func::<(), Rooted<ExternRef>>(&mut store, "get")?;
     let ext2 = f.call(&mut store, ())?;
@@ -3497,7 +3497,12 @@ fn miri_gc_smoke_test() -> Result<()> {
         store.gc(None)?;
 
         let assert_field_value = |store: &mut Store<_>, val: Val, field: i32| -> Result<()> {
-            let s = val.anyref().unwrap().unwrap().unwrap_struct(&store)?;
+            let s = val
+                .anyref()
+                .unwrap()
+                .unwrap()
+                .unwrap_rooted()
+                .unwrap_struct(&store)?;
             let f = s.field(store, 0)?;
             assert_eq!(f.unwrap_i32(), field);
             Ok(())
@@ -3983,7 +3988,7 @@ fn winch_drc_write_barrier_drops_old_global_value() -> Result<()> {
     {
         let mut scope = RootScope::new(&mut store);
         let r = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
-        set.call(&mut scope, &[Val::ExternRef(Some(r))], &mut [])?;
+        set.call(&mut scope, &[Val::ExternRef(Some(r.into()))], &mut [])?;
     }
 
     // The global holds the only reference; nothing may be dropped yet.
@@ -4039,7 +4044,7 @@ fn winch_drc_read_barrier_keeps_loaded_ref_alive() -> Result<()> {
     {
         let mut scope = RootScope::new(&mut store);
         let r = ExternRef::new(&mut scope, 0xDECAFu32)?;
-        set.call(&mut scope, &[Val::ExternRef(Some(r))], &mut [])?;
+        set.call(&mut scope, &[Val::ExternRef(Some(r.into()))], &mut [])?;
     }
 
     // Settle the deferred unroot so the global truly holds the last count.
@@ -4087,14 +4092,18 @@ fn winch_drc_i31_wrapped_as_externref_skips_global_barriers() -> Result<()> {
 
     let anyref = AnyRef::from_i31(&mut store, I31::wrapping_u32(0x1234));
     let externref = ExternRef::convert_any(&mut store, anyref)?;
-    set.call(&mut store, &[Val::ExternRef(Some(externref))], &mut [])?;
+    set.call(
+        &mut store,
+        &[Val::ExternRef(Some(externref.into()))],
+        &mut [],
+    )?;
 
     let mut results = [Val::null_extern_ref()];
     get.call(&mut store, &[], &mut results)?;
     let externref = results[0]
         .unwrap_externref()
         .expect("global.get returned null");
-    let anyref = AnyRef::convert_extern(&mut store, *externref)?;
+    let anyref = AnyRef::convert_extern(&mut store, externref.unwrap_rooted())?;
     assert_eq!(anyref.unwrap_i31(&store)?.get_u32(), 0x1234);
 
     // Replacing the i31-backed externref exercises the old-value side of the
@@ -4145,7 +4154,7 @@ fn winch_drc_read_barrier_forces_gc_at_threshold() -> Result<()> {
             let global = instance
                 .get_global(&mut scope, &format!("g{i}"))
                 .expect("global must be exported");
-            global.set(&mut scope, Val::ExternRef(Some(gc_ref)))?;
+            global.set(&mut scope, Val::ExternRef(Some(gc_ref.into())))?;
         }
     }
 
@@ -4203,7 +4212,7 @@ fn winch_ref_params_and_results_across_gc() -> Result<()> {
             let instance = Instance::new(&mut store, &module, &[gc.into()])?;
             let hold = instance.get_func(&mut store, "hold").unwrap();
             let args: Vec<Val> = (0..nparams as u32)
-                .map(|i| Ok(Val::ExternRef(Some(ExternRef::new(&mut store, i)?))))
+                .map(|i| Ok(Val::ExternRef(Some(ExternRef::new(&mut store, i)?.into()))))
                 .collect::<Result<_>>()?;
             let mut outs = vec![Val::null_extern_ref(); nresults];
             hold.call(&mut store, &args, &mut outs)?;
@@ -4211,6 +4220,7 @@ fn winch_ref_params_and_results_across_gc() -> Result<()> {
                 let id = v
                     .unwrap_externref()
                     .expect("result became null")
+                    .unwrap_rooted()
                     .data(&store)?
                     .and_then(|d| d.downcast_ref::<u32>().copied());
                 assert_eq!(

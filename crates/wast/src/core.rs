@@ -22,10 +22,10 @@ pub fn val(ctx: &mut WastContext, v: &CoreConst) -> Result<Val> {
         } => Val::ExternRef(None),
         ExternRef {
             value: Some(json_from_wast::ExternRef::Host(x)),
-        } => Val::ExternRef(if let Some(rt) = ctx.async_runtime.as_ref() {
-            Some(rt.block_on(wasmtime::ExternRef::new_async(&mut ctx.core_store, x.0))?)
+        } => Val::from(if let Some(rt) = ctx.async_runtime.as_ref() {
+            rt.block_on(wasmtime::ExternRef::new_async(&mut ctx.core_store, x.0))?
         } else {
-            Some(wasmtime::ExternRef::new(&mut ctx.core_store, x.0)?)
+            wasmtime::ExternRef::new(&mut ctx.core_store, x.0)?
         }),
 
         AnyRef {
@@ -40,7 +40,7 @@ pub fn val(ctx: &mut WastContext, v: &CoreConst) -> Result<Val> {
                 wasmtime::ExternRef::new(&mut ctx.core_store, x.0)?
             };
             let x = wasmtime::AnyRef::convert_extern(&mut ctx.core_store, x)?;
-            Val::AnyRef(Some(x))
+            Val::from(x)
         }
         NullRef => Val::AnyRef(None),
         other => bail!("couldn't convert {other:?} to a runtime value"),
@@ -136,6 +136,7 @@ pub fn match_val(store: &mut Store<()>, actual: &Val, expected: &CoreConst) -> R
             },
         ) => {
             let x = x
+                .unwrap_rooted()
                 .data(store)?
                 .ok_or_else(|| {
                     format_err!("expected an externref of a u32, found externref without host data")
@@ -150,28 +151,28 @@ pub fn match_val(store: &mut Store<()>, actual: &Val, expected: &CoreConst) -> R
         }
 
         (Val::AnyRef(Some(x)), CoreConst::EqRef) => {
-            if x.is_eqref(store)? {
+            if x.unwrap_rooted().is_eqref(store)? {
                 Ok(())
             } else {
                 bail!("expected an eqref, found {x:?}");
             }
         }
         (Val::AnyRef(Some(x)), CoreConst::I31Ref) => {
-            if x.is_i31(store)? {
+            if x.unwrap_rooted().is_i31(store)? {
                 Ok(())
             } else {
                 bail!("expected a `(ref i31)`, found {x:?}");
             }
         }
         (Val::AnyRef(Some(x)), CoreConst::StructRef) => {
-            if x.is_struct(store)? {
+            if x.unwrap_rooted().is_struct(store)? {
                 Ok(())
             } else {
                 bail!("expected a struct reference, found {x:?}")
             }
         }
         (Val::AnyRef(Some(x)), CoreConst::ArrayRef) => {
-            if x.is_array(store)? {
+            if x.unwrap_rooted().is_array(store)? {
                 Ok(())
             } else {
                 bail!("expected a array reference, found {x:?}")
@@ -183,7 +184,7 @@ pub fn match_val(store: &mut Store<()>, actual: &Val, expected: &CoreConst) -> R
                 value: Some(json_from_wast::AnyRef::Host(y)),
             },
         ) => {
-            let x = wasmtime::ExternRef::convert_any(&mut *store, *x)?;
+            let x = wasmtime::ExternRef::convert_any(&mut *store, x.unwrap_rooted())?;
             let x = x
                 .data(&mut *store)?
                 .ok_or_else(|| {

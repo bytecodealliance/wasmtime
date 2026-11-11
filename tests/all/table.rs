@@ -149,10 +149,10 @@ fn i31ref_table_get() -> Result<()> {
                 assert_eq!(
                     init.as_any()
                         .expect("is anyref")
-                        .map(|a| a.as_i31(&store).expect("is in scope")),
+                        .map(|a| a.unwrap_rooted().as_i31(&store).expect("is in scope")),
                     val.as_any()
                         .expect("is anyref")
-                        .map(|a| a.as_i31(&store).expect("is in scope"))
+                        .map(|a| a.unwrap_rooted().as_i31(&store).expect("is in scope"))
                 )
             }
         }
@@ -200,11 +200,11 @@ fn i31ref_table_set() -> Result<()> {
                         expected
                             .as_any()
                             .expect("is anyref")
-                            .map(|a| a.as_i31(&store).expect("is in scope")),
+                            .map(|a| a.unwrap_rooted().as_i31(&store).expect("is in scope")),
                         actual
                             .as_any()
                             .expect("is anyref")
-                            .map(|a| a.as_i31(&store).expect("is in scope"))
+                            .map(|a| a.unwrap_rooted().as_i31(&store).expect("is in scope"))
                     )
                 }
             }
@@ -246,6 +246,7 @@ fn i31ref_table_grow() -> Result<()> {
                     .as_any()
                     .expect("is anyref")
                     .expect("is non null")
+                    .unwrap_rooted()
                     .as_i31(&store)
                     .expect("is in scope")
                     .expect("is i31"),
@@ -287,6 +288,7 @@ fn i31ref_table_fill() -> Result<()> {
                 .as_any()
                 .expect("is anyref")
                 .expect("is non null")
+                .unwrap_rooted()
                 .as_i31(&store)
                 .expect("is in scope")
                 .expect("is i31"),
@@ -335,6 +337,7 @@ fn i31ref_table_copy() -> Result<()> {
                 .as_any()
                 .expect("is anyref")
                 .expect("is non null")
+                .unwrap_rooted()
                 .as_i31(&store)
                 .expect("is in scope")
                 .expect("is i31"),

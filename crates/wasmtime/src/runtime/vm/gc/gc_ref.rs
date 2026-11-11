@@ -423,15 +423,15 @@ impl VMGcRef {
             StorageType::ValType(ValType::Ref(r)) => match r.heap_type().top() {
                 HeapTopType::Extern => {
                     let raw = data.read_u32(offset)?;
-                    Val::ExternRef(ExternRef::_from_raw(store, raw))
+                    Val::from(ExternRef::_from_raw(store, raw))
                 }
                 HeapTopType::Any => {
                     let raw = data.read_u32(offset)?;
-                    Val::AnyRef(AnyRef::_from_raw(store, raw))
+                    Val::from(AnyRef::_from_raw(store, raw))
                 }
                 HeapTopType::Exn => {
                     let raw = data.read_u32(offset)?;
-                    Val::ExnRef(ExnRef::_from_raw(store, raw))
+                    Val::from(ExnRef::_from_raw(store, raw))
                 }
                 HeapTopType::Func => {
                     let func_ref_id = data.read_u32(offset)?;

@@ -808,17 +808,19 @@ impl RootSet {
 ///     .get_global(&mut store, "global")
 ///     .ok_or_else(|| Error::msg("missing `global` export"))?;
 /// let global_val = global.get(&mut store);
-/// let global_ref: Option<&Rooted<_>> = global_val
+/// let global_ref: Option<Rooted<_>> = global_val
 ///     .externref()
-///     .ok_or_else(|| Error::msg("not an externref"))?;
+///     .ok_or_else(|| Error::msg("not an externref"))?
+///     .map(|r| r.unwrap_rooted());
 ///
 /// let table = instance.get_table(&mut store, "table").unwrap();
 /// let table_elem = table
 ///     .get(&mut store, 3)
 ///     .ok_or_else(|| Error::msg("table out of bounds"))?;
-/// let table_elem_ref: Option<&Rooted<_>> = table_elem
+/// let table_elem_ref: Option<Rooted<_>> = table_elem
 ///     .as_extern()
-///     .ok_or_else(|| Error::msg("not an externref"))?;
+///     .ok_or_else(|| Error::msg("not an externref"))?
+///     .map(|r| r.unwrap_rooted());
 /// # Ok(())
 /// # }
 /// ```
