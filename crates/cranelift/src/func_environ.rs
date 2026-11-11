@@ -2166,17 +2166,12 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         }
     }
 
-    /// Create a new `Call` site that will do regular, non-tail calls to a
-    /// callee that never unwinds a Wasm exception into its caller.
-    pub fn new_never_throw(
-        builder: &'a mut FunctionBuilder<'func>,
-        env: &'a mut FuncEnvironment<'module_env>,
-        srcloc: ir::SourceLoc,
-    ) -> Self {
-        Call {
-            may_throw: false,
-            ..Self::new(builder, env, srcloc)
-        }
+    /// Configure whether this call may ever throw a Wasm exception or not.
+    ///
+    /// By default, it is conservatively assumed that calls may throw.
+    pub fn may_throw(mut self, may_throw: bool) -> Self {
+        self.may_throw = may_throw;
+        self
     }
 
     /// Do a Wasm-level direct call to the given callee function.
@@ -2247,11 +2242,17 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         mut real_call_args: Vec<ir::Value>,
         caller_vmctx: ir::Value,
     ) -> Result<Reachability<SmallVec<[ir::Value; 4]>>, wasmtime_environ::WasmError> {
-        self.may_throw = !self
+        // Host intrinsics turn exceptions into traps rather than unwinding them
+        // into us, so a plain `call` suffices even inside a `try_table`, which
+        // avoids `try_call`'s clobber-everything ABI.
+        if self
             .env
             .translation
             .imported_funcs_never_throw
-            .contains(callee_index);
+            .contains(callee_index)
+        {
+            self = self.may_throw(false);
+        }
 
         // First append the callee vmctx address.
         //
@@ -2368,17 +2369,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
                     FactInlineIntrinsic::EnterSyncCall | FactInlineIntrinsic::ExitSyncCall => {}
                 }
-                let import_off = self.env.offsets.imported_functions().at(callee_index);
-                let func_addr = self
-                    .env
-                    .alias_regions
-                    .vm_function_import()
-                    .wasm_call()
-                    .relative_to(import_off)
-                    .load(&mut self.builder.cursor(), vmctx);
-                Ok(Reachability::Reachable(self.indirect_call_inst(
+                Ok(Reachability::Reachable(self.imported_call_inst(
+                    callee_index,
                     sig_ref,
-                    func_addr,
                     &real_call_args,
                 )))
             }
@@ -2388,21 +2381,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // Unknown import function or this module is instantiated many times
             // and with different functions. Either way, we have to do the
             // indirect call.
-            None => {
-                let import_off = self.env.offsets.imported_functions().at(callee_index);
-                let func_addr = self
-                    .env
-                    .alias_regions
-                    .vm_function_import()
-                    .wasm_call()
-                    .relative_to(import_off)
-                    .load(&mut self.builder.cursor(), vmctx);
-                Ok(Reachability::Reachable(self.indirect_call_inst(
-                    sig_ref,
-                    func_addr,
-                    &real_call_args,
-                )))
-            }
+            None => Ok(Reachability::Reachable(self.imported_call_inst(
+                callee_index,
+                sig_ref,
+                &real_call_args,
+            ))),
         }
     }
 
@@ -2465,9 +2448,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 }
                 debug_assert!(!self.tail);
                 let rep = component_sync_call::transfer_borrow_to_owner(
-                    self.builder,
-                    self.env,
-                    self.srcloc,
+                    self,
                     ty,
                     instance,
                     callee_index,
@@ -2498,15 +2479,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let slow =
             component_sync_call::exit(self.builder, &mut self.env.alias_regions, vmctx, slot);
 
-        let import_off = self.env.offsets.imported_functions().at(callee_index);
-        let func_addr = self
-            .env
-            .alias_regions
-            .vm_function_import()
-            .wasm_call()
-            .relative_to(import_off)
-            .load(&mut self.builder.cursor(), vmctx);
-        self.indirect_call_inst(sig_ref, func_addr, real_call_args);
+        self.imported_call_inst(callee_index, sig_ref, real_call_args);
 
         slow.finish(self.builder);
         CallRets::new()
@@ -2873,6 +2846,26 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             self.attach_tags(inst);
             results
         }
+    }
+
+    /// Call the imported function `callee_index` through its
+    /// `VMFunctionImport`, with the full `real_call_args`.
+    fn imported_call_inst(
+        &mut self,
+        callee_index: FuncIndex,
+        sig_ref: ir::SigRef,
+        real_call_args: &[ir::Value],
+    ) -> CallRets {
+        let vmctx = self.caller_vmctx();
+        let import_off = self.env.offsets.imported_functions().at(callee_index);
+        let func_addr = self
+            .env
+            .alias_regions
+            .vm_function_import()
+            .wasm_call()
+            .relative_to(import_off)
+            .load(&mut self.builder.cursor(), vmctx);
+        self.indirect_call_inst(sig_ref, func_addr, real_call_args)
     }
 
     fn indirect_call_inst(
