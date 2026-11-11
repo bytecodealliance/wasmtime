@@ -133,6 +133,11 @@ typedef struct wasmtime_valtype {
 } wasmtime_valtype_t;
 
 /// \brief Creates a new type in `out` from the type in `ty`.
+///
+/// #wasmtime_valtype_t can represent every value type Wasmtime supports, while
+/// #wasm_valtype_kind aborts for `v128` and for reference types other than
+/// `externref` and `funcref`. Use this function to inspect the latter through
+/// the `WASMTIME_VALTYPE_KIND_*` constants.
 WASM_API_EXTERN void wasmtime_valtype_new(const wasm_valtype_t *ty,
                                           wasmtime_valtype_t *out);
 
