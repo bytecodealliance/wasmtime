@@ -38,12 +38,12 @@ use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::error::{Context as _, Result};
 use wasmtime_environ::obj::{ELF_WASMTIME_EXCEPTIONS, ELF_WASMTIME_FRAMES};
 use wasmtime_environ::{
-    Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
-    DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
-    FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, GetPtrSize, HostCall,
-    InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder, PtrSize,
-    StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables,
-    WasmFuncType, WasmValType, prelude::*,
+    Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CallSite, CompileError,
+    CompiledFunctionBody, DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape,
+    FrameStateSlotBuilder, FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, GetPtrSize,
+    HostCall, InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder,
+    PtrSize, StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt,
+    Tunables, WasmFuncType, WasmValType, prelude::*,
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
@@ -1001,7 +1001,7 @@ impl InliningCompiler for Compiler {
     fn inline<'a>(
         &self,
         func_body: &mut CompiledFunctionBody,
-        get_callee: &'a mut dyn FnMut(FuncKey) -> Option<&'a CompiledFunctionBody>,
+        get_callee: &'a mut dyn FnMut(FuncKey, CallSite) -> Option<&'a CompiledFunctionBody>,
     ) -> Result<()> {
         debug_assert!(!func_body.code.is::<CompiledFunction>());
         debug_assert!(func_body.code.is::<Option<Box<CompilerContext>>>());
@@ -1014,13 +1014,15 @@ impl InliningCompiler for Compiler {
         cx.codegen_context.inline(Inliner(get_callee))?;
         return Ok(());
 
-        struct Inliner<'a>(&'a mut dyn FnMut(FuncKey) -> Option<&'a CompiledFunctionBody>);
+        struct Inliner<'a>(
+            &'a mut dyn FnMut(FuncKey, CallSite) -> Option<&'a CompiledFunctionBody>,
+        );
 
         impl cranelift_codegen::inline::Inline for Inliner<'_> {
             fn inline(
                 &mut self,
                 caller: &ir::Function,
-                _call_inst: ir::Inst,
+                call_inst: ir::Inst,
                 _call_opcode: ir::Opcode,
                 callee: ir::FuncRef,
                 _call_args: &[ir::Value],
@@ -1039,7 +1041,11 @@ impl InliningCompiler for Compiler {
                     FuncKey::UnsafeIntrinsic(..) => {}
                     _ => return InlineCommand::KeepCall,
                 }
-                match (self.0)(callee) {
+                let is_cold = caller
+                    .layout
+                    .inst_block(call_inst)
+                    .is_some_and(|block| caller.layout.is_cold(block));
+                match (self.0)(callee, CallSite { is_cold }) {
                     None => InlineCommand::KeepCall,
                     Some(func_body) => {
                         debug_assert!(!func_body.code.is::<CompiledFunction>());

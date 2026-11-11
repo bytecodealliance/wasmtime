@@ -467,6 +467,14 @@ pub trait Compiler: Send + Sync {
     fn release_caches(&self);
 }
 
+/// Information about a call site, for use in inlining heuristics.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CallSite {
+    /// Whether this call site is in cold code (e.g. a block that has been
+    /// hinted as unlikely to execute).
+    pub is_cold: bool,
+}
+
 /// An inlining compiler.
 pub trait InliningCompiler: Sync + Send {
     /// Enumerate the function calls that the given `func` makes.
@@ -479,12 +487,13 @@ pub trait InliningCompiler: Sync + Send {
     /// Process this function for inlining.
     ///
     /// Implementations should call `get_callee` for each of their direct
-    /// function call sites and if `get_callee` returns `Some(_)`, they should
-    /// inline the given function body into that call site.
+    /// function call sites, passing the callee and information about the call
+    /// site, and if `get_callee` returns `Some(_)`, they should inline the
+    /// given function body into that call site.
     fn inline<'a>(
         &self,
         func: &mut CompiledFunctionBody,
-        get_callee: &'a mut dyn FnMut(FuncKey) -> Option<&'a CompiledFunctionBody>,
+        get_callee: &'a mut dyn FnMut(FuncKey, CallSite) -> Option<&'a CompiledFunctionBody>,
     ) -> Result<()>;
 
     /// Finish compiling the given function.
