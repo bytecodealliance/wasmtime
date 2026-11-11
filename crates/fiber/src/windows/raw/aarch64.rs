@@ -1,7 +1,7 @@
 // A WORD OF CAUTION
 //
 // This file needs to be kept in sync with itself and with the layout
-// documented in `raw/windows.rs`, and `SUSPENDED_FRAME` with the frame that
+// documented in `windows/raw.rs`, and `SUSPENDED_FRAME` with the frame that
 // `wasmtime_fiber_suspend` spills. It closely follows `x86_64.rs`.
 
 use core::arch::naked_asm;
@@ -93,7 +93,7 @@ pub unsafe extern "C" fn wasmtime_fiber_suspend(top: *mut u8 /* x0 */) {
     );
 }
 
-/// Sets up the top of the stack as documented in `raw/windows.rs`, reports `top`
+/// Sets up the top of the stack as documented in `windows/raw.rs`, reports `top`
 /// through `top_out`, suspends, and then calls `entry(arg, top)` when first
 /// resumed.
 ///

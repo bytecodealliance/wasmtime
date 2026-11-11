@@ -16,6 +16,10 @@
 //! to support stack-switching in a first-class manner.
 
 use crate::{Result, RunResult, RuntimeFiberStack};
+
+/// Raw fibers are never supported under Miri (see `RawFiber::is_supported`),
+/// but still refer to this crate's stack-switching routines.
+pub(crate) use crate::stackswitch::raw;
 use std::boxed::Box;
 use std::cell::Cell;
 use std::io;
