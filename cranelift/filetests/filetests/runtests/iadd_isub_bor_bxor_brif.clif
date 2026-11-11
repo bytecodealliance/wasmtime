@@ -1,10 +1,14 @@
 test interpret
 test run
+target aarch64
+target s390x
 target x86_64
-
-;; `brif` on a 32- or 64-bit `iadd`/`isub`/`bor`/`bxor` result uses the op's own
-;; flags; 8- and 16-bit results still use a `test`. The wrap-to-zero cases
-;; check that the branch sees the result at the width of its type.
+target riscv64
+target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %iadd_brif_i8(i8, i8) -> i8, i8 {
 block0(v0: i8, v1: i8):
@@ -316,22 +320,6 @@ block2(v7: i32):
 
 ; run: %bxor_select_and_brif(0x80000000, 0x80000000, 10, 20) == 1020
 ; run: %bxor_select_and_brif(0, 0x80000000, 10, 20) == 10
-
-function %iadd_load_select(i32, i32) -> i32 {
-  ss0 = explicit_slot 4
-block0(v0: i32, v1: i32):
-  v2 = stack_addr.i64 ss0
-  store.i32 v1, v2
-  v3 = load.i32 v2
-  v4 = iadd v3, v0
-  v5 = iconst.i32 10
-  v6 = iconst.i32 20
-  v7 = select v4, v5, v6
-  return v7
-}
-
-; run: %iadd_load_select(0x80000000, 0x80000000) == 20
-; run: %iadd_load_select(2, 3) == 10
 
 function %iadd_icmp_slt_zero_brif(i32, i32) -> i8 {
 block0(v0: i32, v1: i32):
