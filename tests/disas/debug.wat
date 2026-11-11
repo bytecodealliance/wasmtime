@@ -46,6 +46,7 @@
 ;;   62: movq    %rdi, %r12
 ;;   65: xorl    %esi, %esi
 ;;   67: callq   0x1bf
+;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x23, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack 
 ;;   6c: movq    %r12, %rdi
 ;;   6f: callq   0x208
 ;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x23, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack 

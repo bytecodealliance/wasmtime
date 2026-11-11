@@ -825,7 +825,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.fuel_save_from_var(builder);
         let out_of_gas = self.builtin_functions.out_of_gas(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        builder.ins().call(out_of_gas, &[vmctx]);
+        self.call_builtin(builder, out_of_gas, &[vmctx]);
         self.fuel_load_into_var(builder);
         builder.ins().jump(continuation_block, &[]);
         builder.seal_block(continuation_block);
@@ -884,7 +884,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         } else {
             retvals[0]
         };
-        builder.ins().call(check_malloc, &[vmctx, retval, len]);
+        self.call_builtin(builder, check_malloc, &[vmctx, retval, len]);
     }
 
     fn hook_free_exit(&mut self, builder: &mut FunctionBuilder) {
@@ -901,7 +901,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // first argument is a pointer to memory.
             func_args[2]
         };
-        builder.ins().call(check_free, &[vmctx, ptr]);
+        self.call_builtin(builder, check_free, &[vmctx, ptr]);
     }
 
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
@@ -979,7 +979,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmctx = self.vmctx_val(&mut builder.cursor());
         // new_epoch() returns the new deadline, so we don't have to
         // reload it.
-        let call = builder.ins().call(new_epoch, &[vmctx]);
+        let call = self.call_builtin(builder, new_epoch, &[vmctx]);
         let new_deadline = *builder.func.dfg.inst_results(call).first().unwrap();
         builder.def_var(self.epoch_deadline_var, new_deadline);
         builder.ins().jump(continuation_block, &[]);
@@ -1151,7 +1151,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .table_get_lazy_init_func_ref(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
         let index = self.cast_index_to_i64(&mut builder.cursor(), index, index_type);
-        let call_inst = builder.ins().call(lazy_init, &[vmctx, table_index, index]);
+        let call_inst = self.call_builtin(builder, lazy_init, &[vmctx, table_index, index]);
         let returned_entry = builder.func.dfg.inst_results(call_inst)[0];
         builder
             .ins()
@@ -1165,13 +1165,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn check_malloc_start(&mut self, builder: &mut FunctionBuilder) {
         let malloc_start = self.builtin_functions.malloc_start(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        builder.ins().call(malloc_start, &[vmctx]);
+        self.call_builtin(builder, malloc_start, &[vmctx]);
     }
 
     fn check_free_start(&mut self, builder: &mut FunctionBuilder) {
         let free_start = self.builtin_functions.free_start(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        builder.ins().call(free_start, &[vmctx]);
+        self.call_builtin(builder, free_start, &[vmctx]);
     }
 
     fn current_func_name(&self, builder: &mut FunctionBuilder) -> Option<&str> {
@@ -1424,8 +1424,23 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     pub(crate) fn debug_tags(&self, srcloc: ir::SourceLoc) -> Vec<ir::DebugTag> {
+        self.stacks.assert_debug_stack_is_synced();
+        self.debug_tags_impl(srcloc)
+    }
+
+    /// Compute debug tags describing the state slot as it is at this
+    /// point in translation, with `srcloc` as the Wasm PC; but unlike
+    /// `debug_tags` above, do not require the stack to be sync'd to
+    /// the debut state slot. Used for libcalls in the middle of an
+    /// operator's implementation. (Ordinarily the state slot will
+    /// contain the "prefix" of the stack at this point, i.e. with
+    /// operands popped and results not yet pushed.)
+    pub(crate) fn debug_tags_mid_operand(&self, srcloc: ir::SourceLoc) -> Vec<ir::DebugTag> {
+        self.debug_tags_impl(srcloc)
+    }
+
+    fn debug_tags_impl(&self, srcloc: ir::SourceLoc) -> Vec<ir::DebugTag> {
         if let Some((slot, _b)) = &self.state_slot {
-            self.stacks.assert_debug_stack_is_synced();
             let stack_shape = self
                 .stacks
                 .stack_shape
@@ -1448,6 +1463,25 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             ]
         } else {
             vec![]
+        }
+    }
+
+    pub(crate) fn call_builtin(
+        &self,
+        at: &mut impl InsertBuiltinCall,
+        callee: ir::FuncRef,
+        args: &[ir::Value],
+    ) -> ir::Inst {
+        let inst = at.insert_call(callee, args);
+        self.attach_builtin_call_debug_tags(at.func_mut(), inst);
+        inst
+    }
+
+    pub(crate) fn attach_builtin_call_debug_tags(&self, func: &mut ir::Function, inst: ir::Inst) {
+        debug_assert!(func.dfg.insts[inst].opcode().is_call());
+        let tags = self.debug_tags_mid_operand(func.srcloc(inst));
+        if !tags.is_empty() {
+            func.debug_tags.set(inst, tags);
         }
     }
 
@@ -1538,6 +1572,34 @@ impl TranslateTrap<VMOffsets<u8>> for FuncEnvironment<'_> {
 
     fn debug_tags(&self, srcloc: ir::SourceLoc) -> Vec<ir::DebugTag> {
         FuncEnvironment::debug_tags(self, srcloc)
+    }
+}
+
+/// A place at which a call to a builtin function can be inserted:
+/// either a [`FunctionBuilder`] or a [`FuncCursor`]. See
+/// [`FuncEnvironment::call_builtin`].
+pub(crate) trait InsertBuiltinCall {
+    /// Insert a `call` instruction at the current position.
+    fn insert_call(&mut self, callee: ir::FuncRef, args: &[ir::Value]) -> ir::Inst;
+    /// Get the function being built.
+    fn func_mut(&mut self) -> &mut ir::Function;
+}
+
+impl InsertBuiltinCall for FunctionBuilder<'_> {
+    fn insert_call(&mut self, callee: ir::FuncRef, args: &[ir::Value]) -> ir::Inst {
+        self.ins().call(callee, args)
+    }
+    fn func_mut(&mut self) -> &mut ir::Function {
+        self.func
+    }
+}
+
+impl InsertBuiltinCall for FuncCursor<'_> {
+    fn insert_call(&mut self, callee: ir::FuncRef, args: &[ir::Value]) -> ir::Inst {
+        self.ins().call(callee, args)
+    }
+    fn func_mut(&mut self) -> &mut ir::Function {
+        self.func
     }
 }
 
@@ -1790,9 +1852,7 @@ impl FuncEnvironment<'_> {
         let addr = builder.ins().iadd_imm_s(index, offset.cast_signed());
         let len = builder.ins().iconst(I32, i64::from(size));
         let watch = self.builtin_functions.memory_watch_store(builder.func);
-        builder
-            .ins()
-            .call(watch, &[vmctx, memory, addr, len, lo, hi]);
+        self.call_builtin(builder, watch, &[vmctx, memory, addr, len, lo, hi]);
         builder.ins().jump(done, &[]);
         builder.switch_to_block(done);
         builder.seal_block(done);
@@ -1851,7 +1911,7 @@ impl FuncEnvironment<'_> {
         let dst = Self::to_u64(builder, dst);
         let len = Self::to_u64(builder, len);
         let watch = self.builtin_functions.memory_watch_range(builder.func);
-        builder.ins().call(watch, &[vmctx, memory, dst, len]);
+        self.call_builtin(builder, watch, &[vmctx, memory, dst, len]);
     }
 
     fn to_u64(builder: &mut FunctionBuilder<'_>, value: ir::Value) -> ir::Value {
@@ -2083,7 +2143,7 @@ impl FuncEnvironment<'_> {
             // Our own tag -- we only need to get our instance ID.
             let builtin = self.builtin_functions.get_instance_id(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(builtin, &[vmctx]);
+            let call = self.call_builtin(builder, builtin, &[vmctx]);
             let instance_id = builder.func.dfg.inst_results(call)[0];
             let tag_id = builder
                 .ins()
@@ -2106,7 +2166,7 @@ impl FuncEnvironment<'_> {
                 .relative_to(import_off)
                 .load(&mut builder.cursor(), vmctx);
             let builtin = self.builtin_functions.get_instance_id(builder.func);
-            let call = builder.ins().call(builtin, &[from_vmctx]);
+            let call = self.call_builtin(builder, builtin, &[from_vmctx]);
             let from_instance_id = builder.func.dfg.inst_results(call)[0];
             (from_instance_id, index)
         }
@@ -3008,9 +3068,11 @@ impl FuncEnvironment<'_> {
         // because no other wasm instructions (or embedder code) can execute in
         // this window.
         let table_grow = self.builtin_functions.table_grow(pos.func);
-        let call_inst = pos
-            .ins()
-            .call(table_grow, &[table_vmctx, defined_table_index, delta64]);
+        let call_inst = self.call_builtin(
+            &mut pos,
+            table_grow,
+            &[table_vmctx, defined_table_index, delta64],
+        );
         let result = builder.func.dfg.first_result(call_inst);
         let result_idx =
             self.convert_pointer_to_index_type(builder.cursor(), result, index_type, false);
@@ -4017,9 +4079,11 @@ impl FuncEnvironment<'_> {
         let fuel = self.pre_translate_bulk_op(builder, val, cost);
         let mut pos = builder.cursor();
         let val = self.cast_index_to_i64(&mut pos, val, index_type);
-        let call_inst = pos
-            .ins()
-            .call(memory_grow, &[memory_vmctx, val, defined_memory_index]);
+        let call_inst = self.call_builtin(
+            &mut pos,
+            memory_grow,
+            &[memory_vmctx, val, defined_memory_index],
+        );
         let result = *pos.func.dfg.inst_results(call_inst).first().unwrap();
         let single_byte_pages = match self.memory(index).page_size_log2 {
             16 => false,
@@ -4200,11 +4264,11 @@ impl FuncEnvironment<'_> {
         match op {
             BulkOp::MemoryCopy { dst, src, len, .. } => {
                 let memory_copy = self.builtin_functions.memory_copy(&mut builder.func);
-                builder.ins().call(memory_copy, &[vmctx, dst, src, len]);
+                self.call_builtin(builder, memory_copy, &[vmctx, dst, src, len]);
             }
             BulkOp::MemoryFill { dst, val, len } => {
                 let memory_fill = self.builtin_functions.memory_fill(&mut builder.func);
-                builder.ins().call(memory_fill, &[vmctx, dst, val, len]);
+                self.call_builtin(builder, memory_fill, &[vmctx, dst, val, len]);
             }
         }
         Ok(())
@@ -4689,7 +4753,7 @@ impl FuncEnvironment<'_> {
                         .builtin_functions
                         .passive_elem_segment_len(&mut builder.func);
                     let idx = builder.ins().iconst(I32, i64::from(passive_index.as_u32()));
-                    let call = builder.ins().call(libcall, &[vmctx, idx]);
+                    let call = self.call_builtin(builder, libcall, &[vmctx, idx]);
                     builder.func.dfg.first_result(call)
                 }
                 None => builder.ins().iconst(pointer_type, 0),
@@ -4776,7 +4840,7 @@ impl FuncEnvironment<'_> {
                         .builtin_functions
                         .passive_elem_segment_base(builder.func);
                     let idx = builder.ins().iconst(I32, i64::from(passive_index.as_u32()));
-                    let call = builder.ins().call(libcall, &[vmctx, idx]);
+                    let call = self.call_builtin(builder, libcall, &[vmctx, idx]);
                     builder.func.dfg.first_result(call)
                 }
 
@@ -5470,7 +5534,7 @@ impl FuncEnvironment<'_> {
                 .passive_elem_segment_drop(&mut pos.func);
             let idx = pos.ins().iconst(I32, i64::from(passive_index.as_u32()));
             let vmctx = self.vmctx_val(&mut pos);
-            pos.ins().call(libcall, &[vmctx, idx]);
+            self.call_builtin(&mut pos, libcall, &[vmctx, idx]);
         }
         Ok(())
     }
@@ -5492,7 +5556,8 @@ impl FuncEnvironment<'_> {
         let (memory_vmctx, defined_memory_index) =
             self.memory_vmctx_and_defined_index(&mut pos, memory_index);
 
-        let call_inst = pos.ins().call(
+        let call_inst = self.call_builtin(
+            &mut pos,
             wait_func,
             &[memory_vmctx, defined_memory_index, addr, expected, timeout],
         );
@@ -5514,7 +5579,8 @@ impl FuncEnvironment<'_> {
 
         let (memory_vmctx, defined_memory_index) =
             self.memory_vmctx_and_defined_index(&mut pos, memory_index);
-        let call_inst = pos.ins().call(
+        let call_inst = self.call_builtin(
+            &mut pos,
             atomic_notify,
             &[memory_vmctx, defined_memory_index, addr, count],
         );
@@ -5679,9 +5745,7 @@ impl FuncEnvironment<'_> {
             }
             let builtin = self.builtin_functions.patchable_breakpoint(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            let inst = builder.ins().call(builtin, &[vmctx]);
-            let tags = self.debug_tags(builder.srcloc());
-            builder.func.debug_tags.set(inst, tags);
+            self.call_builtin(builder, builtin, &[vmctx]);
             if self.tunables.consume_fuel {
                 self.fuel_load_into_var(builder);
             }
@@ -5972,9 +6036,7 @@ impl FuncEnvironment<'_> {
             let vmctx = self.vmctx_val(&mut builder.cursor());
             let num_bytes = builder.ins().iconst(I32, val_size as i64);
             let offset_val = builder.ins().iconst(I64, offset as i64);
-            builder
-                .ins()
-                .call(check_load, &[vmctx, num_bytes, addr, offset_val]);
+            self.call_builtin(builder, check_load, &[vmctx, num_bytes, addr, offset_val]);
         }
     }
 
@@ -5990,9 +6052,7 @@ impl FuncEnvironment<'_> {
             let vmctx = self.vmctx_val(&mut builder.cursor());
             let num_bytes = builder.ins().iconst(I32, val_size as i64);
             let offset_val = builder.ins().iconst(I64, offset as i64);
-            builder
-                .ins()
-                .call(check_store, &[vmctx, num_bytes, addr, offset_val]);
+            self.call_builtin(builder, check_store, &[vmctx, num_bytes, addr, offset_val]);
         }
     }
 
@@ -6008,7 +6068,7 @@ impl FuncEnvironment<'_> {
                 let update_stack_pointer =
                     self.builtin_functions.update_stack_pointer(builder.func);
                 let vmctx = self.vmctx_val(&mut builder.cursor());
-                builder.ins().call(update_stack_pointer, &[vmctx, value]);
+                self.call_builtin(builder, update_stack_pointer, &[vmctx, value]);
             }
         }
     }
@@ -6022,7 +6082,7 @@ impl FuncEnvironment<'_> {
         if self.compiler.wmemcheck && mem_index.as_u32() == 0 {
             let update_mem_size = self.builtin_functions.update_mem_size(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            builder.ins().call(update_mem_size, &[vmctx, num_pages]);
+            self.call_builtin(builder, update_mem_size, &[vmctx, num_pages]);
         }
     }
 
@@ -6051,7 +6111,7 @@ impl FuncEnvironment<'_> {
         let vmctx = self.vmctx_val(&mut builder.cursor());
         let round = round_builtin(&mut self.builtin_functions, builder.func);
         let round_one = |builder: &mut FunctionBuilder, value: ir::Value| {
-            let call = builder.ins().call(round, &[vmctx, value]);
+            let call = self.call_builtin(builder, round, &[vmctx, value]);
             *builder.func.dfg.inst_results(call).first().unwrap()
         };
 
@@ -6229,7 +6289,7 @@ impl FuncEnvironment<'_> {
         } else {
             let swizzle = self.builtin_functions.i8x16_swizzle(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(swizzle, &[vmctx, a, b]);
+            let call = self.call_builtin(builder, swizzle, &[vmctx, a, b]);
             *builder.func.dfg.inst_results(call).first().unwrap()
         }
     }
@@ -6250,7 +6310,7 @@ impl FuncEnvironment<'_> {
         } else {
             let swizzle = self.builtin_functions.i8x16_swizzle(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(swizzle, &[vmctx, a, b]);
+            let call = self.call_builtin(builder, swizzle, &[vmctx, a, b]);
             *builder.func.dfg.inst_results(call).first().unwrap()
         }
     }
@@ -6277,7 +6337,7 @@ impl FuncEnvironment<'_> {
             let lanes = builder.ins().vconst(I8X16, lanes);
             let i8x16_shuffle = self.builtin_functions.i8x16_shuffle(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(i8x16_shuffle, &[vmctx, a, b, lanes]);
+            let call = self.call_builtin(builder, i8x16_shuffle, &[vmctx, a, b, lanes]);
             *builder.func.dfg.inst_results(call).first().unwrap()
         }
     }
@@ -6295,7 +6355,7 @@ impl FuncEnvironment<'_> {
             // Deterministic semantics are "fused multiply and add".
             let fma = self.builtin_functions.fma_f32x4(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(fma, &[vmctx, a, b, c]);
+            let call = self.call_builtin(builder, fma, &[vmctx, a, b, c]);
             *builder.func.dfg.inst_results(call).first().unwrap()
         } else {
             let mul = builder.ins().fmul(a, b);
@@ -6316,7 +6376,7 @@ impl FuncEnvironment<'_> {
             // Deterministic semantics are "fused multiply and add".
             let fma = self.builtin_functions.fma_f64x2(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(fma, &[vmctx, a, b, c]);
+            let call = self.call_builtin(builder, fma, &[vmctx, a, b, c]);
             *builder.func.dfg.inst_results(call).first().unwrap()
         } else {
             let mul = builder.ins().fmul(a, b);
@@ -6489,7 +6549,7 @@ impl FuncEnvironment<'_> {
             .builtin_functions
             .passive_elem_segment_base(builder.func);
         let idx = builder.ins().iconst(I32, i64::from(elem.as_u32()));
-        let call = builder.ins().call(libcall, &[vmctx, idx]);
+        let call = self.call_builtin(builder, libcall, &[vmctx, idx]);
         let base = builder.func.dfg.first_result(call);
 
         match exprs {
@@ -6636,7 +6696,7 @@ impl FuncEnvironment<'_> {
                     .builtin_functions
                     .passive_elem_segment_drop(builder.func);
                 let idx = builder.ins().iconst(I32, i64::from(passive_index.as_u32()));
-                builder.ins().call(libcall, &[vmctx, idx]);
+                self.call_builtin(builder, libcall, &[vmctx, idx]);
                 return self.post_translate_bulk_op(builder, fuel);
             }
         };
