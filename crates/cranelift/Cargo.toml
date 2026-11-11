@@ -49,4 +49,5 @@ features = [
 all-arch = ["cranelift-codegen/all-arch"]
 host-arch = ["cranelift-codegen/host-arch"]
 pulley = ["cranelift-codegen/pulley", "dep:pulley-interpreter"]
+pulley-fallback = ["cranelift-codegen/pulley-fallback"]
 trace-log = ["cranelift-codegen/trace-log"]

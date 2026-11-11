@@ -21,7 +21,7 @@ wasmtime-jit-debug = { workspace = true, optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
-wasmtime-cranelift = { workspace = true, optional = true, features = ['pulley'] }
+wasmtime-cranelift = { workspace = true, optional = true, features = ['pulley-fallback'] }
 wasmtime-unwinder = { workspace = true, optional = true }
 wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
@@ -178,11 +178,17 @@ winch = ["dep:wasmtime-winch", "std"]
 # targets will be available. When paired with the `runtime` feature, the Pulley
 # interpreter will be built into the runtime and you can interpret WebAssembly
 # modules that have been compiled to Pulley bytecode.
+#
+# If Wasmtime is compiled for a target that does not have a native Cranelift
+# backend then this feature need not be explicitly enabled to use Pulley.
+# Wasmtime makes a dynamic decision based on the target platform whether to use
+# Pulley or not. To guarantee the ability to compile for Pulley, such as a
+# pre-compilation target, then this feature should be enabled.
 pulley = [
-  # Note that this is intentionally empty. This feature is dynamically activated
-  # in `build.rs` as well when the host platform does not have Cranelift support
-  # for example. That means that dependencies for pulley need to be already
-  # activated anyway.
+  # Note that pulley dependencies are intentionally non-optional and not enabled
+  # here. The crate dependencies are always pulled in and `build.rs` decides
+  # whether they're used or not.
+  "wasmtime-cranelift?/pulley",
 ]
 
 # Enables support for incremental compilation cache to be enabled in `Config`.
