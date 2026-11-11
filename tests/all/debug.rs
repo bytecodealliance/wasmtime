@@ -2394,6 +2394,12 @@ async fn watchpoints_handler_may_grow_memory() -> wasmtime::Result<()> {
         }
     }
 
+    // Pulley doesn't support the wasm threads proposal, so skip this test on
+    // those targets.
+    if Engine::default().is_pulley() {
+        return Ok(());
+    }
+
     let (module, mut store) = get_module_and_store(
         |config| {
             // With no reservation beyond the memory's size, the memory moves
