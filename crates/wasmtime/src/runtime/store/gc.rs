@@ -64,7 +64,7 @@ pub(crate) struct StoreGcData {
     /// solution" where supertypes are stored inline in a compiled-code-visible
     /// location which means that a libcall isn't needed at all (nor
     /// synchronization) to determine subtype/supertype relationships.
-    subtype_check_cache: HashMap<u64, bool, foldhash::fast::FixedState>,
+    subtype_check_cache: HashMap<u64, bool>,
 }
 
 impl<T> Store<T> {
