@@ -1088,11 +1088,11 @@ impl Func {
     /// The returned value is only valid for as long as the store is alive.
     /// This value is safe to pass to [`Func::from_raw`] so long as the same
     /// `store` is provided.
-    pub fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
-        self.to_raw_(store.as_context_mut().0)
+    pub fn to_raw(&self, store: impl AsContext) -> *mut c_void {
+        self.to_raw_(store.as_context().0)
     }
 
-    pub(crate) fn to_raw_(&self, store: &mut StoreOpaque) -> *mut c_void {
+    pub(crate) fn to_raw_(&self, store: &StoreOpaque) -> *mut c_void {
         self.vm_func_ref(store).as_ptr().cast()
     }
 

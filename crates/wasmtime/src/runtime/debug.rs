@@ -4,9 +4,10 @@ use super::store::AsStoreOpaque;
 use crate::code::StoreCode;
 use crate::module::RegisterBreakpointState;
 use crate::store::StoreId;
+use crate::sync::RwLock;
 use crate::vm::{Activation, Backtrace};
 use crate::{
-    AnyRef, AsContextMut, CodeMemory, ExnRef, Extern, ExternRef, Func, Instance, Module,
+    AnyRef, AsContext, AsContextMut, CodeMemory, ExnRef, Extern, ExternRef, Func, Instance, Module,
     OwnedRooted, StoreContext, StoreContextMut, Unrooted, Val,
     code::StoreCodePC,
     module::ModuleRegistry,
@@ -14,7 +15,8 @@ use crate::{
     vm::{CompiledModuleId, VMContext},
 };
 use crate::{Caller, Result, Store};
-use alloc::collections::{BTreeMap, BTreeSet, btree_map::Entry};
+use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::{ffi::c_void, ptr::NonNull};
@@ -193,7 +195,7 @@ impl StoreOpaque {
         })
     }
 
-    fn debug_all_instances(&mut self) -> Vec<Instance> {
+    fn debug_all_instances(&self) -> Vec<Instance> {
         if !self.engine().tunables().debug_guest {
             return vec![];
         }
@@ -228,13 +230,9 @@ impl Instance {
     ///
     /// `None` is returned if guest-debugging is not enabled in the
     /// engine configuration for this Store.
-    pub fn debug_global(
-        &self,
-        mut store: impl AsContextMut,
-        global_index: u32,
-    ) -> Option<crate::Global> {
+    pub fn debug_global(&self, store: impl AsContext, global_index: u32) -> Option<crate::Global> {
         self.debug_export(
-            store.as_context_mut().0,
+            store.as_context().0,
             GlobalIndex::from_bits(global_index).into(),
         )
         .and_then(|s| s.into_global())
@@ -257,13 +255,9 @@ impl Instance {
     ///
     /// `None` is returned if guest-debugging is not enabled in the
     /// engine configuration for this Store.
-    pub fn debug_memory(
-        &self,
-        mut store: impl AsContextMut,
-        memory_index: u32,
-    ) -> Option<crate::Memory> {
+    pub fn debug_memory(&self, store: impl AsContext, memory_index: u32) -> Option<crate::Memory> {
         self.debug_export(
-            store.as_context_mut().0,
+            store.as_context().0,
             MemoryIndex::from_bits(memory_index).into(),
         )
         .and_then(|s| s.into_memory())
@@ -288,11 +282,11 @@ impl Instance {
     /// engine configuration for this Store.
     pub fn debug_shared_memory(
         &self,
-        mut store: impl AsContextMut,
+        store: impl AsContext,
         memory_index: u32,
     ) -> Option<crate::SharedMemory> {
         self.debug_export(
-            store.as_context_mut().0,
+            store.as_context().0,
             MemoryIndex::from_bits(memory_index).into(),
         )
         .and_then(|s| s.into_shared_memory())
@@ -312,13 +306,9 @@ impl Instance {
     ///
     /// `None` is returned if guest-debugging is not enabled in the
     /// engine configuration for this Store.
-    pub fn debug_table(
-        &self,
-        mut store: impl AsContextMut,
-        table_index: u32,
-    ) -> Option<crate::Table> {
+    pub fn debug_table(&self, store: impl AsContext, table_index: u32) -> Option<crate::Table> {
         self.debug_export(
-            store.as_context_mut().0,
+            store.as_context().0,
             TableIndex::from_bits(table_index).into(),
         )
         .and_then(|s| s.into_table())
@@ -344,7 +334,7 @@ impl Instance {
         mut store: impl AsContextMut,
         function_index: u32,
     ) -> Option<crate::Func> {
-        self.debug_export(
+        self.debug_export_mut(
             store.as_context_mut().0,
             FuncIndex::from_bits(function_index).into(),
         )
@@ -364,15 +354,38 @@ impl Instance {
     ///
     /// `None` is returned if guest-debugging is not enabled in the
     /// engine configuration for this Store.
-    pub fn debug_tag(&self, mut store: impl AsContextMut, tag_index: u32) -> Option<crate::Tag> {
-        self.debug_export(
-            store.as_context_mut().0,
-            TagIndex::from_bits(tag_index).into(),
-        )
-        .and_then(|s| s.into_tag())
+    pub fn debug_tag(&self, store: impl AsContext, tag_index: u32) -> Option<crate::Tag> {
+        self.debug_export(store.as_context().0, TagIndex::from_bits(tag_index).into())
+            .and_then(|s| s.into_tag())
     }
 
-    fn debug_export(&self, store: &mut StoreOpaque, index: EntityIndex) -> Option<Extern> {
+    /// Looks up the entity at `index` in this instance's index
+    /// spaces, for debugging. Returns `None` if guest debugging is
+    /// disabled, if `index` is out of bounds, or if `index` refers to
+    /// a function.
+    ///
+    /// This needs only shared access to the store, so it cannot
+    /// return functions (because of lazy init); use
+    /// `debug_export_mut` for those.
+    fn debug_export(&self, store: &StoreOpaque, index: EntityIndex) -> Option<Extern> {
+        if !store.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let env_module = self._module(store).env_module();
+        if !env_module.is_valid(index) {
+            return None;
+        }
+        let export = store[self.id].get_export_by_index(store.id(), index)?;
+        Some(Extern::from_wasmtime_export(export, store.engine()))
+    }
+
+    /// Like `debug_export`, but also returns functions.
+    ///
+    /// Looking up a function needs mutable access to the store because an
+    /// instance's defined functions' `VMFuncRef`s are initialized lazily, on
+    /// first use, and looking one up may be that first use.
+    fn debug_export_mut(&self, store: &mut StoreOpaque, index: EntityIndex) -> Option<Extern> {
         if !store.engine().tunables().debug_guest {
             return None;
         }
@@ -392,6 +405,22 @@ impl Instance {
 }
 
 impl<'a, T> StoreContext<'a, T> {
+    /// Get a vector of all Instances held in the Store, for debug
+    /// purposes.
+    ///
+    /// See [`Store::debug_all_instances`] for more details.
+    pub fn debug_all_instances(self) -> Vec<Instance> {
+        self.0.debug_all_instances()
+    }
+
+    /// Get a vector of all Modules held in the Store, for debug
+    /// purposes.
+    ///
+    /// See [`Store::debug_all_modules`] for more details.
+    pub fn debug_all_modules(self) -> Vec<Module> {
+        self.0.debug_all_modules()
+    }
+
     /// Return all breakpoints.
     pub fn breakpoints(self) -> Option<impl Iterator<Item = Breakpoint> + 'a> {
         if !self.engine().tunables().debug_guest {
@@ -452,15 +481,14 @@ impl FrameHandle {
     /// # Safety
     ///
     /// The provided activation must be valid currently.
-    unsafe fn exit_frame(store: &mut StoreOpaque, activation: Activation) -> Option<FrameHandle> {
+    unsafe fn exit_frame(store: &StoreOpaque, activation: Activation) -> Option<FrameHandle> {
         // SAFETY: activation is valid as per our safety condition.
         let mut cursor = unsafe { activation.cursor() };
 
         // Find the first virtual frame. Each physical frame may have
         // zero or more virtual frames.
         while !cursor.done() {
-            let (cache, registry) = store.frame_data_cache_mut_and_registry();
-            let frames = cache.lookup_or_compute(registry, cursor.frame());
+            let frames = FrameDataCache::frames(store, cursor.frame());
             if frames.len() > 0 {
                 return Some(FrameHandle {
                     cursor,
@@ -482,9 +510,8 @@ impl FrameHandle {
 
     /// Determine whether this handle can still be used to refer to a
     /// frame.
-    pub fn is_valid(&self, mut store: impl AsContextMut) -> bool {
-        let store = store.as_context_mut();
-        self.is_valid_impl(store.0.as_store_opaque())
+    pub fn is_valid(&self, store: impl AsContext) -> bool {
+        self.is_valid_impl(store.as_context().0)
     }
 
     fn is_valid_impl(&self, store: &StoreOpaque) -> bool {
@@ -495,9 +522,9 @@ impl FrameHandle {
 
     /// Get a handle to the next frame up the activation (the one that
     /// called this frame), if any.
-    pub fn parent(&self, mut store: impl AsContextMut) -> Result<Option<FrameHandle>> {
-        let mut store = store.as_context_mut();
-        if !self.is_valid(&mut store) {
+    pub fn parent(&self, store: impl AsContext) -> Result<Option<FrameHandle>> {
+        let store = store.as_context().0;
+        if !self.is_valid_impl(store) {
             crate::error::bail!("Frame handle is no longer valid.");
         }
 
@@ -505,11 +532,7 @@ impl FrameHandle {
         parent.virtual_frame_idx += 1;
 
         while !parent.cursor.done() {
-            let (cache, registry) = store
-                .0
-                .as_store_opaque()
-                .frame_data_cache_mut_and_registry();
-            let frames = cache.lookup_or_compute(registry, parent.cursor.frame());
+            let frames = FrameDataCache::frames(store, parent.cursor.frame());
             if parent.virtual_frame_idx < frames.len() {
                 return Ok(Some(parent));
             }
@@ -518,26 +541,26 @@ impl FrameHandle {
             // wrt execution version at the top of this function, and
             // we have not returned since.
             unsafe {
-                parent.cursor.advance(store.0.as_store_opaque().unwinder());
+                parent.cursor.advance(store.unwinder());
             }
         }
 
         Ok(None)
     }
 
-    fn frame_data<'a>(&self, store: &'a mut StoreOpaque) -> Result<&'a FrameData> {
+    fn frame_data(&self, store: &StoreOpaque) -> Result<FrameDataRef> {
         if !self.is_valid_impl(store) {
             crate::error::bail!("Frame handle is no longer valid.");
         }
-        let (cache, registry) = store.frame_data_cache_mut_and_registry();
-        let frames = cache.lookup_or_compute(registry, self.cursor.frame());
+        let frames = FrameDataCache::frames(store, self.cursor.frame());
         // `virtual_frame_idx` counts up for ease of iteration
         // behavior, while the frames are stored in outer-to-inner
         // (i.e., caller to callee) order, so we need to reverse here.
-        Ok(&frames[frames.len() - 1 - self.virtual_frame_idx])
+        let index = frames.len() - 1 - self.virtual_frame_idx;
+        Ok(FrameDataRef { frames, index })
     }
 
-    fn raw_instance<'a>(&self, store: &mut StoreOpaque) -> Result<&'a crate::vm::Instance> {
+    fn raw_instance<'a>(&self, store: &StoreOpaque) -> Result<&'a crate::vm::Instance> {
         let frame_data = self.frame_data(store)?;
 
         // Read out the vmctx slot.
@@ -559,21 +582,20 @@ impl FrameHandle {
     }
 
     /// Get the instance associated with the current frame.
-    pub fn instance(&self, mut store: impl AsContextMut) -> Result<Instance> {
-        let store = store.as_context_mut();
-        let instance = self.raw_instance(store.0.as_store_opaque())?;
-        let id = instance.id();
-        Ok(Instance::from_wasmtime(id, store.0.as_store_opaque()))
+    pub fn instance(&self, store: impl AsContext) -> Result<Instance> {
+        let store = store.as_context().0;
+        let instance = self.raw_instance(store)?;
+        Ok(Instance::from_wasmtime(instance.id(), store))
     }
 
     /// Get the module associated with the current frame, if any
     /// (i.e., not a container instance for a host-created entity).
     pub fn module<'a, T: 'static>(
         &self,
-        store: impl Into<StoreContextMut<'a, T>>,
+        store: impl Into<StoreContext<'a, T>>,
     ) -> Result<Option<&'a Module>> {
         let store = store.into();
-        let instance = self.raw_instance(store.0.as_store_opaque())?;
+        let instance = self.raw_instance(store.0)?;
         Ok(instance.runtime_module())
     }
 
@@ -583,17 +605,17 @@ impl FrameHandle {
     /// (rather than a trampoline).
     pub fn wasm_function_index_and_pc(
         &self,
-        mut store: impl AsContextMut,
+        store: impl AsContext,
     ) -> Result<Option<(DefinedFuncIndex, ModulePC)>> {
-        let mut store = store.as_context_mut();
-        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+        let store = store.as_context();
+        let frame_data = self.frame_data(store.0)?;
         let FuncKey::DefinedWasmFunction(module, func) = frame_data.func_key else {
             return Ok(None);
         };
         let wasm_pc = frame_data.wasm_pc;
         debug_assert_eq!(
             module,
-            self.module(&mut store)?
+            self.module(&store)?
                 .expect("module should be defined if this is a defined function")
                 .env_module()
                 .module_index
@@ -602,16 +624,14 @@ impl FrameHandle {
     }
 
     /// Get the number of locals in this frame.
-    pub fn num_locals(&self, mut store: impl AsContextMut) -> Result<u32> {
-        let store = store.as_context_mut();
-        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+    pub fn num_locals(&self, store: impl AsContext) -> Result<u32> {
+        let frame_data = self.frame_data(store.as_context().0)?;
         Ok(u32::try_from(frame_data.locals.len()).unwrap())
     }
 
     /// Get the depth of the operand stack in this frame.
-    pub fn num_stacks(&self, mut store: impl AsContextMut) -> Result<u32> {
-        let store = store.as_context_mut();
-        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+    pub fn num_stacks(&self, store: impl AsContext) -> Result<u32> {
+        let frame_data = self.frame_data(store.as_context().0)?;
         Ok(u32::try_from(frame_data.stack.len()).unwrap())
     }
 
@@ -626,16 +646,16 @@ impl FrameHandle {
     ///
     /// Panics if the index is out-of-range (greater than
     /// `num_locals()`).
-    pub fn local(&self, mut store: impl AsContextMut, index: u32) -> Result<Val> {
-        let store = store.as_context_mut();
-        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+    pub fn local(&self, store: impl AsContext, index: u32) -> Result<Val> {
+        let store = store.as_context().0;
+        let frame_data = self.frame_data(store)?;
         let (offset, ty) = frame_data.locals[usize::try_from(index).unwrap()];
         let slot_addr = frame_data.slot_addr(self.cursor.frame().fp());
         // SAFETY: compiler produced metadata to describe this local
         // slot and stored a value of the correct type into it. Slot
         // address is valid because we checked liveness of the
         // activation/frame via `frame_data` above.
-        Ok(unsafe { read_value(store.0.as_store_opaque(), slot_addr, offset, ty) })
+        Ok(unsafe { read_value(store, slot_addr, offset, ty) })
     }
 
     /// Get the type and value of the given operand-stack value in
@@ -648,16 +668,21 @@ impl FrameHandle {
     ///
     /// A GC reference is returned as an unrooted reference, as with
     /// [`FrameHandle::local`].
-    pub fn stack(&self, mut store: impl AsContextMut, index: u32) -> Result<Val> {
-        let store = store.as_context_mut();
-        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out-of-range (greater than
+    /// `num_stacks()`).
+    pub fn stack(&self, store: impl AsContext, index: u32) -> Result<Val> {
+        let store = store.as_context().0;
+        let frame_data = self.frame_data(store)?;
         let (offset, ty) = frame_data.stack[usize::try_from(index).unwrap()];
         let slot_addr = frame_data.slot_addr(self.cursor.frame().fp());
         // SAFETY: compiler produced metadata to describe this
         // operand-stack slot and stored a value of the correct type
         // into it. Slot address is valid because we checked liveness
         // of the activation/frame via `frame_data` above.
-        Ok(unsafe { read_value(store.0.as_store_opaque(), slot_addr, offset, ty) })
+        Ok(unsafe { read_value(store, slot_addr, offset, ty) })
     }
 }
 
@@ -666,40 +691,55 @@ impl FrameHandle {
 /// present at that physical PC.
 pub(crate) struct FrameDataCache {
     /// For a given physical PC, the list of virtual frames, from
-    /// inner (most recently called/inlined) to outer.
-    by_pc: BTreeMap<StoreCodePC, Vec<FrameData>>,
+    /// outer (caller) to inner (most recently called/inlined).
+    by_pc: RwLock<BTreeMap<StoreCodePC, Arc<[FrameData]>>>,
 }
 
 impl FrameDataCache {
     pub(crate) fn new() -> FrameDataCache {
         FrameDataCache {
-            by_pc: BTreeMap::new(),
+            by_pc: RwLock::new(BTreeMap::new()),
         }
     }
 
-    /// Look up (or compute) the list of `FrameData`s from a physical
-    /// `Frame`.
-    fn lookup_or_compute<'a>(
-        &'a mut self,
-        registry: &ModuleRegistry,
-        frame: Frame,
-    ) -> &'a [FrameData] {
+    /// Look up (or compute and cache) the list of `FrameData`s for a
+    /// physical `Frame`.
+    fn frames(store: &StoreOpaque, frame: Frame) -> Arc<[FrameData]> {
         let pc = StoreCodePC::from_raw(frame.pc());
-        match self.by_pc.entry(pc) {
-            Entry::Occupied(frames) => frames.into_mut(),
-            Entry::Vacant(v) => {
-                // Although inlining can mix modules, `module` is the
-                // module that actually contains the physical PC
-                // (i.e., the outermost function that inlined the
-                // others).
-                let (store_code, frames) = VirtualFrame::decode(registry, frame.pc());
-                let frames = frames
-                    .into_iter()
-                    .map(|frame| FrameData::compute(frame, store_code))
-                    .collect::<Vec<_>>();
-                v.insert(frames)
-            }
+        let cache = &store.frame_data_cache().by_pc;
+        if let Some(frames) = cache.read().get(&pc) {
+            return frames.clone();
         }
+        // Compute without holding the lock. If another thread fills
+        // in the same PC meanwhile, keep whichever was inserted first;
+        // both are equal.
+        let frames: Arc<[FrameData]> = Self::compute(store.modules(), frame).into();
+        cache.write().entry(pc).or_insert(frames).clone()
+    }
+
+    fn compute(registry: &ModuleRegistry, frame: Frame) -> Vec<FrameData> {
+        // Although inlining can mix modules, `module` is the module that
+        // actually contains the physical PC (i.e., the outermost function
+        // that inlined the others).
+        let (store_code, frames) = VirtualFrame::decode(registry, frame.pc());
+        frames
+            .into_iter()
+            .map(|frame| FrameData::compute(frame, store_code))
+            .collect()
+    }
+}
+
+/// A reference to one virtual frame's `FrameData` in a
+/// `FrameDataCache` entry.
+struct FrameDataRef {
+    frames: Arc<[FrameData]>,
+    index: usize,
+}
+
+impl core::ops::Deref for FrameDataRef {
+    type Target = FrameData;
+    fn deref(&self) -> &FrameData {
+        &self.frames[self.index]
     }
 }
 
@@ -743,6 +783,7 @@ impl VirtualFrame {
 }
 
 /// Data computed when we visit a given frame.
+#[derive(Clone)]
 struct FrameData {
     slot_to_fp_offset: usize,
     func_key: FuncKey,
@@ -813,7 +854,7 @@ impl FrameData {
 /// instrumentation is correct, and as long as the tables are
 /// preserved through serialization).
 unsafe fn read_value(
-    store: &mut StoreOpaque,
+    store: &StoreOpaque,
     slot_base: *const u8,
     offset: FrameStateSlotOffset,
     ty: FrameValType,
@@ -823,44 +864,26 @@ unsafe fn read_value(
     // SAFETY: each case reads a value from memory that should be valid
     // according to our safety condition. State-slot values are packed without
     // alignment padding, so these loads must accept unaligned addresses.
+    let raw = || unsafe { (address as *const u32).read_unaligned() };
     match ty {
-        FrameValType::I32 => {
-            let value = unsafe { (address as *const i32).read_unaligned() };
-            Val::I32(value)
-        }
-        FrameValType::I64 => {
-            let value = unsafe { (address as *const i64).read_unaligned() };
-            Val::I64(value)
-        }
-        FrameValType::F32 => {
-            let value = unsafe { (address as *const u32).read_unaligned() };
-            Val::F32(value)
-        }
-        FrameValType::F64 => {
-            let value = unsafe { (address as *const u64).read_unaligned() };
-            Val::F64(value)
-        }
+        FrameValType::I32 => Val::I32(unsafe { (address as *const i32).read_unaligned() }),
+        FrameValType::I64 => Val::I64(unsafe { (address as *const i64).read_unaligned() }),
+        FrameValType::F32 => Val::F32(raw()),
+        FrameValType::F64 => Val::F64(unsafe { (address as *const u64).read_unaligned() }),
         FrameValType::V128 => {
             // Vectors are always stored as little-endian.
             let value =
                 unsafe { u128::from_le_bytes((address as *const [u8; 16]).read_unaligned()) };
             Val::V128(value.into())
         }
-        FrameValType::AnyRef => {
-            let value = unsafe { (address as *const u32).read_unaligned() };
-            Val::from(Unrooted::<AnyRef>::from_raw_u32(store, value))
-        }
-        FrameValType::ExnRef => {
-            let value = unsafe { (address as *const u32).read_unaligned() };
-            Val::from(Unrooted::<ExnRef>::from_raw_u32(store, value))
-        }
-        FrameValType::ExternRef => {
-            let value = unsafe { (address as *const u32).read_unaligned() };
-            Val::from(Unrooted::<ExternRef>::from_raw_u32(store, value))
-        }
+        FrameValType::AnyRef => Val::from(Unrooted::<AnyRef>::from_raw_u32(store, raw())),
+        FrameValType::ExnRef => Val::from(Unrooted::<ExnRef>::from_raw_u32(store, raw())),
+        FrameValType::ExternRef => Val::from(Unrooted::<ExternRef>::from_raw_u32(store, raw())),
         FrameValType::FuncRef => {
             let value = unsafe { (address as *const *mut c_void).read_unaligned() };
-            let value = unsafe { Func::_from_raw(store, value) };
+            // SAFETY: the slot holds a function reference of this store.
+            let value = NonNull::new(value.cast())
+                .map(|f| unsafe { Func::from_vm_func_ref(store.id(), f) });
             Val::FuncRef(value)
         }
         FrameValType::ContRef => {
