@@ -21,8 +21,8 @@ use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
-use wasmtime_environ::DefinedTagIndex;
 use wasmtime_environ::packed_option::ReservedValue;
+use wasmtime_environ::{DefinedTagIndex, VMSharedTypeIndex};
 
 #[derive(Default)]
 pub(crate) struct StoreGcData {
@@ -64,7 +64,7 @@ pub(crate) struct StoreGcData {
     /// solution" where supertypes are stored inline in a compiled-code-visible
     /// location which means that a libcall isn't needed at all (nor
     /// synchronization) to determine subtype/supertype relationships.
-    subtype_check_cache: HashMap<u64, bool>,
+    subtype_check_cache: HashMap<(VMSharedTypeIndex, VMSharedTypeIndex), bool>,
 }
 
 impl<T> Store<T> {
@@ -1084,12 +1084,12 @@ impl StoreOpaque {
     /// for details.
     pub(crate) fn is_subtype_cached(
         &mut self,
-        sub: wasmtime_environ::VMSharedTypeIndex,
-        sup: wasmtime_environ::VMSharedTypeIndex,
+        sub: VMSharedTypeIndex,
+        sup: VMSharedTypeIndex,
     ) -> bool {
         const MAX_SIZE: usize = 1 << 16; // 64k entries
 
-        let key = (u64::from(sub.as_u32()) << 32) | u64::from(sup.as_u32());
+        let key = (sub, sup);
         let engine_answer = || self.engine.signatures().is_subtype(sub, sup);
         if self.gc_data.subtype_check_cache.len() < MAX_SIZE {
             *self
