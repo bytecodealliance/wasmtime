@@ -20,15 +20,7 @@ use wasmtime::{Result, bail, format_err};
 
 /// Find the wasmtime binary built alongside the test binary.
 fn wasmtime_binary() -> std::path::PathBuf {
-    let mut me = std::env::current_exe().expect("current_exe specified");
-    me.pop(); // chop off file name
-    me.pop(); // chop off `deps`
-    if cfg!(target_os = "windows") {
-        me.push("wasmtime.exe");
-    } else {
-        me.push("wasmtime");
-    }
-    me
+    env!("CARGO_BIN_EXE_wasmtime").into()
 }
 
 /// Path to the wasm-aware LLDB.

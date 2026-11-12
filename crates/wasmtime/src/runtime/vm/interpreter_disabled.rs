@@ -12,11 +12,10 @@ use core::mem;
 use core::ptr::NonNull;
 use wasmtime_unwinder::Unwind;
 
-// Wasmtime currently unconditionally depends on the `pulley-interpreter` crate
-// in `Cargo.toml` to make it always available, and then `build.rs` determines
-// what to do with it. Fake a use of it here to squash the "unused dependency"
-// warning of Cargo since our manifest can't take into account the build-script
-// logic easily.
+// The `pulley-interpreter` crate is always a dependency when the `runtime`
+// feature is enabled and `build.rs` decides whether it's actually used. Fake a
+// use of it here to quiet Cargo's `unused_dependencies` lint since our manifest
+// can't take into account the build-script logic.
 use pulley_interpreter as _;
 
 pub struct Interpreter {

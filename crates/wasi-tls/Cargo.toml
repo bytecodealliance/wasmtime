@@ -43,6 +43,6 @@ openssl = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-programs-artifacts = { workspace = true }
-wasmtime-wasi = { workspace = true }
+wasmtime-wasi = { workspace = true, features = ["p2", "p3"] }
 tokio = { workspace = true, features = ["macros"] }
 futures = { workspace = true }

@@ -409,6 +409,23 @@ extern crate alloc;
 // `use crate::prelude::*;` everywhere else within this crate, for example.
 use wasmtime_environ::prelude;
 
+// Cargo's `unused_dependencies` lint warns about dependencies that rustc never
+// used, but some dependencies are only used under a combination of Cargo
+// features which can't be expressed in `Cargo.toml`. Fake a use of them here to
+// keep the lint quiet:
+//
+// * `encoding_rs` and `wasmtime-component-macro` are only used with both the
+//   `component-model` and `runtime` features.
+// * `wat` is only used with the `cranelift` or `winch` features.
+// * `wasmtime-jit-icache-coherence` is only used with both the `std` and
+//   `runtime` features.
+#[cfg(feature = "component-model")]
+use {encoding_rs as _, wasmtime_component_macro as _};
+#[cfg(feature = "std")]
+use wasmtime_jit_icache_coherence as _;
+#[cfg(feature = "wat")]
+use wat as _;
+
 // FIXME(#12069) should transition to OOM-handling versions of these collections
 // for all internal usage instead of using abort-on-OOM versions. Once that's
 // done this can be removed and the collections should be directly imported from

@@ -5,6 +5,11 @@
 // selectively enabled here.
 #![warn(clippy::cast_sign_loss)]
 
+// Whether `wasmtime-versioned-export-macros` is used depends on `build.rs`
+// computed cfgs which `Cargo.toml` can't take into account, so fake a use of it
+// here to force this to be considered used.
+use wasmtime_versioned_export_macros as _;
+
 // Polyfill `std::simd::i8x16` etc. until they're stable.
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]

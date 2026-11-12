@@ -17,6 +17,11 @@
 
 pub use wasmtime;
 
+// `tracing` is only a dependency to support the `disable-logging` feature, so
+// fake a use of it to quiet Cargo's `unused_dependencies` lint.
+#[cfg(feature = "disable-logging")]
+use tracing as _;
+
 mod config;
 mod engine;
 mod error;
