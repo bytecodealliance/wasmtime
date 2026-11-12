@@ -2829,6 +2829,10 @@ impl Config {
             bail!("exceptions support requires garbage collection (GC) to be enabled in the build");
         }
 
+        if !cfg!(feature = "threads") && features.threads() {
+            bail!("support for threads was disabled at compile time")
+        }
+
         match &self.rr_config {
             #[cfg(feature = "rr")]
             RRConfig::Recording | RRConfig::Replaying => {
