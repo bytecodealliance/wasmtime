@@ -82,6 +82,15 @@ impl<T> Store<T> {
     /// After this function returns a trap, it may be called for subsequent
     /// returns to host or wasm code as the trap propagates to the root call.
     ///
+    /// If the future of an async call into WebAssembly, such as
+    /// [`Func::call_async`](crate::Func::call_async), is dropped before it
+    /// completes, the call is cancelled and no further user code runs for it,
+    /// including this hook. The [`CallHook::ReturningFromHost`] and
+    /// [`CallHook::ReturningFromWasm`] events that would otherwise match
+    /// earlier [`CallHook::CallingHost`] and [`CallHook::CallingWasm`] events
+    /// are not delivered for a cancelled call. Embedders that track state
+    /// across these events should reset it when they drop such a future.
+    ///
     /// [`Trap`]: crate::Trap
     #[cfg(feature = "call-hook")]
     pub fn call_hook_async(&mut self, hook: impl CallHookHandler<T> + Send + Sync + 'static) {
