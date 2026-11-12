@@ -716,6 +716,14 @@ impl<'a, 'data> Translator<'a, 'data> {
                                     )
                                     .into()
                                 }
+                                Trampoline::LowerImport { .. } => {
+                                    // Uncaught exceptions become traps at component boundaries
+                                    self.static_modules[module]
+                                        .imported_funcs_never_throw
+                                        .insert(imported_func);
+
+                                    continue;
+                                }
                                 _ => continue,
                             },
 
