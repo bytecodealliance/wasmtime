@@ -38,12 +38,12 @@ use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::error::{Context as _, Result};
 use wasmtime_environ::obj::{ELF_WASMTIME_EXCEPTIONS, ELF_WASMTIME_FRAMES};
 use wasmtime_environ::{
-    Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
-    DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
-    FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, GetPtrSize, HostCall,
-    InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder, PtrSize,
-    StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables,
-    WasmFuncType, WasmValType, prelude::*,
+    Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CallSite, CompileError,
+    CompiledFunctionBody, DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape,
+    FrameStateSlotBuilder, FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, GetPtrSize,
+    HostCall, InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder,
+    PtrSize, StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt,
+    Tunables, WasmFuncType, WasmValType, prelude::*,
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
@@ -274,24 +274,7 @@ impl Compiler {
             &[callee_vmctx, caller_vmctx, args_base, args_len],
         );
 
-        // Increment the "execution version" on the VMStoreContext if
-        // guest debugging is enabled.
-        if self.tunables.debug_guest {
-            let vmstore_ctx_ptr = alias_regions
-                .vmctx()
-                .store_context()
-                .load(&mut builder.cursor(), caller_vmctx);
-            let old_version = alias_regions
-                .vm_store_context()
-                .execution_version()
-                .load(&mut builder.cursor(), vmstore_ctx_ptr);
-            let new_version = builder.ins().iadd_imm_s(old_version, 1);
-            alias_regions.vm_store_context().execution_version().store(
-                &mut builder.cursor(),
-                vmstore_ctx_ptr,
-                new_version,
-            );
-        }
+        self.bump_execution_version(&mut builder, &mut alias_regions, caller_vmctx);
 
         // Invoke `raise` if the callee (host) returned an error.
         let succeeded = builder.func.dfg.inst_results(call)[0];
@@ -381,6 +364,8 @@ impl Compiler {
             host_sig,
         );
         let results = builder.func.dfg.inst_results(call).to_vec();
+
+        self.bump_execution_version(&mut builder, &mut alias_regions, vmctx);
 
         // Libcalls do not explicitly jump/raise on traps but instead return a
         // code indicating whether they trapped or not. This means that it's the
@@ -736,7 +721,7 @@ impl wasmtime_environ::Compiler for Compiler {
             }
         }
 
-        let mut breakpoint_table: Vec<(ModulePC, Range<u32>)> = Vec::new();
+        let mut breakpoint_table: Vec<(StaticModuleIndex, ModulePC, Range<u32>)> = Vec::new();
         let mut nop_units = None;
 
         let mut ret = Vec::with_capacity(funcs.len());
@@ -799,7 +784,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // may appear in multiple functions (due to inlining) so it is
         // only now that we can aggregate all appearances of a PC
         // together for breakpoint metadata indexed by that PC.
-        breakpoint_table.sort_by_key(|(wasm_pc, _text_range)| *wasm_pc);
+        breakpoint_table.sort_by_key(|(_module, wasm_pc, _text_range)| *wasm_pc);
 
         builder.finish(|text| {
             if !breakpoint_table.is_empty() {
@@ -817,11 +802,11 @@ impl wasmtime_environ::Compiler for Compiler {
                     }
                 };
 
-                for (wasm_pc, text_range) in &breakpoint_table {
+                for (module, wasm_pc, text_range) in &breakpoint_table {
                     let start = usize::try_from(text_range.start).unwrap();
                     let end = usize::try_from(text_range.end).unwrap();
                     let text = &mut text[start..end];
-                    frame_tables.add_breakpoint_patch(*wasm_pc, text_range.start, text);
+                    frame_tables.add_breakpoint_patch(*module, *wasm_pc, text_range.start, text);
                     fill_with_nops(text);
                 }
             }
@@ -1016,7 +1001,7 @@ impl InliningCompiler for Compiler {
     fn inline<'a>(
         &self,
         func_body: &mut CompiledFunctionBody,
-        get_callee: &'a mut dyn FnMut(FuncKey) -> Option<&'a CompiledFunctionBody>,
+        get_callee: &'a mut dyn FnMut(FuncKey, CallSite) -> Option<&'a CompiledFunctionBody>,
     ) -> Result<()> {
         debug_assert!(!func_body.code.is::<CompiledFunction>());
         debug_assert!(func_body.code.is::<Option<Box<CompilerContext>>>());
@@ -1029,13 +1014,15 @@ impl InliningCompiler for Compiler {
         cx.codegen_context.inline(Inliner(get_callee))?;
         return Ok(());
 
-        struct Inliner<'a>(&'a mut dyn FnMut(FuncKey) -> Option<&'a CompiledFunctionBody>);
+        struct Inliner<'a>(
+            &'a mut dyn FnMut(FuncKey, CallSite) -> Option<&'a CompiledFunctionBody>,
+        );
 
         impl cranelift_codegen::inline::Inline for Inliner<'_> {
             fn inline(
                 &mut self,
                 caller: &ir::Function,
-                _call_inst: ir::Inst,
+                call_inst: ir::Inst,
                 _call_opcode: ir::Opcode,
                 callee: ir::FuncRef,
                 _call_args: &[ir::Value],
@@ -1054,7 +1041,11 @@ impl InliningCompiler for Compiler {
                     FuncKey::UnsafeIntrinsic(..) => {}
                     _ => return InlineCommand::KeepCall,
                 }
-                match (self.0)(callee) {
+                let is_cold = caller
+                    .layout
+                    .inst_block(call_inst)
+                    .is_some_and(|block| caller.layout.is_cold(block));
+                match (self.0)(callee, CallSite { is_cold }) {
                     None => InlineCommand::KeepCall,
                     Some(func_body) => {
                         debug_assert!(!func_body.code.is::<CompiledFunction>());
@@ -1330,6 +1321,39 @@ impl Compiler {
                     })
                 }),
         }
+    }
+
+    /// Increments the "execution version" in the `VMStoreContext` if guest
+    /// debugging is enabled.
+    ///
+    /// This must be done whenever execution resumes in Wasm after the host
+    /// has had a chance to run (and thus possibly capture `FrameHandle`s),
+    /// so that any such handles are invalidated.
+    fn bump_execution_version<O>(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        alias_regions: &mut AliasRegions<O>,
+        vmctx: ir::Value,
+    ) where
+        O: GetPtrSize,
+    {
+        if !self.tunables.debug_guest {
+            return;
+        }
+        let vmstore_ctx_ptr = alias_regions
+            .vmctx()
+            .store_context()
+            .load(&mut builder.cursor(), vmctx);
+        let old_version = alias_regions
+            .vm_store_context()
+            .execution_version()
+            .load(&mut builder.cursor(), vmstore_ctx_ptr);
+        let new_version = builder.ins().iadd_imm_s(old_version, 1);
+        alias_regions.vm_store_context().execution_version().store(
+            &mut builder.cursor(),
+            vmstore_ctx_ptr,
+            new_version,
+        );
     }
 
     /// Invokes the `raise` libcall in `vmctx` if the `succeeded` value
@@ -1888,13 +1912,13 @@ fn clif_to_env_frame_tables<'a>(
 /// Wasmtime's serialized metadata.
 fn clif_to_env_breakpoints(
     range: Range<u64>,
-    breakpoint_patches: impl Iterator<Item = (ModulePC, Range<u32>)>,
-    patch_table: &mut Vec<(ModulePC, Range<u32>)>,
+    breakpoint_patches: impl Iterator<Item = (StaticModuleIndex, ModulePC, Range<u32>)>,
+    patch_table: &mut Vec<(StaticModuleIndex, ModulePC, Range<u32>)>,
 ) -> Result<()> {
-    patch_table.extend(breakpoint_patches.map(|(wasm_pc, offset_range)| {
+    patch_table.extend(breakpoint_patches.map(|(module, wasm_pc, offset_range)| {
         let start = offset_range.start + u32::try_from(range.start).unwrap();
         let end = offset_range.end + u32::try_from(range.start).unwrap();
-        (wasm_pc, start..end)
+        (module, wasm_pc, start..end)
     }));
     Ok(())
 }

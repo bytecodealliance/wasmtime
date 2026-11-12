@@ -947,11 +947,11 @@
 
     ;; A pseudo-instruction that captures register arguments in vregs.
     (Args
-      (args VecArgPair))
+      (args BoxedSliceArgPair))
 
     ;; A pseudo-instruction that moves vregs to return registers.
     (Rets
-      (rets VecRetPair))
+      (rets BoxedSliceRetPair))
 
     ;; ---- branches (exactly one must appear at end of BB) ----
 

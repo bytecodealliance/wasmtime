@@ -52,7 +52,11 @@ where
                 let trap_libcall = self.builtin_funcref(builder, BuiltinFunctionIndex::trap());
                 let vmctx = self.vmctx_val(&mut builder.cursor());
                 let trap_code = builder.ins().iconst(I8, i64::from(trap.as_u8()));
-                builder.ins().call(trap_libcall, &[vmctx, trap_code]);
+                let inst = builder.ins().call(trap_libcall, &[vmctx, trap_code]);
+                builder
+                    .func
+                    .debug_tags
+                    .set(inst, debug_tags.iter().cloned());
                 let raise_libcall = self.builtin_funcref(builder, BuiltinFunctionIndex::raise());
                 let inst = builder.ins().call(raise_libcall, &[vmctx]);
                 builder.func.debug_tags.set(inst, debug_tags);

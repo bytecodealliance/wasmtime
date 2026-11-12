@@ -1,6 +1,8 @@
 use super::{TransmitLocalStateKind, TypedResourceIndex};
 use crate::prelude::TryVec;
-use crate::vm::{VMHandleTableSlot, VMScope, VMTransmitLocalState, VMTypedResource, VmPtr, VmSafe};
+use crate::vm::{
+    VMHandleTable, VMHandleTableSlot, VMScope, VMTransmitLocalState, VMTypedResource, VmPtr, VmSafe,
+};
 use crate::{Result, bail};
 use core::mem;
 use core::ptr::NonNull;
@@ -9,6 +11,10 @@ use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
 // SAFETY: `VMHandleTableSlot` is generated with `#[repr(C, u32)]` and every
 // variant holds only `u32`s and `VmSafe` structs of them.
 unsafe impl VmSafe for VMHandleTableSlot {}
+
+// SAFETY: `VMHandleTable` is generated with `#[repr(C)]` and holds only a
+// `VmPtr` and a `usize`.
+unsafe impl VmSafe for VMHandleTable {}
 
 #[cfg(test)]
 mod test_vm_handle_table_slot {
@@ -116,10 +122,12 @@ impl Default for HandleTable {
 
 impl HandleTable {
     /// This table's slots, as compiled code reads them.
-    pub fn slots_ptr(&mut self) -> VmPtr<VMHandleTableSlot> {
-        // An empty `TryVec`'s pointer is dangling but well-aligned; a table
-        // with no slots has none for compiled code to reach.
-        VmPtr::from(NonNull::new(self.slots.as_mut_ptr()).unwrap())
+    pub fn vmhandletable(&mut self) -> VMHandleTable {
+        // An empty `TryVec`'s pointer dangles, but then `current_slots` is 0.
+        VMHandleTable {
+            base: VmPtr::from(NonNull::new(self.slots.as_mut_ptr()).unwrap()),
+            current_slots: self.slots.len(),
+        }
     }
 
     /// Returns whether or not this table is empty.
@@ -130,22 +138,21 @@ impl HandleTable {
     }
 
     /// Begins inserting into this table, which compiled code reads through
-    /// `vm_ptr`, re-publishing the table's slots there whenever they move.
+    /// `vm_table`, re-publishing the table there whenever it grows.
     ///
     /// # Safety
     ///
-    /// `vm_ptr` must be the `VMComponentContext` entry through which compiled
-    /// code reads this table's slots, or else compiled code may later read
-    /// through a stale pointer.
+    /// `vm_table` must be the `VMComponentContext` entry through which
+    /// compiled code reads this table, or it may go stale.
     pub unsafe fn insert<'a>(
         &'a mut self,
         counter: &'a mut HandleCounter,
-        vm_ptr: &'a mut VmPtr<VMHandleTableSlot>,
+        vm_table: &'a mut VMHandleTable,
     ) -> HandleTableInsertion<'a> {
         HandleTableInsertion {
             table: self,
             counter,
-            vm_ptr: Some(vm_ptr),
+            vm_table: Some(vm_table),
         }
     }
 
@@ -153,8 +160,8 @@ impl HandleTable {
     ///
     /// # Safety
     ///
-    /// This table's slots must never be published to compiled code, or else
-    /// compiled code may later read through a stale pointer.
+    /// This table must never be published to compiled code, or it may go
+    /// stale.
     pub unsafe fn insert_unpublished<'a>(
         &'a mut self,
         counter: &'a mut HandleCounter,
@@ -162,7 +169,7 @@ impl HandleTable {
         HandleTableInsertion {
             table: self,
             counter,
-            vm_ptr: None,
+            vm_table: None,
         }
     }
 
@@ -571,7 +578,7 @@ pub struct HandleTableInsertion<'a> {
     table: &'a mut HandleTable,
     counter: &'a mut HandleCounter,
     /// `None` when compiled code never reads `table`.
-    vm_ptr: Option<&'a mut VmPtr<VMHandleTableSlot>>,
+    vm_table: Option<&'a mut VMHandleTable>,
 }
 
 impl HandleTableInsertion<'_> {
@@ -602,8 +609,8 @@ impl HandleTableInsertion<'_> {
                 next: next.checked_add(1).unwrap(),
             })?;
             self.counter.used += 1;
-            if let Some(vm_ptr) = &mut self.vm_ptr {
-                **vm_ptr = table.slots_ptr();
+            if let Some(vm_table) = &mut self.vm_table {
+                **vm_table = table.vmhandletable();
             }
         }
         table.next = match mem::replace(&mut table.slots[next as usize], slot) {

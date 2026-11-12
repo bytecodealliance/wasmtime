@@ -10,13 +10,16 @@ use wasmtime_environ::prelude::*;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Threading::*;
 
+/// Raw fibers on top of Windows fibers.
+pub(crate) mod raw;
+
 pub type Error = io::Error;
 
 #[derive(Debug)]
 pub struct FiberStack {
     pub(crate) size: usize,
     // Windows allocates a fiber's stack when creating the fiber, so its
-    // location is only known while a raw fiber owns it. See `raw/windows.rs`.
+    // location is only known while a raw fiber owns it. See `windows/raw.rs`.
     pub(crate) raw_range: Option<Range<usize>>,
 }
 

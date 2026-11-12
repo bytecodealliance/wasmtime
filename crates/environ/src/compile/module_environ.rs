@@ -45,12 +45,18 @@ pub struct ModuleEnvironment<'a, 'data> {
 pub enum FactInlineIntrinsic {
     /// `enter-sync-call`: push a deferred component-model thread inline.
     EnterSyncCall,
+
     /// `exit-sync-call`: pop the deferred thread inline on the fast path, or
     /// fall back to the out-of-line `exit-sync-call` libcall when the thread
     /// was promoted.
     ExitSyncCall,
+
     /// `trap`: raise the given trap.
     Trap(Trap),
+
+    /// An intrinsic that only exists for components.
+    #[cfg(feature = "component-model")]
+    Component(crate::component::FactComponentIntrinsic),
 }
 
 /// A statically-known function import.
@@ -142,6 +148,12 @@ pub struct ModuleTranslation<'data> {
     ///
     /// Only filled in for modules compiled as part of a component.
     pub imported_func_vmctx_representative: SecondaryMap<FuncIndex, PackedOption<FuncIndex>>,
+
+    /// Imported functions that never unwind a Wasm exception into their
+    /// caller, such as the host intrinsics imported by FACT adapter modules.
+    ///
+    /// Calls to these need no exception handlers, even inside a `try_table`.
+    pub imported_funcs_never_throw: EntitySet<FuncIndex>,
 
     /// For each imported global, memory, or table, the single statically-known
     /// defined entity that always satisfies that import, if any.
@@ -328,6 +340,7 @@ impl<'data> ModuleTranslation<'data> {
             function_body_inputs: PrimaryMap::default(),
             known_imported_functions: SecondaryMap::default(),
             imported_func_vmctx_representative: SecondaryMap::default(),
+            imported_funcs_never_throw: EntitySet::new(),
             known_imported_globals: SecondaryMap::default(),
             known_imported_memories: SecondaryMap::default(),
             known_imported_tables: SecondaryMap::default(),

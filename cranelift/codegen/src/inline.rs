@@ -493,7 +493,7 @@ fn inline_one(
                     allocs.set_inlined_value(callee, *callee_val, *inlined_val);
                 }
 
-                if opcode.is_call() {
+                if opcode.is_safepoint() {
                     append_stack_map_entries(
                         func,
                         callee,
@@ -502,7 +502,9 @@ fn inline_one(
                         inlined_inst,
                         callee_inst,
                     );
+                }
 
+                if opcode.is_call() {
                     // When we are inlining a `try_call` call site, we need to merge
                     // the call site's exception table into the inlined calls'
                     // exception tables. This can involve rewriting regular `call`s

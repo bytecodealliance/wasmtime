@@ -883,6 +883,12 @@ impl ComponentTypesBuilder {
         self.type_information(ty).has_string
     }
 
+    /// Returns whether the type specified contains a `string`, `list`, or
+    /// `map` within it, i.e. whether lowering it may call `realloc`.
+    pub fn ty_needs_realloc(&self, ty: &InterfaceType) -> bool {
+        self.type_information(ty).needs_realloc
+    }
+
     /// Returns whether the signature of `ty` mentions any handle, in either its
     /// parameters or its results.
     pub fn func_contains_any_handle(&self, ty: TypeFuncIndex) -> bool {
@@ -943,6 +949,7 @@ impl ComponentTypesBuilder {
                 static INFO: TypeInformation = {
                     let mut info = TypeInformation::string();
                     info.has_string = true;
+                    info.needs_realloc = true;
                     info
                 };
                 &INFO
@@ -1127,6 +1134,10 @@ struct TypeInformation {
 
     /// Whether this type transitively contains a `string`.
     has_string: bool,
+
+    /// Whether lowering this type needs realloc because it transitively
+    /// contains a `string`, `list`, or `map`.
+    needs_realloc: bool,
 }
 
 impl TypeInformation {
@@ -1135,6 +1146,7 @@ impl TypeInformation {
             flat: FlatTypesStorage::new(),
             handles: Handles::None,
             has_string: false,
+            needs_realloc: false,
         }
     }
 
@@ -1162,6 +1174,7 @@ impl TypeInformation {
         for info in types {
             self.handles = Handles::join(self.handles, info.handles);
             self.has_string |= info.has_string;
+            self.needs_realloc |= info.needs_realloc;
             match info.flat.as_flat_types() {
                 Some(types) => {
                     for (t32, t64) in types.memory32.iter().zip(types.memory64) {
@@ -1204,6 +1217,7 @@ impl TypeInformation {
             };
             self.handles = Handles::join(self.handles, info.handles);
             self.has_string |= info.has_string;
+            self.needs_realloc |= info.needs_realloc;
 
             // If this variant is already unrepresentable in a flat
             // representation then this can be skipped.
@@ -1270,6 +1284,7 @@ impl TypeInformation {
         let element_info = types.type_information(&ty.element);
         self.handles = element_info.handles;
         self.has_string = element_info.has_string;
+        self.needs_realloc = element_info.needs_realloc;
         match element_info.flat.as_flat_types() {
             Some(types) => {
                 'outer: for _ in 0..ty.size {
@@ -1326,6 +1341,7 @@ impl TypeInformation {
         let info = types.type_information(&ty.element);
         self.handles = info.handles;
         self.has_string = info.has_string;
+        self.needs_realloc = true;
     }
 
     fn maps(&mut self, types: &ComponentTypesBuilder, ty: &TypeMap) {
@@ -1336,5 +1352,6 @@ impl TypeInformation {
         let value_info = types.type_information(&ty.value);
         self.handles = Handles::join(key_info.handles, value_info.handles);
         self.has_string = key_info.has_string || value_info.has_string;
+        self.needs_realloc = true;
     }
 }

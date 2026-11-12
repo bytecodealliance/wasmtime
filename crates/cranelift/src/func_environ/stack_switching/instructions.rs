@@ -58,7 +58,8 @@ fn emit_stack_switch<'a>(
         builder.func,
         BuiltinFunctionIndex::asan_start_switch_fiber(),
     );
-    builder.ins().call(
+    env.call_builtin(
+        builder,
         asan_start_switch_fiber,
         &[vmctx, fake_stack_save, source_csi, target_csi],
     );
@@ -72,9 +73,11 @@ fn emit_stack_switch<'a>(
         builder.func,
         BuiltinFunctionIndex::asan_finish_switch_fiber(),
     );
-    builder
-        .ins()
-        .call(asan_finish_switch_fiber, &[vmctx, fake_stack, source_csi]);
+    env.call_builtin(
+        builder,
+        asan_finish_switch_fiber,
+        &[vmctx, fake_stack, source_csi],
+    );
 
     result
 }
@@ -1579,9 +1582,11 @@ pub(crate) fn translate_cont_new<'a>(
 
     let cont_new_func = env.builtin_functions.cont_new(&mut builder.func);
     let vmctx = env.vmctx_val(&mut builder.cursor());
-    let call_inst = builder
-        .ins()
-        .call(cont_new_func, &[vmctx, func, nargs, nreturns, gc_refs]);
+    let call_inst = env.call_builtin(
+        builder,
+        cont_new_func,
+        &[vmctx, func, nargs, nreturns, gc_refs],
+    );
     let contref = *builder.func.dfg.inst_results(call_inst).first().unwrap();
 
     let tag = helpers::VMContRef::new(contref).get_revision(env, builder);

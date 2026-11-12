@@ -366,7 +366,7 @@ wasip1 = { version = "1.0.0", default-features = false }
 
 # cap-std family:
 target-lexicon = "0.13.5"
-rustix = "1.1.4"
+rustix = "1.1.6"
 # wit-bindgen:
 wit-bindgen = { version = "0.63.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.63.0", default-features = false }

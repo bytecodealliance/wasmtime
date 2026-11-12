@@ -9,23 +9,16 @@ use core::sync::atomic::Ordering;
 use wasmtime_environ::collections::TryVec;
 use wasmtime_environ::error::{Error, Result, bail, ensure};
 
-cfg_select! {
-    all(windows, feature = "std", not(miri)) => {
-        mod windows;
-        use windows as sys;
-    }
-    _ => {
-        mod stackswitch;
-        use stackswitch as sys;
-    }
-}
+// The platform's raw-fiber backend, selected along with the rest of the
+// platform's fiber implementation in `lib.rs`.
+use crate::imp::raw as sys;
 
 /// The entry point of a raw fiber.
 ///
 /// This is called on the fiber's stack with the `arg` given to
 /// [`RawFiber::new`] and the fiber's [`RawFiber::switch_arg`]. It must never
 /// return.
-pub type RawFiberEntry = unsafe extern "C" fn(arg: *mut u8, switch_arg: *mut u8);
+pub type RawFiberEntry = unsafe extern "C" fn(arg: *mut u8, switch_arg: *mut u8) -> !;
 
 /// The lifecycle of a [`RawFiber`].
 ///
@@ -185,7 +178,7 @@ impl RawFiber {
     /// argument, to suspend itself. It returns when the fiber is next
     /// resumed.
     pub fn switch_routine() -> unsafe extern "C" fn(*mut u8) {
-        sys::switch_routine()
+        sys::switch_routine
     }
 
     /// The argument which code on this fiber passes to
@@ -249,7 +242,7 @@ impl RawFiber {
     }
 
     fn saved_sp_slot(&self) -> *mut usize {
-        // See the layout diagrams in `unix.rs` and `raw/windows.rs`: the
+        // See the layout diagrams in `unix.rs` and `windows/raw.rs`: the
         // second slot below the top holds the stack pointer to resume the
         // fiber at.
         self.switch_arg().cast::<usize>().wrapping_sub(2)
@@ -366,36 +359,59 @@ impl RawFiberSnapshot {
     }
 }
 
-#[cfg(test)]
+// The code on these tests' fibers must not include any Rust frames, so it is
+// written in assembly, for x86_64 Linux only.
+#[cfg(all(test, target_arch = "x86_64", target_os = "linux"))]
 mod tests {
     use super::*;
     use core::cell::Cell;
 
     /// State shared between a test and the code on its raw fiber.
     #[derive(Default)]
+    #[repr(C)]
     struct Shared {
         observed: Cell<u64>,
         finished: Cell<bool>,
     }
 
-    /// Yields the values 1, 2, 3 and then finishes. The counter is local to
-    /// the fiber, so a restored snapshot rewinds it.
-    unsafe extern "C" fn count_to_three(arg: *mut u8, switch_arg: *mut u8) {
-        // SAFETY: tests pass a `Shared` that outlives the fiber's use.
-        let shared = unsafe { &*arg.cast::<Shared>() };
-        let switch = RawFiber::switch_routine();
-        let mut count = 0;
-        while count < 3 {
-            count += 1;
-            shared.observed.set(count);
-            // SAFETY: this is the switch routine for this fiber.
-            unsafe { switch(switch_arg) };
-        }
-        shared.finished.set(true);
-        // SAFETY: as above.
-        unsafe { switch(switch_arg) };
-        // Resuming a terminal fiber is rejected by `RawFiber::resume`.
-        std::process::abort();
+    /// Yields the values 1, 2, 3 and then finishes. The counter is in `rbx`,
+    /// which the switch routine spills to the fiber's stack, so a restored
+    /// snapshot rewinds it.
+    ///
+    /// Resuming the fiber after it finishes, which `RawFiber::resume` rejects,
+    /// traps.
+    #[unsafe(naked)]
+    unsafe extern "C" fn count_to_three(
+        arg: *mut u8,        /* rdi */
+        switch_arg: *mut u8, /* rsi */
+    ) -> ! {
+        core::arch::naked_asm!(
+            "
+            // A frame record, for `suspended_frame`. This also aligns the
+            // stack for the calls below.
+            push rbp
+            mov rbp, rsp
+
+            mov r12, rdi
+            mov r13, rsi
+            xor ebx, ebx
+        2:
+            inc rbx
+            mov qword ptr [r12 + {observed}], rbx
+            mov rdi, r13
+            call {switch}
+            cmp rbx, 3
+            jb 2b
+
+            mov byte ptr [r12 + {finished}], 1
+            mov rdi, r13
+            call {switch}
+            ud2
+            ",
+            observed = const core::mem::offset_of!(Shared, observed),
+            finished = const core::mem::offset_of!(Shared, finished),
+            switch = sym sys::switch_routine,
+        );
     }
 
     fn fiber(shared: &Shared) -> Option<RawFiber> {
@@ -516,37 +532,24 @@ mod tests {
 
     #[test]
     fn resume_on_another_thread() {
-        let shared = std::sync::Arc::new(SharedSync::default());
-        if !RawFiber::is_supported() {
+        let shared = Shared::default();
+        let Some(mut fiber) = fiber(&shared) else {
             return;
-        }
-        unsafe extern "C" fn entry(arg: *mut u8, switch_arg: *mut u8) {
-            let shared = unsafe { &*arg.cast::<SharedSync>() };
-            let switch = RawFiber::switch_routine();
-            loop {
-                shared.0.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-                unsafe { switch(switch_arg) };
-            }
-        }
-        #[derive(Default)]
-        struct SharedSync(core::sync::atomic::AtomicUsize);
-
-        let stack = FiberStack::new(64 * 1024, false).unwrap();
-        let arg = std::sync::Arc::as_ptr(&shared).cast_mut().cast();
-        let mut fiber = unsafe { RawFiber::new(stack, entry, arg) }
-            .map_err(|e| e.0)
-            .unwrap();
+        };
         unsafe { fiber.resume().unwrap() };
         let snapshot = fiber.snapshot().unwrap();
+        // `shared` is only accessed by the fiber while this thread waits for
+        // the other one.
         let mut fiber = std::thread::spawn(move || {
             unsafe { fiber.resume().unwrap() };
             fiber
         })
         .join()
         .unwrap();
+        assert_eq!(shared.observed.get(), 2);
         unsafe { fiber.restore(&snapshot).unwrap() };
         unsafe { fiber.resume().unwrap() };
-        assert_eq!(shared.0.load(core::sync::atomic::Ordering::Relaxed), 3);
+        assert_eq!(shared.observed.get(), 2);
     }
 
     #[test]
@@ -573,16 +576,10 @@ mod tests {
         };
         assert!(fiber.suspended_frame().is_none());
         unsafe { fiber.resume().unwrap() };
-        if let Some((pc, fp)) = fiber.suspended_frame() {
-            // Without frame pointers in this Rust entry, `fp` may still be
-            // the initial one: the top of the stack.
-            let range = fiber.stack().range().unwrap();
-            assert!(
-                range.start <= fp && fp <= range.end,
-                "{fp:#x} vs {range:x?}"
-            );
-            let entry = count_to_three as *const () as usize;
-            assert!(pc > entry && pc < entry + 4096, "{pc:#x} vs {entry:#x}");
-        }
+        let (pc, fp) = fiber.suspended_frame().unwrap();
+        let range = fiber.stack().range().unwrap();
+        assert!(range.contains(&fp), "{fp:#x} vs {range:x?}");
+        let entry = count_to_three as *const () as usize;
+        assert!(pc > entry && pc < entry + 0x100, "{pc:#x} vs {entry:#x}");
     }
 }

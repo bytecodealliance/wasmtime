@@ -28,7 +28,7 @@ use crate::hash_set::HashSet;
 use crate::prelude::*;
 use std::{any::Any, borrow::Cow, mem, ops::Range};
 use wasmtime_environ::{
-    Abi, CompiledFunctionBody, CompiledFunctionsTable, CompiledFunctionsTableBuilder,
+    Abi, CallSite, CompiledFunctionBody, CompiledFunctionsTable, CompiledFunctionsTableBuilder,
     CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos, FinishedObject, FuncKey,
     FunctionBodyData, Inlining, InliningCompiler, ModuleEnvironment, ModuleTranslation,
     ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex, Tunables,
@@ -288,6 +288,7 @@ struct InlineHeuristicParams<'a> {
     callee_size: u32,
     callee_key: FuncKey,
     callee_needs_gc_heap: bool,
+    call_site_is_cold: bool,
 }
 
 /// The collection of things we need to compile for a Wasm module or component.
@@ -773,42 +774,46 @@ the use case.
 
                     let mut caller_size = inlining_compiler.size(caller);
 
-                    inlining_compiler.inline(caller, &mut |callee_key: FuncKey| {
-                        log::trace!("  --> considering call to {callee_key:?}");
-                        let callee_output_index: OutputIndex = key_to_output[&callee_key];
+                    inlining_compiler.inline(
+                        caller,
+                        &mut |callee_key: FuncKey, call_site: CallSite| {
+                            log::trace!("  --> considering call to {callee_key:?}");
+                            let callee_output_index: OutputIndex = key_to_output[&callee_key];
 
-                        // NB: If the callee is not inside `outputs`, then it is
-                        // in the same `Strata` layer as the caller (and
-                        // therefore is in the same strongly-connected component
-                        // as the caller, and they mutually recursive). In this
-                        // case, we do not do any inlining; communicate this
-                        // command via `?`-propagation.
-                        let callee_output = outputs[callee_output_index].as_ref()?;
+                            // NB: If the callee is not inside `outputs`, then it is
+                            // in the same `Strata` layer as the caller (and
+                            // therefore is in the same strongly-connected component
+                            // as the caller, and they mutually recursive). In this
+                            // case, we do not do any inlining; communicate this
+                            // command via `?`-propagation.
+                            let callee_output = outputs[callee_output_index].as_ref()?;
 
-                        debug_assert_eq!(callee_output.key, callee_key);
+                            debug_assert_eq!(callee_output.key, callee_key);
 
-                        let callee = &callee_output.function;
-                        let callee_size = inlining_compiler.size(callee);
+                            let callee = &callee_output.function;
+                            let callee_size = inlining_compiler.size(callee);
 
-                        let callee_needs_gc_heap = callee_output
-                            .translation
-                            .is_some_and(|t| t.module.needs_gc_heap);
+                            let callee_needs_gc_heap = callee_output
+                                .translation
+                                .is_some_and(|t| t.module.needs_gc_heap);
 
-                        if Self::should_inline(InlineHeuristicParams {
-                            tunables: engine.tunables(),
-                            caller_size,
-                            caller_key,
-                            caller_needs_gc_heap,
-                            callee_size,
-                            callee_key,
-                            callee_needs_gc_heap,
-                        }) {
-                            caller_size = caller_size.saturating_add(callee_size);
-                            Some(callee)
-                        } else {
-                            None
-                        }
-                    })
+                            if Self::should_inline(InlineHeuristicParams {
+                                tunables: engine.tunables(),
+                                caller_size,
+                                caller_key,
+                                caller_needs_gc_heap,
+                                callee_size,
+                                callee_key,
+                                callee_needs_gc_heap,
+                                call_site_is_cold: call_site.is_cold,
+                            }) {
+                                caller_size = caller_size.saturating_add(callee_size);
+                                Some(callee)
+                            } else {
+                                None
+                            }
+                        },
+                    )
                 },
             )?;
 
@@ -861,6 +866,7 @@ the use case.
             callee_size,
             callee_key,
             callee_needs_gc_heap,
+            call_site_is_cold,
         }: InlineHeuristicParams,
     ) -> bool {
         log::trace!(
@@ -870,7 +876,8 @@ the use case.
              \t\tneeds_gc_heap = {caller_needs_gc_heap}\n\
              \tcallee = {callee_key:?}\n\
              \t\tsize = {callee_size}\n\
-             \t\tneeds_gc_heap = {callee_needs_gc_heap}"
+             \t\tneeds_gc_heap = {callee_needs_gc_heap}\n\
+             \tcall_site_is_cold = {call_site_is_cold}"
         );
 
         debug_assert!(
@@ -878,6 +885,13 @@ the use case.
             "shouldn't even call this method if we aren't configured for inlining"
         );
         debug_assert_ne!(caller_key, callee_key, "we never inline recursion");
+
+        // Don't inline into cold call sites: doing so bloats code that is
+        // rarely executed and provides little benefit.
+        if call_site_is_cold {
+            log::trace!("  --> not inlining: call site is cold");
+            return false;
+        }
 
         // Put a limit on how large we can make a function via inlining to cap
         // code bloat.

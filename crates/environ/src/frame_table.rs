@@ -4,7 +4,7 @@
 //! section in a compiled artifact as produced by
 //! [`crate::compile::FrameTableBuilder`].
 
-use crate::{FuncKey, ModulePC};
+use crate::{FuncKey, ModulePC, StaticModuleIndex};
 use alloc::vec::Vec;
 use object::{Bytes, LittleEndian, U32};
 
@@ -53,6 +53,7 @@ pub struct FrameTable<'a> {
     progpoint_descriptor_offsets: &'a [U32<LittleEndian>],
     progpoint_descriptor_data: &'a [U32<LittleEndian>],
 
+    breakpoint_modules: &'a [U32<LittleEndian>],
     breakpoint_pcs: &'a [U32<LittleEndian>],
     breakpoint_patch_offsets: &'a [U32<LittleEndian>],
     breakpoint_patch_data_ends: &'a [U32<LittleEndian>],
@@ -115,6 +116,9 @@ impl<'a> FrameTable<'a> {
         let (progpoint_descriptor_offsets, data) =
             object::slice_from_bytes::<U32<LittleEndian>>(data, num_progpoint_descriptors)
                 .map_err(|_| anyhow::anyhow!("Unable to read progpoint descriptor offset slice"))?;
+        let (breakpoint_modules, data) =
+            object::slice_from_bytes::<U32<LittleEndian>>(data, num_breakpoints)
+                .map_err(|_| anyhow::anyhow!("Unable to read breakpoint module slice"))?;
         let (breakpoint_pcs, data) =
             object::slice_from_bytes::<U32<LittleEndian>>(data, num_breakpoints)
                 .map_err(|_| anyhow::anyhow!("Unable to read breakpoint PC slice"))?;
@@ -146,6 +150,7 @@ impl<'a> FrameTable<'a> {
             progpoint_pcs,
             progpoint_descriptor_offsets,
             progpoint_descriptor_data,
+            breakpoint_modules,
             breakpoint_pcs,
             breakpoint_patch_offsets,
             breakpoint_patch_data_ends,
@@ -345,14 +350,19 @@ impl<'a> FrameTable<'a> {
 
     /// Return an iterator over all breakpoint patches.
     ///
-    /// Returned tuples are (module-relative Wasm PC, breakpoint data).
+    /// Returned tuples are (module, module-relative Wasm PC, breakpoint
+    /// data). The module is the one whose Wasm code the breakpoint is
+    /// in, even if that code was inlined into another module's
+    /// function.
     pub fn breakpoint_patches(
         &self,
-    ) -> impl Iterator<Item = (ModulePC, FrameTableBreakpointData<'_>)> + '_ {
+    ) -> impl Iterator<Item = (StaticModuleIndex, ModulePC, FrameTableBreakpointData<'_>)> + '_
+    {
         self.breakpoint_pcs.iter().enumerate().map(|(i, wasm_pc)| {
+            let module = StaticModuleIndex::from_u32(self.breakpoint_modules[i].get(LittleEndian));
             let wasm_pc = ModulePC::new(wasm_pc.get(LittleEndian));
             let data = self.breakpoint_patch(i);
-            (wasm_pc, data)
+            (module, wasm_pc, data)
         })
     }
 }

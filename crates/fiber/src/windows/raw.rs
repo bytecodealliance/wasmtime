@@ -32,10 +32,8 @@
 //! A raw fiber's `FiberStack` reports its range as the bottom of the stack's
 //! reservation up to `top`, which is also what it reports as the stack's top.
 
+use super::{FIBER_FLAG_FLOAT_SWITCH, delete_fiber, set_stack_guarantee, with_current_fiber};
 use crate::RawFiberEntry;
-use crate::windows::{
-    FIBER_FLAG_FLOAT_SWITCH, delete_fiber, set_stack_guarantee, with_current_fiber,
-};
 use std::ffi::c_void;
 use std::io;
 use std::ptr;
@@ -73,6 +71,7 @@ cfg_select! {
 }
 
 pub(crate) use asm::SUSPENDED_FRAME;
+pub(crate) use asm::wasmtime_fiber_suspend as switch_routine;
 
 /// A raw fiber's underlying Windows fiber, which owns its stack's memory.
 pub(crate) struct Fiber(*mut c_void);
@@ -115,10 +114,6 @@ fn user_shadow_stacks() -> bool {
         );
     }
     flags & ENABLE_USER_SHADOW_STACK != 0
-}
-
-pub(crate) fn switch_routine() -> unsafe extern "C" fn(*mut u8) {
-    asm::wasmtime_fiber_suspend
 }
 
 unsafe extern "system" fn fiber_start(data: *mut c_void) {

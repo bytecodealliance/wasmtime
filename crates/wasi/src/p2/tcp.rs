@@ -181,12 +181,15 @@ impl WriteState {
     }
 
     fn write(&mut self, mut bytes: bytes::Bytes) -> StreamResult<()> {
+        if bytes.is_empty() {
+            return match self {
+                WriteState::Closed(e) => Err(e.clone().into()),
+                _ => Ok(()),
+            };
+        }
+
         let mut stream = match self {
             WriteState::Ready(_, permit) if bytes.len() <= *permit => {
-                if bytes.is_empty() {
-                    return Ok(());
-                }
-
                 let WriteState::Ready(stream, _) = self.take() else {
                     unreachable!()
                 };

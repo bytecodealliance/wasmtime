@@ -234,7 +234,7 @@ impl<'data> Translator<'_, 'data> {
             // translation, validation, etc.
             self.validator.reset();
             let static_module_index = self.static_modules.next_key();
-            let translation = ModuleEnvironment::new(
+            let mut translation = ModuleEnvironment::new(
                 self.tunables,
                 &mut self.validator,
                 self.types.module_types_builder(),
@@ -242,6 +242,18 @@ impl<'data> Translator<'_, 'data> {
             )
             .translate(Parser::new(0), wasm)
             .context("failed to validate a fused adapter module")?;
+
+            // Only `CoreDef` imports can be guest code. Everything else is a
+            // host intrinsic, which turns any exception it sees into a trap
+            // rather than unwinding it into the adapter.
+            for (i, import) in imports.iter().enumerate() {
+                if let fact::Import::CoreDef(_) = import {
+                    continue;
+                }
+                if let Some(EntityIndex::Function(func)) = translation.module.import_index(i) {
+                    translation.imported_funcs_never_throw.insert(func);
+                }
+            }
 
             // Record, for each adapter in this adapter module, the module that
             // the adapter was placed within as well as the function index of

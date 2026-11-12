@@ -204,7 +204,7 @@ impl DrcCompiler {
         builder.set_cold_block(gc_block);
         let force_gc = func_env.builtin_functions.force_gc(builder.func);
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
-        builder.ins().call(force_gc, &[vmctx]);
+        func_env.call_builtin(builder, force_gc, &[vmctx]);
         builder.ins().jump(continue_block, &[]);
 
         builder.switch_to_block(continue_block);
@@ -790,7 +790,7 @@ impl GcCompiler for DrcCompiler {
         log::trace!("DRC write barrier: drop old ref with a ref count of zero");
         let drop_gc_ref_libcall = func_env.builtin_functions.drop_gc_ref(builder.func);
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
-        builder.ins().call(drop_gc_ref_libcall, &[vmctx, old_val]);
+        func_env.call_builtin(builder, drop_gc_ref_libcall, &[vmctx, old_val]);
         builder.ins().jump(continue_block, &[]);
 
         // Block to store the new ref count back to `old_val` for when

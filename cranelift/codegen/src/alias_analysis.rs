@@ -144,6 +144,7 @@ fn alias_regions_observed(
     debug_assert_eq!(func.dfg.insts[inst].memflags_data(&func.dfg), memflags);
     if opcode.is_return()
         || opcode.is_call()
+        || opcode == Opcode::InterruptPoll
         || opcode.can_trap()
         // NB: the `opcode.can_trap()` check above only covers explicitly
         // trapping instructions (like `trap` and `trapz`), not loads/stores

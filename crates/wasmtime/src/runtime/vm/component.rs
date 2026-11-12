@@ -16,7 +16,7 @@ use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::vmcontext::VMLazyThread;
 use crate::runtime::vm::{
     HostResult, SendSyncPtr, UncaughtException, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition,
-    VMHandleTableSlot, VMMemoryDefinition, VMOpaqueContext, VMResourceIndex, VMScope, VMStore,
+    VMHandleTable, VMMemoryDefinition, VMOpaqueContext, VMResourceIndex, VMScope, VMStore,
     VMStoreContext, VMStoreRawPtr, VMTableImport, VMTransmitLocalState, VMTypedResource,
     VMWasmCallFunction, ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
 };
@@ -636,7 +636,7 @@ impl ComponentInstance {
         let (states, _types, published) = self.instance_states_and_published();
         for (instance, state) in states.iter_mut() {
             let i = usize::try_from(instance.as_u32()).unwrap();
-            published[i] = state.handle_table().slots_ptr();
+            published[i] = state.handle_table().vmhandletable();
         }
     }
 
@@ -1174,19 +1174,17 @@ impl ComponentInstance {
     ) -> (
         &mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &ComponentTypes,
-        &mut [VmPtr<VMHandleTableSlot>],
+        &mut [VMHandleTable],
     ) {
         let offset = self
             .offsets
-            .handle_table_slots()
+            .handle_tables()
             .at(RuntimeComponentInstanceIndex::from_u32(0));
         let len = usize::try_from(self.offsets.num_runtime_component_instances).unwrap();
         // SAFETY: the array is part of this `VMComponentContext`'s allocation
         // and holds exactly `len` entries.
         let published = unsafe {
-            let base = self
-                .as_mut()
-                .vmctx_plus_offset_raw::<VmPtr<VMHandleTableSlot>>(offset);
+            let base = self.as_mut().vmctx_plus_offset_raw::<VMHandleTable>(offset);
             core::slice::from_raw_parts_mut(base.as_ptr(), len)
         };
         // safety: as in `instance_states`.
