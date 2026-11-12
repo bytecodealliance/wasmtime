@@ -2381,6 +2381,77 @@ async fn watchpoints_on_imported_memory_follow_growth() -> wasmtime::Result<()> 
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
+async fn watchpoints_handler_may_grow_memory() -> wasmtime::Result<()> {
+    #[derive(Clone, Default)]
+    struct WatchGrower;
+
+    impl DebugHandler for WatchGrower {
+        type Data = ();
+        async fn handle(&self, mut store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+            if let DebugEvent::Watchpoint(hit) = event {
+                hit.memory.grow(&mut store, 1).unwrap();
+            }
+        }
+    }
+
+    // Pulley doesn't support the wasm threads proposal, so skip this test on
+    // those targets.
+    if Engine::default().is_pulley() {
+        return Ok(());
+    }
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            // With no reservation beyond the memory's size, the memory moves
+            // each time the handler grows it.
+            config
+                .memory_reservation(0)
+                .memory_reservation_for_growth(0);
+        },
+        r#"
+    (module
+      (memory (export "memory") 1)
+      (func (export "store") (param i32 i32)
+        (i32.store (local.get 0) (local.get 1)))
+      (func (export "atomic_store") (param i32 i32)
+        (i32.atomic.store (local.get 0) (local.get 1)))
+      (func (export "atomic_rmw") (param i32 i32) (result i32)
+        (i32.atomic.rmw.add (local.get 0) (local.get 1)))
+      (func (export "atomic_cas") (param i32 i32) (result i32)
+        (i32.atomic.rmw.cmpxchg (local.get 0) (i32.const 0) (local.get 1)))
+      (func (export "store_twice") (param i32 i32)
+        (i32.store (local.get 0) (local.get 1))
+        (i32.store offset=4 (local.get 0) (local.get 1))))
+    "#,
+    )?;
+    let grower = WatchGrower::default();
+    store.set_debug_handler(grower.clone());
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    store.edit_breakpoints().unwrap().watch(memory, 0..64)?;
+
+    let store_i32 = instance.get_typed_func::<(i32, i32), ()>(&mut store, "store")?;
+    store_i32.call_async(&mut store, (0, 0x11111111)).await?;
+    let atomic_store = instance.get_typed_func::<(i32, i32), ()>(&mut store, "atomic_store")?;
+    atomic_store.call_async(&mut store, (4, 0x22222222)).await?;
+    let atomic_rmw = instance.get_typed_func::<(i32, i32), i32>(&mut store, "atomic_rmw")?;
+    assert_eq!(atomic_rmw.call_async(&mut store, (0, 1)).await?, 0x11111111);
+    let atomic_cas = instance.get_typed_func::<(i32, i32), i32>(&mut store, "atomic_cas")?;
+    assert_eq!(atomic_cas.call_async(&mut store, (8, 0x33333333)).await?, 0);
+    let store_twice = instance.get_typed_func::<(i32, i32), ()>(&mut store, "store_twice")?;
+    store_twice.call_async(&mut store, (12, 0x44444444)).await?;
+
+    assert_eq!(memory.size(&store), 7);
+    let data = memory.data(&store);
+    assert_eq!(&data[0..4], &0x11111112_u32.to_le_bytes());
+    assert_eq!(&data[4..8], &0x22222222_u32.to_le_bytes());
+    assert_eq!(&data[8..12], &0x33333333_u32.to_le_bytes());
+    assert_eq!(&data[12..20], &[0x44; 8]);
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn watchpoints_out_of_bounds_stores_trap() -> wasmtime::Result<()> {
     // Try both mmap- and malloc-backed memories (and so shadows).
     let configs: [fn(&mut Config); 2] = [

@@ -3838,10 +3838,14 @@ fn align_atomic_addr(
 
 /// Like `prepare_addr` but for atomic accesses.
 ///
+/// If the access stores `stored`, checks for watchpoints (see `watch_store`)
+/// after the alignment check and before computing the native address.
+///
 /// Returns `None` when the Wasm access will unconditionally trap.
 fn prepare_atomic_addr(
     memarg: &MemArg,
     loaded_bytes: u8,
+    stored: Option<Value>,
     builder: &mut FunctionBuilder,
     environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<Reachability<(MemFlagsData, Value, Value)>> {
@@ -3849,6 +3853,13 @@ fn prepare_atomic_addr(
         return Err(wasm_unsupported!("acquire-release-atomics"));
     }
     align_atomic_addr(memarg, loaded_bytes, builder, environ);
+    if let Some(stored) = stored {
+        if let Reachability::Unreachable =
+            watch_store(memarg, loaded_bytes, stored, builder, environ)?
+        {
+            return Ok(Reachability::Unreachable);
+        }
+    }
     prepare_addr(memarg, loaded_bytes, builder, environ)
 }
 
@@ -3889,13 +3900,16 @@ fn translate_store(
     let val_ty = builder.func.dfg.value_type(val);
     let mem_op_size = mem_op_size(opcode, val_ty);
 
+    unwrap_or_return_unreachable_state!(
+        environ,
+        watch_store(memarg, mem_op_size, val, builder, environ)?
+    );
     let (flags, wasm_index, base) = unwrap_or_return_unreachable_state!(
         environ,
         prepare_addr(memarg, mem_op_size, builder, environ)?
     );
 
     environ.before_store(builder, mem_op_size, wasm_index, memarg.offset);
-    watch_store(memarg, mem_op_size, wasm_index, val, builder, environ);
 
     let flags = builder.func.dfg.mem_flags.insert(flags).unwrap();
     builder
@@ -3904,42 +3918,45 @@ fn translate_store(
     Ok(())
 }
 
-/// Before a store of `value`, `size` bytes at the Wasm address `index` plus
-/// `memarg.offset`, checks the memory's shadow for watchpoints, if it has one.
+/// Before a store of `value`, `size` bytes at the Wasm address at the top of
+/// the stack plus `memarg.offset`, checks the memory's shadow for watchpoints,
+/// if it has one.
 ///
 /// The shadow is as large as the memory, so the shadow's bounds check passes
 /// exactly when the store's does.
 fn watch_store(
     memarg: &MemArg,
     size: u8,
-    index: Value,
     value: Value,
     builder: &mut FunctionBuilder,
     environ: &mut FuncEnvironment<'_>,
-) {
+) -> WasmResult<Reachability<()>> {
     let memory = match memarg.target {
         MemArgTarget::Memory(index) => MemoryIndex::from_u32(index),
-        // Callers have already rejected array accesses in `prepare_addr`.
-        MemArgTarget::Array(_) => unreachable!(),
+        MemArgTarget::Array(_) => return Err(wasm_unsupported!("multibyte-array-access proposal")),
     };
     let heap = environ.get_or_create_heap(builder.func, memory);
     let Some(shadow) = environ.heaps()[heap].shadow else {
-        return;
+        return Ok(Reachability::Reachable(()));
     };
     let shadow = environ.heaps()[shadow].clone();
-    if let Reachability::Reachable(shadow_addr) =
-        heap_addr(memarg, size, &shadow, index, builder, environ)
-    {
-        environ.watch_store(
-            builder,
-            memory,
-            shadow_addr,
-            index,
-            memarg.offset,
-            size,
-            value,
-        );
-    }
+    let index = environ.stacks.pop1();
+    let shadow_addr = heap_addr(memarg, size, &shadow, index, builder, environ);
+    let Reachability::Reachable(shadow_addr) = shadow_addr else {
+        environ.stacks.push1(index);
+        return Ok(Reachability::Unreachable);
+    };
+    environ.watch_store(
+        builder,
+        memory,
+        shadow_addr,
+        index,
+        memarg.offset,
+        size,
+        value,
+    );
+    environ.stacks.push1(index);
+    Ok(Reachability::Reachable(()))
 }
 
 fn mem_op_size(opcode: ir::Opcode, ty: Type) -> u8 {
@@ -3991,18 +4008,17 @@ fn translate_atomic_rmw(
         arg2 = builder.ins().ireduce(access_ty, arg2);
     }
 
-    let (flags, index, addr) = unwrap_or_return_unreachable_state!(
+    let (flags, _, addr) = unwrap_or_return_unreachable_state!(
         environ,
         prepare_atomic_addr(
             memarg,
             u8::try_from(access_ty.bytes()).unwrap(),
+            Some(arg2),
             builder,
             environ,
         )?
     );
 
-    let size = u8::try_from(access_ty.bytes()).unwrap();
-    watch_store(memarg, size, index, arg2, builder, environ);
     let mut res = builder.ins().atomic_rmw(access_ty, flags, op, addr, arg2);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
@@ -4048,17 +4064,16 @@ fn translate_atomic_cas(
         replacement = builder.ins().ireduce(access_ty, replacement);
     }
 
-    let (flags, index, addr) = unwrap_or_return_unreachable_state!(
+    let (flags, _, addr) = unwrap_or_return_unreachable_state!(
         environ,
         prepare_atomic_addr(
             memarg,
             u8::try_from(access_ty.bytes()).unwrap(),
+            Some(replacement),
             builder,
             environ,
         )?
     );
-    let size = u8::try_from(access_ty.bytes()).unwrap();
-    watch_store(memarg, size, index, replacement, builder, environ);
     let mut res = builder.ins().atomic_cas(flags, addr, expected, replacement);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
@@ -4096,6 +4111,7 @@ fn translate_atomic_load(
         prepare_atomic_addr(
             memarg,
             u8::try_from(access_ty.bytes()).unwrap(),
+            None,
             builder,
             environ,
         )?
@@ -4138,17 +4154,16 @@ fn translate_atomic_store(
         data = builder.ins().ireduce(access_ty, data);
     }
 
-    let (flags, index, addr) = unwrap_or_return_unreachable_state!(
+    let (flags, _, addr) = unwrap_or_return_unreachable_state!(
         environ,
         prepare_atomic_addr(
             memarg,
             u8::try_from(access_ty.bytes()).unwrap(),
+            Some(data),
             builder,
             environ,
         )?
     );
-    let size = u8::try_from(access_ty.bytes()).unwrap();
-    watch_store(memarg, size, index, data, builder, environ);
     builder.ins().atomic_store(flags, data, addr);
     Ok(())
 }
