@@ -2394,4 +2394,3 @@ fn wasm_to_host_trampolines_and_subtyping(config: &mut Config) -> Result<()> {
 
     Ok(())
 }
-
