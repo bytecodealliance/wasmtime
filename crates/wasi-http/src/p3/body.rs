@@ -237,6 +237,9 @@ impl<D> StreamConsumer<D> for LimitedGuestBodyConsumer {
         }
         match self.contents_tx.poll_reserve(cx) {
             Poll::Ready(Ok(())) => {
+                if n == 0 {
+                    return Poll::Ready(Ok(StreamResult::Completed));
+                }
                 let buf = Bytes::copy_from_slice(buf);
                 match self.contents_tx.send_item(Ok(buf)) {
                     Ok(()) => {
@@ -283,6 +286,9 @@ impl<D> StreamConsumer<D> for UnlimitedGuestBodyConsumer {
                 let mut src = src.as_direct(store);
                 let buf = src.remaining();
                 let n = buf.len().min(self.max_chunk_size);
+                if n == 0 {
+                    return Poll::Ready(Ok(StreamResult::Completed));
+                }
                 let buf = Bytes::copy_from_slice(&buf[..n]);
                 match self.contents_tx.send_item(Ok(buf)) {
                     Ok(()) => {
