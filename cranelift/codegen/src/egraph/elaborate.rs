@@ -64,6 +64,8 @@ pub(crate) struct Elaborator<'a> {
     /// loop-exit block) to executed once in the header, and (2) would make us
     /// hoist cold code out of blocks that terminate with a trap into loop
     /// headers.
+    ///
+    /// Always zero in `cold` blocks, so we never hoist out of them.
     active_loop_depth: usize,
     /// For each loop currently on `loop_stack`, its index in that stack;
     /// `NOT_ON_LOOP_STACK` for every other loop.
@@ -247,7 +249,13 @@ impl<'a> Elaborator<'a> {
             );
         }
 
-        self.active_loop_depth = self.find_active_loop_depth(block);
+        // Never hoist out of a cold block: that would move cold-path work into
+        // a (likely hotter) loop preheader.
+        self.active_loop_depth = if self.func.layout.is_cold(block) {
+            0
+        } else {
+            self.find_active_loop_depth(block)
+        };
 
         trace!(
             "block {}: loop stack is {:?}, active depth {}",
