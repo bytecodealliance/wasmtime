@@ -6,7 +6,7 @@
 
 use crate::hash_map::{Entry, HashMap};
 use crate::module::RegisteredModuleId;
-use crate::vm::{GcStoreTraceState, TraceInfo};
+use crate::vm::{GcStoreTraceState, NopHasher, TraceInfo};
 use crate::{bail_bug, prelude::*};
 use wasmtime_environ::{ModuleInternedTypeIndex, VMSharedTypeIndex};
 
@@ -19,7 +19,7 @@ enum TraceInfoLoc {
 /// A map from GC type indices to where their tracing information can be found.
 #[derive(Default)]
 pub(super) struct TraceInfos {
-    map: HashMap<VMSharedTypeIndex, TraceInfoLoc>,
+    map: HashMap<VMSharedTypeIndex, TraceInfoLoc, NopHasher>,
 }
 
 impl TraceInfos {
