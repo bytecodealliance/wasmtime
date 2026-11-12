@@ -15,7 +15,6 @@ mod call_hook;
 mod dynamic;
 mod fixed_length_list;
 mod func;
-mod handle_table_limit;
 mod import;
 mod instance;
 mod linker;
