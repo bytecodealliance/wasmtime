@@ -271,10 +271,6 @@
 (rule (simplify (rotl ty (rotr ty x y @ (value_type kty)) z @ (value_type kty)))
       (rotr ty x (isub_uextend y z)))
 
-(rule
-    (simplify (rotr ty (iconst ty p) (select ty x (iconst ty y) (iconst ty z))))
-    (select ty x (iconst ty (imm64_rotr ty p y)) (iconst ty (imm64_rotr ty p z))))
-
 ;; Convert shifts into rotates. We always normalize into a rotate left.
 ;;
 ;; (bor (ishl x k1) (ushr x k2)) == (rotl x k1) if k2 == ty_bits - k1
@@ -355,6 +351,70 @@
       (select ty x
                  (iconst ty (imm64_shl ty y p))
                  (iconst ty (imm64_shl ty z p))))
+
+;; K OP (c ? C1 : C2) --> c ? (K OP C1) : (K OP C2) (OP = {<<, >>u, >>s, rotl, rotr})
+(rule ishl_const_select
+      (simplify (ishl (fits_in_64 ty)
+                      (iconst ty k)
+                      (select sty c (iconst sty x) (iconst sty y))))
+      (select ty c
+                 (iconst ty (imm64_shl ty k x))
+                 (iconst ty (imm64_shl ty k y))))
+(rule ushr_const_select
+      (simplify (ushr (fits_in_64 ty)
+                      (iconst ty k)
+                      (select sty c (iconst sty x) (iconst sty y))))
+      (select ty c
+                 (iconst ty (imm64_ushr ty k x))
+                 (iconst ty (imm64_ushr ty k y))))
+(rule sshr_const_select
+      (simplify (sshr (fits_in_64 ty)
+                      (iconst ty k)
+                      (select sty c (iconst sty x) (iconst sty y))))
+      (select ty c
+                 (iconst ty (imm64_sshr ty k x))
+                 (iconst ty (imm64_sshr ty k y))))
+(rule rotl_const_select
+      (simplify (rotl (fits_in_64 ty)
+                      (iconst ty k)
+                      (select sty c (iconst sty x) (iconst sty y))))
+      (select ty c
+                 (iconst ty (imm64_rotl ty k x))
+                 (iconst ty (imm64_rotl ty k y))))
+(rule rotr_const_select
+      (simplify (rotr (fits_in_64 ty)
+                      (iconst ty k)
+                      (select sty c (iconst sty x) (iconst sty y))))
+      (select ty c
+                 (iconst ty (imm64_rotr ty k x))
+                 (iconst ty (imm64_rotr ty k y))))
+
+;; Masking off bits that the shift discards anyways is a no-op:
+;;
+;; (x & C) << K --> x << K, if (C << K) == (-1 << K)
+;; (x & C) >>u K --> x >>u K, if (C >>u K) == (-1 >>u K)
+;; (x & C) >>s K --> x >>s K, if (C >>s K) == -1
+(rule ishl_band_redundant_mask
+      (simplify (ishl (fits_in_64 (ty_int ty))
+                      (band ty x (iconst ty c))
+                      k @ (iconst _ kimm)))
+      (if-let true (u64_eq (u64_uextend_imm64 ty (imm64_shl ty c kimm))
+                           (u64_uextend_imm64 ty (imm64_shl ty (imm64 (ty_mask ty)) kimm))))
+      (ishl ty x k))
+(rule ushr_band_redundant_mask
+      (simplify (ushr (fits_in_64 (ty_int ty))
+                      (band ty x (iconst ty c))
+                      k @ (iconst _ kimm)))
+      (if-let true (u64_eq (u64_uextend_imm64 ty (imm64_ushr ty c kimm))
+                           (u64_uextend_imm64 ty (imm64_ushr ty (imm64 (ty_mask ty)) kimm))))
+      (ushr ty x k))
+(rule sshr_band_redundant_mask
+      (simplify (sshr (fits_in_64 (ty_int ty))
+                      (band ty x (iconst ty c))
+                      k @ (iconst _ kimm)))
+      (if-let true (u64_eq (u64_uextend_imm64 ty (imm64_sshr ty c kimm))
+                           (ty_mask ty)))
+      (sshr ty x k))
 
 ;; (x >> k) OP (y >> k) --> (x OP y) >> k (OP = {&, |})
 (rule (simplify (bor ty (sshr ty x y) (sshr ty z y))) (sshr ty (bor ty x z) y))

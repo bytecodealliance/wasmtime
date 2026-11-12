@@ -1583,11 +1583,9 @@ block0(v0: i8):
     return v4
 }
 
-; check: v1 = iconst.i32 1
-; check: v2 = ishl v0, v1
-; check: v3 = iconst.i8 13
-; check: v4 = imul v2, v3
-; check: return v4
+; check: v5 = iconst.i8 26
+; check: v6 = imul v0, v5
+; check: return v6
 
 function %transplant_41951_i64(i64) -> i64 {
 block0(v0: i64):
@@ -1598,11 +1596,9 @@ block0(v0: i64):
     return v4
 }
 
-; check: v1 = iconst.i32 1
-; check: v2 = ishl v0, v1
-; check: v3 = iconst.i64 13
-; check: v4 = imul v2, v3
-; check: return v4
+; check: v5 = iconst.i64 26
+; check: v6 = imul v0, v5
+; check: return v6
 
 function %transplant_41951_i128(i128) -> i128 {
 block0(v0: i128):
@@ -1620,6 +1616,30 @@ block0(v0: i128):
 ; check: v4 = sextend.i128 v3
 ; check: v5 = imul v2, v4
 ; check: return v5
+
+function %imul_ishl_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 3
+    v2 = ishl v0, v1
+    v3 = iconst.i32 12
+    v4 = imul v2, v3
+    return v4
+}
+; check: v5 = iconst.i32 96
+; check: v6 = imul v0, v5  ; v5 = 96
+; check: return v6
+
+function %imul_ishl_const_wide_amt(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i64 36
+    v2 = ishl v0, v1
+    v3 = iconst.i32 3
+    v4 = imul v2, v3
+    return v4
+}
+; check: v8 = iconst.i32 48
+; check: v9 = imul v0, v8  ; v8 = 48
+; check: return v9
 
 function %transplant_41834_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):

@@ -1,0 +1,104 @@
+test interpret
+test run
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target pulley32
+target pulley64
+
+function %bor_band_i32_400_800(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1024
+    v2 = bor v0, v1
+    v3 = iconst.i32 2048
+    v4 = band v2, v3
+    return v4
+}
+; run: %bor_band_i32_400_800(0) == 0
+; run: %bor_band_i32_400_800(1) == 0
+; run: %bor_band_i32_400_800(2) == 0
+; run: %bor_band_i32_400_800(2147483647) == 2048
+; run: %bor_band_i32_400_800(-2147483648) == 0
+; run: %bor_band_i32_400_800(-2147483647) == 0
+; run: %bor_band_i32_400_800(-1186361293) == 0
+; run: %bor_band_i32_400_800(-67657680) == 0
+; run: %bor_band_i32_400_800(-2) == 2048
+; run: %bor_band_i32_400_800(-1) == 2048
+
+function %bor_band_i32_8108_c0(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 33032
+    v2 = bor v0, v1
+    v3 = iconst.i32 192
+    v4 = band v2, v3
+    return v4
+}
+; run: %bor_band_i32_8108_c0(0) == 0
+; run: %bor_band_i32_8108_c0(1) == 0
+; run: %bor_band_i32_8108_c0(2) == 0
+; run: %bor_band_i32_8108_c0(1861782108) == 64
+; run: %bor_band_i32_8108_c0(2147483647) == 192
+; run: %bor_band_i32_8108_c0(-2147483648) == 0
+; run: %bor_band_i32_8108_c0(-2147483647) == 0
+; run: %bor_band_i32_8108_c0(-1531668010) == 192
+; run: %bor_band_i32_8108_c0(-2) == 192
+; run: %bor_band_i32_8108_c0(-1) == 192
+
+function %bor_band_i32_8148_c0(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 33096
+    v2 = bor v0, v1
+    v3 = iconst.i32 192
+    v4 = band v2, v3
+    return v4
+}
+; run: %bor_band_i32_8148_c0(0) == 64
+; run: %bor_band_i32_8148_c0(1) == 64
+; run: %bor_band_i32_8148_c0(2) == 64
+; run: %bor_band_i32_8148_c0(1868940653) == 64
+; run: %bor_band_i32_8148_c0(2147483647) == 192
+; run: %bor_band_i32_8148_c0(-2147483648) == 64
+; run: %bor_band_i32_8148_c0(-2147483647) == 64
+; run: %bor_band_i32_8148_c0(-1783037462) == 192
+; run: %bor_band_i32_8148_c0(-2) == 192
+; run: %bor_band_i32_8148_c0(-1) == 192
+
+function %bxor_band_i16_ff00_ff(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 -256
+    v2 = bxor v0, v1
+    v3 = iconst.i16 255
+    v4 = band v2, v3
+    return v4
+}
+; run: %bxor_band_i16_ff00_ff(0) == 0
+; run: %bxor_band_i16_ff00_ff(1) == 1
+; run: %bxor_band_i16_ff00_ff(2) == 2
+; run: %bxor_band_i16_ff00_ff(32767) == 255
+; run: %bxor_band_i16_ff00_ff(-32768) == 0
+; run: %bxor_band_i16_ff00_ff(-32767) == 1
+; run: %bxor_band_i16_ff00_ff(-30516) == 204
+; run: %bxor_band_i16_ff00_ff(-27095) == 41
+; run: %bxor_band_i16_ff00_ff(-2) == 254
+; run: %bxor_band_i16_ff00_ff(-1) == 255
+
+function %bxor_band_i64_ffffffffffffff00_ff(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -256
+    v2 = bxor v0, v1
+    v3 = iconst.i64 255
+    v4 = band v2, v3
+    return v4
+}
+; run: %bxor_band_i64_ffffffffffffff00_ff(0) == 0
+; run: %bxor_band_i64_ffffffffffffff00_ff(1) == 1
+; run: %bxor_band_i64_ffffffffffffff00_ff(2) == 2
+; run: %bxor_band_i64_ffffffffffffff00_ff(9223372036854775807) == 255
+; run: %bxor_band_i64_ffffffffffffff00_ff(-9223372036854775808) == 0
+; run: %bxor_band_i64_ffffffffffffff00_ff(-9223372036854775807) == 1
+; run: %bxor_band_i64_ffffffffffffff00_ff(-8814676770943450521) == 103
+; run: %bxor_band_i64_ffffffffffffff00_ff(-6391181154092057859) == 253
+; run: %bxor_band_i64_ffffffffffffff00_ff(-2) == 254
+; run: %bxor_band_i64_ffffffffffffff00_ff(-1) == 255

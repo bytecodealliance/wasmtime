@@ -453,6 +453,14 @@
 (rule (simplify (ne result_ty (clz x_ty X) (all_zero _)))
       (sge result_ty X (all_zero x_ty)))
 
+;; clz(X) == 1  iff  the top two bits of X are 0b01, i.e.  X >s (SMAX >> 1).
+(rule icmp_eq_clz_one (simplify (eq (fits_in_64 (ty_int ty)) (clz ty X) (iconst_u ty 1)))
+      (sgt ty X (iconst ty (imm64_ushr ty (imm64 (ty_smax ty)) (imm64 1)))))
+
+;; clz(X) != 1  iff  X <=s (SMAX >> 1).
+(rule icmp_ne_clz_one (simplify (ne (fits_in_64 (ty_int ty)) (clz ty X) (iconst_u ty 1)))
+      (sle ty X (iconst ty (imm64_ushr ty (imm64 (ty_smax ty)) (imm64 1)))))
+
 ;;;;; Same simplifications applied directly when the count-leading /
 ;;;;; trailing-zeros value is consumed as a `brif` condition (the 2-op
 ;;;;; wasm pattern `i32.ctz; br_if`, with no `i32.eqz` interposed for the
@@ -677,3 +685,33 @@
 (rule (simplify (band _ (uge cty x y) (ule cty x y))) (eq cty x y))
 (rule (simplify (band _ (ule cty x y) (uge cty x y))) (eq cty x y))
 (rule (simplify (band _ (ule cty x y) (ule cty y x))) (eq cty x y))
+
+;; Comparing a value with its low bits cleared against zero is a range check:
+;;
+;; (x & -2^k) == 0 --> x <u 2^k
+;; (x & -2^k) != 0 --> x >=u 2^k
+;;
+;; When only the sign bit survives the mask, this is a sign check instead:
+;;
+;; (x & SMIN) == 0 --> x >=s 0
+;; (x & SMIN) != 0 --> x <s 0
+(rule icmp_eq_band_high_mask_zero
+      (simplify (eq (fits_in_64 (ty_int ty)) (band ty x (iconst ty mask)) (all_zero ty)))
+      (if-let true (i64_is_negative_power_of_two (i64_sextend_imm64 ty mask)))
+      (if-let pow2 (u64_uextend_imm64 ty (imm64_neg ty mask)))
+      (if-let false (u64_eq pow2 (ty_smin ty)))
+      (ult ty x (iconst_u ty pow2)))
+(rule icmp_ne_band_high_mask_zero
+      (simplify (ne (fits_in_64 (ty_int ty)) (band ty x (iconst ty mask)) (all_zero ty)))
+      (if-let true (i64_is_negative_power_of_two (i64_sextend_imm64 ty mask)))
+      (if-let pow2 (u64_uextend_imm64 ty (imm64_neg ty mask)))
+      (if-let false (u64_eq pow2 (ty_smin ty)))
+      (uge ty x (iconst_u ty pow2)))
+(rule icmp_eq_band_sign_bit_zero
+      (simplify (eq (fits_in_64 (ty_int ty)) (band ty x (iconst_u ty mask)) (all_zero ty)))
+      (if-let true (u64_eq mask (ty_smin ty)))
+      (sge ty x (all_zero ty)))
+(rule icmp_ne_band_sign_bit_zero
+      (simplify (ne (fits_in_64 (ty_int ty)) (band ty x (iconst_u ty mask)) (all_zero ty)))
+      (if-let true (u64_eq mask (ty_smin ty)))
+      (slt ty x (all_zero ty)))

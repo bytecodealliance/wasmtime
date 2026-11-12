@@ -1,0 +1,66 @@
+test interpret
+test run
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target pulley32
+target pulley64
+
+function %ishl_imul_i32_3_c(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i64 3
+    v2 = ishl v0, v1
+    v3 = iconst.i32 12
+    v4 = imul v2, v3
+    return v4
+}
+; run: %ishl_imul_i32_3_c(0) == 0
+; run: %ishl_imul_i32_3_c(1) == 96
+; run: %ishl_imul_i32_3_c(2) == 192
+; run: %ishl_imul_i32_3_c(1578159150) == 1179423040
+; run: %ishl_imul_i32_3_c(1766053782) == 2037438528
+; run: %ishl_imul_i32_3_c(2147483647) == -96
+; run: %ishl_imul_i32_3_c(-2147483648) == 0
+; run: %ishl_imul_i32_3_c(-2147483647) == 96
+; run: %ishl_imul_i32_3_c(-2) == -192
+; run: %ishl_imul_i32_3_c(-1) == -96
+
+function %ishl_imul_i32_36_3(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i64 36
+    v2 = ishl v0, v1
+    v3 = iconst.i32 3
+    v4 = imul v2, v3
+    return v4
+}
+; run: %ishl_imul_i32_36_3(0) == 0
+; run: %ishl_imul_i32_36_3(1) == 48
+; run: %ishl_imul_i32_36_3(2) == 96
+; run: %ishl_imul_i32_36_3(947704648) == -1754817152
+; run: %ishl_imul_i32_36_3(2147483647) == -48
+; run: %ishl_imul_i32_36_3(-2147483648) == 0
+; run: %ishl_imul_i32_36_3(-2147483647) == 48
+; run: %ishl_imul_i32_36_3(-1255124804) == -116448448
+; run: %ishl_imul_i32_36_3(-2) == -96
+; run: %ishl_imul_i32_36_3(-1) == -48
+
+function %ishl_imul_i8_5_31(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i64 5
+    v2 = ishl v0, v1
+    v3 = iconst.i8 49
+    v4 = imul v2, v3
+    return v4
+}
+; run: %ishl_imul_i8_5_31(0) == 0
+; run: %ishl_imul_i8_5_31(1) == 32
+; run: %ishl_imul_i8_5_31(2) == 64
+; run: %ishl_imul_i8_5_31(127) == -32
+; run: %ishl_imul_i8_5_31(-128) == 0
+; run: %ishl_imul_i8_5_31(-127) == 32
+; run: %ishl_imul_i8_5_31(-110) == 64
+; run: %ishl_imul_i8_5_31(-87) == 32
+; run: %ishl_imul_i8_5_31(-2) == -64
+; run: %ishl_imul_i8_5_31(-1) == -32
