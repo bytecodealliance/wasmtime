@@ -19,7 +19,7 @@ enum TraceInfoLoc {
 /// A map from GC type indices to where their tracing information can be found.
 #[derive(Default)]
 pub(super) struct TraceInfos {
-    map: HashMap<VMSharedTypeIndex, TraceInfoLoc>,
+    map: HashMap<VMSharedTypeIndex, TraceInfoLoc, foldhash::fast::FixedState>,
 }
 
 impl TraceInfos {
