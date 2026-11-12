@@ -1,8 +1,15 @@
 //! Measure accessing a host buffer via traditional host APIs and via compile-time builtins.
 
 use criterion::{Bencher, Criterion, criterion_group, criterion_main};
-use std::{mem, time::Instant};
-use wasmtime::{component::Component, *};
+use std::{
+    mem,
+    ops::{Deref, DerefMut},
+    time::Instant,
+};
+use wasmtime::{
+    component::{Component, Resource, ResourceAny, ResourceType},
+    *,
+};
 
 // The nearest power of two to 100,000 (2^17 = 131_072). Using a power of two
 // lets the PRNG's high bits map directly onto the buffer without division.
@@ -21,21 +28,21 @@ const MCG_SEED: u64 = 1;
 // buffer.
 const MCG_OUTPUT_SHIFT: u32 = u64::BITS - HOST_BUF_LEN.trailing_zeros();
 
-/// A `*mut u8` pointer that is exposed directly to Wasm via unsafe intrinsics.
+/// A `*mut T` pointer that is exposed directly to Wasm via unsafe intrinsics.
 #[repr(align(8))]
-union ExposedPointer {
-    pointer: *mut u8,
+union ExposedPointer<T> {
+    pointer: *mut T,
     padding: u64,
 }
 
 const _EXPOSED_POINTER_LAYOUT_ASSERTIONS: () = {
-    assert!(mem::size_of::<ExposedPointer>() == 8);
-    assert!(mem::align_of::<ExposedPointer>() == 8);
+    assert!(mem::size_of::<ExposedPointer<u8>>() == 8);
+    assert!(mem::align_of::<ExposedPointer<u8>>() == 8);
 };
 
-impl ExposedPointer {
+impl<T> ExposedPointer<T> {
     /// Wrap the given pointer into an `ExposedPointer`.
-    fn new(pointer: *mut u8) -> Self {
+    fn new(pointer: *mut T) -> Self {
         // NB: Zero-initialize to avoid potential footguns with accessing
         // undefined bytes.
         let mut p = Self { padding: 0 };
@@ -44,7 +51,7 @@ impl ExposedPointer {
     }
 
     /// Get the wrapped pointer.
-    fn get(&self) -> *mut u8 {
+    fn get(&self) -> *mut T {
         unsafe { self.pointer }
     }
 }
@@ -53,7 +60,7 @@ impl ExposedPointer {
 /// intrinsics.
 #[repr(C)]
 struct ExposedBuf {
-    buf_ptr: ExposedPointer,
+    buf_ptr: ExposedPointer<u8>,
     buf_len: u64,
 }
 
@@ -101,6 +108,64 @@ impl ExposedBuf {
     }
 }
 
+/// An owned `Vec<T>` that is exposed directly to Wasm via unsafe intrinsics.
+#[repr(C)]
+struct ExposedVec<T> {
+    ptr: ExposedPointer<T>,
+    len: u64,
+    cap: u64,
+}
+
+const _EXPOSED_VEC_LAYOUT_ASSERTIONS: () = {
+    assert!(mem::size_of::<ExposedVec<ExposedBuf>>() == 24);
+    assert!(mem::align_of::<ExposedVec<ExposedBuf>>() == 8);
+    assert!(mem::offset_of!(ExposedVec<ExposedBuf>, ptr) == 0);
+    assert!(mem::offset_of!(ExposedVec<ExposedBuf>, len) == 8);
+    assert!(mem::offset_of!(ExposedVec<ExposedBuf>, cap) == 16);
+};
+
+impl<T> From<Vec<T>> for ExposedVec<T> {
+    fn from(vec: Vec<T>) -> Self {
+        let mut vec = mem::ManuallyDrop::new(vec);
+        Self {
+            ptr: ExposedPointer::new(vec.as_mut_ptr()),
+            len: u64::try_from(vec.len()).unwrap(),
+            cap: u64::try_from(vec.capacity()).unwrap(),
+        }
+    }
+}
+
+impl<T> Drop for ExposedVec<T> {
+    fn drop(&mut self) {
+        let len = usize::try_from(self.len).unwrap();
+        let cap = usize::try_from(self.cap).unwrap();
+        unsafe {
+            let _ = Vec::from_raw_parts(self.ptr.get(), len, cap);
+        }
+    }
+}
+
+impl<T> Deref for ExposedVec<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &[T] {
+        let ptr = self.ptr.get().cast_const();
+        let len = usize::try_from(self.len).unwrap();
+        unsafe { std::slice::from_raw_parts(ptr, len) }
+    }
+}
+
+impl<T> DerefMut for ExposedVec<T> {
+    fn deref_mut(&mut self) -> &mut [T] {
+        let ptr = self.ptr.get();
+        let len = usize::try_from(self.len).unwrap();
+        unsafe { std::slice::from_raw_parts_mut(ptr, len) }
+    }
+}
+
+/// The store data: every host buffer, indexed by `host-buf` resource reps.
+type HostBufs = ExposedVec<ExposedBuf>;
+
 fn make_engine(concurrency_support: bool) -> Result<Engine, Error> {
     let mut config = Config::new();
     config.compiler_inlining(wasmtime::Inlining::Yes);
@@ -109,36 +174,105 @@ fn make_engine(concurrency_support: bool) -> Result<Engine, Error> {
     Ok(engine)
 }
 
-fn make_linker(engine: &Engine) -> Result<component::Linker<ExposedBuf>, Error> {
-    let mut linker = wasmtime::component::Linker::<ExposedBuf>::new(engine);
-    let mut host_buf = linker.instance("host-buf")?;
+/// Get the host buffer that the `buf` resource refers to.
+fn host_buf<'a>(bufs: &'a mut HostBufs, buf: &Resource<ExposedBuf>) -> Result<&'a mut ExposedBuf> {
+    let index = usize::try_from(buf.rep())?;
+    bufs.get_mut(index)
+        .ok_or_else(|| format_err!("invalid host buffer"))
+}
 
-    host_buf.func_wrap("get", |ctx, (i,): (u64,)| -> Result<(u8,)> {
-        let i = usize::try_from(i)?;
-        match ctx.data().get().get(i).copied() {
-            Some(x) => Ok((x,)),
-            None => bail!("out-of-bounds host buffer access"),
-        }
-    })?;
+fn make_linker(engine: &Engine) -> Result<component::Linker<HostBufs>, Error> {
+    let mut linker = component::Linker::<HostBufs>::new(engine);
+    let mut host_buf_instance = linker.instance("host-buf")?;
 
-    host_buf.func_wrap("set", |mut ctx, (i, x): (u64, u8)| -> Result<()> {
-        let i = usize::try_from(i)?;
-        match ctx.data_mut().get_mut().get_mut(i) {
-            Some(b) => {
-                *b = x;
-                Ok(())
+    host_buf_instance.resource(
+        "host-buf",
+        ResourceType::host::<ExposedBuf>(),
+        |_, _| Ok(()),
+    )?;
+
+    host_buf_instance.func_wrap(
+        "new",
+        |ctx, (index,): (u32,)| -> Result<(Resource<ExposedBuf>,)> {
+            ensure!(
+                usize::try_from(index)? < ctx.data().len(),
+                "invalid host buffer index"
+            );
+            Ok((Resource::new_own(index),))
+        },
+    )?;
+
+    host_buf_instance.func_wrap(
+        "get",
+        |mut ctx, (buf, i): (Resource<ExposedBuf>, u64)| -> Result<(u8,)> {
+            let i = usize::try_from(i)?;
+            match host_buf(ctx.data_mut(), &buf)?.get().get(i).copied() {
+                Some(x) => Ok((x,)),
+                None => bail!("out-of-bounds host buffer access"),
             }
-            None => bail!("out-of-bounds host buffer access"),
-        }
-    })?;
+        },
+    )?;
 
-    host_buf.func_wrap("len", |ctx, ()| -> Result<(u64,)> {
-        let len = ctx.data().get().len();
-        let len = u64::try_from(len)?;
-        Ok((len,))
-    })?;
+    host_buf_instance.func_wrap(
+        "set",
+        |mut ctx, (buf, i, x): (Resource<ExposedBuf>, u64, u8)| -> Result<()> {
+            let i = usize::try_from(i)?;
+            match host_buf(ctx.data_mut(), &buf)?.get_mut().get_mut(i) {
+                Some(b) => {
+                    *b = x;
+                    Ok(())
+                }
+                None => bail!("out-of-bounds host buffer access"),
+            }
+        },
+    )?;
+
+    host_buf_instance.func_wrap(
+        "len",
+        |mut ctx, (buf,): (Resource<ExposedBuf>,)| -> Result<(u64,)> {
+            let len = host_buf(ctx.data_mut(), &buf)?.get().len();
+            let len = u64::try_from(len)?;
+            Ok((len,))
+        },
+    )?;
 
     Ok(linker)
+}
+
+/// Get the `name` function from a host-buf API guest's `api` instance export.
+fn get_api_func<Params, Results>(
+    store: &mut Store<HostBufs>,
+    instance: &component::Instance,
+    name: &str,
+) -> Result<component::TypedFunc<Params, Results>>
+where
+    Params: component::ComponentNamedList + component::Lower,
+    Results: component::ComponentNamedList + component::Lift,
+{
+    let api = instance
+        .get_export_index(&mut *store, None, "api")
+        .ok_or_else(|| format_err!("missing `api` export"))?;
+    let func = instance
+        .get_export_index(&mut *store, Some(&api), name)
+        .ok_or_else(|| format_err!("missing `api` export `{name}`"))?;
+    instance.get_typed_func(&mut *store, &func)
+}
+
+/// Instantiate a guest of the host-buf API in a new store containing a single,
+/// zeroed host buffer, and get a handle to that buffer via the guest's
+/// `new-host-buf` export.
+fn instantiate_host_buf_api_guest(
+    engine: &Engine,
+    linker: &component::Linker<HostBufs>,
+    component: &Component,
+) -> Result<(Store<HostBufs>, component::Instance, ResourceAny)> {
+    let bufs = vec![ExposedBuf::new(std::iter::repeat_n(0u8, HOST_BUF_LEN))];
+    let mut store = Store::new(engine, HostBufs::from(bufs));
+    let instance = linker.instantiate(&mut store, component)?;
+    let new_host_buf =
+        get_api_func::<(u32,), (ResourceAny,)>(&mut store, &instance, "new-host-buf")?;
+    let (buf,) = new_host_buf.call(&mut store, (0,))?;
+    Ok((store, instance, buf))
 }
 
 static COMPILE_TIME_BUILTINS: &str = r#"
@@ -152,50 +286,99 @@ static COMPILE_TIME_BUILTINS: &str = r#"
             )
         )
 
+        ;; A host buffer. Its rep is an index into the store data's
+        ;; `ExposedVec<ExposedBuf>`.
+        (type $host-buf (resource (rep i32)))
+        (core func $host-buf-new (canon resource.new $host-buf))
+
         ;; The core Wasm module that implements the safe API.
+        ;;
+        ;; This component defines the `host-buf` resource, so lifted `borrow`s
+        ;; of it arrive as reps rather than handles.
         (core module $host-buf-impl
             (import "" "store-data-address" (func $store-data-address (result i64)))
             (import "" "u64-native-load" (func $u64-native-load (param i64) (result i64)))
             (import "" "u8-native-load" (func $u8-native-load (param i64) (result i32)))
             (import "" "u8-native-store" (func $u8-native-store (param i64 i32)))
+            (import "" "host-buf-new" (func $host-buf-new (param i32) (result i32)))
 
-            ;; Load the `ExposedBuf::buf_ptr` field
-            (func $get-buf-ptr (result i64)
+            ;; Load the `ExposedVec::ptr` field
+            (func $get-vec-ptr (result i64)
                 (call $u64-native-load (i64.add (call $store-data-address) (i64.const 0)))
             )
 
-            ;; Load the `ExposedBuf::buf_len` field
-            (func $get-buf-len (result i64)
+            ;; Load the `ExposedVec::len` field
+            (func $get-vec-len (result i64)
                 (call $u64-native-load (i64.add (call $store-data-address) (i64.const 8)))
             )
 
-            ;; Check that `$i` is within `ExposedBuf` buffer's bounds, raising a trap
-            ;; otherwise.
-            (func $bounds-check (param $i i64)
-                (if (i64.lt_u (local.get $i) (call $get-buf-len))
+            ;; Check that `$index` is within the `ExposedVec`'s bounds, raising
+            ;; a trap otherwise.
+            (func $vec-bounds-check (param $index i32)
+                (if (i64.lt_u (i64.extend_i32_u (local.get $index)) (call $get-vec-len))
                     (then (return))
                     (else (unreachable))
                 )
             )
 
-            ;; A safe function to get the `i`th byte from `ExposedBuf`'s buffer,
-            ;; raising a trap on out-of-bounds accesses.
-            (func (export "get") (param $i i64) (result i32)
-                (call $bounds-check (local.get $i))
-                (call $u8-native-load (i64.add (call $get-buf-ptr) (local.get $i)))
+            ;; Get the address of the `$buf`th `ExposedBuf` in the
+            ;; `ExposedVec`, raising a trap on out-of-bounds accesses.
+            (func $get-buf-addr (param $buf i32) (result i64)
+                (call $vec-bounds-check (local.get $buf))
+                (i64.add (call $get-vec-ptr)
+                         ;; `size_of::<ExposedBuf>() == 16`
+                         (i64.mul (i64.extend_i32_u (local.get $buf)) (i64.const 16)))
             )
 
-            ;; A safe function to set the `i`th byte in `ExposedBuf`'s buffer,
-            ;; raising a trap on out-of-bounds accesses.
-            (func (export "set") (param $i i64) (param $value i32)
-                (call $bounds-check (local.get $i))
-                (call $u8-native-store (i64.add (call $get-buf-ptr) (local.get $i))
+            ;; Load the `$buf`th `ExposedBuf::buf_ptr` field
+            (func $get-buf-ptr (param $buf i32) (result i64)
+                (call $u64-native-load (i64.add (call $get-buf-addr (local.get $buf))
+                                                (i64.const 0)))
+            )
+
+            ;; Load the `$buf`th `ExposedBuf::buf_len` field
+            (func $get-buf-len (param $buf i32) (result i64)
+                (call $u64-native-load (i64.add (call $get-buf-addr (local.get $buf))
+                                                (i64.const 8)))
+            )
+
+            ;; Check that `$i` is within the `$buf`th `ExposedBuf` buffer's
+            ;; bounds, raising a trap otherwise.
+            (func $buf-bounds-check (param $buf i32) (param $i i64)
+                (if (i64.lt_u (local.get $i) (call $get-buf-len (local.get $buf)))
+                    (then (return))
+                    (else (unreachable))
+                )
+            )
+
+            ;; A safe function to create a `host-buf` resource for the
+            ;; `$index`th `ExposedBuf`, raising a trap on out-of-bounds
+            ;; indices.
+            (func (export "new") (param $index i32) (result i32)
+                (call $vec-bounds-check (local.get $index))
+                (call $host-buf-new (local.get $index))
+            )
+
+            ;; A safe function to get the `i`th byte from an `ExposedBuf`'s
+            ;; buffer, raising a trap on out-of-bounds accesses.
+            (func (export "get") (param $buf i32) (param $i i64) (result i32)
+                (call $buf-bounds-check (local.get $buf) (local.get $i))
+                (call $u8-native-load (i64.add (call $get-buf-ptr (local.get $buf))
+                                               (local.get $i)))
+            )
+
+            ;; A safe function to set the `i`th byte in an `ExposedBuf`'s
+            ;; buffer, raising a trap on out-of-bounds accesses.
+            (func (export "set") (param $buf i32) (param $i i64) (param $value i32)
+                (call $buf-bounds-check (local.get $buf) (local.get $i))
+                (call $u8-native-store (i64.add (call $get-buf-ptr (local.get $buf))
+                                                (local.get $i))
                                        (local.get $value))
             )
 
-            ;; A safe function to get the length of the `ExposedBuf` buffer.
-            (func (export "len") (result i64)
-                (call $get-buf-len)
+            ;; A safe function to get the length of an `ExposedBuf`'s buffer.
+            (func (export "len") (param $buf i32) (result i64)
+                (call $get-buf-len (local.get $buf))
             )
         )
 
@@ -214,21 +397,47 @@ static COMPILE_TIME_BUILTINS: &str = r#"
                     (export "u64-native-load" (func $u64-native-load'))
                     (export "u8-native-load" (func $u8-native-load'))
                     (export "u8-native-store" (func $u8-native-store'))
+                    (export "host-buf-new" (func $host-buf-new))
                 ))
             )
         )
 
-        ;; Lift the safe API's exports from core functions to component functions
-        ;; and export them.
-        (func (export "get") (param "i" u64) (result u8)
+        ;; Lift the safe API's core functions to component functions.
+        (func $new (param "index" u32) (result (own $host-buf))
+            (canon lift (core func $instance "new"))
+        )
+        (func $get (param "buf" (borrow $host-buf)) (param "i" u64) (result u8)
             (canon lift (core func $instance "get"))
         )
-        (func (export "set") (param "i" u64) (param "value" u8)
+        (func $set (param "buf" (borrow $host-buf)) (param "i" u64) (param "value" u8)
             (canon lift (core func $instance "set"))
         )
-        (func (export "len") (result u64)
+        (func $len (param "buf" (borrow $host-buf)) (result u64)
             (canon lift (core func $instance "len"))
         )
+
+        ;; Export the safe API as a nested instance, whose function types
+        ;; refer to the instance's own `host-buf` resource type export.
+        (component $api
+            (import "host-buf-type" (type $host-buf (sub resource)))
+            (import "new-func" (func $new (param "index" u32) (result (own $host-buf))))
+            (import "get-func" (func $get (param "buf" (borrow $host-buf)) (param "i" u64) (result u8)))
+            (import "set-func" (func $set (param "buf" (borrow $host-buf)) (param "i" u64) (param "value" u8)))
+            (import "len-func" (func $len (param "buf" (borrow $host-buf)) (result u64)))
+            (export $host-buf' "host-buf" (type $host-buf))
+            (export "new" (func $new) (func (param "index" u32) (result (own $host-buf'))))
+            (export "get" (func $get) (func (param "buf" (borrow $host-buf')) (param "i" u64) (result u8)))
+            (export "set" (func $set) (func (param "buf" (borrow $host-buf')) (param "i" u64) (param "value" u8)))
+            (export "len" (func $len) (func (param "buf" (borrow $host-buf')) (result u64)))
+        )
+        (instance $api (instantiate $api
+            (with "host-buf-type" (type $host-buf))
+            (with "new-func" (func $new))
+            (with "get-func" (func $get))
+            (with "set-func" (func $set))
+            (with "len-func" (func $len))
+        ))
+        (export "host-buf" (instance $api))
     )
 "#;
 
@@ -255,34 +464,47 @@ mod inc_list {
             ;; Import the safe API.
             (import "host-buf"
                 (instance $host-buf
-                    (export "get" (func (param "i" u64) (result u8)))
-                    (export "set" (func (param "i" u64) (param "value" u8)))
-                    (export "len" (func (result u64)))
+                    (export "host-buf" (type $host-buf (sub resource)))
+                    (export "new" (func (param "index" u32) (result (own $host-buf))))
+                    (export "get" (func (param "buf" (borrow $host-buf)) (param "i" u64) (result u8)))
+                    (export "set" (func (param "buf" (borrow $host-buf)) (param "i" u64) (param "value" u8)))
+                    (export "len" (func (param "buf" (borrow $host-buf)) (result u64)))
                 )
             )
+            (alias export $host-buf "host-buf" (type $host-buf))
 
             ;; Define this component's core module implementation.
             (core module $main-impl
-                (import "" "get" (func $get (param i64) (result i32)))
-                (import "" "set" (func $set (param i64 i32)))
-                (import "" "len" (func $len (result i64)))
+                (import "" "new" (func $new (param i32) (result i32)))
+                (import "" "drop" (func $drop (param i32)))
+                (import "" "get" (func $get (param i32 i64) (result i32)))
+                (import "" "set" (func $set (param i32 i64 i32)))
+                (import "" "len" (func $len (param i32) (result i64)))
 
-                (func (export "main")
+                (func (export "new-host-buf") (param $index i32) (result i32)
+                    (call $new (local.get $index))
+                )
+
+                (func (export "main") (param $buf i32)
                     (local $i i64)
                     (local $n i64)
 
                     (local.set $i (i64.const 0))
-                    (local.set $n (call $len))
+                    (local.set $n (call $len (local.get $buf)))
 
                     (loop $loop
                         ;; When we have iterated over every byte in the
                         ;; buffer, exit.
                         (if (i64.ge_u (local.get $i) (local.get $n))
-                            (then (return)))
+                            (then
+                                ;; Borrows must be dropped before returning.
+                                (call $drop (local.get $buf))
+                                (return)))
 
                         ;; Increment the `i`th byte in the buffer.
-                        (call $set (local.get $i)
-                                   (i32.add (call $get (local.get $i))
+                        (call $set (local.get $buf)
+                                   (local.get $i)
+                                   (i32.add (call $get (local.get $buf) (local.get $i))
                                             (i32.const 1)))
 
                         ;; Increment `i` and continue to the next iteration
@@ -294,6 +516,8 @@ mod inc_list {
             )
 
             ;; Lower the imported safe APIs from component functions to core functions.
+            (core func $new' (canon lower (func $host-buf "new")))
+            (core func $drop (canon resource.drop $host-buf))
             (core func $get' (canon lower (func $host-buf "get")))
             (core func $set' (canon lower (func $host-buf "set")))
             (core func $len' (canon lower (func $host-buf "len")))
@@ -302,6 +526,8 @@ mod inc_list {
             (core instance $instance
                 (instantiate $main-impl
                     (with "" (instance
+                        (export "new" (func $new'))
+                        (export "drop" (func $drop))
                         (export "get" (func $get'))
                         (export "set" (func $set'))
                         (export "len" (func $len'))
@@ -309,11 +535,34 @@ mod inc_list {
                 )
             )
 
-            ;; Lift the implementation's `main` from a core function to a component function
-            ;; and export it!
-            (func (export "main")
+            ;; Lift the implementation's `new-host-buf` and `main` from core
+            ;; functions to component functions.
+            (func $new-host-buf (param "index" u32) (result (own $host-buf))
+                (canon lift (core func $instance "new-host-buf"))
+            )
+            (func $main (param "buf" (borrow $host-buf))
                 (canon lift (core func $instance "main"))
             )
+
+            ;; Export them, along with the host buffer resource type, as a
+            ;; nested instance. Composition re-exports a nested instance as-is,
+            ;; but would re-export top-level functions without the type
+            ;; ascriptions tying their `borrow`s to the re-exported resource
+            ;; type, which is invalid.
+            (component $api
+                (import "host-buf-type" (type $host-buf (sub resource)))
+                (import "new-host-buf-func" (func $new-host-buf (param "index" u32) (result (own $host-buf))))
+                (import "main-func" (func $main (param "buf" (borrow $host-buf))))
+                (export $host-buf' "host-buf" (type $host-buf))
+                (export "new-host-buf" (func $new-host-buf) (func (param "index" u32) (result (own $host-buf'))))
+                (export "main" (func $main) (func (param "buf" (borrow $host-buf'))))
+            )
+            (instance $api (instantiate $api
+                (with "host-buf-type" (type $host-buf))
+                (with "new-host-buf-func" (func $new-host-buf))
+                (with "main-func" (func $main))
+            ))
+            (export "api" (instance $api))
         )
     "#;
 
@@ -323,26 +572,28 @@ mod inc_list {
         let component = Component::new(&engine, HOST_BUF_API_GUEST_WASM.as_bytes())?;
 
         let iter_func = |iters| -> Result<_> {
-            let mut store = Store::new(
-                &engine,
-                ExposedBuf::new(std::iter::repeat_n(0u8, HOST_BUF_LEN)),
-            );
-            let instance = linker.instantiate(&mut store, &component)?;
-            let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+            let (mut store, instance, buf) =
+                instantiate_host_buf_api_guest(&engine, &linker, &component)?;
+            let main = get_api_func::<(ResourceAny,), ()>(&mut store, &instance, "main")?;
 
             let start = Instant::now();
             for _ in 0..iters {
-                main.call(&mut store, ())?;
+                main.call(&mut store, (buf,))?;
             }
             let elapsed = start.elapsed();
 
+            buf.resource_drop(&mut store)?;
             let expected = iters as u8;
-            store.data().get().iter().enumerate().for_each(|(i, byte)| {
-                assert_eq!(
-                    *byte, expected,
-                    "buf[{i}] = {byte}, but should be {expected}"
-                )
-            });
+            store.data()[0]
+                .get()
+                .iter()
+                .enumerate()
+                .for_each(|(i, byte)| {
+                    assert_eq!(
+                        *byte, expected,
+                        "buf[{i}] = {byte}, but should be {expected}"
+                    )
+                });
 
             Ok(elapsed)
         };
@@ -379,26 +630,28 @@ mod inc_list {
         let component = builder.compile_component()?;
 
         let iter_func = |iters| -> Result<_> {
-            let mut store = Store::new(
-                &engine,
-                ExposedBuf::new(std::iter::repeat_n(0u8, HOST_BUF_LEN)),
-            );
-            let instance = linker.instantiate(&mut store, &component)?;
-            let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+            let (mut store, instance, buf) =
+                instantiate_host_buf_api_guest(&engine, &linker, &component)?;
+            let main = get_api_func::<(ResourceAny,), ()>(&mut store, &instance, "main")?;
 
             let start = Instant::now();
             for _ in 0..iters {
-                main.call(&mut store, ())?;
+                main.call(&mut store, (buf,))?;
             }
             let elapsed = start.elapsed();
 
+            buf.resource_drop(&mut store)?;
             let expected = iters as u8;
-            store.data().get().iter().enumerate().for_each(|(i, byte)| {
-                assert_eq!(
-                    *byte, expected,
-                    "buf[{i}] = {byte}, but should be {expected}"
-                )
-            });
+            store.data()[0]
+                .get()
+                .iter()
+                .enumerate()
+                .for_each(|(i, byte)| {
+                    assert_eq!(
+                        *byte, expected,
+                        "buf[{i}] = {byte}, but should be {expected}"
+                    )
+                });
 
             Ok(elapsed)
         };
@@ -429,8 +682,8 @@ mod inc_list {
                             ;; Increment the `i`th byte in the buffer.
                             (i32.store8 (i32.add (local.get $ptr) (local.get $i))
                                         (i32.add (i32.load8_u (i32.add (local.get $ptr)
-                                                                       (local.get $i))
-                                                 (i32.const 1))))
+                                                                       (local.get $i)))
+                                                 (i32.const 1)))
 
                             ;; Increment `i` and continue to the next iteration
                             ;; of the loop.
@@ -460,7 +713,7 @@ mod inc_list {
         let component = Component::new(&engine, TAKE_AND_RETURN_INT_LIST_GUEST_WASM.as_bytes())?;
 
         let iter_func = |iters| -> Result<_> {
-            let mut store = Store::new(&engine, ExposedBuf::new([]));
+            let mut store = Store::new(&engine, HostBufs::from(vec![]));
             let instance = linker.instantiate(&mut store, &component)?;
             let inc_list =
                 instance.get_typed_func::<(&[u8],), (Vec<u8>,)>(&mut store, "inc-list")?;
@@ -474,7 +727,8 @@ mod inc_list {
             let elapsed = start.elapsed();
 
             let expected = iters as u8;
-            store.data().get().iter().enumerate().for_each(|(i, byte)| {
+            assert_eq!(buf.len(), HOST_BUF_LEN);
+            buf.iter().enumerate().for_each(|(i, byte)| {
                 assert_eq!(
                     *byte, expected,
                     "buf[{i}] = {byte}, but should be {expected}"
@@ -515,17 +769,27 @@ mod inc_random {
             ;; Import the safe API.
             (import "host-buf"
                 (instance $host-buf
-                    (export "get" (func (param "i" u64) (result u8)))
-                    (export "set" (func (param "i" u64) (param "value" u8)))
+                    (export "host-buf" (type $host-buf (sub resource)))
+                    (export "new" (func (param "index" u32) (result (own $host-buf))))
+                    (export "get" (func (param "buf" (borrow $host-buf)) (param "i" u64) (result u8)))
+                    (export "set" (func (param "buf" (borrow $host-buf)) (param "i" u64) (param "value" u8)))
                 )
             )
+            (alias export $host-buf "host-buf" (type $host-buf))
 
             ;; Define this component's core module implementation.
             (core module $inc-random-impl
-                (import "" "get" (func $get (param i64) (result i32)))
-                (import "" "set" (func $set (param i64 i32)))
+                (import "" "new" (func $new (param i32) (result i32)))
+                (import "" "drop" (func $drop (param i32)))
+                (import "" "get" (func $get (param i32 i64) (result i32)))
+                (import "" "set" (func $set (param i32 i64 i32)))
+
+                (func (export "new-host-buf") (param $index i32) (result i32)
+                    (call $new (local.get $index))
+                )
 
                 (func (export "inc-random")
+                    (param $buf i32)
                     (param $iters i64)
                     (local $state i64)
                     (local $i i64)
@@ -540,13 +804,16 @@ mod inc_random {
                             )
                         )
                         ;; Increment the buffer.
-                        (call $set (local.get $i)
-                                (i32.add (call $get (local.get $i))
+                        (call $set (local.get $buf)
+                                   (local.get $i)
+                                   (i32.add (call $get (local.get $buf) (local.get $i))
                                             (i32.const 1)))
                         (local.set $iters (i64.sub (local.get $iters) (i64.const 1)))
                         local.get $iters
                         i64.eqz
                         if
+                          ;; Borrows must be dropped before returning.
+                          (call $drop (local.get $buf))
                           return
                         end
                         ;; Get next random number by multiplying by multiplier.
@@ -562,6 +829,8 @@ mod inc_random {
             )
 
             ;; Lower the imported safe APIs from component functions to core functions.
+            (core func $new' (canon lower (func $host-buf "new")))
+            (core func $drop (canon resource.drop $host-buf))
             (core func $get' (canon lower (func $host-buf "get")))
             (core func $set' (canon lower (func $host-buf "set")))
 
@@ -569,17 +838,39 @@ mod inc_random {
             (core instance $instance
                 (instantiate $inc-random-impl
                     (with "" (instance
+                        (export "new" (func $new'))
+                        (export "drop" (func $drop))
                         (export "get" (func $get'))
                         (export "set" (func $set'))
                     ))
                 )
             )
 
-            ;; Lift the implementation's `inc-random` from a core function to a component function
-            ;; and export it!
-            (func (export "inc-random") (param "iters" u64)
+            ;; Lift the implementation's `new-host-buf` and `inc-random` from
+            ;; core functions to component functions.
+            (func $new-host-buf (param "index" u32) (result (own $host-buf))
+                (canon lift (core func $instance "new-host-buf"))
+            )
+            (func $inc-random (param "buf" (borrow $host-buf)) (param "iters" u64)
                 (canon lift (core func $instance "inc-random"))
             )
+
+            ;; Export them, along with the host buffer resource type, as a
+            ;; nested instance; see the comment in `inc_list`'s guest.
+            (component $api
+                (import "host-buf-type" (type $host-buf (sub resource)))
+                (import "new-host-buf-func" (func $new-host-buf (param "index" u32) (result (own $host-buf))))
+                (import "inc-random-func" (func $inc-random (param "buf" (borrow $host-buf)) (param "iters" u64)))
+                (export $host-buf' "host-buf" (type $host-buf))
+                (export "new-host-buf" (func $new-host-buf) (func (param "index" u32) (result (own $host-buf'))))
+                (export "inc-random" (func $inc-random) (func (param "buf" (borrow $host-buf')) (param "iters" u64)))
+            )
+            (instance $api (instantiate $api
+                (with "host-buf-type" (type $host-buf))
+                (with "new-host-buf-func" (func $new-host-buf))
+                (with "inc-random-func" (func $inc-random))
+            ))
+            (export "api" (instance $api))
         )
     "#
         )
@@ -610,19 +901,18 @@ mod inc_random {
         let component = Component::new(&engine, guest_wasm.as_bytes())?;
 
         let iter_func = |iters| -> Result<_> {
-            let mut store = Store::new(
-                &engine,
-                ExposedBuf::new(std::iter::repeat_n(0u8, HOST_BUF_LEN)),
-            );
-            let instance = linker.instantiate(&mut store, &component)?;
-            let inc_random = instance.get_typed_func::<(u64,), ()>(&mut store, "inc-random")?;
+            let (mut store, instance, buf) =
+                instantiate_host_buf_api_guest(&engine, &linker, &component)?;
+            let inc_random =
+                get_api_func::<(ResourceAny, u64), ()>(&mut store, &instance, "inc-random")?;
 
             let start = Instant::now();
-            inc_random.call(&mut store, (iters,))?;
+            inc_random.call(&mut store, (buf, iters))?;
             let elapsed = start.elapsed();
 
+            buf.resource_drop(&mut store)?;
             let expected = get_expected(iters);
-            let actual = store.data().get();
+            let actual = store.data()[0].get();
             assert_eq!(actual, expected);
 
             Ok(elapsed)
@@ -661,19 +951,18 @@ mod inc_random {
         let component = builder.compile_component()?;
 
         let iter_func = |iters| -> Result<_> {
-            let mut store = Store::new(
-                &engine,
-                ExposedBuf::new(std::iter::repeat_n(0u8, HOST_BUF_LEN)),
-            );
-            let instance = linker.instantiate(&mut store, &component)?;
-            let inc_random = instance.get_typed_func::<(u64,), ()>(&mut store, "inc-random")?;
+            let (mut store, instance, buf) =
+                instantiate_host_buf_api_guest(&engine, &linker, &component)?;
+            let inc_random =
+                get_api_func::<(ResourceAny, u64), ()>(&mut store, &instance, "inc-random")?;
 
             let start = Instant::now();
-            inc_random.call(&mut store, (iters,))?;
+            inc_random.call(&mut store, (buf, iters))?;
             let elapsed = start.elapsed();
 
+            buf.resource_drop(&mut store)?;
             let expected = get_expected(iters);
-            let actual = store.data().get();
+            let actual = store.data()[0].get();
             assert_eq!(actual, expected);
 
             Ok(elapsed)
@@ -719,7 +1008,7 @@ mod inc_random {
         let component = Component::new(&engine, TAKE_AND_RETURN_INT_LIST_GUEST_WASM.as_bytes())?;
 
         let iter_func = |iters| -> Result<_> {
-            let mut store = Store::new(&engine, ExposedBuf::new([]));
+            let mut store = Store::new(&engine, HostBufs::from(vec![]));
             let instance = linker.instantiate(&mut store, &component)?;
             let inc_random =
                 instance.get_typed_func::<(u32, &[u8]), (Vec<u8>,)>(&mut store, "inc-random")?;
