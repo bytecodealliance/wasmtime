@@ -419,12 +419,12 @@ use wasmtime_environ::prelude;
 // * `wat` is only used with the `cranelift` or `winch` features.
 // * `wasmtime-jit-icache-coherence` is only used with both the `std` and
 //   `runtime` features.
-#[cfg(feature = "component-model")]
-use {encoding_rs as _, wasmtime_component_macro as _};
 #[cfg(feature = "std")]
 use wasmtime_jit_icache_coherence as _;
 #[cfg(feature = "wat")]
 use wat as _;
+#[cfg(feature = "component-model")]
+use {encoding_rs as _, wasmtime_component_macro as _};
 
 // FIXME(#12069) should transition to OOM-handling versions of these collections
 // for all internal usage instead of using abort-on-OOM versions. Once that's

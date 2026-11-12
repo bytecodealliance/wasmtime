@@ -13,10 +13,10 @@
 // * `tracing` is only a dependency to support the `disable-logging` feature.
 // * `wasmtime-debugger` and `gdbstub-component-artifact` are only used by the
 //   `run` and `serve` subcommands.
-#[cfg(feature = "disable-logging")]
-use tracing as _;
 #[cfg(feature = "gdbstub")]
 use gdbstub_component_artifact as _;
+#[cfg(feature = "disable-logging")]
+use tracing as _;
 #[cfg(feature = "debug")]
 use wasmtime_debugger as _;
 
