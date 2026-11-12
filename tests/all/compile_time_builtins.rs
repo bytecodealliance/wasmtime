@@ -285,6 +285,34 @@ fn constant_builtin(value: u32) -> String {
     )
 }
 
+/// A compile-time builtin that imports `lower` as an instance exporting `get`,
+/// and exports `get`, returning `lower`'s `get` plus `offset`.
+fn layered_builtin(lower: &str, offset: u32) -> String {
+    format!(
+        r#"
+            (component
+                (import "{lower}" (instance $lower (export "get" (func (result u32)))))
+                (core func $lower-get (canon lower (func $lower "get")))
+
+                (core module $m
+                    (import "" "lower-get" (func $lower-get (result i32)))
+                    (func (export "get") (result i32)
+                        (i32.add (call $lower-get) (i32.const {offset}))
+                    )
+                )
+
+                (core instance $i
+                    (instantiate $m (with "" (instance (export "lower-get" (func $lower-get)))))
+                )
+
+                (func (export "get") (result u32)
+                    (canon lift (core func $i "get"))
+                )
+            )
+        "#
+    )
+}
+
 /// A main Wasm that imports each of `names` as an instance exporting `get`,
 /// and exports `sum`, the sum of every `get`.
 fn summing_main(names: &[&str]) -> String {
@@ -392,43 +420,45 @@ fn versions_of_one_interface() -> Result<()> {
     Ok(())
 }
 
+/// A compile-time builtin that exports `get`, returning the `u8` store data,
+/// read through the unsafe intrinsics.
+const STORE_DATA_BUILTIN: &str = r#"
+    (component
+        (import "unsafe-intrinsics"
+            (instance $intrinsics
+                (export "store-data-address" (func (result u64)))
+                (export "u8-native-load" (func (param "pointer" u64) (result u8)))
+            )
+        )
+
+        (core func $store-data-address' (canon lower (func $intrinsics "store-data-address")))
+        (core func $u8-native-load' (canon lower (func $intrinsics "u8-native-load")))
+
+        (core module $m
+            (import "" "store-data-address" (func $store-data-address (result i64)))
+            (import "" "u8-native-load" (func $u8-native-load (param i64) (result i32)))
+            (func (export "get") (result i32)
+                (call $u8-native-load (call $store-data-address))
+            )
+        )
+
+        (core instance $i
+            (instantiate $m
+                (with "" (instance (export "store-data-address" (func $store-data-address'))
+                                   (export "u8-native-load" (func $u8-native-load'))))
+            )
+        )
+
+        (func (export "get") (result u32)
+            (canon lift (core func $i "get"))
+        )
+    )
+"#;
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn builtins_share_intrinsics() -> Result<()> {
     // Both builtins' intrinsics imports merge into one.
-    const BUILTIN: &str = r#"
-        (component
-            (import "unsafe-intrinsics"
-                (instance $intrinsics
-                    (export "store-data-address" (func (result u64)))
-                    (export "u8-native-load" (func (param "pointer" u64) (result u8)))
-                )
-            )
-
-            (core func $store-data-address' (canon lower (func $intrinsics "store-data-address")))
-            (core func $u8-native-load' (canon lower (func $intrinsics "u8-native-load")))
-
-            (core module $m
-                (import "" "store-data-address" (func $store-data-address (result i64)))
-                (import "" "u8-native-load" (func $u8-native-load (param i64) (result i32)))
-                (func (export "get") (result i32)
-                    (call $u8-native-load (call $store-data-address))
-                )
-            )
-
-            (core instance $i
-                (instantiate $m
-                    (with "" (instance (export "store-data-address" (func $store-data-address'))
-                                       (export "u8-native-load" (func $u8-native-load'))))
-                )
-            )
-
-            (func (export "get") (result u32)
-                (canon lift (core func $i "get"))
-            )
-        )
-    "#;
-
     let engine = Engine::default();
     let linker = component::Linker::new(&engine);
 
@@ -437,12 +467,12 @@ fn builtins_share_intrinsics() -> Result<()> {
             .expose_unsafe_intrinsics("unsafe-intrinsics")
             .compile_time_builtins_binary_or_text(
                 "a:b/first",
-                BUILTIN.as_bytes(),
+                STORE_DATA_BUILTIN.as_bytes(),
                 Some(Path::new("first.wat")),
             )?
             .compile_time_builtins_binary_or_text(
                 "a:b/second",
-                BUILTIN.as_bytes(),
+                STORE_DATA_BUILTIN.as_bytes(),
                 Some(Path::new("second.wat")),
             )?
             .wasm_binary_or_text(
@@ -563,5 +593,213 @@ fn unused_compile_time_builtins_with_other_imports() -> Result<()> {
         .collect::<Vec<_>>();
     assert_eq!(imports, ["link-time-api"]);
 
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn builtins_import_builtins() -> Result<()> {
+    // The main Wasm imports only `a:b/outer`, which imports `a:b/inner`.
+    let engine = Engine::default();
+
+    let component = unsafe {
+        CodeBuilder::new(&engine)
+            .expose_unsafe_intrinsics("unsafe-intrinsics")
+            .compile_time_builtins_binary_or_text(
+                "a:b/outer",
+                layered_builtin("a:b/inner", 100).as_bytes(),
+                Some(Path::new("outer.wat")),
+            )?
+            .compile_time_builtins_binary_or_text(
+                "a:b/inner",
+                constant_builtin(42).as_bytes(),
+                Some(Path::new("inner.wat")),
+            )?
+            .wasm_binary_or_text(
+                summing_main(&["a:b/outer"]).as_bytes(),
+                Some(Path::new("main.wat")),
+            )?
+            .compile_component()?
+    };
+
+    let component_type = component.component_type();
+    assert_eq!(component_type.imports(&engine).len(), 0);
+    assert_eq!(call_sum(&engine, &component)?, 142);
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn builtins_are_shared_by_their_importers() -> Result<()> {
+    // `get` counts its calls, so the sum is 1 + 2 only if both importers call
+    // the same instance.
+    const COUNTER: &str = r#"
+        (component
+            (core module $m
+                (global $count (mut i32) (i32.const 0))
+                (func (export "get") (result i32)
+                    (global.set $count (i32.add (global.get $count) (i32.const 1)))
+                    (global.get $count)
+                )
+            )
+
+            (core instance $i (instantiate $m))
+
+            (func (export "get") (result u32)
+                (canon lift (core func $i "get"))
+            )
+        )
+    "#;
+
+    let engine = Engine::default();
+
+    let component = unsafe {
+        CodeBuilder::new(&engine)
+            .expose_unsafe_intrinsics("unsafe-intrinsics")
+            .compile_time_builtins_binary_or_text(
+                "a:b/memory",
+                COUNTER.as_bytes(),
+                Some(Path::new("memory.wat")),
+            )?
+            .compile_time_builtins_binary_or_text(
+                "a:b/buffers",
+                layered_builtin("a:b/memory", 0).as_bytes(),
+                Some(Path::new("buffers.wat")),
+            )?
+            .compile_time_builtins_binary_or_text(
+                "a:b/strings",
+                layered_builtin("a:b/memory", 0).as_bytes(),
+                Some(Path::new("strings.wat")),
+            )?
+            .wasm_binary_or_text(
+                summing_main(&["a:b/buffers", "a:b/strings"]).as_bytes(),
+                Some(Path::new("main.wat")),
+            )?
+            .compile_component()?
+    };
+
+    assert_eq!(call_sum(&engine, &component)?, 3);
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn builtin_import_cycles_are_named_in_errors() -> Result<()> {
+    let engine = Engine::default();
+
+    let err = unsafe {
+        CodeBuilder::new(&engine)
+            .expose_unsafe_intrinsics("unsafe-intrinsics")
+            .compile_time_builtins_binary_or_text(
+                "a:b/first",
+                layered_builtin("a:b/second", 0).as_bytes(),
+                Some(Path::new("first.wat")),
+            )?
+            .compile_time_builtins_binary_or_text(
+                "a:b/second",
+                layered_builtin("a:b/first", 0).as_bytes(),
+                Some(Path::new("second.wat")),
+            )?
+            .wasm_binary_or_text(
+                summing_main(&["a:b/first"]).as_bytes(),
+                Some(Path::new("main.wat")),
+            )?
+            .compile_component()
+            .map(|_| ())
+            .unwrap_err()
+    };
+    err.assert_contains("`a:b/first` -> `a:b/second` -> `a:b/first`");
+
+    let err = unsafe {
+        CodeBuilder::new(&engine)
+            .expose_unsafe_intrinsics("unsafe-intrinsics")
+            .compile_time_builtins_binary_or_text(
+                "a:b/self",
+                layered_builtin("a:b/self", 0).as_bytes(),
+                Some(Path::new("self.wat")),
+            )?
+            .wasm_binary_or_text(
+                summing_main(&["a:b/self"]).as_bytes(),
+                Some(Path::new("main.wat")),
+            )?
+            .compile_component()
+            .map(|_| ())
+            .unwrap_err()
+    };
+    err.assert_contains("`a:b/self` -> `a:b/self`");
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn builtins_imported_by_builtins_get_intrinsics() -> Result<()> {
+    // Only `a:b/outer` is imported by the main Wasm, but `a:b/inner` uses the
+    // intrinsics.
+    let engine = Engine::default();
+    let linker = component::Linker::new(&engine);
+
+    let component = unsafe {
+        CodeBuilder::new(&engine)
+            .expose_unsafe_intrinsics("unsafe-intrinsics")
+            .compile_time_builtins_binary_or_text(
+                "a:b/outer",
+                layered_builtin("a:b/inner", 100).as_bytes(),
+                Some(Path::new("outer.wat")),
+            )?
+            .compile_time_builtins_binary_or_text(
+                "a:b/inner",
+                STORE_DATA_BUILTIN.as_bytes(),
+                Some(Path::new("inner.wat")),
+            )?
+            .wasm_binary_or_text(
+                summing_main(&["a:b/outer"]).as_bytes(),
+                Some(Path::new("main.wat")),
+            )?
+            .compile_component()?
+    };
+
+    let mut store = Store::new(&engine, 42_u8);
+    let instance = linker.instantiate(&mut store, &component)?;
+
+    let (result,) = instance
+        .get_typed_func::<(), (u32,)>(&mut store, "sum")?
+        .call(&mut store, ())?;
+
+    assert_eq!(result, 142);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn builtin_link_errors_name_the_importer() -> Result<()> {
+    // `a:b/inner` doesn't export the `get` that `a:b/outer` imports.
+    let engine = Engine::default();
+
+    let err = unsafe {
+        CodeBuilder::new(&engine)
+            .expose_unsafe_intrinsics("unsafe-intrinsics")
+            .compile_time_builtins_binary_or_text(
+                "a:b/outer",
+                layered_builtin("a:b/inner", 0).as_bytes(),
+                Some(Path::new("outer.wat")),
+            )?
+            .compile_time_builtins_binary_or_text(
+                "a:b/inner",
+                "(component)".as_bytes(),
+                Some(Path::new("inner.wat")),
+            )?
+            .wasm_binary_or_text(
+                summing_main(&["a:b/outer"]).as_bytes(),
+                Some(Path::new("main.wat")),
+            )?
+            .compile_component()
+            .map(|_| ())
+            .unwrap_err()
+    };
+
+    err.assert_contains("`a:b/inner`");
+    err.assert_contains("`a:b/outer`");
     Ok(())
 }
