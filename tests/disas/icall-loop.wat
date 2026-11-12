@@ -50,7 +50,6 @@
 ;; @002b                               v10 = iadd v7, v9
 ;; @002b                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
 ;; @002b                               v14 = iconst.i64 -2
-;; @002b                               v17 = iconst.i32 0
 ;; @002b                               v20 = load.i64 notrap aligned readonly can_move region4 v0+40
 ;; @002b                               v21 = load.i32 notrap aligned readonly can_move region5 v20
 ;; @0027                               jump block2
@@ -62,8 +61,8 @@
 ;; @002b                               brif v13, block5(v30), block4
 ;;
 ;;                                 block4 cold:
-;; @002b                               v31 = iconst.i32 0
-;; @002b                               v19 = call fn0(v0, v31, v6)  ; v31 = 0
+;; @002b                               v17 = iconst.i32 0
+;; @002b                               v19 = call fn0(v0, v17, v6)  ; v17 = 0
 ;; @002b                               jump block5(v19)
 ;;
 ;;                                 block5(v16: i64):
@@ -98,8 +97,6 @@
 ;;                                     v34 = iconst.i64 8
 ;; @0038                               v9 = iadd v6, v34  ; v34 = 8
 ;; @0038                               v13 = iconst.i64 -2
-;; @0038                               v16 = iconst.i32 0
-;;                                     v33 = iconst.i64 1
 ;; @0038                               v19 = load.i64 notrap aligned readonly can_move region4 v0+40
 ;; @0038                               v20 = load.i32 notrap aligned readonly can_move region5 v19
 ;; @0034                               jump block2
@@ -112,9 +109,9 @@
 ;; @0038                               brif v12, block5(v37), block4
 ;;
 ;;                                 block4 cold:
-;; @0038                               v38 = iconst.i32 0
-;;                                     v39 = iconst.i64 1
-;; @0038                               v18 = call fn0(v0, v38, v39)  ; v38 = 0, v39 = 1
+;; @0038                               v16 = iconst.i32 0
+;;                                     v33 = iconst.i64 1
+;; @0038                               v18 = call fn0(v0, v16, v33)  ; v16 = 0, v33 = 1
 ;; @0038                               jump block5(v18)
 ;;
 ;;                                 block5(v15: i64):
