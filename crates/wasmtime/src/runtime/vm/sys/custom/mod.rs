@@ -10,6 +10,17 @@
 
 #![warn(dead_code, unused_imports)]
 
+// These crates are used on the `unix` and `windows` backends, and there's no
+// easy way to #[cfg] it in `Cargo.toml`, so just put a fake use of it here to
+// consider it used even on these builds.
+use libc as _;
+use wasmtime_jit_icache_coherence as _;
+// Similarly for `memfd` when we're compiling for Linux & no-std, just fake a
+// use here since that's not something that can be accounted for in
+// `Cargo.toml`.
+#[cfg(target_os = "linux")]
+use memfd as _;
+
 #[cfg(has_virtual_memory)]
 use crate::prelude::*;
 

@@ -26,7 +26,7 @@ wasmtime-unwinder = { workspace = true, optional = true }
 wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
-wasmtime-versioned-export-macros = { workspace = true }
+wasmtime-versioned-export-macros = { workspace = true, optional = true }
 wasmtime-wmemcheck = { workspace = true, optional = true }
 wasmtime-core = { workspace = true, features = ['serde'] }
 pulley-interpreter = { workspace = true }
@@ -217,6 +217,7 @@ async = [
   "dep:wasmtime-fiber",
   "wasmtime-component-macro?/async",
   "runtime",
+  "dep:async-trait",
 ]
 
 # Enables support for the pooling instance allocation strategy
@@ -270,11 +271,11 @@ runtime = [
   "dep:smallvec",
   "dep:mach2",
   "dep:memfd",
-  "dep:wasmtime-versioned-export-macros",
   "dep:windows-sys",
   "pulley-interpreter/interp",
   "dep:wasmtime-unwinder",
-  "dep:async-trait",
+  "dep:wasmtime-jit-icache-coherence",
+  "dep:wasmtime-versioned-export-macros",
 ]
 
 # Enable support for garbage collection-related things.
@@ -334,7 +335,6 @@ std = [
   'pulley-interpreter/std',
   'addr2line?/std',
   "dep:rustix",
-  "wasmtime-jit-icache-coherence",
   "wasmtime-jit-debug?/std",
   "futures?/std",
 ]
