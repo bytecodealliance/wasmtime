@@ -6,8 +6,9 @@ use crate::runtime::vm::{
 use crate::{Engine, ValRaw};
 use core::marker;
 use core::ptr::NonNull;
+use pulley_interpreter::decode::{Decode, UnsafeBytecodeStream};
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
-use pulley_interpreter::{Opcode, Reg, XReg};
+use pulley_interpreter::{ExtendedOpcode, Opcode, Reg, XReg};
 use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
 use wasmtime_unwinder::Handler;
 use wasmtime_unwinder::Unwind;
@@ -493,21 +494,28 @@ impl InterpreterRef<'_> {
         caller: NonNull<VMContext>,
     ) -> Option<NonNull<u8>> {
         // Pulley checks for stack overflow whenever the stack pointer is
-        // decremented, including in the `push_frame` and `push_frame_save`
-        // instructions at the start of a function. A stack overflow there
-        // happens before the trapping function has pushed its frame, so `fp` is
-        // still its caller's and its return address is still in `lr`.
+        // decremented, including in the `push_frame`, `push_frame_save`, and
+        // `push_frame_full` instructions which are always the first
+        // instruction of a function that sets up a frame. A stack overflow
+        // there happens before the trapping function has pushed its frame, so
+        // `fp` is still its caller's and its return address is still in `lr`.
+        // Detect that case and set `lr` so the trap is attributed to the call
+        // site in the caller, as if the callee hadn't been entered yet.
         let lr = match kind {
             Some(TrapKind::StackOverflow) => {
-                // SAFETY: `pc` points to the start of the trapping
-                // instruction, so its first byte is the opcode.
-                let opcode = Opcode::new(unsafe { *pc.as_ptr() });
-                match opcode {
-                    Some(Opcode::PushFrame | Opcode::PushFrameSave) => {
-                        Some(self.vm().lr() as usize)
+                // SAFETY: the interpreter reports `pc` as the start of the
+                // trapping instruction, so it is valid bytecode.
+                let mut stream = unsafe { UnsafeBytecodeStream::new(pc) };
+                let Ok(opcode) = Opcode::decode(&mut stream);
+                let is_function_prologue = match opcode {
+                    Opcode::PushFrame | Opcode::PushFrameSave => true,
+                    Opcode::ExtendedOp => {
+                        let Ok(opcode) = ExtendedOpcode::decode(&mut stream);
+                        opcode == ExtendedOpcode::PushFrameFull
                     }
-                    _ => None,
-                }
+                    _ => false,
+                };
+                is_function_prologue.then(|| self.vm().lr() as usize)
             }
             _ => None,
         };

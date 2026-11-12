@@ -302,6 +302,19 @@ where
     /// common cases and we don't want to spread the logic over multiple
     /// functions.
     ///
+    /// Additionally any prologue opcode risks the possibility of stack
+    /// overflow, and when this happens Wasmtime needs to know whether to use
+    /// the `fp`/`lr` in registers or the one on the stack. Wasmtime does this
+    /// by looking at the faulting opcode to determine whether we're in the
+    /// prologue before `fp`/`lr` are pushed or not. This means that it's
+    /// required that the first stack-allocation opcode either fail or push
+    /// `fp`/`lr` onto the stack. Currently there are only three possible
+    /// opcodes, depending on the frame layout, but more can be added in the
+    /// future if needed (or folded into `PushFrameFull`). Note that further
+    /// stack allocation after `PushFrame*` opcodes is fine because if that
+    /// fails `fp`/`lr` are already on the stack which establishes backtraces
+    /// correctly.
+    ///
     /// The general machinst methods are split to accommodate stack checks and
     /// things like stack probes, all of which are empty on Pulley because
     /// Pulley has its own stack check mechanism.
@@ -314,35 +327,60 @@ where
         let mut insts = SmallVec::new();
 
         let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
-        if incoming_args_diff > 0 {
-            // Decrement SP by the amount of additional incoming argument space
-            // we need
-            insts.extend(Self::gen_sp_reg_adjust(-(incoming_args_diff as i32)));
-        }
 
         let style = frame_layout.pulley_frame_style();
 
         match &style {
-            FrameStyle::None => {}
-            FrameStyle::PulleyBasicSetup { frame_size } => {
-                insts.push(RawInst::PushFrame.into());
+            FrameStyle::None => {
                 insts.extend(Self::gen_sp_reg_adjust(
-                    -i32::try_from(*frame_size).unwrap(),
+                    -i32::try_from(incoming_args_diff).unwrap(),
                 ));
+            }
+            FrameStyle::PulleyBasicSetup { frame_size } => {
+                if incoming_args_diff > 0 {
+                    insts.push(
+                        RawInst::PushFrameFull {
+                            pre: incoming_args_diff,
+                            amt: *frame_size,
+                            regs: pulley_interpreter::UpperRegSet::default(),
+                        }
+                        .into(),
+                    );
+                } else {
+                    insts.push(RawInst::PushFrame.into());
+                    insts.extend(Self::gen_sp_reg_adjust(
+                        -i32::try_from(*frame_size).unwrap(),
+                    ));
+                }
             }
             FrameStyle::PulleySetupAndSaveClobbers {
                 frame_size,
                 saved_by_pulley,
-            } => insts.push(
-                RawInst::PushFrameSave {
-                    amt: *frame_size,
-                    regs: pulley_interpreter::UpperRegSet::from_bitset(*saved_by_pulley),
+            } => {
+                let regs = pulley_interpreter::UpperRegSet::from_bitset(*saved_by_pulley);
+                if incoming_args_diff > 0 {
+                    insts.push(
+                        RawInst::PushFrameFull {
+                            pre: incoming_args_diff,
+                            amt: u32::from(*frame_size),
+                            regs,
+                        }
+                        .into(),
+                    );
+                } else {
+                    insts.push(
+                        RawInst::PushFrameSave {
+                            amt: *frame_size,
+                            regs,
+                        }
+                        .into(),
+                    );
                 }
-                .into(),
-            ),
-            FrameStyle::Manual { frame_size } => insts.extend(Self::gen_sp_reg_adjust(
-                -i32::try_from(*frame_size).unwrap(),
-            )),
+            }
+            FrameStyle::Manual { frame_size } => {
+                let amt = incoming_args_diff.checked_add(*frame_size).unwrap();
+                insts.extend(Self::gen_sp_reg_adjust(-i32::try_from(amt).unwrap()));
+            }
         }
 
         for (offset, ty, reg) in frame_layout.manually_managed_clobbers(&style) {

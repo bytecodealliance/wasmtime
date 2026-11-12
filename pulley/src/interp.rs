@@ -1089,6 +1089,64 @@ impl Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    /// Shared implementation of `push_frame_save` and `push_frame_full`.
+    ///
+    /// This allocates `pre` bytes of stack, pushes `lr` and `fp`, sets `fp`
+    /// to the new frame, allocates `amt` more bytes of stack, and then saves
+    /// `regs` at the top of the `amt` bytes just allocated.
+    #[inline]
+    fn push_frame_full_impl<I: Encode>(
+        &mut self,
+        pre: usize,
+        amt: usize,
+        regs: UpperRegSet<XReg>,
+    ) -> ControlFlow<Done> {
+        let ptr_size = size_of::<usize>();
+        let full_amt = pre + 2 * ptr_size + amt;
+        let new_sp = self.state[XReg::sp].get_ptr::<u8>().wrapping_sub(full_amt);
+        self.set_sp::<I>(new_sp)?;
+
+        let mut offset = i32::try_from(amt).unwrap();
+        let ptr_size = ptr_size as i32;
+
+        // SAFETY: all stores below are within the `full_amt` bytes of stack
+        // just allocated above.
+        unsafe {
+            // Emulate `push_frame` by placing `lr` and `fp` onto the stack, in
+            // that order, just below the `pre` area.
+            self.store_ne::<_, I>(
+                AddrO32 {
+                    addr: XReg::sp,
+                    offset: offset + ptr_size,
+                },
+                self.state.lr,
+            )?;
+            self.store_ne::<_, I>(
+                AddrO32 {
+                    addr: XReg::sp,
+                    offset,
+                },
+                self.state.fp,
+            )?;
+
+            // Set `fp` to the top of our frame, where `fp` is stored.
+            self.state.fp = new_sp.add(amt);
+
+            // Next save any registers in `regs` to the stack, just below `fp`.
+            for reg in regs {
+                offset -= 8;
+                self.store_ne::<_, I>(
+                    AddrO32 {
+                        addr: XReg::sp,
+                        offset,
+                    },
+                    self.state[reg].get_u64(),
+                )?;
+            }
+        }
+        ControlFlow::Continue(())
+    }
+
     /// Same as `set_sp` but does not check to see if `sp` is in-bounds. Should
     /// only be used with stack increment operations such as `pop`.
     fn set_sp_unchecked<T>(&mut self, sp: *mut T) {
@@ -2011,50 +2069,7 @@ impl OpVisitor for Interpreter<'_> {
 
     #[inline]
     fn push_frame_save(&mut self, amt: u16, regs: UpperRegSet<XReg>) -> ControlFlow<Done> {
-        // Decrement the stack pointer `amt` bytes plus 2 pointers more for
-        // fp/lr.
-        let ptr_size = size_of::<usize>();
-        let full_amt = usize::from(amt) + 2 * ptr_size;
-        let new_sp = self.state[XReg::sp].get_ptr::<u8>().wrapping_sub(full_amt);
-        self.set_sp::<crate::PushFrameSave>(new_sp)?;
-
-        unsafe {
-            // Emulate `push_frame` by placing `lr` and `fp` onto the stack, in
-            // that order, at the top of the allocated area.
-            self.store_ne::<_, crate::PushFrameSave>(
-                AddrO32 {
-                    addr: XReg::sp,
-                    offset: (full_amt - 1 * ptr_size) as i32,
-                },
-                self.state.lr,
-            )?;
-            self.store_ne::<_, crate::PushFrameSave>(
-                AddrO32 {
-                    addr: XReg::sp,
-                    offset: (full_amt - 2 * ptr_size) as i32,
-                },
-                self.state.fp,
-            )?;
-
-            // Set `fp` to the top of our frame, where `fp` is stored.
-            let mut offset = amt as i32;
-            self.state.fp = self.state[XReg::sp]
-                .get_ptr::<u8>()
-                .byte_offset(offset as isize);
-
-            // Next save any registers in `regs` to the stack.
-            for reg in regs {
-                offset -= 8;
-                self.store_ne::<_, crate::PushFrameSave>(
-                    AddrO32 {
-                        addr: XReg::sp,
-                        offset,
-                    },
-                    self.state[reg].get_u64(),
-                )?;
-            }
-        }
-        ControlFlow::Continue(())
+        self.push_frame_full_impl::<crate::PushFrameSave>(0, usize::from(amt), regs)
     }
 
     fn pop_frame_restore(&mut self, amt: u16, regs: UpperRegSet<XReg>) -> ControlFlow<Done> {
@@ -2838,6 +2853,17 @@ impl ExtendedOpVisitor for Interpreter<'_> {
 
     fn call_indirect_host(&mut self, id: u8) -> ControlFlow<Done> {
         self.done_call_indirect_host(id)
+    }
+
+    fn push_frame_full(
+        &mut self,
+        pre: u32,
+        amt: u32,
+        regs: UpperRegSet<XReg>,
+    ) -> ControlFlow<Done> {
+        let pre = usize::try_from(pre).unwrap();
+        let amt = usize::try_from(amt).unwrap();
+        self.push_frame_full_impl::<crate::PushFrameFull>(pre, amt, regs)
     }
 
     fn xpcadd(&mut self, dst: XReg, offset: PcRelOffset) -> ControlFlow<Done> {
