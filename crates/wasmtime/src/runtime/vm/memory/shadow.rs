@@ -19,7 +19,9 @@ pub const WATCH_DEBUG: u8 = 1 << 0;
 /// The shadow of a linear memory: one byte per byte of the memory.
 ///
 /// The shadow is itself a linear memory, of the same type and allocated with
-/// the same tunables as the memory it shadows, and grows along with it.
+/// the same tunables as the memory it shadows, and grows along with it. Its
+/// allocation may be larger than the memory (see `reserve_to`), but its size, as
+/// seen by compiled code and by `bytes`, is always the memory's.
 /// Compiled code accesses the shadow just like any other linear memory, with
 /// its own bounds check, at the same Wasm address as the memory access.
 ///
@@ -38,6 +40,9 @@ pub struct ShadowMemory {
     // Whether compiled code reloads the shadow's base, which otherwise must
     // never move.
     may_move: bool,
+    // The size of the memory, and so of the shadow. At most
+    // `alloc.byte_size()`.
+    len: usize,
 }
 
 impl ShadowMemory {
@@ -55,6 +60,7 @@ impl ShadowMemory {
         let alloc = DefaultMemoryCreator.new_memory(&request)?;
         let definition = try_new::<Box<_>>(super::vmmemory(&*alloc))?;
         Ok(ShadowMemory {
+            len: alloc.byte_size(),
             alloc,
             definition,
             may_move: ty.memory_may_move(memory_tunables),
@@ -80,18 +86,37 @@ impl ShadowMemory {
     }
 
     pub(super) fn byte_size(&self) -> usize {
-        self.alloc.byte_size()
+        self.len
     }
 
-    /// Whether the shadow can follow the memory's growth to `len` bytes.
-    pub(super) fn can_grow_to(&self, len: usize) -> bool {
-        self.may_move || len <= self.alloc.byte_capacity()
-    }
-
-    /// Follows the memory's growth to `len` bytes.
-    pub(super) fn grow_to(&mut self, len: usize) -> Result<()> {
-        self.alloc.grow_to(len)?;
-        *self.definition = super::vmmemory(&*self.alloc);
+    /// Grows the shadow's allocation to at least `len` bytes, leaving the
+    /// actual wasm-reported size of memory unchanged.
+    ///
+    /// This method is used to perform shadow memory growth before linear memory
+    /// growth, so in the event of the latter failing the shadow memory is at
+    /// least ready to grow but the extra accessible bytse are harmless.
+    pub(super) fn reserve_to(&mut self, len: usize) -> Result<()> {
+        if !self.may_move && len > self.alloc.byte_capacity() {
+            bail!("Memory maximum size exceeded");
+        }
+        if len > self.alloc.byte_size() {
+            self.alloc.grow_to(len)?;
+            *self.definition = self.vmmemory();
+        }
         Ok(())
+    }
+
+    /// Follows the memory's growth to `len` bytes, after a `reserve_to(len)`.
+    pub(super) fn set_byte_size(&mut self, len: usize) {
+        assert!(self.len <= len && len <= self.alloc.byte_size());
+        self.len = len;
+        *self.definition = self.vmmemory();
+    }
+
+    /// The shadow's definition: its allocation's base, and the memory's size.
+    fn vmmemory(&self) -> VMMemoryDefinition {
+        let mut definition = super::vmmemory(&*self.alloc);
+        definition.current_length = self.len.into();
+        definition
     }
 }
