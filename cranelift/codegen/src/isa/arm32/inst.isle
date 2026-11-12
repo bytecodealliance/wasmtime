@@ -1,0 +1,972 @@
+;; arm32 (AArch32 / A32) instruction definitions.
+;;
+;; The `MInst` type below is the machine-instruction enum for this backend; it
+;; is generated into Rust and re-exported as `Inst` by `inst/mod.rs`.
+
+;;;; Supporting types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; A data-processing ALU operation.
+(type ALUOp
+  (enum
+    (Add)
+    (Sub)
+    (Rsb)
+    (Adc)
+    (Sbc)
+    (And)
+    (Orr)
+    (Eor)
+    (Bic)))
+
+;; A flag-setting compare/test operation (destination is discarded).
+(type CmpOp
+  (enum
+    (Cmp)
+    (Cmn)
+    (Tst)
+    (Teq)))
+
+;; A shift/rotate operation.
+(type ShiftOp
+  (enum
+    (Lsl)
+    (Lsr)
+    (Asr)
+    (Ror)))
+
+;; A single-operand bit-manipulation operation.
+(type BitOp
+  (enum
+    (Clz)
+    (Rev)
+    (Rev16)
+    (Rbit)
+    (Revsh)))
+
+;; A saturating add/subtract (`qadd`/`qsub`/`qdadd`/`qdsub`).
+(type QAluOp
+  (enum
+    (Qadd)
+    (Qsub)
+    (Qdadd)
+    (Qdsub)))
+
+;; A saturate operation (`ssat`/`usat`/`ssat16`/`usat16`).
+(type SatOp
+  (enum
+    (Ssat)
+    (Usat)
+    (Ssat16)
+    (Usat16)))
+
+;; A bitfield extract (`sbfx`/`ubfx`).
+(type BfxOp
+  (enum
+    (Sbfx)
+    (Ubfx)))
+
+;; A halfword-pack operation (`pkhbt`/`pkhtb`).
+(type PkhOp
+  (enum
+    (Pkhbt)
+    (Pkhtb)))
+
+;; A parallel (SIMD-in-GPR) 8/16-bit add/subtract operation. Names follow the
+;; ARM mnemonics: prefix S/Q/SH/U/UQ/UH, op ADD8/ADD16/SUB8/SUB16/ASX/SAX.
+(type ParAluOp
+  (enum
+    (Sadd8) (Sadd16) (Ssub8) (Ssub16) (Sasx) (Ssax)
+    (Qadd8) (Qadd16) (Qsub8) (Qsub16) (Qasx) (Qsax)
+    (Shadd8) (Shadd16) (Shsub8) (Shsub16) (Shasx) (Shsax)
+    (Uadd8) (Uadd16) (Usub8) (Usub16) (Uasx) (Usax)
+    (Uqadd8) (Uqadd16) (Uqsub8) (Uqsub16) (Uqasx) (Uqsax)
+    (Uhadd8) (Uhadd16) (Uhsub8) (Uhsub16) (Uhasx) (Uhsax)))
+
+;; A sign/zero extension operation.
+(type ExtOp
+  (enum
+    (Sxtb)
+    (Sxth)
+    (Uxtb)
+    (Uxth)
+    (Sxtb16)
+    (Uxtb16)))
+
+;; A sign/zero extend-and-add operation (`sxtab`/`uxtah`/...).
+(type ExtAddOp
+  (enum
+    (Sxtab)
+    (Sxtah)
+    (Sxtab16)
+    (Uxtab)
+    (Uxtah)
+    (Uxtab16)))
+
+;; DSP multiplies with a single 32-bit result (`rd = f(rn, rm)`).
+(type DspMul3Op
+  (enum
+    (Smulbb) (Smulbt) (Smultb) (Smultt)
+    (Smulwb) (Smulwt)
+    (Smmul) (Smuad) (Smusd)))
+
+;; DSP multiply-accumulates with a single 32-bit result (`rd = f(rn, rm) + ra`).
+(type DspMul4Op
+  (enum
+    (Smlabb) (Smlabt) (Smlatb) (Smlatt)
+    (Smlawb) (Smlawt)
+    (Smmla) (Smmls)
+    (Smlad) (Smlsd)))
+
+;; DSP multiplies with a 64-bit accumulator (`{rd_hi:rd_lo} = ...`).
+(type DspMulLOp
+  (enum
+    (Smlalbb) (Smlalbt) (Smlaltb) (Smlaltt)
+    (Smlald) (Smlsld)
+    (Umaal)))
+
+;; A memory-barrier / exclusive-monitor-clear instruction (all use the full
+;; system option).
+(type BarrierOp
+  (enum
+    (Dmb)
+    (Dsb)
+    (Isb)
+    (Clrex)))
+
+;; Access width for exclusive / acquire-release memory operations. `DWord`
+;; (64-bit) uses an even/odd register pair and is only valid on the paired
+;; exclusive instructions.
+(type AtomicSize
+  (enum
+    (Byte)
+    (Half)
+    (Word)
+    (DWord)))
+
+;; The precision of a VFP floating-point operation.
+(type FpuSize
+  (enum
+    (F32)
+    (F64)))
+
+;; A three-register VFP data-processing operation.
+(type FpuOp3
+  (enum
+    (Vadd)
+    (Vsub)
+    (Vmul)
+    (Vdiv)))
+
+;; A two-register VFP data-processing operation.
+(type FpuOp2
+  (enum
+    (Vmov)
+    (Vneg)
+    (Vabs)
+    (Vsqrt)))
+
+;; An ARM condition code (the "always" and "never" codes are omitted).
+(type Cond
+  (enum
+    (Eq) (Ne) (Hs) (Lo) (Mi) (Pl) (Vs) (Vc)
+    (Hi) (Ls) (Ge) (Lt) (Gt) (Le)))
+
+;; The width/signedness of a load.
+(type LoadKind
+  (enum
+    (Word)
+    (UByte)
+    (SByte)
+    (UHalf)
+    (SHalf)))
+
+;; The width of a store.
+(type StoreKind
+  (enum
+    (Word)
+    (Byte)
+    (Half)))
+
+;; A memory addressing mode.
+(type AMode
+  (enum
+    ;; `[rn, #offset]`
+    (RegOffset (rn Reg) (offset i32))
+    ;; `[rn, rm]`
+    (RegReg (rn Reg) (rm Reg))
+    ;; `[sp, #offset]`
+    (SPOffset (offset i64))
+    ;; A reference to a stack slot, resolved to an SP offset at emit time.
+    (SlotOffset (offset i64))
+    ;; A reference into the incoming-argument area, resolved at emit time.
+    (IncomingArg (offset i64))))
+
+(type BoxCallInfo (primitive BoxCallInfo))
+(type BoxCallIndInfo (primitive BoxCallIndInfo))
+(type VecMachLabel extern (enum))
+
+;;;; Instruction formats ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type MInst
+  (enum
+    ;; A zero-length no-op.
+    (Nop0)
+    ;; A four-byte no-op.
+    (Nop4)
+
+    ;; Load an arbitrary 32-bit constant into `rd` via `movw` + `movt`.
+    (MovImm (rd WritableReg) (imm u64))
+    ;; `mov rd, #imm` with a rotated 8-bit immediate (pre-encoded imm12).
+    (MovRotImm (rd WritableReg) (imm12 u32))
+    ;; `mvn rd, #imm` with a rotated 8-bit immediate (pre-encoded imm12).
+    (MvnRotImm (rd WritableReg) (imm12 u32))
+    ;; `movw rd, #imm16`.
+    (Movw (rd WritableReg) (imm16 u32))
+    ;; `movt rd, #imm16` (sets the top half, preserving the low half).
+    (Movt (rd WritableReg) (imm16 u32))
+    ;; `mov rd, rm`.
+    (MovReg (rd WritableReg) (rm Reg))
+    ;; `mvn rd, rm` — bitwise-NOT of a register.
+    (MvnReg (rd WritableReg) (rm Reg))
+
+    ;; `op rd, rn, rm`.
+    (AluRRR (op ALUOp) (rd WritableReg) (rn Reg) (rm Reg))
+    ;; `op rd, rn, #imm` (pre-encoded rotated imm12).
+    (AluRRImm (op ALUOp) (rd WritableReg) (rn Reg) (imm12 u32))
+    ;; `op{s} rd, rn, rm` — flag-setting form (adds/subs/adcs/sbcs).
+    (AluRRRFlags (op ALUOp) (rd WritableReg) (rn Reg) (rm Reg))
+
+    ;; A shift/rotate by a constant amount (`op rd, rm, #amount`).
+    (ShiftImm (op ShiftOp) (rd WritableReg) (rm Reg) (amount u8))
+    ;; A shift/rotate by a register amount (`op rd, rm, rs`).
+    (ShiftReg (op ShiftOp) (rd WritableReg) (rm Reg) (rs Reg))
+
+    ;; `mul rd, rn, rm` — `rd = rn * rm` (low 32 bits).
+    (Mul (rd WritableReg) (rn Reg) (rm Reg))
+    ;; `mla rd, rn, rm, ra` — `rd = rn * rm + ra` (low 32 bits).
+    (Mla (rd WritableReg) (rn Reg) (rm Reg) (ra Reg))
+    ;; `mls rd, rn, rm, ra` — `rd = ra - rn * rm` (low 32 bits).
+    (Mls (rd WritableReg) (rn Reg) (rm Reg) (ra Reg))
+    ;; `umull rd_lo, rd_hi, rn, rm` — unsigned 32x32->64 multiply.
+    (Umull (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+    ;; `smull rd_lo, rd_hi, rn, rm` — signed 32x32->64 multiply.
+    (Smull (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+    ;; `umlal rd_lo, rd_hi, rn, rm` — unsigned multiply-accumulate into 64 bits.
+    (Umlal (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+    ;; `smlal rd_lo, rd_hi, rn, rm` — signed multiply-accumulate into 64 bits.
+    (Smlal (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+
+    ;; `sdiv rd, rn, rm` — signed divide `rd = rn / rm`.
+    (SDiv (rd WritableReg) (rn Reg) (rm Reg))
+    ;; `udiv rd, rn, rm` — unsigned divide.
+    (UDiv (rd WritableReg) (rn Reg) (rm Reg))
+
+    ;; A single-operand bit operation (`clz`/`rev`/`rev16`/`rbit`).
+    (BitRR (op BitOp) (rd WritableReg) (rm Reg))
+    ;; A sign/zero extension (`sxtb`/`sxth`/`uxtb`/`uxth`).
+    (ExtRR (op ExtOp) (rd WritableReg) (rm Reg))
+
+    ;; A conditional select, emitted as `mov rd, rm; mov<cond> rd, rn`.
+    (CSel (cond Cond) (rd WritableReg) (rn Reg) (rm Reg))
+
+    ;; Bitfield clear: `bfc rd, #lsb, #width`.
+    (Bfc (rd WritableReg) (lsb u8) (width u8))
+    ;; Bitfield insert: `bfi rd, rn, #lsb, #width`.
+    (Bfi (rd WritableReg) (rn Reg) (lsb u8) (width u8))
+    ;; Bitfield extract: `sbfx`/`ubfx rd, rn, #lsb, #width`.
+    (Bfx (op BfxOp) (rd WritableReg) (rn Reg) (lsb u8) (width u8))
+
+    ;; A saturating add/subtract (`op rd, rm, rn`).
+    (QAlu (op QAluOp) (rd WritableReg) (rm Reg) (rn Reg))
+    ;; A saturate: `ssat/usat rd, #sat_bits, rm`.
+    (Sat (op SatOp) (rd WritableReg) (sat_bits u8) (rm Reg))
+
+    ;; A parallel 8/16-bit add/subtract (`op rd, rn, rm`).
+    (ParAlu (op ParAluOp) (rd WritableReg) (rn Reg) (rm Reg))
+
+    ;; A sign/zero extend-and-add (`op rd, rn, rm`).
+    (ExtAdd (op ExtAddOp) (rd WritableReg) (rn Reg) (rm Reg))
+
+    ;; A DSP multiply producing a single 32-bit result.
+    (DspMul3 (op DspMul3Op) (rd WritableReg) (rn Reg) (rm Reg))
+    ;; A DSP multiply-accumulate producing a single 32-bit result.
+    (DspMul4 (op DspMul4Op) (rd WritableReg) (rn Reg) (rm Reg) (ra Reg))
+    ;; A DSP multiply with a 64-bit accumulator pair.
+    (DspMulL (op DspMulLOp) (rd_lo WritableReg) (rd_hi WritableReg) (rn Reg) (rm Reg))
+
+    ;; Byte-wise select using the GE flags (`sel rd, rn, rm`).
+    (Sel (rd WritableReg) (rn Reg) (rm Reg))
+    ;; Halfword pack (`pkhbt`/`pkhtb rd, rn, rm`).
+    (Pkh (op PkhOp) (rd WritableReg) (rn Reg) (rm Reg))
+    ;; Rotate right with extend (`rrx rd, rm`).
+    (Rrx (rd WritableReg) (rm Reg))
+
+    ;; A permanently-undefined instruction used to encode a trap.
+    (Udf (code TrapCode))
+
+    ;; Conditionally trap on the current flags: emitted as
+    ;; `b<!cond> 1f; udf <code>; 1:`.
+    (TrapIf (cond Cond) (code TrapCode))
+
+    ;; Load/store multiple, increment-after (`ldmia`/`stmia rn{!}, {list}`).
+    (LdmStm (load bool) (rn Reg) (writeback bool) (reg_list u32))
+
+    ;; Load-exclusive (`ldrex{b,h}`) or load-acquire-exclusive (`ldaex{b,h}`).
+    (LoadEx (acquire bool) (size AtomicSize) (rt WritableReg) (rn Reg))
+    ;; Store-exclusive (`strex{b,h}`) or store-release-exclusive
+    ;; (`stlex{b,h}`); `rd` receives the success flag.
+    (StoreEx (release bool) (size AtomicSize) (rd WritableReg) (rt Reg) (rn Reg))
+    ;; Load-acquire (`lda{b,h} rt, [rn]`).
+    (LoadAcq (size AtomicSize) (rt WritableReg) (rn Reg))
+    ;; Store-release (`stl{b,h} rt, [rn]`).
+    (StoreRel (size AtomicSize) (rt Reg) (rn Reg))
+
+    ;; A memory barrier / clear-exclusive.
+    (Barrier (op BarrierOp))
+
+    ;; An atomic read-modify-write loop over a `size`-wide location:
+    ;;   loop: ldaex{,b,h} rd, [addr]; <op> tmp1, rd, operand;
+    ;;         stlex{,b,h} tmp2, tmp1, [addr]; cmp tmp2, #0; bne loop
+    ;; `rd` receives the (zero-extended) old value.
+    (AtomicRmw (op AtomicRmwOp) (size AtomicSize) (rd WritableReg) (addr Reg)
+               (operand Reg) (tmp1 WritableReg) (tmp2 WritableReg))
+    ;; An atomic compare-and-swap loop over a `size`-wide location; `rd`
+    ;; receives the (zero-extended) old value.
+    (AtomicCas (size AtomicSize) (rd WritableReg) (addr Reg) (expected Reg)
+               (new Reg) (tmp WritableReg))
+
+    ;; A 64-bit atomic read-modify-write loop using the paired exclusive
+    ;; instructions (`ldaexd`/`stlexd`). The old value is returned in
+    ;; (rd_lo, rd_hi). All registers are pinned to a fixed even/odd layout in
+    ;; the operand collector because A32 exclusive-pair instructions require
+    ;; consecutive even/odd register pairs, which regalloc2 cannot model.
+    (AtomicRmw64 (op AtomicRmwOp) (rd_lo WritableReg) (rd_hi WritableReg)
+                 (addr Reg) (operand_lo Reg) (operand_hi Reg)
+                 (tmp_new_lo WritableReg) (tmp_new_hi WritableReg)
+                 (tmp_res WritableReg))
+    ;; A 64-bit atomic compare-and-swap loop; the old value is in (rd_lo, rd_hi).
+    (AtomicCas64 (rd_lo WritableReg) (rd_hi WritableReg) (addr Reg)
+                 (expected_lo Reg) (expected_hi Reg) (new_lo Reg) (new_hi Reg)
+                 (tmp_res WritableReg))
+    ;; A 64-bit sequentially-consistent atomic load (`ldaexd` + `clrex`).
+    (AtomicLoad64 (rd_lo WritableReg) (rd_hi WritableReg) (addr Reg))
+    ;; A 64-bit sequentially-consistent atomic store via an `ldaexd`/`stlexd`
+    ;; retry loop; the loaded value is discarded into (scratch_lo, scratch_hi).
+    (AtomicStore64 (addr Reg) (src_lo Reg) (src_hi Reg)
+                   (scratch_lo WritableReg) (scratch_hi WritableReg)
+                   (tmp_res WritableReg))
+
+    ;; A three-register VFP op (`vadd`/`vsub`/`vmul`/`vdiv`).
+    (FpuRRR (op FpuOp3) (size FpuSize) (rd WritableReg) (rn Reg) (rm Reg))
+    ;; A two-register VFP op (`vmov`/`vneg`/`vabs`/`vsqrt`).
+    (FpuRR (op FpuOp2) (size FpuSize) (rd WritableReg) (rm Reg))
+    ;; A VFP load (`vldr`).
+    (FpuLoad (size FpuSize) (rd WritableReg) (mem AMode))
+    ;; A VFP store (`vstr`).
+    (FpuStore (size FpuSize) (rt Reg) (mem AMode))
+    ;; Move a GPR into the low half of an S register (`vmov s, r`) for f32 bits.
+    (MovToFpu32 (rd WritableReg) (rt Reg))
+    ;; Move two GPRs into a D register (`vmov d, rlo, rhi`) for f64 bits.
+    (MovToFpu64 (rd WritableReg) (rt_lo Reg) (rt_hi Reg))
+    ;; Move an S register into a GPR (`vmov r, s`).
+    (MovFromFpu32 (rt WritableReg) (rm Reg))
+    ;; Move a D register into two GPRs (`vmov rlo, rhi, d`).
+    (MovFromFpu64 (rt_lo WritableReg) (rt_hi WritableReg) (rm Reg))
+
+    ;; Compare two float registers and move the VFP flags into the CPSR
+    ;; (`vcmp` + `vmrs APSR_nzcv, FPSCR`).
+    (VcmpMrs (size FpuSize) (rn Reg) (rm Reg))
+    ;; Convert between f32 and f64 (`to_f64` selects fpromote vs fdemote).
+    (VcvtFF (to_f64 bool) (rd WritableReg) (rm Reg))
+    ;; Convert a float to a 32-bit integer (round toward zero, saturating).
+    ;; `rd` receives the integer in an S register.
+    (VcvtToInt (signed bool) (size FpuSize) (rd WritableReg) (rm Reg))
+    ;; Convert a 32-bit integer (held in the S register `rm`) to a float.
+    (VcvtFromInt (signed bool) (size FpuSize) (rd WritableReg) (rm Reg))
+    ;; A conditional float select, emitted as `vmov rd, rm; vmov<cond> rd, rn`.
+    (FpuCSel (cond Cond) (rd WritableReg) (rn Reg) (rm Reg))
+    ;; IEEE `vminnm`/`vmaxnm` (number min/max; ARMv8). `max` selects vmaxnm.
+    (FpuMinMax (max bool) (size FpuSize) (rd WritableReg) (rn Reg) (rm Reg))
+
+    ;; `cmp/cmn/tst/teq rn, rm`.
+    (CmpRR (op CmpOp) (rn Reg) (rm Reg))
+    ;; `cmp/cmn/tst/teq rn, #imm` (pre-encoded rotated imm12).
+    (CmpRImm (op CmpOp) (rn Reg) (imm12 u32))
+
+    ;; A load of the given kind.
+    (Load (rt WritableReg) (mem AMode) (kind LoadKind))
+    ;; A store of the given kind.
+    (Store (rt Reg) (mem AMode) (kind StoreKind))
+
+    ;; `push {reglist}` (STMDB sp!). The register list is a 16-bit mask.
+    (Push (reg_list u32))
+    ;; `pop {reglist}` (LDMIA sp!).
+    (Pop (reg_list u32))
+
+    ;; Adjust the stack pointer by a signed constant (add/sub sp).
+    (AdjustSp (amount i32))
+
+    ;; A direct call (`bl`).
+    (Call (info BoxCallInfo))
+    ;; An indirect call (`blx rm`).
+    (CallInd (info BoxCallIndInfo))
+
+    ;; Load the absolute address of an external symbol into `rd` via an
+    ;; inline literal: `ldr rd, [pc]; b .+8; .word <name+offset>` where the
+    ;; `.word` carries an `Abs4` relocation resolved by the linker.
+    (LoadExtName (rd WritableReg)
+                 (name BoxExternalName)
+                 (offset i64))
+
+    ;; An unconditional branch to a label (`b`).
+    (Jump (dest MachLabel))
+
+    ;; A conditional branch: `b<cond> taken; b not_taken`.
+    (CondBr (cond Cond) (taken MachLabel) (not_taken MachLabel))
+
+    ;; A jump table: bounds-check `index` against the entry count and branch to
+    ;; `targets[index]`, else to the default (`targets[0]`).
+    (BrTable (index Reg) (tmp WritableReg) (targets VecMachLabel))
+
+    ;; Pseudo-instruction capturing incoming register arguments in vregs.
+    (Args (args VecArgPair))
+    ;; Pseudo-instruction moving vregs into the return registers.
+    (Rets (rets VecRetPair))
+    ;; Return from the current function (`bx lr`).
+    (Ret)
+  )
+)
+
+;;;; Constant materialization ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Materialize an integer constant into a register, choosing the shortest of
+;; `mov`/`mvn`/`movw`/`movw+movt`.
+(decl gen_constant (u64) Reg)
+(extern constructor gen_constant gen_constant)
+
+;; Materialize an integer constant of the given type into a register.
+(decl imm (Type u64) Reg)
+(rule (imm _ty n) (gen_constant n))
+
+;;;; ALU helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `op rd, rn, rm`.
+(decl alu_rrr (ALUOp Reg Reg) Reg)
+(rule (alu_rrr op rn rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AluRRR op rd rn rm))))
+    rd))
+
+;; `op rd, rn, #imm` (immediate must be a rotated imm12).
+(decl alu_rr_imm12 (ALUOp Reg u32) Reg)
+(rule (alu_rr_imm12 op rn imm12)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AluRRImm op rd rn imm12))))
+    rd))
+
+;; `op{s} rd, rn, rm` — flag-setting form (adds/subs/adcs/sbcs).
+(decl alu_rrr_flags (ALUOp Reg Reg) Reg)
+(rule (alu_rrr_flags op rn rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AluRRRFlags op rd rn rm))))
+    rd))
+
+;; A constant is encodable as an A32 data-processing immediate; the result is
+;; its pre-encoded 12-bit form.
+(decl pure partial u64_from_rotated_imm12 (u64) u32)
+(extern constructor u64_from_rotated_imm12 u64_from_rotated_imm12)
+
+;; Add: prefer the immediate form when the RHS is an encodable constant.
+(decl add_reg (Reg Reg) Reg)
+(rule (add_reg a b) (alu_rrr (ALUOp.Add) a b))
+
+(decl add_imm (Reg u64) Reg)
+(rule 1 (add_imm a b)
+  (if-let imm12 (u64_from_rotated_imm12 b))
+  (alu_rr_imm12 (ALUOp.Add) a imm12))
+(rule (add_imm a b) (alu_rrr (ALUOp.Add) a (gen_constant b)))
+
+(decl sub_reg (Reg Reg) Reg)
+(rule (sub_reg a b) (alu_rrr (ALUOp.Sub) a b))
+
+(decl sub_imm (Reg u64) Reg)
+(rule 1 (sub_imm a b)
+  (if-let imm12 (u64_from_rotated_imm12 b))
+  (alu_rr_imm12 (ALUOp.Sub) a imm12))
+(rule (sub_imm a b) (alu_rrr (ALUOp.Sub) a (gen_constant b)))
+
+;; Reverse subtract, used for negation: `rsb rd, rn, #0`.
+(decl rsb_imm (Reg u32) Reg)
+(rule (rsb_imm a imm12)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AluRRImm (ALUOp.Rsb) rd a imm12))))
+    rd))
+
+;; A generic ALU op that prefers the immediate form when the RHS is an
+;; encodable constant and otherwise materializes it into a register.
+(decl alu_op_imm (ALUOp Reg u64) Reg)
+(rule 1 (alu_op_imm op a b)
+  (if-let imm12 (u64_from_rotated_imm12 b))
+  (alu_rr_imm12 op a imm12))
+(rule (alu_op_imm op a b) (alu_rrr op a (gen_constant b)))
+
+;;;; Multiplies ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl mul (Reg Reg) Reg)
+(rule (mul a b)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.Mul rd a b))))
+    rd))
+
+;; Bitwise-NOT of a register (`mvn rd, rm`).
+(decl mvn_reg (Reg) Reg)
+(rule (mvn_reg rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.MvnReg rd rm))))
+    rd))
+
+;; `mls rd, rn, rm, ra` — `rd = ra - rn * rm`.
+(decl mls (Reg Reg Reg) Reg)
+(rule (mls rn rm ra)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.Mls rd rn rm ra))))
+    rd))
+
+;;;; Divides ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; True when the hardware integer-divide instructions are available.
+(decl pure use_idiv () bool)
+(extern constructor use_idiv use_idiv)
+
+;; Signed/unsigned divide with the Cranelift-mandated trap checks (divide by
+;; zero, and `INT_MIN / -1` overflow for `sdiv`) emitted before the divide.
+(decl gen_sdiv (Reg Reg) Reg)
+(extern constructor gen_sdiv gen_sdiv)
+(decl gen_udiv (Reg Reg) Reg)
+(extern constructor gen_udiv gen_udiv)
+
+;;;; Bit operations and extends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl bit_rr (BitOp Reg) Reg)
+(rule (bit_rr op rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.BitRR op rd rm))))
+    rd))
+
+(decl ext_rr (ExtOp Reg) Reg)
+(rule (ext_rr op rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.ExtRR op rd rm))))
+    rd))
+
+;;;; Conditional select ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Select `if_true` when `cond` holds (given the current flags), else
+;; `if_false`. Emitted as `mov rd, if_false; mov<cond> rd, if_true`.
+(decl csel (Cond Reg Reg) Reg)
+(rule (csel cond if_true if_false)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.CSel cond rd if_true if_false))))
+    rd))
+
+;;;; Traps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl udf (TrapCode) SideEffectNoResult)
+(rule (udf code)
+  (SideEffectNoResult.Inst (MInst.Udf code)))
+
+;;;; Barriers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl dmb () SideEffectNoResult)
+(rule (dmb)
+  (SideEffectNoResult.Inst (MInst.Barrier (BarrierOp.Dmb))))
+
+;;;; Atomics (8/16/32-bit) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Map a scalar integer type to the exclusive-access width.
+(decl atomic_size (Type) AtomicSize)
+(rule (atomic_size $I8) (AtomicSize.Byte))
+(rule (atomic_size $I16) (AtomicSize.Half))
+(rule (atomic_size $I32) (AtomicSize.Word))
+
+(decl atomic_rmw_size (Type AtomicRmwOp Reg Reg) Reg)
+(rule (atomic_rmw_size ty op addr operand)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (tmp1 WritableReg (temp_writable_reg $I32))
+        (tmp2 WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AtomicRmw op (atomic_size ty) rd addr operand tmp1 tmp2))))
+    rd))
+
+(decl atomic_cas_size (Type Reg Reg Reg) Reg)
+(rule (atomic_cas_size ty addr expected new)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (tmp WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AtomicCas (atomic_size ty) rd addr expected new tmp))))
+    rd))
+
+;; Sequentially-consistent load/store via load-acquire / store-release.
+(decl atomic_load_size (Type Reg) Reg)
+(rule (atomic_load_size ty addr)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.LoadAcq (atomic_size ty) rd addr))))
+    rd))
+
+(decl atomic_store_size (Type Reg Reg) InstOutput)
+(rule (atomic_store_size ty src addr)
+  (side_effect (SideEffectNoResult.Inst (MInst.StoreRel (atomic_size ty) src addr))))
+
+;;;; Atomics (64-bit) ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl atomic_rmw_i64 (AtomicRmwOp Reg ValueRegs) ValueRegs)
+(rule (atomic_rmw_i64 op addr operand)
+  (let ((rd_lo WritableReg (temp_writable_reg $I32))
+        (rd_hi WritableReg (temp_writable_reg $I32))
+        (nl WritableReg (temp_writable_reg $I32))
+        (nh WritableReg (temp_writable_reg $I32))
+        (res WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AtomicRmw64 op rd_lo rd_hi addr
+                        (vr_lo operand) (vr_hi operand) nl nh res))))
+    (value_regs (writable_reg_to_reg rd_lo) (writable_reg_to_reg rd_hi))))
+
+(decl atomic_cas_i64 (Reg ValueRegs ValueRegs) ValueRegs)
+(rule (atomic_cas_i64 addr expected new)
+  (let ((rd_lo WritableReg (temp_writable_reg $I32))
+        (rd_hi WritableReg (temp_writable_reg $I32))
+        (res WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AtomicCas64 rd_lo rd_hi addr
+                        (vr_lo expected) (vr_hi expected)
+                        (vr_lo new) (vr_hi new) res))))
+    (value_regs (writable_reg_to_reg rd_lo) (writable_reg_to_reg rd_hi))))
+
+(decl atomic_load_i64 (Reg) ValueRegs)
+(rule (atomic_load_i64 addr)
+  (let ((rd_lo WritableReg (temp_writable_reg $I32))
+        (rd_hi WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.AtomicLoad64 rd_lo rd_hi addr))))
+    (value_regs (writable_reg_to_reg rd_lo) (writable_reg_to_reg rd_hi))))
+
+(decl atomic_store_i64 (ValueRegs Reg) InstOutput)
+(rule (atomic_store_i64 src addr)
+  (let ((sl WritableReg (temp_writable_reg $I32))
+        (sh WritableReg (temp_writable_reg $I32))
+        (res WritableReg (temp_writable_reg $I32)))
+    (side_effect (SideEffectNoResult.Inst
+      (MInst.AtomicStore64 addr (vr_lo src) (vr_hi src) sl sh res)))))
+
+;;;; Floating point ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl fpu_rrr (FpuOp3 FpuSize Reg Reg) Reg)
+(rule (fpu_rrr op size rn rm)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.FpuRRR op size rd rn rm))))
+    rd))
+
+(decl fpu_rr (FpuOp2 FpuSize Reg) Reg)
+(rule (fpu_rr op size rm)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.FpuRR op size rd rm))))
+    rd))
+
+;; An f32 constant: build the bit pattern in a GPR, then move it into an S reg.
+(decl f32_const (u64) Reg)
+(rule (f32_const bits)
+  (let ((r Reg (gen_constant bits))
+        (rd WritableReg (temp_writable_reg $F32))
+        (_ Unit (emit (MInst.MovToFpu32 rd r))))
+    rd))
+
+;; An f64 constant: build the two halves in GPRs, then move them into a D reg.
+(decl f64_const (u64) Reg)
+(rule (f64_const bits)
+  (let ((lo Reg (gen_constant bits))
+        (hi Reg (gen_constant (u64_high32 bits)))
+        (rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.MovToFpu64 rd lo hi))))
+    rd))
+
+(decl fpu_load (FpuSize AMode) Reg)
+(rule (fpu_load size mem)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.FpuLoad size rd mem))))
+    rd))
+
+(decl fpu_store (FpuSize Reg AMode) InstOutput)
+(rule (fpu_store size val mem)
+  (side_effect (SideEffectNoResult.Inst (MInst.FpuStore size val mem))))
+
+;; Map a Cranelift `FloatCC` to the ARM condition testing the VFP flags.
+(decl cond_from_floatcc (FloatCC) Cond)
+(extern constructor cond_from_floatcc cond_from_floatcc)
+
+;; The two float conditions that a single ARM condition can't express, built as
+;; a 0/1 boolean from the flags left by a `vcmp`. `one` (ordered and not-equal)
+;; keeps the not-equal result only when ordered (`vc`); `ueq` (unordered or
+;; equal) forces the equal result to 1 when unordered (`vs`).
+(decl gen_fcmp_one (FpuSize Reg Reg) Reg)
+(rule (gen_fcmp_one size a b)
+  (let ((_ Unit (emit_side_effect (vcmp size a b))))
+    (csel (Cond.Vc) (csetv (Cond.Ne)) (gen_constant 0))))
+(decl gen_fcmp_ueq (FpuSize Reg Reg) Reg)
+(rule (gen_fcmp_ueq size a b)
+  (let ((_ Unit (emit_side_effect (vcmp size a b))))
+    (csel (Cond.Vs) (gen_constant 1) (csetv (Cond.Eq)))))
+
+;; `fcopysign` via GPR bit manipulation (clear the sign of `a`, OR in `b`'s).
+(decl gen_copysign_f32 (Reg Reg) Reg)
+(extern constructor gen_copysign_f32 gen_copysign_f32)
+(decl gen_copysign_f64 (Reg Reg) Reg)
+(extern constructor gen_copysign_f64 gen_copysign_f64)
+
+;; `vcmp` + `vmrs` as a side effect (leaves the comparison in the CPSR).
+(decl vcmp (FpuSize Reg Reg) SideEffectNoResult)
+(rule (vcmp size rn rm)
+  (SideEffectNoResult.Inst (MInst.VcmpMrs size rn rm)))
+
+;; f32<->f64 conversion.
+(decl vcvt_ff (bool Reg) Reg)
+(rule (vcvt_ff to_f64 rm)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.VcvtFF to_f64 rd rm))))
+    rd))
+
+;; int (in a GPR) -> float.
+(decl vcvt_from_int (bool FpuSize Reg) Reg)
+(rule (vcvt_from_int signed size gpr)
+  (let ((s WritableReg (temp_writable_reg $F32))
+        (_ Unit (emit (MInst.MovToFpu32 s gpr)))
+        (rd WritableReg (temp_writable_reg $F64))
+        (_2 Unit (emit (MInst.VcvtFromInt signed size rd (writable_reg_to_reg s)))))
+    rd))
+
+;; float -> i32 (in a GPR), round toward zero, saturating.
+(decl vcvt_to_int (bool FpuSize Reg) Reg)
+(rule (vcvt_to_int signed size f)
+  (let ((s WritableReg (temp_writable_reg $F32))
+        (_ Unit (emit (MInst.VcvtToInt signed size s f)))
+        (rd WritableReg (temp_writable_reg $I32))
+        (_2 Unit (emit (MInst.MovFromFpu32 rd (writable_reg_to_reg s)))))
+    rd))
+
+;; bitcast helpers (`vmov` between the GPR and VFP files).
+(decl mov_from_fpu32 (Reg) Reg)
+(rule (mov_from_fpu32 rm)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.MovFromFpu32 rd rm))))
+    rd))
+
+(decl mov_to_fpu32 (Reg) Reg)
+(rule (mov_to_fpu32 rt)
+  (let ((rd WritableReg (temp_writable_reg $F32))
+        (_ Unit (emit (MInst.MovToFpu32 rd rt))))
+    rd))
+
+(decl mov_from_fpu64 (Reg) ValueRegs)
+(rule (mov_from_fpu64 rm)
+  (let ((lo WritableReg (temp_writable_reg $I32))
+        (hi WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.MovFromFpu64 lo hi rm))))
+    (value_regs (writable_reg_to_reg lo) (writable_reg_to_reg hi))))
+
+(decl mov_to_fpu64 (ValueRegs) Reg)
+(rule (mov_to_fpu64 regs)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.MovToFpu64 rd (vr_lo regs) (vr_hi regs)))))
+    rd))
+
+;; Conditional float select: `if_true` when `cond` holds, else `if_false`.
+(decl fpu_csel (Cond Reg Reg) Reg)
+(rule (fpu_csel cond if_true if_false)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.FpuCSel cond rd if_true if_false))))
+    rd))
+
+;; `vminnm`/`vmaxnm` (IEEE number min/max, ignoring NaN).
+(decl fpu_minmax (bool FpuSize Reg Reg) Reg)
+(rule (fpu_minmax is_max size rn rm)
+  (let ((rd WritableReg (temp_writable_reg $F64))
+        (_ Unit (emit (MInst.FpuMinMax is_max size rd rn rm))))
+    rd))
+
+;; fmin/fmax with WebAssembly NaN propagation: use the IEEE number min/max
+;; (which handles signed zeros) when ordered, and `x+y` (a NaN) when unordered.
+(decl gen_fminmax (bool FpuSize Reg Reg) Reg)
+(rule (gen_fminmax is_max size x y)
+  (let ((nm Reg (fpu_minmax is_max size x y))
+        (nan Reg (fpu_rrr (FpuOp3.Vadd) size x y))
+        (_ Unit (emit_side_effect (vcmp size x y))))
+    (fpu_csel (Cond.Vs) nan nm)))
+
+;;;; Shifts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Shift/rotate by a constant amount. Handles the Cranelift "modulo width"
+;; semantics (and the shift-by-zero special case) in Rust.
+(decl gen_shift_imm (ShiftOp Reg u64) Reg)
+(extern constructor gen_shift_imm gen_shift_imm)
+
+;; Shift/rotate by a register amount. The amount is masked to 0..31 to match
+;; Cranelift's modulo-width semantics.
+(decl shift_reg (ShiftOp Reg Value) Reg)
+(rule (shift_reg op rm amount)
+  (let ((masked Reg (alu_rr_imm12 (ALUOp.And) (put_in_reg amount) 31))
+        (rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.ShiftReg op rd rm masked))))
+    rd))
+
+;;;; 64-bit helpers (values held as a (lo, hi) register pair) ;;;;;;;;;;;;;;;;;;
+
+(decl vr_lo (ValueRegs) Reg)
+(rule (vr_lo regs) (value_regs_get regs 0))
+(decl vr_hi (ValueRegs) Reg)
+(rule (vr_hi regs) (value_regs_get regs 1))
+
+;; The high 32 bits of a 64-bit constant.
+(decl pure u64_high32 (u64) u64)
+(extern constructor u64_high32 u64_high32)
+
+;; Widen a u32 to u64 (zero-extended).
+(decl pure u32_to_u64 (u32) u64)
+(extern constructor u32_to_u64 u32_to_u64)
+
+;; `adds`/`adc` and `subs`/`sbc` carry chains over the halves.
+(decl add_i64 (ValueRegs ValueRegs) ValueRegs)
+(rule (add_i64 x y)
+  (let ((lo Reg (alu_rrr_flags (ALUOp.Add) (vr_lo x) (vr_lo y)))
+        (hi Reg (alu_rrr (ALUOp.Adc) (vr_hi x) (vr_hi y))))
+    (value_regs lo hi)))
+
+(decl sub_i64 (ValueRegs ValueRegs) ValueRegs)
+(rule (sub_i64 x y)
+  (let ((lo Reg (alu_rrr_flags (ALUOp.Sub) (vr_lo x) (vr_lo y)))
+        (hi Reg (alu_rrr (ALUOp.Sbc) (vr_hi x) (vr_hi y))))
+    (value_regs lo hi)))
+
+;; A bitwise op applied independently to each half.
+(decl logical_i64 (ALUOp ValueRegs ValueRegs) ValueRegs)
+(rule (logical_i64 op x y)
+  (value_regs (alu_rrr op (vr_lo x) (vr_lo y))
+              (alu_rrr op (vr_hi x) (vr_hi y))))
+
+(decl not_i64 (ValueRegs) ValueRegs)
+(rule (not_i64 x)
+  (value_regs (mvn_reg (vr_lo x)) (mvn_reg (vr_hi x))))
+
+;; `mla rd, rn, rm, ra` — `rd = rn * rm + ra`.
+(decl mla (Reg Reg Reg) Reg)
+(rule (mla rn rm ra)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.Mla rd rn rm ra))))
+    rd))
+
+;; 64-bit multiply (low 64 bits): umull for the lo*lo product, then fold in the
+;; two cross terms with mla.
+(decl mul_i64 (ValueRegs ValueRegs) ValueRegs)
+(rule (mul_i64 x y)
+  (let ((xlo Reg (vr_lo x))
+        (xhi Reg (vr_hi x))
+        (ylo Reg (vr_lo y))
+        (yhi Reg (vr_hi y))
+        (lo WritableReg (temp_writable_reg $I32))
+        (hi0 WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.Umull lo hi0 xlo ylo)))
+        (hi1 Reg (mla xlo yhi (writable_reg_to_reg hi0)))
+        (hi2 Reg (mla xhi ylo hi1)))
+    (value_regs (writable_reg_to_reg lo) hi2)))
+
+;; Constant shift/rotate of a 64-bit value; the funnel logic is in Rust.
+(decl gen_i64_shift_imm (ShiftOp ValueRegs u64) ValueRegs)
+(extern constructor gen_i64_shift_imm gen_i64_shift_imm)
+
+;;;; Loads and stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl arm_load (AMode LoadKind) Reg)
+(rule (arm_load mem kind)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.Load rd mem kind))))
+    rd))
+
+(decl arm_store (Reg AMode StoreKind) InstOutput)
+(rule (arm_store val mem kind)
+  (side_effect (SideEffectNoResult.Inst (MInst.Store val mem kind))))
+
+;; Build an addressing mode from an address value plus a constant offset.
+(decl amode (Value Offset32) AMode)
+(rule (amode base offset) (AMode.RegOffset base (offset32_to_i32 offset)))
+
+;; Addressing mode for the high word of a 64-bit access (offset + 4).
+(decl amode_hi (Value Offset32) AMode)
+(rule (amode_hi base offset) (AMode.RegOffset base (offset32_plus4 offset)))
+
+(decl pure offset32_plus4 (Offset32) i32)
+(extern constructor offset32_plus4 offset32_plus4)
+
+;;;; Comparisons and branches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Emit a compare (`cmp rn, rm`) as a side effect.
+(decl cmp_rr (Reg Reg) SideEffectNoResult)
+(rule (cmp_rr rn rm)
+  (SideEffectNoResult.Inst (MInst.CmpRR (CmpOp.Cmp) rn rm)))
+
+;; Emit a compare against a rotated imm12 (`cmp rn, #imm`) as a side effect.
+(decl cmp_imm (Reg u32) SideEffectNoResult)
+(rule (cmp_imm rn imm12)
+  (SideEffectNoResult.Inst (MInst.CmpRImm (CmpOp.Cmp) rn imm12)))
+
+;; A conditional branch.
+(decl cond_br (Cond MachLabel MachLabel) SideEffectNoResult)
+(rule (cond_br cond taken not_taken)
+  (SideEffectNoResult.Inst (MInst.CondBr cond taken not_taken)))
+
+;; An unconditional branch.
+(decl jump_impl (MachLabel) SideEffectNoResult)
+(rule (jump_impl label)
+  (SideEffectNoResult.Inst (MInst.Jump label)))
+
+;; A jump table (the first target is the default block).
+(decl lower_br_table (Reg MachLabelSlice) Unit)
+(extern constructor lower_br_table lower_br_table)
+
+;;;; Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo bool) BoxCallInfo)
+(extern constructor gen_call_info gen_call_info)
+
+(decl gen_call_ind_info (Sig Reg CallArgList CallRetList OptionTryCallInfo) BoxCallIndInfo)
+(extern constructor gen_call_ind_info gen_call_ind_info)
+
+(decl call_impl (BoxCallInfo) SideEffectNoResult)
+(rule (call_impl info)
+  (SideEffectNoResult.Inst (MInst.Call info)))
+
+;; Load the absolute address of an external symbol (plus a byte offset) into a
+;; fresh register. Used for far/non-colocated calls and symbol addresses.
+;; (`box_external_name` is applied implicitly by the `ExternalName ->
+;; BoxExternalName` conversion in the prelude.)
+(decl load_ext_name (ExternalName i64) Reg)
+(rule (load_ext_name name offset)
+  (let ((rd WritableReg (temp_writable_reg $I32))
+        (_ Unit (emit (MInst.LoadExtName rd name offset))))
+    rd))
+
+(decl call_ind_impl (BoxCallIndInfo) SideEffectNoResult)
+(rule (call_ind_impl info)
+  (SideEffectNoResult.Inst (MInst.CallInd info)))
+
+;; Map an `IntCC` to the corresponding ARM condition code.
+(decl cond_from_intcc (IntCC) Cond)
+(extern constructor cond_from_intcc cond_from_intcc)
+
+;; Emit a `cmp` of two (possibly narrow) integer values as a side effect,
+;; widening i8/i16 operands to 32 bits per the comparison's signedness, and
+;; return the ARM condition that then tests the result.
+(decl emit_icmp_cmp (IntCC Value Value) Cond)
+(extern constructor emit_icmp_cmp emit_icmp_cmp)
+
+;; Emit the compare sequence for a 64-bit `icmp` and return the ARM condition
+;; that then tests it (the compare itself is emitted as a side effect).
+(decl lower_icmp_i64 (IntCC ValueRegs ValueRegs) Cond)
+(extern constructor lower_icmp_i64 lower_icmp_i64)
+
+;; Materialize a boolean 0/1 from the current flags and a condition
+;; (`mov rd, #0; mov<cond> rd, #1`).
+(decl csetv (Cond) Reg)
+(rule (csetv cond) (csel cond (gen_constant 1) (gen_constant 0)))

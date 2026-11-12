@@ -1,0 +1,116 @@
+test compile precise-output
+target arm
+
+function %eq(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   eor r0, r0, r2
+;   eor r1, r1, r3
+;   orrs r0, r0, r1
+;   mov r1, #1
+;   mov r2, #0
+;   mov r0, r2; moveq r0, r1
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   eor r0, r0, r2
+;   eor r1, r1, r3
+;   orrs r0, r0, r1
+;   mov r1, #1
+;   mov r2, #0
+;   mov r0, r2
+;   moveq r0, r1
+;   bx lr
+
+function %slt(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   subs r0, r0, r2
+;   sbcs r0, r1, r3
+;   mov r1, #1
+;   mov r2, #0
+;   mov r0, r2; movlt r0, r1
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   subs r0, r0, r2
+;   sbcs r0, r1, r3
+;   mov r1, #1
+;   mov r2, #0
+;   mov r0, r2
+;   movlt r0, r1
+;   bx lr
+
+function %ugt(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp ugt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   subs r0, r2, r0
+;   sbcs r0, r3, r1
+;   mov r1, #1
+;   mov r2, #0
+;   mov r0, r2; movlo r0, r1
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   subs r0, r2, r0
+;   sbcs r0, r3, r1
+;   mov r1, #1
+;   mov r2, #0
+;   mov r0, r2
+;   movlo r0, r1
+;   bx lr
+
+function %br_sle(i64, i64) -> i32 {
+block0(v0: i64, v1: i64):
+    v2 = icmp sle v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i32 1
+    return v3
+block2:
+    v4 = iconst.i32 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   subs r0, r2, r0
+;   sbcs r0, r3, r1
+;   bge label2; b label1
+; block1:
+;   mov r0, #0
+;   bx lr
+; block2:
+;   mov r0, #1
+;   bx lr
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   subs r0, r2, r0
+;   sbcs r0, r3, r1
+;   bge #0x14
+; block1: ; offset 0xc
+;   mov r0, #0
+;   bx lr
+; block2: ; offset 0x14
+;   mov r0, #1
+;   bx lr
+
