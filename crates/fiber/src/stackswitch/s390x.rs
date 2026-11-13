@@ -7,13 +7,21 @@
 
 use core::arch::naked_asm;
 
+/// The indices, in words from a suspended raw fiber's saved stack pointer, of
+/// the frame pointer and return address that `wasmtime_fiber_switch_` spills
+/// for its caller. As in Wasmtime's unwinder, the "frame pointer" is the
+/// caller's stack pointer, `%r15`, which addresses its back chain; `stmg`
+/// spills it, with `%r14`, into the caller's register save area. Keep in sync
+/// with that routine.
+pub(crate) const SUSPENDED_FRAME: Option<(usize, usize)> = Some((23, 22));
+
 #[inline(never)] // FIXME(rust-lang/rust#148307)
 pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8) {
     unsafe { wasmtime_fiber_switch_(top_of_stack) }
 }
 
 #[unsafe(naked)]
-unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* x0 */) {
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* x0 */) {
     naked_asm!(
         "
         // Save all callee-saved registers on the stack since we're assuming

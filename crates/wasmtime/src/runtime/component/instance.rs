@@ -9,7 +9,8 @@ use crate::component::{ExportLookup, RuntimeInstance};
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
-use crate::runtime::vm::component::{ComponentInstance, TypedResource, TypedResourceIndex};
+use crate::runtime::vm::VMTypedResource;
+use crate::runtime::vm::component::{ComponentInstance, TypedResourceIndex};
 use crate::runtime::vm::{self, UncaughtException, VMFuncRef, VMStore};
 use crate::store::{AsStoreOpaque, Asyncness, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
@@ -382,7 +383,7 @@ impl Instance {
     ) -> Result<u32> {
         store
             .component_resource_tables(Some(self))?
-            .resource_new(TypedResource::Component { ty, rep })
+            .resource_new(VMTypedResource::component(ty, rep))
     }
 
     /// Implementation of the `resource.rep` intrinsic for `i32`
@@ -419,7 +420,7 @@ impl Instance {
     ) -> Result<u32> {
         let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_own(TypedResourceIndex::Component { ty: src, index })?;
-        tables.resource_lower_own(TypedResource::Component { ty: dst, rep })
+        tables.resource_lower_own(VMTypedResource::component(dst, rep))
     }
 
     pub(crate) fn resource_transfer_borrow(
@@ -433,9 +434,12 @@ impl Instance {
             !self.id().get(store).resource_owned_by_own_instance(dst),
             "should have used `resource.transfer-borrow-to-owner` instead",
         );
+        // No lazy-lend path here: the `resource_lower_borrow` below needs a
+        // materialized scope for its `borrow_count`, so the thread has to be
+        // forced anyway.
         let mut tables = store.component_resource_tables(Some(self))?;
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
-        tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
+        tables.resource_lower_borrow(VMTypedResource::component(dst, rep))
     }
 
     /// Variant of `resource_transfer_borrow` for when the destination instance
@@ -446,8 +450,8 @@ impl Instance {
         index: u32,
         src: TypeResourceTableIndex,
     ) -> Result<u32> {
-        let mut tables = store.component_resource_tables(Some(self))?;
-        tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })
+        store
+            .resource_lift_borrow_maybe_lazy(self, TypedResourceIndex::Component { ty: src, index })
     }
 
     pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {
@@ -514,6 +518,18 @@ impl Instance {
             let memory = memory.as_ref();
             core::slice::from_raw_parts_mut(memory.base.as_ptr(), memory.current_length())
         }
+    }
+
+    /// The `len` bytes at `offset` of the options' memory, if in bounds.
+    pub(crate) fn options_memory_range_mut<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+        options: OptionsIndex,
+        offset: usize,
+        len: usize,
+    ) -> Option<&'a mut [u8]> {
+        let end = offset.checked_add(len)?;
+        self.options_memory_mut(store, options).get_mut(offset..end)
     }
 
     /// Helper function to simultaneously get a borrow to this instance's

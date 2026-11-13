@@ -4,7 +4,7 @@
 using namespace wasmtime;
 
 TEST(MemoryType, Simple) {
-  MemoryType ty(1);
+  MemoryType ty = MemoryType::create(1).unwrap();
   EXPECT_EQ(ty->min(), 1);
   EXPECT_EQ(ty->max(), std::nullopt);
   EXPECT_FALSE(ty->is_64());
@@ -14,17 +14,26 @@ TEST(MemoryType, Simple) {
 }
 
 TEST(MemoryType, WithMax) {
-  MemoryType ty(1, 2);
+  MemoryType ty = MemoryType::create(1, 2).unwrap();
   EXPECT_EQ(ty->min(), 1);
   EXPECT_EQ(ty->max(), 2);
   EXPECT_FALSE(ty->is_64());
   EXPECT_FALSE(ty->is_shared());
   EXPECT_EQ(ty->page_size_log2(), 16);
   EXPECT_EQ(ty->page_size(), 1 << 16);
+
+  MemoryType other = MemoryType::create(3).unwrap();
+  other = ty;
+  EXPECT_EQ(other->min(), 1);
+}
+
+TEST(MemoryType, Invalid) {
+  EXPECT_FALSE(MemoryType::create(2, 1));
+  EXPECT_FALSE(MemoryType::create64(2, 1));
 }
 
 TEST(MemoryType, Mem64) {
-  MemoryType ty = MemoryType::New64(1);
+  MemoryType ty = MemoryType::create64(1).unwrap();
   EXPECT_EQ(ty->min(), 1);
   EXPECT_EQ(ty->max(), std::nullopt);
   EXPECT_TRUE(ty->is_64());
@@ -32,7 +41,7 @@ TEST(MemoryType, Mem64) {
   EXPECT_EQ(ty->page_size_log2(), 16);
   EXPECT_EQ(ty->page_size(), 1 << 16);
 
-  ty = MemoryType::New64(1, 2);
+  ty = MemoryType::create64(1, 2).unwrap();
   EXPECT_EQ(ty->min(), 1);
   EXPECT_EQ(ty->max(), 2);
   EXPECT_TRUE(ty->is_64());

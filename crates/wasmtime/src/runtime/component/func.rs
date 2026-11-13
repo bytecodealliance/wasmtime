@@ -466,10 +466,6 @@ impl Func {
         let instance = self.instance.runtime_instance(raw_options.instance);
         let async_ = raw_options.async_;
 
-        if !store.0.may_enter() {
-            bail!(crate::Trap::CannotEnterComponent);
-        }
-
         store.0.enter_guest_sync_call(async_, instance)?;
 
         #[repr(C)]

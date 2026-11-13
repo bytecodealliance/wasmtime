@@ -292,6 +292,99 @@ mod one_import_concurrent {
     }
 }
 
+mod sync_export_async_import {
+    use super::*;
+    use wasmtime::Trap;
+    use wasmtime::component::{Accessor, HasData};
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            world sync-export-async-import {
+                import foo: interface {
+                    foo: async func(block: bool);
+                }
+
+                export bar: func(block: bool);
+            }
+        ",
+        exports: { default: async },
+    });
+
+    const COMPONENT: &str = r#"
+        (component
+            (import "foo" (instance $foo-instance
+                (export "foo" (func async (param "block" bool)))
+            ))
+            (core func $foo (canon lower (func $foo-instance "foo")))
+            (core module $m
+                (import "" "foo" (func $foo (param i32)))
+                (func (export "bar") (param i32)
+                    local.get 0
+                    call $foo
+                )
+            )
+            (core instance $i (instantiate $m
+                (with "" (instance (export "foo" (func $foo))))
+            ))
+            (func (export "bar") (param "block" bool)
+                (canon lift (core func $i "bar"))
+            )
+        )
+    "#;
+
+    #[derive(Default)]
+    struct MyImports {
+        hit: bool,
+    }
+
+    impl HasData for MyImports {
+        type Data<'a> = &'a mut MyImports;
+    }
+
+    impl<T> foo::HostWithStore<T> for MyImports {
+        async fn foo(accessor: &Accessor<T, Self>, block: bool) {
+            if block {
+                std::future::pending::<()>().await;
+            }
+            accessor.with(|mut view| view.get().hit = true);
+        }
+    }
+
+    impl foo::Host for MyImports {}
+
+    async fn setup() -> Result<(Store<MyImports>, SyncExportAsyncImport)> {
+        let mut config = Config::new();
+        config.wasm_component_model_async(true);
+        let engine = Engine::new(&config)?;
+        let component = Component::new(&engine, COMPONENT)?;
+        let mut linker = Linker::new(&engine);
+        foo::add_to_linker::<_, MyImports>(&mut linker, |x| x)?;
+        let mut store = Store::new(&engine, MyImports::default());
+        let instance =
+            SyncExportAsyncImport::instantiate_async(&mut store, &component, &linker).await?;
+        Ok((store, instance))
+    }
+
+    #[tokio::test]
+    async fn non_blocking() -> Result<()> {
+        let (mut store, instance) = setup().await?;
+        instance.call_bar(&mut store, false).await?;
+        assert!(store.data().hit);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn blocking_traps() -> Result<()> {
+        let (mut store, instance) = setup().await?;
+        let err = instance.call_bar(&mut store, true).await.unwrap_err();
+        assert_eq!(err.downcast_ref::<Trap>(), Some(&Trap::CannotBlockSyncTask));
+        assert!(!store.data().hit);
+        Ok(())
+    }
+}
+
 mod resources_at_world_level {
     use super::*;
     use wasmtime::component::{HasSelf, Resource};

@@ -20,10 +20,13 @@
 //! about ABI details can be found in lifting/lowering throughout Wasmtime,
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
-use super::{HandleCounter, HandleTable, InstanceState, RemovedResource};
+use super::{HandleCounter, HandleTable, HandleTableInsertion, InstanceState, RemovedResource};
 use crate::bail_bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
+use crate::runtime::vm::{
+    VMHandleTable, VMResourceIndex, VMScope, VMStoreContext, VMTypedResource,
+};
 use core::error::Error;
 use core::fmt;
 use core::mem;
@@ -55,9 +58,13 @@ pub struct ResourceTables<'a> {
     /// embedder-originating operations though such as
     /// `ResourceAny::resource_drop` which won't consult this table as it's
     /// only operating over the host table.
+    ///
+    /// The slice holds the `VMComponentContext` entries through which compiled
+    /// code reads each instance's handle table.
     pub guest: Option<(
         &'a mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &'a ComponentTypes,
+        &'a mut [VMHandleTable],
     )>,
 
     /// Runtime state for resources currently owned by the host.
@@ -85,75 +92,10 @@ pub struct ResourceTables<'a> {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CurrentScope {
     /// A scope which already has an ID in the component task state.
-    Id(Scope),
+    Id(VMScope),
     /// A host scope whose task has not yet been materialized.
     #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
     DeferredHost,
-}
-
-/// Identifier for a component call's resource-borrow scope.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum Scope {
-    /// A non-concurrent scope or a concurrent guest-task scope.
-    Id(u32),
-    /// A concurrent host-task scope.
-    HostId(u32),
-}
-
-/// Typed representation of a "rep" for a resource.
-///
-/// All resources in the component model are stored in a single heterogeneous
-/// table so this type is used to disambiguate what everything is. This is the
-/// representation of a resource stored at-rest in memory.
-#[derive(Debug)]
-pub enum TypedResource {
-    /// A resource defined by the host.
-    ///
-    /// The meaning of the 32-bit integer here is up to the embedder, it
-    /// otherwise is not used within the runtime here.
-    Host(u32),
-
-    /// A resource defined within a component.
-    Component {
-        /// This is an integer supplied by the component itself when this
-        /// resource was created. Typically this is a pointer into linear
-        /// memory for a component.
-        rep: u32,
-
-        /// The type of this component resource.
-        ///
-        /// This is used, within the context of a component, to keep track of
-        /// what the type of `rep` is. This is then used when getting/removing
-        /// from the table to ensure that the guest does indeed have the right
-        /// permission to access this slot.
-        ty: TypeResourceTableIndex,
-    },
-}
-
-impl TypedResource {
-    pub(super) fn rep(&self, access_ty: &TypedResourceIndex) -> Result<u32> {
-        match (self, access_ty) {
-            (Self::Host(rep), TypedResourceIndex::Host(_)) => Ok(*rep),
-            (Self::Host(_), expected) => bail!(ResourceTypeMismatch {
-                expected: *expected,
-                found: "host resource",
-            }),
-            (Self::Component { rep, ty }, TypedResourceIndex::Component { ty: expected, .. }) => {
-                if ty == expected {
-                    Ok(*rep)
-                } else {
-                    bail!(ResourceTypeMismatch {
-                        expected: *access_ty,
-                        found: "a different guest-defined resource",
-                    })
-                }
-            }
-            (Self::Component { .. }, expected) => bail!(ResourceTypeMismatch {
-                expected: *expected,
-                found: "guest-defined resource",
-            }),
-        }
-    }
 }
 
 /// An index used to access a resource.
@@ -185,7 +127,7 @@ impl TypedResourceIndex {
         }
     }
 
-    fn desc(&self) -> &'static str {
+    pub(crate) fn desc(&self) -> &'static str {
         match self {
             Self::Host(_) => "host resource",
             Self::Component { .. } => "guest-defined resource",
@@ -208,18 +150,23 @@ impl CallContext {
 }
 
 impl ResourceTables<'_> {
-    fn table_for_resource(
-        &mut self,
-        resource: &TypedResource,
-    ) -> (&mut HandleTable, &mut HandleCounter) {
-        let table = match resource {
-            TypedResource::Host(_) => &mut *self.host_table,
-            TypedResource::Component { ty, .. } => {
-                let (states, types) = self.guest.as_mut().unwrap();
-                states[types[*ty].unwrap_concrete_instance()].handle_table()
+    fn insertion_for_resource(&mut self, resource: &VMTypedResource) -> HandleTableInsertion<'_> {
+        let counter = &mut *self.handle_counter;
+        match resource.component_ty() {
+            // SAFETY: the host table is never published to compiled code.
+            None => unsafe { self.host_table.insert_unpublished(counter) },
+            Some(ty) => {
+                let (states, types, published) = self.guest.as_mut().unwrap();
+                let i = types[ty].unwrap_concrete_instance();
+                // SAFETY: `published[i]` is where compiled code reads instance
+                // `i`'s handle table.
+                unsafe {
+                    states[i]
+                        .handle_table()
+                        .insert(counter, &mut published[i.as_u32() as usize])
+                }
             }
-        };
-        (table, &mut *self.handle_counter)
+        }
     }
 
     fn table_for_index(
@@ -229,7 +176,7 @@ impl ResourceTables<'_> {
         let table = match index {
             TypedResourceIndex::Host(_) => &mut *self.host_table,
             TypedResourceIndex::Component { ty, .. } => {
-                let (states, types) = self.guest.as_mut().unwrap();
+                let (states, types, _published) = self.guest.as_mut().unwrap();
                 states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
         };
@@ -239,9 +186,9 @@ impl ResourceTables<'_> {
     /// Implementation of the `resource.new` canonical intrinsic.
     ///
     /// Note that this is the same as `resource_lower_own`.
-    pub fn resource_new(&mut self, resource: TypedResource) -> Result<u32> {
-        let (table, counter) = self.table_for_resource(&resource);
-        table.resource_own_insert(counter, resource)
+    pub fn resource_new(&mut self, resource: VMTypedResource) -> Result<u32> {
+        self.insertion_for_resource(&resource)
+            .resource_own(resource)
     }
 
     /// Implementation of the `resource.rep` canonical intrinsic.
@@ -283,9 +230,9 @@ impl ResourceTables<'_> {
     /// the same as `resource_new` implementation-wise.
     ///
     /// This is an implementation of the canonical ABI `lower_own` function.
-    pub fn resource_lower_own(&mut self, resource: TypedResource) -> Result<u32> {
-        let (table, counter) = self.table_for_resource(&resource);
-        table.resource_own_insert(counter, resource)
+    pub fn resource_lower_own(&mut self, resource: VMTypedResource) -> Result<u32> {
+        self.insertion_for_resource(&resource)
+            .resource_own(resource)
     }
 
     /// Attempts to remove an "own" handle from the specified table and its
@@ -303,7 +250,7 @@ impl ResourceTables<'_> {
         }
     }
 
-    fn materialize_current_scope(&mut self) -> Result<Scope> {
+    fn materialize_current_scope(&mut self) -> Result<VMScope> {
         let id = match self.current_scope {
             Some(CurrentScope::Id(id)) => return Ok(id),
             Some(CurrentScope::DeferredHost) => self.task_state.materialize_current_scope()?,
@@ -363,9 +310,83 @@ impl ResourceTables<'_> {
         // Space for the lender is reserved first so that recording it can't
         // fail after the lend.
         self.current_scope()?.lenders.reserve(1)?;
-        let rep = self.table_for_index(&index).0.resource_lend(index)?;
+        let (table, counter) = self.table_for_index(&index);
+        let rep = table.resource_lend(counter, index)?;
         self.current_scope()?.lenders.push(index)?;
         Ok(rep)
+    }
+
+    /// Variant of `resource_lift_borrow` for an unforced `VMDeferredThread`,
+    /// which records the lend in the store's `lazy_lenders` buffer instead of a
+    /// `CallContext`.
+    ///
+    /// The handle's `lend_count` is left alone: forcing the thread performs the
+    /// real lend for each buffered entry (see `promote_lazy_lends`), and exiting
+    /// an unforced frame discards its entries by resetting `lazy_lenders_len`.
+    /// Everything that reads `lend_count` forces the thread first, so the count
+    /// is always complete by the time anything relies on it.
+    ///
+    /// Returns `Ok(None)` without lending anything if the buffer is full, in
+    /// which case the caller must force the thread and use
+    /// `resource_lift_borrow` instead.
+    pub fn resource_lift_borrow_lazy(
+        &mut self,
+        index: TypedResourceIndex,
+        lazy_lenders: &mut [VMResourceIndex],
+        vm_store_context: &mut VMStoreContext,
+    ) -> Result<Option<u32>> {
+        // A forced thread already has a `CallContext`, and anything recorded
+        // here would never be promoted into it.
+        debug_assert!(vm_store_context.current_thread_mut().is_deferred());
+
+        let lazy_lenders_len = vm_store_context.lazy_lenders_len_mut();
+        let Some(slot) = lazy_lenders.get_mut(*lazy_lenders_len) else {
+            return Ok(None);
+        };
+        let rep = self
+            .table_for_index(&index)
+            .0
+            .resource_lend_deferred(index)?;
+        *slot = VMResourceIndex::new(index);
+        *lazy_lenders_len += 1;
+        Ok(Some(rep))
+    }
+
+    /// Promotes lazy lends recorded by `resource_lift_borrow_lazy` into real
+    /// lends owned by `scope`'s `CallContext`, incrementing each handle's
+    /// `lend_count` and charging the store's handle count now that the thread
+    /// that made them has been forced.
+    ///
+    /// Either every lend is promoted or, on error, none is.
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(
+            dead_code,
+            reason = "deferred threads are only created with `component-model-async`, so nothing promotes lazy lends without it"
+        )
+    )]
+    pub fn promote_lazy_lends(
+        &mut self,
+        scope: VMScope,
+        lazy_lenders: &[VMResourceIndex],
+    ) -> Result<()> {
+        // Fail up front on anything that could otherwise fail partway through
+        // and leave some of these lends promoted but not the rest.
+        self.task_state
+            .call_context(scope)?
+            .lenders
+            .reserve(lazy_lenders.len())?;
+        if !self.handle_counter.has_room(lazy_lenders.len()) {
+            bail!("cannot lend resource: store handle limit exceeded");
+        }
+
+        for lender in lazy_lenders {
+            let index = lender.get();
+            let (table, counter) = self.table_for_index(&index);
+            table.resource_lend(counter, index)?;
+            self.task_state.call_context(scope)?.lenders.push(index)?;
+        }
+        Ok(())
     }
 
     /// Records a new `borrow` resource with the given representation within the
@@ -380,12 +401,12 @@ impl ResourceTables<'_> {
     /// function. The other half of this implementation is located on
     /// `VMComponentContext` which handles the special case of avoiding borrow
     /// tracking entirely.
-    pub fn resource_lower_borrow(&mut self, resource: TypedResource) -> Result<u32> {
+    pub fn resource_lower_borrow(&mut self, resource: VMTypedResource) -> Result<u32> {
         let scope = self.materialize_current_scope()?;
         let cx = self.task_state.call_context(scope)?;
         cx.borrow_count = cx.borrow_count.checked_add(1).unwrap();
-        let (table, counter) = self.table_for_resource(&resource);
-        table.resource_borrow_insert(counter, resource, scope)
+        self.insertion_for_resource(&resource)
+            .resource_borrow(resource, scope)
     }
 
     /// Validates that the current scope can be exited.
@@ -403,19 +424,17 @@ impl ResourceTables<'_> {
             // Note the panics here which should never get triggered in theory
             // due to the dynamic tracking of borrows and such employed for
             // resources.
-            self.table_for_index(&lender)
-                .0
-                .resource_undo_lend(lender)
-                .unwrap();
+            let (table, counter) = self.table_for_index(&lender);
+            table.resource_undo_lend(counter, lender).unwrap();
         }
         Ok(())
     }
 }
 
 #[derive(Debug)]
-struct ResourceTypeMismatch {
-    expected: TypedResourceIndex,
-    found: &'static str,
+pub(crate) struct ResourceTypeMismatch {
+    pub(crate) expected: TypedResourceIndex,
+    pub(crate) found: &'static str,
 }
 
 impl fmt::Display for ResourceTypeMismatch {

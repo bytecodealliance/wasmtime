@@ -133,6 +133,10 @@ pub struct HeapData {
 
     /// Whether this heap is an imported linear memory.
     pub imported: bool,
+
+    /// The heap of this linear memory's shadow bytes, when stores check them
+    /// for watchpoints (`Tunables::memory_watchpoints`).
+    pub shadow: Option<Heap>,
 }
 
 impl HeapData {

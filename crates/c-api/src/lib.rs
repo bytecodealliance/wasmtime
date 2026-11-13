@@ -17,6 +17,11 @@
 
 pub use wasmtime;
 
+// `tracing` is only a dependency to support the `disable-logging` feature, so
+// fake a use of it to quiet Cargo's `unused_dependencies` lint.
+#[cfg(feature = "disable-logging")]
+use tracing as _;
+
 mod config;
 mod engine;
 mod error;
@@ -148,5 +153,14 @@ unsafe fn slice_from_raw_parts_mut<'a, T>(ptr: *mut T, len: usize) -> &'a mut [T
 
 pub(crate) fn abort(name: &str) -> ! {
     eprintln!("`{name}` is not implemented");
+    std::process::abort();
+}
+
+/// Aborts the process after printing `message` to stderr.
+///
+/// Unlike [`abort`], which reports a function that is not implemented, this is
+/// for functions that are implemented but cannot represent their input.
+pub(crate) fn abort_unsupported(message: &str) -> ! {
+    eprintln!("{message}");
     std::process::abort();
 }

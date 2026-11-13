@@ -135,6 +135,12 @@ impl GcStore {
         self.gc_heap.heap_slice().len()
     }
 
+    /// Get the number of bytes that can be allocated into this GC heap before
+    /// a collection is required.
+    pub fn gc_heap_allocatable_bytes(&self) -> usize {
+        self.gc_heap.allocatable_bytes()
+    }
+
     /// Asynchronously perform garbage collection within this heap.
     pub async fn gc(
         &mut self,

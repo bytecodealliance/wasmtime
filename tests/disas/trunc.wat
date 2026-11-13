@@ -24,7 +24,7 @@
 ;;       jne     0x101
 ;;   39: movq    %rbx, %rdi
 ;;       movdqu  (%rsp), %xmm0
-;;       callq   0x264
+;;       callq   0x26f
 ;;       movabsq $13830554455654793216, %rax
 ;;       movq    %rax, %xmm1
 ;;       ucomisd %xmm0, %xmm1
@@ -55,27 +55,27 @@
 ;;       retq
 ;;   d3: movl    $6, %esi
 ;;   d8: movq    %rbx, %rdi
-;;   db: callq   0x291
+;;   db: callq   0x29c
 ;;   e0: movq    %rbx, %rdi
-;;   e3: callq   0x2c2
+;;   e3: callq   0x2cd
 ;;   e8: ud2
 ;;   ea: movl    $6, %esi
 ;;   ef: movq    %rbx, %rdi
-;;   f2: callq   0x291
+;;   f2: callq   0x29c
 ;;   f7: movq    %rbx, %rdi
-;;   fa: callq   0x2c2
+;;   fa: callq   0x2cd
 ;;   ff: ud2
 ;;  101: movl    $8, %esi
 ;;  106: movq    %rbx, %rdi
-;;  109: callq   0x291
+;;  109: callq   0x29c
 ;;  10e: movq    %rbx, %rdi
-;;  111: callq   0x2c2
+;;  111: callq   0x2cd
 ;;  116: ud2
 ;;  118: xorl    %esi, %esi
 ;;  11a: movq    %rbx, %rdi
-;;  11d: callq   0x291
+;;  11d: callq   0x29c
 ;;  122: movq    %rbx, %rdi
-;;  125: callq   0x2c2
+;;  125: callq   0x2cd
 ;;  12a: ud2
 ;;  12c: ud2
 ;;  12e: ud2

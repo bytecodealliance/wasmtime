@@ -10,6 +10,9 @@
 #![deny(missing_docs)]
 #![warn(clippy::cast_sign_loss)]
 #![no_std]
+// `for_each_vm_type!`'s offset generation recurses once per field of a type,
+// and some of our `VM*` types have enough fields to exceed the default.
+#![recursion_limit = "512"]
 
 #[cfg(any(feature = "std", test))]
 #[macro_use]

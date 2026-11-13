@@ -29,15 +29,7 @@ fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
     let script_path = script_file.path().to_str().unwrap();
     cmd.args(&["-s", &script_path]);
 
-    let mut me = std::env::current_exe().expect("current_exe specified");
-    me.pop(); // chop off the file name
-    me.pop(); // chop off `deps`
-    if cfg!(target_os = "windows") {
-        me.push("wasmtime.exe");
-    } else {
-        me.push("wasmtime");
-    }
-    cmd.arg(me);
+    cmd.arg(env!("CARGO_BIN_EXE_wasmtime"));
 
     cmd.arg("--");
     cmd.args(args);

@@ -119,104 +119,20 @@ impl Config {
 
     /// Updates this configuration to be able to run the `test` specified.
     ///
-    /// This primarily updates `self.module_config` to ensure that it enables
-    /// all features and proposals necessary to execute the `test` specified.
-    /// This will additionally update limits in the pooling allocator to be able
-    /// to execute all tests.
+    /// This updates limits in the pooling allocator, and other settings, to be
+    /// able to execute all tests. The test's features and `flags` are applied
+    /// separately, see `oracles::wast_test`.
     pub fn make_wast_test_compliant(&mut self, test: &WastTest) -> WastConfig {
-        let wasmtime_test_util::wast::TestConfig {
-            bulk_memory,
-            memory64,
-            custom_page_sizes,
-            multi_memory,
-            threads,
-            shared_everything_threads,
-            gc,
-            function_references,
-            relaxed_simd,
-            reference_types,
-            tail_call,
-            extended_const,
-            wide_arithmetic,
-            branch_hinting,
-            compact_imports,
-            component_model_async,
-            component_model_more_async_builtins,
-            component_model_async_stackful,
-            component_model_threading,
-            component_model_error_context,
-            component_model_gc,
-            component_model_map,
-            component_model_memory64,
-            component_model_fixed_length_lists,
-            component_model_implements,
-            component_model_canonical_names,
-            component_model_accessors,
-            simd,
-            exceptions,
-            legacy_exceptions: _,
-            custom_descriptors: _,
-
-            hogs_memory: _,
-            nan_canonicalization: _,
-            gc_types: _,
-            stack_switching,
-            spec_test: _,
-        } = test.config;
-
-        // Enable/disable some proposals that aren't configurable in wasm-smith
-        // but are configurable in Wasmtime.
-        self.module_config.function_references_enabled =
-            function_references.or(gc).unwrap_or(false);
-        self.module_config.component_model_async = component_model_async.unwrap_or(false);
-        self.module_config.component_model_more_async_builtins =
-            component_model_more_async_builtins.unwrap_or(false);
-        self.module_config.component_model_async_stackful =
-            component_model_async_stackful.unwrap_or(false);
-        self.module_config.component_model_threading = component_model_threading.unwrap_or(false);
-        self.module_config.component_model_error_context =
-            component_model_error_context.unwrap_or(false);
-        self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
-        self.module_config.component_model_map = component_model_map.unwrap_or(false);
-        self.module_config.component_model_memory64 = component_model_memory64.unwrap_or(false);
-        self.module_config.component_model_fixed_length_lists =
-            component_model_fixed_length_lists.unwrap_or(false);
-        self.module_config.component_model_implements = component_model_implements.unwrap_or(false);
-        self.module_config.component_model_canonical_names =
-            component_model_canonical_names.unwrap_or(false);
-        self.module_config.component_model_accessors = component_model_accessors.unwrap_or(false);
-        self.module_config.stack_switching = stack_switching.unwrap_or(false);
-        self.wasmtime.branch_hinting = branch_hinting.unwrap_or(false);
-
-        // Enable/disable proposals that wasm-smith has knobs for which will be
-        // read when creating `wasmtime::Config`.
-        let config = &mut self.module_config.config;
-        config.bulk_memory_enabled = bulk_memory.unwrap_or(false);
-        config.multi_value_enabled = true;
-        config.wide_arithmetic_enabled = wide_arithmetic.unwrap_or(false);
-        config.compact_imports_enabled = compact_imports.unwrap_or(false);
-        config.memory64_enabled = memory64.unwrap_or(false);
-        config.relaxed_simd_enabled = relaxed_simd.unwrap_or(false);
-        config.simd_enabled = config.relaxed_simd_enabled || simd.unwrap_or(false);
-        config.tail_call_enabled = tail_call.unwrap_or(false);
-        config.custom_page_sizes_enabled = custom_page_sizes.unwrap_or(false);
-        config.threads_enabled = threads.unwrap_or(false);
-        config.shared_everything_threads_enabled = shared_everything_threads.unwrap_or(false);
-        config.gc_enabled = gc.unwrap_or(false);
-        config.reference_types_enabled = config.gc_enabled
-            || self.module_config.function_references_enabled
-            || self.module_config.component_model_async
-            || reference_types.unwrap_or(false);
-        config.extended_const_enabled = extended_const.unwrap_or(false);
-        config.exceptions_enabled =
-            self.module_config.stack_switching || exceptions.unwrap_or(false);
-        if multi_memory.unwrap_or(false) {
-            config.max_memories = limits::MEMORIES_PER_MODULE as usize;
-        } else {
-            config.max_memories = 1;
-        }
-
-        if self.module_config.stack_switching {
+        // Features, flags, etc, within `test` will all get overlaid on top of
+        // `self` by default. This means that we don't have to fully reflect all
+        // of `test` into `self`, for example all individual wasm features. We
+        // do reflect some minor things, though, when they affect other options
+        // that are otherwise configured.
+        //
+        // For example `threads_enabled` here feeds into memory configuration
+        // and whether that's respected.
+        self.module_config.config.threads_enabled = test.config.threads();
+        if test.config.stack_switching() {
             self.wasmtime.inlining = Some(Inlining::No);
         }
 
@@ -258,7 +174,7 @@ impl Config {
                 .max(limits::MEMORIES_PER_MODULE);
             pooling.max_memories_per_component = pooling
                 .max_memories_per_component
-                .max(limits::MEMORIES_PER_MODULE);
+                .max(limits::MEMORIES_PER_COMPONENT);
             pooling.total_core_instances = pooling.total_core_instances.max(limits::CORE_INSTANCES);
             pooling.max_memory_size = pooling
                 .max_memory_size
@@ -281,13 +197,6 @@ impl Config {
         // which is used afterwards to test if the `test` here is expected to
         // fail or not.
         WastConfig {
-            collector: match self.wasmtime.collector {
-                Collector::Null => wasmtime_test_util::wast::Collector::Null,
-                Collector::DeferredReferenceCounting => {
-                    wasmtime_test_util::wast::Collector::DeferredReferenceCounting
-                }
-                Collector::Copying => wasmtime_test_util::wast::Collector::Copying,
-            },
             pooling: matches!(
                 self.wasmtime.strategy,
                 InstanceAllocationStrategy::Pooling(_)
@@ -306,6 +215,15 @@ impl Config {
 
     /// Converts this to a `wasmtime::Config` object
     pub fn to_wasmtime(&self) -> wasmtime::Config {
+        self.to_wasmtime_with(&mut self.to_common_options())
+    }
+
+    /// Converts this to the `wasmtime` CLI options that it represents.
+    ///
+    /// Note that some of this configuration, such as async settings, isn't
+    /// representable as CLI options and is only applied by
+    /// [`Config::to_wasmtime_with`].
+    pub fn to_common_options(&self) -> wasmtime_cli_flags::CommonOptions {
         crate::init_fuzzing();
 
         let mut cfg = wasmtime_cli_flags::CommonOptions::default();
@@ -389,7 +307,11 @@ impl Config {
         };
         self.wasmtime.compiler_strategy.configure(&mut cfg);
 
-        self.wasmtime.codegen.configure(&mut cfg);
+        // Host-specific codegen settings (target triple and ISA flags) don't
+        // apply to Pulley, so skip this if that's selected.
+        if *compiler_strategy != CompilerStrategy::CraneliftPulley {
+            self.wasmtime.codegen.configure(&mut cfg);
+        }
 
         cfg.codegen.inlining = self.wasmtime.inlining.map(|i| i.into());
 
@@ -460,21 +382,23 @@ impl Config {
             memory_config.configure(&mut cfg);
         }
 
-        log::debug!("creating wasmtime config with CLI options:\n{cfg}");
-        let mut cfg = cfg.config(None).expect("failed to create wasmtime::Config");
+        cfg
+    }
+
+    /// Creates a `wasmtime::Config` from `opts`, which are typically from
+    /// [`Config::to_common_options`] with further adjustments.
+    pub fn to_wasmtime_with(
+        &self,
+        opts: &mut wasmtime_cli_flags::CommonOptions,
+    ) -> wasmtime::Config {
+        log::debug!("creating wasmtime config with CLI options:\n{opts}");
+        let mut cfg = opts
+            .config(None)
+            .expect("failed to create wasmtime::Config");
 
         if self.wasmtime.async_config != AsyncConfig::Disabled {
             log::debug!("async config in use {:?}", self.wasmtime.async_config);
             self.wasmtime.async_config.configure(&mut cfg);
-        }
-
-        // Fuzzing on macOS with mach ports seems to sometimes bypass the mach
-        // port handling thread entirely and go straight to asan's or fuzzing's
-        // signal handler. No idea why and for me at least it's just easier to
-        // disable mach ports when fuzzing because there's no need to use that
-        // over signal handlers.
-        if cfg!(target_vendor = "apple") {
-            cfg.macos_use_mach_ports(false);
         }
 
         return cfg;
@@ -684,18 +608,6 @@ impl WasmtimeConfig {
             CompilerStrategy::CraneliftNative => {}
 
             CompilerStrategy::Winch => {
-                // Winch is not complete on non-x64 targets, so just abandon this test
-                // case. We don't want to force Cranelift because we change what module
-                // config features are enabled based on the compiler strategy, and we
-                // don't want to make the same fuzz input DNA generate different test
-                // cases on different targets.
-                if cfg!(not(any(target_arch = "x86_64", target_arch = "aarch64"))) {
-                    log::warn!(
-                        "want to compile with Winch but host architecture does not support it"
-                    );
-                    return Err(arbitrary::Error::IncorrectFormat);
-                }
-
                 // Winch doesn't support the same set of wasm proposal as Cranelift
                 // at this time, so if winch is selected be sure to disable wasm
                 // proposals in `Config` to ensure that Winch can compile the
@@ -732,7 +644,20 @@ impl WasmtimeConfig {
 
             CompilerStrategy::CraneliftPulley => {
                 config.config.threads_enabled = false;
+
+                // Pulley doesn't use signals anyway and this avoids configuring
+                // the engine on platorms which don't support signals anyway, so
+                // alway disable.
+                self.signals_based_traps = false;
             }
+        }
+
+        // Unconditionally disable s390x signals because in CI they're disabled
+        // in Wasmtime due to possible QEMU emulation bugs (see wasmtime's
+        // `build.rs`). In such a situation if it were enabled here that'd lead
+        // to an error because Wasmtime would claim a lack of support.
+        if cfg!(target_arch = "s390x") {
+            self.signals_based_traps = false;
         }
 
         // If using the pooling allocator, constrain the memory and module configurations
@@ -988,7 +913,7 @@ impl From<Inlining> for wasmtime::Inlining {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 /// Compiler to use.
 pub enum CompilerStrategy {
     /// Cranelift compiler for the native architecture.
@@ -1000,6 +925,17 @@ pub enum CompilerStrategy {
 }
 
 impl CompilerStrategy {
+    /// Whether native Cranelift (`CraneliftNative`) can run on this host.
+    pub const CRANELIFT_NATIVE_SUPPORTED: bool = cfg!(any(
+        target_arch = "x86_64",
+        target_arch = "aarch64",
+        target_arch = "riscv64",
+        target_arch = "s390x",
+    ));
+
+    /// Whether Winch can run on this host.
+    pub const WINCH_SUPPORTED: bool = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
+
     /// Configures `config` to use this compilation strategy
     pub fn configure(&self, config: &mut wasmtime_cli_flags::CommonOptions) {
         match self {
@@ -1011,7 +947,13 @@ impl CompilerStrategy {
             }
             CompilerStrategy::CraneliftPulley => {
                 config.codegen.compiler = Some(wasmtime::Strategy::Cranelift);
-                config.target = Some("pulley64".to_string());
+                if cfg!(target_pointer_width = "32") {
+                    config.target = Some("pulley32".to_string());
+                } else if cfg!(target_endian = "big") {
+                    config.target = Some("pulley64be".to_string());
+                } else {
+                    config.target = Some("pulley64".to_string());
+                }
             }
         }
     }
@@ -1019,13 +961,28 @@ impl CompilerStrategy {
 
 impl Arbitrary<'_> for CompilerStrategy {
     fn arbitrary(u: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
+        // Favor actually using native cranelift, but if it's not actually
+        // supported on this platform then fall back to pulley instead.
+        // Similarly, when winch is selected use that when it's supported,
+        // otherwise fall back to whatever cranelift is.
+        let native = if Self::CRANELIFT_NATIVE_SUPPORTED {
+            Self::CraneliftNative
+        } else {
+            Self::CraneliftPulley
+        };
+        let winch = if Self::WINCH_SUPPORTED {
+            Self::Winch
+        } else {
+            native
+        };
+
         // Favor fuzzing native cranelift, but if allowed also enable
         // winch/pulley.
-        match u.int_in_range(0..=19)? {
-            1 => Ok(Self::CraneliftPulley),
-            2 => Ok(Self::Winch),
-            _ => Ok(Self::CraneliftNative),
-        }
+        Ok(match u.int_in_range(0..=19)? {
+            1 => Self::CraneliftPulley,
+            2 => winch,
+            _ => native,
+        })
     }
 }
 

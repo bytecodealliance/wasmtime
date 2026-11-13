@@ -145,6 +145,7 @@ use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
 use crate::settings;
 use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{SmallVec, smallvec};
@@ -504,11 +505,11 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
-    fn gen_args(args: Vec<ArgPair>) -> Inst {
+    fn gen_args(args: Box<[ArgPair]>) -> Inst {
         Inst::Args { args }
     }
 
-    fn gen_rets(rets: Vec<RetPair>) -> Inst {
+    fn gen_rets(rets: Box<[RetPair]>) -> Inst {
         Inst::Rets { rets }
     }
 

@@ -5,6 +5,11 @@
 // selectively enabled here.
 #![warn(clippy::cast_sign_loss)]
 
+// Whether `wasmtime-versioned-export-macros` is used depends on `build.rs`
+// computed cfgs which `Cargo.toml` can't take into account, so fake a use of it
+// here to force this to be considered used.
+use wasmtime_versioned_export_macros as _;
+
 // Polyfill `std::simd::i8x16` etc. until they're stable.
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
 #[expect(non_camel_case_types, reason = "matching wasm conventions")]
@@ -109,7 +114,9 @@ pub use crate::runtime::vm::instance::{
     PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
 };
 pub use crate::runtime::vm::interpreter::*;
-pub use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator, SharedMemory};
+#[cfg(feature = "debug")]
+pub use crate::runtime::vm::memory::WATCH_DEBUG;
+pub use crate::runtime::vm::memory::{Memory, ShadowMemory, SharedMemory};
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::provenance::*;
 pub use crate::runtime::vm::stack_switching::*;
@@ -122,26 +129,7 @@ pub use crate::runtime::vm::table::{Table, TableElementType};
 #[cfg(feature = "gc")]
 pub use crate::runtime::vm::throw::*;
 pub use crate::runtime::vm::traphandlers::*;
-#[cfg(feature = "component-model")]
-pub use crate::runtime::vm::vmcontext::VMArrayCallFunction;
-#[cfg(feature = "gc-copying")]
-pub(crate) use crate::runtime::vm::vmcontext::VMCopyingHeader;
-#[cfg(feature = "gc-copying")]
-pub use crate::runtime::vm::vmcontext::VMCopyingHeapData;
-#[cfg(feature = "gc-drc")]
-pub(crate) use crate::runtime::vm::vmcontext::VMDrcHeader;
-#[cfg(feature = "gc-drc")]
-pub use crate::runtime::vm::vmcontext::VMDrcHeapData;
-#[cfg(feature = "component-model-async")]
-pub use crate::runtime::vm::vmcontext::VMLazyThread;
-#[cfg(feature = "gc-null")]
-pub use crate::runtime::vm::vmcontext::VMNullHeapData;
-pub use crate::runtime::vm::vmcontext::{
-    VMArrayCallHostFuncContext, VMCommonStackInformation, VMContRef, VMContext, VMFuncRef,
-    VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMHostArray,
-    VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMPayloads, VMStackLimits, VMStoreContext,
-    VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
-};
+pub use crate::runtime::vm::vmcontext::*;
 #[cfg(has_custom_sync)]
 pub(crate) use sys::capi;
 

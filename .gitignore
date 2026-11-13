@@ -38,3 +38,4 @@ report/
 cranelift/isle/veri/cache/
 # Staging directory used by `verify.sh rebuild-cache` before it swaps in.
 cranelift/isle/veri/cache.rebuild/
+.idea/

@@ -158,6 +158,20 @@ impl<T> TryVec<T> {
         Ok(())
     }
 
+    /// Same as [`std::vec::Vec::extend_from_slice`] but returns an error on
+    /// allocation failure, in which case `self` is unchanged.
+    ///
+    /// This is limited to `Copy` elements, which can be copied without
+    /// allocating, so that it is a single copy of the slice.
+    pub fn extend_from_slice(&mut self, other: &[T]) -> Result<(), OutOfMemory>
+    where
+        T: Copy,
+    {
+        self.reserve(other.len())?;
+        self.inner.extend_from_slice(other);
+        Ok(())
+    }
+
     /// Same as [`std::vec::Vec::pop`].
     pub fn pop(&mut self) -> Option<T> {
         self.inner.pop()
@@ -222,23 +236,8 @@ impl<T> TryVec<T> {
     }
 
     /// Same as [`std::vec::Vec::into_raw_parts`].
-    pub fn into_raw_parts(mut self) -> (*mut T, usize, usize) {
-        // NB: Can't use `Vec::into_raw_parts` until our MSRV is >= 1.93.
-        #[cfg(not(miri))]
-        {
-            let ptr = self.as_mut_ptr();
-            let len = self.len();
-            let cap = self.capacity();
-            mem::forget(self);
-            (ptr, len, cap)
-        }
-        // NB: Miri requires using `into_raw_parts`, but always run on nightly,
-        // so it's fine to use there.
-        #[cfg(miri)]
-        {
-            let _ = &mut self;
-            self.inner.into_raw_parts()
-        }
+    pub fn into_raw_parts(self) -> (*mut T, usize, usize) {
+        self.inner.into_raw_parts()
     }
 
     /// Same as [`std::vec::Vec::from_raw_parts`].
@@ -497,6 +496,17 @@ where
 mod tests {
     use super::TryVec;
     use crate::error::OutOfMemory;
+
+    #[test]
+    fn test_extend_from_slice() -> Result<(), OutOfMemory> {
+        let mut vec = TryVec::new();
+        vec.extend_from_slice(&[])?;
+        assert!(vec.is_empty());
+        vec.extend_from_slice(&[1, 2])?;
+        vec.extend_from_slice(&[3])?;
+        assert_eq!(*vec, [1, 2, 3]);
+        Ok(())
+    }
 
     #[test]
     fn test_into_boxed_slice() -> Result<(), OutOfMemory> {

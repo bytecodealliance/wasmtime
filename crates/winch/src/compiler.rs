@@ -116,6 +116,7 @@ impl wasmtime_environ::Compiler for Compiler {
         key: FuncKey,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
+        _component: Option<wasmtime_environ::EnclosingComponent<'_>>,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         log::trace!("compiling function: {key:?} = {symbol:?}");
@@ -250,12 +251,13 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
         key: FuncKey,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
+        component: Option<wasmtime_environ::EnclosingComponent<'_>>,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let input = data.body.clone();
         let mut body = self
             .0
-            .compile_function(translation, key, data, types, symbol)?;
+            .compile_function(translation, key, data, types, component, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
             c.finish_compiling(&mut body, Some(input), symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;

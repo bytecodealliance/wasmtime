@@ -11,8 +11,6 @@
 //! panicking.
 
 pub mod component_api;
-#[cfg(feature = "fuzz-spec-interpreter")]
-pub mod diff_spec;
 pub mod diff_wasmi;
 pub mod diff_wasmtime;
 pub mod dummy;
@@ -44,7 +42,7 @@ use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
-#[cfg(feature = "v8")]
+#[cfg(v8)]
 mod diff_v8;
 
 static CNT: AtomicUsize = AtomicUsize::new(0);
@@ -96,9 +94,15 @@ struct LimitsState {
 /// most interesting behavior.
 const MAX_MEMORY: usize = 1 << 30;
 
-/// Allow up to 4G of bytes to be copied (conservatively) which should enable
+/// Maximum number of bytes to be copied (conservatively) which should enable
 /// growth up to `MAX_MEMORY` or at least up to a relatively large amount.
-const MAX_MEMORY_MOVED: usize = 4 << 30;
+///
+/// Set to 4G on 64-bit platforms but a bit smaller on 32.
+const MAX_MEMORY_MOVED: usize = if cfg!(target_pointer_width = "32") {
+    1 << 30
+} else {
+    4 << 30
+};
 
 impl StoreLimits {
     /// Creates the default set of limits for all fuzzing stores.
@@ -637,6 +641,17 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
         return Err(arbitrary::Error::IncorrectFormat);
     }
 
+    // Like integration tests skip all pooling allocator tests on 32-bit
+    // platforms.
+    if cfg!(target_pointer_width = "32")
+        && matches!(
+            fuzz_config.wasmtime.strategy,
+            generators::InstanceAllocationStrategy::Pooling(_)
+        )
+    {
+        return Err(arbitrary::Error::IncorrectFormat);
+    }
+
     // Transform `fuzz_config` to be valid for `test` and make sure that this
     // test is supposed to pass.
     let wast_config = fuzz_config.make_wast_test_compliant(test);
@@ -678,9 +693,17 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
         wasmtime_wast::Async::Yes
     };
     log::debug!("async: {async_:?}");
-    let engine = Engine::new(&fuzz_config.to_wasmtime()).unwrap();
+    // The test's configuration is layered on top of the fuzz configuration toe
+    // ensure that any explicitly specified configuration overrides whatever the
+    // fuzz-generated input selected.
+    let mut opts = fuzz_config.to_common_options();
+    test.config
+        .apply(&mut opts)
+        .expect("invalid `flags` in wast test");
+    let engine = Engine::new(&fuzz_config.to_wasmtime_with(&mut opts)).unwrap();
     let mut wast_context = WastContext::new(&engine, async_, move |store| {
         fuzz_config.configure_store_epoch_and_fuel(store);
+        opts.configure_store(store).unwrap();
     });
     wast_context.ignore_error_messages(test.config.spec_test.unwrap_or(false));
     wast_context

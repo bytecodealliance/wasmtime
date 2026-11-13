@@ -1,0 +1,60 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; Regression tests for https://github.com/bytecodealliance/wasmtime/issues/15053
+
+function %issue_15053(i64, i64, i64, i64) {
+    region0 = 1 "heap"
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+    ;; This store is visible if the `region0` store traps, so it cannot be
+    ;; removed by dead-store elimination.
+    store user42 v2, v0
+
+    ;; This is idempotent, so it should be removed, which means we need to
+    ;; mark the previous store observed.
+    store notrap v2, v0
+
+    ;; This can trap, at which point someone could observe the first store.
+    store user42 region0 v3, v1
+
+    ;; This overwrites the first store (assuming the store to `region0` didn't
+    ;; trap, which the optimizer cannot assume while remaining sound).
+    store user42 v2, v2
+
+    return
+}
+
+; function %issue_15053(i64, i64, i64, i64) fast {
+;     region0 = 1 "heap"
+;
+; block0(v0: i64, v1: i64, v2: i64, v3: i64):
+;     store user42 v2, v0
+;     store user42 region0 v3, v1
+;     store user42 v2, v2
+;     return
+; }
+
+;; The same as above, but instead of having a region-less store that sits in the
+;; `last_fence` slot, we have named regions.
+function %region_slot(i64, i64, i64, i64) {
+    region0 = 1 "a"
+    region1 = 2 "b"
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+    store user42 region1 v2, v0
+    store notrap region1 v2, v0
+    store user42 region0 v3, v1
+    store user42 region1 v2, v2
+    return
+}
+
+; function %region_slot(i64, i64, i64, i64) fast {
+;     region0 = 1 "a"
+;     region1 = 2 "b"
+;
+; block0(v0: i64, v1: i64, v2: i64, v3: i64):
+;     store user42 region1 v2, v0
+;     store user42 region0 v3, v1
+;     store user42 region1 v2, v2
+;     return
+; }

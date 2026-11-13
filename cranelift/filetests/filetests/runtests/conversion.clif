@@ -23,6 +23,10 @@ block0(v0: f32):
 ; run: %f32_to_i32(-0x8.1) == -8
 ; run: %f32_to_i32(-0x0.1) == 0
 ; run: %f32_to_i32(-0x1.0p31) == 0x8000_0000
+; run: %f32_to_i32(0x4.c) == 4
+; run: %f32_to_i32(-0x4.c) == -4
+; run: %f32_to_i32(0x7fffff.8) == 8388607
+; run: %f32_to_i32(-0x7fffff.8) == -8388607
 
 function %f64_to_i32(f64) -> i32 {
 block0(v0: f64):
@@ -36,6 +40,10 @@ block0(v0: f64):
 ; run: %f64_to_i32(-0x8.1) == -8
 ; run: %f64_to_i32(-0x0.1) == 0
 ; run: %f64_to_i32(-0x1.0p31) == 0x8000_0000
+; run: %f64_to_i32(0x4.c) == 4
+; run: %f64_to_i32(-0x4.c) == -4
+; run: %f64_to_i32(0x7fffffff.c) == 2147483647
+; run: %f64_to_i32(-0x80000000.c) == -2147483648
 
 function %f32_to_i64(f32) -> i64 {
 block0(v0: f32):
@@ -48,6 +56,10 @@ block0(v0: f32):
 ; run: %f32_to_i64(0x8.1) == 8
 ; run: %f32_to_i64(-0x8.1) == -8
 ; run: %f32_to_i64(-0x0.1) == 0
+; run: %f32_to_i64(0x4.c) == 4
+; run: %f32_to_i64(-0x4.c) == -4
+; run: %f32_to_i64(0x7fffff.8) == 8388607
+; run: %f32_to_i64(-0x7fffff.8) == -8388607
 
 function %f64_to_i64(f64) -> i64 {
 block0(v0: f64):
@@ -60,6 +72,10 @@ block0(v0: f64):
 ; run: %f64_to_i64(0x8.1) == 8
 ; run: %f64_to_i64(-0x8.1) == -8
 ; run: %f64_to_i64(-0x0.1) == 0
+; run: %f64_to_i64(0x4.c) == 4
+; run: %f64_to_i64(-0x4.c) == -4
+; run: %f64_to_i64(0xfffffffffffff.8) == 4503599627370495
+; run: %f64_to_i64(-0xfffffffffffff.8) == -4503599627370495
 
 function %f32_to_u32(f32) -> i32 {
 block0(v0:f32):
@@ -73,6 +89,9 @@ block0(v0:f32):
 ; run: %f32_to_u32(0x1.d6f346p26) == 123456792
 ; run: %f32_to_u32(0xB2D05E00.0) == 3000000000
 ; run: %f32_to_u32(-0x0.1) == 0
+; run: %f32_to_u32(0x4.c) == 4
+; run: %f32_to_u32(-0x0.c) == 0
+; run: %f32_to_u32(0x7fffff.8) == 8388607
 
 function %f64_to_u32(f64) -> i32 {
 block0(v0:f64):
@@ -86,6 +105,9 @@ block0(v0:f64):
 ; run: %f64_to_u32(0x1.d6f346p26) == 123456792
 ; run: %f64_to_u32(0xB2D05E00.0) == 3000000000
 ; run: %f64_to_u32(-0x0.1) == 0
+; run: %f64_to_u32(0x4.c) == 4
+; run: %f64_to_u32(-0x0.c) == 0
+; run: %f64_to_u32(0xffffffff.c) == 4294967295
 
 function %f32_to_u64(f32) -> i64 {
 block0(v0:f32):
@@ -99,6 +121,9 @@ block0(v0:f32):
 ; run: %f32_to_u64(0x1.d6f346p26) == 123456792
 ; run: %f32_to_u64(0xB2D05E00.0) == 3000000000
 ; run: %f32_to_u64(-0x0.1) == 0
+; run: %f32_to_u64(0x4.c) == 4
+; run: %f32_to_u64(-0x0.c) == 0
+; run: %f32_to_u64(0x7fffff.8) == 8388607
 
 function %f64_to_u64(f64) -> i64 {
 block0(v0:f64):
@@ -112,6 +137,9 @@ block0(v0:f64):
 ; run: %f64_to_u64(0x1.d6f346p26) == 123456792
 ; run: %f64_to_u64(0xB2D05E00.0) == 3000000000
 ; run: %f64_to_u64(-0x0.1) == 0
+; run: %f64_to_u64(0x4.c) == 4
+; run: %f64_to_u64(-0x0.c) == 0
+; run: %f64_to_u64(0xfffffffffffff.8) == 4503599627370495
 
 function %f32_to_i32_sat(f32) -> i32 {
 block0(v0: f32):
@@ -129,6 +157,10 @@ block0(v0: f32):
 ; run: %f32_to_i32_sat(-NaN) == 0
 ; run: %f32_to_i32_sat(+Inf) == 2147483647
 ; run: %f32_to_i32_sat(-Inf) == -2147483648
+; run: %f32_to_i32_sat(0x4.c) == 4
+; run: %f32_to_i32_sat(-0x4.c) == -4
+; run: %f32_to_i32_sat(-0x0.c) == 0
+; run: %f32_to_i32_sat(-0x7fffff.8) == -8388607
 
 function %f64_to_i32_sat(f64) -> i32 {
 block0(v0: f64):
@@ -146,6 +178,9 @@ block0(v0: f64):
 ; run: %f64_to_i32_sat(-NaN) == 0
 ; run: %f64_to_i32_sat(+Inf) == 2147483647
 ; run: %f64_to_i32_sat(-Inf) == -2147483648
+; run: %f64_to_i32_sat(0x4.c) == 4
+; run: %f64_to_i32_sat(-0x4.c) == -4
+; run: %f64_to_i32_sat(-0x0.c) == 0
 
 function %f32_to_i64_sat(f32) -> i64 {
 block0(v0: f32):
@@ -163,6 +198,10 @@ block0(v0: f32):
 ; run: %f32_to_i64_sat(-NaN) == 0
 ; run: %f32_to_i64_sat(+Inf) == 0x7fffffff_ffffffff
 ; run: %f32_to_i64_sat(-Inf) == 0x80000000_00000000
+; run: %f32_to_i64_sat(0x4.c) == 4
+; run: %f32_to_i64_sat(-0x4.c) == -4
+; run: %f32_to_i64_sat(-0x0.c) == 0
+; run: %f32_to_i64_sat(-0x7fffff.8) == -8388607
 
 function %f64_to_i64_sat(f64) -> i64 {
 block0(v0: f64):
@@ -180,6 +219,10 @@ block0(v0: f64):
 ; run: %f64_to_i64_sat(-NaN) == 0
 ; run: %f64_to_i64_sat(+Inf) == 0x7fffffff_ffffffff
 ; run: %f64_to_i64_sat(-Inf) == 0x80000000_00000000
+; run: %f64_to_i64_sat(0x4.c) == 4
+; run: %f64_to_i64_sat(-0x4.c) == -4
+; run: %f64_to_i64_sat(-0x0.c) == 0
+; run: %f64_to_i64_sat(-0xfffffffffffff.8) == -4503599627370495
 
 function %f32_to_u32_sat(f32) -> i32 {
 block0(v0:f32):
@@ -199,6 +242,8 @@ block0(v0:f32):
 ; run: %f32_to_u32_sat(-NaN) == 0
 ; run: %f32_to_u32_sat(+Inf) == 0xffffffff
 ; run: %f32_to_u32_sat(-Inf) == 0
+; run: %f32_to_u32_sat(0x4.c) == 4
+; run: %f32_to_u32_sat(0x7fffff.8) == 8388607
 
 function %f64_to_u32_sat(f64) -> i32 {
 block0(v0:f64):
@@ -218,6 +263,7 @@ block0(v0:f64):
 ; run: %f64_to_u32_sat(-NaN) == 0
 ; run: %f64_to_u32_sat(+Inf) == 0xffffffff
 ; run: %f64_to_u32_sat(-Inf) == 0
+; run: %f64_to_u32_sat(0x4.c) == 4
 
 function %f32_to_u64_sat(f32) -> i64 {
 block0(v0:f32):
@@ -237,6 +283,8 @@ block0(v0:f32):
 ; run: %f32_to_u64_sat(-NaN) == 0
 ; run: %f32_to_u64_sat(+Inf) == 0xffffffff_ffffffff
 ; run: %f32_to_u64_sat(-Inf) == 0
+; run: %f32_to_u64_sat(0x4.c) == 4
+; run: %f32_to_u64_sat(0x7fffff.8) == 8388607
 
 function %f64_to_u64_sat(f64) -> i64 {
 block0(v0:f64):
@@ -256,3 +304,5 @@ block0(v0:f64):
 ; run: %f64_to_u64_sat(-NaN) == 0
 ; run: %f64_to_u64_sat(+Inf) == 0xffffffff_ffffffff
 ; run: %f64_to_u64_sat(-Inf) == 0
+; run: %f64_to_u64_sat(0x4.c) == 4
+; run: %f64_to_u64_sat(0xfffffffffffff.8) == 4503599627370495

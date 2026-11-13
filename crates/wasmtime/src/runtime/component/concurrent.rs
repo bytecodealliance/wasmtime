@@ -52,6 +52,7 @@
 
 use self::error_contexts::GlobalErrorContextRefCount;
 use crate::component::func::{Func, call_post_return};
+use crate::component::store::ComponentInstanceId;
 use crate::component::{
     HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
 };
@@ -63,8 +64,11 @@ use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 #[cfg(feature = "gc")]
 use crate::vm::GcRootsList;
+use crate::vm::VMScope;
+use crate::vm::component::ScopeKind;
 use crate::vm::component::{
-    CallContext, ComponentInstance, CurrentScope, HandleCounter, InstanceState, Scope,
+    CallContext, ComponentInstance, CurrentScope, HandleCounter, HandleTableInsertion,
+    InstanceState,
 };
 use crate::vm::{
     AlwaysMut, SendSyncPtr, UncaughtException, VMFuncRef, VMLazyThread, VMMemoryDefinition, VMStore,
@@ -88,6 +92,7 @@ use core::task::{Context, Poll, Waker};
 use futures::channel::oneshot;
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
+use smallvec::SmallVec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
@@ -1433,7 +1438,7 @@ impl<T> StoreContextMut<'_, T> {
                 // unwound. Note that this is checked after polling `future`
                 // above so that it can observe the original error, e.g. a
                 // trap delivered over a oneshot channel by a work item.
-                if reset.store.0.trapped() {
+                if reset.store.0.component_trapped() {
                     return Poll::Ready(Err(Trap::CannotEnterComponent.into()));
                 }
 
@@ -1784,6 +1789,8 @@ impl<T> StoreContextMut<'_, T> {
         instance: ModuleInstance,
         callee: Option<RuntimeInstance>,
     ) -> Result<ModuleInstance> {
+        // See `Func::call_async` for why this is checked up front.
+        self.0.check_event_loop_not_running()?;
         let (tx, rx) = oneshot::channel();
         let token = StoreToken::new(self.as_context_mut());
         self.0.queue_task(move |store| {
@@ -1866,7 +1873,7 @@ impl StoreOpaque {
 
         // Collect the deferred frames pushed inline by fused adapters, walking
         // the `parent` chain from innermost to the base.
-        let mut frames = Vec::new();
+        let mut frames = SmallVec::<[_; 8]>::new();
         let mut cur = *self.vm_store_context_mut().current_thread_mut();
         while let Some(ptr) = cur.as_deferred() {
             // SAFETY: `ptr` points at a `VMDeferredThread` living in a fused
@@ -1878,6 +1885,7 @@ impl StoreOpaque {
                 deferred.callee_async != 0,
                 deferred.callee_instance,
                 deferred.saved_context,
+                deferred.lazy_lenders_start,
             ));
             cur = deferred.parent;
         }
@@ -1894,7 +1902,24 @@ impl StoreOpaque {
         // Replay the deferred `enter_guest_sync_call`s outermost-first so that
         // the resulting `ConcurrentState` matches what the non-deferred path
         // would have otherwise produced.
-        for (callee_async, callee_instance, saved_context) in frames.into_iter().rev() {
+        //
+        // A frame's own lazy lends run from its start to that of the frame
+        // pushed after it, or to the end of the buffer for the innermost.
+        let lazy_lenders_end = *self.vm_store_context_mut().lazy_lenders_len_mut();
+        frames.reverse();
+        let lazy_lenders_base = match frames.first() {
+            Some((_, _, _, start)) => *start,
+            None => bail_bug!("forcing a deferred thread with no deferred frames"),
+        };
+        let lazy_lender_ends = frames
+            .iter()
+            .skip(1)
+            .map(|(_, _, _, start)| *start)
+            .chain([lazy_lenders_end])
+            .collect::<SmallVec<[_; 8]>>();
+        for ((callee_async, callee_instance, saved_context, start), lenders_end) in
+            frames.into_iter().zip(lazy_lender_ends)
+        {
             // Restore the caller's context slots so that we save the correct
             // values into the caller's thread, exactly as the non-deferred path
             // would have on entry.
@@ -1904,7 +1929,19 @@ impl StoreOpaque {
                 index: RuntimeComponentInstanceIndex::from_u32(callee_instance),
             };
             self.enter_guest_sync_call(callee_async, callee)?;
+
+            // Now that this frame has a real `GuestTask`, promote any lazy
+            // lends it recorded while deferred.
+            self.promote_current_lazy_lends(id, start, lenders_end)?;
         }
+
+        // Every lazy-lend record was promoted, so the length resets back to
+        // where the outermost frame found it.
+        debug_assert_eq!(
+            *self.vm_store_context_mut().lazy_lenders_len_mut(),
+            lazy_lenders_end
+        );
+        *self.vm_store_context_mut().lazy_lenders_len_mut() = lazy_lenders_base;
 
         // Replaying done; restore the current context.
         *self.vm_store_context_mut().component_context_mut() = current_context;
@@ -1912,6 +1949,33 @@ impl StoreOpaque {
         Ok(self
             .concurrent_state_mut_without_forcing_current_thread()
             .unforced_current_thread)
+    }
+
+    /// Promotes the `lazy_lenders` entries in `start..end` into real lends
+    /// owned by the current thread's `CallContext`.
+    ///
+    /// The task's `validate_scope_exit` then undoes them as if they had been
+    /// lent there all along.
+    fn promote_current_lazy_lends(
+        &mut self,
+        id: ComponentInstanceId,
+        start: usize,
+        end: usize,
+    ) -> Result<()> {
+        if start == end {
+            return Ok(());
+        }
+
+        let scope = match self
+            .concurrent_state_mut_without_forcing_current_thread()
+            .unforced_current_thread
+            .guest_task()
+        {
+            Some(task) => VMScope::id(task.rep()),
+            None => bail_bug!("replayed deferred frame is not a guest thread"),
+        };
+        let instance = Instance::from_wasmtime(self, id);
+        self.promote_lazy_lends(instance, scope, start, end)
     }
 
     fn current_guest_thread(&mut self) -> Result<QualifiedThreadId> {
@@ -2179,6 +2243,14 @@ impl StoreOpaque {
             .store_data_mut()
             .component_instance_and_handle_counter_mut(instance.instance);
         (component.instance_state(instance.index), counter)
+    }
+
+    /// Begins inserting into the handle table of the specified instance.
+    fn handle_table_insertion(&mut self, instance: RuntimeInstance) -> HandleTableInsertion<'_> {
+        let (component, counter) = self
+            .store_data_mut()
+            .component_instance_and_handle_counter_mut(instance.instance);
+        component.handle_table_insertion(instance.index, counter)
     }
 
     /// Configure the currently running `thread`.
@@ -2704,12 +2776,12 @@ impl StoreOpaque {
         if !self.concurrency_support() {
             return Ok(self
                 .current_scope_id_not_concurrent()?
-                .map(|id| CurrentScope::Id(Scope::Id(id))));
+                .map(|id| CurrentScope::Id(VMScope::id(id))));
         }
 
         Ok(match self.current_thread()? {
-            CurrentThread::Guest(id) => Some(CurrentScope::Id(Scope::Id(id.task.rep()))),
-            CurrentThread::Host(id) => Some(CurrentScope::Id(Scope::HostId(id.rep()))),
+            CurrentThread::Guest(id) => Some(CurrentScope::Id(VMScope::id(id.task.rep()))),
+            CurrentThread::Host(id) => Some(CurrentScope::Id(VMScope::host_id(id.rep()))),
             CurrentThread::DeferredHost(_) => Some(CurrentScope::DeferredHost),
             CurrentThread::None => return Ok(None),
         })
@@ -3649,10 +3721,10 @@ impl Instance {
                 // It hasn't returned yet, but the caller is calling via an
                 // async-lowered import, so we generate a handle for the task
                 // waitable and return the status.
-                let (state, counter) = store.0.instance_state_and_handle_counter(caller_instance);
-                let handle = state
-                    .handle_table()
-                    .subtask_insert_guest(counter, guest_thread.task.rep())?;
+                let handle = store
+                    .0
+                    .handle_table_insertion(caller_instance)
+                    .subtask_guest(guest_thread.task.rep())?;
                 store
                     .0
                     .concurrent_state_mut()?
@@ -3846,10 +3918,10 @@ impl Instance {
         let state = store.0.concurrent_state_mut()?;
         state.push_future(future);
         let instance = state.get_mut(caller.task)?.instance;
-        let (state, counter) = store.0.instance_state_and_handle_counter(instance);
-        let handle = state
-            .handle_table()
-            .subtask_insert_host(counter, task.rep())?;
+        let handle = store
+            .0
+            .handle_table_insertion(instance)
+            .subtask_host(task.rep())?;
         store.0.concurrent_state_mut()?.get_mut(task)?.common.handle = Some(handle);
         log::trace!("assign {task:?} handle {handle} for {caller:?} instance {instance:?}");
 
@@ -3989,11 +4061,9 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
     ) -> Result<u32> {
         let set = store.concurrent_state_mut()?.push(WaitableSet::default())?;
-        let (state, counter) =
-            store.instance_state_and_handle_counter(self.runtime_instance(caller_instance));
-        let handle = state
-            .handle_table()
-            .waitable_set_insert(counter, set.rep())?;
+        let handle = store
+            .handle_table_insertion(self.runtime_instance(caller_instance))
+            .waitable_set(set.rep())?;
         log::trace!("new waitable set {set:?} (handle {handle})");
         Ok(handle)
     }
@@ -4505,14 +4575,16 @@ impl Instance {
                 }
             }
         };
-        let memory = self.options_memory_mut(store, params.options);
         let ptr = crate::component::func::validate_inbounds_dynamic(
             &CanonicalAbiInfo::POINTER_PAIR,
-            memory,
+            self.options_memory(store, params.options),
             &ValRaw::u32(params.payload),
         )?;
-        memory[ptr + 0..][..4].copy_from_slice(&handle.to_le_bytes());
-        memory[ptr + 4..][..4].copy_from_slice(&result.to_le_bytes());
+        let memory = self
+            .options_memory_range_mut(store, params.options, ptr, 8)
+            .unwrap();
+        memory[0..4].copy_from_slice(&handle.to_le_bytes());
+        memory[4..8].copy_from_slice(&result.to_le_bytes());
         Ok(ordinal)
     }
 
@@ -6544,13 +6616,13 @@ impl ConcurrentState {
 
     /// Used by `ResourceTables` to acquire the current `CallContext` for the
     /// specified task.
-    pub fn call_context(&mut self, task: Scope) -> Result<&mut CallContext> {
-        match task {
-            Scope::HostId(task) => {
+    pub fn call_context(&mut self, task: VMScope) -> Result<&mut CallContext> {
+        match task.kind() {
+            ScopeKind::HostId(task) => {
                 let task: TableId<HostTask> = TableId::new(task);
                 Ok(&mut self.get_mut(task)?.call_context)
             }
-            Scope::Id(task) => {
+            ScopeKind::Id(task) => {
                 let task: TableId<GuestTask> = TableId::new(task);
                 Ok(&mut self.get_mut(task)?.call_context)
             }
@@ -6618,9 +6690,9 @@ impl ConcurrentState {
         }
     }
 
-    pub(crate) fn materialize_current_scope(&mut self) -> Result<Scope> {
+    pub(crate) fn materialize_current_scope(&mut self) -> Result<VMScope> {
         match self.materialize_host_task()? {
-            CurrentThread::Host(id) => Ok(Scope::HostId(id.rep())),
+            CurrentThread::Host(id) => Ok(VMScope::host_id(id.rep())),
             _ => bail_bug!("current scope is not a deferred host scope"),
         }
     }
@@ -6813,6 +6885,9 @@ pub(crate) fn prepare_call<T, R>(
     + Sync
     + 'static,
 ) -> Result<PreparedCall<R>> {
+    // This check should be redundant, but leave it here so that there is a
+    // clear error when trying to execute wasm in a poisoned store instead of
+    // possibly hitting some other `bail_bug!` because of inconsistent state.
     if !store.0.may_enter() {
         bail!(Trap::CannotEnterComponent);
     }
@@ -7019,12 +7094,11 @@ mod tests {
             state,
             group,
         })?;
-        let (state, counter) = store_opaque.instance_state_and_handle_counter(
-            instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(0)),
-        );
-        let handle = state
-            .handle_table()
-            .subtask_insert_host(counter, task.rep())?;
+        let handle = store_opaque
+            .handle_table_insertion(
+                instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(0)),
+            )
+            .subtask_host(task.rep())?;
         let common = &mut store_opaque.concurrent_state_mut()?.get_mut(task)?.common;
         common.handle = Some(handle);
         common.event = event;

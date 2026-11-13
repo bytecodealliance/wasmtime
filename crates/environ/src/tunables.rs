@@ -99,6 +99,9 @@ define_tunables! {
         /// Whether or not we use epoch-based interruption.
         pub epoch_interruption: bool,
 
+        /// Whether to generate the polling code to support MMU interruption.
+        pub mmu_interruption: bool,
+
         /// Whether or not linear memories are allowed to be reallocated after
         /// initial allocation at runtime.
         pub memory_may_move: bool,
@@ -151,6 +154,10 @@ define_tunables! {
         /// enabled.
         pub concurrency_support: bool,
 
+        /// Whether compiled code checks a linear memory's shadow before each
+        /// store, for watchpoints.
+        pub memory_watchpoints: bool,
+
         /// Whether recording in RR is enabled or not. This is used primarily
         /// to signal checksum computation for compiled artifacts.
         pub recording: bool,
@@ -158,10 +165,11 @@ define_tunables! {
         /// Whether compiled stack-switching instructions must emit the
         /// AddressSanitizer fiber-switch handshake expected by this runtime.
         ///
-        /// This setting is derived from how Wasmtime was built. It
-        /// ensures that the compiled artifact and runtime are ABI
-        /// compatible, e.g. it prevents running a non-ASan artifact
-        /// on an ASan-enabled runtime.
+        /// This setting defaults to how Wasmtime was built (`cfg(asan)`)
+        /// and can be overridden with `Config::asan_compatible_code`. It is
+        /// checked when deserializing artifacts so that the compiled
+        /// artifact and runtime agree, e.g. it prevents running a non-ASan
+        /// artifact on an ASan-enabled runtime.
         pub asan_stack_switching: bool,
 
         /// An allocation counter that triggers GC when it reaches zero.
@@ -271,6 +279,7 @@ impl Tunables {
             consume_fuel: false,
             operator_cost: OperatorCostStrategy::Default,
             epoch_interruption: false,
+            mmu_interruption: false,
             memory_may_move: true,
             guard_before_linear_memory: true,
             table_lazy_init: true,
@@ -285,6 +294,7 @@ impl Tunables {
             inlining_sum_size_threshold: 2000,
             debug_guest: false,
             concurrency_support: true,
+            memory_watchpoints: false,
             recording: false,
             asan_stack_switching: false,
             gc_zeal_alloc_counter: None,
@@ -395,6 +405,11 @@ impl<'a> MemoryTunables<'a> {
         Self { tunables, kind }
     }
 
+    /// Whether compiled code checks this memory's shadow for watchpoints.
+    pub fn watchpoints(&self) -> bool {
+        self.tunables.memory_watchpoints && self.kind == MemoryKind::LinearMemory
+    }
+
     /// The virtual memory reservation for this kind of memory.
     pub fn reservation(&self) -> u64 {
         match self.kind {
@@ -426,6 +441,11 @@ impl<'a> MemoryTunables<'a> {
             MemoryKind::LinearMemory => self.tunables.memory_may_move,
             MemoryKind::GcHeap => self.tunables.gc_heap_may_move,
         }
+    }
+
+    /// Kind of memory these tunables are for.
+    pub fn kind(&self) -> MemoryKind {
+        self.kind
     }
 
     /// Get the underlying tunables.

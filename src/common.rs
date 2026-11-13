@@ -2,6 +2,7 @@
 
 use clap::Parser;
 use std::net::TcpListener;
+use std::num::NonZeroUsize;
 use std::{fs::File, path::Path, time::Duration};
 use wasmtime::{
     Engine, Module, Precompiled, Result, Store, StoreLimits, StoreLimitsBuilder, bail,
@@ -372,6 +373,16 @@ impl RunCommon {
         if let Some(enable) = self.common.wasi.allow_ip_name_lookup {
             builder.allow_ip_name_lookup(enable);
         }
+        // The default of 64KiB for this value is a bit small for a CLI
+        // embedding which has more leeway with resources and just a single
+        // guest, so raise it by default if no configuration is otherwise
+        // applied.
+        builder.max_io_size(
+            self.common
+                .wasi
+                .max_io_size
+                .unwrap_or(NonZeroUsize::new(2 << 20).unwrap()),
+        );
         if let Some(enable) = self.common.wasi.tcp {
             builder.allow_tcp(enable);
         }
@@ -514,24 +525,10 @@ impl RunCommon {
                 table.set_max_capacity(max);
             }
         }
-        if let Some(fuel) = self.common.wasi.hostcall_fuel {
-            store.set_hostcall_fuel(fuel);
-        }
-        if let Some(max) = self.common.wasi.max_component_handles {
-            store.set_max_component_handles(max);
-        }
-        if let Some(max) = self.common.wasi.max_fibers {
-            store.set_max_fibers(max);
-        }
+        self.common.configure_store(store)?;
 
         *limits(store.data_mut()) = self.store_limits();
         store.limiter(move |t| limits(t));
-
-        // If fuel has been configured, we want to add the configured
-        // fuel amount to this store.
-        if let Some(fuel) = self.common.wasm.fuel {
-            store.set_fuel(fuel)?;
-        }
         Ok(())
     }
 }

@@ -1069,21 +1069,31 @@ where
                     TrapCode::BAD_CONVERSION_TO_INTEGER,
                 )));
             }
-            let x = arg(0).into_float()? as i128;
+            let x = arg(0).into_float()?.trunc();
             let is_signed = inst.opcode() == Opcode::FcvtToSint;
-            let (min, max) = ctrl_ty.bounds(is_signed);
-            let overflow = if is_signed {
-                x < (min as i128) || x > (max as i128)
+
+            // Compute the range [lo, hi) of values that fit in the result type,
+            // and check it before converting. If we were to convert before
+            // checking, the conversion might saturate and we would miss that it
+            // overflows.
+            let num_bits = ctrl_ty.bits() as i32;
+            let (lo, hi) = if is_signed {
+                (-(2f64.powi(num_bits - 1)), 2f64.powi(num_bits - 1))
             } else {
-                x < 0 || (x as u128) > max
+                (0.0, 2f64.powi(num_bits))
             };
-            // bounds check
-            if overflow {
+            if !(lo <= x && x < hi) {
                 return Ok(ControlFlow::Trap(CraneliftTrap::User(
                     TrapCode::INTEGER_OVERFLOW,
                 )));
             }
-            // perform the conversion.
+
+            // Perform the conversion.
+            let x = if is_signed {
+                x as i128
+            } else {
+                x as u128 as i128
+            };
             assign(DataValueExt::int(x, ctrl_ty)?)
         }
         Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => {
@@ -1095,15 +1105,13 @@ where
                 } else {
                     let is_signed = inst.opcode() == Opcode::FcvtToSintSat;
                     let (min, max) = ctrl_ty.bounds(is_signed);
-                    let x = x.into_float()? as i128;
+                    let x = x.into_float()?;
                     let x = if is_signed {
-                        let x = i128::max(x, min as i128);
-                        let x = i128::min(x, max as i128);
-                        x
+                        (x as i128).clamp(min as i128, max as i128)
                     } else {
-                        let x = if x < 0 { 0 } else { x };
-                        let x = u128::min(x as u128, max);
-                        x as i128
+                        // Go through `u128` so values of 2^127 and above
+                        // are not clamped to `i128::MAX`.
+                        u128::min(x as u128, max) as i128
                     };
 
                     DataValue::int(x, ctrl_ty.lane_type())

@@ -616,12 +616,14 @@ impl<'a> TrampolineCompiler<'a> {
                     |_, _| {},
                 );
             }
-            Trampoline::ResourceTransferBorrowToOwner => {
+            Trampoline::ResourceTransferBorrowToOwner { ty } => {
                 self.translate_libcall(
                     host::resource_transfer_borrow_to_owner,
                     TrapSentinel::NegativeOne,
                     WasmArgs::InRegisters,
-                    |_, _| {},
+                    |me, params| {
+                        params.push(me.index_value(*ty));
+                    },
                 );
             }
             Trampoline::PrepareCall { memory } => {
@@ -729,6 +731,8 @@ impl<'a> TrampolineCompiler<'a> {
                 start_func_table_idx,
                 start_func_ty_idx,
             } => {
+                // FIXME(#4311): the wasm arguments are `i64` for a 64-bit
+                // table or an `i64` closure, but the libcall takes `u32`s
                 self.translate_libcall(
                     host::thread_new_indirect,
                     TrapSentinel::NegativeOne,
@@ -1258,11 +1262,11 @@ impl<'a> TrampolineCompiler<'a> {
             .builder
             .ins()
             .iconst(ir::types::I32, i64::from(callee_instance.as_u32()));
-        crate::component_sync_call::enter(
+        crate::func_environ::component_sync_call::enter(
             &mut self.builder,
             &mut self.alias_regions,
             vmctx,
-            crate::component_sync_call::EnterArgs {
+            crate::func_environ::component_sync_call::EnterArgs {
                 callee_async,
                 callee_instance,
             },
@@ -1274,7 +1278,7 @@ impl<'a> TrampolineCompiler<'a> {
         // Note that the helper here wants a core wasm vmctx, not a component
         // one like `vmctx` is in this function.
         let caller_vmctx = self.caller_vmctx();
-        let slow = crate::component_sync_call::exit(
+        let slow = crate::func_environ::component_sync_call::exit(
             &mut self.builder,
             &mut self.alias_regions,
             caller_vmctx,
@@ -1434,7 +1438,7 @@ impl<'a> TrampolineCompiler<'a> {
             // directly from guest wasm, so no check is needed.
             Trampoline::ResourceTransferOwn
             | Trampoline::ResourceTransferBorrow
-            | Trampoline::ResourceTransferBorrowToOwner
+            | Trampoline::ResourceTransferBorrowToOwner { .. }
             | Trampoline::PrepareCall { .. }
             | Trampoline::StartCall { .. }
             | Trampoline::FutureTransfer
@@ -1969,17 +1973,7 @@ impl TrampolineCompiler<'_> {
     // Helper function to cast a core wasm input to a host pointer type
     // which will go into the host libcall.
     fn cast_to_pointer(&mut self, val: ir::Value, is64: bool) -> ir::Value {
-        let pointer_type = self.isa.pointer_type();
-        let host64 = pointer_type == ir::types::I64;
-        if is64 == host64 {
-            val
-        } else if !is64 {
-            assert!(host64);
-            self.builder.ins().uextend(pointer_type, val)
-        } else {
-            assert!(!host64);
-            self.builder.ins().ireduce(pointer_type, val)
-        }
+        crate::cast_to_pointer(&mut self.builder, self.isa.pointer_type(), val, is64)
     }
 
     // Helper to cast a host pointer integer type to the destination type.

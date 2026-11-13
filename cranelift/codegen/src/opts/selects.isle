@@ -313,3 +313,25 @@
 
 ;; (c ? C1 : C2) - C --> c ? (C1 - C) : (C2 - C)
 (rule (simplify (isub (fits_in_64 ty) (select ty x (iconst ty y) (iconst ty z)) (iconst ty p))) (select ty x (iconst ty (imm64_sub ty y p)) (iconst ty (imm64_sub ty z p))))
+
+;; (x == 0) ? -x : x --> x
+(rule (simplify (select ty (eq cty x (all_zero ty)) (ineg ty x) x)) x)
+(rule (simplify (select ty (ne cty x (all_zero ty)) x (ineg ty x))) x)
+
+;; ~(c ? C1 : C2) --> c ? ~C1 : ~C2
+(rule (simplify (bnot (fits_in_64 ty) (select ty x (iconst ty y) (iconst ty z)))) (select ty x (iconst ty (imm64_not ty y)) (iconst ty (imm64_not ty z))))
+
+;; -(c ? C1 : C2) --> c ? -C1 : -C2
+(rule (simplify (ineg (fits_in_64 ty) (select ty x (iconst ty y) (iconst ty z)))) (select ty x (iconst ty (imm64_neg ty y)) (iconst ty (imm64_neg ty z))))
+
+;; (x == 0) ? 0 : (x & y) --> x & y
+(rule (simplify (select ty (eq cty x (iconst_u ty 0)) (iconst_u ty 0) (band ty x y))) (band ty x y))
+(rule (simplify (select ty (eq cty x (iconst_u ty 0)) (iconst_u ty 0) (band ty y x))) (band ty x y))
+(rule (simplify (select ty (ne cty x (iconst_u ty 0)) (band ty x y) (iconst_u ty 0))) (band ty x y))
+(rule (simplify (select ty (ne cty x (iconst_u ty 0)) (band ty y x) (iconst_u ty 0))) (band ty x y))
+
+;; (x == 0) ? 0 : (x * y) --> x * y
+(rule (simplify (select ty (eq cty x (iconst_u ty 0)) (iconst_u ty 0) (imul ty x y))) (imul ty x y))
+(rule (simplify (select ty (eq cty x (iconst_u ty 0)) (iconst_u ty 0) (imul ty y x))) (imul ty x y))
+(rule (simplify (select ty (ne cty x (iconst_u ty 0)) (imul ty x y) (iconst_u ty 0))) (imul ty x y))
+(rule (simplify (select ty (ne cty x (iconst_u ty 0)) (imul ty y x) (iconst_u ty 0))) (imul ty x y))

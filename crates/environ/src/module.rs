@@ -130,7 +130,42 @@ pub struct TableSegment {
     /// The base offset to start this segment at.
     pub offset: ConstExpr,
     /// The values to write into the table elements.
-    pub elements: TableSegmentElements,
+    pub init: TableSegmentInit,
+}
+
+/// How the values of an active table segment are produced.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TableSegmentInit {
+    /// The elements are evaluated and written directly to the table in
+    /// segment order. These never appear in `vm::Instance`.
+    ///
+    /// This is used when the elements cannot trap, or when a trap could not
+    /// be observed because no imported table has been written to yet.
+    Direct(TableSegmentElements),
+    /// The elements may trap during evaluation, so they are instead evaluated
+    /// up-front into this passive element segment's storage alongside all
+    /// other passive element segments. The segment is then copied into the
+    /// table in segment order and dropped.
+    ///
+    /// Instantiation evaluates all element segment expressions before any
+    /// active segment is written to a table, so a trapping expression must not
+    /// leave earlier segments' writes visible in imported tables.
+    Staged {
+        /// The passive element segment holding the evaluated elements.
+        index: PassiveElemIndex,
+        /// The number of elements in this segment.
+        len: u64,
+    },
+}
+
+impl TableSegmentInit {
+    /// Returns the number of elements in this segment.
+    pub fn len(&self) -> u64 {
+        match self {
+            Self::Direct(elements) => elements.len(),
+            Self::Staged { len, .. } => *len,
+        }
+    }
 }
 
 /// Elements of a table segment, either a list of functions or list of arbitrary
@@ -243,6 +278,11 @@ pub struct Module {
     /// Does this module need a GC heap to run?
     pub needs_gc_heap: bool,
 
+    /// Does this module's compiled code check its memories' shadows for
+    /// watchpoints (`Tunables::memory_watchpoints`), and so need a pointer to
+    /// each memory's shadow `VMMemoryDefinition` in its `VMContext`?
+    pub has_shadow_memories: bool,
+
     /// Number of functions that "escape" from this module may need to have a
     /// `VMFuncRef` constructed for them.
     ///
@@ -345,6 +385,7 @@ impl Module {
             num_imported_globals: Default::default(),
             num_imported_tags: Default::default(),
             needs_gc_heap: Default::default(),
+            has_shadow_memories: Default::default(),
             num_escaped_funcs: Default::default(),
             functions: Default::default(),
             tables: Default::default(),
@@ -693,6 +734,7 @@ impl TypeTrace for Module {
             num_imported_tags: _,
             num_escaped_funcs: _,
             needs_gc_heap: _,
+            has_shadow_memories: _,
             functions,
             tables,
             memories: _,
@@ -745,6 +787,7 @@ impl TypeTrace for Module {
             num_imported_tags: _,
             num_escaped_funcs: _,
             needs_gc_heap: _,
+            has_shadow_memories: _,
             functions,
             tables,
             memories: _,

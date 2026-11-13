@@ -1,12 +1,12 @@
 use crate::filesystem::sys;
 use crate::filesystem::{Descriptor, Dir, File, WasiFilesystem, WasiFilesystemCtxView};
+use crate::p3::FallibleIteratorProducer;
 use crate::p3::bindings::clocks::system_clock;
 use crate::p3::bindings::filesystem::types::{
     self, Advice, DescriptorFlags, DescriptorStat, DescriptorType, DirectoryEntry, ErrorCode,
     Filesize, MetadataHashValue, NewTimestamp, OpenFlags, PathFlags,
 };
 use crate::p3::filesystem::{FilesystemError, FilesystemResult, preopens};
-use crate::p3::{DEFAULT_BUFFER_CAPACITY, FallibleIteratorProducer};
 use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
@@ -97,6 +97,7 @@ struct ReadStreamProducer {
     offset: u64,
     result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
     task: Option<JoinHandle<std::io::Result<BytesMut>>>,
+    max_read_size: usize,
 }
 
 impl Drop for ReadStreamProducer {
@@ -134,14 +135,14 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
     fn poll_produce<'a>(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        store: StoreContextMut<'a, D>,
+        mut store: StoreContextMut<'a, D>,
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         if let Some(file) = self.file.as_blocking_file() {
             // Once a blocking file, always a blocking file, so assert as such.
             assert!(self.task.is_none());
-            let mut dst = dst.as_direct(store, DEFAULT_BUFFER_CAPACITY);
+            let mut dst = dst.as_direct(store, self.max_read_size);
             let buf = dst.remaining()?;
             if buf.is_empty() {
                 return Poll::Ready(Ok(StreamResult::Completed));
@@ -164,18 +165,23 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
 
         // Lazily spawn a read task if one hasn't already been spawned yet.
         let me = &mut *self;
-        let task = me.task.get_or_insert_with(|| {
+        if me.task.is_none() {
+            let size = match dst.remaining(store.as_context_mut())? {
+                Some(0) | None => me.max_read_size,
+                Some(n) => n.min(me.max_read_size),
+            };
             let mut buf = dst.take_buffer();
-            buf.resize(DEFAULT_BUFFER_CAPACITY, 0);
+            buf.resize(size, 0);
             let file = Arc::clone(me.file.as_file());
             let offset = me.offset;
-            spawn_blocking(move || {
+            me.task = Some(spawn_blocking(move || {
                 sys::read_at_cursor_unspecified(&file, &mut buf, offset).map(|n| {
                     buf.truncate(n);
                     buf
                 })
-            })
-        });
+            }));
+        }
+        let task = me.task.as_mut().unwrap();
 
         // Await the completion of the read task. Note that this is not a
         // cancellable await point because we can't cancel the other task, so
@@ -345,6 +351,7 @@ struct WriteStreamConsumer {
     result: Option<oneshot::Sender<Result<(), ErrorCode>>>,
     buffer: BytesMut,
     task: Option<JoinHandle<std::io::Result<(BytesMut, usize)>>>,
+    max_write_size: usize,
 }
 
 #[derive(Copy, Clone)]
@@ -358,6 +365,7 @@ impl WriteStreamConsumer {
         file: File,
         location: WriteLocation,
         result: oneshot::Sender<Result<(), ErrorCode>>,
+        max_write_size: usize,
     ) -> Self {
         Self {
             file,
@@ -365,6 +373,7 @@ impl WriteStreamConsumer {
             result: Some(result),
             buffer: BytesMut::default(),
             task: None,
+            max_write_size,
         }
     }
 
@@ -430,7 +439,7 @@ impl<D> StreamConsumer<D> for WriteStreamConsumer {
         let remaining = src.remaining()?;
         let task = me.task.get_or_insert_with(|| {
             debug_assert!(me.buffer.is_empty());
-            let n = remaining.len().min(DEFAULT_BUFFER_CAPACITY);
+            let n = remaining.len().min(me.max_write_size);
             me.buffer.extend_from_slice(&remaining[..n]);
             let buf = mem::take(&mut me.buffer);
             let file = Arc::clone(me.file.as_file());
@@ -487,6 +496,7 @@ fn read_via_stream(
     mut store: impl AsContextMut,
     fd: Descriptor,
     offset: Filesize,
+    max_read_size: usize,
 ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
     let mut store = store.as_context_mut();
     let file = match fd {
@@ -509,6 +519,7 @@ fn read_via_stream(
                 offset,
                 result: Some(result_tx),
                 task: None,
+                max_read_size,
             },
         )?,
         FutureReader::new(&mut store, result_rx)?,
@@ -520,6 +531,7 @@ fn write_via_stream(
     file: FilesystemResult<File>,
     mut data: StreamReader<u8>,
     location: WriteLocation,
+    max_write_size: usize,
 ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
     let mut store = store.as_context_mut();
     let (result_tx, result_rx) = oneshot::channel();
@@ -527,7 +539,7 @@ fn write_via_stream(
         Ok(file) => {
             data.pipe(
                 &mut store,
-                WriteStreamConsumer::new(file, location, result_tx),
+                WriteStreamConsumer::new(file, location, result_tx, max_write_size),
             )?;
         }
         Err(err) => {
@@ -863,7 +875,8 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
         offset: Filesize,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
         let fd = get_descriptor(store.get().table, &fd)?.clone();
-        read_via_stream(&mut store, fd, offset)
+        let max = store.get().ctx.max_io_size.get();
+        read_via_stream(&mut store, fd, offset, max)
     }
 
     fn write_via_stream(
@@ -873,7 +886,8 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
         offset: Filesize,
     ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
         let file = get_writable_file(store.get().table, &fd);
-        write_via_stream(&mut store, file, data, WriteLocation::Offset(offset))
+        let max = store.get().ctx.max_io_size.get();
+        write_via_stream(&mut store, file, data, WriteLocation::Offset(offset), max)
     }
 
     fn append_via_stream(
@@ -882,7 +896,8 @@ impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
         data: StreamReader<u8>,
     ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
         let file = get_writable_file(store.get().table, &fd);
-        write_via_stream(&mut store, file, data, WriteLocation::End)
+        let max = store.get().ctx.max_io_size.get();
+        write_via_stream(&mut store, file, data, WriteLocation::End, max)
     }
 
     async fn advise(
@@ -1159,7 +1174,8 @@ mod named {
             offset: Filesize,
         ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
             let fd = super::get_descriptor(store.get().0.filesystem(id).table, &fd)?.clone();
-            super::read_via_stream(&mut store, fd, offset)
+            let max = store.get().0.filesystem(id).ctx.max_io_size.get();
+            super::read_via_stream(&mut store, fd, offset, max)
         }
 
         fn write_via_stream(
@@ -1170,7 +1186,9 @@ mod named {
             offset: Filesize,
         ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
             let file = super::get_writable_file(store.get().0.filesystem(id).table, &fd);
-            super::write_via_stream(&mut store, file, data, super::WriteLocation::Offset(offset))
+            let max = store.get().0.filesystem(id).ctx.max_io_size.get();
+            let location = super::WriteLocation::Offset(offset);
+            super::write_via_stream(&mut store, file, data, location, max)
         }
 
         fn append_via_stream(
@@ -1180,7 +1198,8 @@ mod named {
             data: StreamReader<u8>,
         ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
             let file = super::get_writable_file(store.get().0.filesystem(id).table, &fd);
-            super::write_via_stream(&mut store, file, data, super::WriteLocation::End)
+            let max = store.get().0.filesystem(id).ctx.max_io_size.get();
+            super::write_via_stream(&mut store, file, data, super::WriteLocation::End, max)
         }
 
         async fn advise(

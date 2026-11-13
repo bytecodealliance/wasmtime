@@ -37,18 +37,18 @@ for min in bins-*-min/*.tar.*; do
  rm $min $normal
 done
 
-for min in bins-*-min/*.zip; do
-  normal=${min/-min\//\/}
+# Builds without a `*-min` counterpart weren't merged above, so recompress their
+# tarballs with xz and move their zips over as-is. This keeps the final artifact
+# names consistent regardless of whether a min build was produced.
+for normal in bins-*/wasmtime-*.tar.gz; do
+  case $normal in
+    *-src.tar.gz) continue ;;
+  esac
   filename=$(basename $normal)
-  dir=${filename%.zip}
-
-  rm -rf tmp
-  mkdir tmp
-  (cd tmp && unzip -o ../$min)
-  (cd tmp && unzip -o ../$normal)
-  (cd tmp && 7z a ../dist/$dir.zip $dir/)
-  rm $min $normal
+  gunzip -c $normal | xz -T0 > dist/${filename%.tar.gz}.tar.xz
+  rm $normal
 done
+mv -t dist bins-*/*.zip
 
 # Copy over remaining source tarball into the dist folder
 mv -t dist bins-*/*.tar.*

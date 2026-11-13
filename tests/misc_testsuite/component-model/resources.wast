@@ -1124,3 +1124,363 @@
 )
 
 (assert_return (invoke "run"))
+
+;; A resource defined by the outer component can be dropped by the outer
+;; component and by two separate nested instances.
+(component
+  (type $t' (resource (rep i32)))
+  (export $t "t" (type $t'))
+
+  (core func $ctor (canon resource.new $t))
+  (func $ctor (param "x" u32) (result (own $t))
+    (canon lift (core func $ctor)))
+  (core func $dtor (canon resource.drop $t))
+  (func $dtor1 (param "x" (own $t)) (canon lift (core func $dtor)))
+
+  (component $C
+    (import "t" (type $t (sub resource)))
+    (core func $dtor (canon resource.drop $t))
+    (func (export "dtor") (param "x" (own $t))
+      (canon lift (core func $dtor)))
+  )
+  (instance $i1 (instantiate $C (with "t" (type $t))))
+  (instance $i2 (instantiate $C (with "t" (type $t))))
+
+  (component $Driver
+    (import "t" (type $t (sub resource)))
+    (import "ctor" (func $ctor (param "x" u32) (result (own $t))))
+    (import "dtor1" (func $dtor1 (param "x" (own $t))))
+    (import "dtor2" (func $dtor2 (param "x" (own $t))))
+    (import "dtor3" (func $dtor3 (param "x" (own $t))))
+
+    (core func $ctor (canon lower (func $ctor)))
+    (core func $dtor1 (canon lower (func $dtor1)))
+    (core func $dtor2 (canon lower (func $dtor2)))
+    (core func $dtor3 (canon lower (func $dtor3)))
+
+    (core module $m
+      (import "" "ctor" (func $ctor (param i32) (result i32)))
+      (import "" "dtor1" (func $dtor1 (param i32)))
+      (import "" "dtor2" (func $dtor2 (param i32)))
+      (import "" "dtor3" (func $dtor3 (param i32)))
+      (func (export "run")
+        (call $dtor1 (call $ctor (i32.const 100)))
+        (call $dtor2 (call $ctor (i32.const 200)))
+        (call $dtor3 (call $ctor (i32.const 300))))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "ctor" (func $ctor))
+        (export "dtor1" (func $dtor1))
+        (export "dtor2" (func $dtor2))
+        (export "dtor3" (func $dtor3))
+      ))
+    ))
+    (func (export "run") (canon lift (core func $i "run")))
+  )
+  (instance $d (instantiate $Driver
+    (with "t" (type $t))
+    (with "ctor" (func $ctor))
+    (with "dtor1" (func $dtor1))
+    (with "dtor2" (func $i1 "dtor"))
+    (with "dtor3" (func $i2 "dtor"))
+  ))
+  (export "run" (func $d "run"))
+)
+
+(assert_return (invoke "run"))
+
+;; A borrow can be passed back to the host multiple times before it's dropped.
+(component definition $C
+  (import "host" (instance $host
+    (export "resource1" (type $r (sub resource)))
+    (export "[constructor]resource1"
+      (func (param "r" u32) (result (own $r))))
+    (export "[method]resource1.simple"
+      (func (param "self" (borrow $r)) (param "rep" u32)))
+    (export "[static]resource1.assert"
+      (func (param "r" (own $r)) (param "rep" u32)))
+  ))
+  (alias export $host "resource1" (type $r))
+  (alias export $host "[constructor]resource1" (func $ctor))
+  (alias export $host "[method]resource1.simple" (func $simple))
+  (alias export $host "[static]resource1.assert" (func $assert))
+
+  ;; `f` passes its borrow to the host twice, then drops it.
+  (component $B
+    (import "r" (type $r (sub resource)))
+    (import "simple"
+      (func $simple (param "self" (borrow $r)) (param "rep" u32)))
+
+    (core func $simple (canon lower (func $simple)))
+    (core func $resource.drop (canon resource.drop $r))
+
+    (core module $m
+      (import "" "simple" (func $simple (param i32 i32)))
+      (import "" "resource.drop" (func $resource.drop (param i32)))
+      (func (export "f") (param i32)
+        (call $simple (local.get 0) (i32.const 100))
+        (call $simple (local.get 0) (i32.const 100))
+        (call $resource.drop (local.get 0)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "simple" (func $simple))
+        (export "resource.drop" (func $resource.drop))
+      ))
+    ))
+    (func (export "f") (param "x" (borrow $r))
+      (canon lift (core func $i "f")))
+  )
+  (instance $b (instantiate $B
+    (with "r" (type $r))
+    (with "simple" (func $simple))
+  ))
+
+  ;; `f` is given a borrow of a host resource and returns it as an `own`.
+  (component $Ret
+    (import "r" (type $r (sub resource)))
+    (core module $m
+      (func (export "f") (param i32) (result i32) local.get 0)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "x" (borrow $r)) (result (own $r))
+      (canon lift (core func $i "f")))
+  )
+  (instance $ret (instantiate $Ret (with "r" (type $r))))
+
+  ;; `f` passes its borrow to a host function which takes an `own`.
+  (component $Own
+    (import "r" (type $r (sub resource)))
+    (import "take-own" (func $take-own (param "r" (own $r)) (param "rep" u32)))
+    (core func $take-own (canon lower (func $take-own)))
+    (core module $m
+      (import "" "take-own" (func $take-own (param i32 i32)))
+      (func (export "f") (param i32)
+        (call $take-own (local.get 0) (i32.const 100)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "take-own" (func $take-own))
+      ))
+    ))
+    (func (export "f") (param "x" (borrow $r))
+      (canon lift (core func $i "f")))
+  )
+  (instance $own (instantiate $Own
+    (with "r" (type $r))
+    (with "take-own" (func $assert))
+  ))
+
+  (core func $ctor (canon lower (func $ctor)))
+  (core func $b (canon lower (func $b "f")))
+  (core func $ret (canon lower (func $ret "f")))
+  (core func $own (canon lower (func $own "f")))
+  (core func $resource.drop (canon resource.drop $r))
+
+  (core module $m
+    (import "" "ctor" (func $ctor (param i32) (result i32)))
+    (import "" "b" (func $b (param i32)))
+    (import "" "ret" (func $ret (param i32) (result i32)))
+    (import "" "own" (func $own (param i32)))
+    (import "" "resource.drop" (func $resource.drop (param i32)))
+    (func (export "thread-through-borrow")
+      (local $r i32)
+      (local.set $r (call $ctor (i32.const 100)))
+      (call $b (local.get $r))
+      (call $resource.drop (local.get $r)))
+    (func (export "return-borrow-as-own")
+      (drop (call $ret (call $ctor (i32.const 100)))))
+    (func (export "pass-borrow-as-own")
+      (call $own (call $ctor (i32.const 100))))
+  )
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "ctor" (func $ctor))
+      (export "b" (func $b))
+      (export "ret" (func $ret))
+      (export "own" (func $own))
+      (export "resource.drop" (func $resource.drop))
+    ))
+  ))
+  (func (export "thread-through-borrow")
+    (canon lift (core func $i "thread-through-borrow")))
+  (func (export "return-borrow-as-own")
+    (canon lift (core func $i "return-borrow-as-own")))
+  (func (export "pass-borrow-as-own")
+    (canon lift (core func $i "pass-borrow-as-own")))
+)
+
+(component instance $C $C)
+(assert_return (invoke "thread-through-borrow"))
+;; The remaining borrow is reported, not the own/borrow mismatch.
+(component instance $C $C)
+(assert_trap (invoke "return-borrow-as-own")
+  "borrow handles still remain at the end of the call")
+(component instance $C $C)
+(assert_trap (invoke "pass-borrow-as-own")
+  "cannot lift own resource from a borrow")
+
+;; An owned resource can't be dropped while it's lent to a pending async
+;; host call.
+(component
+  (import "host" (instance $host
+    (export "resource1" (type $r (sub resource)))
+    (export "[constructor]resource1"
+      (func (param "r" u32) (result (own $r))))
+    (export "[method]resource1.never-return"
+      (func async (param "self" (borrow $r))))
+  ))
+  (alias export $host "resource1" (type $r))
+  (alias export $host "[constructor]resource1" (func $ctor))
+  (alias export $host "[method]resource1.never-return" (func $never-return))
+
+  (core func $ctor (canon lower (func $ctor)))
+  (core func $never-return (canon lower (func $never-return) async))
+  (core func $resource.drop (canon resource.drop $r))
+
+  (core module $m
+    (import "" "ctor" (func $ctor (param i32) (result i32)))
+    (import "" "never-return" (func $never-return (param i32) (result i32)))
+    (import "" "resource.drop" (func $resource.drop (param i32)))
+    (func (export "f")
+      (local $r i32)
+      (local.set $r (call $ctor (i32.const 300)))
+      ;; Expect the subtask to be STARTED.
+      (if (i32.ne (i32.const 1)
+            (i32.and (call $never-return (local.get $r)) (i32.const 0xf)))
+        (then unreachable))
+      (call $resource.drop (local.get $r))
+      unreachable)
+  )
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "ctor" (func $ctor))
+      (export "never-return" (func $never-return))
+      (export "resource.drop" (func $resource.drop))
+    ))
+  ))
+  (func (export "f") async (canon lift (core func $i "f")))
+)
+
+(assert_trap (invoke "f") "cannot remove owned resource while borrowed")
+
+;; `resource.new` and `resource.rep` are lifted directly as exports, so the
+;; host calls their trampolines. `rep` takes a raw handle index here, and 42
+;; (the rep given to `new`) isn't one. A trap in `new` would poison the
+;; instance, and the `assert_trap` would then see a different message.
+(component
+  (type $r' (resource (rep i32)))
+  (export $r "r" (type $r'))
+
+  (core func $resource.new (canon resource.new $r))
+  (core func $resource.rep (canon resource.rep $r))
+
+  (func (export "new") (param "x" u32) (result (own $r))
+    (canon lift (core func $resource.new)))
+  (func (export "rep") (param "x" u32) (result u32)
+    (canon lift (core func $resource.rep)))
+)
+
+(invoke "new" (u32.const 42))
+(assert_trap (invoke "rep" (u32.const 42)) "unknown handle index 42")
+
+;; A task drops a borrow it was given while a subtask it started is blocked in
+;; a sync-lowered async host call. The borrow is tracked by the dropping task,
+;; not the blocked one.
+(component
+  (import "host" (instance $host
+    (export "resource1" (type $r (sub resource)))
+    (export "[constructor]resource1"
+      (func (param "r" u32) (result (own $r))))
+    (export "never-return" (func async))
+  ))
+  (alias export $host "resource1" (type $r))
+  (alias export $host "[constructor]resource1" (func $ctor))
+  (alias export $host "never-return" (func $never-return))
+
+  ;; `call` blocks forever in a sync-lowered call to the host.
+  (component $A
+    (import "never-return" (func $never-return async))
+    (core func $never-return (canon lower (func $never-return)))
+    (core module $m
+      (import "" "never-return" (func $never-return))
+      (func (export "call") (result i32)
+        (call $never-return)
+        i32.const 0 (; EXIT ;))
+      (func (export "callback") (param i32 i32 i32) (result i32)
+        unreachable)
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "never-return" (func $never-return))
+      ))
+    ))
+    (func (export "call") async
+      (canon lift (core func $i "call")
+        async (callback (core func $i "callback"))))
+  )
+  (instance $a (instantiate $A (with "never-return" (func $never-return))))
+
+  ;; `call` starts a subtask in `$A`, then drops its borrow and returns
+  ;; without waiting for the subtask.
+  (component $B
+    (import "r" (type $r (sub resource)))
+    (import "f" (func $f async))
+    (core func $f (canon lower (func $f) async))
+    (core func $task.return (canon task.return))
+    (core func $resource.drop (canon resource.drop $r))
+    (core module $m
+      (import "" "f" (func $f (result i32)))
+      (import "" "task.return" (func $task.return))
+      (import "" "resource.drop" (func $resource.drop (param i32)))
+      (func (export "call") (param i32) (result i32)
+        ;; Expect the subtask to be STARTED.
+        (if (i32.ne (i32.const 1) (i32.and (call $f) (i32.const 0xf)))
+          (then unreachable))
+        (call $resource.drop (local.get 0))
+        (call $task.return)
+        i32.const 0 (; EXIT ;))
+      (func (export "callback") (param i32 i32 i32) (result i32)
+        unreachable)
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "f" (func $f))
+        (export "task.return" (func $task.return))
+        (export "resource.drop" (func $resource.drop))
+      ))
+    ))
+    (func (export "call") async (param "x" (borrow $r))
+      (canon lift (core func $i "call")
+        async (callback (core func $i "callback"))))
+  )
+  (instance $b (instantiate $B
+    (with "r" (type $r))
+    (with "f" (func $a "call"))
+  ))
+
+  (core func $ctor (canon lower (func $ctor)))
+  (core func $call (canon lower (func $b "call")))
+  (core func $resource.drop (canon resource.drop $r))
+  (core module $m
+    (import "" "ctor" (func $ctor (param i32) (result i32)))
+    (import "" "call" (func $call (param i32)))
+    (import "" "resource.drop" (func $resource.drop (param i32)))
+    (func (export "run")
+      (local $r i32)
+      (local.set $r (call $ctor (i32.const 3)))
+      (call $call (local.get $r))
+      (call $resource.drop (local.get $r)))
+  )
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "ctor" (func $ctor))
+      (export "call" (func $call))
+      (export "resource.drop" (func $resource.drop))
+    ))
+  ))
+  (func (export "run") async (canon lift (core func $i "run")))
+)
+
+(assert_return (invoke "run"))

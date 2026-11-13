@@ -45,6 +45,7 @@
 
 use crate::dominator_tree::DominatorTree;
 pub use crate::isa::call_conv::CallConv;
+use crate::loop_analysis::LoopAnalysis;
 
 use crate::CodegenResult;
 use crate::ir::{self, Function, Type};
@@ -310,6 +311,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        loop_analysis: &LoopAnalysis,
         regalloc_ctx: &mut regalloc2::Ctx,
         want_disasm: bool,
         ctrl_plane: &mut ControlPlane,

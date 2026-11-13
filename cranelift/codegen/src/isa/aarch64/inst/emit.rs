@@ -65,7 +65,11 @@ pub fn mem_finalize(
                 };
                 (smallvec![], mem)
             } else {
-                let tmp = writable_spilltmp_reg();
+                let tmp = if basereg == spilltmp_reg() {
+                    writable_tmp2_reg()
+                } else {
+                    writable_spilltmp_reg()
+                };
                 (
                     Inst::load_constant(tmp, off as u64),
                     AMode::RegExtended {
@@ -3522,8 +3526,31 @@ impl MachInstEmit for Inst {
             &Inst::ReturnCallInd { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);
 
+                // Indirect tail calls must use x16 or x17 when BTI is enabled
+                // so that they are compatible with the callee's `BTI C`
+                // landing pad. Other registers are only accepted by `BTI J`,
+                // which is not a valid landing pad for a function entry.
+                //
+                // x16 is the spill-temp register, which by Cranelift
+                // convention we are allowed to use as a scratch register
+                // within one VCode inst, so this is safe.
+                let dest = if emit_info.isa_flags.use_bti() {
+                    let dest = xreg(16);
+                    if info.dest != dest {
+                        Inst::Mov {
+                            size: OperandSize::Size64,
+                            rd: writable_xreg(16),
+                            rm: info.dest,
+                        }
+                        .emit(sink, emit_info, state);
+                    }
+                    dest
+                } else {
+                    info.dest
+                };
+
                 Inst::IndirectBr {
-                    rn: info.dest,
+                    rn: dest,
                     targets: vec![],
                 }
                 .emit(sink, emit_info, state);
@@ -4100,10 +4127,18 @@ impl MachInstEmit for Inst {
                 trap_code,
                 ..
             } => {
+                let stack_map = state.take_stack_map();
+
                 // Record the address of the load in the trap table so a signal
                 // handler can later distinguish whether a segfault is its
                 // fault.
                 sink.add_trap(trap_code);
+
+                // SIGSEGV reports the PC of the faulting load, so the stack map
+                // is associated with the load itself.
+                if let Some(stack_map) = stack_map {
+                    sink.push_user_stack_map(state, sink.cur_offset(), stack_map);
+                }
 
                 // Emit `ldr dst, [load_ptr]`. Reuse the `dst` address as the
                 // destination of the dead load, since we are clobbering it

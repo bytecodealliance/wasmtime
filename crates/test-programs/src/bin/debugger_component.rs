@@ -29,6 +29,9 @@ impl api::exports::bytecodealliance::wasmtime::debugger::Guest for Component {
             Some("loop") => {
                 test_loop(d);
             }
+            Some("watch") => {
+                test_watch(d);
+            }
             other => panic!("unknown test mode: {other:?}"),
         }
     }
@@ -115,6 +118,68 @@ fn test_loop(d: &Debuggee) {
     }
 
     // Continue; the debuggee should exit normally now.
+    let r = Resumption::continue_(d);
+    let event = r.result(d).unwrap();
+    assert!(
+        matches!(event, Event::Complete),
+        "expected Complete, got {event:?}"
+    );
+
+    eprintln!("OK");
+}
+
+/// Watchpoint test: watch bytes [8, 12) of memory 0 and check that
+/// writes overlapping them (and only those) pause execution before
+/// the write happens.
+///
+/// Tests against `debugger_debuggee_watch.wat`.
+fn test_watch(d: &Debuggee) {
+    // Step once so that the instance exists.
+    let r = Resumption::single_step(d);
+    assert!(matches!(r.result(d).unwrap(), Event::Breakpoint));
+
+    let mem = d
+        .all_instances()
+        .iter()
+        .find_map(|inst| inst.get_memory(d, 0).ok())
+        .expect("debuggee has a memory");
+
+    // Ranges must be within the memory.
+    let size = mem.size_bytes(d);
+    assert!(matches!(
+        mem.add_watchpoint(d, size - 1, 2),
+        Err(Error::OutOfBounds)
+    ));
+    assert!(matches!(
+        mem.add_watchpoint(d, u64::MAX, 2),
+        Err(Error::OutOfBounds)
+    ));
+
+    mem.add_watchpoint(d, 8, 4).unwrap();
+
+    // The `i32.store` to [6, 10) is the first write to hit the watch.
+    let r = Resumption::continue_(d);
+    let Event::Watchpoint(hit) = r.result(d).unwrap() else {
+        panic!("expected a watchpoint event");
+    };
+    assert_eq!(hit.memory.unique_id(), mem.unique_id());
+    assert_eq!((hit.address, hit.len), (6, 4));
+    assert_eq!(hit.value, Some(0x11223344_u32.to_le_bytes().to_vec()));
+    // The write has not happened yet; the store to byte 7 has.
+    assert_eq!(mem.get_bytes(d, 6, 4).unwrap(), [0, 1, 0, 0]);
+
+    // Next, the `memory.fill`, which has no single value.
+    let r = Resumption::continue_(d);
+    let Event::Watchpoint(hit) = r.result(d).unwrap() else {
+        panic!("expected a watchpoint event");
+    };
+    assert_eq!((hit.address, hit.len, hit.value), (0, 16, None));
+    assert_eq!(mem.get_u32(d, 6).unwrap(), 0x11223344);
+    assert_eq!(mem.get_u8(d, 12).unwrap(), 2);
+
+    // Once unwatched, the fill proceeds and the debuggee runs to
+    // completion.
+    mem.remove_watchpoint(d, 0, 16).unwrap();
     let r = Resumption::continue_(d);
     let event = r.result(d).unwrap();
     assert!(

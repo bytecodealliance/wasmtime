@@ -18,13 +18,13 @@ cc = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }
 
 [dependencies]
-object = { workspace = true, optional = true }
-wasmtime-versioned-export-macros = { workspace = true }
+wasmtime-versioned-export-macros = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rustix = { workspace = true, features = ["mm", "time"], optional = true }
+object = { workspace = true, optional = true }
 
 [features]
 std = []
-gdb_jit_int = []
+gdb_jit_int = ["dep:wasmtime-versioned-export-macros"]
 perf_jitdump = ["rustix", "object", "std"]

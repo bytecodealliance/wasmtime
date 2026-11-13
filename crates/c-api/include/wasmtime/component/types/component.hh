@@ -95,9 +95,7 @@ public:
 
   /// Copies another item into this one.
   ComponentItem &operator=(const ComponentItem &other) {
-    wasmtime_component_item_delete(&item);
-    wasmtime_component_item_clone(&other.item, &item);
-    return *this;
+    return *this = ComponentItem(other);
   }
 
   /// Moves another item into this one.

@@ -77,18 +77,18 @@
 ;; @004d                               v43 = ireduce.i32 v42
 ;; @004d                               v44 = icmp uge v40, v43
 ;; @004d                               v45 = uextend.i64 v40
-;;                                     v68 = iconst.i64 3
-;;                                     v69 = ishl v45, v68  ; v68 = 3
+;; @0043                               v68 = iconst.i64 3
+;; @004d                               v69 = ishl v45, v68  ; v68 = 3
 ;; @004d                               v50 = iadd v47, v69
-;;                                     v70 = iconst.i64 0
-;;                                     v71 = select_spectre_guard v44, v70, v50  ; v70 = 0
+;; @0043                               v70 = iconst.i64 0
+;; @004d                               v71 = select_spectre_guard v44, v70, v50  ; v70 = 0
 ;; @004d                               v53 = load.i64 user6 aligned region8 v71
-;;                                     v72 = iconst.i64 -2
-;;                                     v73 = band v53, v72  ; v72 = -2
+;; @0043                               v72 = iconst.i64 -2
+;; @004d                               v73 = band v53, v72  ; v72 = -2
 ;; @004d                               brif v53, block5(v73), block4
 ;;
 ;;                                 block4 cold:
-;;                                     v74 = iconst.i32 0
+;; @0043                               v74 = iconst.i32 0
 ;; @004d                               v59 = call fn0(v0, v74, v45)  ; v74 = 0
 ;; @004d                               jump block5(v59)
 ;;

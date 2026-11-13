@@ -76,6 +76,7 @@ const OPCODE_BRAS: u16 = 0xa75;
 const OPCODE_BCR: u16 = 0xa74;
 const OPCODE_LDR: u16 = 0x28;
 const OPCODE_VLR: u16 = 0xe756;
+const OPCODE_LGRL: u16 = 0xc48;
 
 /// Type(s) of memory instructions available for mem_finalize.
 pub struct MemInstType {
@@ -2491,16 +2492,16 @@ impl Inst {
                     &Inst::Load32SExt8 { .. } => (None, Some(0xe376), None),         // LB
                     &Inst::Load32ZExt16 { .. } => (None, Some(0xe395), Some(0xc42)), // LLH, LLHRL
                     &Inst::Load32SExt16 { .. } => (Some(0x48), Some(0xe378), Some(0xc45)), // LH(Y), LHRL
-                    &Inst::Load64 { .. } => (None, Some(0xe304), Some(0xc48)), // LG, LGRL
-                    &Inst::Load64ZExt8 { .. } => (None, Some(0xe390), None),   // LLGC
-                    &Inst::Load64SExt8 { .. } => (None, Some(0xe377), None),   // LGB
+                    &Inst::Load64 { .. } => (None, Some(0xe304), Some(OPCODE_LGRL)), // LG, LGRL
+                    &Inst::Load64ZExt8 { .. } => (None, Some(0xe390), None),         // LLGC
+                    &Inst::Load64SExt8 { .. } => (None, Some(0xe377), None),         // LGB
                     &Inst::Load64ZExt16 { .. } => (None, Some(0xe391), Some(0xc46)), // LLGH, LLGHRL
                     &Inst::Load64SExt16 { .. } => (None, Some(0xe315), Some(0xc44)), // LGH, LGHRL
                     &Inst::Load64ZExt32 { .. } => (None, Some(0xe316), Some(0xc4e)), // LLGF, LLGFRL
                     &Inst::Load64SExt32 { .. } => (None, Some(0xe314), Some(0xc4c)), // LGF, LGFRL
-                    &Inst::LoadRev16 { .. } => (None, Some(0xe31f), None),     // LRVH
-                    &Inst::LoadRev32 { .. } => (None, Some(0xe31e), None),     // LRV
-                    &Inst::LoadRev64 { .. } => (None, Some(0xe30f), None),     // LRVG
+                    &Inst::LoadRev16 { .. } => (None, Some(0xe31f), None),           // LRVH
+                    &Inst::LoadRev32 { .. } => (None, Some(0xe31e), None),           // LRV
+                    &Inst::LoadRev64 { .. } => (None, Some(0xe30f), None),           // LRVG
                     _ => unreachable!(),
                 };
                 let rd = rd.to_reg();
@@ -2740,19 +2741,39 @@ impl Inst {
                 rd,
                 ref symbol_reloc,
             } => {
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 12));
-                let (reloc, name, offset) = match &**symbol_reloc {
-                    SymbolReloc::Absolute { name, offset } => (Reloc::Abs8, name, *offset),
-                    SymbolReloc::TlsGd { name } => (Reloc::S390xTlsGd64, name, 0),
-                };
-                sink.add_reloc(reloc, name, offset);
-                sink.put8(0);
-                let inst = Inst::Load64 {
-                    rd,
-                    mem: MemArg::reg(reg, MemFlagsData::trusted()),
-                };
-                inst.emit(sink, emit_info, state);
+                // Helper: emit  BRAS %r1, 12 ; .8byte <reloc> ; LG rd, 0(%r1)
+                let mut emit_bras_literal =
+                    |sink: &mut MachBuffer<Inst>,
+                     reloc: Reloc,
+                     name: &ExternalName,
+                     addend: i64| {
+                        let reg = writable_spilltmp_reg().to_reg();
+                        put(sink, &enc_ri_b(OPCODE_BRAS, reg, 12));
+                        sink.add_reloc(reloc, name, addend);
+                        sink.put8(0);
+                        Inst::Load64 {
+                            rd,
+                            mem: MemArg::reg(reg, MemFlagsData::trusted()),
+                        }
+                        .emit(sink, emit_info, state);
+                    };
+
+                match &**symbol_reloc {
+                    // PIC GOT-indirect load:
+                    //   LGRL  rd, sym@GOTENT   (R_390_GOTENT: PC-relative load from GOT entry)
+                    SymbolReloc::Got { name } => {
+                        let reloc_offset = sink.cur_offset() + 2;
+                        sink.add_reloc_at_offset(reloc_offset, Reloc::S390xGOTRel32Dbl, name, 2);
+                        put(sink, &enc_ril_b(OPCODE_LGRL, rd.to_reg(), 0));
+                    }
+                    // Non-PIC: BRAS over an embedded 8-byte absolute literal.
+                    SymbolReloc::Absolute { name, offset } => {
+                        emit_bras_literal(sink, Reloc::Abs8, name, *offset);
+                    }
+                    SymbolReloc::TlsGd { name } => {
+                        emit_bras_literal(sink, Reloc::S390xTlsGd64, name, 0);
+                    }
+                }
             }
 
             &Inst::FpuMove32 { rd, rn } => {

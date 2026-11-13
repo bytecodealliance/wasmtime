@@ -80,44 +80,18 @@ private:
 
 public:
   /// Creates a new 32-bit wasm memory type with the specified minimum number of
-  /// pages for the minimum size. The created type will have no maximum memory
-  /// size.
-  explicit MemoryType(uint32_t min) {
-    wasm_memorytype_t *p = nullptr;
-    auto *err = wasmtime_memorytype_new(min, false, 0, false, false, 16, &p);
-    assert(err == nullptr);
-    assert(p != nullptr);
-    ptr.reset(p);
-    ref.ptr = p;
+  /// pages and optional maximum number of pages.
+  ///
+  /// Returns an error if the limits are invalid.
+  static Result<MemoryType> create(uint32_t min,
+                                   std::optional<uint32_t> max = std::nullopt) {
+    return Builder().min(min).max(max).build();
   }
 
-  /// Creates a new 32-bit wasm memory type with the specified minimum number of
-  /// pages for the minimum size, and maximum number of pages for the max size.
-  MemoryType(uint32_t min, uint32_t max) {
-    wasm_memorytype_t *p = nullptr;
-    auto *err = wasmtime_memorytype_new(min, true, max, false, false, 16, &p);
-    assert(err == nullptr);
-    assert(p != nullptr);
-    ptr.reset(p);
-    ref.ptr = p;
-  }
-
-  /// Same as the `MemoryType` constructor, except creates a 64-bit memory.
-  static MemoryType New64(uint64_t min) {
-    wasm_memorytype_t *ptr = nullptr;
-    auto *err = wasmtime_memorytype_new(min, false, 0, true, false, 16, &ptr);
-    assert(err == nullptr);
-    assert(ptr != nullptr);
-    return MemoryType(ptr);
-  }
-
-  /// Same as the `MemoryType` constructor, except creates a 64-bit memory.
-  static MemoryType New64(uint64_t min, uint64_t max) {
-    wasm_memorytype_t *ptr = nullptr;
-    auto *err = wasmtime_memorytype_new(min, true, max, true, false, 16, &ptr);
-    assert(err == nullptr);
-    assert(ptr != nullptr);
-    return MemoryType(ptr);
+  /// Same as `MemoryType::create`, except creates a 64-bit memory.
+  static Result<MemoryType>
+  create64(uint64_t min, std::optional<uint64_t> max = std::nullopt) {
+    return Builder().min(min).max(max).memory64(true).build();
   }
 
   /// Creates a new wasm memory type from the specified ref, making a fresh
@@ -129,6 +103,7 @@ public:
   /// Copies the provided type into a new type.
   MemoryType &operator=(const MemoryType &other) {
     ptr.reset(wasm_memorytype_copy(other.ptr.get()));
+    ref = ptr.get();
     return *this;
   }
   ~MemoryType() = default;

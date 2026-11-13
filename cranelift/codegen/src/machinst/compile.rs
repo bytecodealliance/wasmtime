@@ -3,6 +3,7 @@
 use crate::dominator_tree::DominatorTree;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
+use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::*;
 use crate::settings::RegallocAlgorithm;
 use crate::timing;
@@ -15,6 +16,7 @@ use regalloc2::{Algorithm, RegallocOptions};
 pub fn compile<B: LowerBackend + TargetIsa>(
     f: &Function,
     domtree: &DominatorTree,
+    loop_analysis: &LoopAnalysis,
     regalloc_ctx: &mut regalloc2::Ctx,
     b: &B,
     abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
@@ -23,7 +25,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     ctrl_plane: &mut ControlPlane,
 ) -> CodegenResult<VCode<B::MInst>> {
     // Compute lowered block order.
-    let block_order = BlockLoweringOrder::new(f, domtree, ctrl_plane);
+    let block_order = BlockLoweringOrder::new(f, domtree, loop_analysis, ctrl_plane);
 
     // Build the lowering context.
     let lower =

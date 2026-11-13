@@ -14,6 +14,7 @@ const FEATURES: &[&str] = &[
     "COREDUMP",
     "ADDR2LINE",
     "DEMANGLE",
+    "STACK_SWITCHING",
     "THREADS",
     "GC",
     "GC_DRC",

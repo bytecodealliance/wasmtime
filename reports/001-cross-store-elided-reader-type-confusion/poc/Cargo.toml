@@ -1,0 +1,12 @@
+[package]
+name = "cross-store-reader-poc"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+# Point this at the Wasmtime checkout under test (see report.md).
+wasmtime = { path = "../../../crates/wasmtime" }
+tokio = { version = "1", features = ["rt", "macros"] }

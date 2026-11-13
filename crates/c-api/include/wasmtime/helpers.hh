@@ -108,11 +108,7 @@ public:                                                                        \
   explicit name(Raw raw) : raw(raw) {}                                         \
   name(const name &other) { capi_type##_clone(&other.raw, &raw); }             \
                                                                                \
-  name &operator=(const name &other) {                                         \
-    capi_type##_unroot(&raw);                                                  \
-    capi_type##_clone(&other.raw, &raw);                                       \
-    return *this;                                                              \
-  }                                                                            \
+  name &operator=(const name &other) { return *this = name(other); }           \
   name(name &&other) {                                                         \
     raw = other.raw;                                                           \
     capi_type##_set_null(&other.raw);                                          \

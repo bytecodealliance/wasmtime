@@ -8,6 +8,7 @@ use rustix::fd::AsFd;
 use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::marker;
+use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Poll;
@@ -65,10 +66,21 @@ impl HasData for WasiSockets {
     type Data<'a> = WasiSocketsCtxView<'a>;
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct WasiSocketsCtx {
     pub(crate) socket_addr_check: SocketAddrCheck,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
+    pub(crate) max_io_size: NonZeroUsize,
+}
+
+impl Default for WasiSocketsCtx {
+    fn default() -> Self {
+        Self {
+            socket_addr_check: Default::default(),
+            allowed_network_uses: Default::default(),
+            max_io_size: crate::DEFAULT_MAX_IO_SIZE,
+        }
+    }
 }
 
 pub struct WasiSocketsCtxView<'a> {

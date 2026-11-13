@@ -656,9 +656,17 @@ pub(crate) fn emit(
             trap_code,
             ..
         } => {
+            let stack_map = state.take_stack_map();
+
             // Record the address of load in the trap table so a signal handler
             // can later distinguish whether a segfault is its fault.
             sink.add_trap(*trap_code);
+
+            // SIGSEGV reports the PC of the faulting load, so the stack map
+            // is associated with the load itself.
+            if let Some(stack_map) = stack_map {
+                sink.push_user_stack_map(state, sink.cur_offset(), stack_map);
+            }
 
             let load_ptr_addr = SyntheticAmode::real(Amode::imm_reg(0, **load_ptr));
             // Since we're clobbering dst anyway to store the resume address,

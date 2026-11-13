@@ -295,6 +295,11 @@
  * \fn wasm_valtype_t* wasm_valtype_new(wasm_valkind_t);
  * \brief Creates a new value type from the specified kind.
  *
+ * Aborts the process if the kind is not `i32`, `i64`, `f32`, `f64`, `externref`
+ * or `funcref`, since #wasm_valkind_t cannot represent any other value type.
+ * Use #wasmtime_wasm_valtype_v128 for `v128` types and #wasmtime_valtype_to_wasm
+ * for other reference types.
+ *
  * The caller is responsible for deleting the returned value.
  *
  * \fn wasm_valkind_t wasm_valtype_kind(const wasm_valtype_t *);
@@ -302,6 +307,9 @@
  *
  * Aborts the process if this is a `v128` type or a reference type other than
  * `externref` and `funcref`, which have no #wasm_valkind_t.
+ *
+ * Use #wasmtime_valtype_t, created with #wasmtime_valtype_new, to inspect a
+ * value type that #wasm_valkind_t cannot represent.
  */
 
 /**
@@ -368,6 +376,10 @@
  * This function takes ownership of the `params` and `results` arguments.
  *
  * The caller is responsible for deleting the returned value.
+ *
+ * The returned function type is associated with an engine the first time it's
+ * used with one, for example by #wasmtime_func_new. At that point the process
+ * aborts if any parameter or result type comes from a different engine.
  *
  * \fn const wasm_valtype_vec_t* wasm_functype_params(const wasm_functype_t *);
  * \brief Returns the list of parameters of this function type.

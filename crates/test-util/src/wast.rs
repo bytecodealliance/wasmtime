@@ -21,6 +21,7 @@ pub mod limits {
     pub const GC_HEAP_SIZE: usize = 2 << 20; // 2MiB
     pub const TABLES: u32 = 200;
     pub const MEMORIES_PER_MODULE: u32 = 9;
+    pub const MEMORIES_PER_COMPONENT: u32 = 12;
     pub const TABLES_PER_MODULE: u32 = 5;
     pub const COMPONENT_INSTANCES: u32 = 50;
     pub const CORE_INSTANCES: u32 = 900;
@@ -178,7 +179,10 @@ fn spec_test_config(test: &Path) -> TestConfig {
             let test_name = test.file_name().unwrap().to_str().unwrap();
             ret.reference_types = Some(true);
             ret.multi_memory = Some(true);
-            if test_name.contains("simd") {
+            if test_name.contains("simd")
+                || test_name == "array_init_data.wast"
+                || test_name == "array_new_data.wast"
+            {
                 ret.simd = Some(true);
             }
             if test_name.contains("relaxed") {
@@ -351,10 +355,8 @@ macro_rules! foreach_config_option {
             tail_call
             extended_const
             wide_arithmetic
-            branch_hinting
             compact_imports
             hogs_memory
-            nan_canonicalization
             component_model_async
             component_model_more_async_builtins
             component_model_async_stackful
@@ -368,7 +370,6 @@ macro_rules! foreach_config_option {
             component_model_canonical_names
             component_model_accessors
             simd
-            gc_types
             exceptions
             legacy_exceptions
             stack_switching
@@ -380,12 +381,25 @@ macro_rules! foreach_config_option {
 
 macro_rules! define_test_config {
     ($($option:ident)*) => {
-        /// Per-test configuration which is written down in the test file itself for
-        /// `misc_testsuite/**/*.wast` or in `spec_test_config` above for spec tests.
+        /// Per-test configuration which is written down in the test file itself
+        /// for `misc_testsuite/**/*.wast` or in `spec_test_config` above for
+        /// spec tests.
         #[derive(Debug, PartialEq, Default, Deserialize, Clone)]
         #[serde(deny_unknown_fields)]
         pub struct TestConfig {
+            // Boolean options for each wasm feature.
             $(pub $option: Option<bool>,)*
+
+            /// Mostly arbitrary Wasmtime CLI flags to configure the engine and
+            /// store with.
+            ///
+            /// Flags which affect wasm features, plus some major decisions like
+            /// `-Ccompiler`, are rejected here. This field is opaque to
+            /// `should_fail` calculations below, so nothing specified here can
+            /// affect that result. Hence why major decisions like `-Ccompiler`
+            /// are rejected as they must be representable in such a way that
+            /// `should_fail` can test for.
+            pub flags: Option<TestFlags>,
         }
 
         impl TestConfig {
@@ -399,6 +413,38 @@ macro_rules! define_test_config {
 }
 
 foreach_config_option!(define_test_config);
+
+/// The `flags` key of a [`TestConfig`]: either one string of
+/// whitespace-separated flags or a list of flags.
+#[derive(PartialEq, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum TestFlags {
+    SpaceSeparated(String),
+    List(Vec<String>),
+}
+
+// The `Debug` output of `TestConfig` is embedded as Rust source by
+// `crates/fuzzing/build.rs` and `#[wasmtime_test]`, so this prints a Rust
+// expression.
+impl fmt::Debug for TestFlags {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "wasmtime_test_util::wast::TestFlags::List(vec![")?;
+        for flag in self.to_vec() {
+            write!(f, "{flag:?}.to_string(),")?;
+        }
+        write!(f, "])")
+    }
+}
+
+impl TestFlags {
+    /// Returns each individual flag.
+    pub fn to_vec(&self) -> Vec<&str> {
+        match self {
+            TestFlags::SpaceSeparated(s) => s.split_whitespace().collect(),
+            TestFlags::List(s) => s.iter().map(|s| s.as_str()).collect(),
+        }
+    }
+}
 
 impl TestConfig {
     /// Returns an iterator over each option.
@@ -421,8 +467,6 @@ pub struct WastConfig {
     pub compiler: Compiler,
     /// Whether or not the pooling allocator is enabled.
     pub pooling: bool,
-    /// What garbage collector is being used.
-    pub collector: Collector,
 }
 
 /// Different compilers that can be tested in Wasmtime.
@@ -526,12 +570,6 @@ pub enum Collector {
 }
 
 impl WastTest {
-    /// Returns whether this test exercises the GC types and might want to use
-    /// multiple different garbage collectors.
-    pub fn test_uses_gc_types(&self) -> bool {
-        self.config.gc() || self.config.function_references()
-    }
-
     /// Returns the optional spec proposal that this test is associated with.
     pub fn spec_proposal(&self) -> Option<&str> {
         spec_proposal_from_path(&self.path)
@@ -581,8 +619,8 @@ impl WastTest {
             return true;
         }
 
-        // Wasmtime doesn't implement `assert_{invalid,malformed}_custom`
         let unsupported = [
+            // Wasmtime doesn't implement `assert_{invalid,malformed}_custom`
             "spec_testsuite/proposals/extended-name-section/custom/name_annot.wast",
             "spec_testsuite/proposals/extended-name-section/custom/name.wast",
         ];
@@ -598,6 +636,7 @@ impl WastTest {
                 "extended-const/global.wast",
                 "misc_testsuite/externref-segments.wast",
                 "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
+                "misc_testsuite/fuel/bulk-ops.wast",
                 "misc_testsuite/many_table_gets_lead_to_gc.wast",
                 "misc_testsuite/no-panic.wast",
             ];

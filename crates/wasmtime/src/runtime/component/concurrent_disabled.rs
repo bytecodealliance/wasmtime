@@ -2,7 +2,8 @@ use crate::component::func::{LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower, RuntimeInstance, Val};
 use crate::store::StoreOpaque;
-use crate::vm::component::{CurrentScope, Scope};
+use crate::vm::VMScope;
+use crate::vm::component::CurrentScope;
 use crate::{Result, bail, error::format_err};
 use core::convert::Infallible;
 use core::mem::MaybeUninit;
@@ -184,6 +185,6 @@ impl StoreOpaque {
     pub(crate) fn current_scope(&mut self) -> Result<Option<CurrentScope>> {
         Ok(self
             .current_scope_id_not_concurrent()?
-            .map(|id| CurrentScope::Id(Scope::Id(id))))
+            .map(|id| CurrentScope::Id(VMScope::id(id))))
     }
 }

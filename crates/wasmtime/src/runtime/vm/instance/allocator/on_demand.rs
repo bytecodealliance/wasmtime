@@ -1,9 +1,9 @@
 use super::{
     InstanceAllocationRequest, InstanceAllocator, MemoryAllocationIndex, TableAllocationIndex,
 };
+use crate::MemoryCreator;
 use crate::prelude::*;
 use crate::runtime::vm::CompiledModuleId;
-use crate::runtime::vm::instance::RuntimeMemoryCreator;
 use crate::runtime::vm::memory::{DefaultMemoryCreator, Memory};
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
@@ -29,7 +29,7 @@ use wasmtime_environ::{
 /// Represents the on-demand instance allocator.
 #[derive(Clone)]
 pub struct OnDemandInstanceAllocator {
-    mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
+    mem_creator: Option<Arc<dyn MemoryCreator>>,
     #[cfg(feature = "async")]
     stack_creator: Option<Arc<dyn RuntimeFiberStackCreator>>,
     #[cfg(feature = "async")]
@@ -41,7 +41,7 @@ pub struct OnDemandInstanceAllocator {
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
     pub fn new(
-        mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
+        mem_creator: Option<Arc<dyn MemoryCreator>>,
         stack_size: usize,
         stack_zeroing: bool,
     ) -> Self {

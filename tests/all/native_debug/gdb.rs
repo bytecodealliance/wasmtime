@@ -17,11 +17,7 @@ fn gdb_with_script(args: &[&str], script: &str) -> Result<String> {
 
     cmd.arg("--args");
 
-    let mut me = std::env::current_exe().expect("current_exe specified");
-    me.pop(); // chop off the file name
-    me.pop(); // chop off `deps`
-    me.push("wasmtime");
-    cmd.arg(me);
+    cmd.arg(env!("CARGO_BIN_EXE_wasmtime"));
 
     cmd.args(args);
 

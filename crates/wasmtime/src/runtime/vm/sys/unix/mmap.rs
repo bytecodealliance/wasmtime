@@ -190,26 +190,31 @@ impl Mmap {
         Ok(())
     }
 
-    pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
+    unsafe fn change_protections(
+        &self,
+        range: Range<usize>,
+        permissions: MprotectFlags,
+    ) -> Result<()> {
         let base = unsafe { self.memory.as_ptr().byte_add(range.start).cast() };
         let len = range.end - range.start;
 
         unsafe {
-            mprotect(base, len, MprotectFlags::READ)?;
+            mprotect(base, len, permissions)?;
         }
 
         Ok(())
     }
 
+    pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
+        unsafe { self.change_protections(range, MprotectFlags::READ) }
+    }
+
     pub unsafe fn make_readwrite(&self, range: Range<usize>) -> Result<()> {
-        let base = unsafe { self.memory.as_ptr().byte_add(range.start).cast() };
-        let len = range.end - range.start;
+        unsafe { self.change_protections(range, MprotectFlags::READ | MprotectFlags::WRITE) }
+    }
 
-        unsafe {
-            mprotect(base, len, MprotectFlags::READ | MprotectFlags::WRITE)?;
-        }
-
-        Ok(())
+    pub unsafe fn make_inaccessible(&self, range: Range<usize>) -> Result<()> {
+        unsafe { self.change_protections(range, MprotectFlags::empty()) }
     }
 }
 

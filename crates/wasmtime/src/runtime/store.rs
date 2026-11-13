@@ -92,7 +92,7 @@ use crate::runtime::vm::{
 };
 use crate::trampoline::VMHostGlobalContext;
 #[cfg(feature = "debug")]
-use crate::{BreakpointState, DebugHandler, FrameDataCache};
+use crate::{Breakpoints, DebugHandler, FrameDataCache};
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Table};
 use core::convert::Infallible;
@@ -107,6 +107,7 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 #[cfg(any(feature = "async", feature = "gc"))]
 use core::task::Poll;
+use wasmtime_core::undo::Undo;
 use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
 
 mod context;
@@ -532,7 +533,7 @@ pub struct StoreOpaque {
     /// handler defined above, if any, has a chance to perform some
     /// logic before returning to allow execution to resume.
     #[cfg(feature = "debug")]
-    breakpoints: BreakpointState,
+    breakpoints: Breakpoints,
 
     /// The debug PC-to-FrameData cache for this store.
     ///
@@ -719,7 +720,7 @@ impl<T> Store<T> {
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
     pub fn try_new(engine: &Engine, data: T) -> Result<Self> {
-        let store_data = StoreData::new(engine);
+        let store_data = StoreData::new(engine)?;
         log::trace!("creating new store {:?}", store_data.id());
 
         let pkey = engine.allocator().next_available_pkey();
@@ -774,6 +775,18 @@ impl<T> Store<T> {
         let store_data =
             <NonNull<ManuallyDrop<T>>>::from(&mut inner.data_no_provenance).cast::<()>();
         inner.inner.vm_store_context.store_data = store_data.into();
+
+        // SAFETY: `store_data` and the `VMStoreContext` beside it live in the
+        // same boxed `StoreInner`, so neither outlives nor moves out from under
+        // the other.
+        unsafe {
+            let StoreOpaque {
+                store_data,
+                vm_store_context,
+                ..
+            } = &mut inner.inner;
+            store_data.publish_to_vm_store_context(vm_store_context);
+        }
 
         inner.traitobj = StorePtr(Some(NonNull::from(&mut *inner)));
 
@@ -1403,6 +1416,14 @@ impl<T> StoreInner<T> {
         (data, limiter, &mut self.inner)
     }
 
+    /// Borrows the store's `T` and the rest of the store, which are
+    /// disjoint, mutably at the same time.
+    #[inline]
+    pub(crate) fn data_and_opaque_mut(&mut self) -> (&mut T, &mut StoreOpaque) {
+        let (data, _limiter, opaque) = self.data_limiter_and_opaque();
+        (data, opaque)
+    }
+
     #[inline]
     fn data_mut(&mut self) -> &mut T {
         self.data_limiter_and_opaque().0
@@ -1429,14 +1450,16 @@ impl<T> StoreInner<T> {
         }
 
         // Temporarily take the configured behavior to avoid mutably borrowing
-        // multiple times.
-        if let Some(mut call_hook) = self.call_hook.take() {
-            let result = self.invoke_call_hook(&mut call_hook, s);
-            self.call_hook = Some(call_hook);
-            return result;
+        // multiple times, and put it back when done, even if the hook panics.
+        let call_hook = self.call_hook.take();
+        let mut undo = Undo::new((self, call_hook), |(store, call_hook)| {
+            store.call_hook = call_hook;
+        });
+        let (store, call_hook) = &mut *undo;
+        match call_hook {
+            Some(call_hook) => store.invoke_call_hook(call_hook, s),
+            None => Ok(()),
         }
-
-        Ok(())
     }
 
     fn invoke_call_hook(&mut self, call_hook: &mut CallHookInner<T>, s: CallHook) -> Result<()> {
@@ -1585,15 +1608,26 @@ impl StoreOpaque {
         (&mut self.store_data, &self.modules)
     }
 
+    /// Borrows the `VMStoreContext` and the store's data at the same time.
+    ///
+    /// These are disjoint fields, so JIT-visible state can be reached alongside
+    /// the tables in `StoreData` without a whole-store borrow in between.
+    #[cfg(feature = "component-model")]
+    pub(crate) fn vm_store_context_and_store_data_mut(
+        &mut self,
+    ) -> (&mut VMStoreContext, &mut StoreData) {
+        (&mut self.vm_store_context, &mut self.store_data)
+    }
+
     #[cfg(feature = "debug")]
     pub(crate) fn breakpoints_and_registry_and_engine_mut(
         &mut self,
-    ) -> (&mut BreakpointState, &mut ModuleRegistry, &Engine) {
+    ) -> (&mut Breakpoints, &mut ModuleRegistry, &Engine) {
         (&mut self.breakpoints, &mut self.modules, &self.engine)
     }
 
     #[cfg(feature = "debug")]
-    pub(crate) fn breakpoints_and_registry(&self) -> (&BreakpointState, &ModuleRegistry) {
+    pub(crate) fn breakpoints_and_registry(&self) -> (&Breakpoints, &ModuleRegistry) {
         (&self.breakpoints, &self.modules)
     }
 
@@ -2414,15 +2448,15 @@ unsafe impl<T> VMStore for StoreInner<T> {
     fn new_epoch_updated_deadline(&mut self) -> Result<UpdateDeadline> {
         // Temporarily take the configured behavior to avoid mutably borrowing
         // multiple times.
-        let mut behavior = self.epoch_deadline_behavior.take();
-        let update = match &mut behavior {
-            Some(callback) => callback(StoreHookState::new((&mut *self).as_context_mut())),
+        let behavior = self.epoch_deadline_behavior.take();
+        let mut undo = Undo::new((self, behavior), |(store, behavior)| {
+            store.epoch_deadline_behavior = behavior;
+        });
+        let (store, behavior) = &mut *undo;
+        match behavior {
+            Some(callback) => callback(StoreHookState::new((&mut **store).as_context_mut())),
             None => Ok(UpdateDeadline::Interrupt),
-        };
-
-        // Put back the original behavior which was replaced by `take`.
-        self.epoch_deadline_behavior = behavior;
-        update
+        }
     }
 
     #[cfg(feature = "debug")]
