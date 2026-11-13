@@ -208,6 +208,7 @@ impl DataFlowGraph {
         self.constants.clear();
         self.immediates.clear();
         self.jump_tables.clear();
+        self.exception_tables.clear();
         self.mem_flags.clear();
         self.alias_regions.clear();
     }
@@ -1801,5 +1802,22 @@ mod tests {
         let call_inst_dup = func.dfg.clone_inst(call_inst);
         func.dfg.inst_args_mut(call_inst)[0] = v2;
         assert_eq!(v1, func.dfg.inst_args(call_inst_dup)[0]);
+    }
+
+    #[test]
+    fn clear_resets_exception_tables() {
+        use crate::ir::{ExceptionTableData, Signature};
+        use crate::isa::CallConv;
+
+        let mut dfg = DataFlowGraph::new();
+        let block = dfg.make_block();
+        let sig = dfg.signatures.push(Signature::new(CallConv::Fast));
+        let normal_return = dfg.block_call(block, &[]);
+        dfg.exception_tables
+            .push(ExceptionTableData::new(sig, normal_return, []));
+        assert_eq!(dfg.exception_tables.len(), 1);
+
+        dfg.clear();
+        assert!(dfg.exception_tables.is_empty());
     }
 }
