@@ -1626,6 +1626,10 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         // vregs (RealRegs) may occur more than once.
         true
     }
+
+    fn is_block_cold(&self, block: BlockIndex) -> bool {
+        self.block_order.is_cold(block)
+    }
 }
 
 impl<I: VCodeInst> Debug for VRegAllocator<I> {
