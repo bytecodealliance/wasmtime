@@ -1,3 +1,4 @@
+use crate::WasiPermitType;
 use crate::filesystem::sys;
 use crate::filesystem::{Descriptor, WasiFilesystemCtxView};
 use crate::p2::bindings::clocks::wall_clock;
@@ -277,6 +278,16 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         flags: types::DescriptorFlags,
     ) -> FsResult<Resource<types::Descriptor>> {
         let d = self.table.get(&fd)?.dir()?;
+        let permit = self
+            .hooks
+            .acquire(WasiPermitType::FileOrDirectory)
+            .await
+            .map_err(|_| {
+                // Ideally, we'd return something like POSIX's `ENFILE`, but
+                // `wasi:filesystem/types#error-code` doesn't have any
+                // equivalent.
+                ErrorCode::Io
+            })?;
         let fd = d
             .open_at(
                 path_flags.into(),
@@ -284,6 +295,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
                 oflags.into(),
                 flags.into(),
                 self.ctx.allow_blocking_current_thread,
+                permit,
             )
             .await?;
         let fd = self.table.push(fd)?;

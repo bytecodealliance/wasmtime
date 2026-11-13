@@ -80,6 +80,7 @@ impl WasiView for Host {
         WasiCtxView {
             ctx: &mut self.ctx,
             table: &mut self.table,
+            hooks: Default::default(),
         }
     }
 }

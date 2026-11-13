@@ -233,6 +233,8 @@ impl WasiView for WasiP1Ctx {
         WasiCtxView {
             ctx: &mut self.wasi,
             table: &mut self.table,
+            // TODO: Should we support `WasiHooks` for WASIp1?
+            hooks: Default::default(),
         }
     }
 }
