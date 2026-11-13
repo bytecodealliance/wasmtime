@@ -674,6 +674,59 @@ Caused by:
     }
 }
 #[test]
+fn fmt_debug_with_multi_line_causes() {
+    let error = Error::msg("whoops")
+        .context("line one\nline two\n\nline four")
+        .context("yikes");
+    let actual = format!("{error:?}");
+
+    let expected = "\
+yikes
+
+Caused by:
+    0: line one
+       line two
+
+       line four
+    1: whoops
+";
+
+    #[cfg(feature = "backtrace")]
+    {
+        assert!(actual.starts_with(expected));
+    }
+
+    #[cfg(not(feature = "backtrace"))]
+    {
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn fmt_debug_with_single_multi_line_cause() {
+    let error = Error::msg("line one\nline two").context("uh oh");
+    let actual = format!("{error:?}");
+
+    let expected = "\
+uh oh
+
+Caused by:
+    line one
+    line two
+";
+
+    #[cfg(feature = "backtrace")]
+    {
+        assert!(actual.starts_with(expected));
+    }
+
+    #[cfg(not(feature = "backtrace"))]
+    {
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
 fn fmt_debug_with_single_cause() {
     let error = Error::msg("whoops").context("uh oh");
     let actual = format!("{error:?}");
