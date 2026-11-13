@@ -521,7 +521,8 @@ impl WasmtimeOptionValue for bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(
     feature = "serde",
-    derive(serde_derive::Serialize, serde_derive::Deserialize)
+    derive(serde_derive::Serialize, serde_derive::Deserialize),
+    serde(try_from = "Duration", into = "Duration")
 )]
 pub struct NonzeroDuration(Duration);
 
@@ -533,6 +534,20 @@ impl NonzeroDuration {
         } else {
             Some(Self(duration))
         }
+    }
+}
+
+impl TryFrom<Duration> for NonzeroDuration {
+    type Error = wasmtime::Error;
+
+    fn try_from(duration: Duration) -> Result<Self> {
+        Self::new(duration).ok_or_else(|| format_err!("duration must not be zero"))
+    }
+}
+
+impl From<NonzeroDuration> for Duration {
+    fn from(duration: NonzeroDuration) -> Duration {
+        duration.0
     }
 }
 
@@ -549,7 +564,7 @@ impl WasmtimeOptionValue for NonzeroDuration {
 
     fn parse(val: Option<&str>) -> Result<Self> {
         let duration = <Duration as WasmtimeOptionValue>::parse(val)?;
-        Self::new(duration).ok_or_else(|| format_err!("duration must not be zero"))
+        Self::try_from(duration)
     }
 
     fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

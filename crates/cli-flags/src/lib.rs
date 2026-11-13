@@ -1921,6 +1921,34 @@ mod tests {
                 "Mismatch for input '{collector_value}'. Parsed: {parsed_collector:?}, Expected: {expected:?}",
             );
         }
+
+        // Timeout: zero is rejected, as it is on the command line
+        for (timeout_value, expected) in [
+            (
+                "{ secs = 5, nanos = 0 }",
+                Some(std::time::Duration::from_secs(5)),
+            ),
+            (
+                "{ secs = 0, nanos = 1 }",
+                Some(std::time::Duration::from_nanos(1)),
+            ),
+            ("{ secs = 0, nanos = 0 }", None), // should fail
+        ] {
+            let toml = format!(
+                r#"
+                    [wasm]
+                    timeout = {timeout_value}
+                "#,
+            );
+            let parsed_timeout = toml::from_str::<CommonOptions>(&toml)
+                .ok()
+                .and_then(|common_options| common_options.wasm.timeout)
+                .map(|timeout| *timeout);
+            assert_eq!(
+                parsed_timeout, expected,
+                "Mismatch for input '{timeout_value}'. Parsed: {parsed_timeout:?}, Expected: {expected:?}",
+            );
+        }
     }
 }
 
