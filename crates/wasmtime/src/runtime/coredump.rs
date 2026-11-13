@@ -128,7 +128,9 @@ impl WasmCoreDump {
                     maximum: ty.maximum(),
                     memory64: ty.is_64(),
                     shared: ty.is_shared(),
-                    page_size_log2: None,
+                    page_size_log2: (ty.page_size_log2()
+                        != wasmtime_environ::Memory::DEFAULT_PAGE_SIZE_LOG2)
+                        .then_some(u32::from(ty.page_size_log2())),
                 });
 
                 // Attach the memory data, balancing number of data segments and
@@ -142,7 +144,7 @@ impl WasmCoreDump {
                 // into reasonably-sized chunks and then trim runs of zeroes
                 // from the start and end of each chunk.
                 const CHUNK_SIZE: usize = 4096;
-                for (i, chunk) in mem.data(&store).chunks_exact(CHUNK_SIZE).enumerate() {
+                for (i, chunk) in mem.data(&store).chunks(CHUNK_SIZE).enumerate() {
                     if let Some(start) = chunk.iter().position(|byte| *byte != 0) {
                         let end = chunk.iter().rposition(|byte| *byte != 0).unwrap() + 1;
                         let offset = i * CHUNK_SIZE + start;
