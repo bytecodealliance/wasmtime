@@ -113,9 +113,9 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
             .run_blocking(move |f| {
                 let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX).min(max)];
                 let r = sys::read_at_cursor_unspecified(f, &mut buffer, offset);
-                (buffer, r)
+                Ok::<_, std::io::Error>((buffer, r))
             })
-            .await;
+            .await?;
 
         let (bytes_read, state) = match r? {
             0 => (0, true),
@@ -286,7 +286,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
                 self.ctx.allow_blocking_current_thread,
             )
             .await?;
-        let fd = self.table.push(fd)?;
+        let fd = fd.push(self.table)?;
         Ok(fd)
     }
 
@@ -685,6 +685,12 @@ impl From<std::io::Error> for ErrorCode {
 
 impl<'a> From<&'a std::io::Error> for ErrorCode {
     fn from(err: &'a std::io::Error) -> ErrorCode {
+        if err
+            .get_ref()
+            .is_some_and(|e| e.is::<crate::filesystem::FilesystemOperationError>())
+        {
+            return ErrorCode::WouldBlock;
+        }
         match from_raw_os_error(err.raw_os_error()) {
             Some(errno) => errno,
             None => {

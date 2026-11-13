@@ -336,6 +336,21 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
+    /// Sets the native filesystem admission and lifetime hook.
+    /// See [`WasiFilesystemCtx::set_operation_hook`].
+    pub fn filesystem_operation_hook<F>(&mut self, hook: F) -> &mut Self
+    where
+        F: Fn() -> std::result::Result<
+                crate::filesystem::FilesystemOperation,
+                crate::filesystem::FilesystemOperationError,
+            > + Send
+            + Sync
+            + 'static,
+    {
+        self.filesystem.set_operation_hook(hook);
+        self
+    }
+
     /// Set the generator for the `wasi:random/random` number generator to the
     /// custom generator specified.
     ///

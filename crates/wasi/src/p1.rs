@@ -664,7 +664,10 @@ impl WasiP1Ctx {
                 let nwritten = match f.as_blocking_file() {
                     // If we can block then skip the copy out of wasm memory and
                     // write directly to `f`.
-                    Some(f) => do_write(f, &memory.as_cow(buf)?),
+                    Some(native) => {
+                        let _operation = f.start_operation()?;
+                        do_write(native, &memory.as_cow(buf)?)
+                    }
                     // ... otherwise copy out of wasm memory and use
                     // `spawn_blocking` to do this write in a thread that can
                     // block.
@@ -900,6 +903,12 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
+impl From<crate::filesystem::FilesystemOperationError> for types::Error {
+    fn from(_: crate::filesystem::FilesystemOperationError) -> Self {
+        types::Errno::Again.into()
+    }
+}
+
 impl From<StreamError> for types::Error {
     fn from(err: StreamError) -> Self {
         match err {
@@ -1035,6 +1044,7 @@ impl From<crate::filesystem::ErrorCode> for types::Errno {
             crate::filesystem::ErrorCode::Access => types::Errno::Acces,
             crate::filesystem::ErrorCode::Already => types::Errno::Already,
             crate::filesystem::ErrorCode::BadDescriptor => types::Errno::Badf,
+            crate::filesystem::ErrorCode::WouldBlock => types::Errno::Again,
             crate::filesystem::ErrorCode::Busy => types::Errno::Busy,
             crate::filesystem::ErrorCode::Exist => types::Errno::Exist,
             crate::filesystem::ErrorCode::FileTooLarge => types::Errno::Fbig,
@@ -1689,8 +1699,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                     // Try to read directly into wasm memory where possible
                     // when the current thread can block and additionally wasm
                     // memory isn't shared.
-                    (Some(file), Some(mut buf)) => {
-                        sys::read_at_cursor_unspecified(file, &mut buf, pos)
+                    (Some(native), Some(mut buf)) => {
+                        let _operation = file.start_operation()?;
+                        sys::read_at_cursor_unspecified(native, &mut buf, pos)
                             .map_err(|e| StreamError::LastOperationFailed(e.into()))?
                     }
                     // ... otherwise fall back to performing the read on a
