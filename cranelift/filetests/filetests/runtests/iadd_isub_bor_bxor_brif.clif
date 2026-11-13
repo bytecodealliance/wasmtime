@@ -1,0 +1,341 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
+function %iadd_brif_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+  v2 = iadd v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %iadd_brif_i8(0xFF, 0x01) == [0x00, 0]
+; run: %iadd_brif_i8(0x80, 0x80) == [0x00, 0]
+; run: %iadd_brif_i8(0x7F, 0x01) == [0x80, 1]
+
+function %iadd_brif_i16(i16, i16) -> i16, i8 {
+block0(v0: i16, v1: i16):
+  v2 = iadd v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %iadd_brif_i16(0xFFFF, 0x0001) == [0x0000, 0]
+; run: %iadd_brif_i16(0x8000, 0x8000) == [0x0000, 0]
+; run: %iadd_brif_i16(0x7FFF, 0x0001) == [0x8000, 1]
+
+function %iadd_brif_i32(i32, i32) -> i32, i8 {
+block0(v0: i32, v1: i32):
+  v2 = iadd v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %iadd_brif_i32(0xFFFFFFFF, 0x00000001) == [0x00000000, 0]
+; run: %iadd_brif_i32(0x80000000, 0x80000000) == [0x00000000, 0]
+; run: %iadd_brif_i32(0x7FFFFFFF, 0x00000001) == [0x80000000, 1]
+
+function %iadd_brif_i64(i64, i64) -> i64, i8 {
+block0(v0: i64, v1: i64):
+  v2 = iadd v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %iadd_brif_i64(0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001) == [0x00000000_00000000, 0]
+; run: %iadd_brif_i64(0x80000000_00000000, 0x80000000_00000000) == [0x00000000_00000000, 0]
+; run: %iadd_brif_i64(0x7FFFFFFF_FFFFFFFF, 0x00000000_00000001) == [0x80000000_00000000, 1]
+
+function %isub_brif_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+  v2 = isub v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %isub_brif_i8(0x80, 0x80) == [0x00, 0]
+; run: %isub_brif_i8(0x00, 0x01) == [0xFF, 1]
+
+function %isub_brif_i16(i16, i16) -> i16, i8 {
+block0(v0: i16, v1: i16):
+  v2 = isub v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %isub_brif_i16(0x8000, 0x8000) == [0x0000, 0]
+; run: %isub_brif_i16(0x0000, 0x0001) == [0xFFFF, 1]
+
+function %isub_brif_i32(i32, i32) -> i32, i8 {
+block0(v0: i32, v1: i32):
+  v2 = isub v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %isub_brif_i32(0x80000000, 0x80000000) == [0x00000000, 0]
+; run: %isub_brif_i32(0x00000000, 0x00000001) == [0xFFFFFFFF, 1]
+
+function %isub_brif_i64(i64, i64) -> i64, i8 {
+block0(v0: i64, v1: i64):
+  v2 = isub v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %isub_brif_i64(0x80000000_00000000, 0x80000000_00000000) == [0x00000000_00000000, 0]
+; run: %isub_brif_i64(0x00000000_00000000, 0x00000000_00000001) == [0xFFFFFFFF_FFFFFFFF, 1]
+
+function %bor_brif_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+  v2 = bor v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %bor_brif_i8(0x00, 0x00) == [0x00, 0]
+; run: %bor_brif_i8(0x80, 0x00) == [0x80, 1]
+
+function %bor_brif_i16(i16, i16) -> i16, i8 {
+block0(v0: i16, v1: i16):
+  v2 = bor v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %bor_brif_i16(0x0000, 0x0000) == [0x0000, 0]
+; run: %bor_brif_i16(0x8000, 0x0000) == [0x8000, 1]
+
+function %bor_brif_i32(i32, i32) -> i32, i8 {
+block0(v0: i32, v1: i32):
+  v2 = bor v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %bor_brif_i32(0x00000000, 0x00000000) == [0x00000000, 0]
+; run: %bor_brif_i32(0x80000000, 0x00000000) == [0x80000000, 1]
+
+function %bor_brif_i64(i64, i64) -> i64, i8 {
+block0(v0: i64, v1: i64):
+  v2 = bor v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %bor_brif_i64(0x00000000_00000000, 0x00000000_00000000) == [0x00000000_00000000, 0]
+; run: %bor_brif_i64(0x80000000_00000000, 0x00000000_00000000) == [0x80000000_00000000, 1]
+
+function %bxor_brif_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+  v2 = bxor v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %bxor_brif_i8(0xFF, 0xFF) == [0x00, 0]
+; run: %bxor_brif_i8(0x80, 0x00) == [0x80, 1]
+
+function %bxor_brif_i16(i16, i16) -> i16, i8 {
+block0(v0: i16, v1: i16):
+  v2 = bxor v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %bxor_brif_i16(0xFFFF, 0xFFFF) == [0x0000, 0]
+; run: %bxor_brif_i16(0x8000, 0x0000) == [0x8000, 1]
+
+function %bxor_brif_i32(i32, i32) -> i32, i8 {
+block0(v0: i32, v1: i32):
+  v2 = bxor v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %bxor_brif_i32(0xFFFFFFFF, 0xFFFFFFFF) == [0x00000000, 0]
+; run: %bxor_brif_i32(0x80000000, 0x00000000) == [0x80000000, 1]
+
+function %bxor_brif_i64(i64, i64) -> i64, i8 {
+block0(v0: i64, v1: i64):
+  v2 = bxor v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v2, v3
+
+block2:
+  v4 = iconst.i8 0
+  return v2, v4
+}
+
+; run: %bxor_brif_i64(0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == [0x00000000_00000000, 0]
+; run: %bxor_brif_i64(0x80000000_00000000, 0x00000000_00000000) == [0x80000000_00000000, 1]
+
+function %isub_loop_counter(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 0
+  jump block1(v0, v1)
+
+block1(v2: i64, v3: i64):
+  v4 = iconst.i64 1
+  v5 = isub v2, v4
+  v6 = iadd v3, v2
+  brif v5, block1(v5, v6), block2
+
+block2:
+  return v6
+}
+
+; run: %isub_loop_counter(100) == 5050
+
+function %bxor_select_and_brif(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+  v4 = bxor v0, v1
+  v5 = select v4, v2, v3
+  brif v4, block1(v5), block2(v5)
+
+block1(v6: i32):
+  return v6
+
+block2(v7: i32):
+  v8 = iconst.i32 1000
+  v9 = iadd v7, v8
+  return v9
+}
+
+; run: %bxor_select_and_brif(0x80000000, 0x80000000, 10, 20) == 1020
+; run: %bxor_select_and_brif(0, 0x80000000, 10, 20) == 10
+
+function %iadd_icmp_slt_zero_brif(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+  v2 = iadd v0, v1
+  v3 = iconst.i32 0
+  v4 = icmp slt v2, v3
+  brif v4, block1, block2
+
+block1:
+  v5 = iconst.i8 1
+  return v5
+
+block2:
+  v6 = iconst.i8 0
+  return v6
+}
+
+; run: %iadd_icmp_slt_zero_brif(0x7FFFFFFF, 1) == 1
+; run: %iadd_icmp_slt_zero_brif(0x80000000, -1) == 0
