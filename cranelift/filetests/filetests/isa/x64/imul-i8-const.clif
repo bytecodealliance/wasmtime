@@ -1,0 +1,82 @@
+test compile
+set unwind_info=false
+target x86_64
+set opt_level=speed
+target x86_64
+
+;; Regression test for #14660: use a 32-bit immediate multiply for an i8
+;; constant on either side, without a byte multiply or constant-pool load.
+
+function %imul_i8_const_rhs(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 97
+    v2 = imul v0, v1
+    return v2
+}
+
+; not: mulb
+; not: %rip
+; check: block0:
+; nextln: imull $$0x61, %edi, %eax
+; nextln: movq %rbp, %rsp
+; nextln: popq %rbp
+; nextln: retq
+; not: mulb
+; not: %rip
+
+function %imul_i8_const_lhs(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 97
+    v2 = imul v1, v0
+    return v2
+}
+
+; not: mulb
+; not: %rip
+; check: block0:
+; nextln: imull $$0x61, %edi, %eax
+; nextln: movq %rbp, %rsp
+; nextln: popq %rbp
+; nextln: retq
+; not: mulb
+; not: %rip
+
+;; The i8 load must stay a byte load. In particular, do not fold it into
+;; a 32-bit memory operand of imull, which would read past the input byte.
+function %imul_i8_load_const_rhs(i64) -> i8 {
+block0(v0: i64):
+    v1 = load.i8 v0
+    v2 = iconst.i8 97
+    v3 = imul v1, v2
+    return v3
+}
+
+; not: mulb
+; not: %rip
+; check: block0:
+; nextln: movzb$(=q|l) (%rdi), %$(=[a-z0-9]+)
+; nextln: imull $$0x61, %$(=[a-z0-9]+), %eax
+; nextln: movq %rbp, %rsp
+; nextln: popq %rbp
+; nextln: retq
+; not: mulb
+; not: %rip
+
+function %imul_i8_load_const_lhs(i64) -> i8 {
+block0(v0: i64):
+    v1 = load.i8 v0
+    v2 = iconst.i8 97
+    v3 = imul v2, v1
+    return v3
+}
+
+; not: mulb
+; not: %rip
+; check: block0:
+; nextln: movzb$(=q|l) (%rdi), %$(=[a-z0-9]+)
+; nextln: imull $$0x61, %$(=[a-z0-9]+), %eax
+; nextln: movq %rbp, %rsp
+; nextln: popq %rbp
+; nextln: retq
+; not: mulb
+; not: %rip
