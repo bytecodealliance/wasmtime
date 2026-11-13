@@ -50,17 +50,8 @@ Error: failed to run main module `/home/nick/scratch/trap.wasm`
 Caused by:
     0: core dumped at /home/nick/scratch/trap.coredump
     1: failed to invoke command default
-    2: wasm coredump generated while executing store_name:
-       modules:
-         <module>
-       instances:
-         Instance(store=1, index=1)
-       memories:
-         Memory(store=1, index=1)
-       globals:
-         Global(store=1, index=0)
-       backtrace:
-       error while executing at wasm backtrace:
+    2: wasm core dump captured
+    3: error while executing at wasm backtrace:
            0: 0x5961 - <unknown>!__rust_start_panic
            1: 0x562a - <unknown>!rust_panic
            2: 0x555d - <unknown>!std::panicking::rust_panic_with_hook::h58e7d0b3d70e95b6
