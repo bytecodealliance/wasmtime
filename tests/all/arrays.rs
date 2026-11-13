@@ -558,7 +558,7 @@ fn passing_arrays_through_wasm_with_untyped_calls() -> Result<()> {
 
     let func = Func::new(&mut store, func_ty, |mut caller, args, results| {
         let a = args[0].unwrap_any_ref().unwrap();
-        let a = a.unwrap_array(&mut caller)?;
+        let a = a.unwrap_rooted().unwrap_array(&mut caller)?;
         assert_eq!(a.len(&mut caller)?, 1);
         assert_eq!(a.get(&mut caller, 0)?.unwrap_i32(), 42);
         results[0] = args[0];
@@ -575,7 +575,7 @@ fn passing_arrays_through_wasm_with_untyped_calls() -> Result<()> {
     run.call(&mut store, &[a.into()], &mut results)?;
 
     let a2 = results[0].unwrap_any_ref().unwrap();
-    let a2 = a2.unwrap_array(&mut store)?;
+    let a2 = a2.to_rooted(&mut store)?.unwrap_array(&mut store)?;
     assert_eq!(a2.len(&mut store)?, 1);
     assert_eq!(a2.get(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &a, &a2)?);
@@ -662,7 +662,7 @@ fn host_sets_array_global() -> Result<()> {
     // Get the global from the host.
     let val = g.get(&mut store);
     let anyref = val.unwrap_anyref().expect("non-null");
-    let a1 = anyref.unwrap_array(&store)?;
+    let a1 = anyref.to_rooted(&mut store)?.unwrap_array(&store)?;
     assert_eq!(a1.len(&store)?, 1);
     assert_eq!(a1.get(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &a0, &a1)?);
@@ -714,7 +714,7 @@ fn wasm_sets_array_global() -> Result<()> {
     let g = instance.get_global(&mut store, "g").unwrap();
     let val = g.get(&mut store);
     let anyref = val.unwrap_anyref().expect("non-null");
-    let a1 = anyref.unwrap_array(&store)?;
+    let a1 = anyref.to_rooted(&mut store)?.unwrap_array(&store)?;
     assert_eq!(a1.len(&store)?, 1);
     assert_eq!(a1.get(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &a0, &a1)?);
@@ -762,7 +762,7 @@ fn host_sets_array_in_table() -> Result<()> {
     // Get the global from the host.
     let val = t.get(&mut store, 0).expect("in bounds");
     let anyref = val.unwrap_any().expect("non-null");
-    let a1 = anyref.unwrap_array(&store)?;
+    let a1 = anyref.to_rooted(&mut store)?.unwrap_array(&store)?;
     assert_eq!(a1.len(&store)?, 1);
     assert_eq!(a1.get(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &a0, &a1)?);
@@ -816,7 +816,7 @@ fn wasm_sets_array_in_table() -> Result<()> {
     let t = instance.get_table(&mut store, "t").unwrap();
     let val = t.get(&mut store, 0).expect("in bounds");
     let anyref = val.unwrap_any().expect("non-null");
-    let a1 = anyref.unwrap_array(&store)?;
+    let a1 = anyref.to_rooted(&mut store)?.unwrap_array(&store)?;
     assert_eq!(a1.len(&mut store)?, 1);
     assert_eq!(a1.get(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &a0, &a1)?);
@@ -873,7 +873,7 @@ fn instantiate_with_array_global() -> Result<()> {
     let g = instance.get_global(&mut store, "g").expect("export exists");
     let val = g.get(&mut store);
     let anyref = val.unwrap_anyref().expect("non-null");
-    let a1 = anyref.unwrap_array(&store)?;
+    let a1 = anyref.to_rooted(&mut store)?.unwrap_array(&store)?;
     assert_eq!(a1.len(&mut store)?, 1);
     assert_eq!(a1.get(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &a0, &a1)?);

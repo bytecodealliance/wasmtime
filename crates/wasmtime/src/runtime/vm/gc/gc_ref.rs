@@ -1,7 +1,8 @@
 use crate::runtime::vm::{FuncRefTableId, GcHeap, GcStore, I31, SendSyncPtr};
-use crate::store::AutoAssertNoGc;
+use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    AnyRef, ExnRef, ExternRef, Func, HeapTopType, Result, StorageType, Val, ValType, bail_bug,
+    AnyRef, ExnRef, ExternRef, Func, HeapTopType, Result, StorageType, Unrooted, Val, ValType,
+    bail_bug,
 };
 use core::fmt;
 use core::marker;
@@ -196,6 +197,19 @@ impl VMGcRef {
     /// Does not discriminate between indices into a GC heap and `i31ref`s.
     pub fn from_raw_non_zero_u32(raw: NonZeroU32) -> Self {
         VMGcRef(raw)
+    }
+
+    /// View the raw bits of a GC reference that is held outside of the GC's
+    /// knowledge -- that is, without a root and without having run any clone
+    /// barrier -- as a borrowed `VMGcRef`.
+    ///
+    /// This is how an [`Unrooted`](crate::Unrooted) reference, which must be
+    /// `Copy` and so cannot hold a `VMGcRef` itself, lends out the object it
+    /// refers to.
+    pub fn from_frozen_raw_u32(raw: &NonZeroU32) -> &VMGcRef {
+        // SAFETY: `VMGcRef` is a `#[repr(transparent)]` wrapper around a
+        // `NonZeroU32`.
+        unsafe { &*(raw as *const NonZeroU32).cast::<VMGcRef>() }
     }
 
     /// Construct a new `VMGcRef` from an unboxed 31-bit integer.
@@ -405,13 +419,15 @@ impl VMGcRef {
                 .map_or(false, |h| h.matches_kind(VMGcKind::AnyRef))
     }
 
-    pub fn read_val(
-        &self,
-        store: &mut AutoAssertNoGc,
-        ty: &StorageType,
-        offset: u32,
-    ) -> Result<Val> {
-        let data = store.require_gc_store_mut()?.gc_object_data(self)?;
+    /// Read a value of the given `StorageType` at `offset` within this
+    /// object.
+    ///
+    /// `i8` and `i16` values are zero-extended into `Val::I32(_)`s, and GC
+    /// references are read as `Unrooted` references, so this needs only shared
+    /// access to the store.
+    pub fn read_val(&self, store: &StoreOpaque, ty: &StorageType, offset: u32) -> Result<Val> {
+        let gc_store = store.require_gc_store()?;
+        let data = gc_store.gc_object_data(self)?;
         Ok(match ty {
             StorageType::I8 => Val::I32(data.read_u8(offset)?.into()),
             StorageType::I16 => Val::I32(data.read_u16(offset)?.into()),
@@ -420,35 +436,27 @@ impl VMGcRef {
             StorageType::ValType(ValType::F32) => Val::F32(data.read_u32(offset)?),
             StorageType::ValType(ValType::F64) => Val::F64(data.read_u64(offset)?),
             StorageType::ValType(ValType::V128) => Val::V128(data.read_v128(offset)?),
-            StorageType::ValType(ValType::Ref(r)) => match r.heap_type().top() {
-                HeapTopType::Extern => {
-                    let raw = data.read_u32(offset)?;
-                    Val::ExternRef(ExternRef::_from_raw(store, raw))
+            StorageType::ValType(ValType::Ref(r)) => {
+                let raw = data.read_u32(offset)?;
+                match r.heap_type().top() {
+                    HeapTopType::Extern => {
+                        Val::from(Unrooted::<ExternRef>::from_raw_u32(store, raw))
+                    }
+                    HeapTopType::Any => Val::from(Unrooted::<AnyRef>::from_raw_u32(store, raw)),
+                    HeapTopType::Exn => Val::from(Unrooted::<ExnRef>::from_raw_u32(store, raw)),
+                    HeapTopType::Func => {
+                        let func_ref_id = match FuncRefTableId::from_raw(raw) {
+                            Some(id) => id,
+                            None => bail_bug!("bad FuncRefTableId"),
+                        };
+                        let func_ref = gc_store.func_ref_table.get_untyped(func_ref_id)?;
+                        Val::FuncRef(unsafe {
+                            func_ref.map(|p| Func::from_vm_func_ref(store.id(), p.as_non_null()))
+                        })
+                    }
+                    HeapTopType::Cont => bail_bug!("continuation references are unsupported"),
                 }
-                HeapTopType::Any => {
-                    let raw = data.read_u32(offset)?;
-                    Val::AnyRef(AnyRef::_from_raw(store, raw))
-                }
-                HeapTopType::Exn => {
-                    let raw = data.read_u32(offset)?;
-                    Val::ExnRef(ExnRef::_from_raw(store, raw))
-                }
-                HeapTopType::Func => {
-                    let func_ref_id = data.read_u32(offset)?;
-                    let func_ref_id = match FuncRefTableId::from_raw(func_ref_id) {
-                        Some(id) => id,
-                        None => bail_bug!("bad FuncRefTableId"),
-                    };
-                    let func_ref = store
-                        .unwrap_gc_store()
-                        .func_ref_table
-                        .get_untyped(func_ref_id)?;
-                    Val::FuncRef(unsafe {
-                        func_ref.map(|p| Func::from_vm_func_ref(store.id(), p.as_non_null()))
-                    })
-                }
-                HeapTopType::Cont => bail_bug!("continuation references are unsupported"),
-            },
+            }
         })
     }
 
@@ -462,16 +470,16 @@ impl VMGcRef {
         let gcstore = store.require_gc_store_mut()?;
         match val {
             Val::I32(i) if ty.is_i8() => gcstore
-                .gc_object_data(self)?
+                .gc_object_data_mut(self)?
                 .write_i8(offset, truncate_i32_to_i8(i)),
             Val::I32(i) if ty.is_i16() => gcstore
-                .gc_object_data(self)?
+                .gc_object_data_mut(self)?
                 .write_i16(offset, truncate_i32_to_i16(i)),
-            Val::I32(i) => gcstore.gc_object_data(self)?.write_i32(offset, i),
-            Val::I64(i) => gcstore.gc_object_data(self)?.write_i64(offset, i),
-            Val::F32(f) => gcstore.gc_object_data(self)?.write_u32(offset, f),
-            Val::F64(f) => gcstore.gc_object_data(self)?.write_u64(offset, f),
-            Val::V128(v) => gcstore.gc_object_data(self)?.write_v128(offset, v),
+            Val::I32(i) => gcstore.gc_object_data_mut(self)?.write_i32(offset, i),
+            Val::I64(i) => gcstore.gc_object_data_mut(self)?.write_i64(offset, i),
+            Val::F32(f) => gcstore.gc_object_data_mut(self)?.write_u32(offset, f),
+            Val::F64(f) => gcstore.gc_object_data_mut(self)?.write_u64(offset, f),
+            Val::V128(v) => gcstore.gc_object_data_mut(self)?.write_v128(offset, v),
 
             // NB: We don't need to do a write barrier when initializing a
             // field, because there is nothing being overwritten. Therefore, we
@@ -483,7 +491,7 @@ impl VMGcRef {
                 };
                 store
                     .require_gc_store_mut()?
-                    .gc_object_data(self)?
+                    .gc_object_data_mut(self)?
                     .write_u32(offset, x)
             }
             Val::AnyRef(x) => {
@@ -493,7 +501,7 @@ impl VMGcRef {
                 };
                 store
                     .require_gc_store_mut()?
-                    .gc_object_data(self)?
+                    .gc_object_data_mut(self)?
                     .write_u32(offset, x)
             }
             Val::ExnRef(x) => {
@@ -503,7 +511,7 @@ impl VMGcRef {
                 };
                 store
                     .require_gc_store_mut()?
-                    .gc_object_data(self)?
+                    .gc_object_data_mut(self)?
                     .write_u32(offset, x)
             }
 
@@ -512,7 +520,7 @@ impl VMGcRef {
                 let gcstore = store.require_gc_store_mut()?;
                 let id = unsafe { gcstore.func_ref_table.intern(f) };
                 gcstore
-                    .gc_object_data(self)?
+                    .gc_object_data_mut(self)?
                     .write_u32(offset, id.into_raw())
             }
             Val::ContRef(_) => {
@@ -532,7 +540,7 @@ impl VMGcRef {
         val: Val,
     ) -> Result<()> {
         let gcstore = store.require_gc_store_mut()?;
-        let data = gcstore.gc_object_data(self)?;
+        let data = gcstore.gc_object_data_mut(self)?;
         match val {
             Val::I32(i) if ty.is_i8() => data.write_i8(offset, truncate_i32_to_i8(i)),
             Val::I32(i) if ty.is_i16() => data.write_i16(offset, truncate_i32_to_i16(i)),
@@ -563,7 +571,7 @@ impl VMGcRef {
                 };
                 let store = store.require_gc_store_mut()?;
                 store.write_gc_ref(&mut gc_ref, e.as_ref())?;
-                let data = store.gc_object_data(self)?;
+                let data = store.gc_object_data_mut(self)?;
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()))
             }
             Val::AnyRef(a) => {
@@ -575,7 +583,7 @@ impl VMGcRef {
                 };
                 let store = store.require_gc_store_mut()?;
                 store.write_gc_ref(&mut gc_ref, a.as_ref())?;
-                let data = store.gc_object_data(self)?;
+                let data = store.gc_object_data_mut(self)?;
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()))
             }
             Val::ExnRef(e) => {
@@ -587,7 +595,7 @@ impl VMGcRef {
                 };
                 let store = store.require_gc_store_mut()?;
                 store.write_gc_ref(&mut gc_ref, e.as_ref())?;
-                let data = store.gc_object_data(self)?;
+                let data = store.gc_object_data_mut(self)?;
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()))
             }
 
@@ -596,7 +604,7 @@ impl VMGcRef {
                 let gcstore = store.require_gc_store_mut()?;
                 let id = unsafe { gcstore.func_ref_table.intern(f) };
                 gcstore
-                    .gc_object_data(self)?
+                    .gc_object_data_mut(self)?
                     .write_u32(offset, id.into_raw())
             }
             Val::ContRef(_) => {

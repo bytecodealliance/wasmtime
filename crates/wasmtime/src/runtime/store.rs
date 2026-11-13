@@ -612,7 +612,7 @@ impl<'a> AutoAssertNoGc<'a> {
         let entered = if !cfg!(feature = "gc") {
             false
         } else if let Some(gc_store) = store.gc_store.as_mut() {
-            gc_store.gc_heap.enter_no_gc_scope();
+            gc_store.gc_heap.get_mut().enter_no_gc_scope();
             true
         } else {
             false
@@ -665,7 +665,11 @@ impl Drop for AutoAssertNoGc<'_> {
     #[inline]
     fn drop(&mut self) {
         if self.entered {
-            self.store.unwrap_gc_store_mut().gc_heap.exit_no_gc_scope();
+            self.store
+                .unwrap_gc_store_mut()
+                .gc_heap
+                .get_mut()
+                .exit_no_gc_scope();
         }
     }
 }
@@ -1852,6 +1856,42 @@ impl StoreOpaque {
         &mut self.vm_store_context
     }
 
+    /// Invalidate every [`Unrooted`](crate::Unrooted) reference into this
+    /// store's GC heap, because Wasm has just run, and may have mutated the
+    /// heap directly; see `GcStore::invalidate_unrooted_refs`.
+    ///
+    /// Compiled Wasm mutates the GC heap without going through the heap's
+    /// `EpochState`, so we treat invalidation as a deferred effect of running
+    /// Wasm: it happens whenever control passes from Wasm back to the host,
+    /// before any host code runs, which is the only point at which the host
+    /// can observe what Wasm did. There are exactly two such points:
+    ///
+    /// * Wasm calling into the host (host functions and libcalls, including
+    ///   the `raise` libcall that runs debug handlers for traps), all of which
+    ///   go through `catch_unwind_and_record_trap`.
+    ///
+    /// * Wasm returning, trapping, or unwinding back to the host code that
+    ///   called it, in `catch_traps`.
+    ///
+    /// No invalidation is needed when control passes from the host into Wasm
+    /// (calling Wasm, returning from a host function, or resuming a fiber),
+    /// since the host cannot observe anything Wasm does until the next of the
+    /// points above. Any new way for Wasm to transfer control to host code
+    /// must invalidate here too.
+    #[inline]
+    pub(crate) fn invalidate_unrooted_gc_refs(&mut self) {
+        if let Some(gc_store) = &mut self.gc_store {
+            gc_store.invalidate_unrooted_refs();
+        }
+    }
+
+    /// Like `Self::optional_gc_store_mut`, but shared.
+    #[inline]
+    #[cfg(feature = "gc")]
+    pub(crate) fn optional_gc_store(&self) -> Option<&GcStore> {
+        self.gc_store.as_ref()
+    }
+
     /// Attempts to access the GC store that has been previously allocated.
     ///
     /// This method will return `Some` if the GC store was previously allocated.
@@ -1930,6 +1970,7 @@ impl StoreOpaque {
 
     /// Helper function to clone `gc_ref` notably avoiding allocating a
     /// `GcStore` where possible.
+    #[cfg(feature = "gc")]
     pub(crate) fn clone_gc_ref(&mut self, gc_ref: &VMGcRef) -> VMGcRef {
         if gc_ref.is_i31() {
             gc_ref.copy_i31()
@@ -2533,9 +2574,9 @@ impl Drop for StoreOpaque {
                 let gc_alloc_index = gc_store.allocation_index;
                 log::trace!("store {store_id:?} is deallocating GC heap {gc_alloc_index:?}");
                 debug_assert!(self.engine.features().gc_types());
-                let mem = gc_store.gc_heap.detach();
+                let mem = gc_store.gc_heap.get_mut().detach();
                 let mem_alloc_index =
-                    allocator.deallocate_gc_heap(gc_alloc_index, gc_store.gc_heap);
+                    allocator.deallocate_gc_heap(gc_alloc_index, gc_store.gc_heap.into_inner());
                 allocator.deallocate_memory(None, mem_alloc_index, mem);
             }
 

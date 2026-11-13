@@ -579,7 +579,8 @@ impl Instance {
 
     unsafe fn set_gc_heap(self: Pin<&mut Self>, gc_store: Option<&GcStore>) {
         if let Some(gc_store) = gc_store {
-            *self.gc_heap_data() = Some(unsafe { gc_store.gc_heap.vmctx_gc_heap_data().into() });
+            *self.gc_heap_data() =
+                Some(unsafe { gc_store.gc_heap.get().vmctx_gc_heap_data().into() });
         } else {
             *self.gc_heap_data() = None;
         }

@@ -963,10 +963,10 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
             );
             let args: Vec<_> = (0..ops.limits.num_params)
                 .map(|_| {
-                    Ok(Val::ExternRef(Some(ExternRef::new(
+                    Ok(Val::from(ExternRef::new(
                         &mut scope,
                         CountDrops::new(&expected_drops, num_dropped.clone()),
-                    )?)))
+                    )?))
                 })
                 .collect::<Result<_>>()?;
             log::info!(

@@ -377,17 +377,17 @@ impl wasmtime_val_t {
             crate::WASMTIME_V128 => Val::V128(u128::from_le_bytes(self.of.v128).into()),
             #[cfg(feature = "gc")]
             crate::WASMTIME_ANYREF => {
-                Val::AnyRef(self.of.anyref.as_wasmtime().map(|a| a.to_rooted(cx)))
+                Val::from(self.of.anyref.as_wasmtime().map(|a| a.to_rooted(cx)))
             }
             #[cfg(feature = "gc")]
             crate::WASMTIME_EXTERNREF => {
-                Val::ExternRef(self.of.externref.as_wasmtime().map(|e| e.to_rooted(cx)))
+                Val::from(self.of.externref.as_wasmtime().map(|e| e.to_rooted(cx)))
             }
             #[cfg(feature = "gc")]
             crate::WASMTIME_FUNCREF => Val::FuncRef(self.of.funcref.as_wasmtime()),
             #[cfg(feature = "gc")]
             crate::WASMTIME_EXNREF => {
-                Val::ExnRef(self.of.exnref.as_wasmtime().map(|e| e.to_rooted(cx)))
+                Val::from(self.of.exnref.as_wasmtime().map(|e| e.to_rooted(cx)))
             }
             other => panic!("unknown wasmtime_valkind_t: {other}"),
         }

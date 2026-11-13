@@ -116,7 +116,7 @@ fn host_exnref_has_trace_info_for_gc() -> Result<()> {
         {
             let mut scope = RootScope::new(&mut store);
             let exn = ExnRef::new(&mut scope, &exnpre, &tag, &[Val::I32(43)])?;
-            g.set(&mut scope, Val::ExnRef(Some(exn)))?;
+            g.set(&mut scope, Val::ExnRef(Some(exn.into())))?;
         }
 
         // The exnref should stay alive and be traced properly...

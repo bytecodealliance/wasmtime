@@ -332,14 +332,14 @@ impl StoreOpaque {
         if self
             .gc_store
             .as_ref()
-            .map_or(false, |gc| gc.gc_heap.needs_gc_before_next_growth())
+            .map_or(false, |gc| gc.gc_heap.get().needs_gc_before_next_growth())
         {
             self.do_gc(asyncness).await?;
             debug_assert!(
                 !self
                     .gc_store
                     .as_ref()
-                    .map_or(false, |gc| gc.gc_heap.needs_gc_before_next_growth()),
+                    .map_or(false, |gc| gc.gc_heap.get().needs_gc_before_next_growth()),
                 "needs_gc_before_next_growth should return false after a GC"
             );
         }
@@ -418,7 +418,9 @@ impl StoreOpaque {
         impl<'a> TakenGcHeap<'a> {
             fn new(store: &'a mut StoreOpaque) -> TakenGcHeap<'a> {
                 TakenGcHeap {
-                    memory: ManuallyDrop::new(store.unwrap_gc_store_mut().gc_heap.take_memory()),
+                    memory: ManuallyDrop::new(
+                        store.unwrap_gc_store_mut().gc_heap.get_mut().take_memory(),
+                    ),
                     store,
                     delta_bytes_grown: 0,
                 }
@@ -433,10 +435,14 @@ impl StoreOpaque {
                 // taken when this was created so it should be safe to place
                 // back inside the GC heap.
                 unsafe {
-                    self.store.unwrap_gc_store_mut().gc_heap.replace_memory(
-                        ManuallyDrop::take(&mut self.memory),
-                        self.delta_bytes_grown,
-                    );
+                    self.store
+                        .unwrap_gc_store_mut()
+                        .gc_heap
+                        .get_mut()
+                        .replace_memory(
+                            ManuallyDrop::take(&mut self.memory),
+                            self.delta_bytes_grown,
+                        );
                 }
             }
         }
@@ -548,7 +554,7 @@ impl StoreOpaque {
     ///
     /// GC barriers are not required by the caller of this function.
     pub(crate) fn set_pending_exception(&mut self, exnref: &VMGcRef) -> crate::Error {
-        debug_assert!(exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
+        debug_assert!(exnref.is_exnref(&**self.unwrap_gc_store_mut().gc_heap.get()));
         let gc_store = self.gc_store.as_mut().unwrap();
         match gc_store.write_gc_ref(&mut self.gc_data.pending_exception, Some(exnref)) {
             Ok(()) => ThrownException.into(),
@@ -561,7 +567,7 @@ impl StoreOpaque {
     pub(crate) fn expose_pending_exception_to_wasm(&mut self) -> Option<NonZeroU32> {
         let exnref = self.gc_data.pending_exception.take()?;
         let gc_store = self.unwrap_gc_store_mut();
-        debug_assert!(exnref.is_exnref(&*gc_store.gc_heap));
+        debug_assert!(exnref.is_exnref(&**gc_store.gc_heap.get()));
         Some(gc_store.expose_gc_ref_to_wasm(exnref).unwrap())
     }
 
@@ -569,7 +575,7 @@ impl StoreOpaque {
     /// reference to the `Rooted` that's returned.
     fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
         let vmexnref = self.gc_data.pending_exception.take()?;
-        debug_assert!(vmexnref.is_exnref(&*self.unwrap_gc_store().gc_heap));
+        debug_assert!(vmexnref.is_exnref(&**self.unwrap_gc_store().gc_heap.get()));
         let mut nogc = AutoAssertNoGc::new(self);
         Some(Rooted::new(&mut nogc, vmexnref))
     }
@@ -580,8 +586,8 @@ impl StoreOpaque {
         &mut self,
     ) -> Option<(InstanceId, DefinedTagIndex)> {
         let pending_exnref = self.gc_data.pending_exception.as_ref()?.unchecked_copy();
-        debug_assert!(pending_exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
-        let mut store = AutoAssertNoGc::new(self);
+        debug_assert!(pending_exnref.is_exnref(&**self.unwrap_gc_store_mut().gc_heap.get()));
+        let store = AutoAssertNoGc::new(self);
 
         // Note that if the GC heap is corrupt this will return an error, and in
         // such as situation we return `None` here pretending that there's no
@@ -589,10 +595,7 @@ impl StoreOpaque {
         // later. This method is primarily called right now to determine if
         // there's a handler for an exception, and by returning `None` here this
         // turns into just any old embedder error.
-        let (instance, index) = pending_exnref
-            .into_exnref_unchecked()
-            .tag(&mut store)
-            .ok()?;
+        let (instance, index) = pending_exnref.into_exnref_unchecked().tag(&store).ok()?;
 
         // Validate the heap-derived indices: handler lookup only compares them
         // against live tags, so an unvalidated pair can match the wrong

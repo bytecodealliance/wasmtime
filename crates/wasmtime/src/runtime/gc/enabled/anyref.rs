@@ -349,7 +349,11 @@ impl AnyRef {
     }
 
     pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<HeapType> {
-        let gc_ref = self.inner.try_gc_ref(store)?;
+        Self::_ty_of(store, self.inner.try_gc_ref(store)?)
+    }
+
+    /// The type of the `anyref` object `gc_ref`.
+    pub(crate) fn _ty_of(store: &StoreOpaque, gc_ref: &VMGcRef) -> Result<HeapType> {
         if gc_ref.is_i31() {
             return Ok(HeapType::I31);
         }
@@ -456,16 +460,13 @@ impl AnyRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn as_eqref(&self, mut store: impl AsContextMut) -> Result<Option<Rooted<EqRef>>> {
-        self._as_eqref(store.as_context_mut().0)
+    pub fn as_eqref(&self, store: impl AsContext) -> Result<Option<Rooted<EqRef>>> {
+        self._as_eqref(store.as_context().0)
     }
 
-    pub(crate) fn _as_eqref(&self, store: &mut StoreOpaque) -> Result<Option<Rooted<EqRef>>> {
+    pub(crate) fn _as_eqref(&self, store: &StoreOpaque) -> Result<Option<Rooted<EqRef>>> {
         if self._is_eqref(store)? {
-            let gc_ref = self.inner.try_gc_ref(store)?.unchecked_copy();
-            let gc_ref = store.clone_gc_ref(&gc_ref);
-            let mut store = AutoAssertNoGc::new(store);
-            Ok(Some(Rooted::new(&mut store, gc_ref)))
+            Ok(Some(Rooted::from_gc_root_index(self.inner)))
         } else {
             Ok(None)
         }
@@ -482,11 +483,11 @@ impl AnyRef {
     ///
     /// Panics if this reference is associated with a different store, or if
     /// this `anyref` is not an `eqref`.
-    pub fn unwrap_eqref(&self, mut store: impl AsContextMut) -> Result<Rooted<EqRef>> {
-        self._unwrap_eqref(store.as_context_mut().0)
+    pub fn unwrap_eqref(&self, store: impl AsContext) -> Result<Rooted<EqRef>> {
+        self._unwrap_eqref(store.as_context().0)
     }
 
-    pub(crate) fn _unwrap_eqref(&self, store: &mut StoreOpaque) -> Result<Rooted<EqRef>> {
+    pub(crate) fn _unwrap_eqref(&self, store: &StoreOpaque) -> Result<Rooted<EqRef>> {
         Ok(self
             ._as_eqref(store)?
             .expect("AnyRef::unwrap_eqref on non-eqref"))

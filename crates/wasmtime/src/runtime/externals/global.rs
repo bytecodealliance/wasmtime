@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::runtime::vm::{self, VMGlobalDefinition, VMGlobalKind, VMOpaqueContext};
 use crate::{
     AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, GlobalType, HeapType, Mutability,
-    Ref, Val, ValType,
+    Ref, Unrooted, Val, ValType,
     store::{AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque},
     trampoline::generate_global_export,
 };
@@ -100,6 +100,7 @@ impl Global {
     }
 
     fn _new(store: &mut StoreOpaque, ty: GlobalType, val: Val) -> Result<Global> {
+        val.validate_rooted()?;
         val.ensure_matches_ty(store, ty.content()).context(
             "type mismatch: initial value provided does not match the type of this global",
         )?;
@@ -141,21 +142,24 @@ impl Global {
 
     /// Returns the current [`Val`] of this global.
     ///
+    /// A GC reference is returned as an unrooted reference
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes; root it with
+    /// [`Val::ensure_rooted`] to keep it for longer.
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this global.
-    pub fn get(&self, mut store: impl AsContextMut) -> Val {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._get(&mut store)
+    pub fn get(&self, store: impl AsContext) -> Val {
+        self._get(store.as_context().0)
     }
 
     /// Returns the current [`Val`] of this global if it has a numeric type
     /// (`i32`, `i64`, `f32`, `f64`, or `v128`), or `None` if it holds a
     /// reference.
     ///
-    /// Unlike [`Global::get`] this only needs shared access to the store since
-    /// reading a numeric value never has to clone a GC reference. That makes
-    /// it usable where only an [`AsContext`] is available, for example from
+    /// Like [`Global::get`], this only needs shared access to the store, so it
+    /// is usable where only an [`AsContext`] is available, for example from
     /// epoch or call hooks.
     ///
     /// # Panics
@@ -179,10 +183,10 @@ impl Global {
         }
     }
 
-    pub(crate) fn _get(&self, store: &mut AutoAssertNoGc<'_>) -> Val {
+    pub(crate) fn _get(&self, store: &StoreOpaque) -> Val {
         unsafe {
             let definition = self.definition(store).as_ref();
-            match self._ty(&store).content() {
+            match self._ty(store).content() {
                 ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 | ValType::V128 => self
                     ._get_numeric(store)
                     .expect("numeric globals always have a numeric value"),
@@ -196,10 +200,10 @@ impl Global {
 
                         HeapType::NoFunc => Ref::Func(None),
 
-                        HeapType::Extern => Ref::Extern(definition.as_gc_ref().map(|r| {
-                            let r = store.clone_gc_ref(r);
-                            ExternRef::from_cloned_gc_ref(store, r)
-                        })),
+                        HeapType::Extern => definition
+                            .as_gc_ref()
+                            .map(|r| Unrooted::<ExternRef>::new(store, r))
+                            .into(),
 
                         HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont => {
                             // TODO(#10248) Required to support stack switching in the embedder API.
@@ -210,10 +214,7 @@ impl Global {
 
                         HeapType::Exn => definition
                             .as_gc_ref()
-                            .map(|r| {
-                                let r = store.clone_gc_ref(r);
-                                ExnRef::from_cloned_gc_ref(store, r)
-                            })
+                            .map(|r| Unrooted::<ExnRef>::new(store, r))
                             .into(),
 
                         HeapType::Any
@@ -224,10 +225,7 @@ impl Global {
                         | HeapType::Array
                         | HeapType::ConcreteArray(_) => definition
                             .as_gc_ref()
-                            .map(|r| {
-                                let r = store.clone_gc_ref(r);
-                                AnyRef::from_cloned_gc_ref(store, r)
-                            })
+                            .map(|r| Unrooted::<AnyRef>::new(store, r))
                             .into(),
 
                         HeapType::NoExn => Ref::Exn(None),
@@ -268,6 +266,7 @@ impl Global {
         if global_ty.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");
         }
+        val.validate_rooted()?;
         val.ensure_matches_ty(&store, global_ty.content())
             .context("type mismatch: attempt to set global to value of wrong type")?;
 

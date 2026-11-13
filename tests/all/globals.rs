@@ -185,12 +185,12 @@ fn i31ref_global_get() -> Result<()> {
 
             let got = global.get(&mut store);
 
-            let val = val
-                .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
-            let got = got
-                .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+            let val = val.anyref().and_then(|a| {
+                a.and_then(|a| a.to_unrooted(&store).unwrap().as_i31(&store).unwrap())
+            });
+            let got = got.anyref().and_then(|a| {
+                a.and_then(|a| a.to_unrooted(&store).unwrap().as_i31(&store).unwrap())
+            });
 
             assert_eq!(val, got);
         }
@@ -225,12 +225,12 @@ fn i31ref_global_set() -> Result<()> {
             global.set(&mut store, new_val)?;
             let got = global.get(&mut store);
 
-            let new_val = new_val
-                .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
-            let got = got
-                .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+            let new_val = new_val.anyref().and_then(|a| {
+                a.and_then(|a| a.to_unrooted(&store).unwrap().as_i31(&store).unwrap())
+            });
+            let got = got.anyref().and_then(|a| {
+                a.and_then(|a| a.to_unrooted(&store).unwrap().as_i31(&store).unwrap())
+            });
 
             assert_eq!(new_val, got);
         }
@@ -309,12 +309,12 @@ fn i31ref_as_anyref_global_get() -> Result<()> {
 
             let got = global.get(&mut store);
 
-            let val = val
-                .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
-            let got = got
-                .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+            let val = val.anyref().and_then(|a| {
+                a.and_then(|a| a.to_unrooted(&store).unwrap().as_i31(&store).unwrap())
+            });
+            let got = got.anyref().and_then(|a| {
+                a.and_then(|a| a.to_unrooted(&store).unwrap().as_i31(&store).unwrap())
+            });
 
             assert_eq!(val, got);
         }
@@ -349,12 +349,12 @@ fn i31ref_as_anyref_global_set() -> Result<()> {
             global.set(&mut store, new_val)?;
             let got = global.get(&mut store);
 
-            let new_val = new_val
-                .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
-            let got = got
-                .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+            let new_val = new_val.anyref().and_then(|a| {
+                a.and_then(|a| a.to_unrooted(&store).unwrap().as_i31(&store).unwrap())
+            });
+            let got = got.anyref().and_then(|a| {
+                a.and_then(|a| a.to_unrooted(&store).unwrap().as_i31(&store).unwrap())
+            });
 
             assert_eq!(new_val, got);
         }

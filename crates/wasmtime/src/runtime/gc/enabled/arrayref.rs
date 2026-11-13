@@ -10,7 +10,7 @@ use crate::{
     ArrayType, AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
     OwnedRooted, RefType, Rooted, Val, ValRaw, ValType, WasmTy, bail_bug,
     prelude::*,
-    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
+    store::{AutoAssertNoGc, StoreContext, StoreOpaque},
 };
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{GcArrayLayout, VMGcKind, VMSharedTypeIndex};
@@ -285,6 +285,10 @@ impl ArrayRef {
     /// If the given `elem` value's type does not match the `allocator`'s array
     /// type's element type, an error is returned.
     ///
+    /// If the `elem` value holds a GC reference that is not rooted, an error is
+    /// returned, since allocating may collect garbage; see
+    /// [`Val::ensure_rooted`].
+    ///
     /// If the allocation cannot be satisfied because the GC heap is currently
     /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
     /// error is returned. The allocation might succeed on a second attempt if
@@ -337,6 +341,10 @@ impl ArrayRef {
     /// If the given `elem` value's type does not match the `allocator`'s array
     /// type's element type, an error is returned.
     ///
+    /// If the `elem` value holds a GC reference that is not rooted, an error is
+    /// returned, since allocating may collect garbage; see
+    /// [`Val::ensure_rooted`].
+    ///
     /// If the allocation cannot be satisfied because the GC heap is currently
     /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
     /// error is returned. The allocation might succeed on a second attempt if
@@ -377,6 +385,8 @@ impl ArrayRef {
         len: u32,
         asyncness: Asyncness,
     ) -> Result<Rooted<ArrayRef>> {
+        // Allocation may collect garbage, so the element must be rooted.
+        elem.validate_rooted().context("unrooted element value")?;
         store
             .retry_after_gc_async(limiter, (), asyncness, |store, ()| {
                 Self::new_from_iter(store, allocator, RepeatN(elem, len))
@@ -456,6 +466,10 @@ impl ArrayRef {
     /// If any of the `elems` values' type does not match the `allocator`'s
     /// array type's element type, an error is returned.
     ///
+    /// If any of the `elems` values holds a GC reference that is not rooted, an error is
+    /// returned, since allocating may collect garbage; see
+    /// [`Val::ensure_rooted`].
+    ///
     /// If the allocation cannot be satisfied because the GC heap is currently
     /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
     /// error is returned. The allocation might succeed on a second attempt if
@@ -510,6 +524,10 @@ impl ArrayRef {
     /// If any of the `elems` values' type does not match the `allocator`'s
     /// array type's element type, an error is returned.
     ///
+    /// If any of the `elems` values holds a GC reference that is not rooted, an error is
+    /// returned, since allocating may collect garbage; see
+    /// [`Val::ensure_rooted`].
+    ///
     /// If the allocation cannot be satisfied because the GC heap is currently
     /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
     /// error is returned. The allocation might succeed on a second attempt if
@@ -540,6 +558,10 @@ impl ArrayRef {
         elems: &[Val],
         asyncness: Asyncness,
     ) -> Result<Rooted<ArrayRef>> {
+        // Allocation may collect garbage, so the elements must be rooted.
+        for elem in elems {
+            elem.validate_rooted().context("unrooted element value")?;
+        }
         store
             .retry_after_gc_async(limiter, (), asyncness, |store, ()| {
                 Self::new_from_iter(store, allocator, elems.iter())
@@ -686,7 +708,7 @@ impl ArrayRef {
         match (|| {
             store
                 .require_gc_store_mut()?
-                .gc_object_data(arrayref.as_gc_ref())?
+                .gc_object_data_mut(arrayref.as_gc_ref())?
                 .copy_from_slice(layout.base_size, elems)
         })() {
             Ok(()) => Ok(Rooted::new(&mut store, arrayref.into())),
@@ -838,6 +860,12 @@ impl ArrayRef {
     /// Note that `i8` and `i16` element values are zero-extended into
     /// `Val::I32(_)`s.
     ///
+    /// GC references are returned as unrooted references
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes; root them with
+    /// [`Val::ensure_rooted`] or [`Val::ensure_all_rooted`] to keep them for
+    /// longer.
+    ///
     /// # Errors
     ///
     /// Return an error if this reference has been unrooted.
@@ -847,23 +875,22 @@ impl ArrayRef {
     /// Panics if this reference is associated with a different store.
     pub fn elems<'a, T: 'static>(
         &'a self,
-        store: impl Into<StoreContextMut<'a, T>>,
+        store: impl Into<StoreContext<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         self._elems(store.into().0)
     }
 
     pub(crate) fn _elems<'a>(
         &'a self,
-        store: &'a mut StoreOpaque,
+        store: &'a StoreOpaque,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         assert!(self.comes_from_same_store(store));
-        let store = AutoAssertNoGc::new(store);
 
-        let gc_ref = self.inner.try_gc_ref(&store)?;
+        let gc_ref = self.inner.try_gc_ref(store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.matches_kind(VMGcKind::ArrayRef));
 
-        let len = self._len(&store)?;
+        let len = self._len(store)?;
 
         return Ok(Elems {
             arrayref: self,
@@ -872,14 +899,14 @@ impl ArrayRef {
             len,
         });
 
-        struct Elems<'a, 'b> {
+        struct Elems<'a> {
             arrayref: &'a ArrayRef,
-            store: AutoAssertNoGc<'b>,
+            store: &'a StoreOpaque,
             index: u32,
             len: u32,
         }
 
-        impl Iterator for Elems<'_, '_> {
+        impl Iterator for Elems<'_> {
             type Item = Val;
 
             #[inline]
@@ -890,7 +917,7 @@ impl ArrayRef {
                     return None;
                 }
                 self.index += 1;
-                self.arrayref._get(&mut self.store, i).ok()
+                self.arrayref._get(self.store, i).ok()
             }
 
             #[inline]
@@ -901,7 +928,7 @@ impl ArrayRef {
             }
         }
 
-        impl ExactSizeIterator for Elems<'_, '_> {
+        impl ExactSizeIterator for Elems<'_> {
             #[inline]
             fn len(&self) -> usize {
                 let len = self.len - self.index;
@@ -910,20 +937,20 @@ impl ArrayRef {
         }
     }
 
-    fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
+    fn header<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcHeader> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
         Ok(store.require_gc_store()?.header(gc_ref)?)
     }
 
-    fn arrayref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMArrayRef> {
+    fn arrayref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMArrayRef> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
         debug_assert!(self.header(store)?.matches_kind(VMGcKind::ArrayRef));
         Ok(gc_ref.as_arrayref_unchecked())
     }
 
-    pub(crate) fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<GcArrayLayout> {
+    pub(crate) fn layout(&self, store: &StoreOpaque) -> Result<GcArrayLayout> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
         super::gc_array_layout(store.engine(), type_index)
@@ -939,6 +966,12 @@ impl ArrayRef {
     /// Note that `i8` and `i16` field values are zero-extended into
     /// `Val::I32(_)`s.
     ///
+    /// GC references are returned as unrooted references
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes; root them with
+    /// [`Val::ensure_rooted`] or [`Val::ensure_all_rooted`] to keep them for
+    /// longer.
+    ///
     /// # Errors
     ///
     /// Returns an `Err(_)` if the index is out of bounds or this reference has
@@ -947,17 +980,16 @@ impl ArrayRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn get(&self, mut store: impl AsContextMut, index: u32) -> Result<Val> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._get(&mut store, index)
+    pub fn get(&self, store: impl AsContext, index: u32) -> Result<Val> {
+        self._get(store.as_context().0, index)
     }
 
-    pub(crate) fn _get(&self, store: &mut AutoAssertNoGc<'_>, index: u32) -> Result<Val> {
+    pub(crate) fn _get(&self, store: &StoreOpaque, index: u32) -> Result<Val> {
         assert!(
             self.comes_from_same_store(store),
             "attempted to use an array with the wrong store",
         );
-        let arrayref = self.arrayref(store)?.unchecked_copy();
+        let arrayref = self.arrayref(store)?;
         let field_ty = self.field_ty(store)?;
         let layout = self.layout(store)?;
         let len = arrayref.len(store)?;
@@ -1000,6 +1032,9 @@ impl ArrayRef {
             value.comes_from_same_store(store),
             "attempted to use a value with the wrong store",
         );
+        value
+            .validate_rooted()
+            .with_context(|| format!("cannot set element {index}: unrooted value"))?;
 
         let mut store = AutoAssertNoGc::new(store);
 
@@ -1044,7 +1079,7 @@ impl ArrayRef {
         store: &mut AutoAssertNoGc<'_>,
         gc_ref: VMGcRef,
     ) -> Rooted<Self> {
-        debug_assert!(gc_ref.is_arrayref(&*store.unwrap_gc_store().gc_heap));
+        debug_assert!(gc_ref.is_arrayref(&**store.unwrap_gc_store().gc_heap.get()));
         Rooted::new(store, gc_ref)
     }
 }

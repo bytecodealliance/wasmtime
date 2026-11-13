@@ -69,6 +69,7 @@ mod tags;
 mod threads;
 mod traps;
 mod types;
+mod unrooted;
 mod wait_notify;
 mod winch_engine_features;
 mod winch_tail_calls;

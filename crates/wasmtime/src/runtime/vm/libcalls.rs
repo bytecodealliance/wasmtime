@@ -446,6 +446,7 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
         store
             .require_gc_store()?
             .gc_heap
+            .get()
             .vmmemory()
             .current_length(),
     )
@@ -466,6 +467,7 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
         store
             .require_gc_store()?
             .gc_heap
+            .get()
             .vmmemory()
             .current_length(),
     )

@@ -390,7 +390,7 @@ fn passing_structs_through_wasm_with_untyped_calls() -> Result<()> {
 
     let func = Func::new(&mut store, func_ty, |mut caller, args, results| {
         let s = args[0].unwrap_any_ref().unwrap();
-        let s = s.unwrap_struct(&mut caller)?;
+        let s = s.unwrap_rooted().unwrap_struct(&mut caller)?;
         assert_eq!(s.field(&mut caller, 0)?.unwrap_i32(), 42);
         results[0] = args[0];
         Ok(())
@@ -406,7 +406,7 @@ fn passing_structs_through_wasm_with_untyped_calls() -> Result<()> {
     run.call(&mut store, &[s.into()], &mut results)?;
 
     let t = results[0].unwrap_any_ref().unwrap();
-    let t = t.unwrap_struct(&mut store)?;
+    let t = t.to_rooted(&mut store)?.unwrap_struct(&mut store)?;
     assert_eq!(t.field(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &s, &t)?);
 
@@ -490,7 +490,7 @@ fn host_sets_struct_global() -> Result<()> {
     // Get the global from the host.
     let val = g.get(&mut store);
     let anyref = val.unwrap_anyref().expect("non-null");
-    let s1 = anyref.unwrap_struct(&store)?;
+    let s1 = anyref.to_rooted(&mut store)?.unwrap_struct(&store)?;
     assert_eq!(s1.field(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &s0, &s1)?);
 
@@ -540,7 +540,7 @@ fn wasm_sets_struct_global() -> Result<()> {
     let g = instance.get_global(&mut store, "g").unwrap();
     let val = g.get(&mut store);
     let anyref = val.unwrap_anyref().expect("non-null");
-    let s1 = anyref.unwrap_struct(&store)?;
+    let s1 = anyref.to_rooted(&mut store)?.unwrap_struct(&store)?;
     assert_eq!(s1.field(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &s0, &s1)?);
 
@@ -586,7 +586,7 @@ fn host_sets_struct_in_table() -> Result<()> {
     // Get the global from the host.
     let val = t.get(&mut store, 0).expect("in bounds");
     let anyref = val.unwrap_any().expect("non-null");
-    let s1 = anyref.unwrap_struct(&store)?;
+    let s1 = anyref.to_rooted(&mut store)?.unwrap_struct(&store)?;
     assert_eq!(s1.field(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &s0, &s1)?);
 
@@ -638,7 +638,7 @@ fn wasm_sets_struct_in_table() -> Result<()> {
     let t = instance.get_table(&mut store, "t").unwrap();
     let val = t.get(&mut store, 0).expect("in bounds");
     let anyref = val.unwrap_any().expect("non-null");
-    let s1 = anyref.unwrap_struct(&store)?;
+    let s1 = anyref.to_rooted(&mut store)?.unwrap_struct(&store)?;
     assert_eq!(s1.field(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &s0, &s1)?);
 
@@ -693,7 +693,7 @@ fn instantiate_with_struct_global() -> Result<()> {
     let g = instance.get_global(&mut store, "g").expect("export exists");
     let val = g.get(&mut store);
     let anyref = val.unwrap_anyref().expect("non-null");
-    let s1 = anyref.unwrap_struct(&store)?;
+    let s1 = anyref.to_rooted(&mut store)?.unwrap_struct(&store)?;
     assert_eq!(s1.field(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &s0, &s1)?);
 

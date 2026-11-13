@@ -2,8 +2,7 @@
 
 use crate::{
     AsContext, AsContextMut, ExnType, GcRefImpl, HeapType, Result, Rooted, Tag, Val,
-    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
-    vm::VMGcRef,
+    store::{AutoAssertNoGc, StoreContext, StoreOpaque},
 };
 
 /// Support for `ExnRefPre` disabled at compile time because the `gc`
@@ -17,13 +16,6 @@ pub enum ExnRef {}
 impl GcRefImpl for ExnRef {}
 
 impl ExnRef {
-    pub(crate) fn from_cloned_gc_ref(
-        _store: &mut AutoAssertNoGc<'_>,
-        _gc_ref: VMGcRef,
-    ) -> Rooted<Self> {
-        unimplemented!()
-    }
-
     pub fn from_raw(_store: impl AsContextMut, _raw: u32) -> Option<Rooted<Self>> {
         None
     }
@@ -56,19 +48,19 @@ impl ExnRef {
         match *self {}
     }
 
-    pub fn tag(&self, _store: impl AsContextMut) -> Result<Tag> {
+    pub fn tag(&self, _store: impl AsContext) -> Result<Tag> {
         match *self {}
     }
 
     pub fn fields<'a, T: 'static>(
         &self,
-        _store: impl Into<StoreContextMut<'a, T>>,
+        _store: impl Into<StoreContext<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a + '_> {
         match *self {}
         Ok([].into_iter())
     }
 
-    pub fn field(&self, _store: impl AsContextMut, _index: usize) -> Result<Val> {
+    pub fn field(&self, _store: impl AsContext, _index: usize) -> Result<Val> {
         match *self {}
     }
 
