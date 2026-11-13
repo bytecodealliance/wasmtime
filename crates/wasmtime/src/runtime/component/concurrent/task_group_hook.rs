@@ -128,7 +128,7 @@ impl StoreOpaque {
                 .get_mut()
                 .iter_mut()
                 .filter_map(|(rep, entry)| {
-                    if entry.downcast_mut::<TaskGroup>().is_some() {
+                    if entry.entry().is::<TaskGroup>() {
                         Some(TableId::new(rep))
                     } else {
                         None
