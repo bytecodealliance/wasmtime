@@ -50,6 +50,9 @@ libc = { workspace = true }
 [target.'cfg(any(target_os = "android", target_os = "linux"))'.dependencies]
 rustix-linux-procfs = "0.1.1"
 
+[target.'cfg(target_vendor = "apple")'.dependencies]
+libc = { workspace = true }
+
 [target.'cfg(windows)'.dependencies]
 rustix = { workspace = true, features = ["event", "net"] }
 
