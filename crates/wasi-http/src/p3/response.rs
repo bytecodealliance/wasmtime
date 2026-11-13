@@ -90,9 +90,14 @@ impl Response {
                     };
                     fut.await
                 }));
-                body.with_filtered_trailers(is_forbidden)
-                    .with_error_report(body_result_tx, content_length, Error::HttpResponseBodySize)
-                    .boxed_unsync()
+                let body = body.with_filtered_trailers(is_forbidden);
+                let body = if let Some(limit) = content_length {
+                    body.with_content_length(limit, Error::HttpResponseBodySize)
+                        .boxed_unsync()
+                } else {
+                    body.boxed_unsync()
+                };
+                body.with_error_report(body_result_tx).boxed_unsync()
             }
         };
         Ok(http::Response::from_parts(res, body))

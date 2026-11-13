@@ -197,9 +197,14 @@ impl Request {
                     };
                     fut.await
                 }));
-                body.with_filtered_trailers(is_forbidden)
-                    .with_error_report(body_result_tx, content_length, Error::HttpRequestBodySize)
-                    .boxed_unsync()
+                let body = body.with_filtered_trailers(is_forbidden);
+                let body = if let Some(limit) = content_length {
+                    body.with_content_length(limit, Error::HttpRequestBodySize)
+                        .boxed_unsync()
+                } else {
+                    body.boxed_unsync()
+                };
+                body.with_error_report(body_result_tx).boxed_unsync()
             }
         };
         let mut store = store.as_context_mut();
