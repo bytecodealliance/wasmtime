@@ -780,11 +780,12 @@ impl wasmtime_environ::Compiler for Compiler {
             ret.push((sym_id, info));
         }
 
-        // Sort breakpoints by Wasm PC now. Note that the same Wasm PC
-        // may appear in multiple functions (due to inlining) so it is
-        // only now that we can aggregate all appearances of a PC
-        // together for breakpoint metadata indexed by that PC.
-        breakpoint_table.sort_by_key(|(_module, wasm_pc, _text_range)| *wasm_pc);
+        // Sort breakpoints by module, then Wasm PC, now. Note that the
+        // same Wasm PC may appear in multiple functions (due to
+        // inlining), even in another module's functions, so it is only
+        // now that we can aggregate all appearances of a PC together
+        // for breakpoint metadata indexed by that module and PC.
+        breakpoint_table.sort_by_key(|(module, wasm_pc, _text_range)| (*module, *wasm_pc));
 
         builder.finish(|text| {
             if !breakpoint_table.is_empty() {
