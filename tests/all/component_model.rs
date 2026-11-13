@@ -108,6 +108,17 @@ impl ApiStyle {
     }
 }
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn implements_enabled_by_default() -> Result<()> {
+    let engine = wasmtime::Engine::default();
+    Component::new(
+        &engine,
+        r#"(component (import "a" (implements "a:b/c") (instance)))"#,
+    )?;
+    Ok(())
+}
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum Type {
     S8,
