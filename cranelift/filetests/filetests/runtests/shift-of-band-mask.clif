@@ -1,0 +1,222 @@
+test interpret
+test run
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target pulley32
+target pulley64
+
+function %band_ishl_i32_3fffffff_2(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1073741823
+    v2 = band v0, v1
+    v3 = iconst.i32 2
+    v4 = ishl v2, v3
+    return v4
+}
+; run: %band_ishl_i32_3fffffff_2(0) == 0
+; run: %band_ishl_i32_3fffffff_2(1) == 4
+; run: %band_ishl_i32_3fffffff_2(2) == 8
+; run: %band_ishl_i32_3fffffff_2(11761984) == 47047936
+; run: %band_ishl_i32_3fffffff_2(486112710) == 1944450840
+; run: %band_ishl_i32_3fffffff_2(1073741821) == -12
+; run: %band_ishl_i32_3fffffff_2(1073741822) == -8
+; run: %band_ishl_i32_3fffffff_2(1073741823) == -4
+; run: %band_ishl_i32_3fffffff_2(1073741824) == 0
+; run: %band_ishl_i32_3fffffff_2(1073741825) == 4
+; run: %band_ishl_i32_3fffffff_2(2147483647) == -4
+; run: %band_ishl_i32_3fffffff_2(-2147483648) == 0
+; run: %band_ishl_i32_3fffffff_2(-2147483647) == 4
+; run: %band_ishl_i32_3fffffff_2(-2) == -8
+; run: %band_ishl_i32_3fffffff_2(-1) == -4
+
+function %band_ishl_i32_ff_24(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 255
+    v2 = band v0, v1
+    v3 = iconst.i32 24
+    v4 = ishl v2, v3
+    return v4
+}
+; run: %band_ishl_i32_ff_24(0) == 0
+; run: %band_ishl_i32_ff_24(1) == 16777216
+; run: %band_ishl_i32_ff_24(2) == 33554432
+; run: %band_ishl_i32_ff_24(253) == -50331648
+; run: %band_ishl_i32_ff_24(254) == -33554432
+; run: %band_ishl_i32_ff_24(255) == -16777216
+; run: %band_ishl_i32_ff_24(256) == 0
+; run: %band_ishl_i32_ff_24(257) == 16777216
+; run: %band_ishl_i32_ff_24(1088094613) == -1795162112
+; run: %band_ishl_i32_ff_24(2147483647) == -16777216
+; run: %band_ishl_i32_ff_24(-2147483648) == 0
+; run: %band_ishl_i32_ff_24(-2147483647) == 16777216
+; run: %band_ishl_i32_ff_24(-961658644) == -335544320
+; run: %band_ishl_i32_ff_24(-2) == -33554432
+; run: %band_ishl_i32_ff_24(-1) == -16777216
+
+function %band_ishl_i32_7fffffff_33(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 2147483647
+    v2 = band v0, v1
+    v3 = iconst.i32 33
+    v4 = ishl v2, v3
+    return v4
+}
+; run: %band_ishl_i32_7fffffff_33(0) == 0
+; run: %band_ishl_i32_7fffffff_33(1) == 2
+; run: %band_ishl_i32_7fffffff_33(2) == 4
+; run: %band_ishl_i32_7fffffff_33(748463786) == 1496927572
+; run: %band_ishl_i32_7fffffff_33(1551435215) == -1192096866
+; run: %band_ishl_i32_7fffffff_33(2147483645) == -6
+; run: %band_ishl_i32_7fffffff_33(2147483646) == -4
+; run: %band_ishl_i32_7fffffff_33(2147483647) == -2
+; run: %band_ishl_i32_7fffffff_33(-2147483648) == 0
+; run: %band_ishl_i32_7fffffff_33(-2147483647) == 2
+; run: %band_ishl_i32_7fffffff_33(-2) == -4
+; run: %band_ishl_i32_7fffffff_33(-1) == -2
+
+function %band_ishl_i32_1fffffff_2(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 536870911
+    v2 = band v0, v1
+    v3 = iconst.i32 2
+    v4 = ishl v2, v3
+    return v4
+}
+; run: %band_ishl_i32_1fffffff_2(0) == 0
+; run: %band_ishl_i32_1fffffff_2(1) == 4
+; run: %band_ishl_i32_1fffffff_2(2) == 8
+; run: %band_ishl_i32_1fffffff_2(454992537) == 1819970148
+; run: %band_ishl_i32_1fffffff_2(536870909) == 2147483636
+; run: %band_ishl_i32_1fffffff_2(536870910) == 2147483640
+; run: %band_ishl_i32_1fffffff_2(536870911) == 2147483644
+; run: %band_ishl_i32_1fffffff_2(536870912) == 0
+; run: %band_ishl_i32_1fffffff_2(536870913) == 4
+; run: %band_ishl_i32_1fffffff_2(2054373260) == 1775042096
+; run: %band_ishl_i32_1fffffff_2(2147483647) == 2147483644
+; run: %band_ishl_i32_1fffffff_2(-2147483648) == 0
+; run: %band_ishl_i32_1fffffff_2(-2147483647) == 4
+; run: %band_ishl_i32_1fffffff_2(-2) == 2147483640
+; run: %band_ishl_i32_1fffffff_2(-1) == 2147483644
+
+function %band_ushr_i64_fffffffffffffff0_4(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -16
+    v2 = band v0, v1
+    v3 = iconst.i32 4
+    v4 = ushr v2, v3
+    return v4
+}
+; run: %band_ushr_i64_fffffffffffffff0_4(0) == 0
+; run: %band_ushr_i64_fffffffffffffff0_4(1) == 0
+; run: %band_ushr_i64_fffffffffffffff0_4(2) == 0
+; run: %band_ushr_i64_fffffffffffffff0_4(3348618047889224480) == 209288627993076530
+; run: %band_ushr_i64_fffffffffffffff0_4(9223372036854775807) == 576460752303423487
+; run: %band_ushr_i64_fffffffffffffff0_4(-9223372036854775808) == 576460752303423488
+; run: %band_ushr_i64_fffffffffffffff0_4(-9223372036854775807) == 576460752303423488
+; run: %band_ushr_i64_fffffffffffffff0_4(-8715695174584603474) == 608190556195309258
+; run: %band_ushr_i64_fffffffffffffff0_4(-18) == 1152921504606846974
+; run: %band_ushr_i64_fffffffffffffff0_4(-17) == 1152921504606846974
+; run: %band_ushr_i64_fffffffffffffff0_4(-16) == 1152921504606846975
+; run: %band_ushr_i64_fffffffffffffff0_4(-15) == 1152921504606846975
+; run: %band_ushr_i64_fffffffffffffff0_4(-14) == 1152921504606846975
+; run: %band_ushr_i64_fffffffffffffff0_4(-2) == 1152921504606846975
+; run: %band_ushr_i64_fffffffffffffff0_4(-1) == 1152921504606846975
+
+function %band_ushr_i8_f8_3(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 -8
+    v2 = band v0, v1
+    v3 = iconst.i32 3
+    v4 = ushr v2, v3
+    return v4
+}
+; run: %band_ushr_i8_f8_3(0) == 0
+; run: %band_ushr_i8_f8_3(1) == 0
+; run: %band_ushr_i8_f8_3(2) == 0
+; run: %band_ushr_i8_f8_3(27) == 3
+; run: %band_ushr_i8_f8_3(63) == 7
+; run: %band_ushr_i8_f8_3(127) == 15
+; run: %band_ushr_i8_f8_3(-128) == 16
+; run: %band_ushr_i8_f8_3(-127) == 16
+; run: %band_ushr_i8_f8_3(-10) == 30
+; run: %band_ushr_i8_f8_3(-9) == 30
+; run: %band_ushr_i8_f8_3(-8) == 31
+; run: %band_ushr_i8_f8_3(-7) == 31
+; run: %band_ushr_i8_f8_3(-6) == 31
+; run: %band_ushr_i8_f8_3(-2) == 31
+; run: %band_ushr_i8_f8_3(-1) == 31
+
+function %band_sshr_i32_fffffff0_4(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -16
+    v2 = band v0, v1
+    v3 = iconst.i32 4
+    v4 = sshr v2, v3
+    return v4
+}
+; run: %band_sshr_i32_fffffff0_4(0) == 0
+; run: %band_sshr_i32_fffffff0_4(1) == 0
+; run: %band_sshr_i32_fffffff0_4(2) == 0
+; run: %band_sshr_i32_fffffff0_4(1214790390) == 75924399
+; run: %band_sshr_i32_fffffff0_4(2147483647) == 134217727
+; run: %band_sshr_i32_fffffff0_4(-2147483648) == -134217728
+; run: %band_sshr_i32_fffffff0_4(-2147483647) == -134217728
+; run: %band_sshr_i32_fffffff0_4(-1563627428) == -97726715
+; run: %band_sshr_i32_fffffff0_4(-18) == -2
+; run: %band_sshr_i32_fffffff0_4(-17) == -2
+; run: %band_sshr_i32_fffffff0_4(-16) == -1
+; run: %band_sshr_i32_fffffff0_4(-15) == -1
+; run: %band_sshr_i32_fffffff0_4(-14) == -1
+; run: %band_sshr_i32_fffffff0_4(-2) == -1
+; run: %band_sshr_i32_fffffff0_4(-1) == -1
+
+function %band_sshr_i32_7ffffff0_4(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 2147483632
+    v2 = band v0, v1
+    v3 = iconst.i32 4
+    v4 = sshr v2, v3
+    return v4
+}
+; run: %band_sshr_i32_7ffffff0_4(0) == 0
+; run: %band_sshr_i32_7ffffff0_4(1) == 0
+; run: %band_sshr_i32_7ffffff0_4(2) == 0
+; run: %band_sshr_i32_7ffffff0_4(14540077) == 908754
+; run: %band_sshr_i32_7ffffff0_4(1951436839) == 121964802
+; run: %band_sshr_i32_7ffffff0_4(2147483630) == 134217726
+; run: %band_sshr_i32_7ffffff0_4(2147483631) == 134217726
+; run: %band_sshr_i32_7ffffff0_4(2147483632) == 134217727
+; run: %band_sshr_i32_7ffffff0_4(2147483633) == 134217727
+; run: %band_sshr_i32_7ffffff0_4(2147483634) == 134217727
+; run: %band_sshr_i32_7ffffff0_4(2147483647) == 134217727
+; run: %band_sshr_i32_7ffffff0_4(-2147483648) == 0
+; run: %band_sshr_i32_7ffffff0_4(-2147483647) == 0
+; run: %band_sshr_i32_7ffffff0_4(-2) == 134217727
+; run: %band_sshr_i32_7ffffff0_4(-1) == 134217727
+
+function %band_sshr_i16_fff0_4(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 -16
+    v2 = band v0, v1
+    v3 = iconst.i32 4
+    v4 = sshr v2, v3
+    return v4
+}
+; run: %band_sshr_i16_fff0_4(0) == 0
+; run: %band_sshr_i16_fff0_4(1) == 0
+; run: %band_sshr_i16_fff0_4(2) == 0
+; run: %band_sshr_i16_fff0_4(30426) == 1901
+; run: %band_sshr_i16_fff0_4(32767) == 2047
+; run: %band_sshr_i16_fff0_4(-32768) == -2048
+; run: %band_sshr_i16_fff0_4(-32767) == -2048
+; run: %band_sshr_i16_fff0_4(-21015) == -1314
+; run: %band_sshr_i16_fff0_4(-18) == -2
+; run: %band_sshr_i16_fff0_4(-17) == -2
+; run: %band_sshr_i16_fff0_4(-16) == -1
+; run: %band_sshr_i16_fff0_4(-15) == -1
+; run: %band_sshr_i16_fff0_4(-14) == -1
+; run: %band_sshr_i16_fff0_4(-2) == -1
+; run: %band_sshr_i16_fff0_4(-1) == -1

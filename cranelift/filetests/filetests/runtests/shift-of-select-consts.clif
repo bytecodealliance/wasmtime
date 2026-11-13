@@ -1,0 +1,87 @@
+test interpret
+test run
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target pulley32
+target pulley64
+
+function %ishl_const_select_i32_9_1(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 9
+    v2 = iconst.i32 1
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 -1
+    v5 = ishl v4, v3
+    return v5
+}
+; run: %ishl_const_select_i32_9_1(0) == -2
+; run: %ishl_const_select_i32_9_1(1) == -512
+; run: %ishl_const_select_i32_9_1(-1) == -512
+
+function %ishl_const_select_i16_17_3(i8) -> i16 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 3
+    v3 = select v0, v1, v2
+    v4 = iconst.i16 257
+    v5 = ishl v4, v3
+    return v5
+}
+; run: %ishl_const_select_i16_17_3(0) == 2056
+; run: %ishl_const_select_i16_17_3(1) == 514
+; run: %ishl_const_select_i16_17_3(-1) == 514
+
+function %ushr_const_select_i32_4_28(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 4
+    v2 = iconst.i32 28
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 -268435456
+    v5 = ushr v4, v3
+    return v5
+}
+; run: %ushr_const_select_i32_4_28(0) == 15
+; run: %ushr_const_select_i32_4_28(1) == 251658240
+; run: %ushr_const_select_i32_4_28(-1) == 251658240
+
+function %sshr_const_select_i32_4_28(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 4
+    v2 = iconst.i32 28
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 -268435456
+    v5 = sshr v4, v3
+    return v5
+}
+; run: %sshr_const_select_i32_4_28(0) == -1
+; run: %sshr_const_select_i32_4_28(1) == -16777216
+; run: %sshr_const_select_i32_4_28(-1) == -16777216
+
+function %rotl_const_select_i32_4_40(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 4
+    v2 = iconst.i32 40
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 -268435455
+    v5 = rotl v4, v3
+    return v5
+}
+; run: %rotl_const_select_i32_4_40(0) == 496
+; run: %rotl_const_select_i32_4_40(1) == 31
+; run: %rotl_const_select_i32_4_40(-1) == 31
+
+function %rotr_const_select_i32_4_40(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i64 4
+    v2 = iconst.i64 40
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 -268435455
+    v5 = rotr v4, v3
+    return v5
+}
+; run: %rotr_const_select_i32_4_40(0) == 32505856
+; run: %rotr_const_select_i32_4_40(1) == 520093696
+; run: %rotr_const_select_i32_4_40(-1) == 520093696

@@ -1,0 +1,147 @@
+test interpret
+test run
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target pulley32
+target pulley64
+
+function %clz_eq_1_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = clz v0
+    v2 = iconst.i8 1
+    v3 = icmp eq v1, v2
+    return v3
+}
+; run: %clz_eq_1_i8(0) == 0
+; run: %clz_eq_1_i8(1) == 0
+; run: %clz_eq_1_i8(2) == 0
+; run: %clz_eq_1_i8(10) == 0
+; run: %clz_eq_1_i8(51) == 0
+; run: %clz_eq_1_i8(62) == 0
+; run: %clz_eq_1_i8(63) == 0
+; run: %clz_eq_1_i8(64) == 1
+; run: %clz_eq_1_i8(65) == 1
+; run: %clz_eq_1_i8(66) == 1
+; run: %clz_eq_1_i8(127) == 1
+; run: %clz_eq_1_i8(-128) == 0
+; run: %clz_eq_1_i8(-127) == 0
+; run: %clz_eq_1_i8(-2) == 0
+; run: %clz_eq_1_i8(-1) == 0
+
+function %clz_ne_1_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = clz v0
+    v2 = iconst.i8 1
+    v3 = icmp ne v1, v2
+    return v3
+}
+; run: %clz_ne_1_i8(0) == 1
+; run: %clz_ne_1_i8(1) == 1
+; run: %clz_ne_1_i8(2) == 1
+; run: %clz_ne_1_i8(50) == 1
+; run: %clz_ne_1_i8(53) == 1
+; run: %clz_ne_1_i8(62) == 1
+; run: %clz_ne_1_i8(63) == 1
+; run: %clz_ne_1_i8(64) == 0
+; run: %clz_ne_1_i8(65) == 0
+; run: %clz_ne_1_i8(66) == 0
+; run: %clz_ne_1_i8(127) == 0
+; run: %clz_ne_1_i8(-128) == 1
+; run: %clz_ne_1_i8(-127) == 1
+; run: %clz_ne_1_i8(-2) == 1
+; run: %clz_ne_1_i8(-1) == 1
+
+function %clz_eq_1_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = clz v0
+    v2 = iconst.i32 1
+    v3 = icmp eq v1, v2
+    return v3
+}
+; run: %clz_eq_1_i32(0) == 0
+; run: %clz_eq_1_i32(1) == 0
+; run: %clz_eq_1_i32(2) == 0
+; run: %clz_eq_1_i32(1073741822) == 0
+; run: %clz_eq_1_i32(1073741823) == 0
+; run: %clz_eq_1_i32(1073741824) == 1
+; run: %clz_eq_1_i32(1073741825) == 1
+; run: %clz_eq_1_i32(1073741826) == 1
+; run: %clz_eq_1_i32(1504099518) == 1
+; run: %clz_eq_1_i32(2147483647) == 1
+; run: %clz_eq_1_i32(-2147483648) == 0
+; run: %clz_eq_1_i32(-2147483647) == 0
+; run: %clz_eq_1_i32(-1098608273) == 0
+; run: %clz_eq_1_i32(-2) == 0
+; run: %clz_eq_1_i32(-1) == 0
+
+function %clz_ne_1_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = clz v0
+    v2 = iconst.i32 1
+    v3 = icmp ne v1, v2
+    return v3
+}
+; run: %clz_ne_1_i32(0) == 1
+; run: %clz_ne_1_i32(1) == 1
+; run: %clz_ne_1_i32(2) == 1
+; run: %clz_ne_1_i32(1073741822) == 1
+; run: %clz_ne_1_i32(1073741823) == 1
+; run: %clz_ne_1_i32(1073741824) == 0
+; run: %clz_ne_1_i32(1073741825) == 0
+; run: %clz_ne_1_i32(1073741826) == 0
+; run: %clz_ne_1_i32(2147483647) == 0
+; run: %clz_ne_1_i32(-2147483648) == 1
+; run: %clz_ne_1_i32(-2147483647) == 1
+; run: %clz_ne_1_i32(-1852949414) == 1
+; run: %clz_ne_1_i32(-381626246) == 1
+; run: %clz_ne_1_i32(-2) == 1
+; run: %clz_ne_1_i32(-1) == 1
+
+function %clz_eq_1_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = clz v0
+    v2 = iconst.i64 1
+    v3 = icmp eq v1, v2
+    return v3
+}
+; run: %clz_eq_1_i64(0) == 0
+; run: %clz_eq_1_i64(1) == 0
+; run: %clz_eq_1_i64(2) == 0
+; run: %clz_eq_1_i64(1642449092221065744) == 0
+; run: %clz_eq_1_i64(4611686018427387902) == 0
+; run: %clz_eq_1_i64(4611686018427387903) == 0
+; run: %clz_eq_1_i64(4611686018427387904) == 1
+; run: %clz_eq_1_i64(4611686018427387905) == 1
+; run: %clz_eq_1_i64(4611686018427387906) == 1
+; run: %clz_eq_1_i64(5005030216184048055) == 1
+; run: %clz_eq_1_i64(9223372036854775807) == 1
+; run: %clz_eq_1_i64(-9223372036854775808) == 0
+; run: %clz_eq_1_i64(-9223372036854775807) == 0
+; run: %clz_eq_1_i64(-2) == 0
+; run: %clz_eq_1_i64(-1) == 0
+
+function %clz_ne_1_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = clz v0
+    v2 = iconst.i64 1
+    v3 = icmp ne v1, v2
+    return v3
+}
+; run: %clz_ne_1_i64(0) == 1
+; run: %clz_ne_1_i64(1) == 1
+; run: %clz_ne_1_i64(2) == 1
+; run: %clz_ne_1_i64(4611686018427387902) == 1
+; run: %clz_ne_1_i64(4611686018427387903) == 1
+; run: %clz_ne_1_i64(4611686018427387904) == 0
+; run: %clz_ne_1_i64(4611686018427387905) == 0
+; run: %clz_ne_1_i64(4611686018427387906) == 0
+; run: %clz_ne_1_i64(6821676194913811078) == 0
+; run: %clz_ne_1_i64(9223372036854775807) == 0
+; run: %clz_ne_1_i64(-9223372036854775808) == 1
+; run: %clz_ne_1_i64(-9223372036854775807) == 1
+; run: %clz_ne_1_i64(-5498532924075193670) == 1
+; run: %clz_ne_1_i64(-2) == 1
+; run: %clz_ne_1_i64(-1) == 1

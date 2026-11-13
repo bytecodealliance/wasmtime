@@ -1,0 +1,129 @@
+test interpret
+test run
+set opt_level=speed
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target pulley32
+target pulley64
+
+function %band_eq_i32_fffffff0_0(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 -16
+    v2 = band v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %band_eq_i32_fffffff0_0(0) == 1
+; run: %band_eq_i32_fffffff0_0(1) == 1
+; run: %band_eq_i32_fffffff0_0(2) == 1
+; run: %band_eq_i32_fffffff0_0(13) == 1
+; run: %band_eq_i32_fffffff0_0(14) == 1
+; run: %band_eq_i32_fffffff0_0(15) == 1
+; run: %band_eq_i32_fffffff0_0(16) == 0
+; run: %band_eq_i32_fffffff0_0(17) == 0
+; run: %band_eq_i32_fffffff0_0(18) == 0
+; run: %band_eq_i32_fffffff0_0(2147483647) == 0
+; run: %band_eq_i32_fffffff0_0(-2147483648) == 0
+; run: %band_eq_i32_fffffff0_0(-2147483647) == 0
+; run: %band_eq_i32_fffffff0_0(-1624001409) == 0
+; run: %band_eq_i32_fffffff0_0(-1579906119) == 0
+; run: %band_eq_i32_fffffff0_0(-2) == 0
+; run: %band_eq_i32_fffffff0_0(-1) == 0
+
+function %band_ne_i64_ffffffffffffff00_0(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 -256
+    v2 = band v0, v1
+    v3 = iconst.i64 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+; run: %band_ne_i64_ffffffffffffff00_0(0) == 0
+; run: %band_ne_i64_ffffffffffffff00_0(1) == 0
+; run: %band_ne_i64_ffffffffffffff00_0(2) == 0
+; run: %band_ne_i64_ffffffffffffff00_0(253) == 0
+; run: %band_ne_i64_ffffffffffffff00_0(254) == 0
+; run: %band_ne_i64_ffffffffffffff00_0(255) == 0
+; run: %band_ne_i64_ffffffffffffff00_0(256) == 1
+; run: %band_ne_i64_ffffffffffffff00_0(257) == 1
+; run: %band_ne_i64_ffffffffffffff00_0(258) == 1
+; run: %band_ne_i64_ffffffffffffff00_0(9223372036854775807) == 1
+; run: %band_ne_i64_ffffffffffffff00_0(-9223372036854775808) == 1
+; run: %band_ne_i64_ffffffffffffff00_0(-9223372036854775807) == 1
+; run: %band_ne_i64_ffffffffffffff00_0(-4257676279870689915) == 1
+; run: %band_ne_i64_ffffffffffffff00_0(-3896133300081719081) == 1
+; run: %band_ne_i64_ffffffffffffff00_0(-2) == 1
+; run: %band_ne_i64_ffffffffffffff00_0(-1) == 1
+
+function %band_eq_i32_80000000_0(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 -2147483648
+    v2 = band v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %band_eq_i32_80000000_0(0) == 1
+; run: %band_eq_i32_80000000_0(1) == 1
+; run: %band_eq_i32_80000000_0(2) == 1
+; run: %band_eq_i32_80000000_0(1097403016) == 1
+; run: %band_eq_i32_80000000_0(2147483645) == 1
+; run: %band_eq_i32_80000000_0(2147483646) == 1
+; run: %band_eq_i32_80000000_0(2147483647) == 1
+; run: %band_eq_i32_80000000_0(-2147483648) == 0
+; run: %band_eq_i32_80000000_0(-2147483647) == 0
+; run: %band_eq_i32_80000000_0(-2147483646) == 0
+; run: %band_eq_i32_80000000_0(-1419525509) == 0
+; run: %band_eq_i32_80000000_0(-2) == 0
+; run: %band_eq_i32_80000000_0(-1) == 0
+
+function %band_ne_i8_80_0(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 -128
+    v2 = band v0, v1
+    v3 = iconst.i8 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+; run: %band_ne_i8_80_0(0) == 0
+; run: %band_ne_i8_80_0(1) == 0
+; run: %band_ne_i8_80_0(2) == 0
+; run: %band_ne_i8_80_0(93) == 0
+; run: %band_ne_i8_80_0(125) == 0
+; run: %band_ne_i8_80_0(126) == 0
+; run: %band_ne_i8_80_0(127) == 0
+; run: %band_ne_i8_80_0(-128) == 1
+; run: %band_ne_i8_80_0(-127) == 1
+; run: %band_ne_i8_80_0(-126) == 1
+; run: %band_ne_i8_80_0(-64) == 1
+; run: %band_ne_i8_80_0(-2) == 1
+; run: %band_ne_i8_80_0(-1) == 1
+
+function %band_eq_i32_ffffff70_0(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 -144
+    v2 = band v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+; run: %band_eq_i32_ffffff70_0(0) == 1
+; run: %band_eq_i32_ffffff70_0(1) == 1
+; run: %band_eq_i32_ffffff70_0(2) == 1
+; run: %band_eq_i32_ffffff70_0(141) == 1
+; run: %band_eq_i32_ffffff70_0(142) == 1
+; run: %band_eq_i32_ffffff70_0(143) == 1
+; run: %band_eq_i32_ffffff70_0(144) == 0
+; run: %band_eq_i32_ffffff70_0(145) == 0
+; run: %band_eq_i32_ffffff70_0(146) == 0
+; run: %band_eq_i32_ffffff70_0(2034175623) == 0
+; run: %band_eq_i32_ffffff70_0(2147483647) == 0
+; run: %band_eq_i32_ffffff70_0(-2147483648) == 0
+; run: %band_eq_i32_ffffff70_0(-2147483647) == 0
+; run: %band_eq_i32_ffffff70_0(-445011458) == 0
+; run: %band_eq_i32_ffffff70_0(-2) == 0
+; run: %band_eq_i32_ffffff70_0(-1) == 0
+
