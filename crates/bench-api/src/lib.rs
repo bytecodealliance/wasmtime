@@ -898,4 +898,12 @@ cfg_select! {
             }
         }
     }
+    _ => {
+        fn this_dynamic_library_path() -> Result<PathBuf> {
+            Err(format_err!(
+                "the `wasmtime-bench-api` crate does not support this platform; \
+                 implement support then recompile",
+            ))
+        }
+    }
 }
