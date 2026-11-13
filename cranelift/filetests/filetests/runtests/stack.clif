@@ -77,7 +77,7 @@ block0(v0: i64, v1: i64):
 
 
 
-function %multi_slot_out_of_bounds_writes(i8, i64) -> i8, i64 {
+function %multi_slot_out_of_bounds_writes(i8, i64) -> i8, i64 system_v {
     ss0 = explicit_slot 1
     ss1 = explicit_slot 8
 
@@ -96,7 +96,7 @@ block0(v0: i8, v1: i64):
 ; run: %multi_slot_out_of_bounds_writes(0, 2) == [0, 2]
 
 
-function %multi_slot_offset_writes(i8, i64) -> i8, i64 {
+function %multi_slot_offset_writes(i8, i64) -> i8, i64 system_v {
     ss0 = explicit_slot 8
     ss1 = explicit_slot 8
 

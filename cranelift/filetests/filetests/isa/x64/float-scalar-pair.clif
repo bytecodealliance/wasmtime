@@ -1,4 +1,5 @@
 test compile precise-output
+set enable_llvm_abi_extensions
 target x86_64
 
 function %f32_tuple(f32, f32) -> f32, f32 windows_fastcall {
