@@ -2195,6 +2195,12 @@ criteria = "safe-to-deploy"
 version = "0.5.2"
 notes = "This is a more compact implementation of std's Cow. It uses lots of unsafe, but appears sound in my audit."
 
+[[audits.bindgen]]
+who = "Adam Bratschi-Kaye <ark.email@gmail.com>"
+criteria = "safe-to-run"
+delta = "0.72.0 -> 0.72.1"
+notes = "Tiny change to match clang."
+
 [[audits.bitflags]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -2691,6 +2697,12 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 version = "0.4.4"
 notes = "Most unsafe is hidden by `inout` dependency; only remaining unsafe is raw-splitting a slice and an unreachable hint. Older versions of this regularly reach ~150k daily downloads."
+
+[[audits.clang-sys]]
+who = "Adam Bratschi-Kaye <ark.email@gmail.com>"
+criteria = "safe-to-run"
+delta = "1.7.0 -> 1.8.1"
+notes = "Broadens a bit where clang is searched for. Changes to actual code are small and don't significantly change behavior."
 
 [[audits.clap]]
 who = "Chris Fallin <chris@cfallin.org>"
@@ -3951,6 +3963,12 @@ This bump only changed from a function to an associated `const` and trivially
 contains no significant changes.
 """
 
+[[audits.minimal-lexical]]
+who = "Adam Bratschi-Kaye <ark.email@gmail.com>"
+criteria = "safe-to-run"
+version = "0.2.1"
+notes = "No build scripts, no I/O operations. Inline assembly is just for FP precision settings and unsafe code is just for improved performance."
+
 [[audits.miniz_oxide]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -4893,6 +4911,18 @@ who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 version = "0.4.18"
 
+[[audits.strum]]
+who = "Adam Bratschi-Kaye <ark.email@gmail.com>"
+criteria = "safe-to-run"
+delta = "0.27.1 -> 0.28.0"
+notes = "No actual behavior changes."
+
+[[audits.strum_macros]]
+who = "Adam Bratschi-Kaye <ark.email@gmail.com>"
+criteria = "safe-to-run"
+delta = "0.27.1 -> 0.28.0"
+notes = "Macros are still doing standard token parsing and generating."
+
 [[audits.syn]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -5286,6 +5316,12 @@ who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 version = "0.7.6"
 notes = "Small library that uses `unsafe` only around `str::from_utf8_unchecked` after explicitly verifying UTF-8."
+
+[[audits.valgrind-requests]]
+who = "Adam Bratschi-Kaye <ark.email@gmail.com>"
+criteria = "safe-to-run"
+version = "1.1.0"
+notes = "Build scripts are used to generate C bindings. Inline asm is valgrind's magic no-op sequence."
 
 [[audits.vcpkg]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -7442,7 +7478,7 @@ end = "2026-10-08"
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-02-27"
-end = "2024-07-15"
+end = "2027-11-13"
 
 [[trusted.regex-automata]]
 criteria = "safe-to-deploy"
@@ -7454,7 +7490,7 @@ end = "2026-10-10"
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-03-30"
-end = "2025-11-13"
+end = "2027-11-13"
 
 [[trusted.rustix]]
 criteria = "safe-to-deploy"
