@@ -486,8 +486,6 @@ wasmtime_option_group! {
         pub threads: Option<bool>,
         /// Configure the ability to create a `shared` memory.
         pub shared_memory: Option<bool>,
-        /// Configure support for the shared-everything-threads proposal.
-        pub shared_everything_threads: Option<bool>,
         /// Configure support for the memory64 proposal.
         pub memory64: Option<bool>,
         /// Configure support for the component-model proposal.
@@ -859,11 +857,6 @@ static WASM_FEATURE_OPTIONS: &[(WasmFeatures, fn(&WasmOptions) -> Option<bool>, 
     (F::COMPACT_IMPORTS, |w| w.compact_imports, None),
     (F::EXTENDED_CONST, |w| w.extended_const, None),
     (F::THREADS, |w| w.threads, None),
-    (
-        F::SHARED_EVERYTHING_THREADS,
-        |w| w.shared_everything_threads,
-        None,
-    ),
     (F::GC, |w| w.gc, None),
     (F::GC_TYPES, |w| w.gc_support, Some("gc-support")),
     (F::REFERENCE_TYPES, |w| w.reference_types, None),
@@ -1735,9 +1728,6 @@ impl CommonOptions {
                 multi_value: Some(features.contains(WasmFeatures::MULTI_VALUE)),
                 reference_types: Some(features.contains(WasmFeatures::REFERENCE_TYPES)),
                 relaxed_simd: Some(features.contains(WasmFeatures::RELAXED_SIMD)),
-                shared_everything_threads: Some(
-                    features.contains(WasmFeatures::SHARED_EVERYTHING_THREADS),
-                ),
                 simd: Some(features.contains(WasmFeatures::SIMD)),
                 stack_switching: Some(features.contains(WasmFeatures::STACK_SWITCHING)),
                 tail_call: Some(features.contains(WasmFeatures::TAIL_CALL)),

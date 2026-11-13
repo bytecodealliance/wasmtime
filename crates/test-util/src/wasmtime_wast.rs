@@ -64,7 +64,6 @@ impl TestConfig {
             custom_page_sizes,
             multi_memory,
             threads,
-            shared_everything_threads,
             gc,
             function_references,
             relaxed_simd,
@@ -117,7 +116,6 @@ impl TestConfig {
         w.custom_page_sizes = Some(on(custom_page_sizes));
         w.multi_memory = Some(on(multi_memory));
         w.threads = Some(on(threads));
-        w.shared_everything_threads = Some(on(shared_everything_threads));
         w.gc = Some(gc);
         w.function_references = Some(function_references);
         w.relaxed_simd = Some(relaxed_simd);
