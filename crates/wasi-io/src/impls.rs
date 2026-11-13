@@ -33,7 +33,7 @@ impl poll::Host for ResourceTable {
 
         let mut futures: Vec<(DynFuture<'_>, Vec<ReadylistIndex>)> = Vec::new();
         for (entry, (make_future, readylist_indices)) in self.iter_entries(table_futures) {
-            let entry = entry?;
+            let entry = entry?.entry_mut();
             futures.push((make_future(entry), readylist_indices));
         }
 

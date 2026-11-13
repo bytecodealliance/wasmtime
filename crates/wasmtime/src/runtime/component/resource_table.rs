@@ -443,13 +443,12 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
     pub fn iter_entries<'a, T>(
         &'a mut self,
         map: BTreeMap<u32, T>,
-    ) -> impl Iterator<Item = (Result<&'a mut dyn Any, ResourceTableError>, T)> {
+    ) -> impl Iterator<Item = (Result<&'a mut TableEntry, ResourceTableError>, T)> {
         map.into_iter().map(move |(k, v)| {
             let item = self
                 .occupied_mut(k)
-                .map(|e| Box::as_mut(&mut e.entry))
                 // Safety: extending the lifetime of the mutable reference.
-                .map(|item| unsafe { &mut *(item as *mut dyn Any) });
+                .map(|item| unsafe { &mut *(item as *mut TableEntry) });
             (item, v)
         })
     }
@@ -458,15 +457,15 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
     pub fn iter_children<T>(
         &self,
         parent: &Resource<T>,
-    ) -> Result<impl Iterator<Item = &(dyn Any + Send)> + use<'_, T, D>, ResourceTableError>
+    ) -> Result<impl Iterator<Item = &TableEntry> + use<'_, T, D>, ResourceTableError>
     where
         T: 'static,
     {
         let parent_entry = self.occupied(parent.rep())?;
-        Ok(parent_entry.children.iter().map(|child_index| {
-            let child = self.occupied(*child_index).expect("missing child");
-            child.entry.as_ref()
-        }))
+        Ok(parent_entry
+            .children
+            .iter()
+            .map(|child_index| self.occupied(*child_index).expect("missing child")))
     }
 
     /// Iterate over all the live entries in this table.
