@@ -16,9 +16,9 @@ use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::vmcontext::VMLazyThread;
 use crate::runtime::vm::{
     HostResult, SendSyncPtr, UncaughtException, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition,
-    VMMemoryDefinition, VMOpaqueContext, VMResourceIndex, VMScope, VMStore, VMStoreContext,
-    VMStoreRawPtr, VMTableImport, VMTransmitLocalState, VMTypedResource, VMWasmCallFunction,
-    ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
+    VMHandleTable, VMMemoryDefinition, VMOpaqueContext, VMResourceIndex, VMScope, VMStore,
+    VMStoreContext, VMStoreRawPtr, VMTableImport, VMTransmitLocalState, VMTypedResource,
+    VMWasmCallFunction, ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
 };
 use crate::store::InstanceId;
 use crate::{Func, Result, bail, vm};
@@ -45,7 +45,7 @@ mod handle_table;
 mod libcalls;
 mod resources;
 
-pub use self::handle_table::{HandleCounter, HandleTable, RemovedResource};
+pub use self::handle_table::{HandleCounter, HandleTable, HandleTableInsertion, RemovedResource};
 #[cfg(feature = "component-model-async")]
 pub use self::handle_table::{ThreadHandleTable, Waitable};
 pub(crate) use self::resources::ResourceTypeMismatch;
@@ -630,6 +630,16 @@ impl ComponentInstance {
         InstanceLayout::vmctx(self)
     }
 
+    /// Seed the vmctx array compiled code reads. Only needed at startup:
+    /// afterwards `HandleTableInsertion` keeps it current.
+    pub(crate) fn publish_handle_tables(self: Pin<&mut Self>) {
+        let (states, _types, published) = self.instance_states_and_published();
+        for (instance, state) in states.iter_mut() {
+            let i = usize::try_from(instance.as_u32()).unwrap();
+            published[i] = state.handle_table().vmhandletable();
+        }
+    }
+
     /// Returns a pointer to the "may leave" flag for this instance specified
     /// for canonical lowering and lifting operations.
     #[inline]
@@ -970,6 +980,8 @@ impl ComponentInstance {
                 VmPtr::from(self.store.0.as_ref().vm_store_context_ptr());
         }
 
+        self.as_mut().publish_handle_tables();
+
         for i in 0..self.offsets.num_runtime_component_instances {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
             let mut def = VMGlobalDefinition::new();
@@ -1135,6 +1147,50 @@ impl ComponentInstance {
         unsafe {
             let me = self.get_unchecked_mut();
             (&mut me.instance_states, me.component.types())
+        }
+    }
+
+    /// Begins inserting into `instance`'s handle table, keeping the vmctx copy
+    /// of its slots pointer current.
+    pub fn handle_table_insertion<'a>(
+        self: Pin<&'a mut Self>,
+        instance: RuntimeComponentInstanceIndex,
+        counter: &'a mut HandleCounter,
+    ) -> HandleTableInsertion<'a> {
+        let (states, _types, published) = self.instance_states_and_published();
+        // SAFETY: `published[instance]` is where compiled code reads
+        // `instance`'s handle table.
+        unsafe {
+            states[instance]
+                .handle_table()
+                .insert(counter, &mut published[instance.as_u32() as usize])
+        }
+    }
+
+    /// As `instance_states`, plus the vmctx entries through which compiled
+    /// code reads each instance's handle table.
+    pub fn instance_states_and_published(
+        mut self: Pin<&mut Self>,
+    ) -> (
+        &mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
+        &ComponentTypes,
+        &mut [VMHandleTable],
+    ) {
+        let offset = self
+            .offsets
+            .handle_tables()
+            .at(RuntimeComponentInstanceIndex::from_u32(0));
+        let len = usize::try_from(self.offsets.num_runtime_component_instances).unwrap();
+        // SAFETY: the array is part of this `VMComponentContext`'s allocation
+        // and holds exactly `len` entries.
+        let published = unsafe {
+            let base = self.as_mut().vmctx_plus_offset_raw::<VMHandleTable>(offset);
+            core::slice::from_raw_parts_mut(base.as_ptr(), len)
+        };
+        // safety: as in `instance_states`.
+        unsafe {
+            let me = self.get_unchecked_mut();
+            (&mut me.instance_states, me.component.types(), published)
         }
     }
 

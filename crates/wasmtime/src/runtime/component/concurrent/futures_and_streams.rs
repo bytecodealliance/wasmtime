@@ -15,7 +15,7 @@ use crate::store::{StoreOpaque, StoreToken};
 use crate::try_mutex::{TryMutex, TryMutexGuard};
 use crate::vm::VMTransmitLocalState;
 use crate::vm::component::TransmitLocalStateKind;
-use crate::vm::component::{ComponentInstance, HandleCounter, HandleTable};
+use crate::vm::component::{ComponentInstance, HandleCounter, HandleTable, HandleTableInsertion};
 use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use crate::{
@@ -262,9 +262,9 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
             bail!("read pointer not aligned");
         }
         lower
-            .as_slice_mut()
-            .get_mut(address..)
-            .and_then(|b| b.get_mut(..T::SIZE32 * count))
+            .as_slice()
+            .get(address..)
+            .and_then(|b| b.get(..T::SIZE32 * count))
             .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
 
         T::linear_store_list_to_memory(lower, ty, address, &buffer.remaining()[..count])?;
@@ -497,10 +497,12 @@ impl<D: 'static> DirectDestination<'_, D> {
             bail_bug!("expected WriteState::HostReady")
         };
 
-        let memory = instance
-            .options_memory_mut(self.store.0, options)
-            .get_mut(address + guest_offset.as_usize()..)
-            .and_then(|b| b.get_mut(..(count.as_usize() - guest_offset.as_usize())));
+        let memory = instance.options_memory_range_mut(
+            self.store.0,
+            options,
+            address + guest_offset.as_usize(),
+            count.as_usize() - guest_offset.as_usize(),
+        );
         match memory {
             Some(memory) => Ok(memory),
             None => bail_bug!("guest buffer unexpectedly out of bounds"),
@@ -2071,8 +2073,8 @@ pub(crate) fn lower_error_context_to_index<U>(
                 .id()
                 .get_mut_and_handle_counter(cx.store.0);
             instance
-                .table_for_error_context(dst)
-                .error_context_insert(counter, rep)
+                .error_context_table_insertion(dst, counter)
+                .error_context(rep)
         }
         _ => func::bad_type_info(),
     }
@@ -3464,7 +3466,7 @@ impl Instance {
                         &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
                     let ptr = func::validate_inbounds_dynamic(
                         read_abi,
-                        lower.as_slice_mut(),
+                        lower.as_slice(),
                         &ValRaw::u32(read_address.try_into()?),
                     )?;
                     let ty = match read_payload_ty {
@@ -3514,8 +3516,14 @@ impl Instance {
                         let src = write_instance.options_memory(store_opaque, write_options)
                             [write_address..][..write_length_in_bytes]
                             .as_ptr();
-                        let dst = read_instance.options_memory_mut(store_opaque, read_options)
-                            [read_address..][..read_length_in_bytes]
+                        let dst = read_instance
+                            .options_memory_range_mut(
+                                store_opaque,
+                                read_options,
+                                read_address,
+                                read_length_in_bytes,
+                            )
+                            .unwrap()
                             .as_mut_ptr();
 
                         // SAFETY: Both `src` and `dst` have been validated
@@ -4422,8 +4430,8 @@ impl Instance {
         // ref tracking data structures to enable later lookup
         let (instance, counter) = self.id().get_mut_and_handle_counter(store);
         let local_idx = instance
-            .table_for_error_context(ty)
-            .error_context_insert(counter, table_id.rep())?;
+            .error_context_table_insertion(ty, counter)
+            .error_context(table_id.rep())?;
 
         Ok(local_idx)
     }
@@ -4461,7 +4469,7 @@ impl Instance {
         // memory, the ptr+length. This'll need to be updated when `memory64`
         // comes along. (FIXME(#4311))
         let offset = lower_cx
-            .as_slice_mut()
+            .as_slice()
             .get(debug_msg_address..)
             .and_then(|b| b.get(..8))
             .map(|_| debug_msg_address)
@@ -4554,15 +4562,15 @@ impl Instance {
             .new_transmit(TransmitOrigin::guest(self.id().instance(), ty))?;
 
         let (instance, counter) = self.id().get_mut_and_handle_counter(store);
-        let table = instance.table_for_transmit(ty);
+        let mut insertion = instance.transmit_table_insertion(ty, counter);
         let (read_handle, write_handle) = match ty {
             TransmitIndex::Future(ty) => (
-                table.future_insert_read(counter, ty, read.rep())?,
-                table.future_insert_write(counter, ty, write.rep())?,
+                insertion.future_read(ty, read.rep())?,
+                insertion.future_write(ty, write.rep())?,
             ),
             TransmitIndex::Stream(ty) => (
-                table.stream_insert_read(counter, ty, read.rep())?,
-                table.stream_insert_write(counter, ty, write.rep())?,
+                insertion.stream_read(ty, read.rep())?,
+                insertion.stream_write(ty, write.rep())?,
             ),
         };
 
@@ -4716,8 +4724,8 @@ impl Instance {
             .table_for_error_context(src)
             .error_context_rep(src_idx)?;
         let dst_idx = instance
-            .table_for_error_context(dst)
-            .error_context_insert(counter, rep)?;
+            .error_context_table_insertion(dst, counter)
+            .error_context(rep)?;
 
         // Update the global (cross-subcomponent) count for error contexts
         // as the new component has essentially created a new reference that will
@@ -4789,32 +4797,53 @@ fn lower_transmit_to_index(
 ) -> Result<u32> {
     let state = concurrent_state.get_mut(id)?.state;
     debug_assert_eq!(concurrent_state.get_mut(state)?.read_handle, id);
-    let handle_table = instance.table_for_transmit(ty);
+    let mut insertion = instance.transmit_table_insertion(ty, counter);
     let handle = match ty {
-        TransmitIndex::Future(idx) => handle_table.future_insert_read(counter, idx, id.rep()),
-        TransmitIndex::Stream(idx) => handle_table.stream_insert_read(counter, idx, id.rep()),
+        TransmitIndex::Future(idx) => insertion.future_read(idx, id.rep()),
+        TransmitIndex::Stream(idx) => insertion.stream_read(idx, id.rep()),
     }?;
     concurrent_state.get_mut(id)?.common.handle = Some(handle);
     Ok(handle)
 }
 
 impl ComponentInstance {
-    fn table_for_transmit(self: Pin<&mut Self>, ty: TransmitIndex) -> &mut HandleTable {
-        let (states, types) = self.instance_states();
-        let runtime_instance = match ty {
+    fn transmit_instance(&self, ty: TransmitIndex) -> RuntimeComponentInstanceIndex {
+        let types = self.component().types();
+        match ty {
             TransmitIndex::Stream(ty) => types[ty].instance,
             TransmitIndex::Future(ty) => types[ty].instance,
-        };
-        states[runtime_instance].handle_table()
+        }
+    }
+
+    fn table_for_transmit(self: Pin<&mut Self>, ty: TransmitIndex) -> &mut HandleTable {
+        let runtime_instance = self.transmit_instance(ty);
+        self.instance_state(runtime_instance).handle_table()
+    }
+
+    fn transmit_table_insertion<'a>(
+        self: Pin<&'a mut Self>,
+        ty: TransmitIndex,
+        counter: &'a mut HandleCounter,
+    ) -> HandleTableInsertion<'a> {
+        let runtime_instance = self.transmit_instance(ty);
+        self.handle_table_insertion(runtime_instance, counter)
     }
 
     fn table_for_error_context(
         self: Pin<&mut Self>,
         ty: TypeComponentLocalErrorContextTableIndex,
     ) -> &mut HandleTable {
-        let (states, types) = self.instance_states();
-        let runtime_instance = types[ty].instance;
-        states[runtime_instance].handle_table()
+        let runtime_instance = self.component().types()[ty].instance;
+        self.instance_state(runtime_instance).handle_table()
+    }
+
+    fn error_context_table_insertion<'a>(
+        self: Pin<&'a mut Self>,
+        ty: TypeComponentLocalErrorContextTableIndex,
+        counter: &'a mut HandleCounter,
+    ) -> HandleTableInsertion<'a> {
+        let runtime_instance = self.component().types()[ty].instance;
+        self.handle_table_insertion(runtime_instance, counter)
     }
 
     fn get_mut_by_index(

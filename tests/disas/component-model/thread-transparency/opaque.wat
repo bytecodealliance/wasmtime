@@ -78,8 +78,7 @@
 ;;     region12 = 93 ""
 ;;     region13 = 30 ""
 ;;     region14 = 184 ""
-;;     region15 = 132 ""
-;;     region16 = 174 ""
+;;     region15 = 174 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -130,17 +129,15 @@
 ;;                                     v21 = load.i64 notrap aligned region13 v15+152
 ;;                                     store notrap aligned region14 v21, v14+24
 ;;                                     store notrap aligned region5 v14, v15+136
-;;                                     v22 = load.i64 notrap aligned readonly can_move region3 v3+208
-;;                                     v23 = load.i32 notrap aligned region15 v22
+;;                                     jump block15
+;;
+;;                                 block15:
+;;                                     v22 = load.i64 notrap aligned readonly can_move region2 v3+72
+;;                                     v24 = load.i64 notrap aligned readonly can_move region0 v22+8
+;;                                     v25 = load.i32 notrap aligned region9 v24+128
 ;;                                     jump block16
 ;;
 ;;                                 block16:
-;;                                     v27 = load.i64 notrap aligned readonly can_move region2 v3+72
-;;                                     v29 = load.i64 notrap aligned readonly can_move region0 v27+8
-;;                                     v30 = load.i32 notrap aligned region9 v29+128
-;;                                     jump block17
-;;
-;;                                 block17:
 ;;                                     jump block11
 ;;
 ;;                                 block11:
@@ -153,7 +150,6 @@
 ;;                                     jump block14
 ;;
 ;;                                 block14:
-;;                                     store.i32 notrap aligned region4 v10, v9
 ;;                                     jump block7
 ;;
 ;;                                 block7:
@@ -163,13 +159,13 @@
 ;;                                     jump block3
 ;;
 ;;                                 block3:
-;;                                     jump block18
+;;                                     jump block17
 ;;
-;;                                 block18:
+;;                                 block17:
 ;; @0125                               jump block1
 ;;
 ;;                                 block1:
 ;; @0120                               v2 = iconst.i32 1234
-;;                                     v48 = iadd.i32 v30, v2  ; v2 = 1234
-;; @0125                               return v48
+;;                                     v38 = iadd.i32 v25, v2  ; v2 = 1234
+;; @0125                               return v38
 ;; }

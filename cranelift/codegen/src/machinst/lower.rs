@@ -613,7 +613,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
-        let inst = self.abi().gen_rets(out_rets);
+        let inst = self.abi().gen_rets(out_rets.into_boxed_slice());
         self.emit(inst);
     }
 

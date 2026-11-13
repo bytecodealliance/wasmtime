@@ -256,9 +256,11 @@ fn emit_gc_raw_alloc(
     assert!(align.is_power_of_two());
     let align = builder.ins().iconst(ir::types::I32, i64::from(align));
 
-    let call_inst = builder
-        .ins()
-        .call(gc_alloc_raw_builtin, &[vmctx, kind, ty, size, align]);
+    let call_inst = func_env.call_builtin(
+        builder,
+        gc_alloc_raw_builtin,
+        &[vmctx, kind, ty, size, align],
+    );
 
     let gc_ref = builder.func.dfg.first_result(call_inst);
     builder.declare_value_needs_stack_map(gc_ref);
@@ -377,9 +379,11 @@ pub fn read_field_at_addr(
                         .builtin_functions
                         .get_interned_func_ref(builder.func);
 
-                    let call_inst = builder
-                        .ins()
-                        .call(get_interned_func_ref, &[vmctx, func_ref_id, expected_ty]);
+                    let call_inst = func_env.call_builtin(
+                        builder,
+                        get_interned_func_ref,
+                        &[vmctx, func_ref_id, expected_ty],
+                    );
                     builder.func.dfg.first_result(call_inst)
                 }
                 WasmHeapTopType::Cont => read_cont_ref_at_addr(func_env, builder, addr, flags)?,
@@ -426,9 +430,7 @@ pub fn intern_func_ref(
 
     // Convert the raw `funcref` into a `FuncRefTableId` for use in the
     // GC heap.
-    let call_inst = builder
-        .ins()
-        .call(intern_func_ref_for_gc_heap, &[vmctx, func_ref]);
+    let call_inst = func_env.call_builtin(builder, intern_func_ref_for_gc_heap, &[vmctx, func_ref]);
     let func_ref_id = builder.func.dfg.first_result(call_inst);
     Ok(builder.ins().ireduce(ir::types::I32, func_ref_id))
 }
@@ -456,7 +458,7 @@ fn intern_cont_ref(
     let intern = func_env
         .builtin_functions
         .intern_contref_for_gc_heap(builder.func);
-    let call = builder.ins().call(intern, &[vmctx, contref, revision]);
+    let call = func_env.call_builtin(builder, intern, &[vmctx, contref, revision]);
     let id = builder.func.dfg.first_result(call);
     builder.ins().ireduce(ir::types::I32, id)
 }
@@ -489,7 +491,7 @@ fn read_cont_ref_at_addr(
     let get = func_env
         .builtin_functions
         .get_interned_contref(builder.func);
-    builder.ins().call(get, &[vmctx, id, out_result]);
+    func_env.call_builtin(builder, get, &[vmctx, id, out_result]);
 
     let region = func_env.alias_regions.stack_slot_region(builder.func, slot);
     let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
@@ -909,7 +911,8 @@ fn translate_throwing_builtin(
     let etd = ExceptionTableData::new(sig, continuation_call, table_items);
     let et = builder.func.dfg.exception_tables.push(etd);
 
-    builder.ins().try_call(builtin, args, et);
+    let inst = builder.ins().try_call(builtin, args, et);
+    func_env.attach_builtin_call_debug_tags(builder.func, inst);
 
     builder.switch_to_block(continuation);
     builder.seal_block(continuation);
@@ -1937,7 +1940,7 @@ impl FuncEnvironment<'_> {
         log::trace!("is_subtype: slow path to do full `is_subtype` libcall");
         let is_subtype = self.builtin_functions.is_subtype(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        let call_inst = builder.ins().call(is_subtype, &[vmctx, a, b]);
+        let call_inst = self.call_builtin(builder, is_subtype, &[vmctx, a, b]);
         let result = builder.func.dfg.first_result(call_inst);
         builder.ins().jump(continue_block, &[result.into()]);
 

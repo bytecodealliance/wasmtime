@@ -67,7 +67,8 @@ use crate::vm::GcRootsList;
 use crate::vm::VMScope;
 use crate::vm::component::ScopeKind;
 use crate::vm::component::{
-    CallContext, ComponentInstance, CurrentScope, HandleCounter, InstanceState,
+    CallContext, ComponentInstance, CurrentScope, HandleCounter, HandleTableInsertion,
+    InstanceState,
 };
 use crate::vm::{
     AlwaysMut, SendSyncPtr, UncaughtException, VMFuncRef, VMLazyThread, VMMemoryDefinition, VMStore,
@@ -2244,6 +2245,14 @@ impl StoreOpaque {
         (component.instance_state(instance.index), counter)
     }
 
+    /// Begins inserting into the handle table of the specified instance.
+    fn handle_table_insertion(&mut self, instance: RuntimeInstance) -> HandleTableInsertion<'_> {
+        let (component, counter) = self
+            .store_data_mut()
+            .component_instance_and_handle_counter_mut(instance.instance);
+        component.handle_table_insertion(instance.index, counter)
+    }
+
     /// Configure the currently running `thread`.
     ///
     /// This will save off any state necessary for the previous thread, if
@@ -3712,10 +3721,10 @@ impl Instance {
                 // It hasn't returned yet, but the caller is calling via an
                 // async-lowered import, so we generate a handle for the task
                 // waitable and return the status.
-                let (state, counter) = store.0.instance_state_and_handle_counter(caller_instance);
-                let handle = state
-                    .handle_table()
-                    .subtask_insert_guest(counter, guest_thread.task.rep())?;
+                let handle = store
+                    .0
+                    .handle_table_insertion(caller_instance)
+                    .subtask_guest(guest_thread.task.rep())?;
                 store
                     .0
                     .concurrent_state_mut()?
@@ -3909,10 +3918,10 @@ impl Instance {
         let state = store.0.concurrent_state_mut()?;
         state.push_future(future);
         let instance = state.get_mut(caller.task)?.instance;
-        let (state, counter) = store.0.instance_state_and_handle_counter(instance);
-        let handle = state
-            .handle_table()
-            .subtask_insert_host(counter, task.rep())?;
+        let handle = store
+            .0
+            .handle_table_insertion(instance)
+            .subtask_host(task.rep())?;
         store.0.concurrent_state_mut()?.get_mut(task)?.common.handle = Some(handle);
         log::trace!("assign {task:?} handle {handle} for {caller:?} instance {instance:?}");
 
@@ -4052,11 +4061,9 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
     ) -> Result<u32> {
         let set = store.concurrent_state_mut()?.push(WaitableSet::default())?;
-        let (state, counter) =
-            store.instance_state_and_handle_counter(self.runtime_instance(caller_instance));
-        let handle = state
-            .handle_table()
-            .waitable_set_insert(counter, set.rep())?;
+        let handle = store
+            .handle_table_insertion(self.runtime_instance(caller_instance))
+            .waitable_set(set.rep())?;
         log::trace!("new waitable set {set:?} (handle {handle})");
         Ok(handle)
     }
@@ -4568,14 +4575,16 @@ impl Instance {
                 }
             }
         };
-        let memory = self.options_memory_mut(store, params.options);
         let ptr = crate::component::func::validate_inbounds_dynamic(
             &CanonicalAbiInfo::POINTER_PAIR,
-            memory,
+            self.options_memory(store, params.options),
             &ValRaw::u32(params.payload),
         )?;
-        memory[ptr + 0..][..4].copy_from_slice(&handle.to_le_bytes());
-        memory[ptr + 4..][..4].copy_from_slice(&result.to_le_bytes());
+        let memory = self
+            .options_memory_range_mut(store, params.options, ptr, 8)
+            .unwrap();
+        memory[0..4].copy_from_slice(&handle.to_le_bytes());
+        memory[4..8].copy_from_slice(&result.to_le_bytes());
         Ok(ordinal)
     }
 
@@ -7085,12 +7094,11 @@ mod tests {
             state,
             group,
         })?;
-        let (state, counter) = store_opaque.instance_state_and_handle_counter(
-            instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(0)),
-        );
-        let handle = state
-            .handle_table()
-            .subtask_insert_host(counter, task.rep())?;
+        let handle = store_opaque
+            .handle_table_insertion(
+                instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(0)),
+            )
+            .subtask_host(task.rep())?;
         let common = &mut store_opaque.concurrent_state_mut()?.get_mut(task)?.common;
         common.handle = Some(handle);
         common.event = event;

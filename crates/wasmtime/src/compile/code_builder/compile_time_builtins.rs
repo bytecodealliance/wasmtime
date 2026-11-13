@@ -55,19 +55,27 @@ fn compose(
 
     // Collect the connections first, since connecting needs the graph
     // mutably.
-    let mut connections: Vec<(InstanceId, InstanceId, ImportIndex)> = Vec::new();
+    let mut connections: Vec<(InstanceId, Option<ExportIndex>, InstanceId, ImportIndex)> =
+        Vec::new();
     for target in core::iter::once(main).chain(instances.iter().map(|&(_, instance)| instance)) {
         let (_, component) = graph.get_component_of_instance(target).unwrap();
         for (import, name) in instance_imports(component) {
             if let Some(&(_, source)) = instances.iter().find(|&&(builtin, _)| builtin == name) {
-                connections.push((source, target, import));
+                // If the builtin exports an instance named after the import,
+                // use that instead of the builtin's instance itself.
+                let (_, source_component) = graph.get_component_of_instance(source).unwrap();
+                let export = source_component
+                    .export_by_name(name)
+                    .filter(|(_, kind, _)| *kind == wasmparser::ComponentExternalKind::Instance)
+                    .map(|(index, _, _)| index);
+                connections.push((source, export, target, import));
             }
         }
     }
 
-    for (source, target, import) in connections {
+    for (source, export, target, import) in connections {
         graph
-            .connect(source, None::<ExportIndex>, target, import)
+            .connect(source, export, target, import)
             .to_wasmtime_result()?;
     }
 

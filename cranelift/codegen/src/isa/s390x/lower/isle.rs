@@ -36,7 +36,7 @@ type BoxExternalName = Box<ExternalName>;
 type BoxSymbolReloc = Box<SymbolReloc>;
 type VecMInst = Vec<MInst>;
 type VecMInstBuilder = Cell<Vec<MInst>>;
-type VecArgPair = Vec<ArgPair>;
+type BoxedSliceArgPair = Box<[ArgPair]>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(

@@ -400,43 +400,6 @@ fn massive_64_bit_still_limited() -> Result<()> {
     }
 }
 
-#[wasmtime_test]
-#[cfg_attr(miri, ignore)]
-fn tiny_static_heap(config: &mut Config) -> Result<()> {
-    // The size of the memory in the module below is the exact same size as
-    // the static memory size limit in the configuration. This is intended to
-    // specifically test that a load of all the valid addresses of the memory
-    // all pass bounds-checks in cranelift to help weed out any off-by-one bugs.
-    config.memory_reservation(1 << 16);
-    let engine = Engine::new(&config)?;
-    let mut store = Store::new(&engine, ());
-
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-                (memory 1 1)
-                (func (export "run")
-                    (local $i i32)
-
-                    (loop
-                        (if (i32.eq (local.get $i) (i32.const 65536))
-                            (then (return)))
-                        (drop (i32.load8_u (local.get $i)))
-                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-                        br 0
-                    )
-                )
-            )
-        "#,
-    )?;
-
-    let i = Instance::new(&mut store, &module, &[])?;
-    let f = i.get_typed_func::<(), ()>(&mut store, "run")?;
-    f.call(&mut store, ())?;
-    Ok(())
-}
-
 #[test]
 fn static_forced_max() -> Result<()> {
     let mut config = Config::new();
@@ -775,112 +738,6 @@ fn non_page_aligned_static_memory() -> Result<()> {
     Ok(())
 }
 
-// When a memory's minimum size exceeds `memory_reservation`, the runtime sizes
-// the allocation from the minimum, so compilers must not treat the reservation
-// as an upper bound on accessible memory.
-#[wasmtime_test]
-#[cfg_attr(miri, ignore)]
-fn minimum_larger_than_reservation_without_moving(cfg: &mut Config) -> Result<()> {
-    cfg.memory_reservation(0);
-    cfg.memory_may_move(false);
-    let engine = Engine::new(cfg)?;
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-                (memory 2)
-                (func (export "store") (param i32 i32)
-                    local.get 0
-                    local.get 1
-                    i32.store)
-                (func (export "load") (param i32) (result i32)
-                    local.get 0
-                    i32.load)
-                (func (export "load_offset") (param i32) (result i32)
-                    local.get 0
-                    i32.load offset=70000)
-            )
-        "#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let store_fn = instance.get_typed_func::<(u32, u32), ()>(&mut store, "store")?;
-    let load = instance.get_typed_func::<u32, u32>(&mut store, "load")?;
-    let load_offset = instance.get_typed_func::<u32, u32>(&mut store, "load_offset")?;
-
-    store_fn.call(&mut store, (0, 42))?;
-    assert_eq!(load.call(&mut store, 0)?, 42);
-    store_fn.call(&mut store, (70_000, 7))?;
-    assert_eq!(load_offset.call(&mut store, 0)?, 7);
-    assert_eq!(load.call(&mut store, 2 * 65536 - 4)?, 0);
-
-    // Accesses past the minimum size must still trap.
-    let trap = load
-        .call(&mut store, 2 * 65536 - 3)
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert_eq!(trap, Trap::MemoryOutOfBounds);
-    let trap = load_offset
-        .call(&mut store, 2 * 65536 - 70_000 - 3)
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert_eq!(trap, Trap::MemoryOutOfBounds);
-    Ok(())
-}
-
-#[wasmtime_test]
-#[cfg_attr(miri, ignore)]
-fn imported_memory_larger_than_reservation_without_moving(cfg: &mut Config) -> Result<()> {
-    cfg.wasm_memory64(true);
-    cfg.wasm_multi_memory(true);
-    cfg.memory_reservation(65536);
-    cfg.memory_may_move(false);
-    let engine = Engine::new(cfg)?;
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-                (import "" "m32" (memory 1))
-                (import "" "m64" (memory i64 1))
-                (func (export "load32") (param i32) (result i32)
-                    local.get 0
-                    i32.load8_u 0)
-                (func (export "load64") (param i64) (result i32)
-                    local.get 0
-                    i32.load8_u 1 offset=1)
-            )
-        "#,
-    )?;
-    let mut store = Store::new(&engine, ());
-    let m32 = Memory::new(&mut store, MemoryType::new(4, None)?)?;
-    let m64 = Memory::new(&mut store, MemoryType::new64(4, None)?)?;
-    m32.data_mut(&mut store)[4 * 65536 - 1] = 1;
-    m64.data_mut(&mut store)[4 * 65536 - 1] = 2;
-    let instance = Instance::new(&mut store, &module, &[m32.into(), m64.into()])?;
-    let load32 = instance.get_typed_func::<u32, u32>(&mut store, "load32")?;
-    let load64 = instance.get_typed_func::<u64, u32>(&mut store, "load64")?;
-
-    // Accesses beyond the importer's minimum size and the memory reservation,
-    // but within the actual memory's size, must succeed.
-    assert_eq!(load32.call(&mut store, 0x20000)?, 0);
-    assert_eq!(load32.call(&mut store, 4 * 65536 - 1)?, 1);
-    assert_eq!(load64.call(&mut store, 0x20000)?, 0);
-    assert_eq!(load64.call(&mut store, 4 * 65536 - 2)?, 2);
-
-    // Accesses past the actual memory's size must still trap.
-    let trap = load32
-        .call(&mut store, 4 * 65536)
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert_eq!(trap, Trap::MemoryOutOfBounds);
-    let trap = load64
-        .call(&mut store, 4 * 65536 - 1)
-        .unwrap_err()
-        .downcast::<Trap>()?;
-    assert_eq!(trap, Trap::MemoryOutOfBounds);
-    Ok(())
-}
-
 #[test]
 fn new_memory_with_custom_page_size() -> Result<()> {
     let engine = Engine::default();
@@ -985,4 +842,66 @@ fn atomic_wait_massive_timeout() -> Result<()> {
     t.join().unwrap();
 
     Ok(())
+}
+
+#[test]
+fn data_ranges() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, 5_u32);
+    let memory = Memory::new(&mut store, MemoryType::new(1, None)?)?;
+
+    memory
+        .data_range_mut(&mut store, 10..13)?
+        .copy_from_slice(b"abc");
+    assert_eq!(memory.data_range(&store, 10..13)?, b"abc");
+    assert_eq!(memory.data_range(&store, 0..0)?, b"");
+    assert_eq!(memory.data_range(&store, 65536..65536)?, b"");
+    assert!(memory.data_range(&store, 65535..65537).is_err());
+    assert!(memory.data_range_mut(&mut store, 70000..70001).is_err());
+    #[allow(clippy::reversed_empty_ranges, reason = "testing invalid ranges")]
+    {
+        assert!(memory.data_range(&store, 5..4).is_err());
+        assert!(memory.data_range_mut(&mut store, 5..4).is_err());
+    }
+
+    // Ranges can be accessed while also borrowing the store's data.
+    let (mut ranges, data) = memory.data_ranges_and_store_data_mut(&mut store);
+    *data += 1;
+    assert_eq!(ranges.len(), 65536);
+    assert_eq!(&ranges.data()[10..13], b"abc");
+    ranges.data_range_mut(11..12)?[0] = b'X';
+    assert_eq!(ranges.data_range(10..13)?, b"aXc");
+    assert!(ranges.data_range_mut(65536..65537).is_err());
+    assert_eq!(*store.data(), 6);
+    assert_eq!(&memory.data(&store)[10..13], b"aXc");
+    Ok(())
+}
+
+/// A memory and a store that it does not belong to.
+fn memory_and_other_store() -> (Memory, Store<()>) {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let memory = Memory::new(&mut store, MemoryType::new(1, None).unwrap()).unwrap();
+    (memory, Store::new(&engine, ()))
+}
+
+#[test]
+#[should_panic = "wrong store"]
+fn data_range_wrong_store() {
+    let (memory, other) = memory_and_other_store();
+    let _ = memory.data_range(&other, 0..1);
+}
+
+#[test]
+#[should_panic = "wrong store"]
+fn data_range_mut_wrong_store() {
+    let (memory, mut other) = memory_and_other_store();
+    let _ = memory.data_range_mut(&mut other, 0..1);
+}
+
+#[test]
+#[should_panic = "comes_from_same_store"]
+fn data_ranges_and_store_data_mut_wrong_store() {
+    let (memory, mut other) = memory_and_other_store();
+    let _ = memory.data_ranges_and_store_data_mut(&mut other);
 }

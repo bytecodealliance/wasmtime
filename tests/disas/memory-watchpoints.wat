@@ -17,8 +17,8 @@
 ;;     region3 = 215 ""
 ;;     region4 = 105 ""
 ;;     region5 = 133 ""
-;;     region6 = 171 ""
-;;     region7 = 153 ""
+;;     region6 = 153 ""
+;;     region7 = 171 ""
 ;;     sig0 = (i64 vmctx, i8) tail
 ;;     sig1 = (i64 vmctx) tail
 ;;     sig2 = (i64) preserve_all
@@ -40,8 +40,8 @@
 ;; @001d                               brif v9, block2, block3
 ;;
 ;;                                 block2 cold:
-;; @0022                               v19 = iconst.i8 0
-;; @001d                               call fn0(v0, v19)  ; v19 = 0
+;; @0022                               v20 = iconst.i8 0
+;; <ss0, 29, 4294967295> @001d         call fn0(v0, v20)  ; v20 = 0
 ;; <ss0, 29, 4294967295> @001d         call fn1(v0)
 ;; @001d                               trap user1
 ;;
@@ -55,56 +55,56 @@
 ;; @0020                               v13 = stack_addr.i64 ss0+24
 ;; @0020                               store.i64 notrap region2 v3, v13
 ;; <ss0, 34, 1> @0022                  call fn2(v0)
-;; @0022                               v15 = load.i64 notrap aligned region4 v0+64
+;; @0022                               v15 = load.i64 notrap aligned readonly can_move region5 v0+72
+;; @0022                               v16 = load.i64 notrap aligned region4 v15+8
 ;; @0022                               v14 = uextend.i64 v2
-;; @0022                               v16 = iconst.i64 16
-;; @0022                               v17 = isub v15, v16  ; v16 = 16
-;; @0022                               v18 = icmp ugt v14, v17
-;; @0022                               brif v18, block4, block5
+;; @0022                               v17 = iconst.i64 16
+;; @0022                               v18 = isub v16, v17  ; v17 = 16
+;; @0022                               v19 = icmp ugt v14, v18
+;; @0022                               brif v19, block4, block5
 ;;
 ;;                                 block4 cold:
-;;                                     v54 = iconst.i8 1
-;; @0022                               call fn0(v0, v54)  ; v54 = 1
+;; @0022                               v54 = iconst.i8 1
+;; <ss0, 34, 4294967295> @0022         call fn0(v0, v54)  ; v54 = 1
 ;; <ss0, 34, 4294967295> @0022         call fn1(v0)
 ;; @0022                               trap user1
 ;;
 ;;                                 block5:
-;; @0022                               v27 = load.i64 notrap aligned readonly can_move region5 v0+72
-;; @0022                               v28 = load.i64 notrap aligned region4 v27+8
-;;                                     v48 = iconst.i64 16
-;;                                     v49 = isub v28, v48  ; v48 = 16
-;; @0022                               v31 = icmp.i64 ugt v14, v49
-;; @0022                               brif v31, block6, block7
+;; @0022                               v24 = load.i64 notrap aligned readonly can_move region3 v15
+;; @0022                               v25 = iadd v24, v14
+;; @0022                               v26 = iconst.i64 8
+;; @0022                               v27 = iadd v25, v26  ; v26 = 8
+;; @0022                               v28 = load.i64 region6 v27
+;; @0022                               brif v28, block6, block7
 ;;
 ;;                                 block6 cold:
-;; @0022                               v34 = iconst.i8 1
-;; @0022                               call fn0(v0, v34)  ; v34 = 1
-;; <ss0, 34, 4294967295> @0022         call fn1(v0)
-;; @0022                               trap user1
+;; @0022                               v30 = iconst.i32 0
+;; @0022                               v48 = iconst.i64 8
+;; @0022                               v49 = iadd.i64 v14, v48  ; v48 = 8
+;; @0022                               v34 = iconst.i32 8
+;; @0022                               v29 = iconst.i64 0
+;; <ss0, 34, 4294967295> @0022         v35 = call fn3(v0, v30, v49, v34, v3, v29)  ; v30 = 0, v34 = 8, v29 = 0
+;; @0022                               jump block7
 ;;
 ;;                                 block7:
-;; @0022                               v36 = load.i64 notrap aligned readonly can_move region3 v27
-;; @0022                               v37 = iadd v36, v14
-;; @0022                               v24 = iconst.i64 8
-;; @0022                               v39 = iadd v37, v24  ; v24 = 8
-;; @0022                               v40 = load.i64 region7 v39
+;; @0022                               v37 = load.i64 notrap aligned region4 v0+64
+;; @0022                               v50 = iconst.i64 16
+;; @0022                               v51 = isub v37, v50  ; v50 = 16
+;; @0022                               v40 = icmp.i64 ugt v14, v51
 ;; @0022                               brif v40, block8, block9
 ;;
 ;;                                 block8 cold:
-;; @0022                               v42 = iconst.i32 0
-;;                                     v50 = iconst.i64 8
-;;                                     v51 = iadd.i64 v14, v50  ; v50 = 8
-;; @0022                               v46 = iconst.i32 8
-;; @0022                               v41 = iconst.i64 0
-;; @0022                               v47 = call fn3(v0, v42, v51, v46, v3, v41)  ; v42 = 0, v46 = 8, v41 = 0
-;; @0022                               jump block9
+;; @0022                               v43 = iconst.i8 1
+;; <ss0, 34, 4294967295> @0022         call fn0(v0, v43)  ; v43 = 1
+;; <ss0, 34, 4294967295> @0022         call fn1(v0)
+;; @0022                               trap user1
 ;;
 ;;                                 block9:
-;; @0022                               v22 = load.i64 notrap aligned readonly can_move region3 v0+56
-;; @0022                               v23 = iadd v22, v14
-;;                                     v52 = iconst.i64 8
-;;                                     v53 = iadd v23, v52  ; v52 = 8
-;; @0022                               store.i64 little region6 v3, v53
+;; @0022                               v44 = load.i64 notrap aligned readonly can_move region3 v0+56
+;; @0022                               v45 = iadd v44, v14
+;; @0022                               v52 = iconst.i64 8
+;; @0022                               v53 = iadd v45, v52  ; v52 = 8
+;; @0022                               store.i64 little region7 v3, v53
 ;; <ss0, 37, 4294967295> @0025         call fn2(v0)
 ;; @0025                               jump block1
 ;;

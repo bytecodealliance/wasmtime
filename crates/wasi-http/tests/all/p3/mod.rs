@@ -35,6 +35,15 @@ foreach_p3_http!(assert_test_exists);
 /// collecting it.
 type ForwardedRequestTx = oneshot::Sender<Result<http::Request<Collected<Bytes>>, Error>>;
 
+/// An extension the host attaches to a request passed to the guest.
+#[derive(Clone, Debug, PartialEq)]
+struct RequestMarker(&'static str);
+
+/// An extension `TestHooks::send_request` attaches to the response for
+/// `p3-test-extensions`.
+#[derive(Clone, Debug, PartialEq)]
+struct ResponseMarker(&'static str);
+
 #[derive(Default)]
 struct TestHooks {
     request_tx: Option<ForwardedRequestTx>,
@@ -134,6 +143,21 @@ impl WasiHttpHooks for TestHooks {
                         std::future::pending::<()>().await;
                         Ok(())
                     }) as Box<dyn Future<Output = _> + Send>,
+                ))
+            })
+        } else if let Some("p3-test-extensions") = request.uri().authority().map(|v| v.as_str()) {
+            // Like `p3-test`, but the response carries an extension, for
+            // checking that extensions survive a trip through the guest.
+            let request_tx = self.request_tx.take();
+            Box::new(async move {
+                collect_request(request, request_tx).await?;
+                let mut response = http::Response::new(Default::default());
+                response
+                    .extensions_mut()
+                    .insert(ResponseMarker("from send_request"));
+                Ok((
+                    response,
+                    Box::new(async { Ok(()) }) as Box<dyn Future<Output = _> + Send>,
                 ))
             })
         } else if let Some("p3-test-trailers") = request.uri().authority().map(|v| v.as_str()) {
@@ -1043,6 +1067,67 @@ async fn p3_http_forbidden_headers() -> Result<()> {
     assert_eq!(
         headers.get("foo").map(|v| v.as_bytes()),
         Some(b"bar".as_slice()),
+    );
+
+    Ok(())
+}
+
+/// Ensure that extensions survive a trip through the guest in both directions
+/// when the guest forwards the HTTP request or response rather than making a
+/// new one.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_extensions() -> Result<()> {
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET)
+        .extension(RequestMarker("from host"));
+
+    let (request_tx, request_rx) = oneshot::channel();
+    let response = run_http_forwarded(
+        P3_HTTP_EXTENSIONS_COMPONENT,
+        request.body(Empty::new())?,
+        request_tx,
+    )
+    .await?
+    .unwrap();
+    assert_eq!(response.status().as_u16(), 200);
+    assert_eq!(
+        response.extensions().get::<ResponseMarker>(),
+        Some(&ResponseMarker("from send_request")),
+    );
+
+    let outbound = request_rx.await.unwrap().unwrap();
+    assert_eq!(
+        outbound.extensions().get::<RequestMarker>(),
+        Some(&RequestMarker("from host")),
+    );
+
+    Ok(())
+}
+
+/// A non-canonical http/1 reason phrase from the backend, which `hyper`'s
+/// client records as a `ReasonPhrase` extension, survives the guest returning
+/// the backend's response.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_proxy_reason_phrase() -> Result<()> {
+    let (server, _requests) = Server::raw(1, |_head| {
+        b"HTTP/1.1 200 Quite Ok\r\ncontent-length: 0\r\n\r\n".to_vec()
+    })?;
+
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET)
+        .header("url", format!("http://{}/", server.addr()));
+    let response = run_http(P3_HTTP_PROXY_COMPONENT, request.body(Empty::new())?)
+        .await?
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 200);
+    assert_eq!(
+        response
+            .extensions()
+            .get::<hyper::ext::ReasonPhrase>()
+            .map(|r| r.as_bytes()),
+        Some(b"Quite Ok".as_slice()),
     );
 
     Ok(())

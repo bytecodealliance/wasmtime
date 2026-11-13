@@ -162,7 +162,7 @@ impl ComponentStoreData {
                 .as_mut()
                 .unwrap()
                 .get_mut()
-                .instance_states()
+                .instance_states_and_published()
         });
         (
             vm::component::ResourceTables {

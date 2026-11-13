@@ -94,7 +94,12 @@ x86 = []
 arm64 = []
 s390x = []
 riscv64 = []
-pulley = [
+pulley = ["pulley-fallback"]
+
+# Enable the Pulley ISA targets only when the target machine has no native
+# Cranelift backend. Note that pulley deps are still pulled in unconditionally,
+# but they're unused should the target machine have a native backend.
+pulley-fallback = [
     "dep:pulley-interpreter",
     "pulley-interpreter/encode",
     "pulley-interpreter/disas",

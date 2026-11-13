@@ -10,6 +10,19 @@
 
 #![warn(dead_code, unused_imports)]
 
+// These crates are used by the `unix` and `windows` backends, and there's no
+// way to express in `Cargo.toml` that they're unused when this custom backend is
+// used instead, so fake a use of them here to quiet Cargo's
+// `unused_dependencies` lint.
+#[cfg(target_vendor = "apple")]
+use mach2 as _;
+#[cfg(target_os = "linux")]
+use memfd as _;
+#[cfg(windows)]
+use windows_sys as _;
+#[cfg(unix)]
+use {libc as _, rustix as _};
+
 #[cfg(has_virtual_memory)]
 use crate::prelude::*;
 

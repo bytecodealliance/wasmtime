@@ -19,7 +19,7 @@ all-features = true
 
 [dependencies]
 anyhow = { workspace = true }
-postcard = { workspace = true }
+postcard = { workspace = true, optional = true }
 cpp_demangle = { version = "0.5.1", default-features = false, features = ['alloc'], optional = true }
 cranelift-entity = { workspace = true, features = ['enable-serde'] }
 cranelift-bitset = { workspace = true, features = ['enable-serde'] }
@@ -30,7 +30,7 @@ indexmap = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 log = { workspace = true }
-gimli = { workspace = true }
+gimli = { workspace = true, optional = true }
 object = { workspace = true }
 rustc-demangle = { version = "0.1.16", default-features = false, optional = true }
 target-lexicon = { workspace = true }
@@ -54,6 +54,7 @@ object = { workspace = true, features = ['unaligned'] }
 arbtest = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
 mutatis = { workspace = true }
+postcard = { workspace = true }
 
 [[example]]
 name = "factc"
@@ -77,7 +78,9 @@ gc-drc = ["gc"]
 gc-null = ["gc"]
 gc-copying = ["gc"]
 compile = [
+  'dep:gimli',
   'gimli/write',
+  'dep:postcard',
   'object/write_core',
   'std',
   "dep:wasm-encoder",

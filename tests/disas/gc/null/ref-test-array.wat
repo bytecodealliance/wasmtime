@@ -26,7 +26,7 @@
 ;;                                 block2:
 ;; @001b                               v7 = iconst.i32 1
 ;; @001b                               v8 = band.i32 v2, v7  ; v7 = 1
-;;                                     v22 = iconst.i32 0
+;; @001b                               v22 = iconst.i32 0
 ;; @001b                               brif v8, block4(v22), block3  ; v22 = 0
 ;;
 ;;                                 block3:

@@ -90,7 +90,10 @@ fn main() {
     // here it doesn't actually enable the Cargo feature, it just passes a cfg
     // to rustc. That means that conditional dependencies enabled in
     // `Cargo.toml` (or other features) by `pulley` aren't activated, which is
-    // why the `pulley` feature of this crate depends on nothing else.
+    // why the Pulley runtime dependencies are unconditional and Cranelift's
+    // Pulley backends are activated via the `pulley-fallback` feature of
+    // `wasmtime-cranelift`, which performs basically the same host check in
+    // `cranelift-codegen`'s build script.
     let default_target_pulley = !has_host_compiler_backend || miri;
     custom_cfg("default_target_pulley", default_target_pulley);
     if default_target_pulley {

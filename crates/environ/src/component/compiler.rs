@@ -1,6 +1,29 @@
-use crate::component::{ComponentTranslation, ComponentTypesBuilder, UnsafeIntrinsic};
+use crate::component::{
+    ComponentTranslation, ComponentTypesBuilder, RuntimeComponentInstanceIndex,
+    TypeResourceTableIndex, UnsafeIntrinsic,
+};
 use crate::error::Result;
-use crate::{Abi, CompiledFunctionBody, FuncKey, Tunables};
+use crate::{Abi, CompiledFunctionBody, FactInlineIntrinsic, FuncKey, Tunables};
+
+/// The component-model-specific `FactInlineIntrinsic`s.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FactComponentIntrinsic {
+    /// `resource.transfer-borrow-to-owner`: lazily lend a `borrow` to its
+    /// resource's owning instance, or fall back to the libcall.
+    ResourceTransferBorrowToOwner {
+        /// The resource type of the handle being lent.
+        ty: TypeResourceTableIndex,
+        /// The component instance owning `ty`'s handle table.
+        instance: RuntimeComponentInstanceIndex,
+    },
+}
+
+impl From<FactComponentIntrinsic> for FactInlineIntrinsic {
+    #[inline]
+    fn from(intrinsic: FactComponentIntrinsic) -> Self {
+        Self::Component(intrinsic)
+    }
+}
 
 /// Compilation support necessary for components.
 pub trait ComponentCompiler: Send + Sync {

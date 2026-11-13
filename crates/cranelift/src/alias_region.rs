@@ -85,16 +85,9 @@ enum VmType {
         reason = "generated uniformly for all VM types via `for_each_vm_type!`"
     )]
     VMAsanStackSupport,
-    #[allow(
-        dead_code,
-        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
-    )]
     VMResourceIndex,
+    VMHandleTable,
     VMHandleTableSlot,
-    #[allow(
-        dead_code,
-        reason = "generated uniformly for all VM types via `for_each_vm_type!`"
-    )]
     VMTypedResource,
     #[allow(
         dead_code,
@@ -690,6 +683,7 @@ macro_rules! define_vm_type_alias_region_helpers {
     // and is marked `#[aggregate]` in `for_each_vm_type!` so that no accessor is
     // generated for it at all.
     (@field_ty $pt:expr, VmPtr < $g:ty >) => { $pt };
+    (@field_ty $pt:expr, VmPtr < VmPtr < $g:ty >>) => { $pt };
     (@field_ty $pt:expr, Option < VmPtr < $g:ty >>) => { $pt };
     (@field_ty $pt:expr, AtomicUsize) => { $pt };
     (@field_ty $pt:expr, usize) => { $pt };
@@ -1153,6 +1147,7 @@ macro_rules! define_vmctx_alias_region_helpers {
     // pointer type as an `ir::Type`).
     (@field_ty $pt:expr, u32) => { ir::types::I32 };
     (@field_ty $pt:expr, VmPtr < $g:ident >) => { $pt };
+    (@field_ty $pt:expr, VmPtr < VmPtr < $g:ident >>) => { $pt };
     (@field_ty $pt:expr, VMSharedTypeIndex) => { ir::types::I32 };
     (@field_ty $pt:expr, AtomicU64) => { ir::types::I64 };
     (@field_ty $pt:expr, unsafe extern "C" fn) => { $pt };

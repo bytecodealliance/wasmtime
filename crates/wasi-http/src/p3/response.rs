@@ -15,6 +15,9 @@ pub struct Response {
     pub status: StatusCode,
     /// The headers of the response.
     pub headers: FieldMap,
+    /// Data associated with this response. Cannot be read by the guest, but can
+    /// be forwarded by the guest.
+    pub extensions: http::Extensions,
     /// Response body.
     pub(crate) body: Body,
 }
@@ -26,11 +29,13 @@ impl TryFrom<Response> for http::Response<Body> {
         Response {
             status,
             headers,
+            extensions,
             body,
         }: Response,
     ) -> Result<Self, Self::Error> {
         let mut res = http::Response::builder().status(status);
         *res.headers_mut().unwrap() = headers.into();
+        *res.extensions_mut().unwrap() = extensions;
         res.body(body)
     }
 }
@@ -121,6 +126,7 @@ impl Response {
         let wasi_response = Response {
             status: parts.status,
             headers: FieldMap::new_immutable(hooks, parts.headers),
+            extensions: parts.extensions,
             body: Body::Host {
                 body: body.map_err(Into::into).boxed_unsync(),
                 result_tx,
