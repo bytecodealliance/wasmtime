@@ -6184,7 +6184,7 @@ impl ConcurrentState {
 
         let mut items = Vec::new();
         for (_, entry) in table.get_mut().iter_mut() {
-            let entry = entry.entry_mut();
+            let entry = entry.into_entry_mut();
             if let Some(set) = entry.downcast_mut::<WaitableSet>() {
                 for mode in mem::take(&mut set.waiting).into_values() {
                     match mode {
@@ -6294,7 +6294,7 @@ impl ConcurrentState {
         } = self;
 
         for (_, entry) in table.get_mut().iter_mut() {
-            let entry = entry.entry_mut();
+            let entry = entry.into_entry_mut();
             if let Some(set) = entry.downcast_mut::<WaitableSet>() {
                 for mode in set.waiting.values_mut() {
                     match mode {
