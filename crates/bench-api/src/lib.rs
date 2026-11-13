@@ -140,8 +140,10 @@ mod unsafe_send_sync;
 
 use crate::unsafe_send_sync::UnsafeSendSync;
 use clap::Parser;
+use std::hash::{DefaultHasher, Hasher};
 use std::os::raw::{c_int, c_void};
 use std::slice;
+use std::sync::OnceLock;
 use std::{env, path::PathBuf};
 use wasmtime::{
     CodeBuilder, CodeHint, Engine, Linker, Module, Result, Store, error::Context as _, format_err,
@@ -640,11 +642,12 @@ impl BenchState {
 
         // NB: set this either way, since `CommonOptions` enables the cache by
         // default and we must not break compilation benchmarks.
-        config.cache(if cache {
-            Some(wasmtime::Cache::from_file(None)?)
+        if cache {
+            config.module_version(wasmtime::ModuleVersionStrategy::Custom(bench_api_hash()?))?;
+            config.cache(Some(wasmtime::Cache::from_file(None)?));
         } else {
-            None
-        });
+            config.cache(None);
+        };
 
         let engine = Engine::new(&config)?;
         let mut linker = Linker::<HostState>::new(&engine);
@@ -808,6 +811,110 @@ impl BenchState {
             }
             None => {
                 panic!("instantiate before execution")
+            }
+        }
+    }
+}
+
+/// A hash of this dynamic library's contents, used as the cache's module
+/// version so that different builds never share cache entries.
+fn bench_api_hash() -> Result<String> {
+    static HASH: OnceLock<String> = OnceLock::new();
+    if let Some(hash) = HASH.get() {
+        return Ok(hash.clone());
+    }
+
+    let path = this_dynamic_library_path()?;
+    let bytes =
+        std::fs::read(&path).with_context(|| format!("failed to read `{}`", path.display()))?;
+    let mut hasher = DefaultHasher::new();
+    hasher.write(&bytes);
+    let hash = format!("bench-api-{:016x}", hasher.finish());
+
+    Ok(HASH.get_or_init(|| hash).clone())
+}
+
+cfg_select! {
+    unix => {
+        fn this_dynamic_library_path() -> Result<PathBuf> {
+            use std::ffi::{CStr, OsStr, c_char};
+            use std::os::unix::ffi::OsStrExt;
+
+            #[repr(C)]
+            struct DlInfo {
+                dli_fname: *const c_char,
+                dli_fbase: *mut c_void,
+                dli_sname: *const c_char,
+                dli_saddr: *mut c_void,
+            }
+
+            unsafe extern "C" {
+                fn dladdr(addr: *const c_void, info: *mut DlInfo) -> c_int;
+            }
+
+            let mut info = DlInfo {
+                dli_fname: std::ptr::null(),
+                dli_fbase: std::ptr::null_mut(),
+                dli_sname: std::ptr::null(),
+                dli_saddr: std::ptr::null_mut(),
+            };
+            let addr = this_dynamic_library_path as *const c_void;
+            let ok = unsafe { dladdr(addr, &mut info) };
+            if ok == 0 || info.dli_fname.is_null() {
+                return Err(format_err!("`dladdr` failed to find the bench API library"));
+            }
+
+            let fname = unsafe { CStr::from_ptr(info.dli_fname) };
+            Ok(PathBuf::from(OsStr::from_bytes(fname.to_bytes())))
+        }
+    }
+    windows => {
+        fn this_dynamic_library_path() -> Result<PathBuf> {
+            use std::ffi::OsString;
+            use std::os::windows::ffi::OsStringExt;
+
+            const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT: u32 = 0x2;
+            const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS: u32 = 0x4;
+
+            #[link(name = "kernel32")]
+            unsafe extern "system" {
+                fn GetModuleHandleExW(
+                    flags: u32,
+                    module_name: *const u16,
+                    module: *mut *mut c_void,
+                ) -> c_int;
+                fn GetModuleFileNameW(module: *mut c_void, filename: *mut u16, size: u32) -> u32;
+            }
+
+            let mut module = std::ptr::null_mut();
+            let addr = this_dynamic_library_path as *const u16;
+            let ok = unsafe {
+                GetModuleHandleExW(
+                    GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+                        | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                    addr,
+                    &mut module,
+                )
+            };
+            if ok == 0 {
+                return Err(std::io::Error::last_os_error())
+                    .context("`GetModuleHandleExW` failed to find the bench API library");
+            }
+
+            let mut buf = vec![0u16; 1024];
+            loop {
+                let size = u32::try_from(buf.len()).unwrap();
+                let len = unsafe { GetModuleFileNameW(module, buf.as_mut_ptr(), size) };
+                if len == 0 {
+                    return Err(std::io::Error::last_os_error())
+                        .context("`GetModuleFileNameW` failed");
+                }
+                // A full buffer means the path was truncated.
+                if len < size {
+                    buf.truncate(len as usize);
+                    return Ok(PathBuf::from(OsString::from_wide(&buf)));
+                }
+                buf.resize(buf.len() * 2, 0);
             }
         }
     }
