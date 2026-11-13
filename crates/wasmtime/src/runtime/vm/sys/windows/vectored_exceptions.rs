@@ -144,7 +144,7 @@ impl Drop for TrapHandler {
                     "failed to remove exception handler: {}",
                     io::Error::last_os_error()
                 );
-                libc::abort();
+                std::process::abort();
             }
             let rc = RemoveVectoredContinueHandler(self.continue_handler);
             if rc == 0 {
@@ -152,7 +152,7 @@ impl Drop for TrapHandler {
                     "failed to remove continue handler: {}",
                     io::Error::last_os_error()
                 );
-                libc::abort();
+                std::process::abort();
             }
         }
     }
