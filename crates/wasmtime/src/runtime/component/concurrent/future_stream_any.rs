@@ -225,6 +225,17 @@ pub struct StreamAny {
 }
 
 impl StreamAny {
+    /// The stream this is the read end of, as a
+    /// [`StreamObserver`](crate::component::StreamObserver) is told of it: the same once its
+    /// read end is given to a guest.
+    pub fn id(&self, mut store: impl AsContextMut) -> Result<crate::component::StreamId> {
+        let store = store.as_context_mut();
+        store
+            .0
+            .transmit_state_rep(self.idx)
+            .map(crate::component::concurrent::StreamId)
+    }
+
     /// Attempts to convert this [`StreamAny`] to a [`StreamReader<T>`]
     /// with a statically known type.
     ///

@@ -115,6 +115,7 @@ pub use futures_and_streams::{
     StreamProducer, StreamReader, StreamResult, VecBuffer, WriteBuffer,
 };
 pub(crate) use futures_and_streams::{ResourcePair, lower_error_context_to_index};
+pub use stream_observer::{StreamId, StreamObserver};
 #[cfg(feature = "task-group-hook")]
 pub use task_group_hook::TaskGroupHook;
 pub use task_group_hook::TaskGroupId;
@@ -124,6 +125,7 @@ mod error_contexts;
 mod func;
 mod future_stream_any;
 mod futures_and_streams;
+mod stream_observer;
 pub(crate) mod table;
 #[cfg(feature = "task-group-hook")]
 mod task_group_hook;
@@ -6110,6 +6112,9 @@ pub struct ConcurrentState {
     /// See [TaskGroupHook].
     #[cfg(feature = "task-group-hook")]
     task_group_hook: Option<Box<dyn TaskGroupHook>>,
+
+    /// See [StreamObserver].
+    stream_observer: Option<Box<dyn StreamObserver>>,
 }
 
 impl Default for ConcurrentState {
@@ -6134,6 +6139,7 @@ impl Default for ConcurrentState {
             saved_next_switch_items: Vec::new(),
             #[cfg(feature = "task-group-hook")]
             task_group_hook: None,
+            stream_observer: None,
         }
     }
 }
@@ -6180,6 +6186,7 @@ impl ConcurrentState {
             event_loop_running: _,
             #[cfg(feature = "task-group-hook")]
                 task_group_hook: _,
+            stream_observer: _,
         } = self;
 
         let mut items = Vec::new();
@@ -6290,6 +6297,7 @@ impl ConcurrentState {
             event_loop_running: _,
             #[cfg(feature = "task-group-hook")]
                 task_group_hook: _,
+            stream_observer: _,
         } = self;
 
         for (_, entry) in table.get_mut().iter_mut() {

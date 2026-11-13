@@ -1,6 +1,6 @@
 use super::table::{TableDebug, TableId};
 use super::{Event, GlobalErrorContextRefCount, Waitable, WaitableCommon};
-use crate::component::concurrent::{ConcurrentState, CurrentThread, WorkItem, tls};
+use crate::component::concurrent::{ConcurrentState, CurrentThread, StreamId, WorkItem, tls};
 use crate::component::func::{self, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::resources::{HostResourceIndex, HostResourceTables};
@@ -2630,6 +2630,13 @@ impl StoreOpaque {
         Ok(())
     }
 
+    /// The transmit state the read end `idx` is of: a stream's identity for its life.
+    pub(super) fn transmit_state_rep(&mut self, idx: HostResourceIndex) -> Result<u32> {
+        let id = self.host_reader_rep(idx)?;
+        let state = self.concurrent_state_mut()?;
+        Ok(state.get_mut(id)?.state.rep())
+    }
+
     pub(super) fn transmit_origin(&mut self, idx: HostResourceIndex) -> Result<TransmitOrigin> {
         let id = self.host_reader_rep(idx)?;
         let state = self.concurrent_state_mut()?;
@@ -3488,9 +3495,37 @@ impl Instance {
                     Some(ty) => ty,
                     None => bail_bug!("expected read payload type to be present"),
                 };
+                // The stream, if a `StreamObserver` watches it.
+                let observed = {
+                    let state = store.concurrent_state_mut()?;
+                    let handle = state.get_mut(TableId::<TransmitHandle>::new(rep))?;
+                    let stream = StreamId(handle.state.rep());
+                    state
+                        .stream_observer
+                        .as_mut()
+                        .is_some_and(|observer| observer.observes(stream))
+                        .then_some(stream)
+                };
+                let mut seen = None;
                 let lift =
                     &mut LiftContext::new(store.store_opaque_mut(), write_options, write_instance)?;
                 if let Some(abi) = flat_abi {
+                    // Copied as bytes: lifted only for an observer.
+                    if observed.is_some() {
+                        let size = usize::try_from(write_abi.size32)?;
+                        let bytes = &lift.memory()[write_address..][..write_length_in_bytes];
+                        seen = Some(
+                            (0..count)
+                                .map(|index| {
+                                    Val::load(
+                                        lift,
+                                        *write_payload_ty,
+                                        &bytes[(index * size)..][..size],
+                                    )
+                                })
+                                .collect::<Result<Vec<_>>>()?,
+                        );
+                    }
                     // The host copies these bytes itself rather than wasm, so
                     // charge them against hostcall fuel.
                     lift.consume_fuel_array(count, usize::try_from(abi.size)?)?;
@@ -3552,6 +3587,9 @@ impl Instance {
 
                     let id = TableId::<TransmitHandle>::new(rep);
                     log::trace!("copy values {values:?} for {id:?}");
+                    if observed.is_some() {
+                        seen = Some(values.clone());
+                    }
 
                     let lower =
                         &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
@@ -3559,6 +3597,11 @@ impl Instance {
                     for value in values {
                         value.store(lower, *read_payload_ty, ptr)?;
                         ptr += usize::try_from(read_abi.size32)?;
+                    }
+                }
+                if let (Some(stream), Some(items)) = (observed, seen) {
+                    if let Some(observer) = store.concurrent_state_mut()?.stream_observer.as_mut() {
+                        observer.items(stream, &items);
                     }
                 }
             }
