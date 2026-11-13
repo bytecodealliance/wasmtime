@@ -56,7 +56,7 @@ pub use self::wizer::*;
 ))]
 fn write_core_dump(
     store: &mut impl wasmtime::AsContextMut,
-    err: &wasmtime::Error,
+    core_dump: &wasmtime::WasmCoreDump,
     name: &str,
     path: &str,
 ) -> wasmtime::Result<()> {
@@ -64,9 +64,6 @@ fn write_core_dump(
     use std::io::Write;
     use wasmtime::error::Context as _;
 
-    let core_dump = err
-        .downcast_ref::<wasmtime::WasmCoreDump>()
-        .expect("should have been configured to capture core dumps");
     let core_dump = core_dump.serialize(store, name);
     let mut core_dump_file =
         File::create(path).with_context(|| format!("failed to create file at `{path}`"))?;
