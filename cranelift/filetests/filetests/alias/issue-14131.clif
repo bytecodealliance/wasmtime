@@ -4,14 +4,10 @@ target x86_64
 
 ;; Regression test for https://github.com/bytecodealliance/wasmtime/issues/14131
 ;;
-;; The first store has no alias region, so it is treated as a fence and becomes
-;; the `last_fence`, while `region0`'s last-store slot stays empty. The second
-;; store is then a dead store, overwritten by the third. When dead-store
-;; elimination unwinds the last-store state past the store it just removed, it
-;; must not materialize the `last_fence` fallback into `region0`'s slot:
-;; reprocessing the overwriting store would then "observe" the regionless store,
-;; an observation that the up-front observed-stores analysis never made, which
-;; leads to an assertion failure.
+;; The first store is regionless ("other") and does not act as a fence. The
+;; second `region0` store is then dead against the third. When DSE unwinds
+;; last-store state, it must restore the raw previous `region0` slot and must
+;; not materialize the last-fence fallback into that slot.
 
 function %f(i64, i64) system_v {
     region0 = 1 "table"
