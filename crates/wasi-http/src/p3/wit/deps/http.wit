@@ -1,10 +1,10 @@
-package wasi:http@0.3.0;
+package wasi:http@0.3.2;
 
 /// This interface defines all of the types and methods for implementing HTTP
 /// Requests and Responses, as well as their headers, trailers, and bodies.
 @since(version = 0.3.0)
 interface types {
-  use wasi:clocks/types@0.3.0.{duration};
+  use wasi:clocks/types@0.3.2.{duration};
 
   /// This type corresponds to HTTP standard Methods.
   @since(version = 0.3.0)
@@ -172,8 +172,9 @@ interface types {
   ///
   /// A `fields` resource should store `field-name`s and `field-value`s in their
   /// original casing used to construct or mutate the `fields` resource. The `fields`
-  /// resource should use that original casing when serializing the fields for
-  /// transport or when returning them from a method.
+  /// resource should use that original casing when returning them from a method.
+  /// The `fields` resource may use a different casing when serializing the value
+  /// for transmission, as doing so may improve encoding efficiency.
   ///
   /// Implementations may impose limits on individual field values and on total
   /// aggregate field section size. Operations that would exceed these limits
@@ -464,20 +465,20 @@ interface client {
 /// in more specific worlds such as `wasi:http/middleware`.
 @since(version = 0.3.0)
 world service {
-  import wasi:cli/types@0.3.0;
-  import wasi:cli/stdout@0.3.0;
-  import wasi:cli/stderr@0.3.0;
-  import wasi:cli/stdin@0.3.0;
-  import wasi:clocks/types@0.3.0;
+  import wasi:cli/types@0.3.2;
+  import wasi:cli/stdout@0.3.2;
+  import wasi:cli/stderr@0.3.2;
+  import wasi:cli/stdin@0.3.2;
+  import wasi:clocks/types@0.3.2;
   import types;
   import client;
-  import wasi:clocks/monotonic-clock@0.3.0;
-  import wasi:clocks/system-clock@0.3.0;
+  import wasi:clocks/monotonic-clock@0.3.2;
+  import wasi:clocks/system-clock@0.3.2;
   @unstable(feature = clocks-timezone)
-  import wasi:clocks/timezone@0.3.0;
-  import wasi:random/random@0.3.0;
-  import wasi:random/insecure@0.3.0;
-  import wasi:random/insecure-seed@0.3.0;
+  import wasi:clocks/timezone@0.3.2;
+  import wasi:random/random@0.3.2;
+  import wasi:random/insecure@0.3.2;
+  import wasi:random/insecure-seed@0.3.2;
 
   export handler;
 }
@@ -489,21 +490,21 @@ world service {
 /// `service` and corresponding `response` flows in the opposite direction.
 @since(version = 0.3.0)
 world middleware {
-  import wasi:clocks/types@0.3.0;
+  import wasi:clocks/types@0.3.2;
   import types;
   import handler;
-  import wasi:cli/types@0.3.0;
-  import wasi:cli/stdout@0.3.0;
-  import wasi:cli/stderr@0.3.0;
-  import wasi:cli/stdin@0.3.0;
+  import wasi:cli/types@0.3.2;
+  import wasi:cli/stdout@0.3.2;
+  import wasi:cli/stderr@0.3.2;
+  import wasi:cli/stdin@0.3.2;
   import client;
-  import wasi:clocks/monotonic-clock@0.3.0;
-  import wasi:clocks/system-clock@0.3.0;
+  import wasi:clocks/monotonic-clock@0.3.2;
+  import wasi:clocks/system-clock@0.3.2;
   @unstable(feature = clocks-timezone)
-  import wasi:clocks/timezone@0.3.0;
-  import wasi:random/random@0.3.0;
-  import wasi:random/insecure@0.3.0;
-  import wasi:random/insecure-seed@0.3.0;
+  import wasi:clocks/timezone@0.3.2;
+  import wasi:random/random@0.3.2;
+  import wasi:random/insecure@0.3.2;
+  import wasi:random/insecure-seed@0.3.2;
 
   export handler;
 }

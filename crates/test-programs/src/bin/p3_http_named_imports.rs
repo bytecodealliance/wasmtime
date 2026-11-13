@@ -4,7 +4,7 @@ mod a {
             package a:b;
 
             world foo {
-                import a: wasi:http/types@0.3.0;
+                import a: wasi:http/types@0.3.2;
             }
         "#,
         path: "../wasi-http/src/p3/wit",
@@ -18,7 +18,7 @@ mod b {
             package a:b;
 
             world bar {
-                import b: wasi:http/types@0.3.0;
+                import b: wasi:http/types@0.3.2;
             }
         "#,
         path: "../wasi-http/src/p3/wit",
