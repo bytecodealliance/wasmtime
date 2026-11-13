@@ -835,31 +835,19 @@ fn bench_api_hash() -> Result<String> {
 }
 
 cfg_select! {
-    unix => {
+    any(target_os = "linux", target_os = "macos") => {
         fn this_dynamic_library_path() -> Result<PathBuf> {
-            use std::ffi::{CStr, OsStr, c_char};
+            use std::ffi::{CStr, OsStr};
             use std::os::unix::ffi::OsStrExt;
 
-            #[repr(C)]
-            struct DlInfo {
-                dli_fname: *const c_char,
-                dli_fbase: *mut c_void,
-                dli_sname: *const c_char,
-                dli_saddr: *mut c_void,
-            }
-
-            unsafe extern "C" {
-                fn dladdr(addr: *const c_void, info: *mut DlInfo) -> c_int;
-            }
-
-            let mut info = DlInfo {
+            let mut info = libc::Dl_info {
                 dli_fname: std::ptr::null(),
                 dli_fbase: std::ptr::null_mut(),
                 dli_sname: std::ptr::null(),
                 dli_saddr: std::ptr::null_mut(),
             };
             let addr = this_dynamic_library_path as *const c_void;
-            let ok = unsafe { dladdr(addr, &mut info) };
+            let ok = unsafe { libc::dladdr(addr, &mut info) };
             if ok == 0 || info.dli_fname.is_null() {
                 return Err(format_err!("`dladdr` failed to find the bench API library"));
             }
@@ -872,19 +860,11 @@ cfg_select! {
         fn this_dynamic_library_path() -> Result<PathBuf> {
             use std::ffi::OsString;
             use std::os::windows::ffi::OsStringExt;
-
-            const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT: u32 = 0x2;
-            const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS: u32 = 0x4;
-
-            #[link(name = "kernel32")]
-            unsafe extern "system" {
-                fn GetModuleHandleExW(
-                    flags: u32,
-                    module_name: *const u16,
-                    module: *mut *mut c_void,
-                ) -> c_int;
-                fn GetModuleFileNameW(module: *mut c_void, filename: *mut u16, size: u32) -> u32;
-            }
+            use windows_sys::Win32::System::LibraryLoader::{
+                GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, GetModuleFileNameW,
+                GetModuleHandleExW,
+            };
 
             let mut module = std::ptr::null_mut();
             let addr = this_dynamic_library_path as *const u16;

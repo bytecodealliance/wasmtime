@@ -4622,6 +4622,7 @@ name = "wasmtime-bench-api"
 version = "52.0.0-dev"
 dependencies = [
  "clap",
+ "libc",
  "shuffling-allocator",
  "target-lexicon 0.13.5",
  "wasmtime",
@@ -4629,6 +4630,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-nn",
  "wat",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
