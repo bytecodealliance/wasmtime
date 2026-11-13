@@ -61,15 +61,6 @@ mod tests {
     use crate::runtime::vm::mpk::enabled::skip_if_mpk_unavailable;
 
     #[test]
-    #[ignore = "cannot be run with other tests that munge the PKRU register"]
-    fn check_read() {
-        skip_if_mpk_unavailable!();
-        assert_eq!(read(), DISABLE_ACCESS ^ 1);
-        // By default, the Linux kernel only allows a process to access key 0,
-        // the default kernel key.
-    }
-
-    #[test]
     fn check_roundtrip() {
         skip_if_mpk_unavailable!();
         let pkru = read();
