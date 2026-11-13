@@ -1023,10 +1023,10 @@ fn write_serve_coredump(state: &HostWorkerState, store: &mut Store<Host>, error:
     let Some(path) = &state.coredump else {
         return;
     };
-    if error.downcast_ref::<wasmtime::WasmCoreDump>().is_none() {
+    let Some(core_dump) = error.downcast_ref::<wasmtime::WasmCoreDump>() else {
         return;
-    }
-    match super::write_core_dump(store, error, &state.coredump_name, path) {
+    };
+    match super::write_core_dump(store, core_dump, &state.coredump_name, path) {
         Ok(()) => eprintln!("core dumped at {path}"),
         Err(coredump_err) => eprintln!("warning: coredump failed to generate: {coredump_err}"),
     }
