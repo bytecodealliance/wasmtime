@@ -27,6 +27,7 @@ use cranelift_entity::{EntitySet, SecondaryMap};
 use smallvec::SmallVec;
 
 mod cost;
+mod early;
 mod elaborate;
 
 /// An iterator that yields blocks in a depth-first pre-order traversal of the
@@ -1291,6 +1292,13 @@ impl<'a> EgraphPass<'a> {
             self.ctrl_plane,
         );
         elaborator.elaborate();
+        early::place_early(
+            self.func,
+            self.cfg,
+            &self.domtree,
+            self.loop_analysis,
+            &mut self.stats,
+        );
 
         self.check_post_egraph();
     }
@@ -1376,6 +1384,7 @@ pub(crate) struct Stats {
     pub(crate) elaborate_memoize_miss: u64,
     pub(crate) elaborate_remat: u64,
     pub(crate) elaborate_licm_hoist: u64,
+    pub(crate) elaborate_place_early: u64,
     pub(crate) elaborate_func: u64,
     pub(crate) elaborate_func_pre_insts: u64,
     pub(crate) elaborate_func_post_insts: u64,

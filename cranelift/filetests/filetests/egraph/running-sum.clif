@@ -1,0 +1,125 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+;; Keep the running sum near the calls so their results do not all remain
+;; live across every subsequent call. Cold error exits permit early placement.
+function %sum(f64) -> f64 {
+    sig0 = (f64) -> f64, i8
+    fn0 = %g sig0
+
+block0(v0: f64):
+    v1 = f64const 0.0
+    jump block1
+
+block1:
+    v3, v4 = call fn0(v0)
+    v5 = fadd v1, v3
+    brif v4, block5, block2
+
+block2:
+    v6, v7 = call fn0(v0)
+    v8 = fadd v5, v6
+    brif v7, block5, block3
+
+block3:
+    v9, v10 = call fn0(v0)
+    v11 = fadd v8, v9
+    brif v10, block5, block4
+
+block4:
+    return v11
+
+block5 cold:
+    return v1
+}
+
+; check: block1:
+; check: call fn0(v0)
+; check: fadd
+; check: brif v4, block5, block2
+; check: block2:
+; check: call fn0(v0)
+; check: fadd
+; check: brif v7, block5, block3
+; check: block3:
+; check: call fn0(v0)
+; check: block4:
+; check: fadd
+; check: return
+
+;; Warm error exits prevent speculation into the earlier call blocks.
+function %warm_exits(f64) -> f64 {
+    sig0 = (f64) -> f64, i8
+    fn0 = %g sig0
+
+block0(v0: f64):
+    v1 = f64const 0.0
+    jump block1
+
+block1:
+    v3, v4 = call fn0(v0)
+    v5 = fadd v1, v3
+    brif v4, block5, block2
+
+block2:
+    v6, v7 = call fn0(v0)
+    v8 = fadd v5, v6
+    brif v7, block5, block3
+
+block3:
+    v9, v10 = call fn0(v0)
+    v11 = fadd v8, v9
+    brif v10, block5, block4
+
+block4:
+    return v11
+
+block5:
+    return v1
+}
+
+; check: block1:
+; check: v3, v4 = call fn0(v0)
+; nextln: brif v4, block5, block2
+; check: block2:
+; check: v6, v7 = call fn0(v0)
+; nextln: brif v7, block5, block3
+; check: block3:
+; check: v9, v10 = call fn0(v0)
+; nextln: brif v10, block5, block4
+; check: block4:
+; check: fadd
+; nextln: v8 = fadd
+; nextln: v11 = fadd
+; nextln: return v11
+
+;; An exit post-dominates the loop, but moving its arithmetic into the loop
+;; would execute it on every iteration. Keep it outside the loop.
+function %loop_exit(f64) -> f64 {
+    sig0 = (f64) -> f64, i8
+    fn0 = %g sig0
+
+block0(v0: f64):
+    v1 = f64const 0.0
+    jump block1
+
+block1:
+    v3, v4 = call fn0(v0)
+    brif v4, block1, block2
+
+block2:
+    v6, v7 = call fn0(v0)
+    v5 = fadd v1, v3
+    v8 = fadd v5, v6
+    return v8
+}
+
+; check: block1:
+; check: v3, v4 = call fn0(v0)
+; nextln: brif v4, block1, block2
+; check: block2:
+; check: call fn0(v0)
+; check: fadd
+; nextln: v8 = fadd
+; nextln: return v8
