@@ -1846,6 +1846,19 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
+    /// Ensure that a faulting instruction's PC is distinct from the previous
+    /// stack map's PC, which may be the return address of a preceding call.
+    /// Call this before recording the instruction's trap and stack map.
+    pub fn pad_for_stack_map(&mut self) {
+        if self
+            .user_stack_maps
+            .last()
+            .is_some_and(|(pc, _, _)| *pc == self.cur_offset())
+        {
+            self.put_data(&I::gen_nop_units()[0]);
+        }
+    }
+
     /// Push a user stack map onto this buffer.
     ///
     /// The stack map is associated with the given `pc` code offset. For a

@@ -657,6 +657,7 @@ pub(crate) fn emit(
             ..
         } => {
             let stack_map = state.take_stack_map();
+            sink.pad_for_stack_map();
 
             // Record the address of load in the trap table so a signal handler
             // can later distinguish whether a segfault is its fault.

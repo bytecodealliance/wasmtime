@@ -1,0 +1,18 @@
+test compile
+target x86_64
+target aarch64
+
+;; A call's return PC and a following poll's fault PC must have distinct
+;; stack maps, even when no register moves are needed between them.
+function %interrupt_poll_after_call(i64, i64, i64) -> i64 tail {
+    ss0 = explicit_slot 16, align = 8
+    sig0 = () preserve_all
+    fn0 = colocated %g sig0
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = stack_addr.i64 ss0
+    store notrap v0, v3
+    v4 = interrupt_poll v1, v2, user3, stack_map=[i64 @ ss0+0]
+    call fn0(), stack_map=[i64 @ ss0+8]
+    v5 = interrupt_poll v4, v2, user3, stack_map=[i64 @ ss0+0]
+    return v5
+}
