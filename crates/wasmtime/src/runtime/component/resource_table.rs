@@ -101,9 +101,13 @@ const DEFAULT_MAX_CAPACITY: usize = 1_000_000;
 /// * whenever a child is deleted, its index is removed from children.
 /// * an entry with children may not be deleted.
 #[derive(Debug)]
-struct TableEntry {
+pub struct TableEntry {
     /// The entry in the table, as a boxed dynamically-typed object
     entry: Box<dyn Any + Send>,
+    /// The name of the entry's type, as given by [`core::any::type_name`].
+    ///
+    /// This is purely informational, intended to assist with debugging.
+    type_name: &'static str,
     /// The index of the parent of this entry, if it has one.
     parent: Option<u32>,
     /// The indices of any children of this entry.
@@ -111,9 +115,10 @@ struct TableEntry {
 }
 
 impl TableEntry {
-    fn new(entry: Box<dyn Any + Send>, parent: Option<u32>) -> Self {
+    fn new<T: Send + 'static>(entry: T, parent: Option<u32>) -> Self {
         Self {
-            entry,
+            entry: Box::new(entry),
+            type_name: core::any::type_name::<T>(),
             parent,
             children: BTreeSet::new(),
         }
@@ -125,6 +130,26 @@ impl TableEntry {
     fn remove_child(&mut self, child: u32) {
         let was_removed = self.children.remove(&child);
         debug_assert!(was_removed);
+    }
+    /// The dynamically-typed item stored at this table entry
+    pub fn entry(&self) -> &(dyn Any + Send) {
+        &*self.entry
+    }
+    /// The mutable dynamically-typed item stored at this table entry
+    pub fn entry_mut(&mut self) -> &mut (dyn Any + Send) {
+        &mut *self.entry
+    }
+    /// The name of the item's type, as given by [`core::any::type_name`].
+    pub fn type_name(&self) -> &'static str {
+        self.type_name
+    }
+    /// The index of the parent of this entry, if any exists
+    pub fn parent(&self) -> &Option<u32> {
+        &self.parent
+    }
+    /// The indicies of any children of this entry
+    pub fn children(&self) -> impl Iterator<Item = &u32> + '_ {
+        self.children.iter()
     }
 }
 
@@ -203,7 +228,7 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
     where
         T: Send + 'static,
     {
-        let idx = self.push_(TableEntry::new(Box::new(entry), None))?;
+        let idx = self.push_(TableEntry::new(entry, None))?;
         Ok(Resource::new_own(idx))
     }
 
@@ -232,11 +257,7 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
             match mem::replace(
                 &mut self.entries[ix],
                 Entry::Occupied {
-                    entry: TableEntry {
-                        entry: Box::new(Tombstone),
-                        parent: None,
-                        children: BTreeSet::new(),
-                    },
+                    entry: TableEntry::new(Tombstone, None),
                 },
             ) {
                 Entry::Occupied { entry } => {
@@ -328,7 +349,7 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
     {
         let parent = parent.rep();
         self.occupied(parent)?;
-        let child = self.push_(TableEntry::new(Box::new(entry), Some(parent)))?;
+        let child = self.push_(TableEntry::new(entry, Some(parent)))?;
         self.occupied_mut(parent)?.add_child(child);
         Ok(Resource::new_own(child))
     }
@@ -422,13 +443,12 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
     pub fn iter_entries<'a, T>(
         &'a mut self,
         map: BTreeMap<u32, T>,
-    ) -> impl Iterator<Item = (Result<&'a mut dyn Any, ResourceTableError>, T)> {
+    ) -> impl Iterator<Item = (Result<&'a mut TableEntry, ResourceTableError>, T)> {
         map.into_iter().map(move |(k, v)| {
             let item = self
                 .occupied_mut(k)
-                .map(|e| Box::as_mut(&mut e.entry))
                 // Safety: extending the lifetime of the mutable reference.
-                .map(|item| unsafe { &mut *(item as *mut dyn Any) });
+                .map(|item| unsafe { &mut *(item as *mut TableEntry) });
             (item, v)
         })
     }
@@ -437,25 +457,50 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
     pub fn iter_children<T>(
         &self,
         parent: &Resource<T>,
-    ) -> Result<impl Iterator<Item = &(dyn Any + Send)> + use<'_, T, D>, ResourceTableError>
+    ) -> Result<impl Iterator<Item = &TableEntry> + use<'_, T, D>, ResourceTableError>
     where
         T: 'static,
     {
         let parent_entry = self.occupied(parent.rep())?;
-        Ok(parent_entry.children.iter().map(|child_index| {
-            let child = self.occupied(*child_index).expect("missing child");
-            child.entry.as_ref()
-        }))
+        Ok(parent_entry
+            .children
+            .iter()
+            .map(|child_index| self.occupied(*child_index).expect("missing child")))
+    }
+
+    /// Iterate over all the live entries in this table.
+    ///
+    /// Each item is the entry's index (its `rep`) and a reference to its
+    /// [`TableEntry`].
+    // Debug tombstones are not yielded, so the number of items yielded is
+    // always equal to [`ResourceTable::len`].
+    pub fn iter(&self) -> impl Iterator<Item = (u32, &TableEntry)> {
+        self.entries
+            .iter()
+            .enumerate()
+            .filter_map(|(rep, entry)| match entry {
+                Entry::Occupied { entry } if !entry.entry.is::<Tombstone>() => {
+                    Some((u32::try_from(rep).unwrap(), entry))
+                }
+                Entry::Occupied { .. } | Entry::Free { .. } => None,
+            })
     }
 
     /// Iterate over all the entries in this table.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (u32, &mut (dyn Any + Send))> {
+    ///
+    /// Each item is the entry's index (its `rep`) and a mutable reference to its
+    /// [`TableEntry`].
+    // Debug tombstones are not yielded, so the number of items yielded is
+    // always equal to [`ResourceTable::len`].
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (u32, &mut TableEntry)> {
         self.entries
             .iter_mut()
             .enumerate()
             .filter_map(|(rep, entry)| match entry {
-                Entry::Occupied { entry } => Some((u32::try_from(rep).unwrap(), &mut *entry.entry)),
-                Entry::Free { .. } => None,
+                Entry::Occupied { entry } if !entry.entry.is::<Tombstone>() => {
+                    Some((u32::try_from(rep).unwrap(), entry))
+                }
+                Entry::Occupied { .. } | Entry::Free { .. } => None,
             })
     }
 }
@@ -468,21 +513,9 @@ impl Default for ResourceTable {
 
 impl<D: DeleteWithTombstone> fmt::Debug for ResourceTable<D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[")?;
-        let mut wrote = false;
-        for (index, entry) in self.entries.iter().enumerate() {
-            if let Entry::Occupied { entry } = entry {
-                if entry.entry.downcast_ref::<Tombstone>().is_none() {
-                    if wrote {
-                        write!(f, ", ")?;
-                    } else {
-                        wrote = true;
-                    }
-                    write!(f, "{index}")?;
-                }
-            }
-        }
-        write!(f, "]")
+        f.debug_map()
+            .entries(self.iter().map(|(rep, entry)| (rep, entry.type_name())))
+            .finish()
     }
 }
 
@@ -651,4 +684,59 @@ fn test_batch_capacity() {
     ));
     assert_eq!(table.len(), 0);
     assert_eq!(table.entries.len(), 3);
+}
+
+#[test]
+fn test_iter_type_names() {
+    struct DebugTombstone;
+    impl DeleteWithTombstone for DebugTombstone {
+        const DELETE_WITH_TOMBSTONE: bool = true;
+    }
+
+    let mut table = ResourceTable::<DebugTombstone>::empty(0);
+    assert_eq!(table.iter().count(), 0);
+
+    let parent = table.push(1u32).unwrap();
+    let child = table.push_child(String::from("hi"), &parent).unwrap();
+    let other = table.push(()).unwrap();
+
+    let entries = table
+        .iter()
+        .map(|(rep, entry)| (rep, entry.type_name()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        entries,
+        [
+            (parent.rep(), core::any::type_name::<u32>()),
+            (child.rep(), core::any::type_name::<String>()),
+            (other.rep(), core::any::type_name::<()>()),
+        ]
+    );
+    assert_eq!(table.iter().count(), table.len());
+    assert_eq!(
+        table
+            .iter()
+            .find(|(rep, _)| *rep == child.rep())
+            .unwrap()
+            .1
+            .entry()
+            .downcast_ref::<String>()
+            .unwrap(),
+        "hi"
+    );
+
+    // Tombstones left behind by deletion are not yielded.
+    let other_rep = other.rep();
+    table.delete(other).unwrap();
+    assert!(table.iter().all(|(rep, _)| rep != other_rep));
+    assert_eq!(table.iter().count(), table.len());
+
+    assert_eq!(
+        format!("{table:?}"),
+        format!(
+            "{{0: {:?}, 1: {:?}}}",
+            core::any::type_name::<u32>(),
+            core::any::type_name::<String>(),
+        )
+    );
 }

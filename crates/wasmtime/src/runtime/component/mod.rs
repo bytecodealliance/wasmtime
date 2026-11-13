@@ -134,7 +134,7 @@ pub use self::func::{
 pub use self::has_data::*;
 pub use self::instance::{Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
-pub use self::resource_table::{ResourceTable, ResourceTableError};
+pub use self::resource_table::{ResourceTable, ResourceTableError, TableEntry};
 pub use self::resources::{Resource, ResourceAny, ResourceDynamic};
 pub use self::types::{ResourceType, Type};
 pub use self::values::Val;
