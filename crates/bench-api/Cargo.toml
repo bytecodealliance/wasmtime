@@ -46,6 +46,15 @@ wasmtime-wasi = { workspace = true, features = ['p1', 'p2'] }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 clap = { workspace = true }
 
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+libc = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+] }
+
 [dev-dependencies]
 wat = { workspace = true }
 
