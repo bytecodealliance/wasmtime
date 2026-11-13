@@ -5,7 +5,7 @@ use wasmtime::component::{FutureConsumer, FutureProducer, FutureReader, Lift, Lo
 use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, StoreContextMut};
 
-/// Extension methosd for `FutureReader`
+/// Extension method for `FutureReader`
 pub trait FutureReaderExt<T> {
     /// Get the underlying `FutureReader`.
     fn as_future_reader(self) -> FutureReader<T>;
