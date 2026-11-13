@@ -618,11 +618,10 @@ impl LocalMemory {
                 bail!("Memory maximum size exceeded");
             }
 
-            // The shadow grows along with this memory, below.
-            if let Some(shadow) = &self.shadow {
-                if !shadow.can_grow_to(new_byte_size) {
-                    bail!("Memory maximum size exceeded");
-                }
+            // Grow the shadow's allocation first, so that if it fails, the
+            // memory hasn't grown either. Its size follows the memory's below.
+            if let Some(shadow) = &mut self.shadow {
+                shadow.reserve_to(new_byte_size)?;
             }
 
             self.alloc.grow_to(new_byte_size)
@@ -640,7 +639,7 @@ impl LocalMemory {
                     );
                 }
                 if let Some(shadow) = &mut self.shadow {
-                    shadow.grow_to(new_byte_size)?;
+                    shadow.set_byte_size(new_byte_size);
                 }
 
                 Ok(Some((old_byte_size, new_byte_size)))
