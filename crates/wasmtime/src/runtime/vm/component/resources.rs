@@ -94,7 +94,10 @@ pub enum CurrentScope {
     /// A scope which already has an ID in the component task state.
     Id(VMScope),
     /// A host scope whose task has not yet been materialized.
-    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(dead_code, reason = "only used with component-model-async")
+    )]
     DeferredHost,
 }
 
@@ -143,7 +146,10 @@ pub struct CallContext {
 }
 
 impl CallContext {
-    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(dead_code, reason = "only used with component-model-async")
+    )]
     pub(crate) fn is_empty(&self) -> bool {
         self.lenders.is_empty() && self.borrow_count == 0
     }
