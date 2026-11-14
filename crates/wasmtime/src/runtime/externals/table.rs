@@ -221,13 +221,13 @@ impl Table {
                     .map(|r| store.clone_gc_ref(&r));
                 Some(match self.ty_(&store).element().heap_type().top() {
                     HeapTopType::Extern => {
-                        Ref::Extern(gc_ref.map(|r| ExternRef::from_cloned_gc_ref(&mut store, r)))
+                        Ref::from(gc_ref.map(|r| ExternRef::from_cloned_gc_ref(&mut store, r)))
                     }
                     HeapTopType::Any => {
-                        Ref::Any(gc_ref.map(|r| AnyRef::from_cloned_gc_ref(&mut store, r)))
+                        Ref::from(gc_ref.map(|r| AnyRef::from_cloned_gc_ref(&mut store, r)))
                     }
                     HeapTopType::Exn => {
-                        Ref::Exn(gc_ref.map(|r| ExnRef::from_cloned_gc_ref(&mut store, r)))
+                        Ref::from(gc_ref.map(|r| ExnRef::from_cloned_gc_ref(&mut store, r)))
                     }
                     HeapTopType::Func | HeapTopType::Cont => unreachable!("not GC refs"),
                 })
@@ -600,7 +600,7 @@ impl Ref {
     }
 
     fn into_table_gc_ref<'a>(
-        self,
+        &'a self,
         store: &'a mut AutoAssertNoGc<'_>,
         ty: &RefType,
     ) -> Result<Option<&'a VMGcRef>> {
@@ -712,7 +712,7 @@ mod tests {
             ExternRef::new(&mut scope, 1u32)?
         };
 
-        let res = table.grow(&mut store, 1, Ref::Extern(Some(unrooted)));
+        let res = table.grow(&mut store, 1, Ref::from(unrooted));
         assert!(res.is_err());
         assert_eq!(table.size(&store), 2);
         Ok(())
