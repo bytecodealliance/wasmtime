@@ -19,7 +19,6 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
   "time",
 ] }
-wasmparser = { workspace = true }
 wasmtime = { workspace = true, features = [
   "default",
   "anyhow",

@@ -570,7 +570,6 @@ dependencies = [
  "test-programs-artifacts",
  "tokio",
  "wasm-compose",
- "wasmparser 0.263.0",
  "wasmtime",
  "wasmtime-wasi",
 ]
@@ -779,8 +778,6 @@ dependencies = [
  "log",
  "num_cpus",
  "pulley-interpreter",
- "serde",
- "serde_derive",
  "similar",
  "smallvec 1.15.1",
  "target-lexicon 0.13.5",
@@ -845,7 +842,6 @@ dependencies = [
  "cranelift-isle",
  "cranelift-isle-veri-caching",
  "cranelift-isle-veri-test-macros",
- "easy-smt",
  "env_logger 0.11.5",
  "log",
  "num-bigint",
@@ -4843,11 +4839,9 @@ dependencies = [
  "cranelift-bforest",
  "cranelift-bitset",
  "env_logger 0.11.5",
- "futures",
  "log",
  "mutatis",
  "rand 0.10.1",
- "rayon",
  "serde",
  "serde_json",
  "smallvec 1.15.1",
@@ -4949,7 +4943,6 @@ dependencies = [
  "pulley-interpreter",
  "smallvec 1.15.1",
  "target-lexicon 0.13.5",
- "thiserror 2.0.17",
  "wasmparser 0.263.0",
  "wasmtime-environ",
  "wasmtime-internal-core",
@@ -5154,7 +5147,6 @@ dependencies = [
  "tempfile",
  "test-log",
  "test-programs-artifacts",
- "thiserror 2.0.17",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -5207,7 +5199,6 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
- "wasmtime-wasi-io",
  "webpki-roots",
 ]
 
@@ -5277,7 +5268,6 @@ version = "52.0.0-dev"
 dependencies = [
  "json-from-wast",
  "log",
- "object 0.40.0",
  "serde_json",
  "tokio",
  "wasmparser 0.263.0",
@@ -5398,7 +5388,6 @@ dependencies = [
 name = "wiggle-macro"
 version = "52.0.0-dev"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn 3.0.5",
  "wiggle",
