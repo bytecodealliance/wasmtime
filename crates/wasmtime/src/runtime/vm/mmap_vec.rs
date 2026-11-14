@@ -69,7 +69,7 @@ impl MmapVec {
     fn new_alloc(len: usize, alignment: usize) -> Result<MmapVec, OutOfMemory> {
         let layout = Layout::from_size_align(len, alignment)
             .expect("Invalid size or alignment for MmapVec allocation");
-        match NonNull::new(unsafe { alloc::alloc::alloc_zeroed(layout.clone()) }) {
+        match NonNull::new(unsafe { alloc::alloc::alloc_zeroed(layout) }) {
             Some(ptr) => {
                 let base = SendSyncPtr::new(ptr);
                 Ok(MmapVec::Alloc { base, layout })
@@ -345,7 +345,7 @@ impl Drop for MmapVec {
         match self {
             #[cfg(not(has_virtual_memory))]
             MmapVec::Alloc { base, layout, .. } => unsafe {
-                alloc::alloc::dealloc(base.as_mut(), layout.clone());
+                alloc::alloc::dealloc(base.as_mut(), *layout);
             },
             MmapVec::ExternallyOwned { .. } => {
                 // Memory is allocated externally, nothing to do
