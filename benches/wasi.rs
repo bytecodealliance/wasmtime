@@ -1,8 +1,9 @@
 //! Measure some common WASI call scenarios.
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use std::{fs::File, path::Path, time::Instant};
+use std::{fs::File, path::Path};
 use wasmtime::{Engine, Linker, Module, Store, TypedFunc};
+use wasmtime_bench_util::Timer;
 use wasmtime_wasi::{FsPerms, WasiCtx, p1::WasiP1Ctx};
 
 criterion_group!(benches, bench_wasi);
@@ -30,10 +31,10 @@ fn bench_wasi(c: &mut Criterion) {
             // `instantiate` for details).
             c.bench_function(&bench_name, move |b| {
                 b.iter_custom(|iters| {
-                    let start = Instant::now();
+                    let start = Timer::start();
                     let result = run_fn.call(&mut store, iters).unwrap();
                     assert_eq!(iters, result);
-                    start.elapsed()
+                    start.stop()
                 })
             });
         }

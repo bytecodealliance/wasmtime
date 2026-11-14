@@ -8,6 +8,7 @@ use criterion::measurement::WallTime;
 use criterion::{BenchmarkGroup, BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::path::Path;
 use wasmtime::*;
+use wasmtime_bench_util as bench;
 
 /// A compilation configuration, for benchmarking.
 #[derive(Clone, Copy, Debug)]
@@ -69,7 +70,7 @@ fn compile(group: &mut BenchmarkGroup<WallTime>, path: &Path, scenario: Scenario
     let config = scenario.to_config();
     let engine = Engine::new(&config).expect("failed to create engine");
     group.bench_function(id, |b| {
-        b.iter(|| Module::new(&engine, &bytes).unwrap());
+        bench::iter(b, || Module::new(&engine, &bytes).unwrap());
     });
 }
 

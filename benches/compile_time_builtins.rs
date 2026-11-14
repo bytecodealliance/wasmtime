@@ -4,12 +4,12 @@ use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 use std::{
     mem,
     ops::{Deref, DerefMut},
-    time::Instant,
 };
 use wasmtime::{
     component::{Component, Resource, ResourceAny, ResourceType},
     *,
 };
+use wasmtime_bench_util::Timer;
 
 // The nearest power of two to 100,000 (2^17 = 131_072). Using a power of two
 // lets the PRNG's high bits map directly onto the buffer without division.
@@ -576,11 +576,11 @@ mod inc_list {
                 instantiate_host_buf_api_guest(&engine, &linker, &component)?;
             let main = get_api_func::<(ResourceAny,), ()>(&mut store, &instance, "main")?;
 
-            let start = Instant::now();
+            let start = Timer::start();
             for _ in 0..iters {
                 main.call(&mut store, (buf,))?;
             }
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             buf.resource_drop(&mut store)?;
             let expected = iters as u8;
@@ -634,11 +634,11 @@ mod inc_list {
                 instantiate_host_buf_api_guest(&engine, &linker, &component)?;
             let main = get_api_func::<(ResourceAny,), ()>(&mut store, &instance, "main")?;
 
-            let start = Instant::now();
+            let start = Timer::start();
             for _ in 0..iters {
                 main.call(&mut store, (buf,))?;
             }
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             buf.resource_drop(&mut store)?;
             let expected = iters as u8;
@@ -720,11 +720,11 @@ mod inc_list {
 
             let mut buf = std::iter::repeat_n(0u8, HOST_BUF_LEN).collect::<Vec<u8>>();
 
-            let start = Instant::now();
+            let start = Timer::start();
             for _ in 0..iters {
                 buf = inc_list.call(&mut store, (&buf,))?.0;
             }
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             let expected = iters as u8;
             assert_eq!(buf.len(), HOST_BUF_LEN);
@@ -906,9 +906,9 @@ mod inc_random {
             let inc_random =
                 get_api_func::<(ResourceAny, u64), ()>(&mut store, &instance, "inc-random")?;
 
-            let start = Instant::now();
+            let start = Timer::start();
             inc_random.call(&mut store, (buf, iters))?;
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             buf.resource_drop(&mut store)?;
             let expected = get_expected(iters);
@@ -956,9 +956,9 @@ mod inc_random {
             let inc_random =
                 get_api_func::<(ResourceAny, u64), ()>(&mut store, &instance, "inc-random")?;
 
-            let start = Instant::now();
+            let start = Timer::start();
             inc_random.call(&mut store, (buf, iters))?;
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             buf.resource_drop(&mut store)?;
             let expected = get_expected(iters);
@@ -1015,11 +1015,11 @@ mod inc_random {
             let i = u32::try_from(get_random_index()?)?;
             let mut buf = std::iter::repeat_n(0u8, HOST_BUF_LEN).collect::<Vec<u8>>();
 
-            let start = Instant::now();
+            let start = Timer::start();
             for _ in 0..iters {
                 buf = inc_random.call(&mut store, (i, &buf))?.0;
             }
-            let elapsed = start.elapsed();
+            let elapsed = start.stop();
 
             let expected = iters as u8;
             let actual = buf[usize::try_from(i)?];
