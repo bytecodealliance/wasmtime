@@ -187,7 +187,9 @@ impl MmapFiberStack {
 
         unsafe {
             // Add in one page for a guard page and then ask for some memory.
-            let mmap_len = size + page_size;
+            let mmap_len = size
+                .checked_add(page_size)
+                .ok_or_else(|| OutOfMemory::new(usize::MAX))?;
             let mmap = rustix::mm::mmap_anonymous(
                 ptr::null_mut(),
                 mmap_len,
