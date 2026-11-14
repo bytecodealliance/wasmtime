@@ -128,9 +128,10 @@ impl WasmCoreDump {
                     maximum: ty.maximum(),
                     memory64: ty.is_64(),
                     shared: ty.is_shared(),
-                    page_size_log2: (ty.page_size_log2()
-                        != wasmtime_environ::Memory::DEFAULT_PAGE_SIZE_LOG2)
-                        .then_some(u32::from(ty.page_size_log2())),
+                    page_size_log2: match ty.page_size_log2() {
+                        16 => None,
+                        n => Some(n.into()),
+                    },
                 });
 
                 // Attach the memory data, balancing number of data segments and
