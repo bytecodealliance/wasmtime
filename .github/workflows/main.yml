@@ -384,6 +384,7 @@ jobs:
               -p wasmtime --no-default-features --features runtime
               -p wasmtime --no-default-features --features threads
               -p wasmtime --no-default-features --features runtime,threads
+              -p wasmtime --no-default-features --features runtime,threads,custom-sync-primitives
               -p wasmtime --no-default-features --features cranelift,threads
               -p wasmtime --no-default-features --features stack-switching
               -p wasmtime --no-default-features --features cranelift,stack-switching
@@ -643,7 +644,7 @@ jobs:
           os: ubuntu-latest
           test: >
             cargo check -p wasmtime --no-default-features --features runtime,component-model &&
-            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model-async,pulley,debug,debug-builtins,demangle,anyhow &&
+            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model-async,pulley,debug,debug-builtins,demangle,anyhow,threads,custom-sync-primitives &&
             cargo check -p cranelift-control --no-default-features &&
             cargo check -p cranelift-assembler-x64 --lib &&
             cargo check -p cranelift-codegen --no-default-features --features all-arch &&
@@ -680,7 +681,7 @@ jobs:
         # A no_std target without 64-bit atomics
         - target: riscv32imac-unknown-none-elf
           os: ubuntu-latest
-          test: cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,async
+          test: cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,async,threads
         - target: loongarch64-unknown-linux-gnu
           os: ubuntu-latest
           test: cargo build

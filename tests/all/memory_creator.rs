@@ -528,6 +528,29 @@ fn growth_within_capacity_that_moves_memory_panics() {
     let _ = memory.grow(&mut store, 1);
 }
 
+#[test]
+fn shared_memory_uses_custom_creator() -> Result<()> {
+    let creator = CustomMemoryCreator::new(ImageMode::ReturnFalse).with_capacity(4 * WASM_PAGE);
+    let (store, counters) = store(creator, |config| {
+        config.wasm_threads(true);
+        config.shared_memory(true);
+    });
+    assert_eq!(counters.num_memories_created.load(SeqCst), 0);
+
+    let shared = SharedMemory::new(store.engine(), MemoryType::shared(1, 3)?)?;
+    assert_eq!(counters.num_memories_created.load(SeqCst), 1);
+    assert_eq!(counters.num_bytes_accessible.load(SeqCst), WASM_PAGE);
+
+    assert_eq!(shared.grow(2)?, 1);
+    assert_eq!(counters.grow_to_calls.load(SeqCst), 1);
+    assert_eq!(counters.num_bytes_accessible.load(SeqCst), 3 * WASM_PAGE);
+    assert!(shared.grow(1).is_err());
+
+    drop(shared);
+    assert_eq!(counters.num_bytes_accessible.load(SeqCst), 0);
+    Ok(())
+}
+
 // Mmap providers for unix and windows.
 mod sys {
     #[cfg(unix)]

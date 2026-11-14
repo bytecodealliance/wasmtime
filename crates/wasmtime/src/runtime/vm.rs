@@ -77,7 +77,7 @@ mod throw;
 mod traphandlers;
 mod vmcontext;
 
-#[cfg(feature = "threads")]
+#[cfg(all(feature = "threads", feature = "std"))]
 mod parking_spot;
 
 // Note that `debug_builtins` here is disabled with a feature or a lack of a

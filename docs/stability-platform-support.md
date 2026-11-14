@@ -87,6 +87,7 @@ Cargo features are:
 * `runtime`
 * `gc`
 * `component-model`
+* `threads`
 * `pulley`
 * `async`
 * `debug`
