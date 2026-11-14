@@ -15,12 +15,12 @@ workspace = true
 
 [dependencies]
 cranelift-codegen = { workspace = true }
-target-lexicon = { workspace = true }
 log = { workspace = true }
 hashbrown = { workspace = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]
+target-lexicon = { workspace = true }
 env_logger = { workspace = true }
 similar = { workspace = true }
 cranelift-codegen = { workspace = true, features = ['x86'] }

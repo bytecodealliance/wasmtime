@@ -21,7 +21,6 @@ tokio = { workspace = true, features = ['rt'] }
 json-from-wast = { workspace = true }
 wasmparser = { workspace = true }
 serde_json = { workspace = true }
-object = { workspace = true, features = ['unaligned'] }
 
 [features]
 component-model = ['wasmtime/component-model']
