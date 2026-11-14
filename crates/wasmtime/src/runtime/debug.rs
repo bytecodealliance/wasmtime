@@ -14,7 +14,7 @@ use crate::{
     vm::{CompiledModuleId, VMContext},
 };
 use crate::{Caller, Result, Store};
-use alloc::collections::{BTreeMap, BTreeSet, btree_map::Entry};
+use alloc::collections::{BTreeMap, btree_map::Entry};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::{ffi::c_void, ptr::NonNull};
@@ -187,10 +187,7 @@ impl StoreOpaque {
             return None;
         }
 
-        Some(BreakpointState {
-            store: self,
-            dirty_modules: BTreeSet::new(),
-        })
+        Some(BreakpointState { store: self })
     }
 
     fn debug_all_instances(&mut self) -> Vec<Instance> {
@@ -1022,10 +1019,9 @@ pub(crate) struct Breakpoints {
     /// count. Multiple requested PCs may map to the same actual
     /// breakpoint when they are slipped forward.
     breakpoints: BTreeMap<BreakpointKey, usize>,
-    /// When a requested breakpoint PC does not exactly match an
-    /// opcode boundary, we "slip" it forward to the next available
-    /// PC. This map records the redirect from the requested key to
-    /// the actual key so that `remove_breakpoint` can undo it.
+    /// Maps each requested breakpoint to its actual (possibly slipped-forward)
+    /// key, including requests that already fall on an opcode boundary. Each
+    /// request contributes exactly one reference to the actual breakpoint.
     breakpoint_redirects: BTreeMap<BreakpointKey, BreakpointKey>,
 }
 
@@ -1060,16 +1056,10 @@ impl BreakpointKey {
 /// Obtained with [`Store::edit_breakpoints`] (or the same method on
 /// [`StoreContextMut`] and [`Caller`]).
 ///
-/// Changes to breakpoints and single-stepping are batched for
-/// efficiency, because code-patching has some overhead (e.g. syscalls
-/// to write-protect/re-publish code).
+/// Each editing operation restores executable permissions before returning,
+/// so forgetting this value cannot leave guest code unexecutable.
 pub struct BreakpointState<'a> {
     store: &'a mut StoreOpaque,
-    /// Modules that have been edited.
-    ///
-    /// Invariant: each of these modules' CodeMemory objects is
-    /// *unpublished* when in the dirty set.
-    dirty_modules: BTreeSet<StoreCodePC>,
 }
 
 impl Breakpoints {
@@ -1121,9 +1111,8 @@ impl<'a> BreakpointState<'a> {
     fn get_code_memory<'b>(
         breakpoints: &Breakpoints,
         registry: &'b mut ModuleRegistry,
-        dirty_modules: &mut BTreeSet<StoreCodePC>,
         module: &Module,
-    ) -> Result<&'b mut CodeMemory> {
+    ) -> Result<UnpublishedCodeMemory<'b>> {
         let store_code_pc =
             registry.store_code_base_or_register(module, RegisterBreakpointState(breakpoints))?;
         let code_memory = registry
@@ -1131,10 +1120,8 @@ impl<'a> BreakpointState<'a> {
             .expect("Just checked presence above")
             .code_memory_mut()
             .expect("Must have unique ownership of StoreCode in guest-debug mode");
-        if dirty_modules.insert(store_code_pc) {
-            code_memory.unpublish()?;
-        }
-        Ok(code_memory)
+        code_memory.unpublish()?;
+        Ok(UnpublishedCodeMemory(code_memory))
     }
 
     fn patch<'b>(
@@ -1177,19 +1164,17 @@ impl<'a> BreakpointState<'a> {
         let actual_key = BreakpointKey::from_raw(module, actual_pc);
 
         let (state, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
-        if actual_pc != pc {
-            log::trace!("slipping breakpoint from {requested_key:?} to {actual_key:?}");
-            state.breakpoint_redirects.insert(requested_key, actual_key);
+        if state.breakpoint_redirects.contains_key(&requested_key) {
+            return Ok(());
         }
-
-        let refcount = state.breakpoints.entry(actual_key).or_insert(0);
-        *refcount += 1;
-        if *refcount == 1 {
+        if !state.breakpoints.contains_key(&actual_key) {
             // First reference: actually patch the code.
-            let mem = Self::get_code_memory(state, registry, &mut self.dirty_modules, module)?;
+            let mem = Self::get_code_memory(state, registry, module)?;
             let patches = frame_table.lookup_breakpoint_patches_by_pc(actual_pc);
-            Self::patch(patches, mem, true);
+            Self::patch(patches, mem.0, true);
         }
+        state.breakpoint_redirects.insert(requested_key, actual_key);
+        *state.breakpoints.entry(actual_key).or_insert(0) += 1;
         Ok(())
     }
 
@@ -1206,10 +1191,9 @@ impl<'a> BreakpointState<'a> {
         self.check_engine(module)?;
         let (state, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
         let requested_key = BreakpointKey::from_raw(module, pc);
-        let actual_key = state
-            .breakpoint_redirects
-            .remove(&requested_key)
-            .unwrap_or(requested_key);
+        let Some(actual_key) = state.breakpoint_redirects.remove(&requested_key) else {
+            return Ok(());
+        };
         let actual_pc = actual_key.1;
 
         if let Some(refcount) = state.breakpoints.get_mut(&actual_key) {
@@ -1217,13 +1201,12 @@ impl<'a> BreakpointState<'a> {
             if *refcount == 0 {
                 state.breakpoints.remove(&actual_key);
                 if !state.single_step {
-                    let mem =
-                        Self::get_code_memory(state, registry, &mut self.dirty_modules, module)?;
+                    let mem = Self::get_code_memory(state, registry, module)?;
                     let frame_table = module
                         .frame_table()
                         .expect("Frame table must be present when guest-debug is enabled");
                     let patches = frame_table.lookup_breakpoint_patches_by_pc(actual_pc);
-                    Self::patch(patches, mem, false);
+                    Self::patch(patches, mem.0, false);
                 }
             }
         }
@@ -1276,8 +1259,8 @@ impl<'a> BreakpointState<'a> {
             .map(|(_, m)| m.clone())
             .collect::<Vec<_>>();
         for module in modules {
-            let mem = Self::get_code_memory(state, registry, &mut self.dirty_modules, &module)?;
-            Self::apply_single_step(mem, &module, enabled, |key| {
+            let mem = Self::get_code_memory(state, registry, &module)?;
+            Self::apply_single_step(mem.0, &module, enabled, |key| {
                 state.breakpoints.contains_key(key)
             })?;
         }
@@ -1324,18 +1307,14 @@ impl<'a> BreakpointState<'a> {
     }
 }
 
-impl<'a> Drop for BreakpointState<'a> {
+/// A private guard that cannot be forgotten by callers of the editing API.
+/// Code must be executable again before returning control to the caller.
+struct UnpublishedCodeMemory<'a>(&'a mut CodeMemory);
+
+impl Drop for UnpublishedCodeMemory<'_> {
     fn drop(&mut self) {
-        let (_, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
-        for &store_code_base in &self.dirty_modules {
-            let store_code = registry.store_code_mut(store_code_base).unwrap();
-            if let Err(e) = store_code
-                .code_memory_mut()
-                .expect("Must have unique ownership of StoreCode in guest-debug mode")
-                .publish()
-            {
-                abort_on_republish_error(e);
-            }
+        if let Err(e) = self.0.publish() {
+            abort_on_republish_error(e);
         }
     }
 }
