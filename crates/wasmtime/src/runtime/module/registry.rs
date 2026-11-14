@@ -205,7 +205,9 @@ impl ModuleRegistry {
         breakpoint_state: RegisterBreakpointState,
     ) -> Result<StoreCodePC> {
         let key = module.engine_code().text_range().start;
-        if !self.store_code.contains_key(key) {
+        // Components share code with their core modules, but the module's
+        // metadata must also be registered for breakpoint enumeration.
+        if self.module_by_compiled_id(module.id()).is_none() {
             let engine = module.engine().clone();
             self.register_module(module, &engine, breakpoint_state)?;
         }
