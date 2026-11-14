@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use core::any::Any;
+use core::fmt;
 use core::future::Future;
 use core::pin::Pin;
 use wasmtime::Result;
@@ -18,6 +19,27 @@ pub struct DynPollable {
     pub(crate) index: u32,
     pub(crate) make_future: MakeFuture,
     pub(crate) remove_index_on_delete: Option<fn(&mut ResourceTable, u32) -> Result<()>>,
+    type_name: &'static str,
+}
+
+impl DynPollable {
+    /// The name of the concrete type this pollable is subscribed to, as
+    /// reported by [`Pollable::type_name`] when it was created by
+    /// [`subscribe`].
+    ///
+    /// This is intended for debugging purposes only.
+    pub fn type_name(&self) -> &'static str {
+        self.type_name
+    }
+}
+
+impl fmt::Debug for DynPollable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DynPollable")
+            .field("index", &self.index)
+            .field("type_name", &self.type_name)
+            .finish_non_exhaustive()
+    }
 }
 
 /// The trait used to implement [`DynPollable`] to create a `pollable`
@@ -78,6 +100,19 @@ pub trait Pollable: Send + 'static {
     /// connected to. The call to `wasi:io/poll` itself does not return errors,
     /// only a list of ready objects.
     async fn ready(&mut self);
+
+    /// The name of the concrete type implementing this trait.
+    ///
+    /// The default implementation returns the value of
+    /// [`core::any::type_name::<Self>()`](core::any::type_name). Calling this
+    /// on a trait object such as
+    /// [`DynInputStream`](crate::streams::DynInputStream) reports the
+    /// underlying concrete type rather than the trait object type.
+    ///
+    /// This is intended for debugging purposes only.
+    fn type_name(&self) -> &'static str {
+        core::any::type_name::<Self>()
+    }
 }
 
 /// Creates a `wasi:io/poll.pollable` resource which is subscribed to the provided
@@ -101,8 +136,10 @@ where
         stream.downcast_mut::<T>().unwrap().ready()
     }
 
+    let type_name = table.get(&resource)?.type_name();
     let pollable = DynPollable {
         index: resource.rep(),
+        type_name,
         remove_index_on_delete: if resource.owned() {
             Some(|table, idx| {
                 let resource = Resource::<T>::new_own(idx);
@@ -116,4 +153,89 @@ where
     };
 
     Ok(table.push_child(pollable, &resource)?)
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use super::*;
+    use crate::streams::{
+        DynInputStream, DynOutputStream, InputStream, OutputStream, StreamResult,
+    };
+    use bytes::Bytes;
+
+    struct TestPollable;
+
+    #[async_trait::async_trait]
+    impl Pollable for TestPollable {
+        async fn ready(&mut self) {}
+    }
+
+    struct TestInput;
+
+    #[async_trait::async_trait]
+    impl Pollable for TestInput {
+        async fn ready(&mut self) {}
+    }
+
+    impl InputStream for TestInput {
+        fn read(&mut self, _size: usize) -> StreamResult<Bytes> {
+            Ok(Bytes::new())
+        }
+    }
+
+    struct TestOutput;
+
+    #[async_trait::async_trait]
+    impl Pollable for TestOutput {
+        async fn ready(&mut self) {}
+    }
+
+    impl OutputStream for TestOutput {
+        fn write(&mut self, _bytes: Bytes) -> StreamResult<()> {
+            Ok(())
+        }
+        fn flush(&mut self) -> StreamResult<()> {
+            Ok(())
+        }
+        fn check_write(&mut self) -> StreamResult<usize> {
+            Ok(0)
+        }
+    }
+
+    #[test]
+    fn dyn_streams_report_concrete_type_name() {
+        let input: DynInputStream = Box::new(TestInput);
+        assert_eq!(input.type_name(), core::any::type_name::<TestInput>());
+        let output: DynOutputStream = Box::new(TestOutput);
+        assert_eq!(output.type_name(), core::any::type_name::<TestOutput>());
+    }
+
+    #[test]
+    fn subscribe_records_type_name() -> Result<()> {
+        let mut table = ResourceTable::new();
+
+        let owned = table.push(TestPollable)?;
+        let pollable = subscribe(&mut table, owned)?;
+        let pollable = table.get(&pollable)?;
+        assert_eq!(pollable.type_name(), core::any::type_name::<TestPollable>());
+        assert!(format!("{pollable:?}").contains("TestPollable"));
+
+        let input: DynInputStream = Box::new(TestInput);
+        let input = table.push(input)?;
+        let borrowed = Resource::<DynInputStream>::new_borrow(input.rep());
+        let pollable = subscribe(&mut table, borrowed)?;
+        assert_eq!(
+            table.get(&pollable)?.type_name(),
+            core::any::type_name::<TestInput>()
+        );
+
+        let output: DynOutputStream = Box::new(TestOutput);
+        let output = table.push(output)?;
+        let pollable = subscribe(&mut table, output)?;
+        assert_eq!(
+            table.get(&pollable)?.type_name(),
+            core::any::type_name::<TestOutput>()
+        );
+        Ok(())
+    }
 }
