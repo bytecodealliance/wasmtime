@@ -15,5 +15,6 @@ mod rename_directory;
 mod reopendir;
 mod set_times;
 mod symlinks;
+mod windows_colons;
 mod windows_open;
 mod windows_symlinks;
