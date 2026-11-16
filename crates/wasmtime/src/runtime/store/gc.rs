@@ -2,7 +2,6 @@
 
 use crate::RootSet;
 use crate::error::{Context, ensure};
-use crate::hash_map::HashMap;
 use crate::module::ModuleRegistry;
 use crate::store::{
     Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
