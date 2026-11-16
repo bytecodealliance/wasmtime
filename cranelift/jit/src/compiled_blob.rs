@@ -14,8 +14,8 @@ use crate::memory::JITMemoryKind;
 /// entries: `[code][veneers][GOT entries]`.
 const VENEER_SIZE: usize = 16;
 
-/// Size of a GOT entry: the absolute 8-byte address of a symbol.
-const GOT_ENTRY_SIZE: usize = 8;
+/// Size of a GOT entry: the absolute 4/8-byte address of a symbol.
+const GOT_ENTRY_SIZE: usize = size_of::<usize>();
 
 /// Reads a 32bit instruction at `iptr`, and writes it again after
 /// being altered by `modifier`
@@ -218,9 +218,8 @@ impl CompiledBlob {
                     // emitted by the x64 backend) accounts for the displacement being
                     // relative to the end of the instruction, and any symbol offset is
                     // added by a separately emitted instruction, so the GOT entry holds
-                    // the address of the symbol itself: `what + 4`.
-                    let what = relocation_target_addr(name, addend);
-                    let symbol_addr = u64::try_from(what.checked_add(4).unwrap()).unwrap();
+                    // the address of the symbol itself without the addend applied.
+                    let symbol_addr = get_address(name).expose_provenance();
 
                     // If the symbol is within displacement range, relax the load to a
                     // `lea` computing its address directly, the same way linkers relax
@@ -232,9 +231,9 @@ impl CompiledBlob {
                     let is_rip_relative_mov = insn.is_some_and(
                         |insn| matches!(insn, [0x48..=0x4f, 0x8b, modrm] if modrm & 0xc7 == 0x05),
                     );
-                    let direct_pcrel = i32::try_from((what as isize) - (at as isize));
+                    let direct_pcrel = i32::try_from((symbol_addr as isize) - (at as isize) - 4);
                     match (is_rip_relative_mov, direct_pcrel) {
-                        (true, Ok(pcrel)) => unsafe {
+                        (true, Ok(pcrel)) if addend == -4 => unsafe {
                             at.sub(2).write(0x8d); // mov -> lea
                             write_unaligned(at as *mut i32, pcrel);
                         },
@@ -248,10 +247,11 @@ impl CompiledBlob {
                                 self.ptr
                                     .byte_add(self.got_offset() + got_idx * GOT_ENTRY_SIZE)
                             };
-                            unsafe { write_unaligned(entry.cast::<u64>(), symbol_addr) };
+                            unsafe { write_unaligned(entry.cast::<usize>(), symbol_addr) };
 
                             let pcrel =
-                                i32::try_from((entry as isize) - (at as isize) - 4).unwrap();
+                                i32::try_from((entry as isize) - (at as isize) + (addend as isize))
+                                    .unwrap();
                             unsafe { write_unaligned(at as *mut i32, pcrel) };
                         }
                     }
