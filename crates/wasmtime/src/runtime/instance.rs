@@ -458,7 +458,7 @@ impl Instance {
         let store = store.as_context_mut().0;
 
         // Verify the `ModuleExport` matches the module used in this instance.
-        if self._module(store).id() != export.module {
+        if store.module_for_instance(self.id)?.id() != export.module {
             return None;
         }
 
