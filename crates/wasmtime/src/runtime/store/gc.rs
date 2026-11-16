@@ -21,7 +21,7 @@ use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
 use wasmtime_environ::packed_option::ReservedValue;
-use wasmtime_environ::{DefinedTagIndex, VMSharedTypeIndex};
+use wasmtime_environ::DefinedTagIndex;
 
 #[derive(Default)]
 pub(crate) struct StoreGcData {

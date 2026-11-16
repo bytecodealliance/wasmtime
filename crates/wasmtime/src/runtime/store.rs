@@ -87,9 +87,9 @@ use crate::runtime::vm::VMContRef;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     self, ExportMemory, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator,
-    InstanceHandle, Interpreter, InterpreterRef, ModuleRuntimeInfo, NopHasher,
-    OnDemandInstanceAllocator, SendSyncPtr, SignalHandler, StoreBox, Unwind, VMContext, VMFuncRef,
-    VMGcRef, VMStore, VMStoreContext,
+    InstanceHandle, Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator,
+    SendSyncPtr, SignalHandler, StoreBox, Unwind, VMContext, VMFuncRef, VMGcRef, VMStore,
+    VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 #[cfg(feature = "debug")]
@@ -109,7 +109,9 @@ use core::ptr::NonNull;
 #[cfg(any(feature = "async", feature = "gc"))]
 use core::task::Poll;
 use wasmtime_core::undo::Undo;
-use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
+use wasmtime_environ::{
+    DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt, VMSharedTypeIndex,
+};
 
 mod context;
 pub use self::context::*;
@@ -500,7 +502,8 @@ pub struct StoreOpaque {
     /// solution" where supertypes are stored inline in a compiled-code-visible
     /// location which means that a libcall isn't needed at all (nor
     /// synchronization) to determine subtype/supertype relationships.
-    subtype_check_cache: HashMap<u64, bool, NopHasher>,
+    subtype_check_cache:
+        HashMap<(VMSharedTypeIndex, VMSharedTypeIndex), bool, foldhash::fast::FixedState>,
 
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
@@ -1591,12 +1594,12 @@ impl StoreOpaque {
     /// for details.
     pub(crate) fn is_subtype_cached(
         &mut self,
-        sub: wasmtime_environ::VMSharedTypeIndex,
-        sup: wasmtime_environ::VMSharedTypeIndex,
+        sub: VMSharedTypeIndex,
+        sup: VMSharedTypeIndex,
     ) -> bool {
         const MAX_SIZE: usize = 1 << 16; // 64k entries
 
-        let key = (u64::from(sub.as_u32()) << 32) | u64::from(sup.as_u32());
+        let key = (sub, sup);
         let engine_answer = || self.engine.signatures().is_subtype(sub, sup);
         if self.subtype_check_cache.len() < MAX_SIZE {
             *self
