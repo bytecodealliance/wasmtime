@@ -45,6 +45,7 @@ features = [
   'component-model',
   'component-model-async',
   'cranelift',
+  'debug',
   'gc',
   'gc-drc',
   'gc-null',

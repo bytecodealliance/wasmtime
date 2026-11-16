@@ -602,6 +602,7 @@ impl WastTest {
                 "misc_testsuite/threads/atomics_notify.wast",
                 "misc_testsuite/threads/atomics_wait_address.wast",
                 "misc_testsuite/threads/wait_notify.wast",
+                "misc_testsuite/threads/shared-memory-imported-oob.wast",
                 "spec_testsuite/proposals/threads/atomic.wast",
                 "spec_testsuite/proposals/threads/exports.wast",
                 "spec_testsuite/proposals/threads/memory.wast",
