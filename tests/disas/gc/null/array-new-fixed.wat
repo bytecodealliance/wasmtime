@@ -62,15 +62,15 @@
 ;; @0025                               trapz v242, user16
 ;;                                     v244 = iconst.i32 40
 ;; @0025                               v61 = uadd_overflow_trap v242, v244, user2  ; v244 = 40
-;; @0025                               v62 = uextend.i64 v61
-;; @0025                               v65 = iadd v32, v62
+;; @0025                               v64 = uextend.i64 v61
+;; @0025                               v67 = iadd v32, v64
 ;;                                     v126 = iconst.i64 24
-;; @0025                               v68 = isub v65, v126  ; v126 = 24
+;; @0025                               v68 = isub v67, v126  ; v126 = 24
 ;; @0025                               store.i64 user2 little region11 v2, v68
 ;;                                     v211 = iconst.i64 16
-;; @0025                               v96 = isub v65, v211  ; v211 = 16
+;; @0025                               v96 = isub v67, v211  ; v211 = 16
 ;; @0025                               store.i64 user2 little region11 v3, v96
-;; @0025                               v124 = isub v65, v8  ; v8 = 8
+;; @0025                               v124 = isub v67, v8  ; v8 = 8
 ;; @0025                               store.i64 user2 little region11 v4, v124
 ;; @0029                               jump block1
 ;;
