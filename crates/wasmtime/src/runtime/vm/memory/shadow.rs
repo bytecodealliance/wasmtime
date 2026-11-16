@@ -94,7 +94,7 @@ impl ShadowMemory {
     ///
     /// This method is used to perform shadow memory growth before linear memory
     /// growth, so in the event of the latter failing the shadow memory is at
-    /// least ready to grow but the extra accessible bytse are harmless.
+    /// least ready to grow but the extra accessible bytes are harmless.
     pub(super) fn reserve_to(&mut self, len: usize) -> Result<()> {
         if !self.may_move && len > self.alloc.byte_capacity() {
             bail!("Memory maximum size exceeded");
