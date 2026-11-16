@@ -100,25 +100,31 @@ const DEFAULT_MAX_CAPACITY: usize = 1_000_000;
 /// * whenever a child is created, its index is added to children.
 /// * whenever a child is deleted, its index is removed from children.
 /// * an entry with children may not be deleted.
-#[derive(Debug)]
 pub struct ResourceTableEntry {
     /// The entry in the table, as a boxed dynamically-typed object
-    entry: Box<dyn Any + Send>,
-    /// The name of the entry's type, as given by [`core::any::type_name`].
-    ///
-    /// This is purely informational, intended to assist with debugging.
-    type_name: &'static str,
+    entry: Box<dyn AnyWithTypeName + Send>,
     /// The index of the parent of this entry, if it has one.
     parent: Option<u32>,
     /// The indices of any children of this entry.
     children: BTreeSet<u32>,
 }
 
+trait AnyWithTypeName: Any {
+    /// The name of this value's concrete type, as given by
+    /// [`core::any::type_name`].
+    fn type_name(&self) -> &'static str;
+}
+
+impl<T: Any> AnyWithTypeName for T {
+    fn type_name(&self) -> &'static str {
+        core::any::type_name::<T>()
+    }
+}
+
 impl ResourceTableEntry {
     fn new<T: Send + 'static>(entry: T, parent: Option<u32>) -> Self {
         Self {
             entry: Box::new(entry),
-            type_name: core::any::type_name::<T>(),
             parent,
             children: BTreeSet::new(),
         }
@@ -137,7 +143,7 @@ impl ResourceTableEntry {
     }
     /// The name of the item's type, as given by [`core::any::type_name`].
     pub fn type_name(&self) -> &'static str {
-        self.type_name
+        AnyWithTypeName::type_name(&*self.entry)
     }
     /// The index of the parent of this entry, if any exists
     pub fn parent(&self) -> &Option<u32> {
@@ -146,6 +152,16 @@ impl ResourceTableEntry {
     /// The indicies of any children of this entry
     pub fn children(&self) -> impl Iterator<Item = &u32> + '_ {
         self.children.iter()
+    }
+}
+
+impl fmt::Debug for ResourceTableEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("ResourceTableEntry")
+            .field("type_name", &self.type_name())
+            .field("parent", &self.parent)
+            .field("children", &self.children)
+            .finish_non_exhaustive()
     }
 }
 
@@ -292,7 +308,7 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
                 },
             ) {
                 Entry::Occupied { entry } => {
-                    if !entry.entry.is::<Tombstone>() {
+                    if !entry.entry().is::<Tombstone>() {
                         self.live -= 1;
                     }
                     entry
@@ -462,7 +478,8 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
                 .expect("missing parent")
                 .remove_child(key);
         }
-        match entry.entry.downcast() {
+        let entry: Box<dyn Any + Send> = entry.entry;
+        match entry.downcast() {
             Ok(t) => Ok(*t),
             Err(_e) => Err(ResourceTableError::WrongType),
         }
@@ -525,7 +542,7 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
             .iter()
             .enumerate()
             .filter_map(|(rep, entry)| match entry {
-                Entry::Occupied { entry } if !entry.entry.is::<Tombstone>() => {
+                Entry::Occupied { entry } if !entry.entry().is::<Tombstone>() => {
                     Some((u32::try_from(rep).unwrap(), entry))
                 }
                 Entry::Occupied { .. } | Entry::Free { .. } => None,
@@ -543,7 +560,7 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
             .iter_mut()
             .enumerate()
             .filter_map(|(rep, entry)| match entry {
-                Entry::Occupied { entry } if !entry.entry.is::<Tombstone>() => {
+                Entry::Occupied { entry } if !entry.entry().is::<Tombstone>() => {
                     Some((u32::try_from(rep).unwrap(), ResourceTableEntryMut { entry }))
                 }
                 Entry::Occupied { .. } | Entry::Free { .. } => None,
