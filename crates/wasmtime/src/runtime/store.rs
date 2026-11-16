@@ -79,6 +79,7 @@
 use crate::error::OutOfMemory;
 #[cfg(feature = "async")]
 use crate::fiber;
+use crate::hash_map::HashMap;
 use crate::module::{RegisterBreakpointState, RegisteredModuleId};
 use crate::prelude::*;
 #[cfg(feature = "stack-switching")]
@@ -108,7 +109,9 @@ use core::ptr::NonNull;
 #[cfg(any(feature = "async", feature = "gc"))]
 use core::task::Poll;
 use wasmtime_core::undo::Undo;
-use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
+use wasmtime_environ::{
+    DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt, VMSharedTypeIndex,
+};
 
 mod context;
 pub use self::context::*;
@@ -480,6 +483,28 @@ pub struct StoreOpaque {
     #[cfg(feature = "gc")]
     gc_data: gc::StoreGcData,
 
+    /// A store-local cache of engine-level subtype checks.
+    ///
+    /// Dynamic subtype checks (e.g. for `ref.cast` instructions) consult the
+    /// engine's type registry, which is protected by a read-write lock.
+    /// Testing locally shows that parallel readers take a significant
+    /// performance hit when using this lock (as measured with `wasmtime
+    /// serve`). Thus this cache is intended to serve as a fast path where the
+    /// lock need not be hit at all.
+    ///
+    /// Note that the size of this cache is currently bounded to a fixed size.
+    /// Once this cache is full then all future consultations which aren't in
+    /// the cache go upstream to the engine itself (slow). In the future
+    /// this'll either be removed entirely (see #13484) or will have some sort
+    /// of LRU-like behavior.
+    ///
+    /// FIXME(#13484) this field is a temporary workaround for a "true
+    /// solution" where supertypes are stored inline in a compiled-code-visible
+    /// location which means that a libcall isn't needed at all (nor
+    /// synchronization) to determine subtype/supertype relationships.
+    subtype_check_cache:
+        HashMap<(VMSharedTypeIndex, VMSharedTypeIndex), bool, foldhash::fast::FixedState>,
+
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
     instance_limit: usize,
@@ -736,6 +761,7 @@ impl<T> Store<T> {
             gc_store: None,
             #[cfg(feature = "gc")]
             gc_data: Default::default(),
+            subtype_check_cache: Default::default(),
             modules: ModuleRegistry::default(),
             func_refs: FuncRefs::default(),
             host_globals: TryPrimaryMap::new(),
@@ -1560,6 +1586,34 @@ fn bump(slot: &mut usize, max: usize, amt: usize, desc: &str) -> Result<()> {
 
 #[doc(hidden)]
 impl StoreOpaque {
+    /// Is type `sub` a subtype of `sup`?
+    ///
+    /// Equivalent to `self.engine().signatures().is_subtype(sub, sup)` but
+    /// caches results store-locally to avoid contention on the engine's type
+    /// registry lock. See the documentation of the `subtype_check_cache` field
+    /// for details.
+    pub(crate) fn is_subtype_cached(
+        &mut self,
+        sub: VMSharedTypeIndex,
+        sup: VMSharedTypeIndex,
+    ) -> bool {
+        const MAX_SIZE: usize = 1 << 16; // 64k entries
+
+        let key = (sub, sup);
+        let engine_answer = || self.engine.signatures().is_subtype(sub, sup);
+        if self.subtype_check_cache.len() < MAX_SIZE {
+            *self
+                .subtype_check_cache
+                .entry(key)
+                .or_insert_with(engine_answer)
+        } else {
+            self.subtype_check_cache
+                .get(&key)
+                .copied()
+                .unwrap_or_else(engine_answer)
+        }
+    }
+
     pub fn id(&self) -> StoreId {
         self.store_data.id()
     }
