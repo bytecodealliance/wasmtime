@@ -604,7 +604,6 @@ fn get_interned_func_ref(
     Ok(func_ref.map_or(core::ptr::null_mut(), |f| f.as_ptr().cast()))
 }
 
-#[cfg(feature = "gc")]
 fn is_subtype(
     store: &mut dyn VMStore,
     _instance: InstanceId,

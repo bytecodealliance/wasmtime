@@ -74,10 +74,10 @@
 ;; @0025                               jump block3
 ;;
 ;;                                 block3:
-;; @0025                               v46 = uextend.i64 v45
-;; @0025                               v49 = iadd.i64 v20, v46
+;; @0025                               v48 = uextend.i64 v45
+;; @0025                               v51 = iadd.i64 v20, v48
 ;;                                     v206 = iconst.i64 12
-;; @0025                               v52 = isub v49, v206  ; v206 = 12
+;; @0025                               v52 = isub v51, v206  ; v206 = 12
 ;; @0025                               store.i32 user2 little region5 v201, v52
 ;;                                     v305 = iadd.i64 v22, v23  ; v23 = 24
 ;; @0025                               v81 = load.i32 user2 readonly region5 v305
@@ -115,12 +115,12 @@
 ;; @0025                               jump block5
 ;;
 ;;                                 block5:
-;; @0025                               v95 = uextend.i64 v94
-;; @0025                               v98 = iadd.i64 v20, v95
+;; @0025                               v97 = uextend.i64 v94
+;; @0025                               v100 = iadd.i64 v20, v97
 ;;                                     v269 = iconst.i32 32
-;; @0025                               v99 = isub.i32 v90, v269  ; v269 = 32
-;; @0025                               v100 = uextend.i64 v99
-;; @0025                               v101 = isub v98, v100
+;; @0025                               v95 = isub.i32 v90, v269  ; v269 = 32
+;; @0025                               v96 = uextend.i64 v95
+;; @0025                               v101 = isub v100, v96
 ;; @0025                               store.i32 user2 little region5 v191, v101
 ;;                                     v313 = iadd.i64 v22, v23  ; v23 = 24
 ;; @0025                               v130 = load.i32 user2 readonly region5 v313
@@ -158,12 +158,12 @@
 ;; @0025                               jump block7
 ;;
 ;;                                 block7:
-;; @0025                               v144 = uextend.i64 v143
-;; @0025                               v147 = iadd.i64 v20, v144
+;; @0025                               v146 = uextend.i64 v143
+;; @0025                               v149 = iadd.i64 v20, v146
 ;;                                     v299 = iconst.i32 36
-;; @0025                               v148 = isub.i32 v139, v299  ; v299 = 36
-;; @0025                               v149 = uextend.i64 v148
-;; @0025                               v150 = isub v147, v149
+;; @0025                               v144 = isub.i32 v139, v299  ; v299 = 36
+;; @0025                               v145 = uextend.i64 v144
+;; @0025                               v150 = isub v149, v145
 ;; @0025                               store.i32 user2 little region5 v181, v150
 ;; @0029                               jump block1
 ;;

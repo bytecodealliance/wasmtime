@@ -671,10 +671,32 @@ impl LocalMemory {
                 }
             }
 
-            // If memory isn't allowed to move then don't let growth happen
-            // beyond the initial capacity
-            if !self.memory_may_move && new_byte_size > self.alloc.byte_capacity() {
-                bail!("Memory maximum size exceeded");
+            // If memory isn't allowed to move then check to see that it's valid
+            // to grow within the current capacity.
+            //
+            // Note though that the capacity tested here may either be
+            // `self.alloc.byte_capacity()` or `self.memory_reservation`.
+            // Compiled code assumes if a memory's initial allocation fits
+            // within the `memory_reservation` tunable then all addresses
+            // outside of `memory_reservation` will trap (assuming
+            // `!self.memory_may_move`). In this situation the byte capacity
+            // might actually be a rounded up version of the memory-reservation
+            // value. If this were to test `byte_capacity` then it would be
+            // possible to grow memory beyond `self.memory_reservation` which
+            // would violate this invariant of compiled code. Hence in this
+            // situation, when the initial size of memory fits within the memory
+            // reservation tunable, the capacity is capped at
+            // `self.memory_reservation` which might be not-page-aligned and
+            // smaller than the byte capacity.
+            if !self.memory_may_move {
+                let mut capacity = self.alloc.byte_capacity();
+                let min = self.ty.minimum_byte_size().unwrap_or(u64::MAX);
+                if min <= u64::try_from(self.memory_reservation).unwrap() {
+                    capacity = capacity.min(self.memory_reservation);
+                }
+                if new_byte_size > capacity {
+                    bail!("Memory maximum size exceeded");
+                }
             }
 
             // If we have a CoW image overlay then let it manage accessible

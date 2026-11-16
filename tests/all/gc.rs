@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::task::{Context, Poll};
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 
 struct SetFlagOnDrop(Arc<AtomicBool>);
 
@@ -4205,5 +4206,121 @@ fn gc_during_epoch(wat: &str) -> Result<()> {
             Err(e) => panic!("iteration {i} failed: {e:?}"),
         }
     }
+    Ok(())
+}
+
+#[wasmtime_test(collectors(All), wasm_features(gc))]
+#[cfg_attr(miri, ignore)]
+fn ghsa_43j2_gcp4_m22g_dangling_gc_heap_base_pointer(config: &mut Config) -> Result<()> {
+    // Configure the GC heap as never moving so that load instructions we emit
+    // to read its base pointer are marked `readonly` and `can_move`.
+    config.gc_heap_may_move(false);
+    let engine = Engine::new(config)?;
+
+    // Even though we never construct a `GcCompiler` during Wasm-to-CLIF
+    // translation for this module, it will still access the GC heap, and we
+    // should therefore allocate the GC heap before any Wasm code starts
+    // running. Otherwise, the Wasm code can read the dangling GC heap base
+    // pointer before the GC heap is allocated, and, because the base pointer
+    // loads are marked `readonly` and `can_move`, keep that dangling base
+    // pointer around for the whole function.
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (import "" "make_ref" (func $make_ref (result externref)))
+              (func (export "run")
+                loop
+                  call $make_ref
+                  any.convert_extern
+                  ref.cast structref    ;; Should trap on this cast.
+                  br_on_null 0
+                  unreachable
+                end
+              )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let make_ref = Func::wrap(
+        &mut store,
+        |mut caller: Caller<'_, ()>| -> Result<Option<Rooted<ExternRef>>> {
+            Ok(Some(ExternRef::new(&mut caller, ())?))
+        },
+    );
+    let instance = Instance::new(&mut store, &module, &[make_ref.into()])?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+    let err = run.call(&mut store, ()).unwrap_err();
+    assert_eq!(err.downcast::<Trap>()?, Trap::CastFailure);
+    Ok(())
+}
+
+// A GC heap that may not move can't grow beyond its reservation, even when the
+// reservation isn't a multiple of the host page size. Filling it with arrays up
+// to its end runs out of memory, and every array allocated before that point,
+// including the ones at the very end of the heap, is accessible.
+#[wasmtime_test(wasm_features(gc, function_references))]
+#[cfg_attr(miri, ignore)]
+fn unaligned_gc_heap_reservation(config: &mut Config) -> Result<()> {
+    const RESERVATION: u64 = 131071;
+
+    config.collector(Collector::DeferredReferenceCounting);
+    config.memory_reservation(RESERVATION);
+    config.memory_may_move(false);
+
+    for pooling in [false, true] {
+        let mut config = config.clone();
+        if pooling {
+            let mut pool = crate::small_pool_config();
+            pool.table_elements(10000)
+                .max_memory_size(usize::try_from(RESERVATION).unwrap());
+            config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+        }
+        let engine = Engine::new(&config)?;
+        let mut store = Store::new(&engine, ());
+
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (type $a (array (mut i8)))
+                    (table $t 10000 (ref null $a))
+                    (global $g (mut (ref null $a)) (ref.null $a))
+
+                    ;; Allocates one $pad-byte array, then $n arrays of $len
+                    ;; bytes that are kept alive in a table, writing and reading
+                    ;; the last element of each.
+                    (func (export "run") (param $n i32) (param $len i32) (param $pad i32) (result i32)
+                        (local $i i32) (local $r (ref null $a))
+                        (global.set $g (array.new_default $a (local.get $pad)))
+                        (loop $l
+                            (local.set $r (array.new_default $a (local.get $len)))
+                            (table.set $t (local.get $i) (local.get $r))
+                            (array.set $a (local.get $r)
+                                (i32.sub (local.get $len) (i32.const 1))
+                                (i32.const 7))
+                            (if (i32.ne (array.get_u $a (local.get $r)
+                                            (i32.sub (local.get $len) (i32.const 1)))
+                                        (i32.const 7))
+                                (then (unreachable)))
+                            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                            (br_if $l (i32.lt_u (local.get $i) (local.get $n))))
+                        (local.get $i))
+                )
+            "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let run = instance.get_typed_func::<(u32, u32, u32), u32>(&mut store, "run")?;
+
+        // 4094 arrays would fill a 131072-byte heap exactly.
+        let err = run.call(&mut store, (4094, 4, 12)).unwrap_err();
+        assert!(
+            err.is::<GcHeapOutOfMemory<()>>(),
+            "pooling = {pooling}: expected GC heap OOM, got {err:?}"
+        );
+    }
+
     Ok(())
 }

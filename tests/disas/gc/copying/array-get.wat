@@ -41,13 +41,13 @@
 ;; @0022                               v18 = iconst.i32 24
 ;; @0022                               v19 = uadd_overflow_trap v42, v18, user2  ; v18 = 24
 ;; @0022                               v23 = uadd_overflow_trap v2, v19, user2
-;; @0022                               v24 = uextend.i64 v23
-;; @0022                               v27 = iadd v6, v24
+;; @0022                               v26 = uextend.i64 v23
+;; @0022                               v29 = iadd v6, v26
 ;;                                     v47 = ishl v3, v41  ; v41 = 3
 ;; @0022                               v22 = iadd v47, v18  ; v18 = 24
-;; @0022                               v28 = isub v19, v22
-;; @0022                               v29 = uextend.i64 v28
-;; @0022                               v30 = isub v27, v29
+;; @0022                               v24 = isub v19, v22
+;; @0022                               v25 = uextend.i64 v24
+;; @0022                               v30 = isub v29, v25
 ;; @0022                               v31 = load.i64 user2 little region4 v30
 ;; @0025                               jump block1
 ;;
