@@ -2817,6 +2817,10 @@ impl Config {
             bail!("support for threads was disabled at compile time")
         }
 
+        if !cfg!(feature = "stack-switching") && features.contains(WasmFeatures::STACK_SWITCHING) {
+            bail!("support for stack switching was disabled at compile time")
+        }
+
         match &self.rr_config {
             #[cfg(feature = "rr")]
             RRConfig::Recording | RRConfig::Replaying => {
