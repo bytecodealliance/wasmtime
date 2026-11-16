@@ -876,3 +876,84 @@ fn atomic_wait_massive_timeout() -> Result<()> {
 
     Ok(())
 }
+
+// A memory that may not move can't grow beyond its reservation, even when the
+// reservation isn't a multiple of the host page size. Every byte up to the
+// memory's current size is accessible, and every byte beyond it traps.
+#[wasmtime_test(wasm_features(custom_page_sizes, multi_memory))]
+#[cfg_attr(miri, ignore)]
+fn unaligned_memory_reservation(config: &mut Config) -> Result<()> {
+    const RESERVATION: u64 = 131071;
+
+    config.memory_reservation(RESERVATION);
+    config.memory_may_move(false);
+
+    for pooling in [false, true] {
+        let mut config = config.clone();
+        if pooling {
+            let mut pool = crate::small_pool_config();
+            pool.total_memories(2)
+                .max_memories_per_module(2)
+                .max_memory_size(usize::try_from(RESERVATION).unwrap());
+            config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+        }
+        let engine = Engine::new(&config)?;
+        let mut store = Store::new(&engine, ());
+
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (memory $memory 1)
+                    (memory $memory1 65536 (pagesize 1))
+                    (func (export "grow") (param i32) (result i32)
+                        (memory.grow $memory (local.get 0)))
+                    (func (export "grow1") (param i32) (result i32)
+                        (memory.grow $memory1 (local.get 0)))
+                    (func (export "size1") (result i32)
+                        (memory.size $memory1))
+                    (func (export "load") (param i32) (result i32)
+                        (i32.load $memory (local.get 0)))
+                    (func (export "load8") (param i32) (result i32)
+                        (i32.load8_u $memory (local.get 0)))
+                    (func (export "load8_1") (param i32) (result i32)
+                        (i32.load8_u $memory1 (local.get 0)))
+                    (func (export "load_1") (param i32) (result i32)
+                        (i32.load $memory1 (local.get 0)))
+                )
+            "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        let grow = instance.get_typed_func::<u32, i32>(&mut store, "grow")?;
+        let grow1 = instance.get_typed_func::<u32, i32>(&mut store, "grow1")?;
+        let size1 = instance.get_typed_func::<(), u32>(&mut store, "size1")?;
+        let load = instance.get_typed_func::<u32, u32>(&mut store, "load")?;
+        let load8 = instance.get_typed_func::<u32, u32>(&mut store, "load8")?;
+        let load_1 = instance.get_typed_func::<u32, u32>(&mut store, "load_1")?;
+        let load8_1 = instance.get_typed_func::<u32, u32>(&mut store, "load8_1")?;
+
+        let assert_oob = |store: &mut Store<()>, f: &TypedFunc<u32, u32>, addr: u32| {
+            let trap = f.call(store, addr).unwrap_err().downcast::<Trap>().unwrap();
+            assert_eq!(trap, Trap::MemoryOutOfBounds, "pooling = {pooling}");
+        };
+
+        // Two 64KiB pages exceed the reservation.
+        assert_eq!(grow.call(&mut store, 1)?, -1);
+        assert_eq!(load.call(&mut store, 65532)?, 0);
+        assert_eq!(load8.call(&mut store, 65535)?, 0);
+        assert_oob(&mut store, &load, 65533);
+        assert_oob(&mut store, &load8, 65536);
+
+        // A 1-byte-page memory grows to exactly the reservation, and no further.
+        assert_eq!(grow1.call(&mut store, 65535)?, 65536);
+        assert_eq!(size1.call(&mut store, ())?, 131071);
+        assert_eq!(grow1.call(&mut store, 1)?, -1);
+        assert_eq!(load_1.call(&mut store, 131067)?, 0);
+        assert_eq!(load8_1.call(&mut store, 131070)?, 0);
+        assert_oob(&mut store, &load_1, 131068);
+        assert_oob(&mut store, &load8_1, 131071);
+    }
+
+    Ok(())
+}
