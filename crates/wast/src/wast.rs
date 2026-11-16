@@ -264,6 +264,13 @@ impl WastContext {
             .func_wrap("wasmtime", "get-fuel", |caller: Caller<_>| {
                 caller.get_fuel()
             })?;
+        self.core_linker.func_wrap(
+            "wasmtime",
+            "new-externref",
+            |mut caller: Caller<_>, x: u32| -> Result<Option<Rooted<ExternRef>>> {
+                Ok(Some(ExternRef::new(&mut caller, x)?))
+            },
+        )?;
         #[cfg(feature = "component-model")]
         {
             let mut i = self.component_linker.instance("wasmtime")?;
