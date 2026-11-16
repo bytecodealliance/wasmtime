@@ -2,7 +2,7 @@ use futures::join;
 use test_programs::p3::wasi::http::client;
 use test_programs::p3::wasi::http::types::{ErrorCode, Headers, Method, Request, Scheme, Trailers};
 use test_programs::p3::{wit_future, wit_stream};
-use wit_bindgen::{FutureReader, FutureWriter, StreamWriter};
+use wit_bindgen::{FutureReader, FutureWriter, StreamReader, StreamWriter};
 
 struct Component;
 
@@ -15,10 +15,21 @@ fn make_request() -> (
     FutureReader<Result<(), ErrorCode>>,
 ) {
     let (contents_tx, contents_rx) = wit_stream::new();
+    let (request, trailers_tx, transmit) = make_request_with_contents(Some(contents_rx));
+    (request, contents_tx, trailers_tx, transmit)
+}
+
+fn make_request_with_contents(
+    contents_rx: Option<StreamReader<u8>>,
+) -> (
+    Request,
+    FutureWriter<Result<Option<Trailers>, ErrorCode>>,
+    FutureReader<Result<(), ErrorCode>>,
+) {
     let (trailers_tx, trailers_rx) = wit_future::new(|| todo!());
     let (request, transmit) = Request::new(
         Headers::from_list(&[("Content-Length".to_string(), b"11".to_vec())]).unwrap(),
-        Some(contents_rx),
+        contents_rx,
         trailers_rx,
         None,
     );
@@ -38,7 +49,7 @@ fn make_request() -> (
         .set_path_with_query(Some("/"))
         .expect("setting path with query");
 
-    (request, contents_tx, trailers_tx, transmit)
+    (request, trailers_tx, transmit)
 }
 
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
@@ -124,6 +135,39 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
             let err = transmit.expect_err("request transmission should have failed");
             assert!(
                 matches!(err, ErrorCode::HttpRequestBodySize(Some(18))),
+                "unexpected error: {err:#?}"
+            );
+        }
+
+        println!("sending with nonzero content-length and without a body");
+        {
+            let (request, trailers_tx, transmit) = make_request_with_contents(None);
+            let (handle, transmit, ()) = join!(
+                async { client::send(request).await },
+                async { transmit.await },
+                async {
+                    _ = trailers_tx.write(Ok(None)).await;
+                },
+            );
+            // As above, whether `handle` observes the error races with the
+            // body being polled, so it may also succeed.
+            assert!(
+                matches!(
+                    handle,
+                    Ok(..)
+                        | Err(ErrorCode::HttpRequestBodySize(Some(0)))
+                        | Err(ErrorCode::HttpProtocolError)
+                ),
+                "unexpected handle result: {handle:#?}"
+            );
+            // With no contents stream the body ends before reaching the
+            // declared length, so the host aborts the request body write.
+            let err = transmit.expect_err("request transmission should have failed");
+            assert!(
+                matches!(
+                    err,
+                    ErrorCode::HttpProtocolError | ErrorCode::HttpRequestBodySize(Some(0))
+                ),
                 "unexpected error: {err:#?}"
             );
         }

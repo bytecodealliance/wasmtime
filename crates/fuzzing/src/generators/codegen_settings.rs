@@ -146,6 +146,13 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                     std: "pacg" => clif: "sign_return_address_all" ratio: 1 in 2,
                 },
             };
+
+            // For hosts not listed in the above just always use the native
+            // codegen settings.
+            if !cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
+                return Ok(CodegenSettings::Native);
+            }
+
             return Ok(CodegenSettings::Target {
                 target: target_lexicon::Triple::host().to_string(),
                 flags,

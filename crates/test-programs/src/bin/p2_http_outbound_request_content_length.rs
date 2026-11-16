@@ -94,4 +94,17 @@ fn main() {
             "unexpected error: {e:#?}"
         );
     }
+
+    {
+        println!("sending with nonzero content-length and without a body");
+        let request = make_request();
+
+        let e = test_programs::wasi::http::outgoing_handler::handle(request, None)
+            .expect_err("handle should fail because content-length doesn't match body");
+
+        assert!(
+            matches!(&e, http_types::ErrorCode::HttpRequestBodySize(Some(0))),
+            "unexpected error: {e:#?}"
+        );
+    }
 }

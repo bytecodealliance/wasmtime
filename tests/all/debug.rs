@@ -3,9 +3,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{
-    AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle,
-    Func, Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Result, Store,
-    StoreContextMut, Trap, Val, ValType,
+    AnyRef, AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine, Extern,
+    FrameHandle, Func, Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability,
+    Result, Rooted, Store, StoreContextMut, Trap, Val, ValType,
 };
 
 use crate::async_functions::PollOnce;
@@ -1226,6 +1226,76 @@ async fn invalidated_frame_handles_in_dropped_future() -> wasmtime::Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn invalidated_frame_handles_from_breakpoint() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // Frame handles captured during a breakpoint/single-step event
+    // (delivered via a builtin, not a host call) must be invalidated
+    // once execution resumes.
+    let (module, mut store) = get_module_and_store(
+        |_config| {},
+        r#"
+    (module
+      (func (export "main") (result i32)
+        (local i32)
+        i32.const 123
+        local.set 0
+        local.get 0))
+        "#,
+    )?;
+
+    #[derive(Clone)]
+    struct H {
+        handle: Arc<Mutex<Option<FrameHandle>>>,
+        events: Arc<AtomicUsize>,
+    }
+    impl DebugHandler for H {
+        type Data = ();
+        async fn handle(&self, mut store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+            if !matches!(event, DebugEvent::Breakpoint) {
+                return;
+            }
+            self.events.fetch_add(1, Ordering::Relaxed);
+            let mut handle = self.handle.lock().unwrap();
+            if let Some(old) = handle.as_ref() {
+                // The handle from the previous step must be invalid,
+                // even though its frame is still live.
+                assert!(!old.is_valid(&mut store));
+                assert!(old.local(&mut store, 0).is_err());
+            } else {
+                let frame = store.debug_exit_frames().next().unwrap();
+                assert!(frame.is_valid(&mut store));
+                *handle = Some(frame);
+            }
+        }
+    }
+
+    let handle = Arc::new(Mutex::new(None));
+    let events = Arc::new(AtomicUsize::new(0));
+    store.edit_breakpoints().unwrap().single_step(true).unwrap();
+    store.set_debug_handler(H {
+        handle: handle.clone(),
+        events: events.clone(),
+    });
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let main = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [Val::I32(0)];
+    main.call_async(&mut store, &[], &mut results).await?;
+    assert_eq!(results[0].unwrap_i32(), 123);
+    assert!(events.load(Ordering::Relaxed) > 1);
+
+    // After the frame has returned, the handle must still be invalid
+    // and must not read the dead frame.
+    let frame = handle.lock().unwrap().take().unwrap();
+    assert!(!frame.is_valid(&mut store));
+    assert!(frame.local(&mut store, 0).is_err());
+
+    Ok(())
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn module_bytecode() -> wasmtime::Result<()> {
@@ -1613,6 +1683,159 @@ async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
     Ok(())
 }
 
+/// A component of two core modules, whose exported functions are on different PCs: `$pad`
+/// keeps `f2`'s code off the ones `f1` has.
+const TWO_MODULES: &str = r#"(component
+     (core module $m1
+       (func (export "f1") (param i32 i32) (result i32)
+         local.get 0
+         local.get 1
+         i32.add))
+     (core instance $i1 (instantiate $m1))
+     (core module $m2
+       (func $pad (result i32)
+         i32.const 1
+         i32.const 2
+         i32.add
+         i32.const 3
+         i32.add)
+       (func (export "f2") (param i32 i32) (result i32)
+         local.get 0
+         local.get 1
+         i32.mul))
+     (core instance $i2 (instantiate $m2))
+     (func (export "f1") (param "a" s32) (param "b" s32) (result s32)
+       (canon lift (core func $i1 "f1")))
+     (func (export "f2") (param "a" s32) (param "b" s32) (result s32)
+       (canon lift (core func $i2 "f2"))))"#;
+
+/// A component whose `f1` calls `g` in another module, so that inlining can copy `g`'s
+/// code (and its breakpoint sites) into `f1`. `$m2` comes first, so it is module 0, and
+/// `g`'s `i32.mul` is at 0x26.
+const CALL_ACROSS_MODULES: &str = r#"(component
+     (core module $m2
+       (func (export "g") (param i32 i32) (result i32)
+         local.get 0
+         local.get 1
+         i32.mul))
+     (core instance $i2 (instantiate $m2))
+     (core module $m1
+       (import "m" "g" (func $g (param i32 i32) (result i32)))
+       (func (export "f1") (param i32 i32) (result i32)
+         local.get 0
+         local.get 1
+         call $g))
+     (core instance $i1 (instantiate $m1 (with "m" (instance $i2))))
+     (func (export "f1") (param "a" s32) (param "b" s32) (result s32)
+       (canon lift (core func $i1 "f1"))))"#;
+
+/// Records the PC of each debug event.
+#[derive(Clone)]
+struct RecordPcs(Arc<Mutex<Vec<u32>>>);
+
+impl DebugHandler for RecordPcs {
+    type Data = ();
+    fn handle(
+        &self,
+        mut store: StoreContextMut<'_, ()>,
+        _event: DebugEvent<'_>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        let frame = store.debug_exit_frames().next().unwrap();
+        let (_, pc) = frame
+            .wasm_function_index_and_pc(&mut store)
+            .unwrap()
+            .unwrap();
+        self.0.lock().unwrap().push(pc.raw());
+        async {}
+    }
+}
+
+/// Loads the component `wat`, and calls each of `exports` in turn, saying the PCs of each
+/// one's events. `edit` sets breakpoints first, given the component's modules.
+async fn run_component(
+    wat: &str,
+    inlining: Inlining,
+    exports: &[&str],
+    edit: impl FnOnce(&mut Store<()>, &[Module]) -> wasmtime::Result<()>,
+) -> wasmtime::Result<Vec<Vec<u32>>> {
+    use wasmtime::component::{Component, Linker};
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    config.compiler_inlining(inlining);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, wat)?;
+    let linker: Linker<()> = Linker::new(&engine);
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let pcs = Arc::new(Mutex::new(Vec::new()));
+    store.set_debug_handler(RecordPcs(pcs.clone()));
+    let modules = store.debug_all_modules();
+    assert_eq!(modules.len(), 2);
+    edit(&mut store, &modules)?;
+
+    let mut events = Vec::new();
+    for name in exports {
+        let func = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, *name)?;
+        func.call_async(&mut store, (3, 5)).await?;
+        events.push(std::mem::take(&mut *pcs.lock().unwrap()));
+    }
+    Ok(events)
+}
+
+/// Runs [`TWO_MODULES`], calling `f1` (in module 0) then `f2` (in module 1).
+async fn two_modules(
+    edit: impl FnOnce(&mut Store<()>, &[Module]) -> wasmtime::Result<()>,
+) -> wasmtime::Result<Vec<Vec<u32>>> {
+    run_component(TWO_MODULES, Inlining::No, &["f1", "f2"], edit).await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn component_breakpoint_survives_single_step() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // Each function's first PC, from a single step through it.
+    let steps = two_modules(|store, _| store.edit_breakpoints().unwrap().single_step(true)).await?;
+    let (f1, f2) = (&steps[0], &steps[1]);
+    assert!(f1.iter().all(|pc| !f2.contains(pc)), "{f1:?} {f2:?}");
+
+    // A breakpoint in either module stops only there, after single-stepping has been on and off.
+    for (at, pc) in [(0, f1[0]), (1, f2[0])] {
+        let events = two_modules(|store, modules| {
+            let mut edit = store.edit_breakpoints().unwrap();
+            edit.add_breakpoint(&modules[at], ModulePC::new(pc))?;
+            edit.single_step(true)?;
+            edit.single_step(false)
+        })
+        .await?;
+        let mut wanted = [vec![], vec![]];
+        wanted[at].push(pc);
+        assert_eq!(events, wanted, "a breakpoint in module {at}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn component_inlined_breakpoint_survives_single_step() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // A breakpoint in `g` stops in it when called from `f1`, whether or not it was inlined
+    // into `f1`'s module, and after single-stepping has been on and off.
+    for inlining in [Inlining::No, Inlining::Yes] {
+        let events = run_component(CALL_ACROSS_MODULES, inlining, &["f1"], |store, modules| {
+            let mut edit = store.edit_breakpoints().unwrap();
+            edit.add_breakpoint(&modules[0], ModulePC::new(0x26))?;
+            edit.single_step(true)?;
+            edit.single_step(false)
+        })
+        .await?;
+        assert_eq!(events, [vec![0x26]], "with {inlining:?}");
+    }
+    Ok(())
+}
+
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn component_module_relative_breakpoint_pcs() -> wasmtime::Result<()> {
@@ -1763,7 +1986,7 @@ async fn take_exception_in_debug_handler() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn gc_in_func_without_program_points() -> wasmtime::Result<()> {
+fn gc_in_libcall_uses_correct_stack_shape() -> wasmtime::Result<()> {
     for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
         let mut config = Config::default();
         config.guest_debug(true).wasm_gc(true).collector(collector);
@@ -1772,23 +1995,19 @@ fn gc_in_func_without_program_points() -> wasmtime::Result<()> {
             &engine,
             r#"
             (module
-              (type $a (array (mut i8)))
-              (func (export "f")
-                (local externref externref externref externref
-                       externref externref externref externref
-                       externref externref externref externref
-                       externref externref externref externref
-                       externref externref externref externref
-                       externref externref externref externref
-                       externref externref externref externref
-                       externref externref externref externref))
-              (global (ref $a) (array.new_default $a (i32.const 100000)))
-              (global (ref $a) (array.new_default $a (i32.const 100000)))
-              (global (ref $a) (array.new_default $a (i32.const 100000))))
+              (type $s (struct (field i32)))
+              (func (export "main") (param $n i32) (result anyref)
+                (loop $l
+                  (drop (struct.new $s (i32.const 0x30)))
+                  (br_if $l (local.tee $n (i32.sub (local.get $n) (i32.const 1)))))
+                (ref.null any)))
             "#,
         )?;
         let mut store = Store::new(&engine, ());
-        Instance::new(&mut store, &module, &[])?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let main = instance.get_typed_func::<i32, Option<Rooted<AnyRef>>>(&mut store, "main")?;
+        let result = main.call(&mut store, 10000)?;
+        assert!(result.is_none());
     }
     Ok(())
 }
@@ -1868,6 +2087,29 @@ async fn fuel_visible_and_mutable_in_debug_handler() -> wasmtime::Result<()> {
     assert_eq!(err.downcast::<Trap>()?, Trap::OutOfFuel);
 
     Ok(())
+}
+
+/// Records each watchpoint hit, with the watched memory's first 64 bytes as
+/// the handler sees them.
+#[derive(Clone, Default)]
+struct WatchRecorder(Arc<Mutex<Vec<(u64, u64, Option<u128>, Vec<u8>)>>>);
+
+impl DebugHandler for WatchRecorder {
+    type Data = ();
+    fn handle(
+        &self,
+        store: StoreContextMut<'_, ()>,
+        event: DebugEvent<'_>,
+    ) -> impl Future<Output = ()> + Send {
+        if let DebugEvent::Watchpoint(hit) = event {
+            let memory = hit.memory.data(&store)[..64].to_vec();
+            self.0
+                .lock()
+                .unwrap()
+                .push((hit.address, hit.len, hit.value, memory));
+        }
+        async {}
+    }
 }
 
 #[tokio::test]
@@ -1977,4 +2219,249 @@ async fn uninit_non_nullable_ref_local_in_single_step() -> Result<()> {
             async {}
         }
     }
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn watchpoints_report_writes_before_they_happen() -> wasmtime::Result<()> {
+    let (module, mut store) = get_module_and_store(
+        |_| {},
+        r#"
+    (module
+      (memory (export "memory") 1)
+      (func (export "main")
+        (i32.store offset=16 (i32.const 0) (i32.const 0x11223344))
+        (i64.store (i32.const 24) (i64.const -1))
+        (v128.store (i32.const 32) (v128.const i64x2 1 2))
+        (f32.store (i32.const 48) (f32.const 1.5))
+        (i32.store8 (i32.const 100) (i32.const 7))
+        (memory.fill (i32.const 40) (i32.const 0xaa) (i32.const 8))))
+    "#,
+    )?;
+    let recorder = WatchRecorder::default();
+    store.set_debug_handler(recorder.clone());
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+
+    // Watch [17, 52): the i32 store overlaps it partially, and the store to
+    // byte 100 not at all.
+    store.edit_breakpoints().unwrap().watch(memory, 17..52)?;
+    main.call_async(&mut store, ()).await?;
+    {
+        let hits = recorder.0.lock().unwrap();
+        let summary = hits
+            .iter()
+            .map(|(address, len, value, _)| (*address, *len, *value))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            summary,
+            [
+                (16, 4, Some(0x11223344)),
+                (24, 8, Some(u128::from(u64::MAX))),
+                (32, 16, Some((2 << 64) | 1)),
+                (48, 4, Some(u128::from(1.5_f32.to_bits()))),
+                (40, 8, None),
+            ]
+        );
+        // Each hit is reported before its write.
+        assert_eq!(&hits[0].3[16..20], &[0; 4]);
+        assert_eq!(&hits[1].3[16..20], &0x11223344_u32.to_le_bytes());
+        assert_eq!(&hits[4].3[40..48], &2_u64.to_le_bytes());
+    }
+    assert_eq!(&memory.data(&store)[40..48], &[0xaa; 8]);
+
+    // Unwatched bytes no longer report writes.
+    recorder.0.lock().unwrap().clear();
+    store.edit_breakpoints().unwrap().unwatch(memory, 0..64)?;
+    main.call_async(&mut store, ()).await?;
+    assert!(recorder.0.lock().unwrap().is_empty());
+
+    // Watches must be within the memory.
+    assert!(
+        store
+            .edit_breakpoints()
+            .unwrap()
+            .watch(memory, 0..65537)
+            .is_err()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn watchpoints_on_imported_memory_follow_growth() -> wasmtime::Result<()> {
+    // `$definer` defines and grows the memory, and `$importer` writes to it,
+    // so both instances must find the shadow as it grows.
+    let (definer, mut store) = get_module_and_store(
+        |_| {},
+        r#"
+    (module
+      (memory (export "memory") 1)
+      (func (export "grow") (param i32) (result i32)
+        (memory.grow (local.get 0))))
+    "#,
+    )?;
+    let importer = Module::new(
+        store.engine(),
+        r#"
+    (module
+      (import "" "memory" (memory 1))
+      (func (export "store") (param i32 i32)
+        (i32.store8 (local.get 0) (local.get 1))))
+    "#,
+    )?;
+    let recorder = WatchRecorder::default();
+    store.set_debug_handler(recorder.clone());
+    let definer = Instance::new_async(&mut store, &definer, &[]).await?;
+    let memory = definer.get_memory(&mut store, "memory").unwrap();
+    let importer = Instance::new_async(&mut store, &importer, &[memory.into()]).await?;
+    let grow = definer.get_typed_func::<i32, i32>(&mut store, "grow")?;
+    let store8 = importer.get_typed_func::<(i32, i32), ()>(&mut store, "store")?;
+
+    // Watch a byte, then grow the memory, and watch a byte in the new pages
+    // too.
+    store.edit_breakpoints().unwrap().watch(memory, 10..11)?;
+    assert_eq!(grow.call_async(&mut store, 7).await?, 1);
+    let high = 7 * 65536 + 3;
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .watch(memory, high..high + 1)?;
+
+    // Writes through the importing instance see both watches, and only
+    // those.
+    store8.call_async(&mut store, (10, 1)).await?;
+    store8.call_async(&mut store, (11, 1)).await?;
+    store8
+        .call_async(&mut store, (i32::try_from(high)?, 1))
+        .await?;
+    let hits = recorder
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(address, len, _, _)| (*address, *len))
+        .collect::<Vec<_>>();
+    assert_eq!(hits, [(10, 1), (high, 1)]);
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn watchpoints_handler_may_grow_memory() -> wasmtime::Result<()> {
+    #[derive(Clone, Default)]
+    struct WatchGrower;
+
+    impl DebugHandler for WatchGrower {
+        type Data = ();
+        async fn handle(&self, mut store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+            if let DebugEvent::Watchpoint(hit) = event {
+                hit.memory.grow(&mut store, 1).unwrap();
+            }
+        }
+    }
+
+    // Pulley doesn't support the wasm threads proposal, so skip this test on
+    // those targets.
+    if Engine::default().is_pulley() {
+        return Ok(());
+    }
+
+    let (module, mut store) = get_module_and_store(
+        |config| {
+            // With no reservation beyond the memory's size, the memory moves
+            // each time the handler grows it.
+            config
+                .memory_reservation(0)
+                .memory_reservation_for_growth(0);
+        },
+        r#"
+    (module
+      (memory (export "memory") 1)
+      (func (export "store") (param i32 i32)
+        (i32.store (local.get 0) (local.get 1)))
+      (func (export "atomic_store") (param i32 i32)
+        (i32.atomic.store (local.get 0) (local.get 1)))
+      (func (export "atomic_rmw") (param i32 i32) (result i32)
+        (i32.atomic.rmw.add (local.get 0) (local.get 1)))
+      (func (export "atomic_cas") (param i32 i32) (result i32)
+        (i32.atomic.rmw.cmpxchg (local.get 0) (i32.const 0) (local.get 1)))
+      (func (export "store_twice") (param i32 i32)
+        (i32.store (local.get 0) (local.get 1))
+        (i32.store offset=4 (local.get 0) (local.get 1))))
+    "#,
+    )?;
+    let grower = WatchGrower::default();
+    store.set_debug_handler(grower.clone());
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    store.edit_breakpoints().unwrap().watch(memory, 0..64)?;
+
+    let store_i32 = instance.get_typed_func::<(i32, i32), ()>(&mut store, "store")?;
+    store_i32.call_async(&mut store, (0, 0x11111111)).await?;
+    let atomic_store = instance.get_typed_func::<(i32, i32), ()>(&mut store, "atomic_store")?;
+    atomic_store.call_async(&mut store, (4, 0x22222222)).await?;
+    let atomic_rmw = instance.get_typed_func::<(i32, i32), i32>(&mut store, "atomic_rmw")?;
+    assert_eq!(atomic_rmw.call_async(&mut store, (0, 1)).await?, 0x11111111);
+    let atomic_cas = instance.get_typed_func::<(i32, i32), i32>(&mut store, "atomic_cas")?;
+    assert_eq!(atomic_cas.call_async(&mut store, (8, 0x33333333)).await?, 0);
+    let store_twice = instance.get_typed_func::<(i32, i32), ()>(&mut store, "store_twice")?;
+    store_twice.call_async(&mut store, (12, 0x44444444)).await?;
+
+    assert_eq!(memory.size(&store), 7);
+    let data = memory.data(&store);
+    assert_eq!(&data[0..4], &0x11111112_u32.to_le_bytes());
+    assert_eq!(&data[4..8], &0x22222222_u32.to_le_bytes());
+    assert_eq!(&data[8..12], &0x33333333_u32.to_le_bytes());
+    assert_eq!(&data[12..20], &[0x44; 8]);
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn watchpoints_out_of_bounds_stores_trap() -> wasmtime::Result<()> {
+    // Try both mmap- and malloc-backed memories (and so shadows).
+    let configs: [fn(&mut Config); 2] = [
+        |_| {},
+        |config| {
+            config
+                .memory_reservation(0)
+                .memory_guard_size(0)
+                .memory_init_cow(false);
+        },
+    ];
+    for configure in configs {
+        let (module, mut store) = get_module_and_store(
+            configure,
+            r#"
+    (module
+      (memory (export "memory") 1)
+      (func (export "store") (param i32)
+        (i64.store (local.get 0) (i64.const -1))))
+    "#,
+        )?;
+        let recorder = WatchRecorder::default();
+        store.set_debug_handler(recorder.clone());
+        let instance = Instance::new_async(&mut store, &module, &[]).await?;
+        let memory = instance.get_memory(&mut store, "memory").unwrap();
+        let store_i64 = instance.get_typed_func::<i32, ()>(&mut store, "store")?;
+        store
+            .edit_breakpoints()
+            .unwrap()
+            .watch(memory, 65528..65536)?;
+
+        // A store that is partially or entirely out of bounds traps before
+        // checking for watchpoints.
+        for addr in [65532, 65536, 1 << 20, -1] {
+            let err = store_i64.call_async(&mut store, addr).await.unwrap_err();
+            assert_eq!(err.downcast::<Trap>()?, Trap::MemoryOutOfBounds);
+        }
+        assert!(recorder.0.lock().unwrap().is_empty());
+
+        // An in-bounds store to the same watched bytes is reported.
+        store_i64.call_async(&mut store, 65528).await?;
+        assert_eq!(recorder.0.lock().unwrap().len(), 1);
+    }
+    Ok(())
 }

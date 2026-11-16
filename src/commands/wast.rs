@@ -57,6 +57,7 @@ impl WastCommand {
         let async_ = optional_flag_with_default(self.async_, true);
         let mut config = self.common.config(None)?;
         config.shared_memory(true);
+        let common = self.common.clone();
 
         let generate_dwarf = optional_flag_with_default(self.generate_dwarf, true);
         // When DWARF is being generated go ahead and enable backtrace details
@@ -73,10 +74,8 @@ impl WastCommand {
                 wasmtime_wast::Async::No
             },
             move |store| {
-                if let Some(fuel) = self.common.wasm.fuel {
-                    store.set_fuel(fuel).unwrap();
-                }
-                if let Some(true) = self.common.wasm.epoch_interruption {
+                common.configure_store(store).unwrap();
+                if let Some(true) = common.wasm.epoch_interruption {
                     store.epoch_deadline_trap();
                     store.set_epoch_deadline(1);
                 }

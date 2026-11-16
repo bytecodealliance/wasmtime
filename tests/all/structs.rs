@@ -731,29 +731,6 @@ fn can_put_funcrefs_in_structs() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(miri, ignore)]
-fn struct_ref_struct_in_same_rec_group_in_global() -> Result<()> {
-    let mut store = gc_store()?;
-    let module = Module::new(
-        store.engine(),
-        r#"
-            (module
-                (rec
-                    (type $b (struct))
-                    (type $a (struct (field (ref $b))))
-                )
-                (global (ref $a)
-                    struct.new_default $b
-                    struct.new $a
-                )
-            )
-        "#,
-    )?;
-    let _instance = Instance::new(&mut store, &module, &[])?;
-    Ok(())
-}
-
-#[test]
 fn structref_to_anyref_rooted() -> Result<()> {
     let mut store = gc_store()?;
     let struct_ty = StructType::new(

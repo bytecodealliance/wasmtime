@@ -10,13 +10,18 @@
 
 use core::arch::naked_asm;
 
+/// The indices, in words from a suspended raw fiber's saved stack pointer, of
+/// the frame pointer and return address that `wasmtime_fiber_switch_` spills
+/// for its caller. Keep in sync with that routine.
+pub(crate) const SUSPENDED_FRAME: Option<(usize, usize)> = Some((14, 15));
+
 #[inline(never)] // FIXME(rust-lang/rust#148307)
 pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8) {
     unsafe { wasmtime_fiber_switch_(top_of_stack) }
 }
 
 #[unsafe(naked)]
-unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
+pub(crate) unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
     naked_asm!(
         "
       // See https://github.com/rust-lang/rust/issues/80608.

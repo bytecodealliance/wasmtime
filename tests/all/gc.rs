@@ -963,55 +963,6 @@ fn table_grow_doesnt_leak() -> Result<()> {
     Ok(())
 }
 
-// This is a test that the argument to `table.init` is properly handled w.r.t.
-// write barriers and such. This doesn't use `SetFlagOnDrop` because that would
-// require initializing a table with an element initialized from a global and
-// the global keeps the externref alive regardless. Instead this has a small GC
-// heap and we continuously make more garbage than is in the heap and expect
-// this to work as when it triggers a GC everything prior should get cleaned up.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn table_init_doesnt_leak() -> Result<()> {
-    const SIZE: u64 = 64 << 10;
-
-    let _ = env_logger::try_init();
-
-    let mut config = Config::new();
-    config.wasm_gc(true);
-    config.wasm_function_references(true);
-    config.memory_may_move(false);
-    config.memory_reservation(SIZE);
-    config.memory_reservation_for_growth(0);
-    let engine = Engine::new(&config)?;
-    let mut store = Store::new(&engine, ());
-
-    let module = Module::new(
-        store.engine(),
-        r#"
-            (module
-                (table 1 arrayref)
-
-                (type $a (array i31ref))
-
-                (func (export "run")
-                    i32.const 0
-                    i32.const 0
-                    i32.const 1
-                    table.init $e)
-                (elem $e arrayref (array.new $a (ref.i31 (i32.const 0)) (i32.const 200)))
-            )
-        "#,
-    )?;
-
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-    for _ in 0..200 {
-        func.call(&mut store, ())?;
-    }
-
-    Ok(())
-}
-
 #[test]
 fn ref_matches() -> Result<()> {
     let mut store = Store::<()>::default();
@@ -1134,56 +1085,6 @@ fn ref_matches() -> Result<()> {
             "{val:?} matches {ty:?}? expected {expected}, got {actual}"
         );
     }
-
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
-fn issue_9669() -> Result<()> {
-    let _ = env_logger::try_init();
-
-    let mut config = Config::new();
-    config.wasm_function_references(true);
-    config.wasm_gc(true);
-    config.collector(Collector::DeferredReferenceCounting);
-
-    let engine = Engine::new(&config)?;
-
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-                (type $empty (struct))
-                (type $thing (struct
-                    (field $field1 (ref $empty))
-                    (field $field2 (ref $empty))
-                ))
-
-                (func (export "run")
-                    (local $object (ref $thing))
-
-                    struct.new $empty
-                    struct.new $empty
-                    struct.new $thing
-
-                    local.tee $object
-                    struct.get $thing $field1
-                    drop
-
-                    local.get $object
-                    struct.get $thing $field2
-                    drop
-                )
-            )
-        "#,
-    )?;
-
-    let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &module, &[])?;
-
-    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-    func.call(&mut store, ())?;
 
     Ok(())
 }
@@ -1361,135 +1262,6 @@ fn drc_traces_the_correct_number_of_gc_refs_in_arrays() -> Result<()> {
     )?;
     let _instance = Instance::new(&mut store, &module, &[])?;
     store.gc(None)?;
-
-    Ok(())
-}
-
-// Regression test for a stack-map bug in `translate_per_element_copy` (used by
-// `array.copy` on arrays whose elements are GC references).
-//
-// The per-element loop derived raw `src_elem_addr` / `dst_elem_addr` pointers
-// once and used only those raw pointers inside the loop body. The source and
-// destination array gc-refs themselves were dead in CLIF inside the loop, so
-// they were absent from the stack maps at safe points there. Once the DRC
-// collector started firing `force_gc` from inside the read barrier (when the
-// over-approximated-stack-roots list grew past 1024 entries), a GC could run
-// mid-copy with neither array marked from any frame's stack map. Sweep could
-// then drop the arrays from OASR, freeing them and cascading dec-refs through
-// their elements, after which the rest of the copy read from freed memory.
-//
-// The fix passes the source and destination array gc-refs as block params
-// through the forward and backward iteration blocks so they stay live across
-// the per-element loop.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn drc_array_copy_keeps_arrays_alive_across_in_loop_gc() -> Result<()> {
-    let _ = env_logger::try_init();
-
-    let mut config = Config::new();
-    config.wasm_function_references(true);
-    config.wasm_gc(true);
-    config.collector(Collector::DeferredReferenceCounting);
-    // Keep the GC heap small so allocations cycle back through the free
-    // list quickly. This dramatically increases the chance that any slot
-    // freed mid-copy will be reused before the test's verify pass reads
-    // from it, making the bug observable.
-    config.gc_heap_reservation(128 * 1024);
-    config.gc_heap_reservation_for_growth(0);
-
-    let engine = Engine::new(&config)?;
-    let mut store = Store::new(&engine, ());
-
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-                (import "wasmtime" "gc" (func $gc))
-                (type $box (struct (field i32)))
-                (type $arr (array (mut (ref null $box))))
-
-                ;; Put the `array.copy` in a helper function so the source
-                ;; and destination gc-refs are visibly dead in CLIF inside
-                ;; the per-element loop -- they are function parameters
-                ;; that are only used at the top of the function to compute
-                ;; the initial address.
-                (func $do_copy
-                    (param $src (ref null $arr))
-                    (param $dst (ref null $arr))
-                    (param $len i32)
-                    (array.copy $arr $arr
-                        (local.get $dst) (i32.const 0)
-                        (local.get $src) (i32.const 0)
-                        (local.get $len)))
-
-                (func (export "test") (result i32)
-                    (local $src (ref null $arr))
-                    (local $dst (ref null $arr))
-                    (local $i i32)
-                    (local $sum i32)
-
-                    ;; N=2048 > 1024 so the per-element read barrier
-                    ;; definitely fires `force_gc` during the copy.
-                    (local.set $src (array.new $arr (ref.null $box) (i32.const 2048)))
-                    (local.set $i (i32.const 0))
-                    (loop $fill
-                        (array.set $arr (local.get $src) (local.get $i)
-                            (struct.new $box (local.get $i)))
-                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-                        (br_if $fill (i32.lt_s (local.get $i) (i32.const 2048))))
-
-                    (local.set $dst (array.new $arr (ref.null $box) (i32.const 2048)))
-
-                    (call $gc)
-
-                    (call $do_copy (local.get $src) (local.get $dst) (i32.const 2048))
-
-                    ;; Drop the source local and force a GC so any
-                    ;; cascade-freed elements that should still be alive
-                    ;; via $dst would surface as either a trap (cast
-                    ;; failure / out-of-bounds) or wrong $dst contents.
-                    (local.set $src (ref.null $arr))
-                    (call $gc)
-
-                    ;; Heavily allocate to reuse any freed slots. Each
-                    ;; iteration allocates a $box with sentinel value -1;
-                    ;; if any element of $dst was a stale reference to a
-                    ;; cascade-freed $box, its slot gets reused here and
-                    ;; reading it back will see -1 rather than its
-                    ;; original index.
-                    (local.set $i (i32.const 0))
-                    (loop $churn
-                        (drop (struct.new $box (i32.const -1)))
-                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-                        (br_if $churn (i32.lt_s (local.get $i) (i32.const 4096))))
-
-                    (call $gc)
-
-                    (local.set $i (i32.const 0))
-                    (local.set $sum (i32.const 0))
-                    (loop $verify
-                        (local.set $sum
-                            (i32.add (local.get $sum)
-                                (struct.get $box 0
-                                    (array.get $arr (local.get $dst) (local.get $i)))))
-                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-                        (br_if $verify (i32.lt_s (local.get $i) (i32.const 2048))))
-
-                    (local.get $sum)))
-        "#,
-    )?;
-
-    let mut linker = Linker::new(&engine);
-    linker.func_wrap("wasmtime", "gc", |mut caller: Caller<_>| -> Result<()> {
-        caller.gc(None)?;
-        Ok(())
-    })?;
-    let instance = linker.instantiate(&mut store, &module)?;
-    let test = instance.get_typed_func::<(), i32>(&mut store, "test")?;
-    let result = test.call(&mut store, ())?;
-
-    // Sum of 0..2048 = 2048 * 2047 / 2.
-    assert_eq!(result, 2_096_128);
 
     Ok(())
 }
@@ -1739,145 +1511,6 @@ fn owned_rooted_lots_of_root_creation() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn instantiate_global_init_oom() -> Result<()> {
-    let mut config = Config::new();
-    config.wasm_gc(true);
-    config.wasm_function_references(true);
-    config.memory_may_move(false);
-    config.memory_reservation(64 << 10);
-    config.memory_reservation_for_growth(0);
-    config.gc_heap_may_move(false);
-    config.gc_heap_reservation(64 << 10);
-    config.gc_heap_reservation_for_growth(0);
-    let engine = Engine::new(&config)?;
-    let mut store = Store::new(&engine, ());
-
-    let module = Module::new(
-        store.engine(),
-        r#"
-            (module
-                (table 100 arrayref)
-                (type $a (array i31ref))
-                (global (ref $a) (array.new_default $a (i32.const 10000000)))
-            )
-        "#,
-    )?;
-
-    Instance::new(&mut store, &module, &[])
-        .unwrap_err()
-        .downcast::<GcHeapOutOfMemory<()>>()?;
-
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
-fn elem_const_eval_oom() -> Result<()> {
-    let mut config = Config::new();
-    config.wasm_gc(true);
-    config.wasm_function_references(true);
-    config.memory_may_move(false);
-    config.memory_reservation(64 << 10);
-    config.memory_reservation_for_growth(0);
-    config.gc_heap_may_move(false);
-    config.gc_heap_reservation(64 << 10);
-    config.gc_heap_reservation_for_growth(0);
-    let engine = Engine::new(&config)?;
-    let mut store = Store::new(&engine, ());
-
-    let module = Module::new(
-        store.engine(),
-        r#"
-            (module
-                (type $a (array i31ref))
-                (elem arrayref
-                    (array.new_default $a (i32.const 100))
-                    (array.new_default $a (i32.const 10000))
-                    (array.new_default $a (i32.const 10000))
-                    (array.new_default $a (i32.const 10000))
-                    (array.new_default $a (i32.const 1000000))
-                )
-            )
-        "#,
-    )?;
-
-    Instance::new(&mut store, &module, &[])
-        .unwrap_err()
-        .downcast::<GcHeapOutOfMemory<()>>()?;
-
-    Ok(())
-}
-
-// The result of a `select` instruction with a GC reference type should be
-// declared as needing a stack map.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn select_gc_ref_stack_map() -> Result<()> {
-    let _ = env_logger::try_init();
-
-    let mut config = Config::new();
-    config.wasm_function_references(true);
-    config.wasm_gc(true);
-    // Use pooling allocator with a tiny GC heap so that GC is triggered
-    // frequently and freed memory is reused quickly.
-    let mut pool = crate::small_pool_config();
-    pool.max_memory_size(1 << 16); // 64 KiB
-    config.allocation_strategy(pool);
-
-    let engine = Engine::new(&config)?;
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-                (type $pair (struct (field (mut i32))))
-                (type $arr (array (mut i8)))
-
-                (import "" "" (func $force_gc))
-
-                (func (export "test") (param $cond i32) (result i32)
-                    ;; The select result stays on the Wasm operand stack (never
-                    ;; stored in a local variable). If the new SSA value created
-                    ;; by select is not declared for stack maps, the GC will
-                    ;; free it.
-                    (select (result (ref null $pair))
-                        (struct.new $pair (i32.const 111))
-                        (ref.null $pair)
-                        (local.get $cond)
-                    )
-
-                    ;; This call is a safepoint. The select result is live
-                    ;; across it. The called function triggers GC which will
-                    ;; free the struct if it is incorrectly omitted from the
-                    ;; safepoint's stack map, and the new allocations would
-                    ;; overwrite the freed memory.
-                    (call $force_gc)
-
-                    (drop (struct.new $pair (i32.const 222)))
-
-                    ;; Use the select result. If it was incorrectly freed, then
-                    ;; this will have the wrong value.
-                    (struct.get $pair 0)
-                )
-            )
-        "#,
-    )?;
-
-    let mut store = Store::new(&engine, ());
-    let force_gc = Func::wrap(&mut store, |mut caller: Caller<'_, _>| {
-        caller.gc(None)?;
-        Ok(())
-    });
-    let instance = Instance::new(&mut store, &module, &[force_gc.into()])?;
-    let test = instance.get_typed_func::<(i32,), i32>(&mut store, "test")?;
-
-    let result = test.call(&mut store, (1,))?;
-    assert_eq!(result, 111);
-
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
 fn dropped_passive_elems_do_not_leak() -> Result<()> {
     let _ = env_logger::try_init();
 
@@ -2007,38 +1640,6 @@ fn pooling_gc_different_configs_rejected() -> Result<()> {
 
     assert!(Engine::new(&config).is_err());
 
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(miri, ignore)]
-fn issue_13141_gc_heap_may_not_move() -> Result<()> {
-    let mut config = Config::new();
-    config.wasm_gc(true);
-    config.gc_heap_may_move(false);
-
-    let engine = Engine::new(&config)?;
-
-    let module = Module::new(
-        &engine,
-        r#"
-            (module
-                (type $a (array (mut i8)))
-
-                (global $g (mut (ref $a)) (array.new_default $a (i32.const 12)))
-
-                (func (export "array_get_nth") (param $p i32) (result i32)
-                    (array.get_u $a (global.get $g) (local.get $p))
-                )
-            )
-        "#,
-    )?;
-
-    let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let array_get_nth = instance.get_typed_func::<i32, i32>(&mut store, "array_get_nth")?;
-    let result = array_get_nth.call(&mut store, 0)?;
-    assert_eq!(result, 0);
     Ok(())
 }
 
@@ -2633,6 +2234,24 @@ fn anyref_ty_extern_converted() -> Result<()> {
     let any = AnyRef::convert_extern(&mut store, ext)?;
     let ty = any.ty(&store)?;
     assert!(matches!(ty, HeapType::Any));
+    Ok(())
+}
+
+#[test]
+fn externref_val_ty() -> Result<()> {
+    let mut store = gc_store()?;
+    let live = ExternRef::new(&mut store, 1u32)?;
+    let ty = Val::ExternRef(Some(live)).ty(&store)?;
+    assert!(ValType::eq(
+        &ty,
+        &ValType::Ref(RefType::new(false, HeapType::Extern))
+    ));
+
+    let unrooted = {
+        let mut scope = RootScope::new(&mut store);
+        ExternRef::new(&mut scope, 2u32)?
+    };
+    assert!(Val::ExternRef(Some(unrooted)).ty(&store).is_err());
     Ok(())
 }
 

@@ -124,6 +124,9 @@ block0(v0: f32):
 ; run: %f32_to_i8_sat(-NaN) == 0
 ; run: %f32_to_i8_sat(+Inf) == 0x7f
 ; run: %f32_to_i8_sat(-Inf) == 0x80
+; run: %f32_to_i8_sat(-0x4.c) == -4
+; run: %f32_to_i8_sat(-0x0.c) == 0
+; run: %f32_to_i8_sat(-0x7f.c) == -127
 
 function %f64_to_i8_sat(f64) -> i8 {
 block0(v0: f64):
@@ -140,6 +143,9 @@ block0(v0: f64):
 ; run: %f64_to_i8_sat(-NaN) == 0
 ; run: %f64_to_i8_sat(+Inf) == 0x7f
 ; run: %f64_to_i8_sat(-Inf) == 0x80
+; run: %f64_to_i8_sat(-0x4.c) == -4
+; run: %f64_to_i8_sat(-0x0.c) == 0
+; run: %f64_to_i8_sat(-0x7f.c) == -127
 
 function %f32_to_i16_sat(f32) -> i16 {
 block0(v0: f32):
@@ -156,6 +162,9 @@ block0(v0: f32):
 ; run: %f32_to_i16_sat(-NaN) == 0
 ; run: %f32_to_i16_sat(+Inf) == 0x7fff
 ; run: %f32_to_i16_sat(-Inf) == 0x8000
+; run: %f32_to_i16_sat(-0x4.c) == -4
+; run: %f32_to_i16_sat(-0x0.c) == 0
+; run: %f32_to_i16_sat(-0x7fff.c) == -32767
 
 function %f64_to_i16_sat(f64) -> i16 {
 block0(v0: f64):
@@ -172,6 +181,9 @@ block0(v0: f64):
 ; run: %f64_to_i16_sat(-NaN) == 0
 ; run: %f64_to_i16_sat(+Inf) == 0x7fff
 ; run: %f64_to_i16_sat(-Inf) == 0x8000
+; run: %f64_to_i16_sat(-0x4.c) == -4
+; run: %f64_to_i16_sat(-0x0.c) == 0
+; run: %f64_to_i16_sat(-0x7fff.c) == -32767
 
 function %f32_to_u8_sat(f32) -> i8 {
 block0(v0:f32):
@@ -189,6 +201,8 @@ block0(v0:f32):
 ; run: %f32_to_u8_sat(-NaN) == 0
 ; run: %f32_to_u8_sat(+Inf) == 0xff
 ; run: %f32_to_u8_sat(-Inf) == 0
+; run: %f32_to_u8_sat(0x4.c) == 4
+; run: %f32_to_u8_sat(0xfe.c) == 254
 
 function %f64_to_u8_sat(f64) -> i8 {
 block0(v0:f64):
@@ -206,6 +220,8 @@ block0(v0:f64):
 ; run: %f64_to_u8_sat(-NaN) == 0
 ; run: %f64_to_u8_sat(+Inf) == 0xff
 ; run: %f64_to_u8_sat(-Inf) == 0
+; run: %f64_to_u8_sat(0x4.c) == 4
+; run: %f64_to_u8_sat(0xfe.c) == 254
 
 function %f32_to_u16_sat(f32) -> i16 {
 block0(v0:f32):
@@ -223,6 +239,8 @@ block0(v0:f32):
 ; run: %f32_to_u16_sat(-NaN) == 0
 ; run: %f32_to_u16_sat(+Inf) == 0xffff
 ; run: %f32_to_u16_sat(-Inf) == 0
+; run: %f32_to_u16_sat(0x4.c) == 4
+; run: %f32_to_u16_sat(0xfffe.c) == 65534
 
 function %f64_to_u16_sat(f64) -> i16 {
 block0(v0:f64):
@@ -240,3 +258,5 @@ block0(v0:f64):
 ; run: %f64_to_u16_sat(-NaN) == 0
 ; run: %f64_to_u16_sat(+Inf) == 0xffff
 ; run: %f64_to_u16_sat(-Inf) == 0
+; run: %f64_to_u16_sat(0x4.c) == 4
+; run: %f64_to_u16_sat(0xfffe.c) == 65534

@@ -6,6 +6,7 @@ use crate::isa::s390x::settings as s390x_settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey, TargetIsa};
+use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::{
     CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode, compile,
@@ -53,6 +54,7 @@ impl S390xBackend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        loop_analysis: &LoopAnalysis,
         regalloc_ctx: &mut regalloc2::Ctx,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<VCode<inst::Inst>> {
@@ -62,6 +64,7 @@ impl S390xBackend {
         compile::compile::<S390xBackend>(
             func,
             domtree,
+            loop_analysis,
             regalloc_ctx,
             self,
             abi,
@@ -77,12 +80,13 @@ impl TargetIsa for S390xBackend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        loop_analysis: &LoopAnalysis,
         regalloc_ctx: &mut regalloc2::Ctx,
         want_disasm: bool,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
-        let vcode = self.compile_vcode(func, domtree, regalloc_ctx, ctrl_plane)?;
+        let vcode = self.compile_vcode(func, domtree, loop_analysis, regalloc_ctx, ctrl_plane)?;
 
         let emit_result = vcode.emit(&regalloc_ctx.output, want_disasm, flags, ctrl_plane)?;
         let value_labels_ranges = emit_result.value_labels_ranges;

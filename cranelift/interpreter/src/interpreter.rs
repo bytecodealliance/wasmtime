@@ -638,6 +638,66 @@ mod tests {
         }
     }
 
+    // Test conversions that trap. These are tested here instead of in Clif runtests because runtests can't test
+    // trapping behavior.
+    #[test]
+    fn fcvt_to_int_i128_traps() {
+        const OVERFLOW: TrapCode = TrapCode::INTEGER_OVERFLOW;
+        const BAD: TrapCode = TrapCode::BAD_CONVERSION_TO_INTEGER;
+        for (op, ty, x, trap) in [
+            // Signed: the range is [-2^127, 2^127).
+            ("fcvt_to_sint", "f32", "0x1.0p127", OVERFLOW),
+            ("fcvt_to_sint", "f32", "0x1.fffffep127", OVERFLOW),
+            ("fcvt_to_sint", "f32", "-0x1.000002p127", OVERFLOW),
+            ("fcvt_to_sint", "f32", "-0x1.fffffep127", OVERFLOW),
+            ("fcvt_to_sint", "f32", "+Inf", OVERFLOW),
+            ("fcvt_to_sint", "f32", "-Inf", OVERFLOW),
+            ("fcvt_to_sint", "f32", "+NaN", BAD),
+            ("fcvt_to_sint", "f64", "0x1.0p127", OVERFLOW),
+            ("fcvt_to_sint", "f64", "-0x1.0000000000001p127", OVERFLOW),
+            ("fcvt_to_sint", "f64", "0x1.fffffffffffffp1023", OVERFLOW),
+            ("fcvt_to_sint", "f64", "-0x1.fffffffffffffp1023", OVERFLOW),
+            ("fcvt_to_sint", "f64", "+Inf", OVERFLOW),
+            ("fcvt_to_sint", "f64", "-Inf", OVERFLOW),
+            ("fcvt_to_sint", "f64", "-NaN", BAD),
+            // Unsigned: the range is [0, 2^128). Every finite f32 below
+            // -1.0 is out of range, but none above: f32::MAX < 2^128.
+            ("fcvt_to_uint", "f32", "-0x1.0", OVERFLOW),
+            ("fcvt_to_uint", "f32", "-0x1.fffffep127", OVERFLOW),
+            ("fcvt_to_uint", "f32", "+Inf", OVERFLOW),
+            ("fcvt_to_uint", "f32", "-Inf", OVERFLOW),
+            ("fcvt_to_uint", "f32", "+NaN", BAD),
+            ("fcvt_to_uint", "f64", "-0x1.0", OVERFLOW),
+            ("fcvt_to_uint", "f64", "-0x1.fffffffffffffp1023", OVERFLOW),
+            ("fcvt_to_uint", "f64", "-Inf", OVERFLOW),
+            ("fcvt_to_uint", "f64", "0x1.0p128", OVERFLOW),
+            ("fcvt_to_uint", "f64", "0x1.fffffffffffffp1023", OVERFLOW),
+            ("fcvt_to_uint", "f64", "+Inf", OVERFLOW),
+            ("fcvt_to_uint", "f64", "-NaN", BAD),
+        ] {
+            let code = format!(
+                "function %test() -> i128 {{
+                block0:
+                    v0 = {ty}const {x}
+                    v1 = {op}.i128 v0
+                    return v1
+                }}"
+            );
+
+            let func = parse_functions(&code).unwrap().into_iter().next().unwrap();
+            let mut env = FunctionStore::default();
+            env.add(func.name.to_string(), &func);
+            let state = InterpreterState::default().with_function_store(env);
+            let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
+
+            assert_eq!(
+                result,
+                ControlFlow::Trap(CraneliftTrap::User(trap)),
+                "{op}.i128 {ty} {x}"
+            );
+        }
+    }
+
     // This test verifies that functions can refer to each other using the function store. A double indirection is
     // required, which is tricky to get right: a referenced function is a FuncRef when called but a FuncIndex inside the
     // function store. This test would preferably be a CLIF filetest but the filetest infrastructure only looks at a

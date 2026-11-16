@@ -90,7 +90,7 @@ impl CompiledModule {
         &self.module
     }
 
-    fn module_index(&self) -> StaticModuleIndex {
+    pub(crate) fn module_index(&self) -> StaticModuleIndex {
         self.module.module_index
     }
 

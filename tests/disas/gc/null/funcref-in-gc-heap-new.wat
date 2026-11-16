@@ -48,8 +48,8 @@
 ;;                                 block2:
 ;;                                     v46 = iconst.i32 -1342177264
 ;; @0020                               v22 = load.i64 notrap aligned readonly can_move region5 v16+32
-;;                                     v52 = band.i32 v11, v45  ; v45 = -8
-;;                                     v53 = uextend.i64 v52
+;; @0020                               v52 = band.i32 v11, v45  ; v45 = -8
+;; @0020                               v53 = uextend.i64 v52
 ;; @0020                               v24 = iadd v22, v53
 ;; @0020                               store user2 region8 v46, v24  ; v46 = -1342177264
 ;; @0020                               v27 = load.i64 notrap aligned readonly can_move region6 v0+40
@@ -69,6 +69,6 @@
 ;; @0020                               jump block2
 ;;
 ;;                                 block1:
-;;                                     v54 = band.i32 v11, v45  ; v45 = -8
+;; @0020                               v54 = band.i32 v11, v45  ; v45 = -8
 ;; @0023                               return v54
 ;; }

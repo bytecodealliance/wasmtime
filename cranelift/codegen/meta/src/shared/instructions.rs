@@ -420,10 +420,6 @@ fn define_control_flow(
         .operands_out(&[
             Operand::new("next_load_ptr", iAddr).with_doc("memory location to load from next time")
         ])
-        // As with `stack_switch`, this instruction is a call, in that "it
-        // continues execution elsewhere". See reasoning at
-        // https://github.com/bytecodealliance/wasmtime/pull/9078#issuecomment-2273869774.
-        .call()
         .can_load()
         // It may transfer control to something that may store. Declaring this
         // makes us a memory fence.
@@ -3193,9 +3189,9 @@ pub(crate) fn define(
             r#"
         Converts floating point scalars to unsigned integer.
 
-        Only operates on `x` if it is a scalar. If `x` is NaN or if
-        the unsigned integral value cannot be represented in the result
-        type, this instruction traps.
+        Only operates on `x` if it is a scalar. This instruction traps if
+        `x` is NaN, or if it cannot be represented in the result type
+        after being truncated toward 0.
 
         "#,
             &formats.unary,
@@ -3212,9 +3208,9 @@ pub(crate) fn define(
             r#"
         Converts floating point scalars to signed integer.
 
-        Only operates on `x` if it is a scalar. If `x` is NaN or if
-        the unsigned integral value cannot be represented in the result
-        type, this instruction traps.
+        Only operates on `x` if it is a scalar. This instruction traps if
+        `x` is NaN, or if it cannot be represented in the result type
+        after being truncated toward 0.
 
         "#,
             &formats.unary,

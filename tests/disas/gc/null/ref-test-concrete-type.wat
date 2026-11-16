@@ -30,7 +30,7 @@
 ;;                                 block2:
 ;; @001d                               v7 = iconst.i32 1
 ;; @001d                               v8 = band.i32 v2, v7  ; v7 = 1
-;;                                     v34 = iconst.i32 0
+;; @001d                               v34 = iconst.i32 0
 ;; @001d                               brif v8, block4(v34), block3  ; v34 = 0
 ;;
 ;;                                 block3:
@@ -42,7 +42,7 @@
 ;; @001d                               v17 = iconst.i32 -1342177280
 ;; @001d                               v18 = band v16, v17  ; v17 = -1342177280
 ;; @001d                               v19 = icmp eq v18, v17  ; v17 = -1342177280
-;;                                     v35 = iconst.i32 0
+;; @001d                               v35 = iconst.i32 0
 ;; @001d                               brif v19, block5, block4(v35)  ; v35 = 0
 ;;
 ;;                                 block5:

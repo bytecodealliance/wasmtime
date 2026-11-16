@@ -10,7 +10,7 @@
 
 use crate::{
     FrameInstPos, FrameStackShape, FrameStateSlotOffset, FrameTableDescriptorIndex, FrameValType,
-    FuncKey, ModulePC, WasmHeapTopType, WasmValType, prelude::*,
+    FuncKey, ModulePC, StaticModuleIndex, WasmHeapTopType, WasmValType, prelude::*,
 };
 use object::{LittleEndian, U32};
 use std::collections::{HashMap, hash_map::Entry};
@@ -212,7 +212,9 @@ impl FrameStateSlotBuilder {
 /// - `num_progpoints` times:
 ///   - progpoint descriptor offset: u32
 /// - `num_breakpoints` times:
-///    - Wasm PC: u32 (sorted order; may repeat)
+///    - static module index of the Wasm PC: u32
+/// - `num_breakpoints` times:
+///    - Wasm PC, relative to that module: u32 (sorted order; may repeat)
 /// - `num_breakpoints` times:
 ///    - patch offset in text: u32
 /// - `num_breakpoints` times:
@@ -243,6 +245,7 @@ pub struct FrameTableBuilder {
     progpoint_descriptor_offsets: Vec<U32<LittleEndian>>,
     progpoint_descriptor_data: Vec<U32<LittleEndian>>,
 
+    breakpoint_modules: Vec<U32<LittleEndian>>,
     breakpoint_pcs: Vec<U32<LittleEndian>>,
     breakpoint_patch_offsets: Vec<U32<LittleEndian>>,
     breakpoint_patch_data_ends: Vec<U32<LittleEndian>>,
@@ -334,13 +337,18 @@ impl FrameTableBuilder {
         }
     }
 
-    /// Add one breakpoint patch.
+    /// Add one breakpoint patch, for a Wasm PC in the given module.
+    ///
+    /// Patches must be added in order of Wasm PC.
     pub fn add_breakpoint_patch(
         &mut self,
+        module: StaticModuleIndex,
         wasm_pc: ModulePC,
         patch_start_native_pc: u32,
         patch: &[u8],
     ) {
+        self.breakpoint_modules
+            .push(U32::new(LittleEndian, module.as_u32()));
         self.breakpoint_pcs
             .push(U32::new(LittleEndian, wasm_pc.raw()));
         self.breakpoint_patch_offsets
@@ -381,6 +389,7 @@ impl FrameTableBuilder {
         f(object::bytes_of_slice(&self.frame_descriptor_fp_offsets));
         f(object::bytes_of_slice(&self.progpoint_pcs));
         f(object::bytes_of_slice(&self.progpoint_descriptor_offsets));
+        f(object::bytes_of_slice(&self.breakpoint_modules));
         f(object::bytes_of_slice(&self.breakpoint_pcs));
         f(object::bytes_of_slice(&self.breakpoint_patch_offsets));
         f(object::bytes_of_slice(&self.breakpoint_patch_data_ends));

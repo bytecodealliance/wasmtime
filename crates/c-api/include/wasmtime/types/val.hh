@@ -33,11 +33,7 @@ public:
   /// Copy constructor.
   HeapType(const HeapType &other) { wasmtime_heaptype_clone(&other.ty, &ty); }
   /// Copy assignment operator.
-  HeapType &operator=(const HeapType &other) {
-    wasmtime_heaptype_delete(&ty);
-    wasmtime_heaptype_clone(&other.ty, &ty);
-    return *this;
-  }
+  HeapType &operator=(const HeapType &other) { return *this = HeapType(other); }
   ~HeapType() {
     if (is_concrete())
       wasmtime_heaptype_delete(&ty);
@@ -108,12 +104,6 @@ public:
   /// \brief Constructor for the `exn` heap type
   static HeapType exn() { return HeapType(WASMTIME_HEAPTYPE_KIND_EXN); }
 
-  /// \brief Constructor for a concrete exception heap type.
-  HeapType(const ExnType &ty) {
-    this->ty.kind = WASMTIME_HEAPTYPE_KIND_CONCRETE_EXN;
-    this->ty.of.concrete_exn = ExnType(ty).capi_release();
-  }
-
   /// \brief Constructor for the `noexn` heap type
   static HeapType noexn() { return HeapType(WASMTIME_HEAPTYPE_KIND_NOEXN); }
 
@@ -123,7 +113,6 @@ public:
     case WASMTIME_HEAPTYPE_KIND_CONCRETE_FUNC:
     case WASMTIME_HEAPTYPE_KIND_CONCRETE_ARRAY:
     case WASMTIME_HEAPTYPE_KIND_CONCRETE_STRUCT:
-    case WASMTIME_HEAPTYPE_KIND_CONCRETE_EXN:
       return true;
     default:
       return false;
@@ -194,16 +183,6 @@ public:
   /// \brief Is this the abstract `exn` heap type?
   bool is_exn() const { return ty.kind == WASMTIME_HEAPTYPE_KIND_EXN; }
 
-  /// \brief If this is a concrete exception type, returns the underlying
-  /// exception type.
-  const ExnType *as_concrete_exn() const {
-    static_assert(sizeof(ExnType) == sizeof(wasmtime_exn_type_t *));
-    if (ty.kind == WASMTIME_HEAPTYPE_KIND_CONCRETE_EXN) {
-      return reinterpret_cast<const ExnType *>(&ty.of.concrete_exn);
-    }
-    return nullptr;
-  }
-
   /// \brief Is this the abstract `noexn` heap type?
   bool is_noexn() const { return ty.kind == WASMTIME_HEAPTYPE_KIND_NOEXN; }
 
@@ -219,11 +198,7 @@ public:
   /// Copy constructor.
   RefType(const RefType &other) { wasmtime_reftype_clone(&other.ty, &ty); }
   /// Copy assignment operator.
-  RefType &operator=(const RefType &other) {
-    wasmtime_reftype_delete(&ty);
-    wasmtime_reftype_clone(&other.ty, &ty);
-    return *this;
-  }
+  RefType &operator=(const RefType &other) { return *this = RefType(other); }
   ~RefType() { wasmtime_reftype_delete(&ty); }
   /// Move constructor
   RefType(RefType &&other) {

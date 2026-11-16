@@ -1077,7 +1077,10 @@ pub enum Trampoline {
     /// Same as `ResourceTransferBorrow` but for a destination instance which
     /// owns the resource and so receives its representation directly, meaning
     /// no destination table is consulted.
-    ResourceTransferBorrowToOwner,
+    ResourceTransferBorrowToOwner {
+        /// The resource table the borrow is transferred out of.
+        ty: TypeResourceTableIndex,
+    },
 
     /// An intrinsic used by FACT-generated modules to prepare a call involving
     /// an async-lowered import and/or an async-lifted export.
@@ -1260,8 +1263,11 @@ impl Trampoline {
             ErrorContextDrop { .. } => format!("error-context-drop"),
             ResourceTransferOwn => format!("component-resource-transfer-own"),
             ResourceTransferBorrow => format!("component-resource-transfer-borrow"),
-            ResourceTransferBorrowToOwner => {
-                format!("component-resource-transfer-borrow-to-owner")
+            ResourceTransferBorrowToOwner { ty } => {
+                format!(
+                    "component-resource-transfer-borrow-to-owner-{}",
+                    ty.as_u32()
+                )
             }
             PrepareCall { .. } => format!("component-prepare-call"),
             StartCall { .. } => format!("component-start-call"),

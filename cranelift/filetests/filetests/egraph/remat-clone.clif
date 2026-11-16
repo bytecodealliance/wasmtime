@@ -1,0 +1,86 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; The constant is first elaborated in one arm of the branch. In the other
+;; arm, it is cloned and hoisted out of the loop. Both the pure select and
+;; the side-effecting store must rematerialize the clone inside the loop.
+function %constant(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = iconst.i64 0x7ff9_0000_0000_0000
+    brif v0, block2, block1
+
+block1:
+    return v3
+
+block2:
+    jump block3(v1)
+
+block3(v4: i64):
+    v5 = select v4, v3, v4
+    store v5, v2
+    store v3, v2+8
+    brif v4, block3(v5), block4
+
+block4:
+    return v4
+}
+
+; function %constant(i64, i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64, v2: i64):
+;     brif v0, block2, block1
+;
+; block1:
+;     v3 = iconst.i64 0x7ff9_0000_0000_0000
+;     return v3  ; v3 = 0x7ff9_0000_0000_0000
+;
+; block2:
+;     v6 = iconst.i64 0x7ff9_0000_0000_0000
+;     jump block3(v1)
+;
+; block3(v4: i64):
+;     v7 = iconst.i64 0x7ff9_0000_0000_0000
+;     v8 = select v4, v7, v4  ; v7 = 0x7ff9_0000_0000_0000
+;     store v8, v2
+;     store v7, v2+8  ; v7 = 0x7ff9_0000_0000_0000
+;     brif v4, block3(v8), block4
+;
+; block4:
+;     return v4
+; }
+
+;; Cloning must also preserve rematerialization for non-constant instructions,
+;; even without loops. The clone in block2 should be rematerialized in block3.
+function %bnot(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = bnot v1
+    brif v0, block2, block1
+
+block1:
+    return v3
+
+block2:
+    store v3, v2
+    jump block3
+
+block3:
+    return v3
+}
+
+; function %bnot(i64, i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64, v2: i64):
+;     brif v0, block2, block1
+;
+; block1:
+;     v3 = bnot.i64 v1
+;     return v3
+;
+; block2:
+;     v4 = bnot.i64 v1
+;     store v4, v2
+;     jump block3
+;
+; block3:
+;     v5 = bnot.i64 v1
+;     return v5
+; }

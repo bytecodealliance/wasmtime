@@ -947,11 +947,11 @@
 
     ;; A pseudo-instruction that captures register arguments in vregs.
     (Args
-      (args VecArgPair))
+      (args BoxedSliceArgPair))
 
     ;; A pseudo-instruction that moves vregs to return registers.
     (Rets
-      (rets VecRetPair))
+      (rets BoxedSliceRetPair))
 
     ;; ---- branches (exactly one must appear at end of BB) ----
 
@@ -1105,7 +1105,16 @@
       (offset i64))
     ;; Reference to a TLS symbol in general-dynamic mode.
     (TlsGd
+      (name ExternalName))
+    ;; GOT-indirect reference for PIC mode (R_390_GOTENT).
+    ;; Emitted as LARL + LG only; offset is always 0 (other rules add any offset).
+    ;; Used for data symbols.
+    (Got
       (name ExternalName))))
+
+;; Returns true when generating position-independent code.
+(decl pure is_pic () bool)
+(extern constructor is_pic is_pic)
 
 ;; Boxed version of SymbolReloc to save space.
 (type BoxSymbolReloc (primitive BoxSymbolReloc))

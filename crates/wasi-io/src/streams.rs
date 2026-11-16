@@ -34,7 +34,6 @@ pub trait InputStream: Pollable {
     /// read.
     async fn blocking_read(&mut self, size: usize) -> StreamResult<Bytes> {
         if size == 0 {
-            self.ready().await;
             return self.read(size);
         }
 

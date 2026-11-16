@@ -54,8 +54,8 @@
 ;;
 ;;                                 block2(v43: i64):
 ;; @0027                               store.i64 user2 little region5 v4, v43
-;;                                     v57 = iconst.i64 8
-;;                                     v58 = iadd v43, v57  ; v57 = 8
+;; @0027                               v57 = iconst.i64 8
+;; @0027                               v58 = iadd v43, v57  ; v57 = 8
 ;; @0027                               v46 = icmp eq v58, v40
 ;; @0027                               brif v46, block3, block2(v58)
 ;;

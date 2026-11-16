@@ -70,16 +70,16 @@
 ;; @0043                               brif v15, block2, block3
 ;;
 ;;                                 block2:
-;;                                     v104 = iconst.i32 32
+;; @0043                               v104 = iconst.i32 32
 ;;                                     v102 = iadd.i32 v5, v104  ; v104 = 32
 ;; @0043                               store notrap aligned region3 v102, v4
-;;                                     v105 = iconst.i32 -1342177278
-;;                                     v106 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v107 = load.i64 notrap aligned readonly can_move region7 v106+32
+;; @0043                               v105 = iconst.i32 -1342177278
+;; @0043                               v106 = load.i64 notrap aligned readonly can_move region0 v0+8
+;; @0043                               v107 = load.i64 notrap aligned readonly can_move region7 v106+32
 ;; @0043                               v29 = iadd v107, v12
 ;; @0043                               store user2 region8 v105, v29  ; v105 = -1342177278
-;;                                     v108 = load.i64 notrap aligned readonly can_move region5 v0+40
-;;                                     v109 = load.i32 notrap aligned readonly can_move region6 v108
+;; @0043                               v108 = load.i64 notrap aligned readonly can_move region5 v0+40
+;; @0043                               v109 = load.i32 notrap aligned readonly can_move region6 v108
 ;; @0043                               store user2 region9 v109, v29+4
 ;;                                     v110 = iconst.i64 32
 ;; @0043                               istore32 user2 region10 v110, v29+8  ; v110 = 32

@@ -35,7 +35,9 @@ use crate::{FuncIndex, GlobalIndex, IndexType, NUM_COMPONENT_CONTEXT_SLOTS, Trap
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
-use wasm_encoder::{BlockType, Catch, Encode, Instruction, Instruction::*, MemArg, ValType};
+use wasm_encoder::{
+    BlockType, Catch, Encode, Instruction, Instruction::*, MemArg, MemArgTarget, ValType,
+};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 use super::DataModel;
@@ -571,9 +573,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .map(|(i, ty)| (i as u32, *ty))
             .collect::<Vec<_>>();
 
-        let saved = self.clear_may_leave(adapter.lift.flags);
+        let saved = self
+            .translate_params_may_call_lift_realloc(adapter)
+            .then(|| self.clear_may_leave(adapter.lift.flags));
         self.translate_params(adapter, &param_locals);
-        self.restore_may_leave(adapter.lift.flags, saved);
+        if let Some(saved) = saved {
+            self.restore_may_leave(adapter.lift.flags, saved);
+        }
 
         self.finish();
     }
@@ -597,7 +603,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .map(|(i, ty)| (i as u32, *ty))
             .collect::<Vec<_>>();
 
-        let saved = self.clear_may_leave(adapter.lower.flags);
+        let saved = self
+            .translate_results_may_call_lower_realloc(adapter)
+            .then(|| self.clear_may_leave(adapter.lower.flags));
         // Note that we pass `param_locals` as _both_ the `param_locals` and
         // `result_locals` parameters to `translate_results`.  That's because
         // the _parameters_ to `task.return` are actually the _results_ that the
@@ -609,7 +617,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // the import is lowered async, in which case `translate_results` will
         // use that pointer to store the results.
         self.translate_results(adapter, &param_locals, &param_locals);
-        self.restore_may_leave(adapter.lower.flags, saved);
+        if let Some(saved) = saved {
+            self.restore_may_leave(adapter.lower.flags, saved);
+        }
 
         self.finish()
     }
@@ -715,7 +725,15 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // more we can reuse locals to make this idempotency obvious, rather
         // than force Cranelift's optimizer to rediscover this information, the
         // better.
-        let saved_lift_may_leave = self.clear_may_leave(adapter.lift.flags);
+        //
+        // If translation can't call the callee's `realloc` then no callee code
+        // runs while the flag is cleared, so the clear-and-restore is skipped
+        // entirely. Cranelift can't always remove it on its own because host
+        // libcalls made during translation (e.g. resource transfers) are
+        // opaque.
+        let saved_lift_may_leave = self
+            .translate_params_may_call_lift_realloc(adapter)
+            .then(|| self.clear_may_leave(adapter.lift.flags));
         let param_locals = lower_sig
             .params
             .iter()
@@ -723,7 +741,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .map(|(i, ty)| (i as u32, *ty))
             .collect::<Vec<_>>();
         self.translate_params(adapter, &param_locals);
-        self.restore_may_leave(adapter.lift.flags, saved_lift_may_leave);
+        if let Some(saved) = saved_lift_may_leave {
+            self.restore_may_leave(adapter.lift.flags, saved);
+        }
 
         // With all the arguments on the stack the actual target function is
         // now invoked. The core wasm results of the function are then placed
@@ -774,10 +794,16 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // left (as we might invoke things like `realloc`). Again the precise
         // order of everything doesn't matter since intermediate states cannot
         // be witnessed, hence the setting of flags here to encapsulate both
-        // liftings and lowerings.
-        self.set_may_leave_false(adapter.lower.flags);
-        self.translate_results(adapter, &param_locals, &result_locals);
-        self.restore_may_leave(adapter.lower.flags, saved_lower_may_leave);
+        // liftings and lowerings. As with parameters, this is skipped if
+        // translation can't call the caller's `realloc`.
+        if self.translate_results_may_call_lower_realloc(adapter) {
+            self.set_may_leave_false(adapter.lower.flags);
+            self.translate_results(adapter, &param_locals, &result_locals);
+            self.restore_may_leave(adapter.lower.flags, saved_lower_may_leave);
+        } else {
+            self.translate_results(adapter, &param_locals, &result_locals);
+            self.free_temp_local(saved_lower_may_leave);
+        }
 
         // And finally post-return state is handled here once all results/etc
         // are all translated.
@@ -806,6 +832,39 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.exit_exception_barrier();
 
         self.finish()
+    }
+
+    /// The maximum number of flat parameters a lifted function receives on the
+    /// stack before they are spilled to memory allocated with its `realloc`.
+    fn max_lift_flat_params(lift_opts: &Options) -> usize {
+        match lift_opts.data_model {
+            DataModel::Gc {} => usize::MAX,
+            DataModel::LinearMemory(_) => MAX_FLAT_PARAMS,
+        }
+    }
+
+    /// Whether `translate_params` might call the callee's `realloc`.
+    fn translate_params_may_call_lift_realloc(&self, adapter: &AdapterData) -> bool {
+        let lift_opts = &adapter.lift.options;
+        let tys = &self.types[self.types[adapter.lift.ty].params].types;
+        tys.iter().any(|ty| self.types.ty_needs_realloc(ty))
+            || self
+                .types
+                .flatten_types(
+                    lift_opts,
+                    Self::max_lift_flat_params(lift_opts),
+                    tys.iter().copied(),
+                )
+                .is_none()
+    }
+
+    /// Whether `translate_results` might call the caller's `realloc`.
+    ///
+    /// Results that don't fit on the stack are written to a caller-provided
+    /// return pointer, so only strings, lists, and maps allocate.
+    fn translate_results_may_call_lower_realloc(&self, adapter: &AdapterData) -> bool {
+        let tys = &self.types[self.types[adapter.lower.ty].results].types;
+        tys.iter().any(|ty| self.types.ty_needs_realloc(ty))
     }
 
     fn translate_params(&mut self, adapter: &AdapterData, param_locals: &[(u32, ValType)]) {
@@ -842,10 +901,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         let src_flat =
             self.types
                 .flatten_types(lower_opts, max_flat_params, src_tys.iter().copied());
-        let max_dst_flat_params = match lift_opts.data_model {
-            DataModel::Gc {} => usize::MAX,
-            DataModel::LinearMemory(_) => MAX_FLAT_PARAMS,
-        };
+        let max_dst_flat_params = Self::max_lift_flat_params(lift_opts);
         let dst_flat =
             self.types
                 .flatten_types(lift_opts, max_dst_flat_params, dst_tys.iter().copied());
@@ -3497,15 +3553,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
             _ => panic!("expected an `Borrow`"),
         };
 
-        let (transfer, dst_ty) = if self.module.resource_owned_by_own_instance(dst_ty) {
-            (self.module.import_resource_transfer_borrow_to_owner(), None)
+        if self.module.resource_owned_by_own_instance(dst_ty) {
+            let transfer = self.module.import_resource_transfer_borrow_to_owner(src_ty);
+            self.translate_handle_types(src, &[], dst, transfer);
         } else {
-            (
-                self.module.import_resource_transfer_borrow(),
-                Some(dst_ty.as_u32()),
-            )
-        };
-        self.translate_handle(src_ty.as_u32(), src, dst_ty, dst, transfer);
+            let transfer = self.module.import_resource_transfer_borrow();
+            self.translate_handle(src_ty.as_u32(), src, Some(dst_ty.as_u32()), dst, transfer);
+        }
     }
 
     /// Translates the index `src`, which resides in the table `src_ty`, into
@@ -3523,15 +3577,30 @@ impl<'a, 'b> Compiler<'a, 'b> {
         dst: &Destination,
         transfer: FuncIndex,
     ) {
+        let types: &[u32] = match dst_ty {
+            Some(dst_ty) => &[src_ty, dst_ty],
+            None => &[src_ty],
+        };
+        self.translate_handle_types(src, types, dst, transfer);
+    }
+
+    /// As [`Self::translate_handle`], except that `types` gives exactly the
+    /// type constants to push after the index.
+    fn translate_handle_types(
+        &mut self,
+        src: &Source<'_>,
+        types: &[u32],
+        dst: &Destination,
+        transfer: FuncIndex,
+    ) {
         self.push_dst_addr(dst);
         match src {
             Source::Memory(mem) => self.i32_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I32),
             Source::Struct(_) | Source::Array(_) => todo!("CM+GC"),
         }
-        self.instruction(I32Const(src_ty as i32));
-        if let Some(dst_ty) = dst_ty {
-            self.instruction(I32Const(dst_ty as i32));
+        for ty in types {
+            self.instruction(I32Const(*ty as i32));
         }
         self.instruction(Call(transfer.as_u32()));
         match dst {
@@ -3937,7 +4006,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
     /// function is wrapped in a `try_table` whose `catch_all` clause
     /// traps. This catches exceptions thrown not only by the callee
     /// itself but also by any other guest functions the adapter
-    /// invokes (e.g. `realloc`).
+    /// invokes (e.g. `realloc`). Calls to host intrinsics inside the
+    /// barrier are compiled as plain calls, since the host turns any
+    /// exception into a trap rather than unwinding it into the adapter.
     ///
     /// The generated structure, completed by `exit_exception_barrier`,
     /// is:
@@ -4506,7 +4577,8 @@ impl<'a> Memory<'a> {
         MemArg {
             offset: u64::from(self.offset),
             align,
-            memory_index: self.mem_opts().memory.unwrap().0.as_u32(),
+            target: MemArgTarget::Memory(self.mem_opts().memory.unwrap().0.as_u32()),
+            ordering: None,
         }
     }
 

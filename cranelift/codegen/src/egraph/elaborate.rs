@@ -50,10 +50,10 @@ pub(crate) struct Elaborator<'a> {
     /// Stack of loops whose headers dominate the current elaboration
     /// path, outermost first.
     loop_stack: SmallVec<[LoopStackEntry; 8]>,
-    /// How many of the entries in `loop_stack` actually contain the current
-    /// block in their loop.
+    /// Stack index just past the innermost loop containing the current block.
     ///
-    /// Valid LICM hoisting targets are `loop_stack[..active_loop_depth]`.
+    /// Search `loop_stack[..active_loop_depth]` for LICM targets, checking loop
+    /// membership since earlier entries may be loops we have already exited.
     ///
     /// This is not *strictly* necessary for correctness, and we could hoist to
     /// anything in `loop_stack` because they all dominate the block we are
@@ -64,6 +64,8 @@ pub(crate) struct Elaborator<'a> {
     /// loop-exit block) to executed once in the header, and (2) would make us
     /// hoist cold code out of blocks that terminate with a trap into loop
     /// headers.
+    ///
+    /// Always zero in `cold` blocks, so we never hoist out of them.
     active_loop_depth: usize,
     /// For each loop currently on `loop_stack`, its index in that stack;
     /// `NOT_ON_LOOP_STACK` for every other loop.
@@ -247,7 +249,13 @@ impl<'a> Elaborator<'a> {
             );
         }
 
-        self.active_loop_depth = self.find_active_loop_depth(block);
+        // Never hoist out of a cold block: that would move cold-path work into
+        // a (likely hotter) loop preheader.
+        self.active_loop_depth = if self.func.layout.is_cold(block) {
+            0
+        } else {
+            self.find_active_loop_depth(block)
+        };
 
         trace!(
             "block {}: loop stack is {:?}, active depth {}",
@@ -262,11 +270,10 @@ impl<'a> Elaborator<'a> {
     /// Not every block dominated by a loop header is inside that loop: a block
     /// that cannot reach the backedge, such as one that only traps or returns,
     /// is dominated by the header but is not a member of the natural loop. This
-    /// function finds how much of the loop stack actually contains this block;
-    /// the rest is not available to hoist out of.
+    /// function finds the innermost loop on the stack containing this block.
     ///
-    /// Returns `depth` where every loop in `self.loop_stack[..depth]` contains
-    /// `block`.
+    /// Returns its stack index + 1, or zero if none contains `block`. Earlier
+    /// entries still need a membership check.
     fn find_active_loop_depth(&self, block: Block) -> usize {
         let mut lp = self.loop_analysis.innermost_loop(block);
         while let Some(l) = lp {
@@ -474,6 +481,7 @@ impl<'a> Elaborator<'a> {
     /// `true` if a rewrite occurred.
     fn maybe_remat_arg(
         remat_values: &FxHashSet<Value>,
+        value_to_best_value: &SecondaryMap<Value, BestEntry>,
         func: &mut Function,
         remat_copies: &mut FxHashMap<(Block, Value), Value>,
         insert_block: Block,
@@ -487,13 +495,21 @@ impl<'a> Elaborator<'a> {
         // would affect, e.g., adds-with-one-constant-arg, which are
         // currently rematerialized. Right now we don't do this, to
         // avoid the need for another fixpoint loop here.
-        if arg.in_block != insert_block && remat_values.contains(&arg.value) {
+        // Elaboration may have cloned the instruction producing `arg`. The
+        // remat set contains original values, so look up the clone's original
+        // best value before checking whether it should be rematerialized.
+        if arg.in_block != insert_block && remat_values.contains(&value_to_best_value[arg.value].1)
+        {
             let new_value = match remat_copies.entry((insert_block, arg.value)) {
                 HashEntry::Occupied(o) => *o.get(),
                 HashEntry::Vacant(v) => {
                     let inst = func.dfg.value_def(arg.value).inst().unwrap();
                     debug_assert_eq!(func.dfg.inst_results(inst).len(), 1);
                     let new_inst = func.dfg.clone_inst(inst);
+                    let srcloc = func.srclocs[inst];
+                    if !srcloc.is_default() {
+                        func.srclocs[new_inst] = srcloc;
+                    }
                     func.layout.insert_inst(new_inst, before);
                     let new_result = func.dfg.inst_results(new_inst)[0];
                     *v.insert(new_result)
@@ -630,8 +646,10 @@ impl<'a> Elaborator<'a> {
                             let hoist_level = self.loop_stack[..active_loop_depth]
                                 .iter()
                                 .position(|loop_entry| {
-                                    self.domtree
-                                        .block_dominates(value.in_block, loop_entry.hoist_block)
+                                    self.loop_analysis.is_in_loop(self.cur_block, loop_entry.lp)
+                                        && self
+                                            .domtree
+                                            .block_dominates(value.in_block, loop_entry.hoist_block)
                                 })
                                 .unwrap_or(active_loop_depth);
                             trace!(
@@ -695,6 +713,7 @@ impl<'a> Elaborator<'a> {
                     for arg_value in arg_values.iter_mut() {
                         if Self::maybe_remat_arg(
                             &self.remat_values,
+                            &self.value_to_best_value,
                             &mut self.func,
                             &mut self.remat_copies,
                             insert_block,
@@ -721,6 +740,10 @@ impl<'a> Elaborator<'a> {
                     let inst = if self.func.layout.inst_block(inst).is_some() || remat_arg {
                         // Clone the inst!
                         let new_inst = self.func.dfg.clone_inst(inst);
+                        let srcloc = self.func.srclocs[inst];
+                        if !srcloc.is_default() {
+                            self.func.srclocs[new_inst] = srcloc;
+                        }
                         trace!(
                             " -> inst {} already has a location; cloned to {}",
                             inst, new_inst
@@ -842,6 +865,7 @@ impl<'a> Elaborator<'a> {
                 let mut new_arg = self.elaborate_eclass_use(*arg, before);
                 Self::maybe_remat_arg(
                     &self.remat_values,
+                    &self.value_to_best_value,
                     &mut self.func,
                     &mut self.remat_copies,
                     block,

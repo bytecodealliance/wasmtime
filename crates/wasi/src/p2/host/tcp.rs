@@ -89,7 +89,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
             return Err(e.into());
         }
 
-        let (input, output) = socket.take_streams()?;
+        let (input, output) = socket.take_streams(self.ctx.max_io_size.get())?;
         let input = self.table.push_child(input, &this)?;
         let output = self.table.push_child(output, &this)?;
         Ok((input, output))
@@ -139,7 +139,7 @@ impl crate::p2::host::tcp::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
             None => return Err(ErrorCode::WouldBlock.into()),
         };
         let mut tcp_socket = TcpSocket::new(accepted);
-        let (input, output) = tcp_socket.take_streams()?;
+        let (input, output) = tcp_socket.take_streams(self.ctx.max_io_size.get())?;
 
         let tcp_socket = self.table.push(tcp_socket)?;
         let input_stream = self.table.push_child(input, &tcp_socket)?;

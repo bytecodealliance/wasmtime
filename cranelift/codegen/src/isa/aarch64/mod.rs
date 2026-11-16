@@ -6,6 +6,7 @@ use crate::isa::aarch64::settings as aarch64_settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, IsaFlagsHashKey, TargetIsa};
+use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::CompiledCode;
 use crate::machinst::{
     CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet, TextSectionBuilder, VCode,
@@ -54,6 +55,7 @@ impl AArch64Backend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        loop_analysis: &LoopAnalysis,
         regalloc_ctx: &mut regalloc2::Ctx,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<VCode<inst::Inst>> {
@@ -63,6 +65,7 @@ impl AArch64Backend {
         compile::compile::<AArch64Backend>(
             func,
             domtree,
+            loop_analysis,
             regalloc_ctx,
             self,
             abi,
@@ -78,11 +81,12 @@ impl TargetIsa for AArch64Backend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        loop_analysis: &LoopAnalysis,
         regalloc_ctx: &mut regalloc2::Ctx,
         want_disasm: bool,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let vcode = self.compile_vcode(func, domtree, regalloc_ctx, ctrl_plane)?;
+        let vcode = self.compile_vcode(func, domtree, loop_analysis, regalloc_ctx, ctrl_plane)?;
 
         let emit_result = vcode.emit(&regalloc_ctx.output, want_disasm, &self.flags, ctrl_plane)?;
         let value_labels_ranges = emit_result.value_labels_ranges;

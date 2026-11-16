@@ -1030,6 +1030,16 @@ impl ObjectModule {
                 encoding: RelocationEncoding::S390xDbl,
                 size: 32,
             },
+            Reloc::S390xGOTRel32Dbl => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "S390xGOTRel32Dbl is only supported for ELF"
+                );
+                RelocationFlags::Elf {
+                    r_type: object::elf::R_390_GOTENT,
+                }
+            }
             Reloc::S390xTlsGd64 => {
                 assert_eq!(
                     self.object.format(),

@@ -42,7 +42,7 @@
 ;; @0020                               brif v12, block2, block3(v10)
 ;;
 ;;                                 block2:
-;;                                     v172 = iadd.i64 v8, v9  ; v9 = 1
+;; @0020                               v172 = iadd.i64 v8, v9  ; v9 = 1
 ;; @0020                               store notrap aligned region2 v172, v7
 ;; @0020                               v14 = call fn0(v0), stack_map=[i32 @ ss0+0, i32 @ ss1+0]
 ;; @0020                               v16 = load.i64 notrap aligned region2 v7
@@ -105,31 +105,31 @@
 ;;                                 block5(v98: i64, v99: i64, v100: i32):
 ;; @002b                               v103 = load.i32 user2 little region6 v99
 ;; @002b                               store user2 little region6 v103, v98
-;;                                     v178 = iconst.i64 4
-;;                                     v179 = iadd v99, v178  ; v178 = 4
+;; @002b                               v178 = iconst.i64 4
+;; @002b                               v179 = iadd v99, v178  ; v178 = 4
 ;; @002b                               v110 = icmp eq v179, v95
-;;                                     v180 = iadd v98, v178  ; v178 = 4
-;;                                     v181 = iconst.i32 1
-;;                                     v182 = iadd v100, v181  ; v181 = 1
+;; @002b                               v180 = iadd v98, v178  ; v178 = 4
+;; @002b                               v181 = iconst.i32 1
+;; @002b                               v182 = iadd v100, v181  ; v181 = 1
 ;; @002b                               brif v110, block7, block5(v180, v179, v182)
 ;;
 ;;                                 block6(v111: i64, v112: i64, v113: i32):
-;;                                     v173 = iconst.i64 4
-;;                                     v174 = isub v112, v173  ; v173 = 4
+;; @002b                               v173 = iconst.i64 4
+;; @002b                               v174 = isub v112, v173  ; v173 = 4
 ;; @002b                               v122 = load.i32 user2 little region6 v174
-;;                                     v175 = isub v111, v173  ; v173 = 4
+;; @002b                               v175 = isub v111, v173  ; v173 = 4
 ;; @002b                               store user2 little region6 v122, v175
 ;; @002b                               v123 = icmp eq v174, v69
-;;                                     v176 = iconst.i32 1
-;;                                     v177 = isub v113, v176  ; v176 = 1
+;; @002b                               v176 = iconst.i32 1
+;; @002b                               v177 = isub v113, v176  ; v176 = 1
 ;; @002b                               brif v123, block7, block6(v175, v174, v177)
 ;;
 ;;                                 block7:
 ;; @002b                               v128 = iconst.i64 6
 ;; @002b                               v129 = iadd.i64 v125, v128  ; v128 = 6
 ;; @002b                               v133 = iadd v129, v31
-;;                                     v183 = iconst.i64 0
-;;                                     v184 = icmp sge v133, v183  ; v183 = 0
+;; @0020                               v183 = iconst.i64 0
+;; @002b                               v184 = icmp sge v133, v183  ; v183 = 0
 ;; @002b                               brif v184, block8, block9(v133)
 ;;
 ;;                                 block8:

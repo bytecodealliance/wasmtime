@@ -48,6 +48,15 @@ fn debugger_debuggee_loop() -> Result<()> {
 }
 
 #[test]
+fn debugger_debuggee_watch() -> Result<()> {
+    run_debugger_test(
+        DEBUGGER_COMPONENT_COMPONENT,
+        DEBUGGER_DEBUGGEE_WATCH_COMPONENT,
+        "watch",
+    )
+}
+
+#[test]
 fn debugger_component() -> Result<()> {
     // This is present so that `assert_test_exists` can assert presence of unit-tests for all
     // components. The debugger component itself exists in this list alongside all the debuggees;

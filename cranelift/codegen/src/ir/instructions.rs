@@ -314,10 +314,10 @@ impl Opcode {
 
     /// Is this instruction a GC safepoint?
     ///
-    /// Safepoints are all kinds of calls, except for tail calls.
+    /// Safepoints are all kinds of non-tail calls, as well as `interrupt_poll`.
     #[inline]
     pub fn is_safepoint(self) -> bool {
-        self.is_call() && !self.is_return()
+        (self.is_call() && !self.is_return()) || self == Opcode::InterruptPoll
     }
 }
 
@@ -642,10 +642,6 @@ impl InstructionData {
             }
             Self::Ternary {
                 opcode: Opcode::StackSwitch,
-                ..
-            }
-            | Self::IntAddTrap {
-                opcode: Opcode::InterruptPoll,
                 ..
             } => {
                 // These instructions aren't actually calls, but they have the

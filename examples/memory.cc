@@ -71,7 +71,7 @@ int main() {
   memory.grow(store, 0).ok();
 
   std::cout << "Creating stand-alone memory...\n";
-  MemoryType ty(5, 5);
+  MemoryType ty = MemoryType::create(5, 5).unwrap();
   Memory memory2 = Memory::create(store, ty).unwrap();
   assert(memory2.size(store) == 5);
   memory2.grow(store, 1).err();

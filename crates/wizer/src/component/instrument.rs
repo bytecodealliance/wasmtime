@@ -1,6 +1,7 @@
 use crate::ModuleContext;
 use crate::component::info::{Accessor, RawSection};
 use crate::component::{ComponentContext, WIZER_INSTANCE};
+use wasm_encoder::MemArgTarget;
 use wasm_encoder::reencode::{Reencode, RoundtripReencoder};
 use wasmtime::{Result, bail};
 
@@ -248,7 +249,8 @@ impl AccessorBuilder<'_> {
         let memarg = |offset| wasm_encoder::MemArg {
             align: 2,
             offset,
-            memory_index: self.accessor_nmemories,
+            target: MemArgTarget::Memory(self.accessor_nmemories),
+            ordering: None,
         };
         // Store the ptr/len into the page that was just allocated
         ins.local_get(0);

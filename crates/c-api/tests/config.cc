@@ -49,6 +49,7 @@ TEST(Config, Smoke) {
   config.wasm_multi_value(false);
   config.wasm_multi_memory(false);
   config.wasm_memory64(false);
+  config.wasm_stack_switching(false);
   config.wasm_wide_arithmetic(false);
   config.wasm_component_model(false);
   config.wasm_exceptions(false);
@@ -66,6 +67,7 @@ TEST(Config, Smoke) {
   config.memory_may_move(false);
   config.memory_init_cow(false);
   config.native_unwind_info(false);
+  config.asan_compatible_code(false);
   config.macos_use_mach_ports(false);
   config.cranelift_flag_enable("foo");
   config.cranelift_flag_set("foo", "bar");
@@ -96,14 +98,13 @@ struct MyMemoryCreator {
     }
   };
 
-  Result<Memory> new_memory(const MemoryType::Ref &ty, size_t minimum,
-                            size_t maximum, size_t reserved_size_in_bytes,
-                            size_t guard_size_in_bytes) {
-    EXPECT_EQ(guard_size_in_bytes, 0);
-    EXPECT_EQ(reserved_size_in_bytes, 0);
+  Result<Memory> new_memory(const MemoryRequest &request) {
+    EXPECT_EQ(request.guard_size_in_bytes(), 0);
+    EXPECT_EQ(request.reserved_size_in_bytes(), 0);
+    EXPECT_EQ(request.kind(), MemoryKind::LinearMemory);
 
     Memory mem;
-    mem.grow_memory(minimum).unwrap();
+    mem.grow_memory(request.minimum()).unwrap();
     return mem;
   }
 };

@@ -30,6 +30,9 @@ pub struct Request {
     pub headers: FieldMap,
     /// Request options.
     pub options: Option<Arc<RequestOptions>>,
+    /// Data associated with this request. Cannot be read by the guest, but can
+    /// be forwarded by the guest.
+    pub extensions: http::Extensions,
     /// Request body.
     pub(crate) body: Body,
 }
@@ -66,6 +69,7 @@ impl Request {
                 path_with_query,
                 headers: headers.into(),
                 options,
+                extensions: http::Extensions::new(),
                 body: Body::Host {
                     body: body.map_err(Into::into).boxed_unsync(),
                     result_tx: tx,
@@ -100,6 +104,7 @@ impl Request {
                 method,
                 uri,
                 headers,
+                extensions,
                 ..
             },
             body,
@@ -110,7 +115,7 @@ impl Request {
             path_and_query,
             ..
         } = uri.into_parts();
-        Self::new(
+        let (mut req, fut) = Self::new(
             method,
             scheme,
             authority,
@@ -118,7 +123,9 @@ impl Request {
             FieldMap::new_immutable(hooks, headers),
             None,
             body,
-        )
+        );
+        req.extensions = extensions;
+        (req, fut)
     }
 
     /// Convert this [`Request`] into an [`http::Request<UnsyncBoxBody<Bytes, ErrorCode>>`].
@@ -154,6 +161,7 @@ impl Request {
             path_with_query,
             mut headers,
             options,
+            extensions,
             body,
         } = self;
         // `Content-Length` header value is validated in `fields` implementation
@@ -237,6 +245,7 @@ impl Request {
         })?;
         let mut req = http::Request::builder();
         *req.headers_mut().unwrap() = headers.into();
+        *req.extensions_mut().unwrap() = extensions;
         let req = req
             .method(method)
             .uri(uri)

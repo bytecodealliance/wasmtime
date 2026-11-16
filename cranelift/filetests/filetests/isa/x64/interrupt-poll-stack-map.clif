@@ -1,0 +1,46 @@
+test compile precise-output
+target x86_64
+
+;; The stack map attached to an `interrupt_poll` must be emitted at the address
+;; of the faulting load, because the MMU-interruption handler resumes by
+;; re-executing that load and records its address as the Wasm resume PC.
+function %interrupt_poll_stack_map(i64, i64, i64) -> i64 tail {
+    ss0 = explicit_slot 8, align = 8
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = stack_addr.i64 ss0
+    store notrap v0, v3
+    v4 = interrupt_poll v1, v2, user3, stack_map=[i64 @ ss0+0]
+    return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block0:
+;   movq %rdi, <offset:1>+(%rsp)
+;   movq %rdx, %rdi
+;   movq %rsi, %r11
+;   %r11 = interrupt_poll load_ptr=%r11, context=%rdi, scratch=%r10 #trap=user3
+;   ; UserStackMap { by_type: [(types::I64, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
+;   movq %r11, %rax
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x8
+;   movq %rdi, (%rsp)
+;   movq %rdx, %rdi
+;   movq %rsi, %r11
+;   movq (%r11), %r10 ; trap: user3
+;   movq %r11, %rax
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq

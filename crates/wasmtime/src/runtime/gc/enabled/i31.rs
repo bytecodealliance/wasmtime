@@ -4,6 +4,7 @@
 //! in order to get doc comments with example code that shows the use of `I31`
 //! with typed functions and such, we need to wrap it in a newtype.
 
+use crate::prelude::*;
 use crate::runtime::vm::{VMGcRef, ValRaw};
 use crate::{
     HeapType, RefType, Result, ValType, WasmTy,
@@ -235,9 +236,11 @@ unsafe impl WasmTy for I31 {
         &self,
         _store: &StoreOpaque,
         _nullable: bool,
-        _actual: &HeapType,
+        actual: &HeapType,
     ) -> Result<()> {
-        unreachable!()
+        // The only concrete types in the `any` hierarchy are struct and array
+        // types, and an `i31` is never an instance of either.
+        bail!("argument type mismatch: expected (ref {actual}), found (ref i31)")
     }
 
     fn store(self, _store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
@@ -266,11 +269,20 @@ unsafe impl WasmTy for Option<I31> {
 
     fn dynamic_concrete_type_check(
         &self,
-        _store: &StoreOpaque,
-        _nullable: bool,
-        _actual: &HeapType,
+        store: &StoreOpaque,
+        nullable: bool,
+        actual: &HeapType,
     ) -> Result<()> {
-        unreachable!()
+        match self {
+            Some(i) => i.dynamic_concrete_type_check(store, nullable, actual),
+            None => {
+                ensure!(
+                    nullable,
+                    "argument type mismatch: expected non-nullable (ref {actual}), found null reference"
+                );
+                Ok(())
+            }
+        }
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {

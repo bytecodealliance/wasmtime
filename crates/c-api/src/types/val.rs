@@ -1,7 +1,4 @@
-use crate::{
-    wasm_engine_t, wasm_functype_t, wasmtime_array_type_t, wasmtime_exn_type_t,
-    wasmtime_struct_type_t,
-};
+use crate::{wasm_engine_t, wasm_functype_t, wasmtime_array_type_t, wasmtime_struct_type_t};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use wasmtime::{HeapType, RefType, ValType};
 
@@ -37,13 +34,16 @@ pub extern "C" fn wasm_valtype_kind(vt: &wasm_valtype_t) -> wasm_valkind_t {
         ValType::I64 => WASM_I64,
         ValType::F32 => WASM_F32,
         ValType::F64 => WASM_F64,
-        // TODO
-        ValType::V128 => crate::abort("support for v128 "),
+        ValType::V128 => crate::abort_unsupported(
+            "`wasm_valtype_kind` cannot represent `v128`, use `wasmtime_valtype_new` instead",
+        ),
         ValType::Ref(r) => match (r.is_nullable(), r.heap_type()) {
             (true, HeapType::Extern) => WASM_EXTERNREF,
             (true, HeapType::Func) => WASM_FUNCREF,
-            // TODO
-            _ => crate::abort("support for non-externref and non-funcref references"),
+            _ => crate::abort_unsupported(
+                "`wasm_valtype_kind` cannot represent reference types other than \
+                 `externref` and `funcref`, use `wasmtime_valtype_new` instead",
+            ),
         },
     }
 }
@@ -133,7 +133,6 @@ pub unsafe extern "C" fn wasmtime_valtype_to_wasm(
         wasmtime_heaptype_t::Struct => HeapType::Struct,
         wasmtime_heaptype_t::ConcreteStruct(s) => HeapType::ConcreteStruct(s.ty.clone()),
         wasmtime_heaptype_t::Exn => HeapType::Exn,
-        wasmtime_heaptype_t::ConcreteExn(e) => HeapType::ConcreteExn(e.ty.clone()),
         wasmtime_heaptype_t::NoExn => HeapType::NoExn,
     };
     Box::new(ValType::Ref(RefType::new(r.nullable, heap_type)))
@@ -156,7 +155,6 @@ pub enum wasmtime_heaptype_t {
     Struct,
     ConcreteStruct(Box<wasmtime_struct_type_t>),
     Exn,
-    ConcreteExn(Box<wasmtime_exn_type_t>),
     NoExn,
 }
 
@@ -181,7 +179,6 @@ impl From<HeapType> for wasmtime_heaptype_t {
                 Self::ConcreteStruct(Box::new(wasmtime_struct_type_t { ty: s }))
             }
             HeapType::Exn => Self::Exn,
-            HeapType::ConcreteExn(e) => Self::ConcreteExn(Box::new(wasmtime_exn_type_t { ty: e })),
             HeapType::NoExn => Self::NoExn,
             HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => {
                 crate::abort("missing support for contref")

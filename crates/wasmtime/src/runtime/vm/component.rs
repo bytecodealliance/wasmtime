@@ -6,7 +6,6 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
-use crate::Result;
 use crate::component::{Component, Instance, InstancePre, ResourceType, RuntimeImport};
 use crate::module::ModuleRegistry;
 #[cfg(feature = "component-model-async")]
@@ -14,13 +13,15 @@ use crate::runtime::component::concurrent::ConcurrentInstanceState;
 use crate::runtime::component::{ComponentInstanceId, RuntimeInstance};
 use crate::runtime::vm::instance::{InstanceLayout, OwnedInstance, OwnedVMContext};
 use crate::runtime::vm::vmcontext::VMFunctionBody;
+use crate::runtime::vm::vmcontext::VMLazyThread;
 use crate::runtime::vm::{
     HostResult, SendSyncPtr, UncaughtException, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition,
-    VMMemoryDefinition, VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableImport, VMWasmCallFunction,
-    ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
+    VMHandleTable, VMMemoryDefinition, VMOpaqueContext, VMResourceIndex, VMScope, VMStore,
+    VMStoreContext, VMStoreRawPtr, VMTableImport, VMTransmitLocalState, VMTypedResource,
+    VMWasmCallFunction, ValRaw, VmPtr, VmSafe, catch_unwind_and_record_trap,
 };
 use crate::store::InstanceId;
-use crate::{Func, vm};
+use crate::{Func, Result, bail, vm};
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
 use core::mem;
@@ -30,7 +31,9 @@ use core::ptr::NonNull;
 use wasmtime_environ::component::*;
 use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::prelude::TryPrimaryMap;
-use wasmtime_environ::{HostPtr, PrimaryMap, PtrSize as _, VMSharedTypeIndex};
+use wasmtime_environ::{
+    HostPtr, LAZY_LENDERS_CAPACITY, PrimaryMap, PtrSize as _, VMSharedTypeIndex,
+};
 
 #[allow(
     clippy::cast_possible_truncation,
@@ -42,12 +45,276 @@ mod handle_table;
 mod libcalls;
 mod resources;
 
-pub use self::handle_table::{HandleCounter, HandleTable, RemovedResource};
+pub use self::handle_table::{HandleCounter, HandleTable, HandleTableInsertion, RemovedResource};
 #[cfg(feature = "component-model-async")]
-pub use self::handle_table::{ThreadHandleTable, TransmitLocalState, Waitable};
-pub use self::resources::{
-    CallContext, CurrentScope, ResourceTables, Scope, TypedResource, TypedResourceIndex,
-};
+pub use self::handle_table::{ThreadHandleTable, Waitable};
+pub(crate) use self::resources::ResourceTypeMismatch;
+pub use self::resources::{CallContext, CurrentScope, ResourceTables, TypedResourceIndex};
+
+impl VMResourceIndex {
+    /// The `ty` of a host resource, which is otherwise never a valid
+    /// `TypeResourceTableIndex`.
+    const HOST: u32 = u32::MAX;
+
+    /// A slot that holds no recorded lend.
+    pub(crate) const EMPTY: VMResourceIndex = VMResourceIndex {
+        ty: Self::HOST,
+        index: 0,
+    };
+
+    /// Converts `index` into its JIT-visible form.
+    pub(crate) fn new(index: TypedResourceIndex) -> VMResourceIndex {
+        match index {
+            TypedResourceIndex::Host(index) => VMResourceIndex {
+                ty: Self::HOST,
+                index,
+            },
+            TypedResourceIndex::Component { ty, index } => {
+                debug_assert_ne!(ty.as_u32(), Self::HOST);
+                VMResourceIndex {
+                    ty: ty.as_u32(),
+                    index,
+                }
+            }
+        }
+    }
+
+    /// Inverse of `new`.
+    pub(crate) fn get(&self) -> TypedResourceIndex {
+        match self.ty {
+            Self::HOST => TypedResourceIndex::Host(self.index),
+            ty => TypedResourceIndex::Component {
+                index: self.index,
+                ty: TypeResourceTableIndex::from_u32(ty),
+            },
+        }
+    }
+}
+
+// SAFETY: `VMTypedResource` is generated with `#[repr(C)]` and holds only
+// `u32`s.
+unsafe impl VmSafe for VMTypedResource {}
+
+impl VMTypedResource {
+    /// The `ty` of a host resource, which is otherwise never a valid
+    /// `TypeResourceTableIndex`.
+    const HOST: u32 = u32::MAX;
+
+    /// A resource defined by the host.
+    pub(crate) fn host(rep: u32) -> VMTypedResource {
+        VMTypedResource {
+            ty: Self::HOST,
+            rep,
+        }
+    }
+
+    /// A resource of type `ty` defined within a component.
+    pub(crate) fn component(ty: TypeResourceTableIndex, rep: u32) -> VMTypedResource {
+        let ty = ty.as_u32();
+        debug_assert_ne!(ty, Self::HOST);
+        VMTypedResource { ty, rep }
+    }
+
+    /// This resource's `TypeResourceTableIndex`, or `None` if it is a host
+    /// resource.
+    pub(crate) fn component_ty(&self) -> Option<TypeResourceTableIndex> {
+        match self.ty {
+            Self::HOST => None,
+            ty => Some(TypeResourceTableIndex::from_u32(ty)),
+        }
+    }
+
+    /// This resource's "rep", if it is being accessed with a matching type.
+    ///
+    /// A host resource may only be accessed as a host resource, and a
+    /// component-defined resource only as the same component-defined type that
+    /// it was created with; anything else is the guest using a handle it does
+    /// not have permission to.
+    pub(crate) fn rep(&self, access_ty: &TypedResourceIndex) -> Result<u32> {
+        match (self.component_ty(), access_ty) {
+            (None, TypedResourceIndex::Host(_)) => Ok(self.rep),
+            (None, expected) => bail!(ResourceTypeMismatch {
+                expected: *expected,
+                found: "host resource",
+            }),
+            (Some(ty), TypedResourceIndex::Component { ty: expected, .. }) => {
+                if ty == *expected {
+                    Ok(self.rep)
+                } else {
+                    bail!(ResourceTypeMismatch {
+                        expected: *access_ty,
+                        found: "a different guest-defined resource",
+                    })
+                }
+            }
+            (Some(_), expected) => bail!(ResourceTypeMismatch {
+                expected: *expected,
+                found: "guest-defined resource",
+            }),
+        }
+    }
+}
+
+// SAFETY: `VMScope` is generated with `#[repr(C)]` and holds only `u32`s.
+unsafe impl VmSafe for VMScope {}
+
+impl VMScope {
+    /// The `kind` of a non-concurrent or concurrent guest-task scope.
+    const KIND_ID: u32 = 0;
+
+    /// The `kind` of a concurrent host-task scope.
+    const KIND_HOST_ID: u32 = 1;
+
+    /// A non-concurrent scope, or a concurrent guest-task scope.
+    pub(crate) fn id(id: u32) -> VMScope {
+        VMScope {
+            kind: Self::KIND_ID,
+            id,
+        }
+    }
+
+    /// A concurrent host-task scope.
+    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
+    pub(crate) fn host_id(id: u32) -> VMScope {
+        VMScope {
+            kind: Self::KIND_HOST_ID,
+            id,
+        }
+    }
+
+    /// Which kind of scope this is, and its identifier.
+    pub(crate) fn kind(&self) -> ScopeKind {
+        match self.kind {
+            Self::KIND_ID => ScopeKind::Id(self.id),
+            Self::KIND_HOST_ID => ScopeKind::HostId(self.id),
+            kind => unreachable!("invalid `VMScope` kind {kind}"),
+        }
+    }
+}
+
+/// The result of matching on a [`VMScope`].
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ScopeKind {
+    /// A non-concurrent scope or a concurrent guest-task scope.
+    Id(u32),
+    /// A concurrent host-task scope.
+    HostId(u32),
+}
+
+// SAFETY: `VMTransmitLocalState` is generated with `#[repr(C)]` and holds only
+// `u32`s.
+unsafe impl VmSafe for VMTransmitLocalState {}
+
+impl VMTransmitLocalState {
+    /// The `kind` of the write end of a stream or future.
+    const KIND_WRITE: u32 = 0;
+
+    /// The `kind` of the read end of a stream or future.
+    const KIND_READ: u32 = 1;
+
+    /// The `kind` of an end with a read or write in progress.
+    const KIND_BUSY: u32 = 2;
+
+    /// The `kind` of an end whose in-progress read or write is being cancelled.
+    const KIND_CANCELLING: u32 = 3;
+
+    /// The write end of a stream or future.
+    pub fn write(done: bool) -> VMTransmitLocalState {
+        VMTransmitLocalState {
+            kind: Self::KIND_WRITE,
+            done: done.into(),
+        }
+    }
+
+    /// The read end of a stream or future.
+    pub fn read(done: bool) -> VMTransmitLocalState {
+        VMTransmitLocalState {
+            kind: Self::KIND_READ,
+            done: done.into(),
+        }
+    }
+
+    /// A read or write is in progress.
+    pub fn busy() -> VMTransmitLocalState {
+        VMTransmitLocalState {
+            kind: Self::KIND_BUSY,
+            done: 0,
+        }
+    }
+
+    /// A read or write is in progress and an asynchronous cancellation of it
+    /// has been requested but has not yet completed.
+    pub fn cancelling() -> VMTransmitLocalState {
+        VMTransmitLocalState {
+            kind: Self::KIND_CANCELLING,
+            done: 0,
+        }
+    }
+
+    /// Which kind of state this is, along with its `done` flag where that is
+    /// meaningful.
+    pub fn kind(&self) -> TransmitLocalStateKind {
+        match self.kind {
+            Self::KIND_WRITE => TransmitLocalStateKind::Write {
+                done: self.done != 0,
+            },
+            Self::KIND_READ => TransmitLocalStateKind::Read {
+                done: self.done != 0,
+            },
+            Self::KIND_BUSY => TransmitLocalStateKind::Busy,
+            Self::KIND_CANCELLING => TransmitLocalStateKind::Cancelling,
+            kind => unreachable!("invalid `VMTransmitLocalState` kind {kind}"),
+        }
+    }
+}
+
+/// The result of matching on a [`VMTransmitLocalState`].
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum TransmitLocalStateKind {
+    /// The write end of the stream or future.
+    Write {
+        /// Whether the component instance has been notified that the stream or
+        /// future is "done" (i.e. the other end has dropped, or, in the case of
+        /// a future, a value has been transmitted).
+        done: bool,
+    },
+    /// The read end of the stream or future.
+    Read {
+        /// Whether the component instance has been notified that the stream or
+        /// future is "done" (i.e. the other end has dropped, or, in the case of
+        /// a future, a value has been transmitted).
+        done: bool,
+    },
+    /// A read or write is in progress.
+    Busy,
+    /// A read or write is in progress and an asynchronous cancellation of it
+    /// has been requested but has not yet completed.
+    Cancelling,
+}
+
+impl VMStoreContext {
+    pub(crate) fn current_thread_mut(&mut self) -> &mut VMLazyThread {
+        self.current_thread.get_mut()
+    }
+
+    /// Points `lazy_lenders` at the store's buffer.
+    ///
+    /// # Safety
+    ///
+    /// `buf` must stay valid and must not move for as long as this
+    /// `VMStoreContext` is used: JIT code reads the pointer without
+    /// re-deriving it, and nothing here invalidates it.
+    pub(crate) unsafe fn set_lazy_lenders(
+        &mut self,
+        buf: NonNull<[VMResourceIndex; LAZY_LENDERS_CAPACITY]>,
+    ) {
+        self.lazy_lenders = buf.cast::<VMResourceIndex>().into();
+    }
+
+    pub(crate) fn lazy_lenders_len_mut(&mut self) -> &mut usize {
+        self.lazy_lenders_len.get_mut()
+    }
+}
 
 /// Represents the state of a (sub-)component instance.
 #[derive(Default)]
@@ -361,6 +628,16 @@ impl ComponentInstance {
     #[inline]
     pub fn vmctx(&self) -> NonNull<VMComponentContext> {
         InstanceLayout::vmctx(self)
+    }
+
+    /// Seed the vmctx array compiled code reads. Only needed at startup:
+    /// afterwards `HandleTableInsertion` keeps it current.
+    pub(crate) fn publish_handle_tables(self: Pin<&mut Self>) {
+        let (states, _types, published) = self.instance_states_and_published();
+        for (instance, state) in states.iter_mut() {
+            let i = usize::try_from(instance.as_u32()).unwrap();
+            published[i] = state.handle_table().vmhandletable();
+        }
     }
 
     /// Returns a pointer to the "may leave" flag for this instance specified
@@ -703,6 +980,8 @@ impl ComponentInstance {
                 VmPtr::from(self.store.0.as_ref().vm_store_context_ptr());
         }
 
+        self.as_mut().publish_handle_tables();
+
         for i in 0..self.offsets.num_runtime_component_instances {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
             let mut def = VMGlobalDefinition::new();
@@ -868,6 +1147,50 @@ impl ComponentInstance {
         unsafe {
             let me = self.get_unchecked_mut();
             (&mut me.instance_states, me.component.types())
+        }
+    }
+
+    /// Begins inserting into `instance`'s handle table, keeping the vmctx copy
+    /// of its slots pointer current.
+    pub fn handle_table_insertion<'a>(
+        self: Pin<&'a mut Self>,
+        instance: RuntimeComponentInstanceIndex,
+        counter: &'a mut HandleCounter,
+    ) -> HandleTableInsertion<'a> {
+        let (states, _types, published) = self.instance_states_and_published();
+        // SAFETY: `published[instance]` is where compiled code reads
+        // `instance`'s handle table.
+        unsafe {
+            states[instance]
+                .handle_table()
+                .insert(counter, &mut published[instance.as_u32() as usize])
+        }
+    }
+
+    /// As `instance_states`, plus the vmctx entries through which compiled
+    /// code reads each instance's handle table.
+    pub fn instance_states_and_published(
+        mut self: Pin<&mut Self>,
+    ) -> (
+        &mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
+        &ComponentTypes,
+        &mut [VMHandleTable],
+    ) {
+        let offset = self
+            .offsets
+            .handle_tables()
+            .at(RuntimeComponentInstanceIndex::from_u32(0));
+        let len = usize::try_from(self.offsets.num_runtime_component_instances).unwrap();
+        // SAFETY: the array is part of this `VMComponentContext`'s allocation
+        // and holds exactly `len` entries.
+        let published = unsafe {
+            let base = self.as_mut().vmctx_plus_offset_raw::<VMHandleTable>(offset);
+            core::slice::from_raw_parts_mut(base.as_ptr(), len)
+        };
+        // safety: as in `instance_states`.
+        unsafe {
+            let me = self.get_unchecked_mut();
+            (&mut me.instance_states, me.component.types(), published)
         }
     }
 

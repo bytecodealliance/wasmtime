@@ -97,7 +97,7 @@ macro_rules! integer_primitives {
                 // See `read` above for various checks here.
                 let val = val.to_le();
                 let offset = ptr.offset();
-                let host_ptr = mem.validate_size_align::<Self>(offset, 1)?;
+                let host_ptr = mem.validate_size_align_mut::<Self>(offset, 1)?;
                 let host_ptr = &host_ptr[0];
                 let atomic_value_ref: &$ty_atomic =
                     unsafe { &*(host_ptr.get().cast::<$ty_atomic>()) };

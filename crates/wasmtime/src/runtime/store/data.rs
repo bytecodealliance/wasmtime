@@ -1,4 +1,5 @@
 use crate::module::ModuleRegistry;
+use crate::prelude::*;
 use crate::runtime::vm::{self, VMStore};
 use crate::store::StoreOpaque;
 use crate::{Engine, StoreContext, StoreContextMut};
@@ -21,14 +22,14 @@ pub struct StoreData {
 }
 
 impl StoreData {
-    pub fn new(engine: &Engine) -> StoreData {
+    pub fn new(engine: &Engine) -> Result<StoreData> {
         #[cfg(not(feature = "component-model"))]
         let _ = engine;
-        StoreData {
+        Ok(StoreData {
             id: StoreId::allocate(),
             #[cfg(feature = "component-model")]
-            components: crate::component::ComponentStoreData::new(engine),
-        }
+            components: crate::component::ComponentStoreData::new(engine)?,
+        })
     }
 
     pub fn id(&self) -> StoreId {
@@ -47,6 +48,26 @@ impl StoreData {
         self.components.decrement_allocator_resources(allocator);
         #[cfg(not(feature = "component-model"))]
         let _ = allocator;
+    }
+
+    /// Publishes any JIT-visible buffers this data owns into
+    /// `vm_store_context`.
+    ///
+    /// # Safety
+    ///
+    /// `self` must outlive `vm_store_context` and must not move while it is in
+    /// use.
+    pub unsafe fn publish_to_vm_store_context(
+        &mut self,
+        vm_store_context: &mut vm::VMStoreContext,
+    ) {
+        // SAFETY: forwarded from this function's own contract.
+        #[cfg(feature = "component-model")]
+        unsafe {
+            self.components.publish_lazy_lenders(vm_store_context);
+        }
+        #[cfg(not(feature = "component-model"))]
+        let _ = vm_store_context;
     }
 }
 

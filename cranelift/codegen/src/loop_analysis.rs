@@ -1,6 +1,8 @@
 //! A loop analysis represented as mappings of loops to their header Block
 //! and parent in the loop tree.
 
+use core::cmp::Ordering;
+
 use crate::dominator_tree::DominatorTree;
 use crate::entity::SecondaryMap;
 use crate::entity::entity_impl;
@@ -13,7 +15,7 @@ use alloc::vec::Vec;
 use smallvec::SmallVec;
 
 /// A opaque reference to a code loop.
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Loop(u32);
 entity_impl!(Loop, "loop");
 
@@ -113,6 +115,20 @@ impl LoopAnalysis {
     /// Return the eventual parent of a loop in the loop tree.
     pub fn loop_parent(&self, lp: Loop) -> Option<Loop> {
         self.loops[lp].parent.expand()
+    }
+
+    /// Return the innermost common ancestor of two loops.
+    pub fn common_ancestor(&self, mut a: Loop, mut b: Loop) -> Option<Loop> {
+        loop {
+            // Because loops are ordered in RPO, a parent loop is guaranteed to
+            // have a lower index than a child loop. We can just walk up the
+            // tree until we find a common loop.
+            match a.cmp(&b) {
+                Ordering::Less => b = self.loop_parent(b)?,
+                Ordering::Equal => return Some(a),
+                Ordering::Greater => a = self.loop_parent(a)?,
+            }
+        }
     }
 
     /// Return the innermost loop for a given block.
@@ -364,6 +380,18 @@ mod tests {
         assert_eq!(loop_analysis.loop_level(block1).level(), 2);
         assert_eq!(loop_analysis.loop_level(block2).level(), 2);
         assert_eq!(loop_analysis.loop_level(block3).level(), 1);
+        assert_eq!(
+            loop_analysis.common_ancestor(loops[0], loops[1]),
+            Some(loops[0])
+        );
+        assert_eq!(
+            loop_analysis.common_ancestor(loops[1], loops[0]),
+            Some(loops[0])
+        );
+        assert_eq!(
+            loop_analysis.common_ancestor(loops[1], loops[1]),
+            Some(loops[1])
+        );
     }
 
     #[test]
@@ -428,5 +456,13 @@ mod tests {
         assert_eq!(loop_analysis.loop_level(block3).level(), 2);
         assert_eq!(loop_analysis.loop_level(block4).level(), 2);
         assert_eq!(loop_analysis.loop_level(block5).level(), 1);
+        assert_eq!(
+            loop_analysis.common_ancestor(loops[1], loops[2]),
+            Some(loops[0])
+        );
+        assert_eq!(
+            loop_analysis.common_ancestor(loops[2], loops[1]),
+            Some(loops[0])
+        );
     }
 }

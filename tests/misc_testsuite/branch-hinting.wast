@@ -1,4 +1,4 @@
-;;! branch_hinting = true
+;;! flags = "-W branch-hinting"
 
 ;; Branch hints are advisory: with the proposal enabled a hinted module must
 ;; still produce the same results it would without hints. Both functions return

@@ -79,6 +79,7 @@ impl Cost {
             // "Simple" arithmetic.
             Opcode::Iadd
             | Opcode::Isub
+            | Opcode::Ineg
             | Opcode::Band
             | Opcode::Bor
             | Opcode::Bxor

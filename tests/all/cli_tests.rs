@@ -104,6 +104,23 @@ fn run_coredump_smoketest() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn run_coredump_during_instantiation() -> Result<()> {
+    let coredump_file = NamedTempFile::new()?;
+    let coredump_arg = format!("-Dcoredump={}", coredump_file.path().display());
+    let err = run_wasmtime(&[
+        "run",
+        &coredump_arg,
+        "tests/all/cli_tests/coredump_start_trap.wat",
+    ])
+    .unwrap_err();
+    assert!(err.to_string().contains(&format!(
+        "core dumped at {}",
+        coredump_file.path().display()
+    )));
+    Ok(())
+}
+
 // Running simple wat
 #[test]
 fn run_wasmtime_simple_wat() -> Result<()> {
@@ -682,6 +699,22 @@ fn component_invoke_multiple_run_exports() -> Result<()> {
         path,
     ])?;
     assert_eq!(stdout, "err\n");
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_invoke_map() -> Result<()> {
+    let path = "tests/all/cli_tests/component-map.wat";
+    let invoke =
+        |call: &str| run_wasmtime(&["run", "-Wcomponent-model-map", "--invoke", call, path]);
+
+    // Map arguments are parsed and map results are printed in WAVE, which
+    // merges duplicate keys.
+    assert_eq!(invoke("echo({})")?, "{}\n");
+    assert_eq!(invoke("echo({3: 4, 1: 2, 3: 5,})")?, "{3: 5, 1: 2}\n");
+    assert_eq!(invoke("duplicates()")?, "{1: 30, 2: 20}\n");
 
     Ok(())
 }
@@ -1951,6 +1984,63 @@ mod test_programs {
     }
 
     #[test]
+    fn p2_cli_zero_idle_timeouts_still_accepted() -> Result<()> {
+        // Only `-W timeout` and `--post-return-timeout` reject zero.
+        let component = P2_CLI_SERVE_HELLO_WORLD_COMPONENT;
+        for option in ["--idle-process-timeout=0", "--idle-instance-timeout=0"] {
+            let mut cmd = super::get_wasmtime_command()?;
+            cmd.args(["serve", "-Scli", option, "--addr", "127.0.0.1:0", component])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped());
+            let mut child = cmd.spawn()?;
+            thread::sleep(Duration::from_millis(800));
+            assert!(
+                child.try_wait()?.is_none(),
+                "`{option}` should still be accepted"
+            );
+            child.kill()?;
+            child.wait()?;
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn p2_cli_reject_zero_timeouts() -> Result<()> {
+        // A zero timeout makes the epoch thread spin at 100% CPU.
+        let component = P2_CLI_SERVE_HELLO_WORLD_COMPONENT;
+        for args in [
+            &["serve", "-Scli", "-W", "timeout=0", component][..],
+            &["serve", "-Scli", "--post-return-timeout", "0", component][..],
+        ] {
+            let mut cmd = super::get_wasmtime_command()?;
+            cmd.args(args)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped());
+            let mut child = cmd.spawn()?;
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while child.try_wait()?.is_none() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "zero timeout was accepted and the server kept running"
+                );
+                thread::sleep(Duration::from_millis(100));
+            }
+            let output = child.wait_with_output()?;
+            assert!(!output.status.success(), "zero timeout was accepted");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.contains("duration must not be zero"),
+                "expected zero timeout to be rejected, got: {stderr}"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn p2_cli_run_outgoing_body_chunk_size() -> Result<()> {
         // Without the option an outgoing body keeps its 1 MiB default budget.
         let stdout = run_wasmtime(&[
@@ -2090,6 +2180,24 @@ mod test_programs {
                 .arg(wasm),
             1,
         )?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_write_too_much() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_WRITE_TOO_MUCH_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(!resp.status().is_success());
 
         Ok(())
     }

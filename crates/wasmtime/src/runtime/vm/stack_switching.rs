@@ -209,6 +209,8 @@ pub fn cont_new(
     result_count: u32,
     gc_refs: bool,
 ) -> crate::Result<*mut VMContRef> {
+    let runtime_headroom = stack::continuation_runtime_headroom(param_count, result_count)?;
+
     let instance = store.instance_mut(instance);
     let caller_vmctx = instance.vmctx();
 
@@ -233,6 +235,7 @@ pub fn cont_new(
         param_count,
         result_count,
         gc_refs,
+        runtime_headroom,
     )?;
 
     // Now that the initial stack pointer was set by the initialization

@@ -470,7 +470,9 @@ pub enum Trampoline {
     },
     ResourceTransferOwn,
     ResourceTransferBorrow,
-    ResourceTransferBorrowToOwner,
+    ResourceTransferBorrowToOwner {
+        ty: TypeResourceTableIndex,
+    },
     PrepareCall {
         memory: Option<MemoryId>,
     },
@@ -1188,8 +1190,8 @@ impl LinearizeDfg<'_> {
             },
             Trampoline::ResourceTransferOwn => info::Trampoline::ResourceTransferOwn,
             Trampoline::ResourceTransferBorrow => info::Trampoline::ResourceTransferBorrow,
-            Trampoline::ResourceTransferBorrowToOwner => {
-                info::Trampoline::ResourceTransferBorrowToOwner
+            Trampoline::ResourceTransferBorrowToOwner { ty } => {
+                info::Trampoline::ResourceTransferBorrowToOwner { ty: *ty }
             }
             Trampoline::PrepareCall { memory } => info::Trampoline::PrepareCall {
                 memory: memory.map(|v| self.runtime_memory(v)),

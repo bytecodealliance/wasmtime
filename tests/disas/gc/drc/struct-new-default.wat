@@ -51,7 +51,7 @@
 ;; @0021                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v59 = iconst.i32 0
+;; @0021                               v59 = iconst.i32 0
 ;; @0021                               v19 = iconst.i64 32
 ;; @0021                               v20 = iadd.i64 v14, v19  ; v19 = 32
 ;; @0021                               store user2 little region7 v59, v20  ; v59 = 0

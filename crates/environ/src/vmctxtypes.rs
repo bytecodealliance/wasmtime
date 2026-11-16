@@ -193,6 +193,12 @@ macro_rules! for_each_vmctx_type {
                     }
 
                     array {
+                        #[readonly]
+                        #[can_move]
+                        shadow_memories[num_shadow_memories; MemoryIndex]: VmPtr<VMMemoryDefinition>
+                    }
+
+                    array {
                         #[aggregate]
                         imported_functions[num_imported_functions; FuncIndex]: VMFunctionImport
                     }
@@ -298,6 +304,16 @@ macro_rules! for_each_vmctx_type {
 
                     align { ptr }
 
+                    // Each instance's `HandleTable::slots`, which a fused
+                    // adapter reads to reach a handle's slot without calling
+                    // into the host.
+                    array {
+                        #[aggregate]
+                        handle_tables
+                            [num_runtime_component_instances; RuntimeComponentInstanceIndex]:
+                                VMHandleTable
+                    }
+
                     array {
                         #[aggregate]
                         trampoline_func_refs[num_trampolines; TrampolineIndex]: VMFuncRef
@@ -376,6 +392,9 @@ macro_rules! vmctx_field_size {
         4u32
     };
     (($p:expr) VmPtr < $g:ident >) => {
+        u32::from($p)
+    };
+    (($p:expr) VmPtr < VmPtr < $g:ident >>) => {
         u32::from($p)
     };
     // `VMLowering` is a pair of pointers, and is not itself defined by

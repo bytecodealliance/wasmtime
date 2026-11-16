@@ -128,9 +128,7 @@ impl NullCompiler {
             ir::types::I64 => bytes_needed,
             _ => unreachable!(),
         };
-        builder
-            .ins()
-            .call(grow_gc_heap_builtin, &[vmctx, bytes_needed]);
+        func_env.call_builtin(builder, grow_gc_heap_builtin, &[vmctx, bytes_needed]);
         builder.ins().jump(continue_block, &[]);
 
         // Write the header, update the bump "pointer", and return the newly

@@ -58,6 +58,21 @@ fn pulley_wrong_architecture_is_rejected() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn memory_tunables_must_fit_in_target_address_space() -> Result<()> {
+    let mut config = Config::new();
+    config.target("pulley32")?;
+    config.memory_reservation(1 << 32);
+    assert!(Engine::new(&config).is_err());
+    config.memory_reservation(0).memory_guard_size(1 << 32);
+    assert!(Engine::new(&config).is_err());
+
+    config.target("pulley64")?;
+    config.memory_reservation(1 << 32);
+    Engine::new(&config)?;
+    Ok(())
+}
+
 // CLI subcommands should support `--target`
 #[test]
 #[cfg(not(miri))]

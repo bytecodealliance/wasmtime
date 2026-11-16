@@ -9,6 +9,9 @@ pub(crate) fn clear_cache(ptr: *const c_void, len: usize) -> Result<()> {
 fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
     cfg_select! {
         feature = "one-core" => {
+            // Fake a use of the `libc` crate to consider it used both on this
+            // branch and in the branch below.
+            use libc as _;
             use std::arch::asm;
             let _ = (start, end);
             unsafe {

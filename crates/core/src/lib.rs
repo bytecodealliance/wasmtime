@@ -12,6 +12,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
+#![warn(clippy::cast_possible_truncation)]
 
 extern crate alloc as std_alloc;
 

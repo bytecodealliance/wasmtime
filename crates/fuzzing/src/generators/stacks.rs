@@ -9,7 +9,7 @@ use std::mem;
 use std::num::NonZeroUsize;
 
 use arbitrary::{Arbitrary, Result, Unstructured};
-use wasm_encoder::{Instruction, ValType};
+use wasm_encoder::{Instruction, MemArgTarget, ValType};
 
 const MAX_FUNCS: u32 = 20;
 const MAX_OPS: usize = 1_000;
@@ -260,7 +260,8 @@ impl Stacks {
                 .instruction(&Instruction::I32Store(wasm_encoder::MemArg {
                     offset: 0,
                     align: 0,
-                    memory_index: memory,
+                    target: MemArgTarget::Memory(memory),
+                    ordering: None,
                 }))
                 .instruction(&Instruction::GlobalGet(stack_len_global))
                 .instruction(&Instruction::I32Const(mem::size_of::<i32>() as i32))

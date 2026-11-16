@@ -365,6 +365,18 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// This is distinct from the heap capacity.
     fn allocated_bytes(&self) -> usize;
 
+    /// Get the number of bytes that can be allocated into this heap before a
+    /// collection is required.
+    ///
+    /// This is distinct from the heap capacity: some collectors (e.g. the
+    /// copying collector) only use a portion of the heap for allocation at any
+    /// given time.
+    ///
+    /// Defaults to the heap's capacity.
+    fn allocatable_bytes(&self) -> usize {
+        self.heap_slice().len()
+    }
+
     /// Whether a GC should be performed before the next heap growth.
     ///
     /// Some collectors (e.g. the copying collector) need to perform a GC before

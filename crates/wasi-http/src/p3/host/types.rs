@@ -238,6 +238,7 @@ where
         path_with_query: None,
         headers,
         options: options.map(Into::into),
+        extensions: http::Extensions::new(),
         body,
     };
     let req = cx
@@ -503,6 +504,7 @@ where
     let res = Response {
         status: http::StatusCode::OK,
         headers,
+        extensions: http::Extensions::new(),
         body,
     };
     let res = cx.table.push(res)?;

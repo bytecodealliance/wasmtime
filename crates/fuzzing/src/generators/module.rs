@@ -127,9 +127,11 @@ impl ModuleConfig {
         };
 
         let mut config = self.config.clone();
-        if default_fuel.is_some() {
-            config.limit_arrays_in_const_exprs = true;
-        }
+
+        // Currently large bulk ops aren't interrupted in the middle of the op
+        // and pulley takes a long time to emulate array initialization so
+        // unconditionally limit array lengths.
+        config.limit_arrays_in_const_exprs = true;
 
         let mut module = wasm_smith::Module::new(config.clone(), input)?;
 

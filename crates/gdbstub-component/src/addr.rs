@@ -84,6 +84,13 @@ impl AddrSpace {
         Ok(())
     }
 
+    /// The address of `offset` within memory `m`, registering the
+    /// memory if it has not been seen before.
+    pub fn memory_addr(&mut self, m: &Memory, offset: u32) -> WasmAddr {
+        let id = self.memory_id(m);
+        WasmAddr::new(WasmAddrType::Memory, id, offset).unwrap()
+    }
+
     /// Iterate over the base `WasmAddr` of every registered module.
     pub fn module_base_addrs(&self) -> impl Iterator<Item = WasmAddr> + '_ {
         (0..self.modules.len())

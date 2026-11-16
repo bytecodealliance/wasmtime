@@ -57,7 +57,6 @@
 ;;     region2 = 42 ""
 ;;     region3 = 57 ""
 ;;     region4 = 209 ""
-;;     region5 = 132 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -88,8 +87,6 @@
 ;;                                     jump block9
 ;;
 ;;                                 block9:
-;;                                     v11 = load.i64 notrap aligned readonly can_move region3 v3+144
-;;                                     v12 = load.i32 notrap aligned region5 v11
 ;;                                     jump block12
 ;;
 ;;                                 block12:
@@ -114,6 +111,6 @@
 ;; @00f0                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v23 = iconst.i32 1276
-;; @00f0                               return v23  ; v23 = 1276
+;;                                     v15 = iconst.i32 1276
+;; @00f0                               return v15  ; v15 = 1276
 ;; }

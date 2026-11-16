@@ -62,3 +62,8 @@
 (assert_return (invoke "get" (i32.const 1)) (i32.const 123))
 (assert_return (invoke "get" (i32.const 2)) (i32.const 456))
 (assert_return (invoke "get" (i32.const 3)) (i32.const 789))
+
+;; i31ref tables with no initializer, a non-null initializer, and a null one.
+(module (table 1 i31ref))
+(module (table 1 i31ref (ref.i31 (i32.const 1))))
+(module (table 1 i31ref (ref.null i31)))

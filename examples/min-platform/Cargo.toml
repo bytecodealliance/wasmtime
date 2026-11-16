@@ -9,9 +9,12 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+wasmtime = { workspace = true, features = ['cranelift', 'wat'] }
+
+# The host only does anything on Linux, see `src/main.rs`.
+[target.'cfg(target_os = "linux")'.dependencies]
 libloading = "0.8"
 object = { workspace = true, features = ['std'] }
-wasmtime = { workspace = true, features = ['cranelift', 'wat'] }
 
 [features]
 default = ["wasi"]

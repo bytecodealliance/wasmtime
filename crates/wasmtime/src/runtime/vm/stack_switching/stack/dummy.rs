@@ -68,6 +68,7 @@ impl VMContinuationStack {
         _parameter_count: u32,
         _return_value_count: u32,
         _gc_refs: bool,
+        _runtime_headroom: usize,
     ) -> Result<()> {
         Ok(())
     }

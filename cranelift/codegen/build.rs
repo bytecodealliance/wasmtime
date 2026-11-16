@@ -32,6 +32,11 @@ fn main() {
 
     let all_arch = env::var("CARGO_FEATURE_ALL_ARCH").is_ok();
     let all_native_arch = env::var("CARGO_FEATURE_ALL_NATIVE_ARCH").is_ok();
+    let miri = env::var("CARGO_CFG_MIRI").is_ok();
+    let pulley_fallback = env::var("CARGO_FEATURE_PULLEY_FALLBACK").is_ok();
+
+    let target_name = target_triple.split('-').next().unwrap();
+    let host_isa = meta::isa_from_arch(&target_name).ok();
 
     let mut isas = meta::isa::Isa::all()
         .iter()
@@ -47,16 +52,24 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    // Don't require host isa if under 'all-arch' feature.
-    let host_isa = env::var("CARGO_FEATURE_HOST_ARCH").is_ok() && !all_native_arch;
+    // If so requested, pulley isn't already enabled, and the host backend for
+    // this host architecture doesn't exist, then enable pulley.
+    if pulley_fallback && !isas.contains(&meta::isa::Isa::Pulley64) && (host_isa.is_none() || miri)
+    {
+        println!("cargo:rustc-cfg=feature=\"pulley\"");
+        isas.push(meta::isa::Isa::Pulley32);
+        isas.push(meta::isa::Isa::Pulley64);
+    }
 
-    if isas.is_empty() || host_isa {
-        // Try to match native target.
-        let target_name = target_triple.split('-').next().unwrap();
-        if let Ok(isa) = meta::isa_from_arch(&target_name) {
-            println!("cargo:rustc-cfg=feature=\"{isa}\"");
-            isas.push(isa);
-        }
+    // Don't require host isa if under 'all-arch' feature.
+    let host_arch = env::var("CARGO_FEATURE_HOST_ARCH").is_ok() && !all_native_arch;
+
+    // Try to match native target.
+    if (isas.is_empty() || host_arch)
+        && let Some(isa) = host_isa
+    {
+        println!("cargo:rustc-cfg=feature=\"{isa}\"");
+        isas.push(isa);
     }
 
     let cur_dir = env::current_dir().expect("Can't access current working directory");

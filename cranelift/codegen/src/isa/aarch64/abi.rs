@@ -502,11 +502,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
         Inst::gen_extend(to_reg, from_reg, op, to)
     }
 
-    fn gen_args(args: Vec<ArgPair>) -> Inst {
+    fn gen_args(args: Box<[ArgPair]>) -> Inst {
         Inst::Args { args }
     }
 
-    fn gen_rets(rets: Vec<RetPair>) -> Inst {
+    fn gen_rets(rets: Box<[RetPair]>) -> Inst {
         Inst::Rets { rets }
     }
 
@@ -643,6 +643,15 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         match Self::select_api_key(isa_flags, call_conv, setup_frame) {
             Some(key) => {
+                // `PACIASP` and `PACIBSP` are implicit `BTI C` landing pads,
+                // but the zero-modifier variants used by the tail calling
+                // convention are not. Adds an explicit landing pad for those.
+                if isa_flags.use_bti() && matches!(key, APIKey::AZ | APIKey::BZ) {
+                    insts.push(Inst::Bti {
+                        targets: BranchTargetType::C,
+                    });
+                }
+
                 insts.push(Inst::Paci { key });
                 if flags.unwind_info() {
                     insts.push(Inst::Unwind {

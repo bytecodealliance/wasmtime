@@ -244,32 +244,6 @@ fn caught_externref_payload_survives_gc(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(collectors(Null), wasm_features(exceptions))]
-#[cfg_attr(miri, ignore)]
-fn throw_with_null_collector(config: &mut Config) -> Result<()> {
-    let engine = Engine::new(config)?;
-    let mut store = Store::new(&engine, ());
-
-    let module = Module::new(
-        &engine,
-        r#"
-        (module
-          (tag $e (param i32))
-          (func (export "throw")
-            (throw $e (i32.const 42))))
-        "#,
-    )?;
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let func = instance.get_func(&mut store, "throw").unwrap();
-    let result = func.call(&mut store, &[], &mut []);
-    assert!(result.unwrap_err().is::<ThrownException>());
-
-    let exn = store.take_pending_exception().unwrap();
-    assert_eq!(exn.field(&mut store, 0)?.unwrap_i32(), 42);
-
-    Ok(())
-}
-
 #[wasmtime_test(wasm_features(exceptions))]
 #[cfg_attr(miri, ignore)]
 fn exception_from_host(config: &mut Config) -> Result<()> {

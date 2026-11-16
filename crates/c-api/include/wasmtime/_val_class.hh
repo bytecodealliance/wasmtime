@@ -117,11 +117,7 @@ public:
   Val(const Val &other) { wasmtime_val_clone(&other.val, &val); }
 
   /// Copy assignment to clone from `other`.
-  Val &operator=(const Val &other) {
-    wasmtime_val_unroot(&val);
-    wasmtime_val_clone(&other.val, &val);
-    return *this;
-  }
+  Val &operator=(const Val &other) { return *this = Val(other); }
 
   /// Move constructor to move the contents of `other`.
   Val(Val &&other) {

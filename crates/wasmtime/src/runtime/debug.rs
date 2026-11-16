@@ -6,7 +6,7 @@ use crate::module::RegisterBreakpointState;
 use crate::store::StoreId;
 use crate::vm::{Activation, Backtrace};
 use crate::{
-    AnyRef, AsContextMut, CodeMemory, Engine, ExnRef, Extern, ExternRef, Func, Instance, Module,
+    AnyRef, AsContextMut, CodeMemory, ExnRef, Extern, ExternRef, Func, Instance, Module,
     OwnedRooted, StoreContext, StoreContextMut, Val,
     code::StoreCodePC,
     module::ModuleRegistry,
@@ -47,8 +47,11 @@ impl<T> Store<T> {
         self.as_store_opaque().debug_exit_frames()
     }
 
-    /// Start an edit session to update breakpoints.
-    pub fn edit_breakpoints<'a>(&'a mut self) -> Option<BreakpointEdit<'a>> {
+    /// Borrow this store's [`BreakpointState`], to edit its
+    /// breakpoints, single-stepping, or watchpoints.
+    ///
+    /// Returns `None` if guest debugging is not enabled.
+    pub fn edit_breakpoints<'a>(&'a mut self) -> Option<BreakpointState<'a>> {
         self.as_store_opaque().edit_breakpoints()
     }
 
@@ -80,8 +83,10 @@ impl<'a, T> StoreContextMut<'a, T> {
         self.0.as_store_opaque().debug_exit_frames()
     }
 
-    /// Start an edit session to update breakpoints.
-    pub fn edit_breakpoints(self) -> Option<BreakpointEdit<'a>> {
+    /// Borrow this store's [`BreakpointState`].
+    ///
+    /// See [`Store::edit_breakpoints`] for more details.
+    pub fn edit_breakpoints(self) -> Option<BreakpointState<'a>> {
         self.0.as_store_opaque().edit_breakpoints()
     }
 
@@ -111,8 +116,10 @@ impl<'a, T> Caller<'a, T> {
         self.store.0.as_store_opaque().debug_exit_frames()
     }
 
-    /// Start an edit session to update breakpoints.
-    pub fn edit_breakpoints<'b>(&'b mut self) -> Option<BreakpointEdit<'b>> {
+    /// Borrow this store's [`BreakpointState`].
+    ///
+    /// See [`Store::edit_breakpoints`] for more details.
+    pub fn edit_breakpoints<'b>(&'b mut self) -> Option<BreakpointState<'b>> {
         self.store.0.as_store_opaque().edit_breakpoints()
     }
 
@@ -134,6 +141,33 @@ impl<'a, T> Caller<'a, T> {
 }
 
 impl StoreOpaque {
+    /// Sets or clears the watch bits of the bytes in `range` of `memory`; see
+    /// [`BreakpointState::watch`].
+    pub(crate) fn debug_set_watch(
+        &mut self,
+        memory: crate::Memory,
+        range: core::ops::Range<u64>,
+        watch: bool,
+    ) -> Result<()> {
+        let Some(shadow) = memory.vm_shadow_mut(self) else {
+            crate::error::bail!("watchpoints require guest debugging");
+        };
+        let bytes = shadow.bytes_mut();
+        let start = usize::try_from(range.start)?;
+        let end = usize::try_from(range.end)?;
+        let Some(bytes) = bytes.get_mut(start..end) else {
+            crate::error::bail!("watchpoint range is out of bounds of the memory");
+        };
+        for byte in bytes {
+            if watch {
+                *byte |= crate::runtime::vm::WATCH_DEBUG;
+            } else {
+                *byte &= !crate::runtime::vm::WATCH_DEBUG;
+            }
+        }
+        Ok(())
+    }
+
     fn debug_exit_frames(&mut self) -> impl Iterator<Item = FrameHandle> {
         let activations = if self.engine().tunables().debug_guest {
             Backtrace::activations(self)
@@ -148,13 +182,15 @@ impl StoreOpaque {
             .filter_map(|act| unsafe { FrameHandle::exit_frame(self, act) })
     }
 
-    fn edit_breakpoints<'a>(&'a mut self) -> Option<BreakpointEdit<'a>> {
+    pub(crate) fn edit_breakpoints<'a>(&'a mut self) -> Option<BreakpointState<'a>> {
         if !self.engine().tunables().debug_guest {
             return None;
         }
 
-        let (breakpoints, registry, engine) = self.breakpoints_and_registry_and_engine_mut();
-        Some(breakpoints.edit(registry, engine))
+        Some(BreakpointState {
+            store: self,
+            dirty_modules: BTreeSet::new(),
+        })
     }
 
     fn debug_all_instances(&mut self) -> Vec<Instance> {
@@ -886,7 +922,36 @@ pub enum DebugEvent<'a> {
     Breakpoint,
     /// An epoch yield occurred.
     EpochYield,
+    /// Guest code is about to write watched bytes of a linear memory; see
+    /// [`BreakpointState::watch`]. The write happens
+    /// once the handler returns.
+    Watchpoint(WatchpointHit),
 }
+
+/// A guest write to watched bytes of a linear memory, reported before the
+/// write happens.
+#[derive(Clone, Copy, Debug)]
+pub struct WatchpointHit {
+    /// The memory being written.
+    pub memory: crate::Memory,
+    /// The address of the write's first byte.
+    pub address: u64,
+    /// The number of bytes written, of which at least one is watched.
+    pub len: u64,
+    /// For a store of up to 16 bytes, the bits being stored (in
+    /// little-endian order, so the first byte is the least significant).
+    /// `None` for bulk memory operations.
+    pub value: Option<u128>,
+}
+
+impl PartialEq for WatchpointHit {
+    fn eq(&self, other: &Self) -> bool {
+        self.memory.same(&other.memory)
+            && (self.address, self.len, self.value) == (other.address, other.len, other.value)
+    }
+}
+
+impl Eq for WatchpointHit {}
 
 /// A handler for debug events.
 ///
@@ -949,7 +1014,7 @@ pub trait DebugHandler: Clone + Send + Sync + 'static {
 
 /// Breakpoint state for modules within a store.
 #[derive(Default)]
-pub(crate) struct BreakpointState {
+pub(crate) struct Breakpoints {
     /// Single-step mode.
     single_step: bool,
     /// Breakpoints added individually. Maps from the actual
@@ -989,19 +1054,17 @@ impl BreakpointKey {
     }
 }
 
-/// A breakpoint-editing session.
+/// A store's breakpoint state: its breakpoints, single-stepping, and
+/// watchpoints, borrowed for editing.
 ///
-/// This enables updating breakpoint state (setting or unsetting
-/// individual breakpoints or the store-global single-step flag) in a
-/// batch. It is more efficient to batch these updates because
-/// "re-publishing" the newly patched code, with update breakpoint
-/// settings, typically requires a syscall to re-enable execute
-/// permissions.
-pub struct BreakpointEdit<'a> {
-    state: &'a mut BreakpointState,
-    registry: &'a mut ModuleRegistry,
-    /// The engine that owns everything in `registry`.
-    engine: &'a Engine,
+/// Obtained with [`Store::edit_breakpoints`] (or the same method on
+/// [`StoreContextMut`] and [`Caller`]).
+///
+/// Changes to breakpoints and single-stepping are batched for
+/// efficiency, because code-patching has some overhead (e.g. syscalls
+/// to write-protect/re-publish code).
+pub struct BreakpointState<'a> {
+    store: &'a mut StoreOpaque,
     /// Modules that have been edited.
     ///
     /// Invariant: each of these modules' CodeMemory objects is
@@ -1009,20 +1072,7 @@ pub struct BreakpointEdit<'a> {
     dirty_modules: BTreeSet<StoreCodePC>,
 }
 
-impl BreakpointState {
-    pub(crate) fn edit<'a>(
-        &'a mut self,
-        registry: &'a mut ModuleRegistry,
-        engine: &'a Engine,
-    ) -> BreakpointEdit<'a> {
-        BreakpointEdit {
-            state: self,
-            registry,
-            engine,
-            dirty_modules: BTreeSet::new(),
-        }
-    }
-
+impl Breakpoints {
     pub(crate) fn breakpoints<'a>(
         &'a self,
         registry: &'a ModuleRegistry,
@@ -1045,14 +1095,14 @@ impl BreakpointState {
         if self.single_step {
             let mem = code.code_memory_mut().unwrap();
             mem.unpublish()?;
-            BreakpointEdit::apply_single_step(mem, module, true, |_key| false)?;
+            BreakpointState::apply_single_step(mem, module, true, |_key| false)?;
             mem.publish()?;
         }
         Ok(())
     }
 }
 
-impl<'a> BreakpointEdit<'a> {
+impl<'a> BreakpointState<'a> {
     /// Errors if `module` does not belong to the same engine as the store
     /// being edited.
     ///
@@ -1062,14 +1112,14 @@ impl<'a> BreakpointEdit<'a> {
     /// at all. So this editing session checks up front as well.
     fn check_engine(&self, module: &Module) -> Result<()> {
         crate::ensure!(
-            crate::Engine::same(self.engine, module.engine()),
+            crate::Engine::same(self.store.engine(), module.engine()),
             "cross-`Engine` breakpoint editing is not supported"
         );
         Ok(())
     }
 
     fn get_code_memory<'b>(
-        breakpoints: &BreakpointState,
+        breakpoints: &Breakpoints,
         registry: &'b mut ModuleRegistry,
         dirty_modules: &mut BTreeSet<StoreCodePC>,
         module: &Module,
@@ -1126,19 +1176,17 @@ impl<'a> BreakpointEdit<'a> {
         let requested_key = BreakpointKey::from_raw(module, pc);
         let actual_key = BreakpointKey::from_raw(module, actual_pc);
 
+        let (state, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
         if actual_pc != pc {
             log::trace!("slipping breakpoint from {requested_key:?} to {actual_key:?}");
-            self.state
-                .breakpoint_redirects
-                .insert(requested_key, actual_key);
+            state.breakpoint_redirects.insert(requested_key, actual_key);
         }
 
-        let refcount = self.state.breakpoints.entry(actual_key).or_insert(0);
+        let refcount = state.breakpoints.entry(actual_key).or_insert(0);
         *refcount += 1;
         if *refcount == 1 {
             // First reference: actually patch the code.
-            let mem =
-                Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, module)?;
+            let mem = Self::get_code_memory(state, registry, &mut self.dirty_modules, module)?;
             let patches = frame_table.lookup_breakpoint_patches_by_pc(actual_pc);
             Self::patch(patches, mem, true);
         }
@@ -1156,25 +1204,21 @@ impl<'a> BreakpointEdit<'a> {
     /// the store being edited.
     pub fn remove_breakpoint(&mut self, module: &Module, pc: ModulePC) -> Result<()> {
         self.check_engine(module)?;
+        let (state, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
         let requested_key = BreakpointKey::from_raw(module, pc);
-        let actual_key = self
-            .state
+        let actual_key = state
             .breakpoint_redirects
             .remove(&requested_key)
             .unwrap_or(requested_key);
         let actual_pc = actual_key.1;
 
-        if let Some(refcount) = self.state.breakpoints.get_mut(&actual_key) {
+        if let Some(refcount) = state.breakpoints.get_mut(&actual_key) {
             *refcount -= 1;
             if *refcount == 0 {
-                self.state.breakpoints.remove(&actual_key);
-                if !self.state.single_step {
-                    let mem = Self::get_code_memory(
-                        self.state,
-                        self.registry,
-                        &mut self.dirty_modules,
-                        module,
-                    )?;
+                state.breakpoints.remove(&actual_key);
+                if !state.single_step {
+                    let mem =
+                        Self::get_code_memory(state, registry, &mut self.dirty_modules, module)?;
                     let frame_table = module
                         .frame_table()
                         .expect("Frame table must be present when guest-debug is enabled");
@@ -1195,7 +1239,13 @@ impl<'a> BreakpointEdit<'a> {
         let table = module
             .frame_table()
             .expect("Frame table must be present when guest-debug is enabled");
-        for (wasm_pc, patch) in table.breakpoint_patches() {
+        // A component's modules share one code image, and so its frame table: leave the
+        // other modules' code to them, or this module's breakpoints decide theirs.
+        let index = module.compiled_module().module_index();
+        for (patch_module, wasm_pc, patch) in table.breakpoint_patches() {
+            if patch_module != index {
+                continue;
+            }
             let key = BreakpointKey::from_raw(&module, wasm_pc);
             let this_enabled = enabled || key_enabled(&key);
             log::trace!(
@@ -1211,38 +1261,74 @@ impl<'a> BreakpointEdit<'a> {
     /// In single-step mode, a breakpoint event is emitted at every
     /// Wasm PC.
     pub fn single_step(&mut self, enabled: bool) -> Result<()> {
+        let (state, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
         log::trace!(
             "single_step({enabled}) with breakpoint set {:?}",
-            self.state.breakpoints
+            state.breakpoints
         );
-        if self.state.single_step == enabled {
+        if state.single_step == enabled {
             // No change to current state; don't go through the effort of re-patching and
             // re-publishing code.
             return Ok(());
         }
-        let modules = self
-            .registry
+        let modules = registry
             .all_modules()
             .map(|(_, m)| m.clone())
             .collect::<Vec<_>>();
         for module in modules {
-            let mem =
-                Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, &module)?;
+            let mem = Self::get_code_memory(state, registry, &mut self.dirty_modules, &module)?;
             Self::apply_single_step(mem, &module, enabled, |key| {
-                self.state.breakpoints.contains_key(key)
+                state.breakpoints.contains_key(key)
             })?;
         }
 
-        self.state.single_step = enabled;
+        state.single_step = enabled;
 
         Ok(())
     }
+
+    /// Watches guest writes to the bytes in `range` of `memory`. A guest
+    /// store or bulk memory operation that writes a watched byte raises
+    /// [`DebugEvent::Watchpoint`] before writing.
+    ///
+    /// Whether a byte is watched is a per-byte property: watching an
+    /// already-watched byte has no further effect. See
+    /// [`BreakpointState::unwatch`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `range` extends beyond the memory's current size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `memory` does not belong to this store.
+    pub fn watch(&mut self, memory: crate::Memory, range: core::ops::Range<u64>) -> Result<()> {
+        self.store.debug_set_watch(memory, range, true)
+    }
+
+    /// Stops watching guest writes to the bytes in `range` of `memory`.
+    ///
+    /// Whether a byte is watched is a per-byte property, so this unwatches
+    /// every byte in `range`, regardless of how many (possibly overlapping)
+    /// calls to [`BreakpointState::watch`] watched it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `range` extends beyond the memory's current size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `memory` does not belong to this store.
+    pub fn unwatch(&mut self, memory: crate::Memory, range: core::ops::Range<u64>) -> Result<()> {
+        self.store.debug_set_watch(memory, range, false)
+    }
 }
 
-impl<'a> Drop for BreakpointEdit<'a> {
+impl<'a> Drop for BreakpointState<'a> {
     fn drop(&mut self) {
+        let (_, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
         for &store_code_base in &self.dirty_modules {
-            let store_code = self.registry.store_code_mut(store_code_base).unwrap();
+            let store_code = registry.store_code_mut(store_code_base).unwrap();
             if let Err(e) = store_code
                 .code_memory_mut()
                 .expect("Must have unique ownership of StoreCode in guest-debug mode")

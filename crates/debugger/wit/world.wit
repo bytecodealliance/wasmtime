@@ -168,6 +168,25 @@ interface debuggee {
     exception(wasm-exception),
     /// An injected call completed with return value(s).
     injected-call-return(list<wasm-value>),
+    /// Wasm is about to write memory watched with
+    /// `memory.add-watchpoint`, pausing execution *before* the write.
+    /// The write happens when execution resumes.
+    watchpoint(watchpoint-hit),
+  }
+
+  /// A guest write to watched bytes of a linear memory.
+  record watchpoint-hit {
+    /// The memory being written.
+    memory: memory,
+    /// The address of the first byte written. This may be below the
+    /// watched range if the write only partially overlaps it.
+    address: u64,
+    /// The number of bytes written, at least one of which is watched.
+    len: u64,
+    /// For a scalar or vector store, the bytes being stored (`len`
+    /// bytes, in memory order). `none` for bulk memory operations
+    /// such as `memory.fill` or `memory.copy`.
+    value: option<list<u8>>,
   }
 
   resource instance {
@@ -249,6 +268,32 @@ interface debuggee {
     set-u32: func(d: borrow<debuggee>, addr: u64, value: u32) -> result<_, error>;
     /// Set a u64 (in little endian order) at an address.
     set-u64: func(d: borrow<debuggee>, addr: u64, value: u64) -> result<_, error>;
+
+    /// Watch guest writes to the `len` bytes starting at `addr`.
+    ///
+    /// Any Wasm store or bulk memory operation that writes at least
+    /// one watched byte pauses execution with a `watchpoint` event
+    /// before the write happens. Only writes can be watched.
+    ///
+    /// Whether a byte is watched is a per-byte property: watching an
+    /// already-watched byte has no further effect, and
+    /// `remove-watchpoint` unwatches every byte in its range,
+    /// regardless of how many (possibly overlapping) ranges watched
+    /// it. Debuggers that allow overlapping watchpoints must track
+    /// them and re-add the still-remaining watchpoints after a removal.
+    ///
+    /// Returns `out-of-bounds` if any byte in the range is beyond the
+    /// memory's current size, and `unsupported-type` for a shared
+    /// memory, which cannot be watched.
+    add-watchpoint: func(d: borrow<debuggee>, addr: u64, len: u64) -> result<_, error>;
+
+    /// Stop watching guest writes to the `len` bytes starting at
+    /// `addr`. See `add-watchpoint` for the per-byte semantics.
+    ///
+    /// Returns `out-of-bounds` if any byte in the range is beyond the
+    /// memory's current size, and `unsupported-type` for a shared
+    /// memory.
+    remove-watchpoint: func(d: borrow<debuggee>, addr: u64, len: u64) -> result<_, error>;
 
     /// Clone this handle.
     clone: func() -> memory;

@@ -26,6 +26,9 @@
 //! its own resumption information into this slot as well.
 
 use crate::stackswitch::*;
+
+/// Raw fibers use this crate's stack-switching routines.
+pub(crate) use crate::stackswitch::raw;
 use crate::{Result, RunResult, RuntimeFiberStack};
 use alloc::boxed::Box;
 use core::cell::Cell;

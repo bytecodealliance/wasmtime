@@ -33,7 +33,7 @@ TEST(ValType, Smoke) {
 }
 
 TEST(MemoryType, Smoke) {
-  MemoryType t(1);
+  MemoryType t = MemoryType::create(1).unwrap();
 
   EXPECT_EQ(t->min(), 1);
   EXPECT_EQ(t->max(), std::nullopt);
@@ -42,7 +42,7 @@ TEST(MemoryType, Smoke) {
 }
 
 TEST(TableType, Smoke) {
-  TableType t(ValType::funcref(), 1);
+  TableType t = TableType::create(ValType::funcref(), 1).unwrap();
 
   EXPECT_EQ(t->min(), 1);
   EXPECT_EQ(t->max(), std::nullopt);
@@ -107,14 +107,14 @@ TEST(ModuleType, Smoke) {
 }
 
 TEST(MemoryType, SixtyFour) {
-  MemoryType t(1);
+  MemoryType t = MemoryType::create(1).unwrap();
   EXPECT_FALSE(t->is_64());
-  t = MemoryType::New64(1);
+  t = MemoryType::create64(1).unwrap();
   EXPECT_TRUE(t->is_64());
   EXPECT_EQ(t->min(), 1);
   EXPECT_EQ(t->max(), std::nullopt);
 
-  t = MemoryType::New64(0x100000000, 0x100000001);
+  t = MemoryType::create64(0x100000000, 0x100000001).unwrap();
   EXPECT_TRUE(t->is_64());
   EXPECT_EQ(t->min(), 0x100000000);
   EXPECT_EQ(t->max(), 0x100000001);

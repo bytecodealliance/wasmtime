@@ -255,6 +255,15 @@ impl WastContext {
                 caller.gc(None)?;
                 Ok(())
             })?;
+        self.core_linker.func_wrap(
+            "wasmtime",
+            "set-fuel",
+            |mut caller: Caller<_>, fuel: u64| caller.set_fuel(fuel),
+        )?;
+        self.core_linker
+            .func_wrap("wasmtime", "get-fuel", |caller: Caller<_>| {
+                caller.get_fuel()
+            })?;
         #[cfg(feature = "component-model")]
         {
             let mut i = self.component_linker.instance("wasmtime")?;

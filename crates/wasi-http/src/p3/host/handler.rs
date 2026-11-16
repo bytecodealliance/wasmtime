@@ -113,7 +113,10 @@ where
     };
     let (
         http::response::Parts {
-            status, headers, ..
+            status,
+            headers,
+            extensions,
+            ..
         },
         body,
     ) = res.into_parts();
@@ -158,6 +161,7 @@ where
         let res = Response {
             status,
             headers: FieldMap::new_immutable(view.hooks, headers),
+            extensions,
             body: Body::Host {
                 body,
                 result_tx: res_result_tx,

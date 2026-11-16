@@ -9,8 +9,8 @@ use crate::store::{
 };
 use crate::type_registry::RegisteredType;
 use crate::vm::{
-    self, Backtrace, Frame, GcRootsList, GcStore, InstanceAllocationRequest, NopHasher,
-    SendSyncPtr, StoreGcHostAllocTypes, TraceInfo, VMGcRef,
+    self, Backtrace, Frame, GcRootsList, GcStore, InstanceAllocationRequest, SendSyncPtr,
+    StoreGcHostAllocTypes, TraceInfo, VMGcRef,
 };
 use crate::{
     Engine, ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, Tag,
@@ -21,8 +21,8 @@ use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
-use wasmtime_environ::DefinedTagIndex;
 use wasmtime_environ::packed_option::ReservedValue;
+use wasmtime_environ::{DefinedTagIndex, VMSharedTypeIndex};
 
 #[derive(Default)]
 pub(crate) struct StoreGcData {
@@ -64,7 +64,8 @@ pub(crate) struct StoreGcData {
     /// solution" where supertypes are stored inline in a compiled-code-visible
     /// location which means that a libcall isn't needed at all (nor
     /// synchronization) to determine subtype/supertype relationships.
-    subtype_check_cache: HashMap<u64, bool, NopHasher>,
+    subtype_check_cache:
+        HashMap<(VMSharedTypeIndex, VMSharedTypeIndex), bool, foldhash::fast::FixedState>,
 }
 
 impl<T> Store<T> {
@@ -290,12 +291,15 @@ impl StoreOpaque {
     ) -> Result<()> {
         log::trace!("collect_and_maybe_grow_gc_heap(bytes_needed = {bytes_needed:#x?})");
         self.do_gc(asyncness).await?;
-        if let Some(n) = bytes_needed
-            && n > u64::try_from(self.gc_heap_capacity())?.saturating_sub(
-                self.gc_store.as_ref().map_or(0, |gc| {
-                    u64::try_from(gc.last_post_gc_allocated_bytes.unwrap_or(0)).unwrap()
-                }),
+        let (allocatable_bytes, last_gc_heap_usage) = self.gc_store.as_ref().map_or((0, 0), |gc| {
+            (
+                gc.gc_heap_allocatable_bytes(),
+                gc.last_post_gc_allocated_bytes.unwrap_or(0),
             )
+        });
+        if let Some(n) = bytes_needed
+            && n > u64::try_from(allocatable_bytes)?
+                .saturating_sub(u64::try_from(last_gc_heap_usage).unwrap())
         {
             if let Err(e) = self.grow_gc_heap(limiter, n, asyncness).await {
                 if e.is::<GcHeapGrowthFailed>() {
@@ -480,15 +484,15 @@ impl StoreOpaque {
 
                     let mut store = WithoutGcZealAllocCounter::new(self);
 
-                    let gc_heap_capacity = store
+                    let allocatable_bytes = store
                         .gc_store
                         .as_ref()
-                        .map_or(0, |gc_store| gc_store.gc_heap_capacity());
+                        .map_or(0, |gc_store| gc_store.gc_heap_allocatable_bytes());
                     let last_gc_heap_usage = store.gc_store.as_ref().map_or(0, |gc_store| {
                         gc_store.last_post_gc_allocated_bytes.unwrap_or(0)
                     });
 
-                    if should_collect_first(bytes_needed, gc_heap_capacity, last_gc_heap_usage) {
+                    if should_collect_first(bytes_needed, allocatable_bytes, last_gc_heap_usage) {
                         log::trace!(
                             "Collecting first, then retrying; growing GC heap if collecting didn't \
                              free up enough space, then retrying again"
@@ -1084,12 +1088,12 @@ impl StoreOpaque {
     /// for details.
     pub(crate) fn is_subtype_cached(
         &mut self,
-        sub: wasmtime_environ::VMSharedTypeIndex,
-        sup: wasmtime_environ::VMSharedTypeIndex,
+        sub: VMSharedTypeIndex,
+        sup: VMSharedTypeIndex,
     ) -> bool {
         const MAX_SIZE: usize = 1 << 16; // 64k entries
 
-        let key = (u64::from(sub.as_u32()) << 32) | u64::from(sup.as_u32());
+        let key = (sub, sup);
         let engine_answer = || self.engine.signatures().is_subtype(sub, sup);
         if self.gc_data.subtype_check_cache.len() < MAX_SIZE {
             *self
@@ -1145,16 +1149,17 @@ impl<'a> WithoutGcZealAllocCounter<'a> {
 ///
 /// * `bytes_needed`: the number of bytes the mutator wants to allocate
 ///
-/// * `gc_heap_capacity`: The current size of the GC heap.
+/// * `allocatable_bytes`: The number of bytes that can be allocated into the GC
+///   heap before a collection is required.
 ///
 /// * `last_gc_heap_usage`: The precise GC heap usage after the last collection.
 #[track_caller]
 fn should_collect_first(
     bytes_needed: u64,
-    gc_heap_capacity: usize,
+    allocatable_bytes: usize,
     last_gc_heap_usage: usize,
 ) -> bool {
-    debug_assert!(last_gc_heap_usage <= gc_heap_capacity);
+    debug_assert!(last_gc_heap_usage <= allocatable_bytes);
 
     // If we haven't allocated the GC heap yet, there's nothing to collect.
     //
@@ -1162,7 +1167,7 @@ fn should_collect_first(
     // passes `bytes_needed = 0`. This way our retry-after-gc logic doesn't
     // auto-fail on its second attempt, which would be bad because it doesn't
     // necessarily retry more than once.
-    if gc_heap_capacity == 0 {
+    if allocatable_bytes == 0 {
         return false;
     }
 
@@ -1194,9 +1199,9 @@ fn should_collect_first(
 
     // Common case: to balance collection frequency (and its time overhead) with
     // GC heap growth (and its space overhead), only prefer growing first if the
-    // predicted GC heap utilization is greater than half the GC heap's
-    // capacity.
-    predicted_usage < gc_heap_capacity / 2
+    // predicted GC heap utilization is greater than half of the bytes that can
+    // be allocated into the heap before a collection is required.
+    predicted_usage < allocatable_bytes / 2
 }
 
 #[cfg(test)]

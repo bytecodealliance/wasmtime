@@ -21,4 +21,6 @@
     (data (i32.const 0) "\2a"))
   "allocation size too large")
 
-(assert_return (invoke $M "call" (i32.const 0)) (i32.const 0))
+;; All element expressions are evaluated before any table is written, so the
+;; trap also means that `$f` is never written to the imported table (#15036).
+(assert_trap (invoke $M "call" (i32.const 0)) "uninitialized element")

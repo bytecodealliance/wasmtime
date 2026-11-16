@@ -33,7 +33,7 @@ type BoxCallInfo = Box<CallInfo<ExternalName>>;
 type BoxCallIndInfo = Box<CallInfo<RegMem>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
-type VecArgPair = Vec<ArgPair>;
+type BoxedSliceArgPair = Box<[ArgPair]>;
 type BoxAtomic128RmwSeqArgs = Box<Atomic128RmwSeqArgs>;
 type BoxAtomic128XchgSeqArgs = Box<Atomic128XchgSeqArgs>;
 

@@ -1469,6 +1469,13 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     uncaught_exception: crate::runtime::vm::UncaughtException,
     closure: impl FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 ) -> Result<()> {
+    // A store containing components is poisoned once anything in it traps, and
+    // no wasm may run in it afterwards.
+    #[cfg(feature = "component-model")]
+    if !store.0.may_enter() {
+        return Err(crate::Trap::CannotEnterComponent.into());
+    }
+
     // The `enter_wasm` call below will reset the store context's
     // `stack_chain` to a new `InitialStack`, pointing to the
     // stack-allocated `initial_stack_csi`.

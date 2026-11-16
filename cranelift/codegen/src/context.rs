@@ -143,6 +143,7 @@ impl Context {
             result = isa.compile_function(
                 &self.func,
                 &self.domtree,
+                &self.loop_analysis,
                 &mut self.regalloc_ctx,
                 self.want_disasm,
                 ctrl_plane,
@@ -390,6 +391,7 @@ impl Context {
         // Branch optimizations can invalidate these; recompute them.
         self.compute_cfg();
         self.compute_domtree();
+        self.compute_loop_analysis();
 
         self.verify_if(fisa)?;
 

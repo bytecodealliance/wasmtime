@@ -216,11 +216,7 @@ public:
   }
 
   /// Copies another type into this one.
-  ValType &operator=(const ValType &other) {
-    wasmtime_component_valtype_delete(&ty);
-    wasmtime_component_valtype_clone(&other.ty, &ty);
-    return *this;
-  }
+  ValType &operator=(const ValType &other) { return *this = ValType(other); }
 
   /// Moves another type into this one.
   ValType(ValType &&other) : ty(other.ty) {

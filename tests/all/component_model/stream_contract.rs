@@ -227,8 +227,8 @@ async fn consumer_completed_without_consuming() -> Result<()> {
     assert_eq!(guest_write(false, 100, 0).await?, 0);
     assert_eq!(guest_write(true, 100, 4).await?, 4 << 4); // COMPLETED(4)
 
-    // A zero-length write isn't bounds-checked, even when it's consumed.
-    assert_eq!(guest_write(true, u32::MAX, 0).await?, 0);
+    // A zero-length write is still bounds-checked.
+    assert!(guest_write(true, u32::MAX, 0).await.is_err());
     Ok(())
 }
 

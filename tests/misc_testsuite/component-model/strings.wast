@@ -377,3 +377,593 @@
   (export "f" (func $c2 "f"))
 )
 (assert_trap (invoke "f") "string content out-of-bounds")
+
+;; The following tests cover transcoding between each pair of string
+;; encodings. `$dst-*` components receive a string with the given encoding
+;; and `$src-*` components pass a string from their own memory with the given
+;; encoding. Each pair is exported as `<src>-to-<dst>`, where `compact` is
+;; latin1+utf16.
+
+;; Strings which are out-of-bounds, or whose `ptr + len` calculation
+;; overflows, trap.
+(component definition $Strings
+  (component $dst-utf8
+    (core module $m
+      (func (export "f") (param i32 i32))
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        i32.const 0)
+      (memory (export "memory") 1)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" string)
+      (canon lift (core func $i "f") (realloc (core func $i "realloc"))
+        (memory (core memory $i "memory")) string-encoding=utf8))
+  )
+  (component $dst-utf16
+    (core module $m
+      (func (export "f") (param i32 i32))
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        i32.const 0)
+      (memory (export "memory") 1)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" string)
+      (canon lift (core func $i "f") (realloc (core func $i "realloc"))
+        (memory (core memory $i "memory")) string-encoding=utf16))
+  )
+  (component $dst-compact
+    (core module $m
+      (func (export "f") (param i32 i32))
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        i32.const 0)
+      (memory (export "memory") 1)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" string)
+      (canon lift (core func $i "f") (realloc (core func $i "realloc"))
+        (memory (core memory $i "memory")) string-encoding=latin1+utf16))
+  )
+  (component $src-utf8
+    (import "f" (func $f (param "a" string)))
+    (core module $libc (memory (export "memory") 1))
+    (core instance $libc (instantiate $libc))
+    (core func $f (canon lower (func $f) string-encoding=utf8
+      (memory (core memory $libc "memory"))))
+    (core module $m
+      (import "" "f" (func $f (param i32 i32)))
+      (func (export "f") (param i32 i32)
+        (call $f (local.get 0) (local.get 1)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "f") (param "ptr" u32) (param "len" u32)
+      (canon lift (core func $i "f")))
+  )
+  (component $src-utf16
+    (import "f" (func $f (param "a" string)))
+    (core module $libc (memory (export "memory") 1))
+    (core instance $libc (instantiate $libc))
+    (core func $f (canon lower (func $f) string-encoding=utf16
+      (memory (core memory $libc "memory"))))
+    (core module $m
+      (import "" "f" (func $f (param i32 i32)))
+      (func (export "f") (param i32 i32)
+        (call $f (local.get 0) (local.get 1)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "f") (param "ptr" u32) (param "len" u32)
+      (canon lift (core func $i "f")))
+  )
+  (component $src-compact
+    (import "f" (func $f (param "a" string)))
+    (core module $libc (memory (export "memory") 1))
+    (core instance $libc (instantiate $libc))
+    (core func $f (canon lower (func $f) string-encoding=latin1+utf16
+      (memory (core memory $libc "memory"))))
+    (core module $m
+      (import "" "f" (func $f (param i32 i32)))
+      (func (export "f") (param i32 i32)
+        (call $f (local.get 0) (local.get 1)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "f") (param "ptr" u32) (param "len" u32)
+      (canon lift (core func $i "f")))
+  )
+
+  (instance $dst-utf8 (instantiate $dst-utf8))
+  (instance $dst-utf16 (instantiate $dst-utf16))
+  (instance $dst-compact (instantiate $dst-compact))
+  (instance $utf8-to-utf8 (instantiate $src-utf8
+    (with "f" (func $dst-utf8 "f"))))
+  (export "utf8-to-utf8" (func $utf8-to-utf8 "f"))
+  (instance $utf8-to-utf16 (instantiate $src-utf8
+    (with "f" (func $dst-utf16 "f"))))
+  (export "utf8-to-utf16" (func $utf8-to-utf16 "f"))
+  (instance $utf8-to-compact (instantiate $src-utf8
+    (with "f" (func $dst-compact "f"))))
+  (export "utf8-to-compact" (func $utf8-to-compact "f"))
+  (instance $utf16-to-utf8 (instantiate $src-utf16
+    (with "f" (func $dst-utf8 "f"))))
+  (export "utf16-to-utf8" (func $utf16-to-utf8 "f"))
+  (instance $utf16-to-utf16 (instantiate $src-utf16
+    (with "f" (func $dst-utf16 "f"))))
+  (export "utf16-to-utf16" (func $utf16-to-utf16 "f"))
+  (instance $utf16-to-compact (instantiate $src-utf16
+    (with "f" (func $dst-compact "f"))))
+  (export "utf16-to-compact" (func $utf16-to-compact "f"))
+  (instance $compact-to-utf8 (instantiate $src-compact
+    (with "f" (func $dst-utf8 "f"))))
+  (export "compact-to-utf8" (func $compact-to-utf8 "f"))
+  (instance $compact-to-utf16 (instantiate $src-compact
+    (with "f" (func $dst-utf16 "f"))))
+  (export "compact-to-utf16" (func $compact-to-utf16 "f"))
+  (instance $compact-to-compact (instantiate $src-compact
+    (with "f" (func $dst-compact "f"))))
+  (export "compact-to-compact" (func $compact-to-compact "f"))
+)
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-utf8" (u32.const 0x80000000) (u32.const 0x0))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-utf8" (u32.const 0x80000000) (u32.const 0x1))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-utf16" (u32.const 0x80000000) (u32.const 0x0))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-utf16" (u32.const 0x80000000) (u32.const 0x1))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-compact" (u32.const 0x80000000) (u32.const 0x0))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-compact" (u32.const 0x80000000) (u32.const 0x1))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-utf8" (u32.const 0x80000000) (u32.const 0x0))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-utf8" (u32.const 0x80000000) (u32.const 0x1))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-utf16" (u32.const 0x80000000) (u32.const 0x0))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-utf16" (u32.const 0x80000000) (u32.const 0x1))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-compact" (u32.const 0x80000000) (u32.const 0x0))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-compact" (u32.const 0x80000000) (u32.const 0x1))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-utf8" (u32.const 0x80000000) (u32.const 0x0))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-utf8" (u32.const 0x80000000) (u32.const 0x1))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-utf16" (u32.const 0x80000000) (u32.const 0x0))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-utf16" (u32.const 0x80000000) (u32.const 0x1))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-compact"
+  (u32.const 0x80000000) (u32.const 0x0))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-compact"
+  (u32.const 0x80000000) (u32.const 0x1))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-utf8" (u32.const 0x3e8) (u32.const 0x80000000))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-utf8" (u32.const 0x3e8) (u32.const 0x7fffff9c))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-utf16" (u32.const 0x3e8) (u32.const 0x80000000))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-utf16" (u32.const 0x3e8) (u32.const 0x40000000))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-utf16" (u32.const 0x3e8) (u32.const 0x3fffff9c))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-compact" (u32.const 0x3e8) (u32.const 0x80000000))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf8-to-compact" (u32.const 0x3e8) (u32.const 0x7fffff9c))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-utf8" (u32.const 0x3e8) (u32.const 0x40000000))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-utf8" (u32.const 0x3e8) (u32.const 0x3fffff9c))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-utf16" (u32.const 0x3e8) (u32.const 0x40000000))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-utf16" (u32.const 0x3e8) (u32.const 0x3fffff9c))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-compact"
+  (u32.const 0x3e8) (u32.const 0x40000000))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "utf16-to-compact"
+  (u32.const 0x3e8) (u32.const 0x3fffff9c))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-utf8" (u32.const 0x3e8) (u32.const 0xc0000000))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-utf8" (u32.const 0x3e8) (u32.const 0xbfffff9c))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-utf16"
+  (u32.const 0x3e8) (u32.const 0xc0000000))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-utf16"
+  (u32.const 0x3e8) (u32.const 0xbfffff9c))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-compact"
+  (u32.const 0x3e8) (u32.const 0xc0000000))
+  "string content out-of-bounds")
+(component instance $Strings $Strings)
+(assert_trap (invoke "compact-to-compact"
+  (u32.const 0x3e8) (u32.const 0xbfffff9c))
+  "string content out-of-bounds")
+
+;; The pointer returned from `realloc` is bounds-checked.
+(component definition $ReallocOob
+  (component $dst-utf8
+    (core module $m
+      (func (export "f") (param i32 i32))
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        i32.const 100000)
+      (memory (export "memory") 1)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" string)
+      (canon lift (core func $i "f") (realloc (core func $i "realloc"))
+        (memory (core memory $i "memory")) string-encoding=utf8))
+  )
+  (component $dst-utf16
+    (core module $m
+      (func (export "f") (param i32 i32))
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        i32.const 100000)
+      (memory (export "memory") 1)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" string)
+      (canon lift (core func $i "f") (realloc (core func $i "realloc"))
+        (memory (core memory $i "memory")) string-encoding=utf16))
+  )
+  (component $dst-compact
+    (core module $m
+      (func (export "f") (param i32 i32))
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        i32.const 100000)
+      (memory (export "memory") 1)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" string)
+      (canon lift (core func $i "f") (realloc (core func $i "realloc"))
+        (memory (core memory $i "memory")) string-encoding=latin1+utf16))
+  )
+  (component $src-utf8
+    (import "f" (func $f (param "a" string)))
+    (core module $libc (memory (export "memory") 1))
+    (core instance $libc (instantiate $libc))
+    (core func $f (canon lower (func $f) string-encoding=utf8
+      (memory (core memory $libc "memory"))))
+    (core module $m
+      (import "" "f" (func $f (param i32 i32)))
+      (func (export "f") (param i32 i32)
+        (call $f (local.get 0) (local.get 1)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "f") (param "ptr" u32) (param "len" u32)
+      (canon lift (core func $i "f")))
+  )
+  (component $src-utf16
+    (import "f" (func $f (param "a" string)))
+    (core module $libc (memory (export "memory") 1))
+    (core instance $libc (instantiate $libc))
+    (core func $f (canon lower (func $f) string-encoding=utf16
+      (memory (core memory $libc "memory"))))
+    (core module $m
+      (import "" "f" (func $f (param i32 i32)))
+      (func (export "f") (param i32 i32)
+        (call $f (local.get 0) (local.get 1)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "f") (param "ptr" u32) (param "len" u32)
+      (canon lift (core func $i "f")))
+  )
+  (component $src-compact
+    (import "f" (func $f (param "a" string)))
+    (core module $libc (memory (export "memory") 1))
+    (core instance $libc (instantiate $libc))
+    (core func $f (canon lower (func $f) string-encoding=latin1+utf16
+      (memory (core memory $libc "memory"))))
+    (core module $m
+      (import "" "f" (func $f (param i32 i32)))
+      (func (export "f") (param i32 i32)
+        (call $f (local.get 0) (local.get 1)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "f") (param "ptr" u32) (param "len" u32)
+      (canon lift (core func $i "f")))
+  )
+
+  (instance $dst-utf8 (instantiate $dst-utf8))
+  (instance $dst-utf16 (instantiate $dst-utf16))
+  (instance $dst-compact (instantiate $dst-compact))
+  (instance $utf8-to-utf8 (instantiate $src-utf8
+    (with "f" (func $dst-utf8 "f"))))
+  (export "utf8-to-utf8" (func $utf8-to-utf8 "f"))
+  (instance $utf8-to-utf16 (instantiate $src-utf8
+    (with "f" (func $dst-utf16 "f"))))
+  (export "utf8-to-utf16" (func $utf8-to-utf16 "f"))
+  (instance $utf8-to-compact (instantiate $src-utf8
+    (with "f" (func $dst-compact "f"))))
+  (export "utf8-to-compact" (func $utf8-to-compact "f"))
+  (instance $utf16-to-utf8 (instantiate $src-utf16
+    (with "f" (func $dst-utf8 "f"))))
+  (export "utf16-to-utf8" (func $utf16-to-utf8 "f"))
+  (instance $utf16-to-utf16 (instantiate $src-utf16
+    (with "f" (func $dst-utf16 "f"))))
+  (export "utf16-to-utf16" (func $utf16-to-utf16 "f"))
+  (instance $utf16-to-compact (instantiate $src-utf16
+    (with "f" (func $dst-compact "f"))))
+  (export "utf16-to-compact" (func $utf16-to-compact "f"))
+  (instance $compact-to-utf8 (instantiate $src-compact
+    (with "f" (func $dst-utf8 "f"))))
+  (export "compact-to-utf8" (func $compact-to-utf8 "f"))
+  (instance $compact-to-utf16 (instantiate $src-compact
+    (with "f" (func $dst-utf16 "f"))))
+  (export "compact-to-utf16" (func $compact-to-utf16 "f"))
+  (instance $compact-to-compact (instantiate $src-compact
+    (with "f" (func $dst-compact "f"))))
+  (export "compact-to-compact" (func $compact-to-compact "f"))
+)
+(component instance $ReallocOob $ReallocOob)
+(assert_trap (invoke "utf8-to-utf8" (u32.const 0x3e8) (u32.const 0xa))
+  "string content out-of-bounds")
+(component instance $ReallocOob $ReallocOob)
+(assert_trap (invoke "utf8-to-utf16" (u32.const 0x3e8) (u32.const 0xa))
+  "string content out-of-bounds")
+(component instance $ReallocOob $ReallocOob)
+(assert_trap (invoke "utf8-to-compact" (u32.const 0x3e8) (u32.const 0xa))
+  "string content out-of-bounds")
+(component instance $ReallocOob $ReallocOob)
+(assert_trap (invoke "utf16-to-utf8" (u32.const 0x3e8) (u32.const 0xa))
+  "string content out-of-bounds")
+(component instance $ReallocOob $ReallocOob)
+(assert_trap (invoke "utf16-to-utf16" (u32.const 0x3e8) (u32.const 0xa))
+  "string content out-of-bounds")
+(component instance $ReallocOob $ReallocOob)
+(assert_trap (invoke "utf16-to-compact" (u32.const 0x3e8) (u32.const 0xa))
+  "string content out-of-bounds")
+(component instance $ReallocOob $ReallocOob)
+(assert_trap (invoke "compact-to-utf8" (u32.const 0x3e8) (u32.const 0xa))
+  "string content out-of-bounds")
+(component instance $ReallocOob $ReallocOob)
+(assert_trap (invoke "compact-to-utf16" (u32.const 0x3e8) (u32.const 0xa))
+  "string content out-of-bounds")
+(component instance $ReallocOob $ReallocOob)
+(assert_trap (invoke "compact-to-compact" (u32.const 0x3e8) (u32.const 0xa))
+  "string content out-of-bounds")
+
+;; Strings which are invalid in their source encoding trap when transcoded.
+(component definition $RawBytes
+  ;; The raw bytes passed by the `$src-*` components, at fixed offsets.
+  (core module $data
+    (memory (export "memory") 1)
+    (data (i32.const 0x100) "\ff")
+    (data (i32.const 0x200) "valid string until \ffthen valid again")
+    (data (i32.const 0x300) "symbol \ce\a3 until \ffthen valid")
+    (data (i32.const 0x400) "\01\d8")
+    (data (i32.const 0x500) "\ff\ff\01\d8")
+    (data (i32.const 0x600) "\ab\00\ff\ff\01\d8")
+    (data (i32.const 0x700) "\ab\00\ff\00")
+  )
+
+  (component $dst-utf8
+    (core module $m
+      (func (export "f") (param i32 i32))
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        i32.const 0)
+      (memory (export "memory") 1)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" string)
+      (canon lift (core func $i "f") (realloc (core func $i "realloc"))
+        (memory (core memory $i "memory")) string-encoding=utf8))
+  )
+  (component $dst-utf16
+    (core module $m
+      (func (export "f") (param i32 i32))
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        i32.const 0)
+      (memory (export "memory") 1)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" string)
+      (canon lift (core func $i "f") (realloc (core func $i "realloc"))
+        (memory (core memory $i "memory")) string-encoding=utf16))
+  )
+  (component $dst-compact
+    (core module $m
+      (func (export "f") (param i32 i32))
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+        i32.const 0)
+      (memory (export "memory") 1)
+    )
+    (core instance $i (instantiate $m))
+    (func (export "f") (param "a" string)
+      (canon lift (core func $i "f") (realloc (core func $i "realloc"))
+        (memory (core memory $i "memory")) string-encoding=latin1+utf16))
+  )
+  (component $src-utf8
+    (import "f" (func $f (param "a" string)))
+    (alias outer $RawBytes $data (core module $data))
+    (core instance $data (instantiate $data))
+    (core func $f (canon lower (func $f) string-encoding=utf8
+      (memory (core memory $data "memory"))))
+    (core module $m
+      (import "" "f" (func $f (param i32 i32)))
+      (func (export "f") (param i32 i32)
+        (call $f (local.get 0) (local.get 1)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "f") (param "ptr" u32) (param "len" u32)
+      (canon lift (core func $i "f")))
+  )
+  (component $src-utf16
+    (import "f" (func $f (param "a" string)))
+    (alias outer $RawBytes $data (core module $data))
+    (core instance $data (instantiate $data))
+    (core func $f (canon lower (func $f) string-encoding=utf16
+      (memory (core memory $data "memory"))))
+    (core module $m
+      (import "" "f" (func $f (param i32 i32)))
+      (func (export "f") (param i32 i32)
+        (call $f (local.get 0) (local.get 1)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "f") (param "ptr" u32) (param "len" u32)
+      (canon lift (core func $i "f")))
+  )
+  (component $src-compact
+    (import "f" (func $f (param "a" string)))
+    (alias outer $RawBytes $data (core module $data))
+    (core instance $data (instantiate $data))
+    (core func $f (canon lower (func $f) string-encoding=latin1+utf16
+      (memory (core memory $data "memory"))))
+    (core module $m
+      (import "" "f" (func $f (param i32 i32)))
+      (func (export "f") (param i32 i32)
+        (call $f (local.get 0) (local.get 1)))
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance (export "f" (func $f))))
+    ))
+    (func (export "f") (param "ptr" u32) (param "len" u32)
+      (canon lift (core func $i "f")))
+  )
+
+  (instance $dst-utf8 (instantiate $dst-utf8))
+  (instance $dst-utf16 (instantiate $dst-utf16))
+  (instance $dst-compact (instantiate $dst-compact))
+  (instance $utf8-to-utf8 (instantiate $src-utf8
+    (with "f" (func $dst-utf8 "f"))))
+  (export "utf8-to-utf8" (func $utf8-to-utf8 "f"))
+  (instance $utf8-to-utf16 (instantiate $src-utf8
+    (with "f" (func $dst-utf16 "f"))))
+  (export "utf8-to-utf16" (func $utf8-to-utf16 "f"))
+  (instance $utf8-to-compact (instantiate $src-utf8
+    (with "f" (func $dst-compact "f"))))
+  (export "utf8-to-compact" (func $utf8-to-compact "f"))
+  (instance $utf16-to-utf8 (instantiate $src-utf16
+    (with "f" (func $dst-utf8 "f"))))
+  (export "utf16-to-utf8" (func $utf16-to-utf8 "f"))
+  (instance $utf16-to-utf16 (instantiate $src-utf16
+    (with "f" (func $dst-utf16 "f"))))
+  (export "utf16-to-utf16" (func $utf16-to-utf16 "f"))
+  (instance $utf16-to-compact (instantiate $src-utf16
+    (with "f" (func $dst-compact "f"))))
+  (export "utf16-to-compact" (func $utf16-to-compact "f"))
+  (instance $compact-to-utf8 (instantiate $src-compact
+    (with "f" (func $dst-utf8 "f"))))
+  (export "compact-to-utf8" (func $compact-to-utf8 "f"))
+  (instance $compact-to-utf16 (instantiate $src-compact
+    (with "f" (func $dst-utf16 "f"))))
+  (export "compact-to-utf16" (func $compact-to-utf16 "f"))
+  (instance $compact-to-compact (instantiate $src-compact
+    (with "f" (func $dst-compact "f"))))
+  (export "compact-to-compact" (func $compact-to-compact "f"))
+)
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "utf8-to-utf8" (u32.const 0x100) (u32.const 1))
+  "invalid utf8 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "utf8-to-utf8" (u32.const 0x200) (u32.const 36))
+  "invalid utf8 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "utf8-to-utf16" (u32.const 0x200) (u32.const 36))
+  "invalid utf8 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "utf8-to-utf8" (u32.const 0x300) (u32.const 27))
+  "invalid utf8 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "utf8-to-utf16" (u32.const 0x300) (u32.const 27))
+  "invalid utf8 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "utf8-to-compact" (u32.const 0x300) (u32.const 27))
+  "invalid utf8 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "utf16-to-utf8" (u32.const 0x400) (u32.const 1))
+  "invalid utf16 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "utf16-to-utf16" (u32.const 0x400) (u32.const 1))
+  "invalid utf16 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "utf16-to-compact" (u32.const 0x500) (u32.const 2))
+  "invalid utf16 encoding")
+
+;; A latin1+utf16 length with the high bit set is a count of utf16 code units.
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "compact-to-utf8" (u32.const 0x400) (u32.const 0x80000001))
+  "invalid utf16 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "compact-to-utf16" (u32.const 0x400) (u32.const 0x80000001))
+  "invalid utf16 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "compact-to-utf16" (u32.const 0x500) (u32.const 0x80000002))
+  "invalid utf16 encoding")
+(component instance $RawBytes $RawBytes)
+(assert_trap
+  (invoke "compact-to-compact" (u32.const 0x600) (u32.const 0x80000003))
+  "invalid utf16 encoding")
+
+;; This latin1+utf16 string is valid and gets compressed to latin1.
+(component instance $RawBytes $RawBytes)
+(assert_return
+  (invoke "compact-to-compact" (u32.const 0x700) (u32.const 0x80000002)))

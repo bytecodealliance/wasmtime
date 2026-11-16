@@ -93,8 +93,10 @@ public:
   ValType &operator=(const ValType &other) {
     ptr.reset(wasm_valtype_copy(other.ptr.get()));
     ref = ptr.get();
+    wasmtime_valtype_t cloned;
+    wasmtime_valtype_clone(&other.wasmtime_ty, &cloned);
     wasmtime_valtype_delete(&wasmtime_ty);
-    wasmtime_valtype_clone(&other.wasmtime_ty, &wasmtime_ty);
+    wasmtime_ty = cloned;
     return *this;
   }
   ~ValType() { wasmtime_valtype_delete(&wasmtime_ty); }
@@ -108,9 +110,11 @@ public:
   ValType &operator=(ValType &&other) {
     ptr = std::move(other.ptr);
     ref = ptr.get();
+    wasmtime_valtype_t old = wasmtime_ty;
     wasmtime_ty = other.wasmtime_ty;
     other.ref = nullptr;
     other.wasmtime_ty.kind = WASMTIME_VALTYPE_KIND_I32;
+    wasmtime_valtype_delete(&old);
     return *this;
   }
 

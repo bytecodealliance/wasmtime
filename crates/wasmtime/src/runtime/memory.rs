@@ -10,9 +10,10 @@ use alloc::sync::Arc;
 use core::any::Any;
 use core::cell::UnsafeCell;
 use core::fmt;
+use core::ops::Range;
 use core::slice;
 use core::time::Duration;
-use wasmtime_environ::DefinedMemoryIndex;
+use wasmtime_environ::{DefinedMemoryIndex, MemoryTunables};
 
 pub use crate::runtime::vm::WaitResult;
 
@@ -400,6 +401,33 @@ impl Memory {
         Ok(())
     }
 
+    /// Returns the [`LinearMemory`] backing this memory if it is of the concrete type `M`.
+    ///
+    /// This is intended for embedders that create memories with a custom
+    /// [`MemoryCreator`] (see [`Config::with_host_memory`](crate::Config::with_host_memory))
+    /// and need to inspect the created [`LinearMemory`] object after instantiation.
+    ///
+    /// Returns `None` if the memory is not of type `M`.
+    /// Keeping the concrete `M` returned by a [`MemoryCreator`] private
+    /// ensures that no other code with access to the store can obtain it.
+    ///
+    /// Note that this method will consider the entire store context provided as
+    /// borrowed for the duration of the lifetime of the returned reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn linear_memory<'a, M: LinearMemory, T: 'static>(
+        &self,
+        store: impl Into<StoreContext<'a, T>>,
+    ) -> Option<&'a M> {
+        let store: &'a StoreOpaque = store.into().0;
+        let memory: &'a dyn Any = store[self.instance]
+            .get_defined_memory(self.index)
+            .as_linear_memory()?;
+        memory.downcast_ref()
+    }
+
     /// Returns this memory as a native Rust slice.
     ///
     /// Note that this method will consider the entire store context provided as
@@ -468,6 +496,85 @@ impl Memory {
             let data = &mut *(store.data_mut() as *mut T);
             (self.data_mut(store), data)
         }
+    }
+
+    /// Returns `range` of this memory as a native Rust slice, or an error if
+    /// it is out of bounds.
+    ///
+    /// Note that this method will consider the entire store context provided as
+    /// borrowed for the duration of the lifetime of the returned slice.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data_range<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContext<'a, T>>,
+        range: Range<usize>,
+    ) -> Result<&'a [u8], MemoryAccessError> {
+        self.data(store)
+            .get(range)
+            .ok_or(MemoryAccessError { _private: () })
+    }
+
+    /// Returns `range` of this memory as a native Rust mutable slice, or an
+    /// error if it is out of bounds.
+    ///
+    /// Unlike [`Memory::data_mut`], which hands out all of memory,
+    /// only this range is borrowed for modification, so that Wasmtime
+    /// knows precisely what the host may modify. Prefer this method
+    /// over `data_mut` plus a sub-slice operation: the additional
+    /// semantic information about written memory may be useful to
+    /// Wasmtime for efficiency reasons in some cases.
+    ///
+    /// Note that this method will consider the entire store context provided as
+    /// borrowed for the duration of the lifetime of the returned slice. See
+    /// [`Memory::data_ranges_and_store_data_mut`] to access multiple ranges
+    /// while also borrowing the store's data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data_range_mut<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContextMut<'a, T>>,
+        range: Range<usize>,
+    ) -> Result<&'a mut [u8], MemoryAccessError> {
+        let store = store.into();
+        MemoryRanges {
+            memory: *self,
+            store: store.0,
+        }
+        .into_range_mut(range)
+    }
+
+    /// Like [`Memory::data_and_store_mut`], but returns a [`MemoryRanges`]
+    /// through which ranges of memory are read and modified, rather than one
+    /// slice of all of memory, alongside the store's data (the `T` in
+    /// [`Store<T>`](crate::Store)).
+    ///
+    /// This is useful for host code that works with the store's `T` while
+    /// accessing several parts of memory, such as the bindings of a WASI
+    /// implementation: as with [`Memory::data_range_mut`], only the ranges
+    /// borrowed for modification are considered modified.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data_ranges_and_store_data_mut<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContextMut<'a, T>>,
+    ) -> (MemoryRanges<'a>, &'a mut T) {
+        let store = store.into();
+        assert!(self.comes_from_same_store(store.0));
+        let (data, opaque) = store.0.data_and_opaque_mut();
+        (
+            MemoryRanges {
+                memory: *self,
+                store: opaque,
+            },
+            data,
+        )
     }
 
     /// Returns the base pointer, in the host's address space, that the memory
@@ -708,6 +815,32 @@ impl Memory {
         store.id() == self.instance.store_id()
     }
 
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    pub(crate) fn vm_shadow<'a>(
+        &self,
+        store: &'a StoreOpaque,
+    ) -> Option<&'a crate::runtime::vm::ShadowMemory> {
+        store[self.instance].get_defined_memory(self.index).shadow()
+    }
+
+    /// This memory's watchpoint shadow, if compiled code checks it.
+    #[cfg(feature = "debug")]
+    pub(crate) fn vm_shadow_mut<'a>(
+        &self,
+        store: &'a mut StoreOpaque,
+    ) -> Option<&'a mut crate::runtime::vm::ShadowMemory> {
+        self.instance
+            .get_mut(store)
+            .get_defined_memory_mut(self.index)
+            .shadow_mut()
+    }
+
+    /// Whether this is the same memory as `other`.
+    #[cfg(feature = "debug")]
+    pub(crate) fn same(&self, other: &Memory) -> bool {
+        self.instance == other.instance && self.index == other.index
+    }
+
     /// Returns a stable identifier for this memory within its store.
     ///
     /// This allows distinguishing memories when introspecting them
@@ -778,6 +911,11 @@ impl Memory {
 /// then every byte from `as_ptr() + byte_size()`, rounded up to the next host page boundary, up to
 /// `as_ptr() + max(reserved_size_in_bytes, byte_size()) + guard_size_in_bytes` must be
 /// inaccessible, so that any access to it faults. This must hold at all times, including after growth.
+///
+/// - **Shared access.** Embedders can obtain `&Self` through [`Memory::linear_memory`] whenever
+/// the owning store is not in use. Methods taking `&self` must therefore be safe to call at any
+/// such time, from any thread, and must not hand out mutable access to state that Wasmtime or
+/// WebAssembly code also mutates, such as the memory's contents.
 ///
 /// Additionally, observe the safety requirements when the memory is accessed, as explained in [`Memory`].
 ///
@@ -980,45 +1118,138 @@ impl core::hash::Hash for MemoryImage {
 /// Note that this is a relatively advanced feature and it is recommended to be
 /// familiar with Wasmtime runtime code to use it.
 pub unsafe trait MemoryCreator: Send + Sync {
-    /// Create a new `LinearMemory` object from the specified parameters.
+    /// Create a new [`LinearMemory`] object from the specified parameters.
     ///
-    /// The type of memory being created is specified by `ty` which indicates
+    /// The returned memory must satisfy all of the properties of the [`MemoryRequest`]
+    /// and be zero filled.
+    fn new_memory(&self, request: &MemoryRequest<'_>) -> Result<Box<dyn LinearMemory>>;
+}
+
+/// The kind of memory that [`MemoryCreator`] is asked to create.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum MemoryKind {
+    /// A standard WebAssembly linear memory (module or host).
+    LinearMemory,
+    /// The memory backing a store's GC heap.
+    ///
+    /// It differs from standard linear memory:
+    /// - It is created lazily, at most once per store: when a module that needs a GC heap is
+    ///   instantiated or when the first GC object is allocated. This might happen in the middle of
+    ///   execution of WebAssembly code.
+    /// - It grows as GC objects are allocated, independently of `memory.grow`.
+    /// - Its contents are Wasmtime's internal representation of GC objects, not data of the guest
+    ///   program. They are only meaningful to the store that created the GC heap, so they should not
+    ///   be shared, persisted, copied to other memories, etc.
+    GcHeap,
+}
+
+impl From<wasmtime_environ::MemoryKind> for MemoryKind {
+    fn from(value: wasmtime_environ::MemoryKind) -> Self {
+        match value {
+            wasmtime_environ::MemoryKind::LinearMemory => Self::LinearMemory,
+            wasmtime_environ::MemoryKind::GcHeap => Self::GcHeap,
+        }
+    }
+}
+
+/// A request to a [`MemoryCreator::new_memory`].
+pub struct MemoryRequest<'a> {
+    ty: &'a wasmtime_environ::Memory,
+    tunables: &'a MemoryTunables<'a>,
+    minimum: usize,
+    maximum: Option<usize>,
+}
+
+impl<'a> MemoryRequest<'a> {
+    pub(crate) fn new(
+        ty: &'a wasmtime_environ::Memory,
+        tunables: &'a MemoryTunables<'a>,
+        minimum: usize,
+        maximum: Option<usize>,
+    ) -> Self {
+        Self {
+            ty,
+            tunables,
+            minimum,
+            maximum,
+        }
+    }
+
+    /// The type of memory being created. Indicates
     /// both the minimum and maximum size, in wasm pages. The minimum and
-    /// maximum sizes, in bytes, are also specified as parameters to avoid
-    /// integer conversion if desired.
-    ///
-    /// The `reserved_size_in_bytes` value indicates the expected size of the
-    /// reservation that is to be made for this memory. If this value is `None`
-    /// than the implementation is free to allocate memory as it sees fit. If
-    /// the value is `Some`, however, then the implementation is expected to
-    /// reserve that many bytes for the memory's allocation, plus the guard
+    /// maximum sizes, in bytes, are also specified as [`minimum`](Self::minimum) and [`maximum`](Self::maximum)
+    /// to avoid integer conversion if desired.
+    pub fn ty(&self) -> MemoryType {
+        MemoryType::from_wasmtime_memory(self.ty)
+    }
+
+    /// Minimum size of the memory in bytes.
+    /// Same as the minimum of [`ty`](Self::ty), but in bytes.
+    pub fn minimum(&self) -> usize {
+        self.minimum
+    }
+
+    /// Limit on the maximum size of the memory in bytes, if any.
+    /// Same as the maximum of [`ty`](Self::ty), but in bytes.
+    pub fn maximum(&self) -> Option<usize> {
+        self.maximum
+    }
+
+    /// Indicates the expected size of the reservation that is to be made for this memory.
+    /// The implementation must reserve this many bytes for the memory's allocation, plus the guard
     /// size at the end. Note that this reservation need only be a virtual
     /// memory reservation, physical memory does not need to be allocated
-    /// immediately. In this case `grow` should never move the base pointer and
-    /// the maximum size of `ty` is guaranteed to fit within
-    /// `reserved_size_in_bytes`.
+    /// immediately.
     ///
-    /// The `guard_size_in_bytes` parameter indicates how many bytes of space,
-    /// after the memory allocation, is expected to be unmapped. JIT code will
+    /// If this value is not zero, [`grow_to`](LinearMemory::grow_to) should never move the base pointer and
+    /// the maximum size of [`ty`](Self::ty) is guaranteed to fit within `reserved_size_in_bytes`.
+    ///
+    /// This value is tuned from the various [`Config`](crate::Config) methods about
+    /// memory sizes/guards. It is guaranteed to be a multiple of the system page size.
+    pub fn reserved_size_in_bytes(&self) -> usize {
+        usize::try_from(self.tunables.reservation()).unwrap()
+    }
+
+    /// Indicates how many bytes of space after the memory allocation is expected to be unmapped. JIT code will
     /// elide bounds checks based on the `guard_size_in_bytes` provided, so for
     /// JIT code to work correctly the memory returned will need to be properly
     /// guarded with `guard_size_in_bytes` bytes left unmapped after the base
     /// allocation.
     ///
-    /// Note that the `reserved_size_in_bytes` and `guard_size_in_bytes` options
-    /// are tuned from the various [`Config`](crate::Config) methods about
-    /// memory sizes/guards. Additionally these two values are guaranteed to be
-    /// multiples of the system page size.
-    ///
-    /// Memory created from this method should be zero filled.
-    fn new_memory(
-        &self,
-        ty: MemoryType,
-        minimum: usize,
-        maximum: Option<usize>,
-        reserved_size_in_bytes: Option<usize>,
-        guard_size_in_bytes: usize,
-    ) -> Result<Box<dyn LinearMemory>, String>;
+    /// This value is tuned from the various [`Config`](crate::Config) methods about
+    /// memory sizes/guards. It is guaranteed to be a multiple of the system page size.
+    pub fn guard_size_in_bytes(&self) -> usize {
+        usize::try_from(self.tunables.guard_size()).unwrap()
+    }
+
+    /// What kind of memory is requested.
+    pub fn kind(&self) -> MemoryKind {
+        self.tunables.kind().into()
+    }
+
+    /// Internal parameter: detailed internal representation of the memory being created.
+    pub(crate) fn wasmtime_memory(&self) -> &'a wasmtime_environ::Memory {
+        self.ty
+    }
+
+    /// Internal parameter: all the tunables, including those not exposed to the public API.
+    pub(crate) fn tunables(&self) -> &'a MemoryTunables<'a> {
+        self.tunables
+    }
+}
+
+impl fmt::Debug for MemoryRequest<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MemoryRequest")
+            .field("ty", &self.ty())
+            .field("minimum", &self.minimum)
+            .field("maximum", &self.maximum)
+            .field("reserved_size_in_bytes", &self.reserved_size_in_bytes())
+            .field("guard_size_in_bytes", &self.guard_size_in_bytes())
+            .field("kind", &self.kind())
+            .finish()
+    }
 }
 
 /// A constructor for externally-created shared memory.
@@ -1485,5 +1716,71 @@ mod tests {
         assert!(mapped[data_start + 5..].iter().all(|b| *b == 0));
 
         Ok(())
+    }
+}
+
+/// Access to ranges of a [`Memory`], from
+/// [`Memory::data_ranges_and_store_data_mut`].
+///
+/// Ranges are read with [`MemoryRanges::data_range`] (or all of memory with
+/// [`MemoryRanges::data`]) and modified with
+/// [`MemoryRanges::data_range_mut`], which considers only the range it
+/// returns modified.
+pub struct MemoryRanges<'a> {
+    memory: Memory,
+    store: &'a mut StoreOpaque,
+}
+
+impl<'a> MemoryRanges<'a> {
+    /// The length of the memory, in bytes.
+    pub fn len(&self) -> usize {
+        self.memory.internal_data_size(self.store)
+    }
+
+    /// Whether the memory is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// All of the memory, for reading.
+    pub fn data(&self) -> &[u8] {
+        let definition = self.store[self.memory.instance].memory(self.memory.index);
+        // SAFETY: the store owns this non-shared memory, and this borrow of
+        // `self` excludes modification through it.
+        unsafe { slice::from_raw_parts(definition.base.as_ptr(), definition.current_length()) }
+    }
+
+    /// `range` of the memory, for reading, or an error if it is out of
+    /// bounds.
+    pub fn data_range(&self, range: Range<usize>) -> Result<&[u8], MemoryAccessError> {
+        self.data()
+            .get(range)
+            .ok_or(MemoryAccessError { _private: () })
+    }
+
+    /// `range` of the memory, for modification, or an error if it is out of
+    /// bounds. Only this range is considered modified.
+    pub fn data_range_mut(&mut self, range: Range<usize>) -> Result<&mut [u8], MemoryAccessError> {
+        MemoryRanges {
+            memory: self.memory,
+            store: &mut *self.store,
+        }
+        .into_range_mut(range)
+    }
+
+    fn into_range_mut(self, range: Range<usize>) -> Result<&'a mut [u8], MemoryAccessError> {
+        let len = self.len();
+        if range.start > range.end || range.end > len {
+            return Err(MemoryAccessError { _private: () });
+        }
+        let definition = self.store[self.memory.instance].memory(self.memory.index);
+        // SAFETY: the range is in bounds, and the store, which owns this
+        // non-shared memory, is borrowed for the slice's lifetime.
+        unsafe {
+            Ok(slice::from_raw_parts_mut(
+                definition.base.as_ptr().add(range.start),
+                range.len(),
+            ))
+        }
     }
 }

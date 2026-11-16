@@ -212,6 +212,16 @@ fn store<T>(input: &mut Unstructured<'_>, val: T) -> arbitrary::Result<Store<T>>
         set_min(&mut p.core_instance_size, 64 << 10);
         p.memory_protection_keys = Enabled::No;
         p.max_memory_size = MEMORY_NEEDED;
+
+        // The default reservation on 32-bit hosts is a bit too small, so ensure
+        // that the default isn't used.
+        if cfg!(target_pointer_width = "32") {
+            config
+                .wasmtime
+                .memory_config
+                .memory_reservation
+                .get_or_insert(MEMORY_NEEDED as u64);
+        }
     }
     set_opt_min(
         &mut config.wasmtime.memory_config.memory_reservation,

@@ -101,7 +101,6 @@
 ;;     region2 = 57 ""
 ;;     region3 = 209 ""
 ;;     region4 = 42 ""
-;;     region5 = 132 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -123,24 +122,21 @@
 ;; @0098                               jump block7
 ;;
 ;;                                 block7:
-;; @009e                               v9 = load.i64 notrap aligned readonly can_move region2 v0+144
-;; @009e                               v10 = load.i32 notrap aligned region5 v9
-;; @00ac                               v14 = load.i64 notrap aligned readonly can_move region4 v0+72
-;; @00ac                               try_call fn0(v14, v0, v2), sig1, block9(ret0), [ context v0, default: block6(exn0) ]
+;; @00a0                               v9 = load.i64 notrap aligned readonly can_move region4 v0+72
+;; @00a0                               try_call fn0(v9, v0, v2), sig1, block9(ret0), [ context v0, default: block6(exn0) ]
 ;;
-;;                                 block9(v15: i32):
-;; @00b8                               store.i32 notrap aligned region3 v7, v6
-;; @00ba                               jump block5
+;;                                 block9(v10: i32):
+;; @00a6                               jump block5
 ;;
 ;;                                 block5:
-;; @00bb                               jump block2
+;; @00a7                               jump block2
 ;;
 ;;                                 block3:
-;; @00be                               trap user52
+;; @00aa                               trap user52
 ;;
 ;;                                 block2:
-;; @00c2                               jump block1
+;; @00ae                               jump block1
 ;;
 ;;                                 block1:
-;; @00c2                               return v15
+;; @00ae                               return v10
 ;; }

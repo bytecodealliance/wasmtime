@@ -1,0 +1,329 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; Loop-invariant values in a cold block inside a loop are not hoisted out of
+;; the cold block, because that would move cold-path work into the loop
+;; preheader.
+function %cold_block_in_loop(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    jump block1(v2)
+
+block1(v3: i64):
+    v4 = icmp ult v3, v1
+    brif v4, block2, block3(v3)
+
+block2 cold:
+    ;; All of these except `v9` are loop invariant, but must stay here.
+    v5 = load.i64 notrap aligned readonly can_move v0+8
+    v6 = load.i64 notrap aligned readonly can_move v5+16
+    v7 = imul v0, v1
+    v8 = iadd v6, v7
+    v9 = iadd v3, v8
+    jump block3(v9)
+
+block3(v10: i64):
+    v11 = iconst.i64 1
+    v12 = iadd v10, v11
+    v13 = icmp ult v12, v1
+    brif v13, block1(v12), block4
+
+block4:
+    return v12
+}
+
+; function %cold_block_in_loop(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 0
+;     v11 = iconst.i64 1
+;     jump block1(v2)  ; v2 = 0
+;
+; block1(v3: i64):
+;     v4 = icmp ult v3, v1
+;     brif v4, block2, block3(v3)
+;
+; block2 cold:
+;     v5 = load.i64 notrap aligned readonly can_move v0+8
+;     v6 = load.i64 notrap aligned readonly can_move v5+16
+;     v7 = imul.i64 v0, v1
+;     v8 = iadd v6, v7
+;     v9 = iadd.i64 v3, v8
+;     jump block3(v9)
+;
+; block3(v10: i64):
+;     v14 = iconst.i64 1
+;     v15 = iadd v10, v14  ; v14 = 1
+;     v13 = icmp ult v15, v1
+;     brif v13, block1(v15), block4
+;
+; block4:
+;     v16 = iadd.i64 v10, v14  ; v14 = 1
+;     return v16
+; }
+
+;; Same as above, but `block2` is not cold, so its loop-invariant values are
+;; hoisted into `block0`.
+function %hot_block_in_loop(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    jump block1(v2)
+
+block1(v3: i64):
+    v4 = icmp ult v3, v1
+    brif v4, block2, block3(v3)
+
+block2:
+    v5 = load.i64 notrap aligned readonly can_move v0+8
+    v6 = load.i64 notrap aligned readonly can_move v5+16
+    v7 = imul v0, v1
+    v8 = iadd v6, v7
+    v9 = iadd v3, v8
+    jump block3(v9)
+
+block3(v10: i64):
+    v11 = iconst.i64 1
+    v12 = iadd v10, v11
+    v13 = icmp ult v12, v1
+    brif v13, block1(v12), block4
+
+block4:
+    return v12
+}
+
+; function %hot_block_in_loop(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 0
+;     v5 = load.i64 notrap aligned readonly can_move v0+8
+;     v6 = load.i64 notrap aligned readonly can_move v5+16
+;     v7 = imul v0, v1
+;     v8 = iadd v6, v7
+;     v11 = iconst.i64 1
+;     jump block1(v2)  ; v2 = 0
+;
+; block1(v3: i64):
+;     v4 = icmp ult v3, v1
+;     brif v4, block2, block3(v3)
+;
+; block2:
+;     v9 = iadd.i64 v3, v8
+;     jump block3(v9)
+;
+; block3(v10: i64):
+;     v14 = iconst.i64 1
+;     v15 = iadd v10, v14  ; v14 = 1
+;     v13 = icmp ult v15, v1
+;     brif v13, block1(v15), block4
+;
+; block4:
+;     v16 = iadd.i64 v10, v14  ; v14 = 1
+;     return v16
+; }
+
+;; A cold block in an inner loop: `v6` is invariant in both loops but is
+;; hoisted out of neither.
+function %cold_block_in_nested_loop(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    jump block1(v2)
+
+block1(v3: i64):
+    jump block2(v3)
+
+block2(v4: i64):
+    v5 = icmp ult v4, v1
+    brif v5, block3, block4(v4)
+
+block3 cold:
+    v6 = imul v0, v1
+    v7 = iadd v4, v6
+    jump block4(v7)
+
+block4(v8: i64):
+    v9 = iconst.i64 1
+    v10 = iadd v8, v9
+    v11 = icmp ult v10, v0
+    brif v11, block2(v10), block5
+
+block5:
+    v12 = icmp ult v10, v1
+    brif v12, block1(v10), block6
+
+block6:
+    return v10
+}
+
+; function %cold_block_in_nested_loop(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 0
+;     jump block1(v2)  ; v2 = 0
+;
+; block1(v3: i64):
+;     v9 = iconst.i64 1
+;     jump block2(v3)
+;
+; block2(v4: i64):
+;     v5 = icmp ult v4, v1
+;     brif v5, block3, block4(v4)
+;
+; block3 cold:
+;     v6 = imul.i64 v0, v1
+;     v7 = iadd.i64 v4, v6
+;     jump block4(v7)
+;
+; block4(v8: i64):
+;     v13 = iconst.i64 1
+;     v14 = iadd v8, v13  ; v13 = 1
+;     v11 = icmp ult v14, v0
+;     brif v11, block2(v14), block5
+;
+; block5:
+;     v15 = iadd.i64 v8, v13  ; v13 = 1
+;     v16 = icmp ult v15, v1
+;     brif v16, block1(v15), block6
+;
+; block6:
+;     v17 = iadd.i64 v8, v13  ; v13 = 1
+;     return v17
+; }
+
+;; A cold loop header: `v4` is loop invariant but is not hoisted into the
+;; preheader.
+function %cold_loop_header(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    jump block1(v2)
+
+block1(v3: i64) cold:
+    v4 = imul v0, v1
+    v5 = iadd v3, v4
+    v6 = icmp ult v5, v1
+    brif v6, block1(v5), block2
+
+block2:
+    return v5
+}
+
+; function %cold_loop_header(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 0
+;     jump block1(v2)  ; v2 = 0
+;
+; block1(v3: i64) cold:
+;     v4 = imul.i64 v0, v1
+;     v5 = iadd v3, v4
+;     v6 = icmp ult v5, v1
+;     brif v6, block1(v5), block2
+;
+; block2:
+;     return v5
+; }
+
+;; Argument-less values like `vconst`, which are normally hoisted out of one
+;; loop level, are not hoisted out of cold blocks either.
+function %cold_block_vconst(i64, i64x2) -> i64x2 {
+block0(v0: i64, v1: i64x2):
+    v2 = iconst.i64 0
+    jump block1(v2, v1)
+
+block1(v3: i64, v4: i64x2):
+    v5 = icmp ult v3, v0
+    brif v5, block2, block3(v4)
+
+block2 cold:
+    v6 = vconst.i64x2 [1 2]
+    v7 = iadd v4, v6
+    jump block3(v7)
+
+block3(v8: i64x2):
+    v9 = iconst.i64 1
+    v10 = iadd v3, v9
+    v11 = icmp ult v10, v0
+    brif v11, block1(v10, v8), block4
+
+block4:
+    return v8
+}
+
+; function %cold_block_vconst(i64, i64x2) -> i64x2 fast {
+;     const0 = 0x00000000000000020000000000000001
+;
+; block0(v0: i64, v1: i64x2):
+;     v2 = iconst.i64 0
+;     v9 = iconst.i64 1
+;     jump block1(v2, v1)  ; v2 = 0
+;
+; block1(v3: i64, v4: i64x2):
+;     v5 = icmp ult v3, v0
+;     brif v5, block2, block3(v4)
+;
+; block2 cold:
+;     v6 = vconst.i64x2 const0
+;     v7 = iadd.i64x2 v4, v6  ; v6 = const0
+;     jump block3(v7)
+;
+; block3(v8: i64x2):
+;     v12 = iconst.i64 1
+;     v13 = iadd.i64 v3, v12  ; v12 = 1
+;     v11 = icmp ult v13, v0
+;     brif v11, block1(v13, v8), block4
+;
+; block4:
+;     return v8
+; }
+
+;; When a hot block that dominates a cold block uses the same loop-invariant
+;; value (`v4`/`v7`), the value is hoisted for the hot use and the cold block
+;; reuses it.
+function %cold_block_reuses_hoisted_value(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 0
+    jump block1(v2)
+
+block1(v3: i64):
+    v4 = imul v0, v1
+    v5 = iadd v3, v4
+    v6 = icmp ult v5, v1
+    brif v6, block2, block3(v5)
+
+block2 cold:
+    v7 = imul v0, v1
+    v8 = isub v3, v7
+    jump block3(v8)
+
+block3(v9: i64):
+    v10 = iconst.i64 1
+    v11 = iadd v9, v10
+    v12 = icmp ult v11, v1
+    brif v12, block1(v11), block4
+
+block4:
+    return v11
+}
+
+; function %cold_block_reuses_hoisted_value(i64, i64) -> i64 fast {
+; block0(v0: i64, v1: i64):
+;     v2 = iconst.i64 0
+;     v4 = imul v0, v1
+;     v10 = iconst.i64 1
+;     jump block1(v2)  ; v2 = 0
+;
+; block1(v3: i64):
+;     v5 = iadd v3, v4
+;     v6 = icmp ult v5, v1
+;     brif v6, block2, block3(v5)
+;
+; block2 cold:
+;     v8 = isub.i64 v3, v4
+;     jump block3(v8)
+;
+; block3(v9: i64):
+;     v13 = iconst.i64 1
+;     v14 = iadd v9, v13  ; v13 = 1
+;     v12 = icmp ult v14, v1
+;     brif v12, block1(v14), block4
+;
+; block4:
+;     v15 = iadd.i64 v9, v13  ; v13 = 1
+;     return v15
+; }

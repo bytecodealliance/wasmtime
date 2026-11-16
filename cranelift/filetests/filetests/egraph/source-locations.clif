@@ -1,0 +1,30 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+;; Hoisted constants are rematerialized in their use blocks, and their users
+;; are cloned when the arguments change. Both must retain their source locations.
+function %source_locations(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    jump block1(v0)
+
+block1(v2: i32):
+@0010                               v3 = iconst.i32 1
+@0020                               v4 = iadd.i32 v1, v3
+@0030                               v5 = iconst.i32 40
+@0040                               v6 = icmp eq v2, v5
+@0050                               v8 = iadd.i32 v2, v3
+    brif v6, block2(v4), block1(v8)
+
+block2(v9: i32):
+    return v9
+}
+
+; check: block1(v2: i32):
+; check: @0030                               v10 = iconst.i32 40
+; check: @0040                               v11 = icmp eq v2, v10
+; check: @0010                               v12 = iconst.i32 1
+; check: @0050                               v13 = iadd v2, v12
+; check: block2:
+; check: @0010                               v14 = iconst.i32 1
+; check: @0020                               v15 = iadd.i32 v1, v14

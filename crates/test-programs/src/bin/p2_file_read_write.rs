@@ -51,6 +51,13 @@ fn main() {
     assert_eq!(buf, b"\0\0\0\0\0Hello, World!");
     drop(ready);
     drop(stream);
+
+    // Zero-length blocking reads on an open stream must not report `closed`.
+    let stream = file.read_via_stream(0).unwrap();
+    assert_eq!(stream.blocking_read(0).unwrap(), b"");
+    assert_eq!(stream.blocking_skip(0).unwrap(), 0);
+    drop(stream);
+
     drop(file);
 
     dir.unlink_file_at(filename).unwrap();

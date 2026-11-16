@@ -244,3 +244,55 @@ block0(v0: i64):
 ;   addi sp, sp, 0x10
 ;   ret
 
+function %limit_preamble_nested_huge_offset(i64 vmctx) {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+400000
+    gv2 = load.i64 notrap aligned gv1+400000
+    stack_limit = gv2
+    ss0 = explicit_slot 20
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   ld t6,400000(a0)
+;   ld t6,400000(t6)
+;   addi t6,t6,32
+;   trap_if stk_ovf##(sp ult t6)
+;   addi sp,sp,-32
+; block0:
+;   addi sp,sp,32
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   lui t6, 0x62
+;   addi t6, t6, -0x580
+;   add t6, t6, a0
+;   ld t6, 0(t6)
+;   lui t5, 0x62
+;   addi t5, t5, -0x580
+;   add t5, t5, t6
+;   ld t6, 0(t5)
+;   addi t6, t6, 0x20
+;   bgeu sp, t6, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
+;   addi sp, sp, -0x20
+; block1: ; offset 0x40
+;   addi sp, sp, 0x20
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

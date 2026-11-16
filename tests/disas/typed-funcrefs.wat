@@ -165,12 +165,12 @@
 ;;                                     v69 = iconst.i64 16
 ;; @005b                               v40 = iadd.i64 v11, v69  ; v69 = 16
 ;; @005b                               v43 = load.i64 user6 aligned region3 v40
-;;                                     v70 = iconst.i64 -2
-;;                                     v71 = band v43, v70  ; v70 = -2
+;; @0048                               v70 = iconst.i64 -2
+;; @005b                               v71 = band v43, v70  ; v70 = -2
 ;; @005b                               brif v43, block5(v71), block4
 ;;
 ;;                                 block4 cold:
-;;                                     v72 = iconst.i32 0
+;; @003c                               v72 = iconst.i32 0
 ;;                                     v68 = iconst.i64 2
 ;; @005b                               v49 = call fn0(v0, v72, v68)  ; v72 = 0, v68 = 2
 ;; @005b                               jump block5(v49)
@@ -223,12 +223,12 @@
 ;;                                     v69 = iconst.i64 16
 ;; @0087                               v40 = iadd.i64 v11, v69  ; v69 = 16
 ;; @0087                               v43 = load.i64 user6 aligned region3 v40
-;;                                     v70 = iconst.i64 -2
-;;                                     v71 = band v43, v70  ; v70 = -2
+;; @0075                               v70 = iconst.i64 -2
+;; @0087                               v71 = band v43, v70  ; v70 = -2
 ;; @0087                               brif v43, block5(v71), block4
 ;;
 ;;                                 block4 cold:
-;;                                     v72 = iconst.i32 0
+;; @0069                               v72 = iconst.i32 0
 ;;                                     v68 = iconst.i64 2
 ;; @0087                               v49 = call fn0(v0, v72, v68)  ; v72 = 0, v68 = 2
 ;; @0087                               jump block5(v49)

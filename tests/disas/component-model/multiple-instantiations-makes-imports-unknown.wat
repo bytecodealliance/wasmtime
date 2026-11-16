@@ -129,7 +129,7 @@
 ;; @0080                               brif v13, block3(v15), block2
 ;;
 ;;                                 block2 cold:
-;;                                     v25 = iconst.i32 0
+;; @007e                               v25 = iconst.i32 0
 ;;                                     v26 = iconst.i64 0
 ;; @0080                               v19 = call fn0(v0, v25, v26)  ; v25 = 0, v26 = 0
 ;; @0080                               jump block3(v19)
@@ -205,7 +205,7 @@
 ;; @010d                               brif v13, block3(v15), block2
 ;;
 ;;                                 block2 cold:
-;;                                     v25 = iconst.i32 0
+;; @010b                               v25 = iconst.i32 0
 ;;                                     v26 = iconst.i64 0
 ;; @010d                               v19 = call fn0(v0, v25, v26)  ; v25 = 0, v26 = 0
 ;; @010d                               jump block3(v19)
@@ -287,7 +287,7 @@
 ;; @0190                               brif v15, block3(v17), block2
 ;;
 ;;                                 block2 cold:
-;;                                     v27 = iconst.i32 0
+;; @018e                               v27 = iconst.i32 0
 ;;                                     v28 = iconst.i64 0
 ;; @0190                               v21 = call fn0(v0, v27, v28)  ; v27 = 0, v28 = 0
 ;; @0190                               jump block3(v21)

@@ -38,7 +38,7 @@
 ;; @0023                               brif v9, block2, block3(v7)
 ;;
 ;;                                 block2:
-;;                                     v58 = iadd.i64 v5, v6  ; v6 = 1
+;; @0023                               v58 = iadd.i64 v5, v6  ; v6 = 1
 ;; @0023                               store notrap aligned region2 v58, v4
 ;; @0023                               v11 = call fn0(v0)
 ;; @0023                               v13 = load.i64 notrap aligned region2 v4
@@ -94,7 +94,7 @@
 ;; @0030                               brif v8, block2, block3(v6)
 ;;
 ;;                                 block2:
-;;                                     v43 = iadd.i64 v4, v5  ; v5 = 1
+;; @0030                               v43 = iadd.i64 v4, v5  ; v5 = 1
 ;; @0030                               store notrap aligned region2 v43, v3
 ;; @0030                               v10 = call fn0(v0)
 ;; @0030                               v12 = load.i64 notrap aligned region2 v3
@@ -145,7 +145,7 @@
 ;; @003d                               brif v8, block2, block3(v6)
 ;;
 ;;                                 block2:
-;;                                     v50 = iadd.i64 v4, v5  ; v5 = 1
+;; @003d                               v50 = iadd.i64 v4, v5  ; v5 = 1
 ;; @003d                               store notrap aligned region2 v50, v3
 ;; @003d                               v10 = call fn0(v0)
 ;; @003d                               v12 = load.i64 notrap aligned region2 v3
@@ -164,12 +164,12 @@
 ;; @0045                               call fn1(v0, v27, v14, v40)  ; v14 = 0, v40 = 4096
 ;; @0045                               v30 = iconst.i64 4100
 ;; @0045                               v31 = iadd v29, v30  ; v30 = 4100
-;;                                     v51 = iconst.i64 0
-;;                                     v52 = icmp sge v31, v51  ; v51 = 0
+;; @003d                               v51 = iconst.i64 0
+;; @0045                               v52 = icmp sge v31, v51  ; v51 = 0
 ;; @0045                               brif v52, block4, block5(v31)
 ;;
 ;;                                 block4:
-;;                                     v53 = iadd.i64 v29, v30  ; v30 = 4100
+;; @0045                               v53 = iadd.i64 v29, v30  ; v30 = 4100
 ;; @0045                               store notrap aligned region2 v53, v3
 ;; @0045                               v35 = call fn0(v0)
 ;; @0045                               v37 = load.i64 notrap aligned region2 v3

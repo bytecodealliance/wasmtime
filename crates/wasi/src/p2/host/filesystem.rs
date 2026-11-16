@@ -107,15 +107,11 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         offset: types::Filesize,
     ) -> FsResult<(Vec<u8>, bool)> {
         let f = self.table.get(&fd)?.file()?;
+        let max = self.ctx.max_io_size.get();
 
         let (mut buffer, r) = f
             .run_blocking(move |f| {
-                let mut buffer = vec![
-                    0;
-                    len.try_into()
-                        .unwrap_or(usize::MAX)
-                        .min(crate::MAX_READ_SIZE_ALLOC)
-                ];
+                let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX).min(max)];
                 let r = sys::read_at_cursor_unspecified(f, &mut buffer, offset);
                 (buffer, r)
             })
@@ -372,7 +368,8 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         };
 
         // Create a stream view for it.
-        let reader: DynInputStream = Box::new(FileInputStream::new(f, offset));
+        let reader: DynInputStream =
+            Box::new(FileInputStream::new(f, offset, self.ctx.max_io_size.get()));
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table.push(reader)?;
@@ -393,7 +390,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         }
 
         // Create a stream view for it.
-        let writer = FileOutputStream::write_at(f, offset);
+        let writer = FileOutputStream::write_at(f, offset, self.ctx.max_io_size.get());
         let writer: DynOutputStream = Box::new(writer);
 
         // Insert the stream view into the table. Trap if the table is full.
@@ -414,7 +411,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         }
 
         // Create a stream view for it.
-        let appender = FileOutputStream::append(f);
+        let appender = FileOutputStream::append(f, self.ctx.max_io_size.get());
         let appender: DynOutputStream = Box::new(appender);
 
         // Insert the stream view into the table. Trap if the table is full.

@@ -705,6 +705,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                                     FactInlineIntrinsic::ExitSyncCall.into()
                                 }
                                 Trampoline::Trap(trap) => FactInlineIntrinsic::Trap(trap).into(),
+                                Trampoline::ResourceTransferBorrowToOwner { ty } => {
+                                    let instance =
+                                        self.types.types()[ty].unwrap_concrete_instance();
+                                    FactInlineIntrinsic::from(
+                                        FactComponentIntrinsic::ResourceTransferBorrowToOwner {
+                                            ty,
+                                            instance,
+                                        },
+                                    )
+                                    .into()
+                                }
                                 _ => continue,
                             },
 

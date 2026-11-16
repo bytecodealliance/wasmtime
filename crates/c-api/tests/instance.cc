@@ -7,12 +7,13 @@ using namespace wasmtime;
 TEST(Instance, Smoke) {
   Engine engine;
   Store store(engine);
-  Memory m = Memory::create(store, MemoryType(1)).unwrap();
+  Memory m = Memory::create(store, MemoryType::create(1).unwrap()).unwrap();
   Global g =
       Global::create(store, GlobalType(ValType::i32(), false), 1).unwrap();
-  Table t = Table::create(store, TableType(ValType::funcref(), 1),
-                          std::optional<Func>())
-                .unwrap();
+  Table t =
+      Table::create(store, TableType::create(ValType::funcref(), 1).unwrap(),
+                    std::optional<Func>())
+          .unwrap();
   Func f(store, FuncType({}, {}),
          [](auto caller, auto params, auto results) -> auto {
            return std::monostate();

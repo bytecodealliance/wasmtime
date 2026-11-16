@@ -12,4 +12,8 @@ TEST(GlobalType, Simple) {
   ty = GlobalType(ValType::v128(), true);
   EXPECT_TRUE(ty->is_mutable());
   EXPECT_EQ(ty->content(), ValType::v128());
+
+  GlobalType other(ValType::i32(), false);
+  other = ty;
+  EXPECT_TRUE(other->is_mutable());
 }

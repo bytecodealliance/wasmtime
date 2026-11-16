@@ -23,7 +23,7 @@ env_logger = { workspace = true, optional = true }
 wasmtime = { workspace = true, features = ['runtime', 'std'] }
 wasmtime-c-api-macros = { workspace = true }
 log = { workspace = true }
-tracing = { workspace = true }
+tracing = { workspace = true, optional = true }
 
 # Optional dependency for the `wat2wasm` API
 wat = { workspace = true, optional = true }
@@ -48,10 +48,11 @@ parallel-compilation = ['wasmtime/parallel-compilation']
 wasi = ['wasmtime-wasi', 'wasmtime-wasi-io', 'tokio', 'async-trait', 'bytes']
 wasi-http = ['wasi', 'wasmtime-wasi-http']
 logging = ['dep:env_logger']
-disable-logging = ["log/max_level_off", "tracing/max_level_off"]
+disable-logging = ["log/max_level_off", "dep:tracing", "tracing/max_level_off"]
 coredump = ["wasmtime/coredump"]
 addr2line = ["wasmtime/addr2line"]
 demangle = ["wasmtime/demangle"]
+stack-switching = ["wasmtime/stack-switching"]
 threads = ["wasmtime/threads"]
 gc = ["wasmtime/gc"]
 gc-drc = ["wasmtime/gc-drc"]

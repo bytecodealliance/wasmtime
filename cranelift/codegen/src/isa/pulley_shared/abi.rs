@@ -10,6 +10,7 @@ use crate::{
     settings,
 };
 use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use cranelift_bitset::ScalarBitSet;
@@ -216,11 +217,11 @@ where
         specified
     }
 
-    fn gen_args(args: Vec<ArgPair>) -> Self::I {
+    fn gen_args(args: Box<[ArgPair]>) -> Self::I {
         Inst::Args { args }.into()
     }
 
-    fn gen_rets(rets: Vec<RetPair>) -> Self::I {
+    fn gen_rets(rets: Box<[RetPair]>) -> Self::I {
         Inst::Rets { rets }.into()
     }
 

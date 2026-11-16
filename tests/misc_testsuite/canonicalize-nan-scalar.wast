@@ -1,4 +1,4 @@
-;;! nan_canonicalization = true
+;;! flags = "-W nan-canonicalization"
 
 ;; Scalar counterpart to simd/canonicalize-nan.wast.
 

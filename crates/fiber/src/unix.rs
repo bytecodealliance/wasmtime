@@ -30,6 +30,9 @@
 //! its own resumption information into this slot as well.
 
 use crate::stackswitch::*;
+
+/// Raw fibers use this crate's stack-switching routines.
+pub(crate) use crate::stackswitch::raw;
 use crate::{RunResult, RuntimeFiberStack};
 use std::boxed::Box;
 use std::cell::Cell;

@@ -6,8 +6,8 @@ use cranelift_codegen::{
     binemit::Reloc, ir, isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo,
 };
 use wasmtime_environ::{
-    FilePos, FrameStateSlotBuilder, InstructionAddressMap, ModulePC, PrimaryMap, TrapInformation,
-    Tunables,
+    FilePos, FrameStateSlotBuilder, FuncKey, InstructionAddressMap, ModulePC, PrimaryMap,
+    StaticModuleIndex, TrapInformation, Tunables,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -68,8 +68,10 @@ pub struct CompiledFunction {
     metadata: CompiledFunctionMetadata,
     /// Debug metadata for the top-level function's state slot.
     pub debug_slot_descriptor: Option<FrameStateSlotBuilder>,
-    /// Debug breakpoint patches: module-relative Wasm PC, offset range in buffer.
-    pub breakpoint_patch_points: Vec<(ModulePC, Range<u32>)>,
+    /// Debug breakpoint patches: the module whose code it is (which
+    /// differs from this function's own module if inlined from
+    /// another), module-relative Wasm PC, offset range in buffer.
+    pub breakpoint_patch_points: Vec<(StaticModuleIndex, ModulePC, Range<u32>)>,
 }
 
 impl CompiledFunction {
@@ -117,19 +119,37 @@ impl CompiledFunction {
             assert_eq!(tag.offset, patchable_callsite.ret_addr);
 
             // Tag format used by our Wasm-to-CLIF format is
-            // (stackslot, wasm_pc, stack_shape). Taking the
-            // second-to-last tag will get the innermost Wasm PC (if
-            // there are multiple nested frames due to inlining).
+            // (stackslot, wasm_pc, stack_shape). Taking the last
+            // triple will get the innermost frame (if there are
+            // multiple nested frames due to inlining): its Wasm PC,
+            // and through its state slot, the module that PC is in.
             assert!(tag.tags.len() >= 3);
-            let ir::DebugTag::User(wasm_pc_raw) = tag.tags[tag.tags.len() - 2] else {
+            let &[
+                ir::DebugTag::StackSlot(slot),
+                ir::DebugTag::User(wasm_pc_raw),
+                ir::DebugTag::User(_stack_shape),
+            ] = &tag.tags[tag.tags.len() - 3..]
+            else {
                 panic!("invalid tag")
             };
+            let func_key = self
+                .buffer
+                .frame_layout()
+                .expect("breakpoint in a function without a frame layout")
+                .stackslots[slot]
+                .key
+                .expect("Key must be present on stackslot used as state slot")
+                .bits();
+            let (module, _) = FuncKey::from_raw_u64(func_key).unwrap_defined_wasm_function();
 
             let patchable_start = patchable_callsite.ret_addr - patchable_callsite.len;
             let patchable_end = patchable_callsite.ret_addr;
 
-            self.breakpoint_patch_points
-                .push((ModulePC::new(wasm_pc_raw), patchable_start..patchable_end));
+            self.breakpoint_patch_points.push((
+                module,
+                ModulePC::new(wasm_pc_raw),
+                patchable_start..patchable_end,
+            ));
 
             tags.next();
             patchable_callsites.next();
@@ -252,8 +272,10 @@ impl CompiledFunction {
 
     /// Returns an iterator over breakpoint patches for this function.
     ///
-    /// Each tuple is (wasm PC, buffer offset range).
-    pub fn breakpoint_patches(&self) -> impl Iterator<Item = (ModulePC, Range<u32>)> + '_ {
+    /// Each tuple is (module, wasm PC, buffer offset range).
+    pub fn breakpoint_patches(
+        &self,
+    ) -> impl Iterator<Item = (StaticModuleIndex, ModulePC, Range<u32>)> + '_ {
         self.breakpoint_patch_points.iter().cloned()
     }
 }

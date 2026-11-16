@@ -408,6 +408,13 @@ impl Engine {
         if !cfg!(has_native_signals) && self.tunables().signals_based_traps {
             return Err("signals-based-traps disabled at compile time -- cannot be enabled".into());
         }
+
+        if self.tunables().mmu_interruption {
+            if !cfg!(has_mmu_interruption_runtime) {
+                return Err("MMU interruption runtime support was disabled at compile time".into());
+            }
+        }
+
         if !cfg!(has_virtual_memory) && self.tunables().memory_init_cow {
             return Err("virtual memory disabled at compile time -- cannot enable CoW".into());
         }
@@ -428,6 +435,12 @@ incompatible with Cranelift and Wasmtime -- use \
 information about this check\
 "
             .into());
+        }
+
+        // Use of asan compatible codegen required in an asan build, optional
+        // otherwise.
+        if cfg!(asan) && !self.tunables().asan_stack_switching {
+            return Err("asan enabled at compile time: asan stack switching required".into());
         }
 
         Ok(())

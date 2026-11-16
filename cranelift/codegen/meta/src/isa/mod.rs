@@ -33,7 +33,7 @@ impl Isa {
         match arch {
             "aarch64" => Some(Isa::Arm64),
             "s390x" => Some(Isa::S390x),
-            x if ["x86_64", "i386", "i586", "i686"].contains(&x) => Some(Isa::X86),
+            "x86_64" => Some(Isa::X86),
             "riscv64" | "riscv64gc" | "riscv64imac" => Some(Isa::Riscv64),
             "pulley32" => Some(Isa::Pulley32),
             "pulley64" => Some(Isa::Pulley64),

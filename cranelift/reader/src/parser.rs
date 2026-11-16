@@ -2282,10 +2282,10 @@ impl<'a> Parser<'a> {
                 Token::Identifier("stack_map"),
                 "expected `stack_map = [...]`",
             )?;
-            if !opcode.is_call() || opcode.is_return() {
+            if !opcode.is_safepoint() {
                 return err!(
                     self.loc,
-                    "stack map can only be attached to a (non-tail) call"
+                    "stack map can only be attached to a safepoint (non-tail call or interrupt_poll)"
                 );
             }
 

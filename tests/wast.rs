@@ -1,10 +1,7 @@
 use libtest_mimic::{Arguments, FormatSetting, Trial};
 use std::sync::{Condvar, LazyLock, Mutex};
-use wasmtime::{
-    Config, Enabled, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, bail,
-    error::Context as _,
-};
-use wasmtime_test_util::wast::{Collector, Compiler, WastConfig, WastTest, limits};
+use wasmtime::{Enabled, Engine, bail, error::Context as _};
+use wasmtime_test_util::wast::{Compiler, WastConfig, WastTest, limits};
 use wasmtime_wast::{Async, SpectestConfig, WastContext};
 
 fn main() {
@@ -61,7 +58,6 @@ fn main() {
             let config = WastConfig {
                 compiler: *compiler,
                 pooling: false,
-                collector: Collector::Auto,
             };
             let name = format!("{compiler:?}/{name}");
 
@@ -87,7 +83,7 @@ fn main() {
 // function which actually executes the `wast` test suite given the `strategy`
 // to compile it.
 fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
-    let test_config = test.config.clone();
+    let test_config = &test.config;
 
     // Determine whether this test is expected to fail or pass. Regardless the
     // test is executed and the result of the execution is asserted to match
@@ -113,14 +109,15 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
         _ => false,
     };
 
-    let mut cfg = Config::new();
-    cfg.shared_memory(true);
-    wasmtime_test_util::wasmtime_wast::apply_test_config(&mut cfg, &test_config);
-    wasmtime_test_util::wasmtime_wast::apply_wast_config(&mut cfg, &config);
+    let mut opts = config.compiler.common_options();
+    opts.wasm.shared_memory = Some(true);
 
     if is_cranelift {
-        cfg.cranelift_debug_verifier(true);
-        cfg.cranelift_wasmtime_debug_checks(true);
+        opts.codegen.cranelift_debug_verifier = Some(true);
+        opts.codegen.cranelift.push((
+            "wasmtime_debug_checks".to_string(),
+            Some("true".to_string()),
+        ));
     }
 
     // By default we'll allocate huge chunks (6gb) of the address space for each
@@ -152,11 +149,10 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
         // Don't use 4gb address space reservations when not hogging memory, and
         // also don't reserve lots of memory after dynamic memories for growth
         // (makes growth slower).
-        cfg.memory_reservation(2 * u64::from(wasmtime_environ::Memory::DEFAULT_PAGE_SIZE));
-        cfg.memory_reservation_for_growth(0);
-
-        let small_guard = 64 * 1024;
-        cfg.memory_guard_size(small_guard);
+        opts.opts.memory_reservation =
+            Some(2 * u64::from(wasmtime_environ::Memory::DEFAULT_PAGE_SIZE));
+        opts.opts.memory_reservation_for_growth = Some(0);
+        opts.opts.memory_guard_size = Some(64 * 1024);
     }
 
     let _pooling_lock = if config.pooling {
@@ -179,33 +175,40 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
         // impact.
         let max_memory_size = limits::MEMORY_SIZE;
         if multi_memory {
-            cfg.memory_reservation(max_memory_size as u64);
-            cfg.memory_reservation_for_growth(0);
-            cfg.memory_guard_size(0);
+            opts.opts.memory_reservation = Some(max_memory_size as u64);
+            opts.opts.memory_reservation_for_growth = Some(0);
+            opts.opts.memory_guard_size = Some(0);
         }
 
-        let mut pool = PoolingAllocationConfig::default();
-        pool.total_memories(limits::MEMORIES * 2)
-            .max_memory_protection_keys(2)
-            .max_memory_size(max_memory_size)
-            .max_memories_per_module(if multi_memory {
-                limits::MEMORIES_PER_MODULE
-            } else {
-                1
-            })
-            .max_tables_per_module(limits::TABLES_PER_MODULE);
+        let o = &mut opts.opts;
+        o.pooling_allocator = Some(true);
+        o.pooling_total_memories = Some(limits::MEMORIES * 2);
+        o.pooling_max_memory_size = Some(max_memory_size);
+        o.pooling_max_memories_per_module = Some(if multi_memory {
+            limits::MEMORIES_PER_MODULE
+        } else {
+            1
+        });
+        o.pooling_max_tables_per_module = Some(limits::TABLES_PER_MODULE);
 
         // When testing, we may choose to start with MPK force-enabled to ensure
         // we use that functionality.
-        if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
-            pool.memory_protection_keys(Enabled::Yes);
-        }
+        o.pooling_memory_protection_keys =
+            Some(if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
+                Enabled::Yes
+            } else {
+                Enabled::No
+            });
+        o.pooling_max_memory_protection_keys = Some(2);
 
-        cfg.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
         Some(lock_pooling())
     } else {
         None
     };
+
+    // The test's configuration goes last so the test has the final say.
+    test_config.apply(&mut opts)?;
+    let mut cfg = opts.config(None)?;
 
     let mut engines = vec![(Engine::new(&cfg), "default")];
 
@@ -221,7 +224,10 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
 
     for (engine, desc) in engines {
         let result = engine.and_then(|engine| {
-            let mut wast_context = WastContext::new(&engine, Async::Yes, |_store| {});
+            let opts = opts.clone();
+            let mut wast_context = WastContext::new(&engine, Async::Yes, move |store| {
+                opts.configure_store(store).unwrap();
+            });
             wast_context.generate_dwarf(true);
             wast_context.register_spectest(&SpectestConfig {
                 use_shared_memory: true,

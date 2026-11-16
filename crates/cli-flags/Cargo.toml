@@ -36,6 +36,7 @@ toml = ["dep:toml", "serde"]
 # ----------------------------------------
 # Forwarding features to the `wasmtime` crate, and additionally being able to
 # configure various options gated behind these features.
+runtime = ["wasmtime/runtime"]
 async = ["wasmtime/async"]
 pooling-allocator = ["wasmtime/pooling-allocator"]
 component-model = ["wasmtime/component-model"]

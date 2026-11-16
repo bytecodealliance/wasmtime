@@ -1,9 +1,7 @@
 //! Densely numbered entity references as mapping keys.
 use crate::EntityRef;
-use crate::boxed_slice::BoxedSlice;
 use crate::iter::{IntoIter, Iter, IterMut};
 use crate::keys::Keys;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
@@ -26,8 +24,7 @@ use wasmtime_core::error::OutOfMemory;
 /// Note that `PrimaryMap` doesn't implement `Deref` or `DerefMut`, which would allow
 /// `&PrimaryMap<K, V>` to convert to `&[V]`. One of the main advantages of `PrimaryMap` is
 /// that it only allows indexing with the distinct `EntityRef` key type, so converting to a
-/// plain slice would make it easier to use incorrectly. To make a slice of a `PrimaryMap`, use
-/// `into_boxed_slice`.
+/// plain slice would make it easier to use incorrectly.
 #[derive(Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct PrimaryMap<K, V>
@@ -185,11 +182,6 @@ where
         self.elems.shrink_to_fit()
     }
 
-    /// Consumes this `PrimaryMap` and produces a `BoxedSlice`.
-    pub fn into_boxed_slice(self) -> BoxedSlice<K, V> {
-        unsafe { BoxedSlice::<K, V>::from_raw(Box::<[V]>::into_raw(self.elems.into_boxed_slice())) }
-    }
-
     /// Returns mutable references to many elements at once.
     ///
     /// Returns an error if an element does not exist, or if the same key was passed more than
@@ -221,25 +213,6 @@ where
             .binary_search_by_key(b, f)
             .map(|i| K::new(i))
             .map_err(|i| K::new(i))
-    }
-
-    /// Analog of `get_raw` except that a raw pointer is returned rather than a
-    /// mutable reference.
-    ///
-    /// The default accessors of items in [`PrimaryMap`] will invalidate all
-    /// previous borrows obtained from the map according to miri. This function
-    /// can be used to acquire a pointer and then subsequently acquire a second
-    /// pointer later on without invalidating the first one. In other words
-    /// this is only here to help borrow two elements simultaneously with miri.
-    pub fn get_raw_mut(&mut self, k: K) -> Option<*mut V> {
-        if k.index() < self.elems.len() {
-            // SAFETY: the `add` function requires that the index is in-bounds
-            // with respect to the allocation which is satisfied here due to
-            // the bounds-check above.
-            unsafe { Some(self.elems.as_mut_ptr().add(k.index())) }
-        } else {
-            None
-        }
     }
 }
 

@@ -118,7 +118,7 @@ fn assert_no_overlap(
 }
 
 #[cfg(feature = "debug")]
-pub struct RegisterBreakpointState<'a>(pub(crate) &'a crate::runtime::debug::BreakpointState);
+pub struct RegisterBreakpointState<'a>(pub(crate) &'a crate::runtime::debug::Breakpoints);
 #[cfg(not(feature = "debug"))]
 pub struct RegisterBreakpointState<'a>(pub(crate) PhantomData<&'a ()>);
 

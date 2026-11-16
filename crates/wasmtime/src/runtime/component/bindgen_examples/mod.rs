@@ -52,16 +52,21 @@
 // referenced in the generated output.
 //
 // Note that this has an additional "hack" such that when docs.rs is documenting
-// this crate (or CI) then `include_generated_code_from_file` is unconditionally
-// turned on. This makes `[source]` links on documentation show the actual
-// generated code rather than just the `bindgen!` macro invocation, which can be
-// helpful when exploring code.
+// this crate (or CI) then `debug` is unconditionally turned on. This makes
+// `[source]` links on documentation show the actual generated code rather than
+// just the `bindgen!` macro invocation, which can be helpful when exploring
+// code.
 #[cfg(docsrs)]
 macro_rules! bindgen {
     ({$($t:tt)*}) => (crate::component::bindgen!({
         $($t)*
         wasmtime_crate: crate,
-        include_generated_code_from_file: true,
+        // On docs.rs itself the source directory is read-only so pick $OUT_DIR
+        // as some semi-relevant location. This works because wasmtime itself
+        // has a build script so the env var is set, and the support for such an
+        // env var in `bindgen!` itself is something we don't speak much of as
+        // it's a hack to support it.
+        debug: "$OUT_DIR/bindgen",
     }););
 }
 #[cfg(not(docsrs))]

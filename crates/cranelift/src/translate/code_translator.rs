@@ -73,12 +73,12 @@
 
 use crate::bounds_checks::{BoundsCheck, bounds_check_and_compute_addr};
 use crate::func_environ::{Extension, FuncEnvironment};
-use crate::translate::TargetEnvironment;
 use crate::translate::environ::StructFieldsVec;
 use crate::translate::stack::{ControlStackFrame, ElseData};
 use crate::translate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation, set_block_params,
 };
+use crate::translate::{HeapData, TargetEnvironment};
 use crate::trap::TranslateTrap;
 use crate::{MAX_BR_TABLE_TARGETS, Reachability};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
@@ -93,7 +93,7 @@ use itertools::Itertools;
 use smallvec::{SmallVec, ToSmallVec};
 use std::collections::{HashMap, hash_map};
 use std::vec::Vec;
-use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
+use wasmparser::{FuncValidator, MemArg, MemArgTarget, Operator, Ordering, WasmModuleResources};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TagIndex, TypeConvert,
     TypeIndex, WasmHeapType, WasmRefType, WasmResult, WasmValType, wasm_unsupported,
@@ -1431,7 +1431,10 @@ pub fn translate_operator(
                 Operator::MemoryAtomicWait32 { .. } => I32,
                 _ => unreachable!(),
             };
-            let memory_index = MemoryIndex::from_u32(memarg.memory);
+            let memory_index = match memarg.target {
+                MemArgTarget::Memory(index) => MemoryIndex::from_u32(index),
+                MemArgTarget::Array(_) => return Err(wasm_unsupported!("should not be valid")),
+            };
             let heap = environ.get_or_create_heap(builder.func, memory_index);
             let timeout = environ.stacks.pop1(); // 64 (fixed)
             let expected = environ.stacks.pop1(); // 32 or 64 (per the `Ixx` in `IxxAtomicWait`)
@@ -1457,7 +1460,10 @@ pub fn translate_operator(
             environ.stacks.push1(res);
         }
         Operator::MemoryAtomicNotify { memarg } => {
-            let memory_index = MemoryIndex::from_u32(memarg.memory);
+            let memory_index = match memarg.target {
+                MemArgTarget::Memory(index) => MemoryIndex::from_u32(index),
+                MemArgTarget::Array(_) => return Err(wasm_unsupported!("should not be valid")),
+            };
             let heap = environ.get_or_create_heap(builder.func, memory_index);
             let count = environ.stacks.pop1(); // 32 (fixed)
             let addr = environ.stacks.pop1();
@@ -1675,7 +1681,10 @@ pub fn translate_operator(
             translate_atomic_cas(I64, I32, memarg, builder, environ)?
         }
 
-        Operator::AtomicFence { .. } => {
+        Operator::AtomicFence { ordering } => {
+            if *ordering != Ordering::SeqCst {
+                return Err(wasm_unsupported!("acquire-release-atomics"));
+            }
             builder.ins().fence();
         }
         Operator::MemoryCopy { src_mem, dst_mem } => {
@@ -3619,9 +3628,46 @@ fn prepare_addr(
 ) -> WasmResult<Reachability<(MemFlagsData, Value, Value)>> {
     let index = environ.stacks.pop1();
 
-    let memory_index = MemoryIndex::from_u32(memarg.memory);
+    let memory_index = match memarg.target {
+        MemArgTarget::Memory(index) => MemoryIndex::from_u32(index),
+        MemArgTarget::Array(_) => return Err(wasm_unsupported!("multibyte-array-access proposal")),
+    };
     let heap = environ.get_or_create_heap(builder.func, memory_index);
+    let heap = environ.heaps()[heap].clone();
+    let addr = match heap_addr(memarg, access_size, &heap, index, builder, environ) {
+        Reachability::Unreachable => return Ok(Reachability::Unreachable),
+        Reachability::Reachable(a) => a,
+    };
 
+    // Note that we don't set `is_aligned` here, even if the load instruction's
+    // alignment immediate may say it's aligned, because WebAssembly's
+    // immediate field is just a hint, while Cranelift's aligned flag needs a
+    // guarantee. WebAssembly memory accesses are always little-endian.
+    let mut flags = MemFlagsData::new();
+    flags.set_endianness(ir::Endianness::Little);
+
+    // The access occurs to a per-memory disjoint category of abstract
+    // state. This may allow alias analysis to merge redundant loads,
+    // etc. when heap accesses occur interleaved with other (table,
+    // vmctx, stack) accesses.
+    let region = environ.memory_alias_region(builder.func, memory_index);
+    flags.set_alias_region(Some(region));
+
+    Ok(Reachability::Reachable((flags, index, addr)))
+}
+
+/// Bounds checks an access of `access_size` bytes at the Wasm address `index`
+/// plus `memarg.offset` in `heap`, and computes its native address.
+///
+/// Returns `Unreachable` when the access will unconditionally trap.
+fn heap_addr(
+    memarg: &MemArg,
+    access_size: u8,
+    heap: &HeapData,
+    index: Value,
+    builder: &mut FunctionBuilder,
+    environ: &mut FuncEnvironment<'_>,
+) -> Reachability<Value> {
     // How exactly the bounds check is performed here and what it's performed
     // on is a bit tricky. Generally we want to rely on access violations (e.g.
     // segfaults) to generate traps since that means we don't have to bounds
@@ -3692,14 +3738,13 @@ fn prepare_addr(
     // offsets in `memarg` are <=2gb, which means we get the fast path of one
     // `heap_addr` instruction plus a hardcoded i32-offset in memory-related
     // instructions.
-    let heap = environ.heaps()[heap].clone();
-    let addr = match u32::try_from(memarg.offset) {
+    match u32::try_from(memarg.offset) {
         // If our offset fits within a u32, then we can place the it into the
         // offset immediate of the `heap_addr` instruction.
         Ok(offset) => bounds_check_and_compute_addr(
             builder,
             environ,
-            &heap,
+            heap,
             index,
             BoundsCheck::StaticOffset {
                 offset,
@@ -3747,7 +3792,7 @@ fn prepare_addr(
             bounds_check_and_compute_addr(
                 builder,
                 environ,
-                &heap,
+                heap,
                 adjusted_index,
                 BoundsCheck::StaticOffset {
                     offset: 0,
@@ -3756,27 +3801,7 @@ fn prepare_addr(
                 ir::TrapCode::HEAP_OUT_OF_BOUNDS,
             )
         }
-    };
-    let addr = match addr {
-        Reachability::Unreachable => return Ok(Reachability::Unreachable),
-        Reachability::Reachable(a) => a,
-    };
-
-    // Note that we don't set `is_aligned` here, even if the load instruction's
-    // alignment immediate may says it's aligned, because WebAssembly's
-    // immediate field is just a hint, while Cranelift's aligned flag needs a
-    // guarantee. WebAssembly memory accesses are always little-endian.
-    let mut flags = MemFlagsData::new();
-    flags.set_endianness(ir::Endianness::Little);
-
-    // The access occurs to a per-memory disjoint category of abstract
-    // state. This may allow alias analysis to merge redundant loads,
-    // etc. when heap accesses occur interleaved with other (table,
-    // vmctx, stack) accesses.
-    let region = environ.memory_alias_region(builder.func, memory_index);
-    flags.set_alias_region(Some(region));
-
-    Ok(Reachability::Reachable((flags, index, addr)))
+    }
 }
 
 fn align_atomic_addr(
@@ -3813,14 +3838,28 @@ fn align_atomic_addr(
 
 /// Like `prepare_addr` but for atomic accesses.
 ///
+/// If the access stores `stored`, checks for watchpoints (see `watch_store`)
+/// after the alignment check and before computing the native address.
+///
 /// Returns `None` when the Wasm access will unconditionally trap.
 fn prepare_atomic_addr(
     memarg: &MemArg,
     loaded_bytes: u8,
+    stored: Option<Value>,
     builder: &mut FunctionBuilder,
     environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<Reachability<(MemFlagsData, Value, Value)>> {
+    if memarg.ordering.is_some() {
+        return Err(wasm_unsupported!("acquire-release-atomics"));
+    }
     align_atomic_addr(memarg, loaded_bytes, builder, environ);
+    if let Some(stored) = stored {
+        if let Reachability::Unreachable =
+            watch_store(memarg, loaded_bytes, stored, builder, environ)?
+        {
+            return Ok(Reachability::Unreachable);
+        }
+    }
     prepare_addr(memarg, loaded_bytes, builder, environ)
 }
 
@@ -3861,6 +3900,10 @@ fn translate_store(
     let val_ty = builder.func.dfg.value_type(val);
     let mem_op_size = mem_op_size(opcode, val_ty);
 
+    unwrap_or_return_unreachable_state!(
+        environ,
+        watch_store(memarg, mem_op_size, val, builder, environ)?
+    );
     let (flags, wasm_index, base) = unwrap_or_return_unreachable_state!(
         environ,
         prepare_addr(memarg, mem_op_size, builder, environ)?
@@ -3873,6 +3916,47 @@ fn translate_store(
         .ins()
         .Store(opcode, val_ty, flags, Offset32::new(0), val, base);
     Ok(())
+}
+
+/// Before a store of `value`, `size` bytes at the Wasm address at the top of
+/// the stack plus `memarg.offset`, checks the memory's shadow for watchpoints,
+/// if it has one.
+///
+/// The shadow is as large as the memory, so the shadow's bounds check passes
+/// exactly when the store's does.
+fn watch_store(
+    memarg: &MemArg,
+    size: u8,
+    value: Value,
+    builder: &mut FunctionBuilder,
+    environ: &mut FuncEnvironment<'_>,
+) -> WasmResult<Reachability<()>> {
+    let memory = match memarg.target {
+        MemArgTarget::Memory(index) => MemoryIndex::from_u32(index),
+        MemArgTarget::Array(_) => return Err(wasm_unsupported!("multibyte-array-access proposal")),
+    };
+    let heap = environ.get_or_create_heap(builder.func, memory);
+    let Some(shadow) = environ.heaps()[heap].shadow else {
+        return Ok(Reachability::Reachable(()));
+    };
+    let shadow = environ.heaps()[shadow].clone();
+    let index = environ.stacks.pop1();
+    let shadow_addr = heap_addr(memarg, size, &shadow, index, builder, environ);
+    let Reachability::Reachable(shadow_addr) = shadow_addr else {
+        environ.stacks.push1(index);
+        return Ok(Reachability::Unreachable);
+    };
+    environ.watch_store(
+        builder,
+        memory,
+        shadow_addr,
+        index,
+        memarg.offset,
+        size,
+        value,
+    );
+    environ.stacks.push1(index);
+    Ok(Reachability::Reachable(()))
 }
 
 fn mem_op_size(opcode: ir::Opcode, ty: Type) -> u8 {
@@ -3929,6 +4013,7 @@ fn translate_atomic_rmw(
         prepare_atomic_addr(
             memarg,
             u8::try_from(access_ty.bytes()).unwrap(),
+            Some(arg2),
             builder,
             environ,
         )?
@@ -3984,6 +4069,7 @@ fn translate_atomic_cas(
         prepare_atomic_addr(
             memarg,
             u8::try_from(access_ty.bytes()).unwrap(),
+            Some(replacement),
             builder,
             environ,
         )?
@@ -4025,6 +4111,7 @@ fn translate_atomic_load(
         prepare_atomic_addr(
             memarg,
             u8::try_from(access_ty.bytes()).unwrap(),
+            None,
             builder,
             environ,
         )?
@@ -4072,6 +4159,7 @@ fn translate_atomic_store(
         prepare_atomic_addr(
             memarg,
             u8::try_from(access_ty.bytes()).unwrap(),
+            Some(data),
             builder,
             environ,
         )?

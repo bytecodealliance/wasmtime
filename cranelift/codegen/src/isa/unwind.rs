@@ -214,11 +214,13 @@ pub enum UnwindInst {
     },
 }
 
+#[cfg(feature = "unwind")]
 struct Writer<'a> {
     buf: &'a mut [u8],
     offset: usize,
 }
 
+#[cfg(feature = "unwind")]
 impl<'a> Writer<'a> {
     pub fn new(buf: &'a mut [u8]) -> Self {
         Self { buf, offset: 0 }

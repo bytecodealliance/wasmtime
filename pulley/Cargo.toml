@@ -15,13 +15,13 @@ workspace = true
 [dependencies]
 arbitrary = { workspace = true, optional = true }
 cranelift-bitset = { workspace = true }
-log = { workspace = true }
 wasmtime-core = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
-pulley-macros = { workspace = true }
+pulley-macros = { workspace = true, optional = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
+log = { workspace = true }
 anyhow = { workspace = true, features = ['std'] }
 clap = { workspace = true }
 termcolor = { workspace = true }
@@ -32,7 +32,7 @@ arbitrary = ["dep:arbitrary", "arbitrary/derive", "std", "cranelift-bitset/arbit
 encode = []
 decode = []
 disas = ["decode"]
-interp = ["decode", "encode", "dep:wasmtime-core"]
+interp = ["decode", "encode", "dep:wasmtime-core", "dep:pulley-macros"]
 profile = ['std', 'dep:anyhow']
 
 [package.metadata.docs.rs]

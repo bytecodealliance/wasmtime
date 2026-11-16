@@ -117,6 +117,10 @@ impl Mmap {
     pub unsafe fn make_readwrite(&self, _range: Range<usize>) -> Result<()> {
         Ok(())
     }
+
+    pub unsafe fn make_inaccessible(&self, _range: Range<usize>) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl Drop for Mmap {

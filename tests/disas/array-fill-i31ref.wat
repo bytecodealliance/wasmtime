@@ -63,8 +63,8 @@
 ;;
 ;;                                 block2(v43: i64):
 ;; @0030                               store.i32 user2 little region5 v4, v43
-;;                                     v57 = iconst.i64 4
-;;                                     v58 = iadd v43, v57  ; v57 = 4
+;; @0030                               v57 = iconst.i64 4
+;; @0030                               v58 = iadd v43, v57  ; v57 = 4
 ;; @0030                               v46 = icmp eq v58, v40
 ;; @0030                               brif v46, block3, block2(v58)
 ;;
@@ -120,10 +120,10 @@
 ;; @003e                               brif v54, block3, block2(v29)
 ;;
 ;;                                 block2(v43: i64):
-;;                                     v56 = iconst.i32 0
+;; @003a                               v56 = iconst.i32 0
 ;; @003e                               store user2 little region5 v56, v43  ; v56 = 0
-;;                                     v57 = iconst.i64 4
-;;                                     v58 = iadd v43, v57  ; v57 = 4
+;; @003e                               v57 = iconst.i64 4
+;; @003e                               v58 = iadd v43, v57  ; v57 = 4
 ;; @003e                               v46 = icmp eq v58, v40
 ;; @003e                               brif v46, block3, block2(v58)
 ;;
@@ -180,10 +180,10 @@
 ;; @004e                               brif v65, block3, block2(v33)
 ;;
 ;;                                 block2(v47: i64):
-;;                                     v67 = iconst.i32 -1
+;; @0048                               v67 = iconst.i32 -1
 ;; @004e                               store user2 little region5 v67, v47  ; v67 = -1
-;;                                     v68 = iconst.i64 4
-;;                                     v69 = iadd v47, v68  ; v68 = 4
+;; @004e                               v68 = iconst.i64 4
+;; @004e                               v69 = iadd v47, v68  ; v68 = 4
 ;; @004e                               v50 = icmp eq v69, v44
 ;; @004e                               brif v50, block3, block2(v69)
 ;;

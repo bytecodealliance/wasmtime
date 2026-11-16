@@ -158,8 +158,8 @@
 ;; @004e                               v29 = iconst.i64 16
 ;; @004e                               v30 = iadd.i64 v19, v29  ; v29 = 16
 ;; @004e                               store user2 region8 v24, v30
-;;                                     v82 = iconst.i32 2
-;;                                     v83 = bor.i32 v20, v82  ; v82 = 2
+;; @004e                               v82 = iconst.i32 2
+;; @004e                               v83 = bor.i32 v20, v82  ; v82 = 2
 ;; @004e                               store user2 region5 v83, v19
 ;; @004e                               v41 = iconst.i64 8
 ;; @004e                               v42 = iadd.i64 v19, v41  ; v41 = 8
@@ -169,8 +169,8 @@
 ;; @004e                               store user2 region9 v45, v42
 ;; @004e                               store.i32 notrap aligned region7 v9, v23
 ;; @004e                               v52 = load.i32 notrap aligned region10 v23+4
-;;                                     v84 = iconst.i32 1
-;;                                     v85 = iadd v52, v84  ; v84 = 1
+;; @004e                               v84 = iconst.i32 1
+;; @004e                               v85 = iadd v52, v84  ; v84 = 1
 ;; @004e                               store notrap aligned region10 v85, v23+4
 ;; @004e                               v57 = load.i32 notrap aligned region11 v23+8
 ;; @004e                               v58 = iadd v57, v57

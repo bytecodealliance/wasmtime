@@ -787,7 +787,9 @@ fn lookup_libcall(name: &str) -> Option<*const u8> {
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::__m128i;
 #[cfg(target_arch = "x86_64")]
-#[expect(
+// NB: when MSRV is 1.102 then delete this attribute as it no longer warns at
+// that point.
+#[allow(
     improper_ctypes_definitions,
     reason = "manually verified to work for now"
 )]

@@ -2815,16 +2815,42 @@
 
 ;;;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; PIC: load the address of a function via the PLT.
+(rule 2 (lower (func_addr _ (func_ref_data _ name _ _)))
+      (if-let true (is_pic))
+      (load_symbol_reloc (SymbolReloc.Got name)))
+
 ;; Load the address of a function, target reachable via PC-relative instruction.
 (rule 1 (lower (func_addr _ (func_ref_data _ name (RelocDistance.Near) _)))
       (load_addr (memarg_symbol name 0 (memflags_trusted))))
 
-;; Load the address of a function, general case.
+;; Load the address of a function, general case (non-PIC).
 (rule (lower (func_addr _ (func_ref_data _ name _ _)))
+      (if-let false (is_pic))
       (load_symbol_reloc (SymbolReloc.Absolute name 0)))
 
 
 ;;;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; PIC: load the address of a symbol through the GOT (zero offset).
+(rule 4 (lower (symbol_value _ (symbol_value_data name _ 0)))
+      (if-let true (is_pic))
+      (load_symbol_reloc (SymbolReloc.Got name)))
+
+;; PIC: load the address of a symbol through the GOT with a signed 16-bit offset.
+(rule 3 (lower (symbol_value _ (symbol_value_data name _ (i16_from_i64 off))))
+      (if-let true (is_pic))
+      (add_simm16 $I64 (load_symbol_reloc (SymbolReloc.Got name)) off))
+
+;; PIC: load the address of a symbol through the GOT with a signed 32-bit offset.
+(rule 2 (lower (symbol_value _ (symbol_value_data name _ (i32_from_i64 off))))
+      (if-let true (is_pic))
+      (add_simm32 $I64 (load_symbol_reloc (SymbolReloc.Got name)) off))
+
+;; PIC: load the address of a symbol through the GOT with a large (>32-bit) offset.
+(rule (lower (symbol_value _ (symbol_value_data name _ off)))
+      (if-let true (is_pic))
+      (add_reg $I64 (load_symbol_reloc (SymbolReloc.Got name)) (imm $I64 (i64_cast_unsigned off))))
 
 ;; Load the address of a symbol, target reachable via PC-relative instruction.
 (rule 1 (lower (symbol_value _ (symbol_value_data name (RelocDistance.Near)
@@ -2832,8 +2858,9 @@
       (if-let offset (memarg_symbol_offset off))
       (load_addr (memarg_symbol name offset (memflags_trusted))))
 
-;; Load the address of a symbol, general case.
+;; Load the address of a symbol (non-PIC).
 (rule (lower (symbol_value _ (symbol_value_data name _ offset)))
+      (if-let false (is_pic))
       (load_symbol_reloc (SymbolReloc.Absolute name offset)))
 
 
@@ -4625,8 +4652,23 @@
             (_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
         output))
 
-;; Direct call to an out-of-range function (implicitly via pointer).
+
+;; PIC: direct call to an out-of-range function via GOT.
+(rule 2 (lower (call (func_ref_data sig_ref name _ false) args))
+      (if-let true (is_pic))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (_ Unit (abi_emit_call_adjust_stack abi))
+            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
+            (defs CallRetList (gen_call_rets abi output))
+            (target Reg (load_symbol_reloc (SymbolReloc.Got name)))
+            (info BoxCallInfo (gen_call_info abi target uses defs (try_call_none) false))
+            (_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
+        output))
+
+;; Direct call to an out-of-range function (implicitly via pointer, non-PIC).
 (rule (lower (call (func_ref_data sig_ref name _ false) args))
+      (if-let false (is_pic))
       (let ((output ValueRegsVec (gen_call_output sig_ref))
             (abi Sig (abi_sig sig_ref))
             (_ Unit (abi_emit_call_adjust_stack abi))
@@ -4659,8 +4701,19 @@
             (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
         (side_effect (return_call_impl info))))
 
-;; Direct tail call to an out-of-range function (implicitly via pointer).
+;; PIC: direct tail call to an out-of-range function via Got.
+(rule 2 (lower (return_call (func_ref_data sig_ref name _ false) args))
+      (if-let true (is_pic))
+      (let ((abi Sig (abi_sig sig_ref))
+            (_ Unit (abi_emit_return_call_adjust_stack abi))
+            (uses CallArgList (gen_return_call_args abi (abi_prepare_args abi args)))
+            (target Reg (load_symbol_reloc (SymbolReloc.Got name)))
+            (info BoxReturnCallInfo (gen_return_call_info abi target uses)))
+        (side_effect (return_call_impl info))))
+
+;; Direct tail call to an out-of-range function (implicitly via pointer, non-PIC).
 (rule (lower (return_call (func_ref_data sig_ref name _ false) args))
+      (if-let false (is_pic))
       (let ((abi Sig (abi_sig sig_ref))
             (_ Unit (abi_emit_return_call_adjust_stack abi))
             (uses CallArgList (gen_return_call_args abi (abi_prepare_args abi args)))
@@ -4690,8 +4743,21 @@
             (info BoxCallInfo (gen_call_info abi name uses defs trycall patchable)))
         (emit_side_effect (call_impl (writable_link_reg) info))))
 
-;; Direct call to an out-of-range function (implicitly via pointer).
+;; PIC: direct try_call to an out-of-range function via Got.
+(rule 2 (lower_branch (try_call (func_ref_data sig_ref name _ false) args et) targets)
+      (if-let true (is_pic))
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (_ Unit (abi_emit_call_adjust_stack abi))
+            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
+            (defs CallRetList (gen_try_call_rets abi))
+            (target Reg (load_symbol_reloc (SymbolReloc.Got name)))
+            (info BoxCallInfo (gen_call_info abi target uses defs trycall false)))
+        (emit_side_effect (call_impl (writable_link_reg) info))))
+
+;; Direct call to an out-of-range function (implicitly via pointer, non-PIC).
 (rule (lower_branch (try_call (func_ref_data sig_ref name _ false) args et) targets)
+      (if-let false (is_pic))
       (let ((abi Sig (abi_sig sig_ref))
             (trycall OptionTryCallInfo (try_call_info et targets))
             (_ Unit (abi_emit_call_adjust_stack abi))

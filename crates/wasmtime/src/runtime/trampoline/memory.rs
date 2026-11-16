@@ -1,19 +1,17 @@
 use crate::MemoryType;
-use crate::memory::{LinearMemory, MemoryCreator};
 use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     CompiledModuleId, InstanceAllocationRequest, InstanceAllocator, Memory, MemoryAllocationIndex,
-    ModuleRuntimeInfo, OnDemandInstanceAllocator, RuntimeMemoryCreator, SharedMemory, Table,
-    TableAllocationIndex,
+    ModuleRuntimeInfo, OnDemandInstanceAllocator, SharedMemory, Table, TableAllocationIndex,
 };
 use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque, StoreResourceLimiter};
 use alloc::sync::Arc;
 use core::future::Future;
 use core::pin::Pin;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryKind, MemoryTunables,
-    Module, StaticModuleIndex, VMOffsets,
+    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryKind, Module,
+    StaticModuleIndex, VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
@@ -71,30 +69,6 @@ pub async fn create_memory(
                 Default::default(),
             )
             .await
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct MemoryCreatorProxy(pub Arc<dyn MemoryCreator>);
-
-impl RuntimeMemoryCreator for MemoryCreatorProxy {
-    fn new_memory(
-        &self,
-        ty: &wasmtime_environ::Memory,
-        memory_tunables: &MemoryTunables<'_>,
-        minimum: usize,
-        maximum: Option<usize>,
-    ) -> Result<Box<dyn LinearMemory>> {
-        let reserved_size_in_bytes = Some(memory_tunables.reservation().try_into().unwrap());
-        self.0
-            .new_memory(
-                MemoryType::from_wasmtime_memory(ty),
-                minimum,
-                maximum,
-                reserved_size_in_bytes,
-                usize::try_from(memory_tunables.guard_size()).unwrap(),
-            )
-            .map_err(|e| format_err!(e))
     }
 }
 

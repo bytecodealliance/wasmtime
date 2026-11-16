@@ -50,6 +50,7 @@ pub struct VMComponentOffsets<P> {
     // generated `compute_field_offsets` and read by the generated accessors of
     // the same names.
     may_leave: u32,
+    handle_tables: u32,
     trampoline_func_refs: u32,
     intrinsic_func_refs: u32,
     lowerings: u32,
@@ -165,6 +166,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             },
             num_resources: component.num_resources,
             may_leave: 0,
+            handle_tables: 0,
             trampoline_func_refs: 0,
             intrinsic_func_refs: 0,
             lowerings: 0,

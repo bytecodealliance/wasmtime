@@ -944,6 +944,10 @@ unsafe impl GcHeap for CopyingHeap {
         usize::try_from(self.bump_ptr() - self.active_space_start).unwrap()
     }
 
+    fn allocatable_bytes(&self) -> usize {
+        usize::try_from(self.active_space_end() - self.active_space_start).unwrap()
+    }
+
     fn gc<'a, 'b>(
         &'a mut self,
         roots: GcRootsIter<'a>,

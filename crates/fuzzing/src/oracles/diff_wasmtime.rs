@@ -256,6 +256,9 @@ mod tests {
 
     #[test]
     fn smoke_cranelift_native() {
+        if !CompilerStrategy::CRANELIFT_NATIVE_SUPPORTED {
+            return;
+        }
         crate::oracles::engine::smoke_test_engine(|u, config| {
             WasmtimeEngine::new(u, config, CompilerStrategy::CraneliftNative)
         })
@@ -270,7 +273,7 @@ mod tests {
 
     #[test]
     fn smoke_winch() {
-        if !cfg!(target_arch = "x86_64") || !cfg!(target_arch = "aarch64") {
+        if !CompilerStrategy::WINCH_SUPPORTED {
             return;
         }
         crate::oracles::engine::smoke_test_engine(|u, config| {

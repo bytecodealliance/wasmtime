@@ -582,3 +582,123 @@ block0:
 ;   ld a0, 8(sp) ; trap: heap_oob
 ;   ret
 
+function %store_i64_imm_offset_large(i64, i64) {
+block0(v0: i64, v1: i64):
+    store.i64 v1, v0+5000
+    return
+}
+
+; VCode:
+; block0:
+;   sd a1,5000(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui t6, 1
+;   addi t6, t6, 0x388
+;   add t6, t6, a0
+;   sd a1, 0(t6) ; trap: heap_oob
+;   ret
+
+function %store_i64_imm_offset_large_neg(i64, i64) {
+block0(v0: i64, v1: i64):
+    store.i64 v1, v0-5000
+    return
+}
+
+; VCode:
+; block0:
+;   sd a1,-5000(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui t6, 0xfffff
+;   addi t6, t6, -0x388
+;   add t6, t6, a0
+;   sd a1, 0(t6) ; trap: heap_oob
+;   ret
+
+function %load_i64_imm_offset_large(i64) -> i64 {
+block0(v0: i64):
+    v1 = load.i64 v0+5000
+    return v1
+}
+
+; VCode:
+; block0:
+;   ld a0,5000(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui t6, 1
+;   addi t6, t6, 0x388
+;   add t6, t6, a0
+;   ld a0, 0(t6) ; trap: heap_oob
+;   ret
+
+function %load_i64_imm_offset_large_neg(i64) -> i64 {
+block0(v0: i64):
+    v1 = load.i64 v0-5000
+    return v1
+}
+
+; VCode:
+; block0:
+;   ld a0,-5000(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui t6, 0xfffff
+;   addi t6, t6, -0x388
+;   add t6, t6, a0
+;   ld a0, 0(t6) ; trap: heap_oob
+;   ret
+
+function %stack_addr_large_offset() -> i64 {
+    ss0 = explicit_slot 5000
+block0:
+    v0 = stack_addr.i64 ss0
+    return v0
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   lui t6,-1
+;   addi t6,t6,-912
+;   add sp,sp,t6
+; block0:
+;   load_addr a0,0(slot)
+;   lui t6,1
+;   addi t6,t6,912
+;   add sp,sp,t6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   lui t6, 0xfffff
+;   addi t6, t6, -0x390
+;   add sp, sp, t6
+; block1: ; offset 0x1c
+;   mv a0, sp
+;   lui t6, 1
+;   addi t6, t6, 0x390
+;   add sp, sp, t6
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

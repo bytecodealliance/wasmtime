@@ -179,14 +179,19 @@ pub(crate) enum NewOrExistingInst {
 /// e-graph: its controlling type variable, or, for a non-polymorphic
 /// instruction that has no controlling type (e.g. `f32const`), the type of its
 /// first result.
+#[inline]
 pub(crate) fn inst_ctrl_type(dfg: &DataFlowGraph, inst: Inst) -> Type {
-    let ty = dfg.ctrl_typevar(inst);
-    if ty != crate::ir::types::INVALID {
-        ty
-    } else if let Some(result) = dfg.inst_results(inst).first() {
-        dfg.value_type(*result)
+    let data = &dfg.insts[inst];
+    if data.opcode().constraints().requires_typevar_operand() {
+        let operand = data
+            .typevar_operand(&dfg.value_lists)
+            .expect("instruction format should have a designated operand");
+        dfg.value_type(operand)
     } else {
-        ty
+        match dfg.inst_results_list(inst).first(&dfg.value_lists) {
+            Some(result) => dfg.value_type(result),
+            None => crate::ir::types::INVALID,
+        }
     }
 }
 

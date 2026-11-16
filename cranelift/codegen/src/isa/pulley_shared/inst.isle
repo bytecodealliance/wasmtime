@@ -13,10 +13,10 @@
     ;;;; Pseudo-Instructions ;;;;
 
     ;; A pseudo-instruction that captures register arguments in vregs.
-    (Args (args VecArgPair))
+    (Args (args BoxedSliceArgPair))
 
     ;; A pseudo-instruction that moves vregs to return registers.
-    (Rets (rets VecRetPair))
+    (Rets (rets BoxedSliceRetPair))
 
     (DummyUse (reg Reg))
 

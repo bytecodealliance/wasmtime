@@ -21,22 +21,21 @@ wasmtime-jit-debug = { workspace = true, optional = true }
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
-wasmtime-cranelift = { workspace = true, optional = true, features = ['pulley'] }
+wasmtime-cranelift = { workspace = true, optional = true, features = ['pulley-fallback'] }
 wasmtime-unwinder = { workspace = true, optional = true }
 wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
-wasmtime-versioned-export-macros = { workspace = true }
+wasmtime-versioned-export-macros = { workspace = true, optional = true }
 wasmtime-wmemcheck = { workspace = true, optional = true }
 wasmtime-core = { workspace = true, features = ['serde'] }
-pulley-interpreter = { workspace = true }
+pulley-interpreter = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasm-wave = { workspace = true, optional = true }
 wasm-compose = { workspace = true, optional = true }
 wit-parser = { workspace = true, optional = true }
-libc = { workspace = true }
 log = { workspace = true }
 wat = { workspace = true, optional = true }
 serde = { workspace = true }
@@ -48,7 +47,7 @@ rayon = { workspace = true, optional = true }
 object = { workspace = true, features = ['unaligned'] }
 async-trait = { workspace = true, optional = true }
 encoding_rs = { version = "0.8.31", optional = true }
-bumpalo = { workspace = true }
+bumpalo = { workspace = true, optional = true }
 fxprof-processed-profile = { version = "0.8.1", optional = true }
 gimli = { workspace = true, optional = true }
 addr2line = { workspace = true, optional = true }
@@ -56,6 +55,7 @@ indexmap = { workspace = true, optional = true }
 semver = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
 bitflags = { workspace = true }
+foldhash = { workspace = true, optional = true }
 futures = { workspace = true, features = ["alloc"], optional = true }
 bytes = { workspace = true, optional = true }
 
@@ -89,6 +89,7 @@ memfd = { workspace = true, optional = true }
 mach2 = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
+libc = { workspace = true, optional = true }
 rustix = { workspace = true, optional = true, features = ["mm", "param"] }
 
 [dev-dependencies]
@@ -178,11 +179,17 @@ winch = ["dep:wasmtime-winch", "std"]
 # targets will be available. When paired with the `runtime` feature, the Pulley
 # interpreter will be built into the runtime and you can interpret WebAssembly
 # modules that have been compiled to Pulley bytecode.
+#
+# If Wasmtime is compiled for a target that does not have a native Cranelift
+# backend then this feature need not be explicitly enabled to use Pulley.
+# Wasmtime makes a dynamic decision based on the target platform whether to use
+# Pulley or not. To guarantee the ability to compile for Pulley, such as a
+# pre-compilation target, then this feature should be enabled.
 pulley = [
-  # Note that this is intentionally empty. This feature is dynamically activated
-  # in `build.rs` as well when the host platform does not have Cranelift support
-  # for example. That means that dependencies for pulley need to be already
-  # activated anyway.
+  # Note that pulley dependencies are intentionally non-optional and not enabled
+  # here. The crate dependencies are always pulled in and `build.rs` decides
+  # whether they're used or not.
+  "wasmtime-cranelift?/pulley",
 ]
 
 # Enables support for incremental compilation cache to be enabled in `Config`.
@@ -196,6 +203,7 @@ profiling = [
   "rustix/thread",
   "dep:serde_json",
   "std",
+  "runtime",
   "wasmtime-jit-debug/perf_jitdump",
 ]
 
@@ -211,6 +219,7 @@ async = [
   "dep:wasmtime-fiber",
   "wasmtime-component-macro?/async",
   "runtime",
+  "dep:async-trait",
 ]
 
 # Enables support for the pooling instance allocation strategy
@@ -240,6 +249,7 @@ wmemcheck = [
   "dep:wasmtime-wmemcheck",
   "wasmtime-environ/wmemcheck",
   "std",
+  "runtime",
 ]
 
 # Enables detailed internal compiler logging via WASMTIME_LOG
@@ -264,11 +274,13 @@ runtime = [
   "dep:smallvec",
   "dep:mach2",
   "dep:memfd",
-  "dep:wasmtime-versioned-export-macros",
   "dep:windows-sys",
   "pulley-interpreter/interp",
   "dep:wasmtime-unwinder",
-  "dep:async-trait",
+  "dep:wasmtime-versioned-export-macros",
+  "dep:bumpalo",
+  "dep:libc",
+  "dep:rustix",
 ]
 
 # Enable support for garbage collection-related things.
@@ -288,7 +300,7 @@ runtime = [
 #
 # You can additionally configure which GC implementations are enabled via the
 # `gc-drc`, `gc-null`, and `gc-copying` features.
-gc = ["wasmtime-environ/gc"]
+gc = ["wasmtime-environ/gc", "dep:foldhash"]
 
 # Enable the deferred reference counting garbage collector.
 gc-drc = ["gc", "wasmtime-environ/gc-drc"]
@@ -311,7 +323,7 @@ stack-switching = [
 # Controls whether backtraces will attempt to parse DWARF information in
 # WebAssembly modules and components to provide filenames and line numbers in
 # stack traces.
-addr2line = ["dep:addr2line", "dep:gimli", "std"]
+addr2line = ["dep:addr2line", "dep:gimli", "std", "runtime"]
 
 # Enables support for the Rust standard library, enabling APIs that require
 # types and traits from Rust's `std` such as `Path` and `Error`.
@@ -325,10 +337,9 @@ std = [
   'object/std',
   'once_cell',
   'wasmtime-fiber?/std',
-  'pulley-interpreter/std',
+  'pulley-interpreter?/std',
   'addr2line?/std',
-  "dep:rustix",
-  "wasmtime-jit-icache-coherence",
+  "dep:wasmtime-jit-icache-coherence",
   "wasmtime-jit-debug?/std",
   "futures?/std",
 ]

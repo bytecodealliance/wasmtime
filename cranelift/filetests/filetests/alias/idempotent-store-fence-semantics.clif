@@ -1,0 +1,70 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; An atomic store publishes its value to other threads and orders the accesses
+;; around it, so it is not a no-op even when the bytes do not change.
+function %two_atomic_stores(i64, i32) {
+block0(v0: i64, v1: i32):
+    atomic_store v1, v0
+    atomic_store v1, v0
+    return
+}
+
+; function %two_atomic_stores(i64, i32) fast {
+; block0(v0: i64, v1: i32):
+;     atomic_store v1, v0
+;     atomic_store v1, v0
+;     return
+; }
+
+;; Same, but with regions.
+function %two_atomic_stores_region(i64, i32) {
+    region0 = 1 "heap"
+
+block0(v0: i64, v1: i32):
+    atomic_store region0 v1, v0
+    atomic_store region0 v1, v0
+    return
+}
+
+; function %two_atomic_stores_region(i64, i32) fast {
+;     region0 = 1 "heap"
+;
+; block0(v0: i64, v1: i32):
+;     atomic_store region0 v1, v0
+;     atomic_store region0 v1, v0
+;     return
+; }
+
+;; The trailing atomic store is what makes the `region0` store visible to other
+;; threads before it.
+function %atomic_store_orders_other_region(i64, i32, i64, i32) {
+    region0 = 1 "heap"
+
+block0(v0: i64, v1: i32, v2: i64, v3: i32):
+    atomic_store v1, v0
+
+    ;; Cannot be removed by dead-store elimination because the following atomic
+    ;; store is a fence.
+    store notrap region0 v3, v2
+
+    atomic_store v1, v0
+
+    ;; Cannot be removed by idempotent-store elimination because the previous
+    ;; atomic store is a fence.
+    store notrap region0 v3, v2
+
+    return
+}
+
+; function %atomic_store_orders_other_region(i64, i32, i64, i32) fast {
+;     region0 = 1 "heap"
+;
+; block0(v0: i64, v1: i32, v2: i64, v3: i32):
+;     atomic_store v1, v0
+;     store notrap region0 v3, v2
+;     atomic_store v1, v0
+;     store notrap region0 v3, v2
+;     return
+; }

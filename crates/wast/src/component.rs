@@ -49,6 +49,13 @@ pub fn val(v: &ComponentConst<'_>) -> Result<Val> {
             Err(v) => Err(payload_val(v.as_deref())?),
         }),
         ComponentConst::Flags(v) => Val::Flags(v.iter().map(|s| s.to_string()).collect()),
+        ComponentConst::Map(entries) => {
+            let mut pairs = Vec::new();
+            for (k, v) in entries {
+                pairs.push((val(k)?, val(v)?));
+            }
+            Val::Map(pairs)
+        }
     })
 }
 
@@ -132,7 +139,7 @@ pub fn match_val(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
         },
         ComponentConst::Record(e) => match actual {
             Val::Record(a) => {
-                if e.len() != e.len() {
+                if e.len() != a.len() {
                     bail!("mismatched number of record fields");
                 }
                 for ((e_name, e_val), (a_name, a_val)) in e.iter().zip(a.iter()) {
@@ -207,6 +214,29 @@ pub fn match_val(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
             }
             _ => mismatch(expected, actual),
         },
+        ComponentConst::Map(e) => match actual {
+            Val::Map(a) => {
+                if e.len() != a.len() {
+                    bail!("expected {} map entries got {}", e.len(), a.len());
+                }
+                let mut used = vec![false; a.len()];
+                for (e_key, e_val) in e {
+                    let found = a.iter().enumerate().position(|(i, (a_key, a_val))| {
+                        !used[i]
+                            && match_val(e_key, a_key).is_ok()
+                            && match_val(e_val, a_val).is_ok()
+                    });
+                    match found {
+                        Some(i) => used[i] = true,
+                        None => bail!(
+                            "expected map entry ({e_key:?}, {e_val:?}) not found in {actual:?}"
+                        ),
+                    }
+                }
+                Ok(())
+            }
+            _ => mismatch(expected, actual),
+        },
     }
 }
 
@@ -263,6 +293,7 @@ fn mismatch(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
         ComponentConst::Option(..) => "option",
         ComponentConst::Result(..) => "result",
         ComponentConst::Flags(..) => "flags",
+        ComponentConst::Map(..) => "map",
     };
     let actual = match actual {
         Val::Bool(..) => "bool",

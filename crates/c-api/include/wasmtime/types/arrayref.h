@@ -31,6 +31,9 @@ typedef struct wasmtime_array_type wasmtime_array_type_t;
  * \param field The element type descriptor.
  *
  * \return Returns a new array type.
+ *
+ * This function aborts the process if the field's type comes from an engine
+ * other than `engine`.
  */
 WASM_API_EXTERN wasmtime_array_type_t *
 wasmtime_array_type_new(const wasm_engine_t *engine,

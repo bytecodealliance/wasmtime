@@ -197,7 +197,14 @@ impl<T: 'static> Linker<T> {
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
+    ///
+    /// Returns an error if `component` was not compiled by the same
+    /// [`Engine`](crate::Engine) as this linker.
     pub fn substituted_component_type(&self, component: &Component) -> Result<types::Component> {
+        ensure!(
+            Engine::same(&self.engine, component.engine()),
+            "cross-`Engine` usage is not supported"
+        );
         let cx = self.typecheck(&component)?;
         Ok(types::Component::from(
             component.ty(),
@@ -992,7 +999,14 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
     /// memory allocation fails. See the `OutOfMemory` type's documentation for
     /// details on Wasmtime's out-of-memory handling.
+    ///
+    /// Returns an error if `module` was not compiled by the same
+    /// [`Engine`](crate::Engine) as this linker.
     pub fn module(&mut self, name: &str, module: &Module) -> Result<()> {
+        ensure!(
+            Engine::same(self.engine, module.engine()),
+            "cross-`Engine` usage is not supported"
+        );
         self.insert(name, Definition::Module(module.clone()))?;
         Ok(())
     }

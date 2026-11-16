@@ -530,7 +530,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &([I8X16, I8X16] | [I16X8, I16X8] | [I32X4, I32X4] | [I64X2, I64X2])
                 ),
                 (
-                    Opcode::UaddSat | Opcode::SaddSat | Opcode::UsubSat | Opcode::SsubSat,
+                    Opcode::UaddSat | Opcode::UsubSat,
                     &([I32X4, I32X4] | [I64X2, I64X2])
                 ),
                 (Opcode::Fcopysign, &([F32X4, F32X4] | [F64X2, F64X2])),

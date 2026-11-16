@@ -1173,6 +1173,12 @@ impl Module {
     }
 
     /// Iterates over imports of the module
+    ///
+    /// # Panics
+    ///
+    /// The `engine` provided must be the [`Engine`] that this type's component
+    /// was compiled with. This method may panic, or return types that don't
+    /// describe this component, if it's a different [`Engine`].
     pub fn imports<'a>(
         &'a self,
         engine: &'a Engine,
@@ -1189,6 +1195,12 @@ impl Module {
     }
 
     /// Iterates over exports of the module
+    ///
+    /// # Panics
+    ///
+    /// The `engine` provided must be the [`Engine`] that this type's component
+    /// was compiled with. This method may panic, or return types that don't
+    /// describe this component, if it's a different [`Engine`].
     pub fn exports<'a>(
         &'a self,
         engine: &'a Engine,
@@ -1212,6 +1224,12 @@ impl Component {
     }
 
     /// Returns import associated with `name`, if such exists in the component
+    ///
+    /// # Panics
+    ///
+    /// The `engine` provided must be the [`Engine`] that this type's component
+    /// was compiled with. This method may panic, or return types that don't
+    /// describe this component, if it's a different [`Engine`].
     pub fn get_import<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
         self.0.types[self.0.index]
             .imports
@@ -1220,6 +1238,12 @@ impl Component {
     }
 
     /// Iterates over imports of the component
+    ///
+    /// # Panics
+    ///
+    /// The `engine` provided must be the [`Engine`] that this type's component
+    /// was compiled with. This method may panic, or return types that don't
+    /// describe this component, if it's a different [`Engine`].
     pub fn imports<'a>(
         &'a self,
         engine: &'a Engine,
@@ -1233,6 +1257,12 @@ impl Component {
     }
 
     /// Returns export associated with `name`, if such exists in the component
+    ///
+    /// # Panics
+    ///
+    /// The `engine` provided must be the [`Engine`] that this type's component
+    /// was compiled with. This method may panic, or return types that don't
+    /// describe this component, if it's a different [`Engine`].
     pub fn get_export<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
         self.0.types[self.0.index]
             .exports
@@ -1241,6 +1271,12 @@ impl Component {
     }
 
     /// Iterates over exports of the component
+    ///
+    /// # Panics
+    ///
+    /// The `engine` provided must be the [`Engine`] that this type's component
+    /// was compiled with. This method may panic, or return types that don't
+    /// describe this component, if it's a different [`Engine`].
     pub fn exports<'a>(
         &'a self,
         engine: &'a Engine,
@@ -1272,6 +1308,12 @@ impl ComponentInstance {
     }
 
     /// Returns export associated with `name`, if such exists in the component instance
+    ///
+    /// # Panics
+    ///
+    /// The `engine` provided must be the [`Engine`] that this type's component
+    /// was compiled with. This method may panic, or return types that don't
+    /// describe this component, if it's a different [`Engine`].
     pub fn get_export<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
         self.0.types[self.0.index]
             .exports
@@ -1280,6 +1322,12 @@ impl ComponentInstance {
     }
 
     /// Iterates over exports of the component instance
+    ///
+    /// # Panics
+    ///
+    /// The `engine` provided must be the [`Engine`] that this type's component
+    /// was compiled with. This method may panic, or return types that don't
+    /// describe this component, if it's a different [`Engine`].
     pub fn exports<'a>(
         &'a self,
         engine: &'a Engine,
