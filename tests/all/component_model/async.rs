@@ -3897,3 +3897,95 @@ async fn cancel_stream_read_completed_by_host() -> Result<()> {
         }
     }
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn poll_ready_for_concurrent_call() -> Result<()> {
+    _ = env_logger::try_init();
+
+    let engine = Engine::new(&Config::new())?;
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $m
+    (import "" "task.return" (func $task.return))
+    (func (export "run") (result i32)
+      (i32.const 1 (; YIELD ;))
+    )
+    (func (export "cb") (param i32 i32 i32) (result i32)
+      (call $task.return)
+      (i32.const 0 (; EXIT ;))
+    )
+  )
+  (core func $task.return (canon task.return))
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "task.return" (func $task.return))
+    ))
+  ))
+  (func (export "run") async(canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    store
+        .run_concurrent(async move |accessor| {
+            future::poll_fn(|cx| {
+                assert!(
+                    accessor
+                        .poll_ready_for_concurrent_call(*run.func(), cx)
+                        .is_ready()
+                );
+                Poll::Ready(())
+            })
+            .await;
+
+            let mut call = pin!(run.call_concurrent(accessor, ()));
+
+            enum State {
+                Start,
+                Polled,
+                Finish,
+            }
+
+            let mut state = State::Start;
+
+            future::poll_fn(move |cx| match state {
+                State::Start => {
+                    state = State::Polled;
+                    assert!(call.as_mut().poll(cx).is_pending());
+                    Poll::Pending
+                }
+
+                State::Polled => {
+                    state = State::Finish;
+                    // Instance should not be considered ready for another call
+                    // while work is queued (in this case, the call to the guest
+                    // callback function).
+                    //
+                    // See also
+                    // crates/misc/component-async-tests/tests/scenario/backpressure.rs,
+                    // which tests that
+                    // `Accessor::poll_ready_for_concurrent_call` waits for
+                    // backpressure to clear before returning `Poll::Ready(())`.
+                    assert!(
+                        accessor
+                            .poll_ready_for_concurrent_call(*run.func(), cx)
+                            .is_pending()
+                    );
+                    Poll::Pending
+                }
+
+                State::Finish => call.as_mut().poll(cx),
+            })
+            .await
+        })
+        .await??;
+
+    Ok(())
+}

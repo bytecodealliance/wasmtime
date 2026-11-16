@@ -597,24 +597,43 @@ where
     }
 
     /// Poll to see if the component instance corresponding to the specified
-    /// function is ready to run a concurrent call without queuing it (i.e. does
-    /// not have backpressure enabled and does not have a sync call in
-    /// progress).
+    /// function is ready to run a concurrent call without queuing it.
     ///
-    /// Returns `Poll::Ready(())` if the component instance is ready to run a
-    /// concurrent call, and otherwise returns `Poll::Pending`.  If pending is
-    /// returned then whenever the instance becomes ready for a call the
-    /// provided context's waker will be notified.  Note that only the waker
-    /// passed to the last call to `poll_ready_for_concurrent_call` for the
-    /// store will be notified (regardless of whether the same or different
-    /// `Func` is specified relative to earlier calls), so this is only
-    /// appropriate to use once-at-a-time per store.  Also note that the waker
-    /// may be notified when _any_ instance becomes callable (i.e. not
-    /// necessarily the last one polled), so this function must be called again
-    /// to determine if the instance of interest is ready.
+    /// This will return `Poll::Ready(())` only if all of the following are true:
+    ///
+    /// - The store to which the instance belongs has no work items queued
+    ///   (e.g. events to deliver to the guest, etc.)
+    ///
+    /// - The instance does not have backpressure enabled.
+    ///
+    /// - The instance does not have a sync call in progress (which implicitly
+    ///   enables backpressure).
+    ///
+    /// Otherwise, it will return `Poll::Pending`.  If pending is returned then
+    /// whenever _any_ instance becomes ready for a call the provided context's
+    /// waker will be notified.  Note that only the waker passed to the last
+    /// call to `poll_ready_for_concurrent_call` for the store will be notified
+    /// (regardless of whether the same or different `Func` is specified
+    /// relative to earlier calls), so this is only appropriate to use
+    /// once-at-a-time per store.  Again, note that the waker may be notified
+    /// when _any_ instance becomes callable (i.e. not necessarily the last one
+    /// polled), so this function must be called again to determine if the
+    /// instance of interest is ready.
     pub fn poll_ready_for_concurrent_call(&self, func: Func, cx: &mut Context<'_>) -> Poll<()> {
         self.with(|mut access| {
             let store = access.as_context_mut().0;
+
+            {
+                let state = store.concurrent_state_mut_without_forcing_current_thread();
+                if state.switch_item.is_some()
+                    || !state.high_priority.is_empty()
+                    || !state.low_priority.is_empty()
+                {
+                    state.ready_for_concurrent_call_waker = Some(cx.waker().clone());
+                    return Poll::Pending;
+                }
+            }
+
             let (_, _, _, raw_options) = func.abi_info(store);
             let instance = func.instance().runtime_instance(raw_options.instance);
             let state = store.instance_state(instance).concurrent_state();
@@ -1486,6 +1505,10 @@ impl<T> StoreContextMut<'_, T> {
                         ready,
                         low_priority,
                     }));
+                }
+
+                if let Some(waker) = state.ready_for_concurrent_call_waker.take() {
+                    waker.wake();
                 }
 
                 // Finally, if we have nothing else to do right now, determine what to do
