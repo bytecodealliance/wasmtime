@@ -5188,9 +5188,9 @@ impl FuncEnvironment<'_> {
         src_region: ir::AliasRegion,
         dst_region: ir::AliasRegion,
     ) {
-        // `trusted()` (notrap + aligned) is sound: the range is already
-        // bounds-checked, and each load feeds only its paired store, so the
-        // backend selects unaligned moves regardless of the `aligned` flag.
+        // These accesses are `notrap` because the range is already
+        // bounds-checked, but they are deliberately not `aligned`.
+        //
         // Endianness is pinned to `Little` because Pulley's `v128` load/store
         // only encode the little-endian variant, and matching load/store
         // endianness preserves the destination bytes either way.
@@ -5200,10 +5200,12 @@ impl FuncEnvironment<'_> {
         // the entity's other (region-tagged) accesses; otherwise a region-less
         // load here could be forwarded a stale value across an intervening
         // region-tagged store to the same address.
-        let load_flags = ir::MemFlagsData::trusted()
+        let load_flags = ir::MemFlagsData::new()
+            .with_notrap()
             .with_endianness(Endianness::Little)
             .with_alias_region(Some(src_region));
-        let store_flags = ir::MemFlagsData::trusted()
+        let store_flags = ir::MemFlagsData::new()
+            .with_notrap()
             .with_endianness(Endianness::Little)
             .with_alias_region(Some(dst_region));
         const WIDTHS: &[(u64, ir::Type)] = &[

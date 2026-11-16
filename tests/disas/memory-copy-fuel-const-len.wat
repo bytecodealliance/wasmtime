@@ -57,9 +57,9 @@
 ;; @002a                               trapnz v35, heap_oob
 ;; @002a                               v24 = load.i64 notrap aligned readonly can_move region3 v0+56
 ;; @002a                               v40 = iadd v24, v30
-;; @002a                               v42 = load.i8x16 notrap aligned little region5 v40
+;; @002a                               v42 = load.i8x16 notrap little region5 v40
 ;; @002a                               v28 = iadd v24, v18
-;; @002a                               store notrap aligned little region5 v42, v28
+;; @002a                               store notrap little region5 v42, v28
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:
