@@ -1683,9 +1683,28 @@ async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
     Ok(())
 }
 
-/// A component of two core modules, whose exported functions are on different PCs: `$pad`
-/// keeps `f2`'s code off the ones `f1` has.
+/// A component of two core modules whose functions have the same module-relative PCs:
+/// `f1`'s `i32.add` and `f2`'s `i32.mul` are both at 0x26.
 const TWO_MODULES: &str = r#"(component
+     (core module $m1
+       (func (export "f1") (param i32 i32) (result i32)
+         local.get 0
+         local.get 1
+         i32.add))
+     (core instance $i1 (instantiate $m1))
+     (core module $m2
+       (func (export "f2") (param i32 i32) (result i32)
+         local.get 0
+         local.get 1
+         i32.mul))
+     (core instance $i2 (instantiate $m2))
+     (func (export "f1") (param "a" s32) (param "b" s32) (result s32)
+       (canon lift (core func $i1 "f1")))
+     (func (export "f2") (param "a" s32) (param "b" s32) (result s32)
+       (canon lift (core func $i2 "f2"))))"#;
+
+/// [`TWO_MODULES`], but with `$pad` putting `f2`'s PCs past the end of `f1`'s.
+const TWO_MODULES_PADDED: &str = r#"(component
      (core module $m1
        (func (export "f1") (param i32 i32) (result i32)
          local.get 0
@@ -1792,27 +1811,97 @@ async fn two_modules(
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
+async fn component_breakpoint_stays_in_its_module() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+    let pc = ModulePC::new(0x26);
+
+    // A breakpoint in one module does not stop the other at the same PC.
+    let events = two_modules(|store, modules| {
+        store
+            .edit_breakpoints()
+            .unwrap()
+            .add_breakpoint(&modules[0], pc)
+    })
+    .await?;
+    assert_eq!(events, [vec![0x26], vec![]]);
+    let events = two_modules(|store, modules| {
+        store
+            .edit_breakpoints()
+            .unwrap()
+            .add_breakpoint(&modules[1], pc)
+    })
+    .await?;
+    assert_eq!(events, [vec![], vec![0x26]]);
+
+    // Removing a breakpoint from one module keeps the other's at the same PC.
+    let events = two_modules(|store, modules| {
+        let mut edit = store.edit_breakpoints().unwrap();
+        edit.add_breakpoint(&modules[0], pc)?;
+        edit.add_breakpoint(&modules[1], pc)?;
+        edit.remove_breakpoint(&modules[1], pc)
+    })
+    .await?;
+    assert_eq!(events, [vec![0x26], vec![]]);
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn component_breakpoint_survives_single_step() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
-    // Each function's first PC, from a single step through it.
-    let steps = two_modules(|store, _| store.edit_breakpoints().unwrap().single_step(true)).await?;
-    let (f1, f2) = (&steps[0], &steps[1]);
-    assert!(f1.iter().all(|pc| !f2.contains(pc)), "{f1:?} {f2:?}");
-
-    // A breakpoint in either module stops only there, after single-stepping has been on and off.
-    for (at, pc) in [(0, f1[0]), (1, f2[0])] {
+    // A breakpoint in either module stops only there, after single-stepping has been on
+    // and off.
+    for at in 0..2 {
         let events = two_modules(|store, modules| {
             let mut edit = store.edit_breakpoints().unwrap();
-            edit.add_breakpoint(&modules[at], ModulePC::new(pc))?;
+            edit.add_breakpoint(&modules[at], ModulePC::new(0x26))?;
             edit.single_step(true)?;
             edit.single_step(false)
         })
         .await?;
         let mut wanted = [vec![], vec![]];
-        wanted[at].push(pc);
+        wanted[at].push(0x26);
         assert_eq!(events, wanted, "a breakpoint in module {at}");
     }
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn component_breakpoint_slips_within_its_module() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // Each function's PCs, from a single step through it.
+    let steps = run_component(
+        TWO_MODULES_PADDED,
+        Inlining::No,
+        &["f1", "f2"],
+        |store, _| store.edit_breakpoints().unwrap().single_step(true),
+    )
+    .await?;
+    let f1_last = *steps[0].iter().max().unwrap();
+    let past_f1 = *steps[1].iter().find(|&&pc| pc > f1_last).unwrap();
+
+    // A breakpoint past module 0's last opcode has nowhere in module 0 to slip to, and
+    // must not land on module 1's opcode at that PC.
+    let events = run_component(
+        TWO_MODULES_PADDED,
+        Inlining::No,
+        &["f1", "f2"],
+        |store, modules| {
+            store
+                .edit_breakpoints()
+                .unwrap()
+                .add_breakpoint(&modules[0], ModulePC::new(past_f1))
+        },
+    )
+    .await?;
+    assert_eq!(
+        events,
+        [Vec::<u32>::new(), vec![]],
+        "a breakpoint in module 0 at {past_f1:#x}"
+    );
     Ok(())
 }
 

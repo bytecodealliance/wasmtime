@@ -1172,7 +1172,8 @@ impl<'a> BreakpointState<'a> {
         let frame_table = module
             .frame_table()
             .expect("Frame table must be present when guest-debug is enabled");
-        let actual_pc = frame_table.nearest_breakpoint(pc).unwrap_or(pc);
+        let index = module.compiled_module().module_index();
+        let actual_pc = frame_table.nearest_breakpoint(index, pc).unwrap_or(pc);
         let requested_key = BreakpointKey::from_raw(module, pc);
         let actual_key = BreakpointKey::from_raw(module, actual_pc);
 
@@ -1187,7 +1188,7 @@ impl<'a> BreakpointState<'a> {
         if *refcount == 1 {
             // First reference: actually patch the code.
             let mem = Self::get_code_memory(state, registry, &mut self.dirty_modules, module)?;
-            let patches = frame_table.lookup_breakpoint_patches_by_pc(actual_pc);
+            let patches = frame_table.lookup_breakpoint_patches_by_pc(index, actual_pc);
             Self::patch(patches, mem, true);
         }
         Ok(())
@@ -1222,7 +1223,8 @@ impl<'a> BreakpointState<'a> {
                     let frame_table = module
                         .frame_table()
                         .expect("Frame table must be present when guest-debug is enabled");
-                    let patches = frame_table.lookup_breakpoint_patches_by_pc(actual_pc);
+                    let index = module.compiled_module().module_index();
+                    let patches = frame_table.lookup_breakpoint_patches_by_pc(index, actual_pc);
                     Self::patch(patches, mem, false);
                 }
             }
@@ -1239,13 +1241,8 @@ impl<'a> BreakpointState<'a> {
         let table = module
             .frame_table()
             .expect("Frame table must be present when guest-debug is enabled");
-        // A component's modules share one code image, and so its frame table: leave the
-        // other modules' code to them, or this module's breakpoints decide theirs.
         let index = module.compiled_module().module_index();
-        for (patch_module, wasm_pc, patch) in table.breakpoint_patches() {
-            if patch_module != index {
-                continue;
-            }
+        for (wasm_pc, patch) in table.breakpoint_patches(index) {
             let key = BreakpointKey::from_raw(&module, wasm_pc);
             let this_enabled = enabled || key_enabled(&key);
             log::trace!(

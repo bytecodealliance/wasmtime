@@ -212,9 +212,10 @@ impl FrameStateSlotBuilder {
 /// - `num_progpoints` times:
 ///   - progpoint descriptor offset: u32
 /// - `num_breakpoints` times:
-///    - static module index of the Wasm PC: u32
+///    - static module index: u32 (sorted order; may repeat)
 /// - `num_breakpoints` times:
-///    - Wasm PC, relative to that module: u32 (sorted order; may repeat)
+///    - Wasm PC, relative to that module: u32 (sorted order within
+///      each module; may repeat)
 /// - `num_breakpoints` times:
 ///    - patch offset in text: u32
 /// - `num_breakpoints` times:
@@ -339,7 +340,7 @@ impl FrameTableBuilder {
 
     /// Add one breakpoint patch, for a Wasm PC in the given module.
     ///
-    /// Patches must be added in order of Wasm PC.
+    /// Patches must be added in order of module, then Wasm PC.
     pub fn add_breakpoint_patch(
         &mut self,
         module: StaticModuleIndex,
@@ -347,6 +348,13 @@ impl FrameTableBuilder {
         patch_start_native_pc: u32,
         patch: &[u8],
     ) {
+        debug_assert!(
+            self.breakpoint_modules
+                .last()
+                .zip(self.breakpoint_pcs.last())
+                .map_or(true, |(m, pc)| (m.get(LittleEndian), pc.get(LittleEndian))
+                    <= (module.as_u32(), wasm_pc.raw()))
+        );
         self.breakpoint_modules
             .push(U32::new(LittleEndian, module.as_u32()));
         self.breakpoint_pcs
