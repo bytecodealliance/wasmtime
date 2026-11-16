@@ -1,3 +1,40 @@
+## 50.0.2
+
+Released 2026-11-16.
+
+### Fixed
+
+* Unbounded host memory growth via empty writes to `AsyncWriteStream` in
+  `wasmtime-wasi` has been fixed.
+  [GHSA-5m8g-xhq4-4h93](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-5m8g-xhq4-4h93)
+
+* Stale GC heap base pointer in compiled code lets a Wasm guest abort the host
+  process has been fixed.
+  [GHSA-43j2-gcp4-m22g](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-43j2-gcp4-m22g)
+
+* Panic when a component cancels a stream or future copy on the wrong end has
+  been fixed.
+  [GHSA-xrvr-8678-5wp8](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-xrvr-8678-5wp8)
+
+* Panic in `Caller::get_module_export` when a host function isn't called from
+  WebAssembly has been fixed.
+  [GHSA-hj27-mpw9-ff4c](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hj27-mpw9-ff4c)
+
+* Process abort when a GC heap's reservation isn't a multiple of the page size
+  has been fixed.
+  [GHSA-wvgq-g5hf-6gm6](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-wvgq-g5hf-6gm6)
+
+* Fixed abort in Wasmtime builds without the `gc` cargo feature.
+  [GHSA-rc4p-x33f-vpr2](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-rc4p-x33f-vpr2)
+
+* Fixed abort in Wasmtime builds without the `threads` cargo feature.
+  [GHSA-2674-w29h-wqvj](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-2674-w29h-wqvj)
+
+* Empty Body Writes can result in unbound heap usage with HTTP/2 has been fixed.
+  [GHSA-f8mm-ggr3-89wh](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-f8mm-ggr3-89wh)
+
+--------------------------------------------------------------------------------
+
 ## 50.0.1
 
 Released 2026-10-29.
