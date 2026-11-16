@@ -45,8 +45,30 @@ pub(crate) use symlink_unchecked::*;
 // <https://docs.microsoft.com/en-us/windows/win32/fileio/reparse-points>
 pub(crate) const MAX_SYMLINK_EXPANSIONS: u8 = 63;
 
-pub(crate) fn file_path(file: &std::fs::File) -> Option<std::path::PathBuf> {
-    get_path::get_path(file).ok()
+/// Returns an error if `path` contains a `:` anywhere.
+///
+/// This must be called on every path that is resolved relative to a
+/// directory handle before it's handed to the OS.
+///
+/// On Windows `:` is disallowed in file names, and a `:` is either part of a
+/// drive prefix, as in `C:` or `C:foo`, or names an NTFS alternate data stream,
+/// as in `file:stream`. Rust's `Path::components` parsing of `C:foo` also
+/// depends on where it is in the `Path`, for example it's a drive prefix in
+/// `C:foo` but it's a normal component in `./C:foo`. The `primitives` module in
+/// this crate generally assumes that a `Normal` path component parsed alone
+/// will again yield a `Normal` path component, but Windows drive prefixes break
+/// this assumption.
+///
+/// Given all this the most conservative thing to do is to simply disallow `:`
+/// everywhere on Windows. It's already not allowed in filenames and otherwise
+/// handling it would require extremely careful management of parsing and
+/// ensuring that just because a path component is `Normal` once doesn't mean
+/// it'll re-parse as `Normal`.
+pub(crate) fn check_no_colon(path: &Path) -> io::Result<()> {
+    if path.as_os_str().as_encoded_bytes().contains(&b':') {
+        return Err(errors::invalid_name());
+    }
+    Ok(())
 }
 
 pub(super) use oflags::*;

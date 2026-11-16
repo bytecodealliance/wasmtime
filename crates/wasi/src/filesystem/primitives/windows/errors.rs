@@ -17,6 +17,11 @@ pub(crate) fn is_not_directory() -> io::Error {
 }
 
 #[cold]
+pub(crate) fn invalid_name() -> io::Error {
+    io::Error::from_raw_os_error(Foundation::ERROR_INVALID_NAME as i32)
+}
+
+#[cold]
 pub(crate) fn too_many_symlinks() -> io::Error {
     io::Error::from_raw_os_error(Foundation::ERROR_TOO_MANY_LINKS as i32)
 }
