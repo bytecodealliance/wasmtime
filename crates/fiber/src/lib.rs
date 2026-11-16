@@ -460,6 +460,10 @@ mod tests {
         }
         assert!(FiberStack::new(usize::MAX, true).is_err());
         assert!(FiberStack::new(usize::MAX, false).is_err());
+
+        for page_size in [4096, 16384, 65536] {
+            assert!(FiberStack::new(usize::MAX - page_size + 1, false).is_err());
+        }
     }
 
     #[test]
