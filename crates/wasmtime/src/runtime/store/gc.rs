@@ -20,8 +20,8 @@ use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
-use wasmtime_environ::packed_option::ReservedValue;
 use wasmtime_environ::DefinedTagIndex;
+use wasmtime_environ::packed_option::ReservedValue;
 
 #[derive(Default)]
 pub(crate) struct StoreGcData {
