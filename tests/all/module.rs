@@ -325,6 +325,42 @@ fn cross_engine_module_exports() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn caller_module_export_without_wasm_caller() -> Result<()> {
+    let engine = Engine::default();
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "host" "f" (func $f (result i32)))
+                (func (export "call-f") (result i32) (call $f))
+                (export "f" (func $f))
+                (memory (export "memory") 1)
+            )
+        "#,
+    )?;
+    let export = module.get_export_index("memory").unwrap();
+
+    let mut store = Store::new(&engine, ());
+    let f = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>| -> i32 {
+        match caller.get_module_export(&export) {
+            Some(Extern::Memory(_)) => 1,
+            Some(_) => unreachable!(),
+            None => 0,
+        }
+    });
+    let instance = Instance::new(&mut store, &module, &[f.into()])?;
+
+    let call_f = instance.get_typed_func::<(), i32>(&mut store, "call-f")?;
+    assert_eq!(call_f.call(&mut store, ())?, 1);
+
+    assert_eq!(f.typed::<(), i32>(&store)?.call(&mut store, ())?, 0);
+    let reexport = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+    assert_eq!(reexport.call(&mut store, ())?, 0);
+    Ok(())
+}
+
 /// Smoke test for registering and unregistering modules (and their rec group
 /// entries) concurrently.
 #[wasmtime_test(wasm_features(gc, function_references))]

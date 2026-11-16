@@ -173,6 +173,9 @@ impl OutputStream for AsyncWriteStream {
                 "write not permitted while flush pending"
             )));
         }
+        if bytes.is_empty() {
+            return Ok(());
+        }
         match state.write_budget.checked_sub(bytes.len()) {
             Some(remaining_budget) => {
                 state.write_budget = remaining_budget;
