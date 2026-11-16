@@ -1,6 +1,6 @@
 ## 50.0.2
 
-Released 2026-11-12.
+Released 2026-11-16.
 
 ### Fixed
 
