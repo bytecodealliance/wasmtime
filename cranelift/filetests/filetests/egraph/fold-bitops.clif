@@ -883,3 +883,70 @@ block0(v0: i32, v1: i32, v2: i32):
 ;     v7 = band v6, v2
 ;     return v7
 ; }
+
+function %band_bor_disjoint_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x400
+    v2 = bor v0, v1
+    v3 = iconst.i32 0x800
+    v4 = band v2, v3
+    return v4
+}
+
+; function %band_bor_disjoint_const(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 2048
+;     v5 = band v0, v3  ; v3 = 2048
+;     return v5
+; }
+
+function %band_bor_disjoint_const_2(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x8108
+    v2 = bor v0, v1
+    v3 = iconst.i32 0xc0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %band_bor_disjoint_const_2(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 192
+;     v5 = band v0, v3  ; v3 = 192
+;     return v5
+; }
+
+function %band_bor_overlapping_const(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x8148
+    v2 = bor v0, v1
+    v3 = iconst.i32 0xc0
+    v4 = band v2, v3
+    return v4
+}
+
+; function %band_bor_overlapping_const(i32) -> i32 fast {
+; block0(v0: i32):
+;     v1 = iconst.i32 0x8148
+;     v2 = bor v0, v1  ; v1 = 0x8148
+;     v3 = iconst.i32 192
+;     v4 = band v2, v3  ; v3 = 192
+;     return v4
+; }
+
+function %band_bxor_disjoint_const(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 0xff00
+    v2 = bxor v0, v1
+    v3 = iconst.i16 0xff
+    v4 = band v2, v3
+    return v4
+}
+
+; function %band_bxor_disjoint_const(i16) -> i16 fast {
+; block0(v0: i16):
+;     v3 = iconst.i16 255
+;     v5 = band v0, v3  ; v3 = 255
+;     return v5
+; }
+

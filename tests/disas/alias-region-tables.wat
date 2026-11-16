@@ -58,8 +58,8 @@
 ;; @0049                               v27 = select_spectre_guard v20, v14, v25  ; v14 = 0
 ;; @0049                               store user6 aligned region6 v17, v27
 ;; @004d                               v43 = iconst.i64 -2
-;; @004d                               v44 = band v17, v43  ; v43 = -2
-;; @004d                               brif v17, block3(v44), block2
+;;                                     v57 = band v3, v43  ; v43 = -2
+;; @004d                               brif v17, block3(v57), block2
 ;;
 ;;                                 block2 cold:
 ;; @004d                               v46 = iconst.i32 0

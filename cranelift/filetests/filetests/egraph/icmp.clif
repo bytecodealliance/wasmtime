@@ -2743,3 +2743,116 @@ block0(v0: i32x4, v1: i32x4):
 ;     v5 = icmp eq v0, v1
 ;     return v5
 ; }
+
+function %icmp_eq_clz_one(i32) -> i8 {
+block0(v0: i32):
+    v1 = clz v0
+    v2 = iconst.i32 1
+    v3 = icmp eq v1, v2
+    return v3
+}
+
+; function %icmp_eq_clz_one(i32) -> i8 fast {
+; block0(v0: i32):
+;     v4 = iconst.i32 0x3fff_ffff
+;     v5 = icmp sgt v0, v4  ; v4 = 0x3fff_ffff
+;     return v5
+; }
+
+function %icmp_ne_clz_one(i64) -> i8 {
+block0(v0: i64):
+    v1 = clz v0
+    v2 = iconst.i64 1
+    v3 = icmp ne v1, v2
+    return v3
+}
+
+; function %icmp_ne_clz_one(i64) -> i8 fast {
+; block0(v0: i64):
+;     v4 = iconst.i64 0x3fff_ffff_ffff_ffff
+;     v5 = icmp sle v0, v4  ; v4 = 0x3fff_ffff_ffff_ffff
+;     return v5
+; }
+
+function %icmp_eq_band_high_mask_zero(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0xffff_fff0
+    v2 = band v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %icmp_eq_band_high_mask_zero(i32) -> i8 fast {
+; block0(v0: i32):
+;     v5 = iconst.i32 16
+;     v6 = icmp ult v0, v5  ; v5 = 16
+;     return v6
+; }
+
+function %icmp_ne_band_high_mask_zero(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 -256
+    v2 = band v0, v1
+    v3 = iconst.i64 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %icmp_ne_band_high_mask_zero(i64) -> i8 fast {
+; block0(v0: i64):
+;     v5 = iconst.i64 256
+;     v6 = icmp uge v0, v5  ; v5 = 256
+;     return v6
+; }
+
+function %icmp_eq_band_sign_bit_zero(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x8000_0000
+    v2 = band v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %icmp_eq_band_sign_bit_zero(i32) -> i8 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 0
+;     v5 = icmp sge v0, v3  ; v3 = 0
+;     return v5
+; }
+
+function %icmp_ne_band_sign_bit_zero(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0x80
+    v2 = band v0, v1
+    v3 = iconst.i8 0
+    v4 = icmp ne v2, v3
+    return v4
+}
+
+; function %icmp_ne_band_sign_bit_zero(i8) -> i8 fast {
+; block0(v0: i8):
+;     v3 = iconst.i8 0
+;     v5 = icmp slt v0, v3  ; v3 = 0
+;     return v5
+; }
+
+function %icmp_eq_band_non_high_mask_zero(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0xffff_ff70
+    v2 = band v0, v1
+    v3 = iconst.i32 0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %icmp_eq_band_non_high_mask_zero(i32) -> i8 fast {
+; block0(v0: i32):
+;     v1 = iconst.i32 -144
+;     v2 = band v0, v1  ; v1 = -144
+;     v3 = iconst.i32 0
+;     v4 = icmp eq v2, v3  ; v3 = 0
+;     return v4
+; }
+
