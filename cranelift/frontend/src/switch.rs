@@ -224,16 +224,9 @@ impl Switch {
         let discr = if first_index == 0 {
             val
         } else {
-            if let Ok(first_index) = u64::try_from(first_index) {
-                bx.ins()
-                    .iadd_imm_s(val, (first_index as i64).wrapping_neg())
-            } else {
-                let (lsb, msb) = (first_index as u64, (first_index >> 64) as u64);
-                let lsb = bx.ins().iconst(types::I64, lsb as i64);
-                let msb = bx.ins().iconst(types::I64, msb as i64);
-                let index = bx.ins().iconcat(lsb, msb);
-                bx.ins().isub(val, index)
-            }
+            let ty = bx.func.dfg.value_type(val);
+            let first_index = iconst_from_u128(bx, ty, first_index);
+            bx.ins().isub(val, first_index)
         };
 
         let discr = match bx.func.dfg.value_type(discr).bits() {
@@ -280,15 +273,24 @@ impl Switch {
 }
 
 fn icmp_imm_u128(bx: &mut FunctionBuilder, cond: IntCC, x: Value, y: u128) -> Value {
-    if let Ok(index) = u64::try_from(y) {
-        bx.ins().icmp_imm_u(cond, x, index.cast_signed())
+    let ty = bx.func.dfg.value_type(x);
+    let y = iconst_from_u128(bx, ty, y);
+    bx.ins().icmp(cond, x, y)
+}
+
+/// Materialize the constant `c` as a value of type `ty`. Assumes `c` fits in `ty`.
+fn iconst_from_u128(bx: &mut FunctionBuilder, ty: Type, c: u128) -> Value {
+    if ty != types::I128 {
+        let c = u64::try_from(c).expect("constant must fit in the type");
+        bx.ins().iconst(ty, c.cast_signed())
+    } else if let Ok(c) = u64::try_from(c) {
+        let c = bx.ins().iconst(types::I64, c.cast_signed());
+        bx.ins().uextend(types::I128, c)
     } else {
-        assert!(bx.func.dfg.value_type(x) == types::I128);
-        let (lsb, msb) = (y as u64, (y >> 64) as u64);
-        let lsb = bx.ins().iconst(types::I64, lsb as i64);
-        let msb = bx.ins().iconst(types::I64, msb as i64);
-        let index = bx.ins().iconcat(lsb, msb);
-        bx.ins().icmp(cond, x, index)
+        let (lsb, msb) = (c as u64, (c >> 64) as u64);
+        let lsb = bx.ins().iconst(types::I64, lsb.cast_signed());
+        let msb = bx.ins().iconst(types::I64, msb.cast_signed());
+        bx.ins().iconcat(lsb, msb)
     }
 }
 
@@ -449,8 +451,8 @@ block9:
     brif v4, block11, block10
 
 block11:
-    v5 = iconst.i8 -10
-    v6 = iadd.i8 v0, v5  ; v0 = 0, v5 = -10
+    v5 = iconst.i8 10
+    v6 = isub.i8 v0, v5  ; v0 = 0, v5 = 10
     v7 = uextend.i32 v6
     br_table v7, block0, [block5, block6, block7]
 
@@ -690,6 +692,56 @@ block4:
 
 block4:
     brif.i128 v1, block3, block2"
+        );
+    }
+
+    #[test]
+    fn switch_128bit_jump_table_above_i64_max() {
+        // An i128 jump table whose first index is in the interval (i64::MAX, u64::MAX] must
+        // zero-extend (not sign-extend) that 64-bit index to 128 bits before subtracting.
+        let mut func = Function::new();
+        let mut func_ctx = FunctionBuilderContext::new();
+        {
+            let mut bx = FunctionBuilder::new(&mut func, &mut func_ctx);
+            let block0 = bx.create_block();
+            bx.switch_to_block(block0);
+            let val = bx.ins().iconst(types::I64, 0);
+            let val = bx.ins().uextend(types::I128, val);
+            let mut switch = Switch::new();
+            let block1 = bx.create_block();
+            switch.set_entry((1 << 63) + 1, block1);
+            let block2 = bx.create_block();
+            switch.set_entry((1 << 63) + 2, block2);
+            let block3 = bx.create_block();
+            switch.emit(&mut bx, val, block3);
+        }
+        let func = func
+            .to_string()
+            .trim_start_matches("function u0:0() fast {\n")
+            .trim_end_matches("\n}\n")
+            .to_string();
+        assert_eq_output!(
+            func,
+            "block0:
+    v0 = iconst.i64 0
+    v1 = uextend.i128 v0  ; v0 = 0
+    v2 = iconst.i64 -9223372036854775807
+    v3 = uextend.i128 v2  ; v2 = -9223372036854775807
+    v4 = icmp uge v1, v3
+    brif v4, block4, block3
+
+block4:
+    v5 = iconst.i64 -9223372036854775807
+    v6 = uextend.i128 v5  ; v5 = -9223372036854775807
+    v7 = isub.i128 v1, v6
+    v8 = iconst.i64 0xffff_ffff
+    v9 = uextend.i128 v8  ; v8 = 0xffff_ffff
+    v10 = icmp ugt v7, v9
+    brif v10, block3, block5
+
+block5:
+    v11 = ireduce.i32 v7
+    br_table v11, block3, [block1, block2]"
         );
     }
 }
