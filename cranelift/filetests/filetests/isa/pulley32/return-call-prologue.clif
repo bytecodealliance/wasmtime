@@ -1,0 +1,212 @@
+test compile precise-output
+target pulley32
+
+function %callee(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64, v11: i64, v12: i64, v13: i64, v14: i64, v15: i64, v16: i64, v17: i64, v18: i64, v19: i64):
+    return v19
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   x0 = xload64 IncomingArg(32, 48) // flags = notrap aligned
+;   pop_frame
+;   stack_free32 48
+;   ret
+;
+; Disassembled:
+; push_frame
+; xload64le_o32 x0, sp, 40
+; pop_frame
+; stack_free32 48
+; ret
+
+;; No frame beyond fp/lr: `PulleyBasicSetup` with a zero-sized frame.
+function %no_frame(i64) -> i64 tail {
+    fn0 = colocated %callee(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+
+block0(v0: i64):
+    return_call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+}
+
+; VCode:
+;   push_frame_full 48, 0, {}
+; block0:
+;   xstore64 IncomingArg(0, 48), x0 // flags =  notrap aligned
+;   xstore64 IncomingArg(8, 48), x0 // flags =  notrap aligned
+;   xstore64 IncomingArg(16, 48), x0 // flags =  notrap aligned
+;   xstore64 IncomingArg(24, 48), x0 // flags =  notrap aligned
+;   xstore64 IncomingArg(32, 48), x0 // flags =  notrap aligned
+;   xmov x14, x0
+;   xmov x1, x14
+;   xmov x2, x14
+;   xmov x3, x14
+;   xmov x4, x14
+;   xmov x5, x14
+;   xmov x6, x14
+;   xmov x7, x14
+;   xmov x8, x14
+;   xmov x9, x14
+;   xmov x10, x14
+;   xmov x11, x14
+;   xmov x12, x14
+;   xmov x13, x14
+;   return_call ReturnCallInfo { dest: TestCase(%callee), new_stack_arg_size: 48, uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }, CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }, CallArgPair { vreg: p10i, preg: p10i }, CallArgPair { vreg: p11i, preg: p11i }, CallArgPair { vreg: p12i, preg: p12i }, CallArgPair { vreg: p13i, preg: p13i }, CallArgPair { vreg: p14i, preg: p14i }] }
+;
+; Disassembled:
+; push_frame_full 48, 0, 
+; xstore64le_o32 sp, 8, x0
+; xstore64le_o32 sp, 16, x0
+; xstore64le_o32 sp, 24, x0
+; xstore64le_o32 sp, 32, x0
+; xstore64le_o32 sp, 40, x0
+; xmov x14, x0
+; xmov x1, x14
+; xmov x2, x14
+; xmov x3, x14
+; xmov x4, x14
+; xmov x5, x14
+; xmov x6, x14
+; xmov x7, x14
+; xmov x8, x14
+; xmov x9, x14
+; xmov x10, x14
+; xmov x11, x14
+; xmov x12, x14
+; xmov x13, x14
+; pop_frame
+; jump 0x1    // target = 0x5c
+
+;; Small frame: `PulleySetupAndSaveClobbers`.
+function %small_frame(i64) -> i64 tail {
+    ss0 = explicit_slot 64
+    fn0 = colocated %callee(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+
+block0(v0: i64):
+    v2 = stack_addr.i32 ss0
+    store v0, v2
+    v1 = load.i64 v2
+    return_call fn0(v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1)
+}
+
+; VCode:
+;   push_frame_full 48, 64, {}
+; block0:
+;   x3 = load_addr Slot(0)
+;   xstore64le_z x3, 0, x0 // trap=TrapCode(253)
+;   xload64le_z x14, x3, 0 // trap=TrapCode(253)
+;   xstore64 IncomingArg(0, 48), x14 // flags =  notrap aligned
+;   xstore64 IncomingArg(8, 48), x14 // flags =  notrap aligned
+;   xstore64 IncomingArg(16, 48), x14 // flags =  notrap aligned
+;   xstore64 IncomingArg(24, 48), x14 // flags =  notrap aligned
+;   xstore64 IncomingArg(32, 48), x14 // flags =  notrap aligned
+;   xmov x0, x14
+;   xmov x1, x14
+;   xmov x2, x14
+;   xmov x3, x14
+;   xmov x4, x14
+;   xmov x5, x14
+;   xmov x6, x14
+;   xmov x7, x14
+;   xmov x8, x14
+;   xmov x9, x14
+;   xmov x10, x14
+;   xmov x11, x14
+;   xmov x12, x14
+;   xmov x13, x14
+;   return_call ReturnCallInfo { dest: TestCase(%callee), new_stack_arg_size: 48, uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }, CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }, CallArgPair { vreg: p10i, preg: p10i }, CallArgPair { vreg: p11i, preg: p11i }, CallArgPair { vreg: p12i, preg: p12i }, CallArgPair { vreg: p13i, preg: p13i }, CallArgPair { vreg: p14i, preg: p14i }] }
+;
+; Disassembled:
+; push_frame_full 48, 64, 
+; xmov x3, sp
+; xstore64le_z x3, 0, x0
+; xload64le_z x14, x3, 0
+; xstore64le_o32 sp, 72, x14
+; xstore64le_o32 sp, 80, x14
+; xstore64le_o32 sp, 88, x14
+; xstore64le_o32 sp, 96, x14
+; xstore64le_o32 sp, 104, x14
+; xmov x0, x14
+; xmov x1, x14
+; xmov x2, x14
+; xmov x3, x14
+; xmov x4, x14
+; xmov x5, x14
+; xmov x6, x14
+; xmov x7, x14
+; xmov x8, x14
+; xmov x9, x14
+; xmov x10, x14
+; xmov x11, x14
+; xmov x12, x14
+; xmov x13, x14
+; pop_frame_restore 64, 
+; jump 0x1    // target = 0x71
+
+;; Large frame that doesn't fit in a `u16`: `PulleyBasicSetup`.
+function %large_frame(i64) -> i64 tail {
+    ss0 = explicit_slot 1000000
+    fn0 = colocated %callee(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+
+block0(v0: i64):
+    v2 = stack_addr.i32 ss0
+    store v0, v2
+    v1 = load.i64 v2
+    return_call fn0(v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1, v1)
+}
+
+; VCode:
+;   push_frame_full 48, 1000000, {}
+; block0:
+;   x3 = load_addr Slot(0)
+;   xstore64le_z x3, 0, x0 // trap=TrapCode(253)
+;   xload64le_z x14, x3, 0 // trap=TrapCode(253)
+;   xstore64 IncomingArg(0, 48), x14 // flags =  notrap aligned
+;   xstore64 IncomingArg(8, 48), x14 // flags =  notrap aligned
+;   xstore64 IncomingArg(16, 48), x14 // flags =  notrap aligned
+;   xstore64 IncomingArg(24, 48), x14 // flags =  notrap aligned
+;   xstore64 IncomingArg(32, 48), x14 // flags =  notrap aligned
+;   xmov x0, x14
+;   xmov x1, x14
+;   xmov x2, x14
+;   xmov x3, x14
+;   xmov x4, x14
+;   xmov x5, x14
+;   xmov x6, x14
+;   xmov x7, x14
+;   xmov x8, x14
+;   xmov x9, x14
+;   xmov x10, x14
+;   xmov x11, x14
+;   xmov x12, x14
+;   xmov x13, x14
+;   return_call ReturnCallInfo { dest: TestCase(%callee), new_stack_arg_size: 48, uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }, CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }, CallArgPair { vreg: p10i, preg: p10i }, CallArgPair { vreg: p11i, preg: p11i }, CallArgPair { vreg: p12i, preg: p12i }, CallArgPair { vreg: p13i, preg: p13i }, CallArgPair { vreg: p14i, preg: p14i }] }
+;
+; Disassembled:
+; push_frame_full 48, 1000000, 
+; xmov x3, sp
+; xstore64le_z x3, 0, x0
+; xload64le_z x14, x3, 0
+; xstore64le_o32 sp, 1000008, x14
+; xstore64le_o32 sp, 1000016, x14
+; xstore64le_o32 sp, 1000024, x14
+; xstore64le_o32 sp, 1000032, x14
+; xstore64le_o32 sp, 1000040, x14
+; xmov x0, x14
+; xmov x1, x14
+; xmov x2, x14
+; xmov x3, x14
+; xmov x4, x14
+; xmov x5, x14
+; xmov x6, x14
+; xmov x7, x14
+; xmov x8, x14
+; xmov x9, x14
+; xmov x10, x14
+; xmov x11, x14
+; xmov x12, x14
+; xmov x13, x14
+; stack_free32 1000000
+; pop_frame
+; jump 0x1    // target = 0x72
+

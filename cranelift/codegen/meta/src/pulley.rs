@@ -208,7 +208,9 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                 Operand::Normal {
                     name: _,
                     ty: "UpperXRegSet",
-                } if *name == "PushFrameSave" || *name == "PopFrameRestore" => {}
+                } if *name == "PushFrameSave"
+                    || *name == "PushFrameFull"
+                    || *name == "PopFrameRestore" => {}
 
                 Operand::Normal { name, ty } => {
                     if ty.contains("Reg") {
