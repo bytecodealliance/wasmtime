@@ -361,7 +361,8 @@ where
             block,
             self.gvn_map_blocks
         );
-        let depth = self.gvn_map_depth[block] as usize;
+        let depth =
+            usize::try_from(self.gvn_map_depth[block]).expect("GVN depth should fit in usize");
         debug_assert_eq!(self.gvn_map_blocks[depth], block);
         depth
     }
@@ -961,7 +962,8 @@ impl<'a> EgraphPass<'a> {
             }
 
             gvn_map.increment_depth();
-            gvn_map_depth[block] = gvn_map_blocks.len() as u32;
+            gvn_map_depth[block] =
+                u32::try_from(gvn_map_blocks.len()).expect("GVN depth should fit in u32");
             gvn_map_blocks.push(block);
 
             let mut alias_analysis_state = self.alias_analysis.push_scope(&*self.cfg, block);
