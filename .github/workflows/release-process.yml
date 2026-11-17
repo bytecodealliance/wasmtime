@@ -46,7 +46,7 @@ jobs:
     name: Run the release process
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           submodules: true
       - name: Setup
@@ -54,8 +54,8 @@ jobs:
           git config user.name 'Wasmtime Publish'
           git config user.email 'wasmtime-publish@users.noreply.github.com'
 
-      - uses: ./.github/actions/install-rust
-      - uses: ./.github/actions/cargo-install
+      - uses: $/.github/actions/install-rust
+      - uses: $/.github/actions/cargo-install
         with:
           crate: cargo-vet
           version: 0.10.2

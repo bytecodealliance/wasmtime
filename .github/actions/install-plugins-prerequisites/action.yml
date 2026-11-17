@@ -10,7 +10,7 @@ runs:
       shell: bash
     - name: Install wit-bindgen (Linux)
       if: runner.os == 'Linux'
-      uses: ./.github/actions/cargo-install
+      uses: $/.github/actions/cargo-install
       with:
         crate: wit-bindgen-cli
         version: 0.46.0
