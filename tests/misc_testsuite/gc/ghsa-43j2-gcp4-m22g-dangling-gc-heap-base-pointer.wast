@@ -1,8 +1,9 @@
 ;;! gc = true
-;;! flags = "-O gc-heap-may-move=n"
+;;! flags = "-O gc-heap-may-move=n -O memory-may-move=n"
 
 ;; Configure the GC heap as never moving so that the load instructions we emit
-;; to read its base pointer are marked `readonly` and `can_move`.
+;; to read its base pointer are marked `readonly` and `can_move`. Linear
+;; memories are configured to match because the pooling allocator requires it.
 ;;
 ;; Even though we never construct a `GcCompiler` during Wasm-to-CLIF
 ;; translation for this module, it will still access the GC heap, and we should

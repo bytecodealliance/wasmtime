@@ -1,5 +1,5 @@
 ;;! gc = true
-;;! flags = "-O gc-heap-may-move=n"
+;;! flags = "-O gc-heap-may-move=n -O memory-may-move=n"
 
 (module
   (type $a (array (mut i8)))
