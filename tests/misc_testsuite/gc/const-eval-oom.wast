@@ -1,6 +1,7 @@
 ;;! gc = true
 ;;! bulk_memory = true
 ;;! flags = """
+;;!   -C collector=drc
 ;;!   -O memory-may-move=n
 ;;!   -O memory-reservation=65536
 ;;!   -O memory-reservation-for-growth=0
