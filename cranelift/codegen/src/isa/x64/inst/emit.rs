@@ -423,7 +423,7 @@ pub(crate) fn emit(
             sink.add_reloc_at_offset(len - 4, Reloc::X86CallPCRel4, &call_info.dest, -4);
 
             if let Some(s) = stack_map {
-                sink.push_user_stack_map(state, len, s);
+                state.push_stack_map(sink, len, s);
             }
 
             if let Some(try_call) = call_info.try_call_info.as_ref() {
@@ -505,7 +505,7 @@ pub(crate) fn emit(
 
             if let Some(s) = stack_map {
                 let offset = sink.cur_offset();
-                sink.push_user_stack_map(state, offset, s);
+                state.push_stack_map(sink, offset, s);
             }
 
             if let Some(try_call) = call_info.try_call_info.as_ref() {
@@ -646,7 +646,8 @@ pub(crate) fn emit(
 
             sink.bind_label(resume, state.ctrl_plane_mut());
             if let Some(s) = stack_map {
-                sink.push_user_stack_map(state, sink.cur_offset(), s);
+                let offset = sink.cur_offset();
+                state.push_stack_map(sink, offset, s);
             }
         }
 
@@ -657,7 +658,9 @@ pub(crate) fn emit(
             ..
         } => {
             let stack_map = state.take_stack_map();
-            sink.pad_for_stack_map();
+            if stack_map.is_some() {
+                state.pad_for_stack_map(sink);
+            }
 
             // Record the address of load in the trap table so a signal handler
             // can later distinguish whether a segfault is its fault.
@@ -666,7 +669,8 @@ pub(crate) fn emit(
             // SIGSEGV reports the PC of the faulting load, so the stack map
             // is associated with the load itself.
             if let Some(stack_map) = stack_map {
-                sink.push_user_stack_map(state, sink.cur_offset(), stack_map);
+                let offset = sink.cur_offset();
+                state.push_stack_map(sink, offset, stack_map);
             }
 
             let load_ptr_addr = SyntheticAmode::real(Amode::imm_reg(0, **load_ptr));

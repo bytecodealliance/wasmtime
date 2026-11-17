@@ -745,6 +745,9 @@ pub struct EmitState {
     /// `pre_safepoint()`.
     user_stack_map: Option<ir::UserStackMap>,
 
+    /// Last emitted map's PC; a following faulting poll needs a distinct PC.
+    last_stack_map_offset: Option<u32>,
+
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
@@ -756,6 +759,7 @@ impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<AArch64MachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             user_stack_map: None,
+            last_stack_map_offset: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
         }
@@ -779,6 +783,17 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl EmitState {
+    fn push_stack_map(&mut self, sink: &mut MachBuffer<Inst>, offset: u32, map: ir::UserStackMap) {
+        sink.push_user_stack_map(self, offset, map);
+        self.last_stack_map_offset = Some(offset);
+    }
+
+    fn pad_for_stack_map(&self, sink: &mut MachBuffer<Inst>) {
+        if self.last_stack_map_offset == Some(sink.cur_offset()) {
+            sink.put4(0xd503201f); // AArch64 NOP
+        }
+    }
+
     fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
         self.user_stack_map.take()
     }
@@ -3417,7 +3432,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_jump26(0b100101, 0));
                 if let Some(s) = user_stack_map {
                     let offset = sink.cur_offset();
-                    sink.push_user_stack_map(state, offset, s);
+                    state.push_stack_map(sink, offset, s);
                 }
 
                 if let Some(try_call) = info.try_call_info.as_ref() {
@@ -3468,7 +3483,7 @@ impl MachInstEmit for Inst {
                 );
                 if let Some(s) = user_stack_map {
                     let offset = sink.cur_offset();
-                    sink.push_user_stack_map(state, offset, s);
+                    state.push_stack_map(sink, offset, s);
                 }
 
                 if let Some(try_call) = info.try_call_info.as_ref() {
@@ -4128,7 +4143,9 @@ impl MachInstEmit for Inst {
                 ..
             } => {
                 let stack_map = state.take_stack_map();
-                sink.pad_for_stack_map();
+                if stack_map.is_some() {
+                    state.pad_for_stack_map(sink);
+                }
 
                 // Record the address of the load in the trap table so a signal
                 // handler can later distinguish whether a segfault is its
@@ -4138,7 +4155,8 @@ impl MachInstEmit for Inst {
                 // SIGSEGV reports the PC of the faulting load, so the stack map
                 // is associated with the load itself.
                 if let Some(stack_map) = stack_map {
-                    sink.push_user_stack_map(state, sink.cur_offset(), stack_map);
+                    let offset = sink.cur_offset();
+                    state.push_stack_map(sink, offset, stack_map);
                 }
 
                 // Emit `ldr dst, [load_ptr]`. Reuse the `dst` address as the
