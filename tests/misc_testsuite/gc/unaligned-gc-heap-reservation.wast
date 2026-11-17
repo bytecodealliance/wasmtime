@@ -1,5 +1,12 @@
 ;;! gc = true
-;;! flags = "-C collector=drc -O memory-reservation=131071 -O memory-may-move=n -O pooling-max-memory-size=131071"
+;;! flags = """
+;;!    -C collector=drc
+;;!    -O memory-reservation=131071
+;;!    -O memory-may-move=n
+;;!    -O gc-heap-reservation=131071
+;;!    -O gc-heap-may-move=n
+;;!    -O pooling-max-memory-size=131071
+;;! """
 
 ;; A GC heap that may not move can't grow beyond its reservation, even when the
 ;; reservation isn't a multiple of the host page size. Filling it with arrays
