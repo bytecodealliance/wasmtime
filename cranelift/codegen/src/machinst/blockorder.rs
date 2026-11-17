@@ -286,14 +286,14 @@ impl BlockLoweringOrder {
 
                     // Critical edges won't have successor information in block_succ_range, but
                     // they only have a single known successor to record anyway.
-                    &LoweredBlock::CriticalEdge { succ, .. } => {
+                    &LoweredBlock::CriticalEdge { succ, pred, .. } => {
                         let succ_index = lb_to_bindex[&LoweredBlock::Orig { block: succ }];
                         lowered_succ_indices.push(succ_index);
 
-                        // Edges inherit indirect branch and cold block metadata from their
-                        // successor.
+                        // Edges inherit indirect branch and cold block metadata
+                        // from their successor and predecessor.
 
-                        if f.is_effectively_cold(succ) {
+                        if f.is_effectively_cold(succ) || f.is_effectively_cold(pred) {
                             cold_blocks.insert(bindex);
                         }
 
