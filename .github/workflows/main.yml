@@ -1428,6 +1428,17 @@ jobs:
         name: bins-${{ matrix.build }}
         path: dist
 
+  verify-gh-actions-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Verify actions.lock is up to date
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh extension install github/gh-actions-lock
+          gh actions-lock --verify
+
   # This is a "join node" which depends on all prior workflows. The merge queue,
   # for example, gates on this to ensure that everything has executed
   # successfully.
@@ -1477,6 +1488,7 @@ jobs:
       - test-min-platform-example
       - check_js
       - gc_zeal
+      - verify-gh-actions-lockfile
     if: always()
     steps:
     # Calculate the exit status of the whole CI workflow.
