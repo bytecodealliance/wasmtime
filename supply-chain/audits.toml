@@ -2271,7 +2271,7 @@ notes = "I am the author of this crate"
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "3.20.3 -> 3.20.4"
-notes = "This is a Bytecode Alliance project"
+notes = "I am the author of this crate"
 
 [[audits.bytes]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -4559,6 +4559,12 @@ who = "Trevor Elliott <telliott@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.6.1 -> 0.7.0"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.regalloc2]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.15.2 -> 0.15.3"
+notes = "This is a Bytecode Alliance project"
 
 [[audits.region]]
 who = "Alex Crichton <alex@alexcrichton.com>"
