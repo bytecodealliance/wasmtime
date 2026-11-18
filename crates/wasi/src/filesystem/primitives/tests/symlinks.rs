@@ -24,8 +24,8 @@ fn basic_symlinks() {
     assert!(!check!(h::metadata(&dir, "file")).file_type().is_symlink());
     assert!(!check!(h::metadata(&dir, "dir")).file_type().is_symlink());
 
-    check!(h::symlink_file(&dir, "file", "file_symlink_file"));
-    check!(h::symlink_dir(&dir, "dir", "dir_symlink_dir"));
+    check!(h::symlink(&dir, "file", "file_symlink_file"));
+    check!(h::symlink(&dir, "dir", "dir_symlink_dir"));
     check!(h::symlink(&dir, "file", "file_symlink"));
     check!(h::symlink(&dir, "dir", "dir_symlink"));
 
@@ -136,14 +136,16 @@ fn symlink_absolute() {
         h::symlink(&dir, "/thing", "thing_symlink_file"),
         "a path led outside of the filesystem"
     );
-    error_contains!(
-        h::symlink_file(&dir, "/file", "file_symlink_file"),
-        "a path led outside of the filesystem"
-    );
-    error_contains!(
-        h::symlink_dir(&dir, "/dir", "dir_symlink_dir"),
-        "a path led outside of the filesystem"
-    );
+}
+
+#[test]
+fn symlink_empty_target() {
+    let tmpdir = tmpdir();
+    let dir = h::dir_of(&tmpdir);
+
+    let err = h::symlink(&dir, "", "empty").unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::NotFound, "{err}");
+    assert!(h::symlink_metadata(&dir, "empty").is_err());
 }
 
 #[test]
@@ -202,18 +204,14 @@ fn open_dir_nofollow() {
 
     check!(h::create(&dir, "file"));
     check!(h::create_dir(&dir, "dir"));
-    check!(h::symlink_file(&dir, "file", "symlink_file"));
-    check!(h::symlink_dir(&dir, "dir", "symlink_dir"));
-    check!(h::symlink_dir(&dir, "dir/", "symlink_dir_slash"));
-    check!(h::symlink_dir(&dir, "dir/.", "symlink_dir_slashdot"));
-    check!(h::symlink_dir(&dir, "dir/..", "symlink_dir_slashdotdot"));
-    check!(h::symlink_dir(
-        &dir,
-        "dir/../",
-        "symlink_dir_slashdotdotslash"
-    ));
-    check!(h::symlink_dir(&dir, ".", "symlink_dot"));
-    check!(h::symlink_dir(&dir, "./", "symlink_dotslash"));
+    check!(h::symlink(&dir, "file", "symlink_file"));
+    check!(h::symlink(&dir, "dir", "symlink_dir"));
+    check!(h::symlink(&dir, "dir/", "symlink_dir_slash"));
+    check!(h::symlink(&dir, "dir/.", "symlink_dir_slashdot"));
+    check!(h::symlink(&dir, "dir/..", "symlink_dir_slashdotdot"));
+    check!(h::symlink(&dir, "dir/../", "symlink_dir_slashdotdotslash"));
+    check!(h::symlink(&dir, ".", "symlink_dot"));
+    check!(h::symlink(&dir, "./", "symlink_dotslash"));
 
     // First try without `nofollow`. The "symlink_dir" case should succeed.
     assert!(p::open_dir(&dir, Path::new("file")).is_err());
