@@ -180,6 +180,7 @@ impl CompiledBlob {
                     let what = relocation_target_addr(name, addend);
                     unsafe { write_unaligned(at.cast::<u64>(), u64::try_from(what).unwrap()) };
                 }
+
                 Reloc::X86PCRel4 => {
                     let what = relocation_target_addr(name, addend);
                     let pcrel = pcrel_offset(what, at).unwrap();
@@ -263,6 +264,7 @@ impl CompiledBlob {
                         }
                     }
                 }
+
                 Reloc::S390xGOTRel32Dbl => {
                     panic!("GOT relocation shouldn't be generated when !is_pic");
                 }
@@ -274,6 +276,7 @@ impl CompiledBlob {
                     .unwrap();
                     unsafe { write_unaligned(at.cast::<i32>(), pcrel) };
                 }
+
                 Reloc::Arm64Call => {
                     let what = relocation_target_addr(name, addend);
                     // The instruction is 32 bits long.
@@ -358,6 +361,7 @@ impl CompiledBlob {
                     let imm12 = (what as u32 & 0xfff) << 10;
                     unsafe { modify_inst32(iptr, |inst| inst | imm12) };
                 }
+
                 Reloc::RiscvCallPlt => {
                     // A R_RISCV_CALL_PLT relocation expects auipc+jalr instruction pair.
                     // It is the equivalent of two relocations:
@@ -393,18 +397,9 @@ impl CompiledBlob {
                         modify_inst32(jalr_addr, |jalr| (jalr & 0xFFFFF) | (lo12 << 20));
                     }
                 }
-                Reloc::PulleyPcRel => {
-                    let what = relocation_target_addr(name, addend);
-                    let pcrel = pcrel_offset(what, at).unwrap();
-                    let at = at.cast::<i32>();
-                    unsafe {
-                        at.write_unaligned(at.read_unaligned().wrapping_add(pcrel));
-                    }
-                }
-
-                // See <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses>
-                // for why `0x800` is added here.
                 Reloc::RiscvPCRelHi20 => {
+                    // See <https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses>
+                    // for why `0x800` is added here.
                     let what = relocation_target_addr(name, addend);
                     let pcrel = i32::try_from(
                         what.cast_signed() - at.expose_provenance().cast_signed() + 0x800,
@@ -416,13 +411,12 @@ impl CompiledBlob {
                         modify_inst32(at, |i| i | (pcrel & 0xfffff000));
                     }
                 }
-
-                // The target of this relocation is the `auipc` preceding this
-                // instruction which should be `RiscvPCRelHi20`, and the actual
-                // target that we're relocating against is the target of that
-                // relocation. Assume for now that the previous relocation is
-                // the target of this relocation, and then use that.
                 Reloc::RiscvPCRelLo12I => {
+                    // The target of this relocation is the `auipc` preceding this
+                    // instruction which should be `RiscvPCRelHi20`, and the actual
+                    // target that we're relocating against is the target of that
+                    // relocation. Assume for now that the previous relocation is
+                    // the target of this relocation, and then use that.
                     let prev_reloc = &self.relocs[i - 1];
                     assert_eq!(prev_reloc.kind, Reloc::RiscvPCRelHi20);
                     let lo_target = get_address(name);
@@ -439,6 +433,15 @@ impl CompiledBlob {
                     let at = at.cast::<u32>();
                     unsafe {
                         modify_inst32(at, |i| i | ((pcrel & 0xfff) << 20));
+                    }
+                }
+
+                Reloc::PulleyPcRel => {
+                    let what = relocation_target_addr(name, addend);
+                    let pcrel = pcrel_offset(what, at).unwrap();
+                    let at = at.cast::<i32>();
+                    unsafe {
+                        at.write_unaligned(at.read_unaligned().wrapping_add(pcrel));
                     }
                 }
 
