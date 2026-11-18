@@ -923,8 +923,8 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.anstyle]]
-version = "1.0.13"
-when = "2025-09-29"
+version = "1.0.14"
+when = "2026-03-13"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -1034,36 +1034,36 @@ user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
 [[publisher.clap]]
-version = "4.5.48"
-when = "2025-09-19"
+version = "4.6.8"
+when = "2026-11-16"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.clap_builder]]
-version = "4.5.48"
-when = "2025-09-19"
+version = "4.6.7"
+when = "2026-09-14"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.clap_complete]]
-version = "4.5.58"
-when = "2025-09-16"
+version = "4.6.12"
+when = "2026-11-16"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.clap_derive]]
-version = "4.5.47"
-when = "2025-09-02"
+version = "4.6.8"
+when = "2026-11-16"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.clap_lex]]
-version = "0.7.5"
-when = "2025-06-09"
+version = "1.1.2"
+when = "2026-11-16"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -1510,8 +1510,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.proc-macro2]]
-version = "1.0.101"
-when = "2025-08-16"
+version = "1.0.107"
+when = "2026-07-19"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -1527,8 +1527,8 @@ when = "2026-10-29"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.quote]]
-version = "1.0.41"
-when = "2025-09-29"
+version = "1.0.47"
+when = "2026-07-19"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -1667,8 +1667,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.syn]]
-version = "3.0.5"
-when = "2026-09-04"
+version = "3.0.10"
+when = "2026-11-09"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"

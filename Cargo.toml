@@ -406,7 +406,7 @@ windows-sys = "0.61.2"
 env_logger = "0.11.5"
 log = { version = "0.4.28", default-features = false }
 clap = { version = "4.5.48", default-features = false, features = ["std", "derive"] }
-clap_complete = "4.5.58"
+clap_complete = "4.6.8"
 hashbrown = { version = "0.17", default-features = false }
 foldhash = { version = "0.2.0", default-features = false }
 capstone = { version = "0.14.0", default-features = false, features = ['full', 'arch_x86', 'arch_riscv', 'arch_arm64', 'arch_sysz'] }
