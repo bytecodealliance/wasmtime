@@ -35,10 +35,10 @@
 //! miss any invalidation points, and makes this pattern
 //! safe-by-construction.
 
+use crate::store::StoreId;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
-use core::sync::atomic::{AtomicU64, Ordering};
 
 /// An encapsulated bit of state that can be mutated and that can have
 /// lazily-invalidated immutable "handles" that refer to a particular
@@ -51,9 +51,15 @@ use core::sync::atomic::{AtomicU64, Ordering};
 /// on since the handle was created. If a handle dereference succeeds,
 /// this container guarantees that the `T` has not been mutated (no
 /// `&mut T` has been handed out) since the handle was created.
+///
+/// Each `EpochState` is tied to the store that owns it, and handles
+/// record that store's `StoreId` to check that they are used with the
+/// right `EpochState`. This means that a store must not have more than
+/// one `EpochState<T>` for the same `T`, or handles from one could be
+/// accepted by another.
 pub struct EpochState<T> {
     inner: T,
-    stamp: Stamp,
+    store_id: StoreId,
     epoch: Epoch,
 }
 
@@ -71,29 +77,15 @@ impl Epoch {
     }
 }
 
-/// Internal "stamp" distinguishing each `EpochState` instance that
-/// exists in the program at runtime. This is what ties an
-/// `EpochStateHandle` to an `EpochState`. (The stamp plus the epoch
-/// numbers together are what completely identify one state of one
-/// `T`.)
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct Stamp(u64);
-impl Stamp {
-    fn new() -> Stamp {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        Stamp(NEXT.fetch_add(1, Ordering::Relaxed))
-    }
-}
-
 /// Handle to one version of `T` in one `EpochState`.
 pub struct EpochStateHandle<T> {
     // Note that we intentionally do *not* hold a borrow of the
     // `EpochState` here; that's the entire point of this
-    // construct. Instead, the stamp and epoch snapshots uniquely
+    // construct. Instead, the store ID and epoch snapshots uniquely
     // describe one version of one `T` and let us check if it's still
     // the same before turning this handle (plus an actual borrow of
     // the `EpochState` at use-time) into a `&T`.
-    stamp: Stamp,
+    store_id: StoreId,
     epoch: Epoch,
     // Note: `fn() -> T`, not `&T` here, because we do not want a
     // lifetime associated with this handle (and it does not actually
@@ -117,7 +109,7 @@ impl<T> Copy for EpochStateHandle<T> {}
 impl<T> fmt::Debug for EpochStateHandle<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("EpochStateHandle")
-            .field("stamp", &self.stamp.0)
+            .field("store_id", &self.store_id)
             .field("epoch", &self.epoch.0)
             .finish()
     }
@@ -125,7 +117,7 @@ impl<T> fmt::Debug for EpochStateHandle<T> {
 
 impl<T> PartialEq for EpochStateHandle<T> {
     fn eq(&self, other: &Self) -> bool {
-        (self.stamp, self.epoch) == (other.stamp, other.epoch)
+        (self.store_id, self.epoch) == (other.store_id, other.epoch)
     }
 }
 
@@ -133,16 +125,16 @@ impl<T> Eq for EpochStateHandle<T> {}
 
 impl<T> Hash for EpochStateHandle<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        (self.stamp, self.epoch).hash(state);
+        (self.store_id, self.epoch).hash(state);
     }
 }
 
 impl<T> EpochState<T> {
-    /// Create a new EpochState.
-    pub fn new(inner: T) -> EpochState<T> {
+    /// Create a new `EpochState` owned by the store `store_id`.
+    pub fn new(store_id: StoreId, inner: T) -> EpochState<T> {
         EpochState {
             inner,
-            stamp: Stamp::new(),
+            store_id,
             epoch: Epoch::default(),
         }
     }
@@ -174,7 +166,7 @@ impl<T> EpochState<T> {
     /// which it is dereferenced.
     pub fn handle(&self) -> EpochStateHandle<T> {
         EpochStateHandle {
-            stamp: self.stamp,
+            store_id: self.store_id,
             epoch: self.epoch,
             _unused: PhantomData,
         }
@@ -221,6 +213,6 @@ impl<T> EpochStateHandle<T> {
 
     /// Did this handle come from `state`?
     pub fn belongs_to(&self, state: &EpochState<T>) -> bool {
-        state.stamp == self.stamp
+        state.store_id == self.store_id
     }
 }

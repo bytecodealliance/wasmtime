@@ -32,7 +32,7 @@ use crate::module::ModuleRegistry;
 use crate::prelude::*;
 use crate::runtime::epoch_state::EpochState;
 use crate::runtime::vm::{GcHeapAllocationIndex, VMMemoryDefinition};
-use crate::store::Asyncness;
+use crate::store::{Asyncness, StoreId};
 use crate::type_registry::RegisteredType;
 use core::any::Any;
 use core::mem::MaybeUninit;
@@ -109,6 +109,7 @@ pub struct GcStoreTraceState<'a> {
 impl GcStore {
     /// Create a new `GcStore`.
     pub fn new(
+        store_id: StoreId,
         allocation_index: GcHeapAllocationIndex,
         gc_heap: Box<dyn GcHeap>,
         gc_zeal_alloc_counter: Option<NonZeroU32>,
@@ -122,7 +123,7 @@ impl GcStore {
 
         Self {
             allocation_index,
-            gc_heap: EpochState::new(gc_heap),
+            gc_heap: EpochState::new(store_id, gc_heap),
             host_data_table,
             func_ref_table,
             #[cfg(feature = "stack-switching")]

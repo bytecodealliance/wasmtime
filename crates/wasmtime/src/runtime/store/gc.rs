@@ -1028,7 +1028,12 @@ impl StoreOpaque {
             };
         heap.attach(mem);
 
-        let gc_store = GcStore::new(index, heap, engine.tunables().gc_zeal_alloc_counter);
+        let gc_store = GcStore::new(
+            self.id(),
+            index,
+            heap,
+            engine.tunables().gc_zeal_alloc_counter,
+        );
         *self.vm_store_context.gc_heap.get_mut() = gc_store.vmmemory_definition();
         Ok(self.gc_store.insert(gc_store))
     }
