@@ -21,6 +21,16 @@ pub struct ResourcesRequired {
 }
 
 impl ResourcesRequired {
+    /// Returns a requirement of zero resources.
+    pub fn zero() -> Self {
+        Self {
+            num_memories: 0,
+            max_initial_memory_size: None,
+            num_tables: 0,
+            max_initial_table_size: None,
+        }
+    }
+
     /// Adds the provided resource requirements to this set of requirements.
     #[cfg(feature = "component-model")]
     pub fn add(&mut self, other: &ResourcesRequired) {
