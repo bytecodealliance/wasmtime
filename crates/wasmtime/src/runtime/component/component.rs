@@ -18,8 +18,8 @@ use core::ptr::NonNull;
 use std::path::Path;
 use wasmtime_environ::component::{
     CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export, ExportIndex,
-    GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
-    TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
+    NameMapNoIntern, OptionsIndex, StaticModuleIndex, TrampolineIndex, TypeComponentIndex,
+    TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
 };
 use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace, WasmChecksum};
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, ResourcesRequired};
@@ -708,35 +708,8 @@ impl Component {
     /// # Ok(()) }
     /// ```
     pub fn resources_required(&self) -> Option<ResourcesRequired> {
-        let mut resources = ResourcesRequired {
-            num_memories: 0,
-            max_initial_memory_size: None,
-            num_tables: 0,
-            max_initial_table_size: None,
-        };
-        for init in &self.env_component().initializers {
-            match init {
-                GlobalInitializer::InstantiateModule(inst, _) => match inst {
-                    InstantiateModule::Static(index, _) => {
-                        let module = self.static_module(*index);
-                        resources.add(&module.resources_required());
-                    }
-                    InstantiateModule::Import(_, _) => {
-                        // We can't statically determine the resources required
-                        // to instantiate this component.
-                        return None;
-                    }
-                },
-                GlobalInitializer::LowerImport { .. }
-                | GlobalInitializer::ExtractMemory(_)
-                | GlobalInitializer::ExtractTable(_)
-                | GlobalInitializer::ExtractRealloc(_)
-                | GlobalInitializer::ExtractCallback(_)
-                | GlobalInitializer::ExtractPostReturn(_)
-                | GlobalInitializer::Resource(_) => {}
-            }
-        }
-        Some(resources)
+        let get_module = |index| self.static_module(index).env_module().as_ref();
+        self.env_component().resources_required(&get_module)
     }
 
     /// Returns the range, in the host's address space, that this module's
