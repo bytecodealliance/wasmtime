@@ -981,27 +981,7 @@ impl Module {
     /// # Ok(()) }
     /// ```
     pub fn resources_required(&self) -> ResourcesRequired {
-        let em = self.env_module();
-        let num_memories = u32::try_from(em.num_defined_memories()).unwrap();
-        let max_initial_memory_size = em
-            .memories
-            .values()
-            .skip(em.num_imported_memories)
-            .map(|memory| memory.limits.min)
-            .max();
-        let num_tables = u32::try_from(em.num_defined_tables()).unwrap();
-        let max_initial_table_size = em
-            .tables
-            .values()
-            .skip(em.num_imported_tables)
-            .map(|table| table.limits.min)
-            .max();
-        ResourcesRequired {
-            num_memories,
-            max_initial_memory_size,
-            num_tables,
-            max_initial_table_size,
-        }
+        self.env_module().resources_required()
     }
 
     /// Returns the range of bytes in memory where this module's compilation
