@@ -839,10 +839,25 @@ impl GuestCall {
                     // Sync- and callback-lifted exports need the instance's
                     // exclusive lock to start, but stackful ones don't.
                     let needs_exclusive = !async_lifted || has_callback;
-                    !((needs_exclusive && state.do_not_enter) || state.backpressure > 0)
-                        // Per the spec, we can't start a call if there are
-                        // others already waiting in line.
-                        && (*was_pending || state.pending_start_count == 0)
+
+                    // This task may enter the instance if (a) there's no
+                    // backpressure enabled, and (b) either the exclusive lock
+                    // is free or we can bypass the lock per the
+                    // `needs_exclusive` logic above.
+                    let may_enter =
+                        !((needs_exclusive && state.do_not_enter) || state.backpressure > 0);
+
+                    // If this task is already waiting in line (or was
+                    // previously in line before getting the go-ahead) or there
+                    // is no line to wait in, we can skip that.  Otherwise, we
+                    // need to get in line to avoid barging ahead of others that
+                    // have been waiting for backpressure to clear, even if
+                    // backpressure is no longer enabled.
+                    let skip_wait = *was_pending || state.pending_start_count == 0;
+
+                    // This task is ready if it may enter the instance _and_
+                    // there's no need to get in line first.
+                    may_enter && skip_wait
                 } else {
                     true
                 }
