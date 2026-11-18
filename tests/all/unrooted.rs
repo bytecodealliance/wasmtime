@@ -60,6 +60,7 @@ fn read_through_unrooted_with_shared_store() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn read_gc_heap_graph_with_shared_store() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -130,6 +131,7 @@ fn read_gc_heap_graph_with_shared_store() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn unrooted_is_invalidated_by_heap_mutation() -> Result<()> {
     let mut store = gc_store()?;
     let s = new_struct(&mut store, 1)?;
@@ -171,6 +173,7 @@ fn unrooted_is_invalidated_by_heap_mutation() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn unrooted_is_invalidated_by_running_wasm() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(store.engine(), r#"(module (func (export "f")))"#)?;
@@ -185,6 +188,7 @@ fn unrooted_is_invalidated_by_running_wasm() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn unrooted_from_host_call_is_invalidated_once_wasm_runs() -> Result<()> {
     use std::sync::{Arc, Mutex};
 
@@ -445,6 +449,7 @@ fn mutating_apis_reject_unrooted_values() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn func_call_takes_rooted_and_returns_unrooted() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
