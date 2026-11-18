@@ -3027,6 +3027,12 @@ criteria = "safe-to-deploy"
 delta = "0.1.5 -> 0.1.6"
 notes = "Just a dependency version bump"
 
+[[audits.file-per-thread-logger]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.0 -> 0.2.1"
+notes = "Just dependency updates/changes"
+
 [[audits.find-msvc-tools]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -4393,6 +4399,12 @@ change.
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 delta = "0.3.29 -> 0.3.32"
+
+[[audits.portable-atomic-util]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.2.8"
+notes = "Lots of unsafe code, as to be expected, but mostly a copy of the standard library's `arc.rs` and otherwise nothing awry here."
 
 [[audits.postcard]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -7124,13 +7136,13 @@ end = "2025-02-23"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2024-01-19"
-end = "2025-09-20"
+end = "2027-11-18"
 
 [[trusted.env_logger]]
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2022-11-24"
-end = "2025-09-20"
+end = "2027-11-18"
 
 [[trusted.equivalent]]
 criteria = "safe-to-deploy"
@@ -7280,13 +7292,37 @@ end = "2024-07-06"
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2024-02-17"
-end = "2026-10-10"
+end = "2027-11-18"
+
+[[trusted.jiff]]
+criteria = "safe-to-deploy"
+trusted-publisher = "github:BurntSushi/jiff"
+start = "2026-11-02"
+end = "2027-11-18"
+
+[[trusted.jiff-core]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2026-06-30"
+end = "2027-11-18"
+
+[[trusted.jiff-core]]
+criteria = "safe-to-deploy"
+trusted-publisher = "github:BurntSushi/jiff"
+start = "2026-11-02"
+end = "2027-11-18"
 
 [[trusted.jiff-static]]
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2025-03-06"
-end = "2026-10-10"
+end = "2027-11-18"
+
+[[trusted.jiff-static]]
+criteria = "safe-to-deploy"
+trusted-publisher = "github:BurntSushi/jiff"
+start = "2026-11-02"
+end = "2027-11-18"
 
 [[trusted.jobserver]]
 criteria = "safe-to-deploy"
@@ -7335,6 +7371,12 @@ criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2019-05-04"
 end = "2024-07-06"
+
+[[trusted.log]]
+criteria = "safe-to-deploy"
+trusted-publisher = "github:rust-lang/log"
+start = "2026-10-30"
+end = "2027-11-18"
 
 [[trusted.mach2]]
 criteria = "safe-to-deploy"
@@ -7448,19 +7490,19 @@ end = "2026-10-08"
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-02-27"
-end = "2024-07-15"
+end = "2027-11-18"
 
 [[trusted.regex-automata]]
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-02-25"
-end = "2026-10-10"
+end = "2027-11-18"
 
 [[trusted.regex-syntax]]
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-03-30"
-end = "2025-11-13"
+end = "2027-11-18"
 
 [[trusted.rustix]]
 criteria = "safe-to-deploy"

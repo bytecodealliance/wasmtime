@@ -915,6 +915,13 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
+[[publisher.anstream]]
+version = "1.0.0"
+when = "2026-02-11"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
 [[publisher.anstyle]]
 version = "1.0.13"
 when = "2025-09-29"
@@ -925,6 +932,13 @@ user-name = "Ed Page"
 [[publisher.anstyle-parse]]
 version = "0.2.7"
 when = "2025-06-04"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.anstyle-parse]]
+version = "1.0.0"
+when = "2026-02-11"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -1190,22 +1204,15 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.env_filter]]
-version = "0.1.2"
-when = "2024-07-25"
+version = "2.0.0"
+when = "2026-06-25"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.env_logger]]
-version = "0.10.0"
-when = "2022-11-24"
-user-id = 6743
-user-login = "epage"
-user-name = "Ed Page"
-
-[[publisher.env_logger]]
-version = "0.11.5"
-when = "2024-07-25"
+version = "0.11.11"
+when = "2026-06-25"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -1341,13 +1348,6 @@ user-id = 539
 user-login = "cuviper"
 user-name = "Josh Stone"
 
-[[publisher.is-terminal]]
-version = "0.4.17"
-when = "2025-10-23"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
 [[publisher.is_terminal_polyfill]]
 version = "1.70.1"
 when = "2024-07-25"
@@ -1361,6 +1361,21 @@ when = "2024-03-26"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
+
+[[publisher.jiff]]
+version = "0.2.46"
+when = "2026-11-15"
+trusted-publisher = "github:BurntSushi/jiff"
+
+[[publisher.jiff-core]]
+version = "0.1.8"
+when = "2026-11-15"
+trusted-publisher = "github:BurntSushi/jiff"
+
+[[publisher.jiff-static]]
+version = "0.2.46"
+when = "2026-11-15"
+trusted-publisher = "github:BurntSushi/jiff"
 
 [[publisher.jobserver]]
 version = "0.1.25"
@@ -1392,6 +1407,11 @@ when = "2025-12-23"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
+
+[[publisher.log]]
+version = "0.4.35"
+when = "2026-10-30"
+trusted-publisher = "github:rust-lang/log"
 
 [[publisher.mach2]]
 version = "0.4.3"
@@ -1521,8 +1541,8 @@ user-login = "cfallin"
 user-name = "Chris Fallin"
 
 [[publisher.regex]]
-version = "1.9.1"
-when = "2023-07-07"
+version = "1.13.2"
+when = "2026-11-18"
 user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
@@ -1535,22 +1555,15 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.regex-automata]]
-version = "0.4.11"
-when = "2025-09-25"
+version = "0.4.19"
+when = "2026-11-18"
 user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.regex-syntax]]
-version = "0.7.4"
-when = "2023-07-11"
-user-id = 189
-user-login = "BurntSushi"
-user-name = "Andrew Gallant"
-
-[[publisher.regex-syntax]]
-version = "0.8.5"
-when = "2024-09-29"
+version = "0.8.12"
+when = "2026-11-18"
 user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
@@ -3457,26 +3470,6 @@ who = "Makoto Kato <m_kato@ga2.so-net.ne.jp>"
 criteria = "safe-to-deploy"
 delta = "0.7.2 -> 0.7.3"
 aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.log]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-version = "0.4.17"
-aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.log]]
-who = "Jan-Erik Rediger <jrediger@mozilla.com>"
-criteria = "safe-to-deploy"
-delta = "0.4.17 -> 0.4.18"
-notes = "One dependency removed, others updated (which we don't rely on), some APIs (which we don't use) changed."
-aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.log]]
-who = "Kagami Sascha Rosylight <krosylight@mozilla.com>"
-criteria = "safe-to-deploy"
-delta = "0.4.18 -> 0.4.20"
-notes = "Only cfg attribute and internal macro changes and module refactorings"
-aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.num-conv]]
 who = "Alex Franchuk <afranchuk@mozilla.com>"
