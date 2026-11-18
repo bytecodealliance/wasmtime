@@ -10,9 +10,12 @@
 ///   fixed amount of resources, e.g. determining whether to create 5
 ///   instances of module `X` or 10 instances of module `Y`.
 pub struct ComponentResourcesRequired {
-    core_instances_aggregate_size: usize,
-    num_core_instances: usize,
-    module_resources: ResourcesRequired,
+    /// TK
+    pub core_instances_aggregate_size: usize,
+    /// TK
+    pub num_core_instances: usize,
+    /// TK
+    pub module_resources: ResourcesRequired,
 }
 
 /// A summary of the amount of resources required to instantiate a particular
@@ -102,10 +105,10 @@ impl crate::Module {
 impl crate::component::Component {
     /// Returns a summary of the resources required to instantiate this
     /// [`Component`][crate::component::Component].
-    pub fn resources_required<'a>(
+    pub fn resources_required<'a, 'b>(
         &self,
         get_module: &'a dyn Fn(crate::StaticModuleIndex) -> &'a crate::Module,
-        get_size: &'a dyn Fn(&crate::Module) -> usize,
+        get_size: &'b dyn Fn(&crate::Module) -> usize,
     ) -> ComponentResourcesRequired {
         use crate::component::{GlobalInitializer::*, InstantiateModule};
         let mut resources = ComponentResourcesRequired::zero();
