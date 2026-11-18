@@ -66,90 +66,6 @@ impl HasData for WasiFilesystem {
     type Data<'a> = WasiFilesystemCtxView<'a>;
 }
 
-/// A native filesystem handle with optional embedder lifetime ownership.
-///
-/// The owner remains alive through Wasmtime's shared handle clones, child opens,
-/// native workers, and directory iterators. The native file closes before the
-/// owner is released. This ownership does not admit an active operation.
-///
-/// For example, an embedder can retain temporary backing content until the last
-/// native handle that can access it closes. This lifetime is independent of
-/// [`FilesystemOperation`], which retains admission only while work is active.
-///
-/// Borrowed access to the native file is available through [`std::ops::Deref`].
-/// Use [`Self::try_clone`] to duplicate a handle while retaining its owner.
-/// Explicitly calling [`std::fs::File::try_clone`] on the borrowed file, or
-/// duplicating its raw OS handle, does not inherit ownership. The embedder is
-/// responsible for retaining the owner of such externally duplicated handles.
-pub struct FilesystemHandle {
-    // Declaration order closes the native file before releasing its owner.
-    file: std::fs::File,
-    owner: Option<Arc<dyn Send + Sync>>,
-}
-
-impl FilesystemHandle {
-    /// Attaches `owner` before the native file can enter a shared allocation.
-    /// Wasmtime never accesses `owner`; its destructor may run on a worker.
-    pub fn new(file: std::fs::File, owner: impl Send + 'static) -> Self {
-        Self {
-            file,
-            // The value is never accessed or locked; the mutex makes a
-            // Send-only owner shareable by handles on different threads.
-            owner: Some(Arc::new(Mutex::new(owner))),
-        }
-    }
-
-    /// Duplicates the native handle and retains the same owner.
-    pub fn try_clone(&self) -> std::io::Result<Self> {
-        Ok(self.inherit(self.file.try_clone()?))
-    }
-
-    fn inherit(&self, file: std::fs::File) -> Self {
-        Self {
-            file,
-            owner: self.owner.clone(),
-        }
-    }
-
-    #[cfg(feature = "p3")]
-    pub(crate) fn read_dir(
-        &self,
-    ) -> std::io::Result<
-        impl Iterator<Item = std::io::Result<(std::ffi::OsString, primitives::FileType)>>
-        + Send
-        + 'static,
-    > {
-        struct Entries<I> {
-            // Enumeration owns independent native state: dispose it first.
-            entries: I,
-            _owner: Option<Arc<dyn Send + Sync>>,
-        }
-        impl<I: Iterator> Iterator for Entries<I> {
-            type Item = I::Item;
-            fn next(&mut self) -> Option<Self::Item> {
-                self.entries.next()
-            }
-        }
-        Ok(Entries {
-            entries: primitives::read_dir(self)?,
-            _owner: self.owner.clone(),
-        })
-    }
-}
-
-impl From<std::fs::File> for FilesystemHandle {
-    fn from(file: std::fs::File) -> Self {
-        Self { file, owner: None }
-    }
-}
-
-impl std::ops::Deref for FilesystemHandle {
-    type Target = std::fs::File;
-    fn deref(&self) -> &Self::Target {
-        &self.file
-    }
-}
-
 /// Shared ownership of one admitted native filesystem operation or session.
 ///
 /// Cloning shares the admission; it does not call the hook again. Wasmtime never
@@ -220,8 +136,8 @@ impl WasiFilesystemCtx {
     /// Idle descriptors do not retain active-operation values.
     ///
     /// Operations involving two descriptors invoke only the initiating
-    /// descriptor's hook. Each native handle independently retains its
-    /// [`FilesystemHandle`] owner, including the second descriptor's handle.
+    /// descriptor's hook. This experiment retains the secondary descriptor's
+    /// factory for `is_same_object`; link/rename ownership is not migrated.
     ///
     /// Descriptors retain the hook configured when their preopen was issued;
     /// changing the hook affects subsequently issued preopens and their children.
@@ -874,16 +790,19 @@ impl Descriptor {
             Self::File(f) => f.start_operation()?,
             Self::Dir(d) => d.start_operation()?,
         };
-        let other = match other {
-            Self::File(f) => Arc::clone(&f.file),
-            Self::Dir(d) => Arc::clone(&d.dir),
-        };
+        // Retain B's factory without invoking it. Capturing only B's native Arc
+        // loses its external generation when the originating descriptor dies.
+        let other = other.clone();
         Ok(match self {
             Self::File(f) => {
                 f.run_blocking_with(operation, move |f| {
                     #[cfg(test)]
                     native_owner_tests::native_work_gate(f);
-                    sys::is_same_file(f, &other)
+                    let native = match &other {
+                        Self::File(file) => &file.file,
+                        Self::Dir(dir) => &dir.dir,
+                    };
+                    sys::is_same_file(f, native)
                 })
                 .await?
             }
@@ -891,7 +810,11 @@ impl Descriptor {
                 d.run_blocking_with(operation, move |d| {
                     #[cfg(test)]
                     native_owner_tests::native_work_gate(d);
-                    sys::is_same_file(d, &other)
+                    let native = match &other {
+                        Self::File(file) => &file.file,
+                        Self::Dir(dir) => &dir.dir,
+                    };
+                    sys::is_same_file(d, native)
                 })
                 .await?
             }
@@ -913,7 +836,8 @@ pub struct File {
     /// Wrapped in an Arc because the same underlying file is used for
     /// implementing the stream types. A copy is also needed for
     /// `spawn_blocking`.
-    pub file: Arc<FilesystemHandle>,
+    // Drop our native reference before the factory and its captured owners.
+    pub file: Arc<std::fs::File>,
     /// Permissions to enforce on access to the file. These permissions are
     /// specified to the parent preopen by a user of the
     /// `crate::WasiCtxBuilder`, and are enforced prior to any enforced by the
@@ -933,13 +857,13 @@ impl File {
     /// Creates a file descriptor. Use [`WasiFilesystemCtx::push_descriptor`] to
     /// install it with a context's operation hook.
     pub fn new(
-        file: impl Into<FilesystemHandle>,
+        file: std::fs::File,
         perms: FsPerms,
         open_mode: OpenMode,
         allow_blocking_current_thread: bool,
     ) -> Self {
         Self {
-            file: Arc::new(file.into()),
+            file: Arc::new(file),
             perms,
             open_mode,
             allow_blocking_current_thread,
@@ -1022,9 +946,9 @@ impl File {
         }
     }
 
-    /// Returns a reference to the shared native handle and its content owner.
+    /// Returns a reference to the shared native handle.
     #[cfg(feature = "p3")]
-    pub(crate) fn as_file(&self) -> &Arc<FilesystemHandle> {
+    pub(crate) fn as_file(&self) -> &Arc<std::fs::File> {
         &self.file
     }
 
@@ -1057,7 +981,8 @@ pub struct Dir {
     /// struct are sandboxed to be within this directory via `cap-primitives`.
     ///
     /// Wrapped in an Arc because a copy is needed for `run_blocking`.
-    pub dir: Arc<FilesystemHandle>,
+    // Drop our native reference before the factory and its captured owners.
+    pub dir: Arc<std::fs::File>,
     /// Permissions to enforce on access to the filesystem under this
     /// directory are specified by a user of the `crate::WasiCtxBuilder`, and
     /// are enforced prior to any enforced by the underlying operating system.
@@ -1079,13 +1004,13 @@ impl Dir {
     /// Creates a directory descriptor. Use [`WasiFilesystemCtx::push_descriptor`]
     /// to install it with a context's operation hook.
     pub fn new(
-        dir: impl Into<FilesystemHandle>,
+        dir: std::fs::File,
         perms: FsPerms,
         open_mode: OpenMode,
         allow_blocking_current_thread: bool,
     ) -> Self {
         Dir {
-            dir: Arc::new(dir.into()),
+            dir: Arc::new(dir),
             perms,
             open_mode,
             allow_blocking_current_thread,
@@ -1115,7 +1040,7 @@ impl Dir {
     /// - [Implement opt-in for enabling WASI to block the current thread](https://github.com/bytecodealliance/wasmtime/pull/8190)
     pub(crate) async fn run_blocking<F, R, E>(&self, body: F) -> Result<R, E>
     where
-        F: FnOnce(&FilesystemHandle) -> Result<R, E> + Send + 'static,
+        F: FnOnce(&std::fs::File) -> Result<R, E> + Send + 'static,
         R: Send + 'static,
         E: From<FilesystemOperationError> + Send + 'static,
     {
@@ -1124,7 +1049,7 @@ impl Dir {
 
     async fn run_blocking_with<F, R>(&self, operation: Option<FilesystemOperation>, body: F) -> R
     where
-        F: FnOnce(&FilesystemHandle) -> R + Send + 'static,
+        F: FnOnce(&std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
         if self.allow_blocking_current_thread {
@@ -1137,7 +1062,7 @@ impl Dir {
 
     /// Returns reference to the underlying directory handle.
     #[cfg(feature = "p3")]
-    pub(crate) fn as_dir(&self) -> &Arc<FilesystemHandle> {
+    pub(crate) fn as_dir(&self) -> &Arc<std::fs::File> {
         &self.dir
     }
 
@@ -1304,8 +1229,8 @@ impl Dir {
         // This makes sure we don't have to give spawn_blocking any way to
         // manipulate the table.
         enum OpenResult {
-            Dir(FilesystemHandle),
-            File(FilesystemHandle),
+            Dir(std::fs::File),
+            File(std::fs::File),
             NotDir,
         }
 
@@ -1316,11 +1241,11 @@ impl Dir {
                 let result = (|| -> std::io::Result<OpenResult> {
                     let opened = crate::filesystem::primitives::open(d, path.as_ref(), &opts)?;
                     if Metadata::from_file(&opened)?.is_dir() {
-                        Ok(OpenResult::Dir(d.inherit(opened)))
+                        Ok(OpenResult::Dir(opened))
                     } else if oflags.contains(OpenFlags::DIRECTORY) {
                         Ok(OpenResult::NotDir)
                     } else {
-                        Ok(OpenResult::File(d.inherit(opened)))
+                        Ok(OpenResult::File(opened))
                     }
                 })();
                 let operation = match &result {

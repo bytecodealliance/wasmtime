@@ -348,7 +348,7 @@ fn failed_open_releases_before_future_is_polled_again() {
 async fn failed_open_installation_disposes_native_result_before_owner() {
     use std::sync::{Weak, atomic::AtomicBool};
     struct Check {
-        native: Arc<Mutex<Option<Weak<FilesystemHandle>>>>,
+        native: Arc<Mutex<Option<Weak<std::fs::File>>>>,
         released: Arc<AtomicBool>,
         disposed: Arc<AtomicBool>,
     }
