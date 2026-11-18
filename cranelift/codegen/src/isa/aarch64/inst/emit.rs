@@ -1119,6 +1119,20 @@ impl MachInstEmit for Inst {
                             rd,
                         ));
                     }
+                    &AMode::ConstPageOff { rn, addr } => {
+                        // The offset within the page is filled in when the
+                        // location of the separate constant pool is known.
+                        let label = sink.get_label_for_constant(addr);
+                        assert!(sink.is_separate_constant_label(label));
+                        let shift = access_ty.bytes().trailing_zeros() as u8;
+                        sink.use_label_at_offset(
+                            sink.cur_offset(),
+                            label,
+                            LabelUse::LdstLo12 { shift },
+                        );
+                        let zero = UImm12Scaled::maybe_from_i64(0, access_ty).unwrap();
+                        sink.put4(enc_ldst_uimm12(op, zero, rn, rd));
+                    }
                     &AMode::Label { ref label } => {
                         let offset = match label {
                             // cast i32 to u32 (two's-complement)
@@ -1269,6 +1283,7 @@ impl MachInstEmit for Inst {
                     | &AMode::IncomingArg { .. }
                     | &AMode::SlotOffset { .. }
                     | &AMode::Const { .. }
+                    | &AMode::ConstPageOff { .. }
                     | &AMode::RegOffset { .. } => {
                         panic!("Should not see {mem:?} here!")
                     }
@@ -3638,6 +3653,14 @@ impl MachInstEmit for Inst {
                 assert!(off > -(1 << 20));
                 assert!(off < (1 << 20));
                 sink.put4(enc_adrp(off, rd));
+            }
+            &Inst::AdrpConst { rd, constant } => {
+                // The page offset is filled in when the location of the
+                // separate constant pool is known.
+                let label = sink.get_label_for_constant(constant);
+                assert!(sink.is_separate_constant_label(label));
+                sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::AdrpPage21);
+                sink.put4(enc_adrp(0, rd));
             }
             &Inst::Word4 { data } => {
                 sink.put4(data);

@@ -360,6 +360,15 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn separate_constant_pool(&mut self) -> Option<()> {
+            if self.backend.flags().separate_constant_pool() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn stack_switch_model(&mut self) -> Option<StackSwitchModel> {
             Some(self.backend.flags().stack_switch_model())
         }

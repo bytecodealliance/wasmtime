@@ -381,6 +381,9 @@ fn memarg_operands(memarg: &mut AMode, collector: &mut impl OperandVisitor) {
             collector.reg_use(rn);
         }
         AMode::Const { .. } => {}
+        AMode::ConstPageOff { rn, .. } => {
+            collector.reg_use(rn);
+        }
     }
 }
 
@@ -1007,7 +1010,7 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             CondBrKind::Zero(rt, _) | CondBrKind::NotZero(rt, _) => collector.reg_use(rt),
             CondBrKind::Cond(_) => {}
         },
-        Inst::Adr { rd, .. } | Inst::Adrp { rd, .. } => {
+        Inst::Adr { rd, .. } | Inst::Adrp { rd, .. } | Inst::AdrpConst { rd, .. } => {
             collector.reg_def(rd);
         }
         Inst::Word4 { .. } | Inst::Word8 { .. } => {}
@@ -3016,6 +3019,10 @@ impl Inst {
                 let byte_offset = off * 4096;
                 format!("adrp {rd}, pc+{byte_offset}")
             }
+            &Inst::AdrpConst { rd, constant } => {
+                let rd = pretty_print_reg(rd.to_reg());
+                format!("adrp {rd}, const({})@page", constant.as_u32())
+            }
             &Inst::Word4 { data } => format!("data.i32 {data}"),
             &Inst::Word8 { data } => format!("data.i64 {data}"),
             &Inst::JTSequence {
@@ -3235,6 +3242,15 @@ pub enum LabelUse {
     /// relocation. This has the same 4KiB-alignment requirement as
     /// `AdrpPage21`, with which it is paired.
     AddLo12,
+    /// Low 12 bits of the label's address, divided by the access size, in the
+    /// 12-bit immediate of a load or store (unsigned offset), bits 21:10.
+    /// Equivalent to the `R_AARCH64_LDST64_ABS_LO12_NC` and
+    /// `R_AARCH64_LDST128_ABS_LO12_NC` relocations. This has the same
+    /// 4KiB-alignment requirement as `AdrpPage21`, with which it is paired.
+    LdstLo12 {
+        /// log2 of the access size in bytes.
+        shift: u8,
+    },
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -3258,7 +3274,7 @@ impl MachInstLabelUse for LabelUse {
             // `adrp` technically has +/-4GiB of range, but cap it to the same
             // range as other 32-bit uses to keep offset arithmetic within
             // `u32`.
-            LabelUse::AdrpPage21 | LabelUse::AddLo12 => 0x7fffffff,
+            LabelUse::AdrpPage21 | LabelUse::AddLo12 | LabelUse::LdstLo12 { .. } => 0x7fffffff,
         }
     }
 
@@ -3292,6 +3308,13 @@ impl MachInstLabelUse for LabelUse {
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn_word));
                 return;
             }
+            LabelUse::LdstLo12 { shift } => {
+                debug_assert_eq!(label_offset & ((1 << shift) - 1), 0);
+                let imm12 = (label_offset & 0xfff) >> shift;
+                let insn_word = (insn_word & !(0xfff << 10)) | imm12 << 10;
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn_word));
+                return;
+            }
             _ => {}
         }
         let pc_rel = (label_offset as i64) - (use_offset as i64);
@@ -3305,7 +3328,7 @@ impl MachInstLabelUse for LabelUse {
             LabelUse::Ldr19 => 0x00ffffe0,    // bits 23..5 inclusive
             LabelUse::Adr21 => 0x60ffffe0,    // bits 30..29, 25..5 inclusive
             LabelUse::PCRel32 => 0xffffffff,
-            LabelUse::AdrpPage21 | LabelUse::AddLo12 => unreachable!(),
+            LabelUse::AdrpPage21 | LabelUse::AddLo12 | LabelUse::LdstLo12 { .. } => unreachable!(),
         };
         let pc_rel_shifted = match self {
             LabelUse::Adr21 | LabelUse::PCRel32 => pc_rel,
@@ -3322,7 +3345,7 @@ impl MachInstLabelUse for LabelUse {
             // *high* bits (30, 29).
             LabelUse::Adr21 => (pc_rel_shifted & 0x1ffffc) << 3 | (pc_rel_shifted & 3) << 29,
             LabelUse::PCRel32 => pc_rel_shifted,
-            LabelUse::AdrpPage21 | LabelUse::AddLo12 => unreachable!(),
+            LabelUse::AdrpPage21 | LabelUse::AddLo12 | LabelUse::LdstLo12 { .. } => unreachable!(),
         };
         let is_add = match self {
             LabelUse::PCRel32 => true,
@@ -3415,6 +3438,17 @@ impl MachInstLabelUse for LabelUse {
             (Reloc::Arm64Call, 0) => Some(LabelUse::Branch26),
             (Reloc::Aarch64AdrPrelPgHi21, 0) => Some(LabelUse::AdrpPage21),
             (Reloc::Aarch64AddAbsLo12Nc, 0) => Some(LabelUse::AddLo12),
+            (Reloc::Aarch64Ldst64AbsLo12Nc, 0) => Some(LabelUse::LdstLo12 { shift: 3 }),
+            (Reloc::Aarch64Ldst128AbsLo12Nc, 0) => Some(LabelUse::LdstLo12 { shift: 4 }),
+            _ => None,
+        }
+    }
+
+    fn to_reloc(self) -> Option<(Reloc, Addend)> {
+        match self {
+            LabelUse::AdrpPage21 => Some((Reloc::Aarch64AdrPrelPgHi21, 0)),
+            LabelUse::LdstLo12 { shift: 3 } => Some((Reloc::Aarch64Ldst64AbsLo12Nc, 0)),
+            LabelUse::LdstLo12 { shift: 4 } => Some((Reloc::Aarch64Ldst128AbsLo12Nc, 0)),
             _ => None,
         }
     }

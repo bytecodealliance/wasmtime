@@ -162,12 +162,7 @@ impl fmt::Display for LookupError {
 
 /// Returns an error if the `separate_constant_pool` setting is enabled, for
 /// backends that do not implement it.
-#[cfg(any(
-    feature = "arm64",
-    feature = "riscv64",
-    feature = "s390x",
-    feature = "pulley"
-))]
+#[cfg(any(feature = "riscv64", feature = "s390x", feature = "pulley"))]
 fn check_no_separate_constant_pool(flags: &settings::Flags, arch: &str) -> CodegenResult<()> {
     if flags.separate_constant_pool() {
         return Err(crate::CodegenError::Unsupported(alloc::format!(
@@ -534,7 +529,7 @@ mod tests {
 
     #[test]
     fn separate_constant_pool_is_rejected_where_unsupported() {
-        for arch in ["aarch64", "riscv64", "s390x", "pulley32", "pulley64"] {
+        for arch in ["riscv64", "s390x", "pulley32", "pulley64"] {
             // Skip a backend that this build does not include.
             let Ok(builder) = lookup(arch.parse().unwrap()) else {
                 continue;

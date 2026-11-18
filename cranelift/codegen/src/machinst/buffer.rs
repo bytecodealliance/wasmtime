@@ -639,6 +639,11 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.separate_constants = enable;
     }
 
+    /// Whether `label` refers to a constant in the separate constant pool.
+    pub fn is_separate_constant_label(&self, label: MachLabel) -> bool {
+        self.separate_constant_labels.contains_key(&label)
+    }
+
     /// Current offset from start of buffer.
     pub fn cur_offset(&self) -> CodeOffset {
         self.data.len() as CodeOffset
@@ -3328,5 +3333,79 @@ mod test {
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
         let _ = buf.total_size();
+    }
+
+    #[test]
+    fn test_separate_constants() {
+        use crate::ir::MemFlagsData;
+        use crate::isa::aarch64::inst::{AMode, writable_vreg, writable_xreg};
+
+        let info = emit_info();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let mut buf = MachBuffer::new();
+        buf.set_separate_constants(true);
+        let mut constants = VCodeConstants::with_capacity(1);
+        let constant = constants.insert(VCodeConstantData::U64([1, 2, 3, 4, 5, 6, 7, 8]));
+        buf.register_constants(&constants);
+
+        // `adrp x0, <page of constant>` and `ldr d0, [x0, <offset in page>]`.
+        Inst::AdrpConst {
+            rd: writable_xreg(0),
+            constant,
+        }
+        .emit(&mut buf, &info, &mut state);
+        Inst::FpuLoad64 {
+            rd: writable_vreg(0),
+            mem: AMode::ConstPageOff {
+                rn: xreg(0),
+                addr: constant,
+            },
+            flags: MemFlagsData::trusted(),
+        }
+        .emit(&mut buf, &info, &mut state);
+        let buf = buf.finish(&constants, state.ctrl_plane_mut());
+
+        // The constant is not in the code. The code refers to it with a
+        // relocation for each of the two instructions.
+        assert_eq!(buf.data().len(), 8);
+        assert_eq!(buf.constant_pool(), &[1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(buf.constant_pool_align(), 8);
+        let reloc = |offset, kind| MachConstantReloc {
+            offset,
+            kind,
+            addend: 0,
+            constant_offset: 0,
+        };
+        assert_eq!(
+            buf.constant_pool_relocs(),
+            &[
+                reloc(0, Reloc::Aarch64AdrPrelPgHi21),
+                reloc(4, Reloc::Aarch64Ldst64AbsLo12Nc),
+            ]
+        );
+
+        // Place the constant at 0x14028 from the start of the text, which is
+        // 0x14 pages and 0x28 bytes further on.
+        let mut ctrl_plane = ControlPlane::default();
+        let mut text = MachTextSectionBuilder::<Inst>::new(1);
+        text.append(true, buf.data(), 4, &mut ctrl_plane);
+        for r in buf.constant_pool_relocs() {
+            assert!(text.resolve_constant_reloc(
+                r.offset.into(),
+                r.kind,
+                r.addend,
+                0x28 + u64::from(r.constant_offset)
+            ));
+        }
+        let mut code = text.finish(&mut ctrl_plane);
+        text.patch_constant_refs(&mut code, 0x14000);
+        let words: Vec<u32> = code
+            .chunks(4)
+            .map(|w| u32::from_le_bytes(w.try_into().unwrap()))
+            .collect();
+        // adrp x0, #0x14000
+        assert_eq!(words[0], 0x9000_00a0);
+        // ldr d0, [x0, #0x28]
+        assert_eq!(words[1], 0xfd40_1400);
     }
 }

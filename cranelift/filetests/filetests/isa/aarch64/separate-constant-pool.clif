@@ -1,0 +1,138 @@
+test compile precise-output
+set separate_constant_pool=true
+target aarch64
+
+function %vconst() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    return v0
+}
+
+; VCode:
+; block0:
+;   adrp x0, const(0)@page
+;   ldr q0, [x0, const(0)@pageoff]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0
+;   ldr q0, [x0]
+;   ret
+
+function %f64const() -> f64 {
+block0:
+    v0 = f64const 0x1.23456789abcdep0
+    return v0
+}
+
+; VCode:
+; block0:
+;   adrp x0, const(0)@page
+;   ldr d0, [x0, const(0)@pageoff]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x0, #0
+;   ldr d0, [x0]
+;   ret
+
+;; An `f32` constant is built in a register and does not use the pool.
+function %f32const() -> f32 {
+block0:
+    v0 = f32const 0x1.2345p0
+    return v0
+}
+
+; VCode:
+; block0:
+;   movz w1, #41600
+;   movk w1, w1, #16273, LSL #16
+;   fmov s0, w1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w1, #0xa280
+;   movk w1, #0x3f91, lsl #16
+;   fmov s0, w1
+;   ret
+
+;; Each constant gets its own `adrp`.
+function %two_constants(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    v2 = vconst.i8x16 [16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1]
+    v3 = iadd v0, v1
+    v4 = bxor v3, v2
+    return v4
+}
+
+; VCode:
+; block0:
+;   adrp x6, const(1)@page
+;   ldr q16, [x6, const(1)@pageoff]
+;   adrp x6, const(0)@page
+;   ldr q17, [x6, const(0)@pageoff]
+;   add v7.16b, v0.16b, v16.16b
+;   eor v0.16b, v7.16b, v17.16b
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x6, #0
+;   ldr q16, [x6]
+;   adrp x6, #0
+;   ldr q17, [x6]
+;   add v7.16b, v0.16b, v16.16b
+;   eor v0.16b, v7.16b, v17.16b
+;   ret
+
+;; The register allocator picks the register for the page address, so it has
+;; to avoid the registers of the live arguments.
+function %live_arguments(i64, i64, i64, i64, i64, i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64):
+    v8 = vconst.i64x2 [0x1122334455667788 0x99aabbccddeeff00]
+    v9 = extractlane v8, 0
+    v10 = iadd v0, v1
+    v11 = iadd v10, v2
+    v12 = iadd v11, v3
+    v13 = iadd v12, v4
+    v14 = iadd v13, v5
+    v15 = iadd v14, v6
+    v16 = iadd v15, v7
+    v17 = iadd v16, v9
+    return v17
+}
+
+; VCode:
+; block0:
+;   adrp x8, const(0)@page
+;   ldr q20, [x8, const(0)@pageoff]
+;   mov x8, v20.d[0]
+;   add x0, x0, x1
+;   add x0, x0, x2
+;   add x0, x0, x3
+;   add x0, x0, x4
+;   add x0, x0, x5
+;   add x0, x0, x6
+;   add x0, x0, x7
+;   add x0, x0, x8
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   adrp x8, #0
+;   ldr q20, [x8]
+;   mov x8, v20.d[0]
+;   add x0, x0, x1
+;   add x0, x0, x2
+;   add x0, x0, x3
+;   add x0, x0, x4
+;   add x0, x0, x5
+;   add x0, x0, x6
+;   add x0, x0, x7
+;   add x0, x0, x8
+;   ret
+
