@@ -59,3 +59,44 @@ impl crate::Module {
         }
     }
 }
+
+#[cfg(feature = "component-model")]
+impl crate::component::Component {
+    /// Returns a summary of the resources required to instantiate this
+    /// [`Component`][crate::component::Component].
+    pub fn resources_required<'a>(
+        &self,
+        get_module: &'a dyn Fn(crate::StaticModuleIndex) -> &'a crate::Module,
+    ) -> Option<ResourcesRequired> {
+        use crate::component::{GlobalInitializer, InstantiateModule};
+        let mut resources = ResourcesRequired {
+            num_memories: 0,
+            max_initial_memory_size: None,
+            num_tables: 0,
+            max_initial_table_size: None,
+        };
+        for init in &self.initializers {
+            match init {
+                GlobalInitializer::InstantiateModule(inst, _) => match inst {
+                    InstantiateModule::Static(index, _) => {
+                        let module = get_module(*index);
+                        resources.add(&module.resources_required());
+                    }
+                    InstantiateModule::Import(_, _) => {
+                        // We can't statically determine the resources required
+                        // to instantiate this component.
+                        return None;
+                    }
+                },
+                GlobalInitializer::LowerImport { .. }
+                | GlobalInitializer::ExtractMemory(_)
+                | GlobalInitializer::ExtractTable(_)
+                | GlobalInitializer::ExtractRealloc(_)
+                | GlobalInitializer::ExtractCallback(_)
+                | GlobalInitializer::ExtractPostReturn(_)
+                | GlobalInitializer::Resource(_) => {}
+            }
+        }
+        Some(resources)
+    }
+}
