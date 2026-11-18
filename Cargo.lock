@@ -563,7 +563,7 @@ name = "component-async-tests"
 version = "0.0.0"
 dependencies = [
  "bytes",
- "env_logger 0.11.5",
+ "env_logger",
  "futures",
  "once_cell",
  "tempfile",
@@ -704,7 +704,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-isle",
  "criterion",
- "env_logger 0.11.5",
+ "env_logger",
  "gimli 0.33.0",
  "hashbrown 0.17.0",
  "libm",
@@ -790,7 +790,7 @@ name = "cranelift-frontend"
 version = "0.139.0-dev"
 dependencies = [
  "cranelift-codegen",
- "env_logger 0.11.5",
+ "env_logger",
  "hashbrown 0.17.0",
  "log",
  "similar",
@@ -842,7 +842,7 @@ dependencies = [
  "cranelift-isle",
  "cranelift-isle-veri-caching",
  "cranelift-isle-veri-test-macros",
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "num-bigint",
  "num-traits",
@@ -1009,7 +1009,7 @@ dependencies = [
  "cranelift-native",
  "cranelift-object",
  "cranelift-reader",
- "env_logger 0.11.5",
+ "env_logger",
  "filecheck",
  "log",
  "pulley-interpreter",
@@ -1280,16 +1280,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_logger"
-version = "0.10.0"
+name = "env_filter"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
+checksum = "900d271a03799a1ee8d1ca9b19893b48ca674a9284fefcfb85f05e74ed314217"
 dependencies = [
- "humantime",
- "is-terminal",
  "log",
  "regex",
- "termcolor",
 ]
 
 [[package]]
@@ -1300,7 +1297,7 @@ checksum = "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
 dependencies = [
  "anstream",
  "anstyle",
- "env_filter",
+ "env_filter 0.1.2",
  "humantime",
  "log",
 ]
@@ -1373,11 +1370,11 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "file-per-thread-logger"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a3cc21c33af89af0930c8cae4ade5e6fdc17b5d2c97b3d2e2edb67a1cf683f3"
+checksum = "638378e0202f4c2170c51c21cc0db0413f40fde94989533e2f3021867db7cbd5"
 dependencies = [
- "env_logger 0.10.0",
+ "env_filter 2.0.0",
  "log",
 ]
 
@@ -2099,17 +2096,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "is-terminal"
-version = "0.4.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
-dependencies = [
- "hermit-abi",
- "libc",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2120,7 +2106,7 @@ name = "isle-fuzz"
 version = "0.0.0"
 dependencies = [
  "cranelift-isle",
- "env_logger 0.11.5",
+ "env_logger",
  "libfuzzer-sys",
  "log",
 ]
@@ -2131,7 +2117,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "cranelift-isle",
- "env_logger 0.11.5",
+ "env_logger",
 ]
 
 [[package]]
@@ -2290,9 +2276,9 @@ checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
 
 [[package]]
 name = "log"
-version = "0.4.28"
+version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
+checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "logos"
@@ -2312,8 +2298,8 @@ dependencies = [
  "fnv",
  "proc-macro2",
  "quote",
- "regex-automata 0.4.11",
- "regex-syntax 0.8.5",
+ "regex-automata 0.4.19",
+ "regex-syntax",
  "syn 2.0.106",
 ]
 
@@ -2364,7 +2350,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
- "regex-automata 0.4.11",
+ "regex-automata 0.4.19",
 ]
 
 [[package]]
@@ -2675,7 +2661,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "637459f74d22a7bb772af9d3a5df61c88608d8daaa6fefe950849c7aabf891c3"
 dependencies = [
- "env_logger 0.11.5",
+ "env_logger",
  "libloading",
  "openvino-finder",
 ]
@@ -2907,7 +2893,7 @@ dependencies = [
  "rand 0.9.4",
  "rand_chacha 0.9.0",
  "rand_xorshift",
- "regex-syntax 0.8.5",
+ "regex-syntax",
  "rusty-fork",
  "tempfile",
  "unarray",
@@ -2921,7 +2907,7 @@ dependencies = [
  "arbitrary",
  "clap",
  "cranelift-bitset",
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "pulley-macros",
  "termcolor",
@@ -2932,7 +2918,7 @@ dependencies = [
 name = "pulley-interpreter-fuzz"
 version = "0.0.0"
 dependencies = [
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "pulley-interpreter",
 ]
@@ -3125,14 +3111,14 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.9.1"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2eae68fc220f7cf2532e4494aded17545fce192d59cd996e0fe7887f4ceb575"
+checksum = "9807af0e638c12e753aa1b4e601791bf2a8f71274023c8bbeec12fc149950857"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.3.3",
- "regex-syntax 0.7.4",
+ "regex-automata 0.4.19",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -3140,21 +3126,16 @@ name = "regex-automata"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39354c10dd07468c2e73926b23bb9c2caca74c5501e38a35da70406f1d923310"
-dependencies = [
- "aho-corasick",
- "memchr",
- "regex-syntax 0.7.4",
-]
 
 [[package]]
 name = "regex-automata"
-version = "0.4.11"
+version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "833eb9ce86d40ef33cb1306d8accf7bc8ec2bfea4355cbdebb3df68b40925cad"
+checksum = "41d60ef07df457506a0a1a2073112eb4aae5733dbd2813c3da77d1b0fd441158"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.8.5",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -3166,15 +3147,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.7.4"
+version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5ea92a5b6195c6ef2a0295ea818b312502c6fc94dde986c5553242e18fd4ce2"
-
-[[package]]
-name = "regex-syntax"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
+checksum = "d902046e6a28a1e4c3cab97258a0ce11e994903f01c2d97a9447a0b3df85f4f6"
 
 [[package]]
 name = "region"
@@ -4043,7 +4018,7 @@ dependencies = [
  "matchers",
  "nu-ansi-term",
  "once_cell",
- "regex-automata 0.4.11",
+ "regex-automata 0.4.19",
  "sharded-slab",
  "thread_local",
  "tracing",
@@ -4562,7 +4537,7 @@ dependencies = [
  "cc",
  "cranelift-native",
  "encoding_rs",
- "env_logger 0.11.5",
+ "env_logger",
  "foldhash 0.2.0",
  "futures",
  "fxprof-processed-profile",
@@ -4642,7 +4617,7 @@ version = "52.0.0-dev"
 dependencies = [
  "async-trait",
  "bytes",
- "env_logger 0.11.5",
+ "env_logger",
  "futures",
  "log",
  "tokio",
@@ -4673,7 +4648,7 @@ dependencies = [
  "cranelift-native",
  "cranelift-reader",
  "criterion",
- "env_logger 0.11.5",
+ "env_logger",
  "filecheck",
  "futures",
  "gimli 0.33.0",
@@ -4761,7 +4736,7 @@ dependencies = [
  "cranelift-bforest",
  "cranelift-bitset",
  "cranelift-entity",
- "env_logger 0.11.5",
+ "env_logger",
  "gimli 0.33.0",
  "hashbrown 0.17.0",
  "indexmap 2.14.0",
@@ -4789,7 +4764,7 @@ name = "wasmtime-environ-fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
- "env_logger 0.11.5",
+ "env_logger",
  "libfuzzer-sys",
  "wasmparser 0.263.0",
  "wasmprinter",
@@ -4812,7 +4787,7 @@ dependencies = [
  "cranelift-interpreter",
  "cranelift-native",
  "cranelift-reader",
- "env_logger 0.11.5",
+ "env_logger",
  "libfuzzer-sys",
  "log",
  "mutatis",
@@ -4838,7 +4813,7 @@ dependencies = [
  "backtrace",
  "cranelift-bforest",
  "cranelift-bitset",
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "mutatis",
  "rand 0.10.1",
@@ -4878,7 +4853,7 @@ version = "52.0.0-dev"
 dependencies = [
  "base64",
  "directories",
- "env_logger 0.11.5",
+ "env_logger",
  "filetime",
  "log",
  "postcard",
@@ -4955,7 +4930,7 @@ name = "wasmtime-internal-debugger"
 version = "52.0.0-dev"
 dependencies = [
  "async-trait",
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "tokio",
  "wasmtime",
@@ -4998,7 +4973,7 @@ version = "52.0.0-dev"
 dependencies = [
  "anyhow",
  "clap",
- "env_logger 0.11.5",
+ "env_logger",
  "futures",
  "gdbstub",
  "gdbstub_arch",
@@ -5113,7 +5088,7 @@ dependencies = [
  "arbitrary",
  "arbtest",
  "clap",
- "env_logger 0.11.5",
+ "env_logger",
  "indexmap 2.14.0",
  "proc-macro2",
  "quote",
@@ -5138,7 +5113,7 @@ dependencies = [
  "async-trait",
  "bitflags 2.11.1",
  "bytes",
- "env_logger 0.11.5",
+ "env_logger",
  "futures",
  "libc",
  "rand 0.10.1",
@@ -5176,7 +5151,7 @@ dependencies = [
  "base64",
  "bytes",
  "criterion",
- "env_logger 0.11.5",
+ "env_logger",
  "flate2",
  "futures",
  "http",
@@ -5281,7 +5256,7 @@ version = "52.0.0-dev"
 dependencies = [
  "clap",
  "criterion",
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "rayon",
  "test-programs-artifacts",
@@ -5398,7 +5373,7 @@ dependencies = [
 name = "wiggle-test"
 version = "0.0.0"
 dependencies = [
- "env_logger 0.11.5",
+ "env_logger",
  "proptest",
  "thiserror 2.0.17",
  "tracing",
@@ -5853,7 +5828,7 @@ dependencies = [
 name = "wizer-fuzz"
 version = "0.0.0"
 dependencies = [
- "env_logger 0.11.5",
+ "env_logger",
  "libfuzzer-sys",
  "log",
  "wasm-smith",
