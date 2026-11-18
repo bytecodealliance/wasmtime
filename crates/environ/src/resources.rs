@@ -1,5 +1,20 @@
 /// A summary of the amount of resources required to instantiate a particular
-/// [`Module`][crate::Module] or [`Component`][crate::component::Component].
+/// [`Component`][crate::component::Component].
+///
+/// Example uses of this information:
+///
+/// * Determining whether your pooling allocator configuration supports
+///   instantiating this module.
+///
+/// * Deciding how many of which `Module` you want to instantiate within a
+///   fixed amount of resources, e.g. determining whether to create 5
+///   instances of module `X` or 10 instances of module `Y`.
+pub struct ComponentResourcesRequired {
+    module_resources: ResourcesRequired,
+}
+
+/// A summary of the amount of resources required to instantiate a particular
+/// [`Module`][crate::Module].
 ///
 /// Example uses of this information:
 ///
@@ -18,6 +33,15 @@ pub struct ResourcesRequired {
     pub num_tables: u32,
     /// The maximum initial size required by any table.
     pub max_initial_table_size: Option<u64>,
+}
+
+impl ComponentResourcesRequired {
+    /// Returns a requirement of zero resources.
+    pub fn zero() -> Self {
+        Self {
+            module_resources: ResourcesRequired::zero(),
+        }
+    }
 }
 
 impl ResourcesRequired {
@@ -77,20 +101,15 @@ impl crate::component::Component {
     pub fn resources_required<'a>(
         &self,
         get_module: &'a dyn Fn(crate::StaticModuleIndex) -> &'a crate::Module,
-    ) -> ResourcesRequired {
+    ) -> ComponentResourcesRequired {
         use crate::component::{GlobalInitializer, InstantiateModule};
-        let mut resources = ResourcesRequired {
-            num_memories: 0,
-            max_initial_memory_size: None,
-            num_tables: 0,
-            max_initial_table_size: None,
-        };
+        let mut resources = ComponentResourcesRequired::zero();
         for init in &self.initializers {
             match init {
                 GlobalInitializer::InstantiateModule(inst, _) => match inst {
                     InstantiateModule::Static(index, _) => {
                         let module = get_module(*index);
-                        resources.add(&module.resources_required());
+                        resources.module_resources.add(&module.resources_required());
                     }
                     InstantiateModule::Import(_, _) => {
                         // We can't statically determine the resources required
