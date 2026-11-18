@@ -10,6 +10,9 @@
 ///   fixed amount of resources, e.g. determining whether to create 5
 ///   instances of module `X` or 10 instances of module `Y`.
 pub struct ComponentResourcesRequired {
+    num_core_instances: usize,
+    /// The aggregate size (in bytes) of this component's core wasm instances.
+    pub core_instances_aggregate_size: usize,
     /// The resources required by this component's modules.
     pub module_resources: ResourcesRequired,
 }
@@ -40,6 +43,7 @@ impl ComponentResourcesRequired {
     /// Returns a requirement of zero resources.
     pub fn zero() -> Self {
         Self {
+            core_instances_aggregate_size: 0,
             module_resources: ResourcesRequired::zero(),
         }
     }
@@ -99,9 +103,10 @@ impl crate::Module {
 impl crate::component::Component {
     /// Returns a summary of the resources required to instantiate this
     /// [`Component`][crate::component::Component].
-    pub fn resources_required<'a>(
+    pub fn resources_required<'a, 'b>(
         &self,
         get_module: &'a dyn Fn(crate::StaticModuleIndex) -> &'a crate::Module,
+        get_size: &'b dyn Fn(&crate::Module) -> usize,
     ) -> ComponentResourcesRequired {
         use crate::component::{GlobalInitializer::*, InstantiateModule};
         let mut resources = ComponentResourcesRequired::zero();
@@ -110,6 +115,7 @@ impl crate::component::Component {
                 InstantiateModule(inst, _) => match inst {
                     InstantiateModule::Static(index, _) => {
                         let module = get_module(*index);
+                        resources.core_instances_aggregate_size += get_size(module);
                         resources.module_resources.add(&module.resources_required());
                     }
                     InstantiateModule::Import(_, _) => {
