@@ -41,7 +41,7 @@ jobs:
     name: Run the release process
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.1.0
         with:
           submodules: true
       - name: Setup
@@ -51,8 +51,8 @@ jobs:
           git config user.email 'wasmtime-publish@users.noreply.github.com'
           git remote set-url origin https://git:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}
 
-      - uses: ./.github/actions/install-rust
-      - uses: ./.github/actions/cargo-install
+      - uses: $/.github/actions/install-rust
+      - uses: $/.github/actions/cargo-install
         with:
           crate: cargo-vet
           version: 0.10.2
