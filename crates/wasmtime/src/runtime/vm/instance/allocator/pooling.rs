@@ -512,10 +512,11 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         offsets: &VMComponentOffsets<HostPtr>,
         get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
     ) -> Result<()> {
+        use wasmtime_environ::ResourcesRequired;
+
         let mut num_core_instances = 0;
-        let mut num_memories = 0;
-        let mut num_tables = 0;
         let mut core_instances_aggregate_size: usize = 0;
+        let mut resources_required = ResourcesRequired::zero();
         for init in &component.initializers {
             use wasmtime_environ::component::GlobalInitializer::*;
             use wasmtime_environ::component::InstantiateModule;
@@ -531,8 +532,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                     let layout = Instance::alloc_layout(&offsets);
                     self.validate_module(module, &offsets)?;
                     num_core_instances += 1;
-                    num_memories += module.num_defined_memories();
-                    num_tables += module.num_defined_tables();
+                    resources_required.add(&module.resources_required());
                     core_instances_aggregate_size += layout.size();
                 }
                 LowerImport { .. }
@@ -544,6 +544,11 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 | Resource(_) => {}
             }
         }
+        let ResourcesRequired {
+            num_memories,
+            num_tables,
+            ..
+        } = resources_required;
 
         if num_core_instances
             > usize::try_from(self.config.limits.max_core_instances_per_component).unwrap()
@@ -555,7 +560,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
             );
         }
 
-        if num_memories > usize::try_from(self.config.limits.max_memories_per_component).unwrap() {
+        if num_memories > self.config.limits.max_memories_per_component {
             bail!(
                 "The component transitively contains {num_memories} Wasm linear memories, which \
                  exceeds the configured maximum of {} in the pooling allocator",
@@ -563,7 +568,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
             );
         }
 
-        if num_tables > usize::try_from(self.config.limits.max_tables_per_component).unwrap() {
+        if num_tables > self.config.limits.max_tables_per_component {
             bail!(
                 "The component transitively contains {num_tables} tables, which exceeds the \
                  configured maximum of {} in the pooling allocator",
