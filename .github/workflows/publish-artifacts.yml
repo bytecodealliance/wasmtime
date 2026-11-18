@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.repository == 'bytecodealliance/wasmtime'
     steps:
-    - uses: actions/checkout@v6
-    - uses: ./.github/actions/fetch-run-id
+    - uses: actions/checkout@v6.1.0
+    - uses: $/.github/actions/fetch-run-id
     - run: |
         gh run download ${COMMIT_RUN_ID}
         ls
@@ -30,13 +30,13 @@ jobs:
     - run: tar xf gh-pages.tar.gz
       working-directory: gh-pages
     - if: github.ref == 'refs/heads/main'
-      uses: actions/configure-pages@v5
+      uses: actions/configure-pages@v5.0.0
     - if: github.ref == 'refs/heads/main'
-      uses: actions/upload-pages-artifact@v3
+      uses: actions/upload-pages-artifact@v3.0.1
       with:
         path: "./gh-pages/gh-pages"
 
-    - uses: actions/attest-build-provenance@v1
+    - uses: actions/attest-build-provenance@v1.4.4
       with:
         subject-path: 'dist/*'
 
@@ -75,4 +75,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v4.0.5
