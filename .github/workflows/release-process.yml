@@ -41,7 +41,7 @@ jobs:
     name: Run the release process
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
         with:
           submodules: true
       - name: Setup
@@ -51,8 +51,8 @@ jobs:
           git config user.email 'wasmtime-publish@users.noreply.github.com'
           git remote set-url origin https://git:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}
 
-      - uses: ./.github/actions/install-rust
-      - uses: ./.github/actions/install-cargo-vet
+      - uses: $/.github/actions/install-rust
+      - uses: $/.github/actions/install-cargo-vet
 
       - name: Bump major version number
         run: |
