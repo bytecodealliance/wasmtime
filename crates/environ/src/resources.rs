@@ -10,7 +10,8 @@
 ///   fixed amount of resources, e.g. determining whether to create 5
 ///   instances of module `X` or 10 instances of module `Y`.
 pub struct ComponentResourcesRequired {
-    num_core_instances: usize,
+    /// The number of core wasm instances required.
+    pub num_core_instances: usize,
     /// The aggregate size (in bytes) of this component's core wasm instances.
     pub core_instances_aggregate_size: usize,
     /// The resources required by this component's modules.
@@ -43,6 +44,7 @@ impl ComponentResourcesRequired {
     /// Returns a requirement of zero resources.
     pub fn zero() -> Self {
         Self {
+            num_core_instances: 0,
             core_instances_aggregate_size: 0,
             module_resources: ResourcesRequired::zero(),
         }
@@ -115,12 +117,14 @@ impl crate::component::Component {
                 InstantiateModule(inst, _) => match inst {
                     InstantiateModule::Static(index, _) => {
                         let module = get_module(*index);
+                        resources.num_core_instances += 1;
                         resources.core_instances_aggregate_size += get_size(module);
                         resources.module_resources.add(&module.resources_required());
                     }
                     InstantiateModule::Import(_, _) => {
                         // We can't statically determine the resources required
                         // to instantiate this component.
+                        resources.num_core_instances += 1;
                     }
                 },
                 LowerImport { .. }
