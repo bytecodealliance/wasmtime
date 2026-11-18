@@ -171,16 +171,18 @@ impl CompiledBlob {
             match kind {
                 Reloc::Abs4 => {
                     let what = relocation_target_addr(name, addend);
-                    unsafe { write_unaligned(at as *mut u32, u32::try_from(what).unwrap()) };
+                    unsafe { write_unaligned(at.cast::<u32>(), u32::try_from(what).unwrap()) };
                 }
                 Reloc::Abs8 => {
                     let what = relocation_target_addr(name, addend);
-                    unsafe { write_unaligned(at as *mut u64, u64::try_from(what).unwrap()) };
+                    unsafe { write_unaligned(at.cast::<u64>(), u64::try_from(what).unwrap()) };
                 }
                 Reloc::X86PCRel4 => {
                     let what = relocation_target_addr(name, addend);
-                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
-                    unsafe { write_unaligned(at as *mut i32, pcrel) };
+                    let pcrel =
+                        i32::try_from(what.cast_signed() - at.expose_provenance().cast_signed())
+                            .unwrap();
+                    unsafe { write_unaligned(at.cast::<i32>(), pcrel) };
                 }
                 Reloc::X86CallPCRel4 | Reloc::X86CallPLTRel4 => {
                     // These relocations are applied to the 32-bit displacement of a `call`
@@ -190,8 +192,10 @@ impl CompiledBlob {
                     // transfers control to `what + 4`. The PLT form additionally permits
                     // resolution through a stub, which the veneer below provides.
                     let what = relocation_target_addr(name, addend);
-                    if let Ok(pcrel) = i32::try_from((what as isize) - (at as isize)) {
-                        unsafe { write_unaligned(at as *mut i32, pcrel) };
+                    if let Ok(pcrel) =
+                        i32::try_from(what.cast_signed() - at.expose_provenance().cast_signed())
+                    {
+                        unsafe { write_unaligned(at.cast::<i32>(), pcrel) };
                     } else {
                         // The target is out of range for the 32-bit displacement, so
                         // redirect the call through a veneer at the end of the function,
@@ -211,8 +215,13 @@ impl CompiledBlob {
 
                         // Point the original instruction at the veneer instead; the
                         // displacement is again relative to the end of the 4-byte field.
-                        let pcrel = i32::try_from((veneer as isize) - (at as isize) - 4).unwrap();
-                        unsafe { write_unaligned(at as *mut i32, pcrel) };
+                        let pcrel = i32::try_from(
+                            veneer.expose_provenance().cast_signed()
+                                - at.expose_provenance().cast_signed()
+                                - 4,
+                        )
+                        .unwrap();
+                        unsafe { write_unaligned(at.cast::<i32>(), pcrel) };
                     }
                 }
                 Reloc::X86GOTPCRel4 => {
@@ -239,7 +248,7 @@ impl CompiledBlob {
                     match (is_rip_relative_mov, direct_pcrel) {
                         (true, Ok(pcrel)) if addend == -4 => unsafe {
                             at.sub(2).write(0x8d); // mov -> lea
-                            write_unaligned(at as *mut i32, pcrel);
+                            write_unaligned(at.cast::<i32>(), pcrel);
                         },
                         _ => {
                             // Resolve through a GOT entry at the end of the allocation,
@@ -250,10 +259,13 @@ impl CompiledBlob {
                             let entry = unsafe { self.got_entry(got_idx) };
                             unsafe { write_unaligned(entry.cast::<usize>(), symbol_addr) };
 
-                            let pcrel =
-                                i32::try_from((entry as isize) - (at as isize) + (addend as isize))
-                                    .unwrap();
-                            unsafe { write_unaligned(at as *mut i32, pcrel) };
+                            let pcrel = i32::try_from(
+                                entry.expose_provenance().cast_signed()
+                                    - at.expose_provenance().cast_signed()
+                                    + (addend as isize),
+                            )
+                            .unwrap();
+                            unsafe { write_unaligned(at.cast::<i32>(), pcrel) };
                         }
                     }
                 }
@@ -262,17 +274,20 @@ impl CompiledBlob {
                 }
                 Reloc::S390xPCRel32Dbl | Reloc::S390xPLTRel32Dbl => {
                     let what = relocation_target_addr(name, addend);
-                    let pcrel = i32::try_from(((what as isize) - (at as isize)) >> 1).unwrap();
-                    unsafe { write_unaligned(at as *mut i32, pcrel) };
+                    let pcrel = i32::try_from(
+                        (what.cast_signed() - at.expose_provenance().cast_signed()) >> 1,
+                    )
+                    .unwrap();
+                    unsafe { write_unaligned(at.cast::<i32>(), pcrel) };
                 }
                 Reloc::Arm64Call => {
                     let what = relocation_target_addr(name, addend);
                     // The instruction is 32 bits long.
-                    let iptr = at as *mut u32;
+                    let iptr = at.cast::<u32>();
 
                     // The offset encoded in the `bl` instruction is the
                     // number of bytes divided by 4.
-                    let diff = ((what as isize) - (at as isize)) >> 2;
+                    let diff = (what.cast_signed() - at.expose_provenance().cast_signed()) >> 2;
                     // Sign propagating right shift disposes of the
                     // included bits, so the result is expected to be
                     // either all sign bits or 0 when in-range, depending
@@ -307,7 +322,9 @@ impl CompiledBlob {
                         };
 
                         // Set the veneer as target of the call
-                        let diff = ((veneer as isize) - (at as isize)) >> 2;
+                        let diff = (veneer.expose_provenance().cast_signed()
+                            - at.expose_provenance().cast_signed())
+                            >> 2;
                         assert!((diff >> 25 == -1) || (diff >> 25 == 0));
                         let chop = 32 - 26;
                         let imm26 = (diff as u32) << chop >> chop;
@@ -330,9 +347,12 @@ impl CompiledBlob {
                     // compute the upper 21bits of the pcrel address however as otherwise the top
                     // bit of the 33bit pcrel address would be forced 0 through zero extension
                     // instead of being sign extended as it should be.
-                    let pcrel =
-                        i32::try_from(get_page(what as isize) - get_page(at as isize)).unwrap();
-                    let iptr = at as *mut u32;
+                    let pcrel = i32::try_from(
+                        get_page(what.cast_signed())
+                            - get_page(at.expose_provenance().cast_signed()),
+                    )
+                    .unwrap();
+                    let iptr = at.cast::<u32>();
                     let hi21 = (pcrel >> 12).cast_unsigned();
                     let lo = (hi21 & 0x3) << 29;
                     let hi = (hi21 & 0x1ffffc) << 3;
@@ -340,7 +360,7 @@ impl CompiledBlob {
                 }
                 Reloc::Aarch64AddAbsLo12Nc => {
                     let what = relocation_target_addr(name, addend);
-                    let iptr = at as *mut u32;
+                    let iptr = at.cast::<u32>();
                     let imm12 = (what as u32 & 0xfff) << 10;
                     unsafe { modify_inst32(iptr, |inst| inst | imm12) };
                 }
@@ -351,7 +371,10 @@ impl CompiledBlob {
                     // 2. R_RISCV_PCREL_LO12_I on the `jalr`
 
                     let what = relocation_target_addr(name, addend);
-                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap() as u32;
+                    let pcrel =
+                        i32::try_from(what.cast_signed() - at.expose_provenance().cast_signed())
+                            .unwrap()
+                            .cast_unsigned();
 
                     // See https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
                     // for a better explanation of the following code.
@@ -371,18 +394,20 @@ impl CompiledBlob {
 
                     unsafe {
                         // Do a R_RISCV_PCREL_HI20 on the `auipc`
-                        let auipc_addr = at as *mut u32;
+                        let auipc_addr = at.cast::<u32>();
                         modify_inst32(auipc_addr, |auipc| (auipc & 0xFFF) | hi20);
 
                         // Do a R_RISCV_PCREL_LO12_I on the `jalr`
-                        let jalr_addr = at.offset(4) as *mut u32;
+                        let jalr_addr = at.offset(4).cast::<u32>();
                         modify_inst32(jalr_addr, |jalr| (jalr & 0xFFFFF) | (lo12 << 20));
                     }
                 }
                 Reloc::PulleyPcRel => {
                     let what = relocation_target_addr(name, addend);
-                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
-                    let at = at as *mut i32;
+                    let pcrel =
+                        i32::try_from(what.cast_signed() - at.expose_provenance().cast_signed())
+                            .unwrap();
+                    let at = at.cast::<i32>();
                     unsafe {
                         at.write_unaligned(at.read_unaligned().wrapping_add(pcrel));
                     }
@@ -392,10 +417,12 @@ impl CompiledBlob {
                 // for why `0x800` is added here.
                 Reloc::RiscvPCRelHi20 => {
                     let what = relocation_target_addr(name, addend);
-                    let pcrel = i32::try_from((what as isize) - (at as isize) + 0x800)
-                        .unwrap()
-                        .cast_unsigned();
-                    let at = at as *mut u32;
+                    let pcrel = i32::try_from(
+                        what.cast_signed() - at.expose_provenance().cast_signed() + 0x800,
+                    )
+                    .unwrap()
+                    .cast_unsigned();
+                    let at = at.cast::<u32>();
                     unsafe {
                         modify_inst32(at, |i| i | (pcrel & 0xfffff000));
                     }
@@ -414,10 +441,13 @@ impl CompiledBlob {
                         unsafe { self.ptr.offset(isize::try_from(prev_reloc.offset).unwrap()) };
                     assert_eq!(lo_target, hi_address);
                     let hi_target = get_address(&prev_reloc.name);
-                    let pcrel = i32::try_from((hi_target as isize) - (hi_address as isize))
-                        .unwrap()
-                        .cast_unsigned();
-                    let at = at as *mut u32;
+                    let pcrel = i32::try_from(
+                        hi_target.expose_provenance().cast_signed()
+                            - hi_address.expose_provenance().cast_signed(),
+                    )
+                    .unwrap()
+                    .cast_unsigned();
+                    let at = at.cast::<u32>();
                     unsafe {
                         modify_inst32(at, |i| i | ((pcrel & 0xfff) << 20));
                     }
