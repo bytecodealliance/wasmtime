@@ -124,10 +124,14 @@ impl CompiledBlob {
         self.wasmtime_exception_data.as_deref()
     }
 
-    /// Offset of the GOT entries within the allocation: after the code and
-    /// the veneers, aligned to the entry size.
-    fn got_offset(&self) -> usize {
-        (self.size + self.veneer_count * VENEER_SIZE).next_multiple_of(GOT_ENTRY_SIZE)
+    /// Pointer to a GOT entry within the allocation.
+    unsafe fn got_entry(&self, idx: usize) -> *mut u8 {
+        // Offset of the GOT entries within the allocation: after the code and
+        // the veneers, aligned to the entry size.
+        let got_offset =
+            (self.size + self.veneer_count * VENEER_SIZE).next_multiple_of(GOT_ENTRY_SIZE);
+
+        unsafe { self.ptr.byte_add(got_offset + idx * GOT_ENTRY_SIZE) }
     }
 
     pub(crate) fn perform_relocations(
@@ -243,10 +247,7 @@ impl CompiledBlob {
                             let got_idx = next_got_idx;
                             next_got_idx += 1;
                             assert!(got_idx < self.got_count);
-                            let entry = unsafe {
-                                self.ptr
-                                    .byte_add(self.got_offset() + got_idx * GOT_ENTRY_SIZE)
-                            };
+                            let entry = unsafe { self.got_entry(got_idx) };
                             unsafe { write_unaligned(entry.cast::<usize>(), symbol_addr) };
 
                             let pcrel =
