@@ -27,13 +27,13 @@ jobs:
 
     # @-mention people who are subscribed to a label when an issue/PR is given
     # that label.
-    - uses: bytecodealliance/subscribe-to-label-action@v1
+    - uses: bytecodealliance/subscribe-to-label-action@v1.1.7
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
       continue-on-error: true
 
     # Leave pre-determined comments on issues/PRs that are given a certain label.
-    - uses: bytecodealliance/label-messager-action@v1
+    - uses: bytecodealliance/label-messager-action@v1.1.1
       with:
         repo-token: "${{ secrets.GITHUB_TOKEN }}"
       continue-on-error: true
