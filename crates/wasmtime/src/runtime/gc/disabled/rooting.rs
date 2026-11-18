@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
@@ -90,6 +91,25 @@ impl<T: GcRef> Rooted<T> {
 
     pub fn to_owned_rooted(&self, _store: impl AsContextMut) -> Result<OwnedRooted<T>> {
         match self.inner {}
+    }
+
+    pub fn to_unrooted(&self, _store: impl AsContext) -> Result<crate::Unrooted<T>> {
+        match self.inner {}
+    }
+
+    pub(crate) fn to_unrooted_(&self, _store: &StoreOpaque) -> Result<crate::Unrooted<T>> {
+        match self.inner {}
+    }
+
+    pub fn to_all_rooted(
+        _store: impl AsContextMut,
+        refs: &[crate::Unrooted<T>],
+        _out: &mut Vec<Rooted<T>>,
+    ) -> Result<()> {
+        match refs.first() {
+            None => Ok(()),
+            Some(r) => match r.inner {},
+        }
     }
 
     pub fn rooted_eq(a: Self, _b: Self) -> bool {
@@ -190,6 +210,21 @@ where
 
     pub fn into_rooted(self, _context: impl AsContextMut) -> Rooted<T> {
         match self.inner {}
+    }
+
+    pub fn to_unrooted(&self, _store: impl AsContext) -> Result<crate::Unrooted<T>> {
+        match self.inner {}
+    }
+
+    pub fn to_all_owned_rooted(
+        _store: impl AsContextMut,
+        refs: &[crate::Unrooted<T>],
+        _out: &mut Vec<OwnedRooted<T>>,
+    ) -> Result<()> {
+        match refs.first() {
+            None => Ok(()),
+            Some(r) => match r.inner {},
+        }
     }
 }
 

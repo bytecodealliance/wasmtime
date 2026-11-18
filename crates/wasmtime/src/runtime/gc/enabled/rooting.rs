@@ -801,8 +801,8 @@ impl RootSet {
 ///     .get_typed_func::<Option<Rooted<ExternRef>>, Option<Rooted<ExternRef>>>(&mut store, "func")?
 ///     .call(&mut store, Some(hello))?;
 ///
-/// // Similarly, getting a GC reference from a Wasm instance's exported global
-/// // or table yields a `Rooted<T>`.
+/// // Getting a GC reference from a Wasm instance's exported global or table
+/// // yields an unrooted reference, which we can choose to root as a `Rooted<T>`.
 ///
 /// let global = instance
 ///     .get_global(&mut store, "global")
@@ -811,7 +811,8 @@ impl RootSet {
 /// let global_ref: Option<Rooted<_>> = global_val
 ///     .externref()
 ///     .ok_or_else(|| Error::msg("not an externref"))?
-///     .map(|r| r.unwrap_rooted());
+///     .map(|r| r.to_rooted(&mut store))
+///     .transpose()?;
 ///
 /// let table = instance.get_table(&mut store, "table").unwrap();
 /// let table_elem = table
@@ -820,7 +821,8 @@ impl RootSet {
 /// let table_elem_ref: Option<Rooted<_>> = table_elem
 ///     .as_extern()
 ///     .ok_or_else(|| Error::msg("not an externref"))?
-///     .map(|r| r.unwrap_rooted());
+///     .map(|r| r.to_rooted(&mut store))
+///     .transpose()?;
 /// # Ok(())
 /// # }
 /// ```
@@ -1069,13 +1071,78 @@ impl<T: GcRef> Rooted<T> {
     /// # }
     /// ```
     pub fn to_owned_rooted(&self, mut store: impl AsContextMut) -> Result<OwnedRooted<T>> {
-        self._to_owned_rooted(store.as_context_mut().0)
+        self.to_owned_rooted_(store.as_context_mut().0)
     }
 
-    pub(crate) fn _to_owned_rooted(&self, store: &mut StoreOpaque) -> Result<OwnedRooted<T>> {
+    pub(crate) fn to_owned_rooted_(&self, store: &mut StoreOpaque) -> Result<OwnedRooted<T>> {
         let mut store = AutoAssertNoGc::new(store);
         let gc_ref = self.try_clone_gc_ref(&mut store)?;
         Ok(OwnedRooted::new(&mut store, gc_ref)?)
+    }
+
+    /// Get an [`Unrooted<T>`](crate::Unrooted) reference to the same GC
+    /// object, which is valid until the store's GC heap next changes.
+    ///
+    /// Unlike rooting, this needs only shared access to the store.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this reference has been unrooted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn to_unrooted(&self, store: impl AsContext) -> Result<crate::Unrooted<T>> {
+        self.to_unrooted_(store.as_context().0)
+    }
+
+    pub(crate) fn to_unrooted_(&self, store: &StoreOpaque) -> Result<crate::Unrooted<T>> {
+        let gc_ref = self.try_gc_ref(store)?;
+        Ok(crate::Unrooted::new(store, gc_ref))
+    }
+
+    /// Root all of the given unrooted references in the current LIFO rooting
+    /// scope, pushing their roots onto `out` in the same order.
+    ///
+    /// Taking `out` as a parameter, rather than returning a new `Vec`, lets
+    /// callers reuse an existing allocation.
+    ///
+    /// Any single rooting operation, such as
+    /// [`Unrooted::to_rooted`](crate::Unrooted::to_rooted), changes
+    /// the store's GC heap, and so invalidates *every* unrooted
+    /// reference into it, not just the one that was rooted. Rooting a
+    /// list of unrooted references one at a time therefore fails when
+    /// perfoming the second rooting action. This function solves for
+    /// that use-case by providing a *batched* rooting action.
+    ///
+    /// See [`Val::ensure_all_rooted`](crate::Val::ensure_all_rooted) for the
+    /// same operation on [`Val`](crate::Val)s, and
+    /// [`OwnedRooted::to_all_owned_rooted`] to root the references until the
+    /// returned handles are dropped instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error, and roots nothing and leaves `out` unchanged, if any
+    /// of `refs` is no longer valid.
+    ///
+    /// This function will return an [`OutOfMemory`](crate::OutOfMemory)
+    /// error when memory allocation fails. See the `OutOfMemory` type's
+    /// documentation for details on Wasmtime's out-of-memory handling.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any of `refs` is associated with a different store.
+    pub fn to_all_rooted(
+        mut store: impl AsContextMut,
+        refs: &[crate::Unrooted<T>],
+        out: &mut Vec<Rooted<T>>,
+    ) -> Result<()> {
+        let store = store.as_context_mut().0;
+        crate::Unrooted::validate_all(store, refs)?;
+        reserve_for_all_rooted(out, refs.len())?;
+        let mut store = AutoAssertNoGc::new(store);
+        out.extend(refs.iter().map(|r| r.to_rooted_unchecked(&mut store)));
+        Ok(())
     }
 
     /// Are these two `Rooted<T>`s the same GC root?
@@ -1730,10 +1797,10 @@ where
     /// # }
     /// ```
     pub fn to_rooted(&self, mut context: impl AsContextMut) -> Rooted<T> {
-        self._to_rooted(context.as_context_mut().0)
+        self.to_rooted_(context.as_context_mut().0)
     }
 
-    pub(crate) fn _to_rooted(&self, store: &mut StoreOpaque) -> Rooted<T> {
+    pub(crate) fn to_rooted_(&self, store: &mut StoreOpaque) -> Rooted<T> {
         assert!(
             self.comes_from_same_store(store),
             "object used with wrong store"
@@ -1741,6 +1808,77 @@ where
         let mut store = AutoAssertNoGc::new(store);
         let gc_ref = self.clone_gc_ref(&mut store).unwrap();
         Rooted::new(&mut store, gc_ref)
+    }
+
+    /// Get an [`Unrooted<T>`](crate::Unrooted) reference to the same GC
+    /// object, which is valid until the store's GC heap next changes.
+    ///
+    /// Unlike rooting, this needs only shared access to the store.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this reference is not associated with `store`'s
+    /// GC heap.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn to_unrooted(&self, store: impl AsContext) -> Result<crate::Unrooted<T>> {
+        self.to_unrooted_(store.as_context().0)
+    }
+
+    pub(crate) fn to_unrooted_(&self, store: &StoreOpaque) -> Result<crate::Unrooted<T>> {
+        let gc_ref = self.try_gc_ref(store)?;
+        Ok(crate::Unrooted::new(store, gc_ref))
+    }
+
+    /// Root all of the given unrooted references until the returned handles
+    /// are dropped, returning the handles in the same order.
+    ///
+    /// Any single rooting operation, such as
+    /// [`Unrooted::to_rooted`](crate::Unrooted::to_rooted), changes
+    /// the store's GC heap, and so invalidates *every* unrooted
+    /// reference into it, not just the one that was rooted. Rooting a
+    /// list of unrooted references one at a time therefore fails once
+    /// the second reference is rooted. This function solves that
+    /// use-case by providing a *batched* rooting operation.
+    ///
+    /// See [`Rooted::to_all_rooted`] to root the references in the current
+    /// LIFO rooting scope instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error, and roots nothing and leaves `out` unchanged, if any
+    /// of `refs` is no longer valid.
+    ///
+    /// This function will return an [`OutOfMemory`](crate::OutOfMemory)
+    /// error when memory allocation fails, in which case `out` is also left
+    /// unchanged. See the `OutOfMemory` type's documentation for details on
+    /// Wasmtime's out-of-memory handling.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any of `refs` is associated with a different store.
+    pub fn to_all_owned_rooted(
+        mut store: impl AsContextMut,
+        refs: &[crate::Unrooted<T>],
+        out: &mut Vec<OwnedRooted<T>>,
+    ) -> Result<()> {
+        let store = store.as_context_mut().0;
+        crate::Unrooted::validate_all(store, refs)?;
+        reserve_for_all_rooted(out, refs.len())?;
+        let original_len = out.len();
+        let mut store = AutoAssertNoGc::new(store);
+        for r in refs {
+            match r.to_owned_rooted_unchecked(&mut store) {
+                Ok(owned) => out.push(owned),
+                Err(e) => {
+                    out.truncate(original_len);
+                    return Err(e);
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Are these two GC roots referencing the same underlying GC object?
@@ -1867,7 +2005,7 @@ where
         let gc_ref = store.clone_gc_ref(&gc_ref);
         RootSet::with_lifo_scope(store, |store| {
             let rooted = from_cloned_gc_ref(store, gc_ref);
-            rooted._to_owned_rooted(store).expect("rooted is in scope")
+            rooted.to_owned_rooted_(store).expect("rooted is in scope")
         })
     }
 
@@ -1899,7 +2037,7 @@ where
         let gc_ref = store.clone_gc_ref(&gc_ref);
         RootSet::with_lifo_scope(store, |store| {
             let rooted = from_cloned_gc_ref(store, gc_ref);
-            Some(rooted._to_owned_rooted(store).expect("rooted is in scope"))
+            Some(rooted.to_owned_rooted_(store).expect("rooted is in scope"))
         })
     }
 
@@ -1973,6 +2111,18 @@ impl<T: GcRef> RootedGcRefImpl<T> for OwnedRooted<T> {
     }
 }
 
+/// Reserve room for `additional` more roots in `out`, for
+/// [`Rooted::to_all_rooted`] and [`OwnedRooted::to_all_owned_rooted`], so that
+/// pushing them cannot fail.
+fn reserve_for_all_rooted<R>(out: &mut Vec<R>, additional: usize) -> Result<(), OutOfMemory> {
+    out.try_reserve(additional).map_err(|_| {
+        OutOfMemory::new(
+            out.len()
+                .saturating_add(additional)
+                .saturating_mul(mem::size_of::<R>()),
+        )
+    })
+}
 #[cfg(test)]
 mod tests {
     use crate::ExternRef;

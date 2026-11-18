@@ -15,6 +15,10 @@ impl StoreOpaque {
         false
     }
 
+    pub(crate) fn require_gc_store(&self) -> Result<&GcStore> {
+        bail!("GC is disabled")
+    }
+
     pub(crate) fn require_gc_store_mut(&mut self) -> Result<&mut GcStore> {
         bail!("GC is disabled")
     }
