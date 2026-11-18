@@ -3989,3 +3989,148 @@ async fn poll_ready_for_concurrent_call() -> Result<()> {
 
     Ok(())
 }
+
+/// A `StreamProducer` which returns `StreamResult::Dropped` must not be polled
+/// again, even if a guest reads its buffered items over several reads. Once
+/// the buffer is drained the guest should see `DROPPED`.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn stream_producer_not_polled_after_dropped() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc (memory (export "mem") 1))
+  (core instance $libc (instantiate $libc))
+  (core module $m
+    (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+    (global $r (mut i32) (i32.const 0))
+    (func (export "start") (param i32) (global.set $r (local.get 0)))
+    (func (export "read") (result i32)
+      (call $stream.read (global.get $r) (i32.const 100) (i32.const 1))))
+  (type $s (stream u8))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "mem"))))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "stream.read" (func $stream.read))))))
+  (func (export "start") (param "s" (stream u8)) (canon lift (core func $i "start")))
+  (func (export "read") (result u32) (canon lift (core func $i "read")))
+)
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let start = instance.get_typed_func::<(StreamReader<u8>,), ()>(&mut store, "start")?;
+    let read = instance.get_typed_func::<(), (u32,)>(&mut store, "read")?;
+
+    let reader = StreamReader::new(&mut store, Producer { polled: false })?;
+    start.call_async(&mut store, (reader,)).await?;
+
+    // COMPLETED(1)
+    assert_eq!(read.call_async(&mut store, ()).await?, (0x10,));
+    assert_eq!(read.call_async(&mut store, ()).await?, (0x10,));
+    // DROPPED(1)
+    assert_eq!(read.call_async(&mut store, ()).await?, (0x11,));
+
+    return Ok(());
+
+    /// Produces 3 items along with `Dropped` the first time it's polled.
+    struct Producer {
+        polled: bool,
+    }
+
+    impl StreamProducer<()> for Producer {
+        type Item = u8;
+        type Buffer = VecBuffer<u8>;
+
+        fn poll_produce<'a>(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<'a, ()>,
+            mut destination: Destination<'a, u8, VecBuffer<u8>>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            assert!(!self.polled, "producer polled after returning `Dropped`");
+            self.polled = true;
+            destination.set_buffer(vec![1, 2, 3].into());
+            Poll::Ready(Ok(StreamResult::Dropped))
+        }
+    }
+}
+
+/// A `StreamConsumer` which returns `StreamResult::Dropped` must not be polled
+/// again, even if the host producer piped into it has more buffered items.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn stream_consumer_not_polled_after_dropped() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let got = Arc::new(Mutex::new(Vec::new()));
+    let reader = StreamReader::new(&mut store, Producer)?;
+    reader.pipe(
+        &mut store,
+        Consumer {
+            got: got.clone(),
+            polled: false,
+        },
+    )?;
+    store
+        .run_concurrent(async |_| yield_times(10).await)
+        .await?;
+    assert_eq!(*got.lock().unwrap(), [1]);
+
+    return Ok(());
+
+    /// Produces 3 items every time it's polled.
+    struct Producer;
+
+    impl StreamProducer<()> for Producer {
+        type Item = u8;
+        type Buffer = VecBuffer<u8>;
+
+        fn poll_produce<'a>(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<'a, ()>,
+            mut destination: Destination<'a, u8, VecBuffer<u8>>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            destination.set_buffer(vec![1, 2, 3].into());
+            Poll::Ready(Ok(StreamResult::Completed))
+        }
+    }
+
+    /// Consumes a single item and returns `Dropped` the first time it's
+    /// polled.
+    struct Consumer {
+        got: Arc<Mutex<Vec<u8>>>,
+        polled: bool,
+    }
+
+    impl StreamConsumer<()> for Consumer {
+        type Item = u8;
+
+        fn poll_consume(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            mut store: StoreContextMut<()>,
+            mut source: Source<'_, u8>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            assert!(!self.polled, "consumer polled after returning `Dropped`");
+            self.polled = true;
+            let mut item = None;
+            source.read(&mut store, &mut item)?;
+            Extend::extend(&mut *self.got.lock().unwrap(), item);
+            Poll::Ready(Ok(StreamResult::Dropped))
+        }
+    }
+}
