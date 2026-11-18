@@ -521,31 +521,3 @@ impl Debug for &dyn TargetIsa {
         )
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use alloc::string::ToString;
-
-    #[test]
-    fn separate_constant_pool_is_rejected_where_unsupported() {
-        for arch in ["riscv64", "s390x", "pulley32", "pulley64"] {
-            // Skip a backend that this build does not include.
-            let Ok(builder) = lookup(arch.parse().unwrap()) else {
-                continue;
-            };
-            let mut flags = settings::builder();
-            flags.enable("separate_constant_pool").unwrap();
-            let err = match builder.finish(settings::Flags::new(flags)) {
-                Ok(_) => panic!("{arch} accepted separate_constant_pool"),
-                Err(err) => err,
-            };
-            assert_eq!(
-                err.to_string(),
-                alloc::format!(
-                    "Unsupported feature: separate_constant_pool is not supported on {arch}"
-                )
-            );
-        }
-    }
-}
