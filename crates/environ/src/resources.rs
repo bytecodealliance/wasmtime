@@ -11,6 +11,7 @@
 ///   instances of module `X` or 10 instances of module `Y`.
 pub struct ComponentResourcesRequired {
     core_instances_aggregate_size: usize,
+    num_core_instances: usize,
     module_resources: ResourcesRequired,
 }
 
@@ -41,6 +42,7 @@ impl ComponentResourcesRequired {
     pub fn zero() -> Self {
         Self {
             core_instances_aggregate_size: 0,
+            num_core_instances: 0,
             module_resources: ResourcesRequired::zero(),
         }
     }
@@ -112,12 +114,14 @@ impl crate::component::Component {
                 InstantiateModule(inst, _) => match inst {
                     InstantiateModule::Static(index, _) => {
                         let module = get_module(*index);
+                        resources.num_core_instances += 1;
                         resources.core_instances_aggregate_size += get_size(module);
                         resources.module_resources.add(&module.resources_required());
                     }
                     InstantiateModule::Import(_, _) => {
                         // We can't statically determine the resources required
                         // to instantiate this component.
+                        resources.num_core_instances += 1;
                     }
                 },
                 LowerImport { .. }
