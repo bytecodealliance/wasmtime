@@ -707,9 +707,14 @@ impl Component {
     /// assert_eq!(resources.max_initial_table_size, None);
     /// # Ok(()) }
     /// ```
-    pub fn resources_required(&self) -> Option<ResourcesRequired> {
-        let get_module = |index| self.static_module(index).env_module().as_ref();
-        self.env_component().resources_required(&get_module)
+    #[allow(
+        dead_code,
+        reason = "temporarily demonstrate this is not currently used"
+    )]
+    fn resources_required(&self) -> Option<ResourcesRequired> {
+        // let get_module = |index| self.static_module(index).env_module().as_ref();
+        // self.env_component().resources_required(&get_module)
+        todo!("we will come back to this")
     }
 
     /// Returns the range, in the host's address space, that this module's
