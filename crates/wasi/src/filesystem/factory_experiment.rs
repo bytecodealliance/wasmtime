@@ -1,4 +1,4 @@
-//! Disposable two-operand experiment; the cleanup queue contains no generation Arc.
+//! Two-operand ownership checks; the cleanup queue contains no generation Arc.
 
 use super::*;
 use std::os::fd::AsRawFd;
@@ -82,7 +82,15 @@ struct OperationValue {
     _admission: Admission,
 }
 
-fn isolated_case(name: &str, directory: bool) {
+#[derive(Clone, Copy, Debug)]
+enum Case {
+    Files,
+    Directories,
+    Link,
+    Rename,
+}
+
+fn isolated_case(name: &str, case: Case) {
     const CHILD: &str = "WASMTIME_FACTORY_EXPERIMENT_CHILD";
     if std::env::var(CHILD).as_deref() != Ok(name) {
         let status = std::process::Command::new(std::env::current_exe().unwrap())
@@ -90,7 +98,7 @@ fn isolated_case(name: &str, directory: bool) {
             .env(CHILD, name)
             .status()
             .unwrap();
-        assert!(status.success(), "isolated ownership experiment failed");
+        assert!(status.success(), "isolated ownership check failed");
         return;
     }
     // One blocking worker makes the final queued task a completion fence.
@@ -99,10 +107,10 @@ fn isolated_case(name: &str, directory: bool) {
         .max_blocking_threads(1)
         .build()
         .unwrap();
-    runtime.block_on(two_operand_case(directory));
+    runtime.block_on(two_operand_case(case));
 }
 
-async fn two_operand_case(directory: bool) {
+async fn two_operand_case(case: Case) {
     let directories: [tempfile::TempDir; 2] = std::array::from_fn(|_| {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("payload"), b"independent generation").unwrap();
@@ -110,10 +118,10 @@ async fn two_operand_case(directory: bool) {
     });
     let paths = directories.each_ref().map(|dir| dir.path().to_owned());
     let descriptors = directories.each_ref().map(|dir| {
-        if directory {
+        if !matches!(case, Case::Files) {
             Descriptor::Dir(Dir::new(
                 primitives::open_ambient_dir(dir.path()).unwrap(),
-                FsPerms::ReadOnly,
+                FsPerms::ReadWrite,
                 OpenMode::READ,
                 false,
             ))
@@ -192,7 +200,36 @@ async fn two_operand_case(directory: bool) {
         Descriptor::File(file) => &file.file,
         Descriptor::Dir(dir) => &dir.dir,
     });
-    let mut future = Box::pin(source.is_same_object(target));
+    let mut future = Box::pin(async {
+        match case {
+            Case::Files | Case::Directories => {
+                source.is_same_object(target).await.unwrap();
+            }
+            Case::Link | Case::Rename => {
+                let source = source
+                    .dir()
+                    .unwrap_or_else(|_| panic!("expected directory"));
+                let target = target
+                    .dir()
+                    .unwrap_or_else(|_| panic!("expected directory"));
+                if matches!(case, Case::Link) {
+                    source
+                        .link_at(
+                            PathFlags::empty(),
+                            "payload".into(),
+                            target,
+                            "target".into(),
+                        )
+                        .await
+                } else {
+                    source
+                        .rename_at("payload".into(), target, "target".into())
+                        .await
+                }
+                .unwrap_or_else(|_| panic!("directory operation failed"));
+            }
+        }
+    });
     assert!(
         future
             .as_mut()
@@ -216,13 +253,13 @@ async fn two_operand_case(directory: bool) {
     let live_during_work = admission.live.load(Ordering::SeqCst);
     let paths_during_work = paths.each_ref().map(|path| path.join("payload").exists());
     eprintln!(
-        "GATED directory={directory}: generation_drops={generation_drops:?}, native_valid={native_alive:?}, hook_calls={hook_calls:?}, admission_live={live_during_work}, paths={paths_during_work:?}"
+        "GATED case={case:?}: generation_drops={generation_drops:?}, native_valid={native_alive:?}, hook_calls={hook_calls:?}, admission_live={live_during_work}, paths={paths_during_work:?}"
     );
 
     drop(gate);
     // FIFO execution on the one-worker blocking pool acknowledges that the
-    // comparison has returned and its cancelled join result was disposed.
-    // Its bool result is inert; it never owns a native handle or generation.
+    // operation has returned and its cancelled join result was disposed.
+    // Its result is inert; it never owns a native handle or generation.
     tokio::task::spawn_blocking(|| ()).await.unwrap();
     let mut drops = Vec::new();
     for _ in 0..2 {
@@ -245,6 +282,16 @@ async fn two_operand_case(directory: bool) {
     let b_dropped_under_a = drops
         .iter()
         .any(|drop| drop.operand == 1 && drop.admission_live == 1);
+    if matches!(case, Case::Link | Case::Rename) {
+        assert_eq!(
+            std::fs::read(paths[1].join("target")).unwrap(),
+            b"independent generation"
+        );
+        assert_eq!(
+            paths[0].join("payload").exists(),
+            matches!(case, Case::Link)
+        );
+    }
     for observation in drops {
         observation.directory.close().unwrap();
     }
@@ -290,7 +337,7 @@ async fn two_operand_case(directory: bool) {
 fn two_operand_files() {
     isolated_case(
         "filesystem::native_owner_tests::factory_experiment::two_operand_files",
-        false,
+        Case::Files,
     );
 }
 
@@ -298,6 +345,22 @@ fn two_operand_files() {
 fn two_operand_directories() {
     isolated_case(
         "filesystem::native_owner_tests::factory_experiment::two_operand_directories",
-        true,
+        Case::Directories,
+    );
+}
+
+#[test]
+fn link_retains_both_directories() {
+    isolated_case(
+        "filesystem::native_owner_tests::factory_experiment::link_retains_both_directories",
+        Case::Link,
+    );
+}
+
+#[test]
+fn rename_retains_both_directories() {
+    isolated_case(
+        "filesystem::native_owner_tests::factory_experiment::rename_retains_both_directories",
+        Case::Rename,
     );
 }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::filesystem::{FilesystemOperation, FsPerms, OpenMode};
+use crate::filesystem::{FilesystemOperation, FilesystemOperationHook, FsPerms, OpenMode};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 const TEST_MAX_IO_SIZE: usize = crate::DEFAULT_MAX_IO_SIZE.get();
@@ -12,26 +12,38 @@ impl Drop for CountDrop {
     }
 }
 
+fn retain_content(hook: &mut Option<FilesystemOperationHook>, dropped: Arc<AtomicUsize>) {
+    let admission = hook.take();
+    let content = Arc::new(CountDrop(dropped));
+    *hook = Some(Arc::new(move || {
+        let operation = admission.as_ref().map(|hook| hook()).transpose()?;
+        // The descriptor's factory owns idle content. Each operation retains
+        // its own content claim, released before the admission's completion fence.
+        Ok(FilesystemOperation::new((content.clone(), operation)))
+    }));
+}
+
 #[test]
 fn terminal_read_releases_session_before_producer_drop() {
-    for owned_handle in [false, true] {
+    for (hooked, owned_content) in [(false, false), (true, false), (true, true)] {
         for overflow in [false, true] {
             let content = Arc::new(AtomicUsize::new(0));
-            let operation = Arc::new(AtomicUsize::new(0));
-            let native = tempfile::tempfile().unwrap();
-            let handle = if owned_handle {
-                FilesystemHandle::new(native, CountDrop(content.clone()))
-            } else {
-                native.into()
-            };
+            let (mut file, counts, _) = file(false, &[]);
+            if !hooked {
+                file.operation_hook = None;
+            } else if owned_content {
+                retain_content(&mut file.operation_hook, content.clone());
+            }
+            let operation = file.start_operation().unwrap();
+            assert_eq!(operation.is_some(), hooked);
             let (result, mut status) = oneshot::channel();
             let mut producer = ReadStreamProducer {
-                file: File::new(handle, FsPerms::ReadOnly, OpenMode::READ, false),
+                file,
                 offset: u64::MAX,
                 result: Some(result),
                 task: None,
                 max_read_size: TEST_MAX_IO_SIZE,
-                operation: Some(FilesystemOperation::new(CountDrop(operation.clone()))),
+                operation,
             };
             if overflow {
                 assert!(matches!(producer.complete_read(1), StreamResult::Dropped));
@@ -40,41 +52,42 @@ fn terminal_read_releases_session_before_producer_drop() {
                 producer.close(Ok(()));
                 assert!(matches!(status.try_recv(), Ok(Ok(()))));
             }
-            assert_eq!(operation.load(Ordering::SeqCst), 1);
+            assert_eq!(counts.admitted.load(Ordering::SeqCst), usize::from(hooked));
+            assert_eq!(counts.released.load(Ordering::SeqCst), usize::from(hooked));
             assert_eq!(content.load(Ordering::SeqCst), 0);
             assert!(producer.file.file.metadata().is_ok());
             drop(producer);
-            assert_eq!(operation.load(Ordering::SeqCst), 1);
-            assert_eq!(content.load(Ordering::SeqCst), usize::from(owned_handle));
+            assert_eq!(counts.released.load(Ordering::SeqCst), usize::from(hooked));
+            assert_eq!(content.load(Ordering::SeqCst), usize::from(owned_content));
         }
     }
 }
 
 #[test]
 fn terminal_write_and_append_retain_consumer_content() {
-    for location in [WriteLocation::Offset(0), WriteLocation::End] {
-        let content = Arc::new(AtomicUsize::new(0));
-        let operation = Arc::new(AtomicUsize::new(0));
-        let (result, mut status) = oneshot::channel();
-        let mut consumer = WriteStreamConsumer::new(
-            File::new(
-                FilesystemHandle::new(tempfile::tempfile().unwrap(), CountDrop(content.clone())),
-                FsPerms::ReadWrite,
-                OpenMode::WRITE,
-                false,
-            ),
-            location,
-            result,
-            TEST_MAX_IO_SIZE,
-            Some(FilesystemOperation::new(CountDrop(operation.clone()))),
-        );
-        consumer.close(Ok(()));
-        assert!(matches!(status.try_recv(), Ok(Ok(()))));
-        assert_eq!(operation.load(Ordering::SeqCst), 1);
-        assert_eq!(content.load(Ordering::SeqCst), 0);
-        assert!(consumer.file.file.metadata().is_ok());
-        drop(consumer);
-        assert_eq!(content.load(Ordering::SeqCst), 1);
+    for (hooked, owned_content) in [(false, false), (true, false), (true, true)] {
+        for location in [WriteLocation::Offset(0), WriteLocation::End] {
+            let content = Arc::new(AtomicUsize::new(0));
+            let (mut file, counts, _) = file(false, &[]);
+            if !hooked {
+                file.operation_hook = None;
+            } else if owned_content {
+                retain_content(&mut file.operation_hook, content.clone());
+            }
+            let operation = file.start_operation().unwrap();
+            assert_eq!(operation.is_some(), hooked);
+            let (result, mut status) = oneshot::channel();
+            let mut consumer =
+                WriteStreamConsumer::new(file, location, result, TEST_MAX_IO_SIZE, operation);
+            consumer.close(Ok(()));
+            assert!(matches!(status.try_recv(), Ok(Ok(()))));
+            assert_eq!(counts.admitted.load(Ordering::SeqCst), usize::from(hooked));
+            assert_eq!(counts.released.load(Ordering::SeqCst), usize::from(hooked));
+            assert_eq!(content.load(Ordering::SeqCst), 0);
+            assert!(consumer.file.file.metadata().is_ok());
+            drop(consumer);
+            assert_eq!(content.load(Ordering::SeqCst), usize::from(owned_content));
+        }
     }
 }
 
@@ -97,7 +110,7 @@ struct NativeGate {
 static GATES: OnceLock<Mutex<BTreeMap<usize, Arc<NativeGate>>>> = OnceLock::new();
 static GUEST_GATES: Mutex<Vec<(std::fs::File, Arc<NativeGate>)>> = Mutex::new(Vec::new());
 
-pub(super) fn native_work_gate(file: &Arc<FilesystemHandle>) {
+pub(super) fn native_work_gate(file: &Arc<std::fs::File>) {
     let gate = GATES
         .get_or_init(Default::default)
         .lock()
@@ -128,7 +141,7 @@ struct InstalledGate {
 }
 
 impl InstalledGate {
-    fn new(file: &Arc<FilesystemHandle>) -> Self {
+    fn new(file: &Arc<std::fs::File>) -> Self {
         let (tx, started) = sync_mpsc::channel();
         let gate = Arc::new(NativeGate {
             started: tx,
@@ -387,7 +400,7 @@ async fn write_and_append_sessions_admit_once_and_release_on_completion() {
 
 #[tokio::test]
 async fn started_read_write_and_append_outlive_store() {
-    for owned_handle in [false, true] {
+    for owned_content in [false, true] {
         for location in [
             None,
             Some(WriteLocation::Offset(0)),
@@ -395,9 +408,8 @@ async fn started_read_write_and_append_outlive_store() {
         ] {
             let (mut file, counts, released) = file(false, &[1, 2, 3]);
             let content = Arc::new(AtomicUsize::new(0));
-            if owned_handle {
-                let native = std::fs::File::try_clone(&file.file).unwrap();
-                file.file = Arc::new(FilesystemHandle::new(native, CountDrop(content.clone())));
+            if owned_content {
+                retain_content(&mut file.operation_hook, content.clone());
             }
             let gate = InstalledGate::new(&file.file);
             let mut store = store();
@@ -430,7 +442,7 @@ async fn started_read_write_and_append_outlive_store() {
             gate.release();
             released.recv_timeout(Duration::from_secs(30)).unwrap();
             assert_eq!(counts.released.load(Ordering::SeqCst), 1);
-            assert_eq!(content.load(Ordering::SeqCst), usize::from(owned_handle));
+            assert_eq!(content.load(Ordering::SeqCst), usize::from(owned_content));
         }
     }
 }
@@ -447,6 +459,8 @@ async fn eager_directory_worker_outlives_store_and_releases_without_polling() {
             false,
         );
         dir.operation_hook = file.operation_hook;
+        let content = Arc::new(AtomicUsize::new(0));
+        retain_content(&mut dir.operation_hook, content.clone());
         let gate = InstalledGate::new(&dir.dir);
         let mut store = store();
         let (_stream, _status) = read_directory(&mut store, Ok(dir)).unwrap();
@@ -456,9 +470,11 @@ async fn eager_directory_worker_outlives_store_and_releases_without_polling() {
             drop(store.take());
         }
         assert_eq!(counts.released.load(Ordering::SeqCst), 0);
+        assert_eq!(content.load(Ordering::SeqCst), 0);
         gate.release();
         released.recv_timeout(Duration::from_secs(30)).unwrap();
         assert_eq!(counts.released.load(Ordering::SeqCst), 1);
+        assert_eq!(content.load(Ordering::SeqCst), 1);
         drop(store);
     }
 }
@@ -575,12 +591,8 @@ async fn direct_p3_directory_iterator_retains_content_through_stream_lifetime() 
         std::fs::write(temp.path().join("child"), b"data").unwrap();
         let content = Arc::new(AtomicUsize::new(0));
         let native = crate::filesystem::primitives::open_ambient_dir(temp.path()).unwrap();
-        let dir = Dir::new(
-            FilesystemHandle::new(native, CountDrop(content.clone())),
-            FsPerms::ReadOnly,
-            OpenMode::READ,
-            true,
-        );
+        let mut dir = Dir::new(native, FsPerms::ReadOnly, OpenMode::READ, true);
+        retain_content(&mut dir.operation_hook, content.clone());
         let mut store = store();
         let (mut stream, mut status) = read_directory(&mut store, Ok(dir)).unwrap();
         assert_eq!(content.load(Ordering::SeqCst), 0);

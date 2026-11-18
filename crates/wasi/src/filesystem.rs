@@ -107,8 +107,9 @@ pub(crate) type FilesystemOperationHook =
 #[derive(Clone)]
 pub struct WasiFilesystemCtx {
     pub(crate) allow_blocking_current_thread: bool,
-    operation_hook: Option<FilesystemOperationHook>,
+    // Close stored preopens before releasing the factory's captured owners.
     pub(crate) preopens: Vec<(Dir, String)>,
+    operation_hook: Option<FilesystemOperationHook>,
     pub(crate) max_io_size: NonZeroUsize,
 }
 
@@ -116,8 +117,8 @@ impl Default for WasiFilesystemCtx {
     fn default() -> Self {
         Self {
             allow_blocking_current_thread: false,
-            operation_hook: None,
             preopens: Vec::new(),
+            operation_hook: None,
             max_io_size: crate::DEFAULT_MAX_IO_SIZE,
         }
     }
@@ -135,12 +136,29 @@ impl WasiFilesystemCtx {
     /// containing only inert data do not wait for guest polling to release it.
     /// Idle descriptors do not retain active-operation values.
     ///
-    /// Operations involving two descriptors invoke only the initiating
-    /// descriptor's hook. This experiment retains the secondary descriptor's
-    /// factory for `is_same_object`; link/rename ownership is not migrated.
+    /// To retain backing content, capture a shared content owner in the hook
+    /// and clone that owner into each returned [`FilesystemOperation`]. The
+    /// retained hook owns idle content; the returned value owns content and
+    /// admission during native work. Operations involving two descriptors invoke
+    /// only the initiating descriptor's hook and retain the secondary
+    /// descriptor, including its hook, until native work finishes.
     ///
     /// Descriptors retain the hook configured when their preopen was issued;
     /// changing the hook affects subsequently issued preopens and their children.
+    /// A context also retains its configured hook. For independently owned
+    /// custom descriptors, a temporary context can attach each descriptor's hook
+    /// with [`Self::push_descriptor`] and then be dropped.
+    /// When replacing a hook, the replacement or another explicit owner must
+    /// retain any backing content still needed by the context's stored preopens.
+    ///
+    /// Cloning [`File::file`] or [`Dir::dir`], or duplicating their native handles,
+    /// does not retain the hook or its captured owners. Embedders must keep an
+    /// unchanged clone of the complete [`Descriptor`], or an explicit content
+    /// owner, until every extracted native handle closes. In an embedder-owned
+    /// struct, declare the native field before the retained descriptor or owner
+    /// so the native field drops first. Do not let the native field escape that
+    /// owner or replace the retained descriptor's native field or hook.
+    ///
     /// Without a hook, no operation value is allocated or reference counted.
     pub fn set_operation_hook<F>(&mut self, hook: F) -> &mut Self
     where
@@ -156,6 +174,9 @@ impl WasiFilesystemCtx {
     /// descriptors constructed with [`File::new`] or [`Dir::new`]. The descriptor
     /// and any children retain the currently configured hook. Later changes to
     /// this context do not change already installed descriptors or streams.
+    /// This replaces any hook previously attached to the supplied descriptor.
+    /// When reattaching an existing descriptor, the replacement hook or another
+    /// explicit owner must retain the descriptor's backing content.
     pub fn push_descriptor(
         &self,
         table: &mut ResourceTable,
@@ -836,6 +857,8 @@ pub struct File {
     /// Wrapped in an Arc because the same underlying file is used for
     /// implementing the stream types. A copy is also needed for
     /// `spawn_blocking`.
+    /// Cloning this Arc does not retain the descriptor's operation hook or its
+    /// captured owners. See [`WasiFilesystemCtx::set_operation_hook`].
     // Drop our native reference before the factory and its captured owners.
     pub file: Arc<std::fs::File>,
     /// Permissions to enforce on access to the file. These permissions are
@@ -981,6 +1004,8 @@ pub struct Dir {
     /// struct are sandboxed to be within this directory via `cap-primitives`.
     ///
     /// Wrapped in an Arc because a copy is needed for `run_blocking`.
+    /// Cloning this Arc does not retain the descriptor's operation hook or its
+    /// captured owners. See [`WasiFilesystemCtx::set_operation_hook`].
     // Drop our native reference before the factory and its captured owners.
     pub dir: Arc<std::fs::File>,
     /// Permissions to enforce on access to the filesystem under this
@@ -1061,7 +1086,6 @@ impl Dir {
     }
 
     /// Returns reference to the underlying directory handle.
-    #[cfg(feature = "p3")]
     pub(crate) fn as_dir(&self) -> &Arc<std::fs::File> {
         &self.dir
     }
@@ -1134,14 +1158,15 @@ impl Dir {
         if self.perms != new_dir.perms {
             return Err(ErrorCode::NotPermitted);
         }
-        let new_dir_handle = Arc::clone(&new_dir.dir);
+        let new_dir = new_dir.clone();
         self.run_blocking(move |d| {
             #[cfg(test)]
             native_owner_tests::native_work_gate(d);
+            // Borrow the complete descriptor so closure capture retains its hook.
             crate::filesystem::primitives::hard_link(
                 d,
                 old_path.as_ref(),
-                &new_dir_handle,
+                new_dir.as_dir(),
                 new_path.as_ref(),
             )
         })
@@ -1320,14 +1345,15 @@ impl Dir {
         if self.perms != new_dir.perms {
             return Err(ErrorCode::NotPermitted);
         }
-        let new_dir_handle = Arc::clone(&new_dir.dir);
+        let new_dir = new_dir.clone();
         self.run_blocking(move |d| {
             #[cfg(test)]
             native_owner_tests::native_work_gate(d);
+            // Borrow the complete descriptor so closure capture retains its hook.
             crate::filesystem::primitives::rename(
                 d,
                 old_path.as_ref(),
-                &new_dir_handle,
+                new_dir.as_dir(),
                 new_path.as_ref(),
             )
         })

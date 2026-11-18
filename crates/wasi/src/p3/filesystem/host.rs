@@ -1,6 +1,6 @@
 use crate::filesystem::sys;
 use crate::filesystem::{
-    Descriptor, Dir, File, FilesystemHandle, FilesystemOperation, NativeOperation, WasiFilesystem,
+    Descriptor, Dir, File, FilesystemOperation, NativeOperation, WasiFilesystem,
     WasiFilesystemCtxView,
 };
 use crate::p3::FallibleIteratorProducer;
@@ -301,7 +301,7 @@ struct ReadDirStream {
 
 impl ReadDirStream {
     fn new(
-        dir: Arc<FilesystemHandle>,
+        dir: Arc<std::fs::File>,
         result: oneshot::Sender<Result<(), ErrorCode>>,
         operation: Option<FilesystemOperation>,
     ) -> ReadDirStream {
@@ -667,7 +667,7 @@ fn read_directory(
     // state, so a native panic cannot strand a status future in the Store.
     if let Ok((dir, operation)) = &dir {
         if dir.allow_blocking_current_thread {
-            let entries = dir.as_dir().read_dir();
+            let entries = crate::filesystem::primitives::read_dir(dir.as_dir());
             let status = FutureReader::new(&mut store, result_rx)?;
             let stream = match entries {
                 Ok(entries) => StreamReader::new(

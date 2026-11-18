@@ -46,60 +46,44 @@ fn owned_dir(
     (dir, count, released, weak)
 }
 
-// Experiment excludes the old wrapper contract or an unmigrated operation.
-#[cfg(any())]
 #[test]
-fn idle_descriptor_and_public_native_clone_retain_content_without_activity() {
-    let (handle, count, _) = owned(tempfile::tempfile().unwrap());
-    let mut context = WasiFilesystemCtx::default();
-    let active = Arc::new(AtomicUsize::new(0));
-    let a = active.clone();
-    context.set_operation_hook(move || {
-        Ok(FilesystemOperation::new(Release {
-            count: a.clone(),
+fn idle_descriptor_clones_retain_content_without_admission() {
+    for directory in [false, true] {
+        let temp = tempfile::tempdir().unwrap();
+        let native = if directory {
+            primitives::open_ambient_dir(temp.path()).unwrap()
+        } else {
+            tempfile::tempfile().unwrap()
+        };
+        let descriptor = if directory {
+            Descriptor::Dir(Dir::new(native, FsPerms::ReadOnly, OpenMode::READ, false))
+        } else {
+            Descriptor::File(File::new(native, FsPerms::ReadOnly, OpenMode::READ, false))
+        };
+        let count = Arc::new(AtomicUsize::new(0));
+        let owner = Release {
+            count: count.clone(),
             done: None,
-        }))
-    });
-    let mut table = ResourceTable::new();
-    let resource = context
-        .push_descriptor(
-            &mut table,
-            Descriptor::File(File::new(handle, FsPerms::ReadOnly, OpenMode::READ, false)),
-        )
-        .unwrap();
-    let file = table
-        .get(&resource)
-        .unwrap()
-        .file()
-        .unwrap_or_else(|_| panic!("expected file"));
-    drop(file.start_operation().unwrap());
-    assert_eq!(active.load(Ordering::SeqCst), 1);
-    assert_eq!(count.load(Ordering::SeqCst), 0);
-    let native = Arc::clone(&file.file);
-    let duplicate = native.try_clone().unwrap();
-    drop(table);
-    drop(native);
-    assert_eq!(count.load(Ordering::SeqCst), 0);
-    drop(duplicate);
-    assert_eq!(count.load(Ordering::SeqCst), 1);
-}
-
-// Experiment excludes the old wrapper contract or an unmigrated operation.
-#[cfg(any())]
-#[test]
-fn idle_directory_clone_retains_content_without_admission() {
-    let temp = tempfile::tempdir().unwrap();
-    let (handle, count, _) = owned(primitives::open_ambient_dir(temp.path()).unwrap());
-    let mut dir = Dir::new(handle, FsPerms::ReadOnly, OpenMode::READ, false);
-    dir.operation_hook = Some(Arc::new(|| panic!("idle clone must not admit work")));
-    let clone = dir.clone();
-    let native = Arc::clone(&dir.dir);
-    drop(dir);
-    drop(clone);
-    assert_eq!(count.load(Ordering::SeqCst), 0);
-    assert!(native.metadata().unwrap().is_dir());
-    drop(native);
-    assert_eq!(count.load(Ordering::SeqCst), 1);
+        };
+        let mut context = WasiFilesystemCtx::default();
+        context.set_operation_hook(move || {
+            let _ = &owner;
+            panic!("idle descriptor clone must not admit work");
+        });
+        let mut table = ResourceTable::new();
+        let resource = context.push_descriptor(&mut table, descriptor).unwrap();
+        drop(context);
+        let clone = table.get(&resource).unwrap().clone();
+        drop(table);
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+        let native = match &clone {
+            Descriptor::File(file) => &file.file,
+            Descriptor::Dir(dir) => &dir.dir,
+        };
+        assert_eq!(native.metadata().unwrap().is_dir(), directory);
+        drop(clone);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+    }
 }
 
 // A keyed gate in real multi-descriptor workers lets the initiating future and
@@ -164,186 +148,6 @@ impl Drop for InstalledNativeWork {
         self.gate.wake.notify_all();
         NATIVE_WORK.get().unwrap().lock().unwrap().remove(&self.key);
     }
-}
-
-// Experiment excludes the old wrapper contract or an unmigrated operation.
-#[cfg(any())]
-#[tokio::test]
-async fn second_descriptor_content_survives_actual_comparison_worker() {
-    for directory in [false, true] {
-        let temp = tempfile::tempdir().unwrap();
-        let (handle, count, released) = owned(if directory {
-            primitives::open_ambient_dir(temp.path()).unwrap()
-        } else {
-            tempfile::tempfile().unwrap()
-        });
-        let target = if directory {
-            Descriptor::Dir(Dir::new(handle, FsPerms::ReadOnly, OpenMode::READ, false))
-        } else {
-            Descriptor::File(File::new(handle, FsPerms::ReadOnly, OpenMode::READ, false))
-        };
-        let mut target_context = WasiFilesystemCtx::default();
-        target_context.set_operation_hook(|| panic!("B must not admit an operation"));
-        let mut target_table = ResourceTable::new();
-        let target = target_context
-            .push_descriptor(&mut target_table, target)
-            .unwrap();
-        let admitted = Arc::new(AtomicUsize::new(0));
-        let hook_admitted = admitted.clone();
-        let hook: FilesystemOperationHook = Arc::new(move || {
-            hook_admitted.fetch_add(1, Ordering::SeqCst);
-            Ok(FilesystemOperation::new(()))
-        });
-        let source = if directory {
-            let mut dir = Dir::new(
-                primitives::open_ambient_dir(temp.path()).unwrap(),
-                FsPerms::ReadOnly,
-                OpenMode::READ,
-                false,
-            );
-            dir.operation_hook = Some(hook);
-            Descriptor::Dir(dir)
-        } else {
-            let mut file = File::new(
-                tempfile::tempfile().unwrap(),
-                FsPerms::ReadOnly,
-                OpenMode::READ,
-                false,
-            );
-            file.operation_hook = Some(hook);
-            Descriptor::File(file)
-        };
-        let gate = InstalledNativeWork::new(match &source {
-            Descriptor::File(file) => &file.file,
-            Descriptor::Dir(dir) => &dir.dir,
-        });
-        let mut future = Box::pin(source.is_same_object(target_table.get(&target).unwrap()));
-        assert!(
-            future
-                .as_mut()
-                .poll(&mut Context::from_waker(Waker::noop()))
-                .is_pending()
-        );
-        gate.started.recv_timeout(Duration::from_secs(30)).unwrap();
-        drop(future);
-        drop(target_table);
-        drop(target_context);
-        drop(source);
-        assert_eq!(admitted.load(Ordering::SeqCst), 1);
-        assert_eq!(
-            count.load(Ordering::SeqCst),
-            0,
-            "B content released while its native handle is in A's worker"
-        );
-        drop(gate);
-        tokio::time::timeout(Duration::from_secs(30), released)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(count.load(Ordering::SeqCst), 1);
-    }
-}
-
-// Experiment excludes the old wrapper contract or an unmigrated operation.
-#[cfg(any())]
-#[tokio::test]
-async fn second_directory_content_survives_link_and_rename_workers() {
-    for rename in [false, true] {
-        let source_path = tempfile::tempdir().unwrap();
-        let target_path = tempfile::tempdir().unwrap();
-        std::fs::write(source_path.path().join("source"), b"contents").unwrap();
-        let (handle, count, released) =
-            owned(primitives::open_ambient_dir(target_path.path()).unwrap());
-        let mut target = Dir::new(handle, FsPerms::ReadWrite, OpenMode::READ, false);
-        target.operation_hook = Some(Arc::new(|| panic!("B must not admit an operation")));
-        let admitted = Arc::new(AtomicUsize::new(0));
-        let hook_admitted = admitted.clone();
-        let mut source = Dir::new(
-            primitives::open_ambient_dir(source_path.path()).unwrap(),
-            FsPerms::ReadWrite,
-            OpenMode::READ,
-            false,
-        );
-        source.operation_hook = Some(Arc::new(move || {
-            hook_admitted.fetch_add(1, Ordering::SeqCst);
-            Ok(FilesystemOperation::new(()))
-        }));
-        let gate = InstalledNativeWork::new(&source.dir);
-        let mut future: std::pin::Pin<Box<dyn Future<Output = Result<(), ErrorCode>> + '_>> =
-            if rename {
-                Box::pin(source.rename_at("source".into(), &target, "target".into()))
-            } else {
-                Box::pin(source.link_at(
-                    PathFlags::empty(),
-                    "source".into(),
-                    &target,
-                    "target".into(),
-                ))
-            };
-        assert!(
-            future
-                .as_mut()
-                .poll(&mut Context::from_waker(Waker::noop()))
-                .is_pending()
-        );
-        gate.started.recv_timeout(Duration::from_secs(30)).unwrap();
-        drop(future);
-        drop(target);
-        drop(source);
-        assert_eq!(admitted.load(Ordering::SeqCst), 1);
-        assert_eq!(
-            count.load(Ordering::SeqCst),
-            0,
-            "B content released while its native handle is in A's worker"
-        );
-        drop(gate);
-        tokio::time::timeout(Duration::from_secs(30), released)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(count.load(Ordering::SeqCst), 1);
-        assert_eq!(
-            std::fs::read(target_path.path().join("target")).unwrap(),
-            b"contents"
-        );
-        assert_eq!(source_path.path().join("source").exists(), !rename);
-    }
-}
-
-// Experiment excludes the old wrapper contract or an unmigrated operation.
-#[cfg(any())]
-#[tokio::test]
-async fn native_worker_retains_content_after_store_drop() {
-    let (handle, count, released) = owned(tempfile::tempfile().unwrap());
-    let file = File::new(handle, FsPerms::ReadOnly, OpenMode::READ, false);
-    let native = Arc::downgrade(&file.file);
-    let mut store = wasmtime::Store::new(&wasmtime::Engine::default(), file);
-    let (started_tx, started_rx) = oneshot::channel();
-    let (release_tx, release_rx) = std::sync::mpsc::channel();
-    {
-        let mut future = Box::pin(store.data_mut().run_blocking(move |file| {
-            started_tx.send(()).unwrap();
-            release_rx.recv().unwrap();
-            file.metadata()
-        }));
-        assert!(
-            future
-                .as_mut()
-                .poll(&mut Context::from_waker(Waker::noop()))
-                .is_pending()
-        );
-        started_rx.await.unwrap();
-    }
-    drop(store);
-    assert!(native.upgrade().is_some());
-    assert_eq!(count.load(Ordering::SeqCst), 0);
-    release_tx.send(()).unwrap();
-    tokio::time::timeout(std::time::Duration::from_secs(30), released)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(count.load(Ordering::SeqCst), 1);
-    assert!(native.upgrade().is_none());
 }
 
 #[tokio::test]
@@ -496,19 +300,97 @@ fn content_owner_runs_after_native_file_closes() {
             );
         }
     }
-    let native = tempfile::tempfile().unwrap();
-    let closed = Arc::new(AtomicBool::new(false));
-    let owner = Check {
-        fd: Arc::new(AtomicI32::new(native.as_raw_fd())),
-        closed: closed.clone(),
-    };
-    let owner = Arc::new(Mutex::new(owner));
-    let mut file = File::new(native, FsPerms::ReadOnly, OpenMode::READ, false);
-    file.operation_hook = Some(Arc::new(move || {
-        Ok(FilesystemOperation::new(owner.clone()))
-    }));
-    drop(file);
-    assert!(closed.load(Ordering::SeqCst));
+    // Embedder-owned extraction uses the existing Descriptor::clone. Declare
+    // independent native state first so it closes before the retained factory.
+    struct OwnedNative {
+        native: std::fs::File,
+        _descriptor: Descriptor,
+    }
+    for directory in [false, true] {
+        for duplicate in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let native = if directory {
+                primitives::open_ambient_dir(temp.path()).unwrap()
+            } else {
+                tempfile::tempfile().unwrap()
+            };
+            let fd = Arc::new(AtomicI32::new(native.as_raw_fd()));
+            let closed = Arc::new(AtomicBool::new(false));
+            let owner = Arc::new(Mutex::new(Check {
+                fd: fd.clone(),
+                closed: closed.clone(),
+            }));
+            let descriptor = if directory {
+                Descriptor::Dir(Dir::new(native, FsPerms::ReadOnly, OpenMode::READ, false))
+            } else {
+                Descriptor::File(File::new(native, FsPerms::ReadOnly, OpenMode::READ, false))
+            };
+            let mut context = WasiFilesystemCtx::default();
+            context.set_operation_hook(move || {
+                let _ = &owner;
+                panic!("owned native extraction must not admit work");
+            });
+            let mut table = ResourceTable::new();
+            let resource = context.push_descriptor(&mut table, descriptor).unwrap();
+            drop(context);
+            let descriptor = table.get(&resource).unwrap();
+            let extracted = duplicate.then(|| OwnedNative {
+                native: match descriptor {
+                    Descriptor::File(file) => file.file.try_clone().unwrap(),
+                    Descriptor::Dir(dir) => dir.dir.try_clone().unwrap(),
+                },
+                _descriptor: descriptor.clone(),
+            });
+            if let Some(extracted) = &extracted {
+                fd.store(extracted.native.as_raw_fd(), Ordering::SeqCst);
+            }
+            drop(table);
+            assert_eq!(closed.load(Ordering::SeqCst), !duplicate);
+            if let Some(extracted) = extracted {
+                assert_eq!(extracted.native.metadata().unwrap().is_dir(), directory);
+                drop(extracted);
+            }
+            assert!(closed.load(Ordering::SeqCst));
+        }
+    }
+
+    // Stored preopens also own native handles, even before a descriptor is
+    // issued or after all issued descriptors have been dropped.
+    let preopens_closed = [false, true].map(|issue| {
+        let temp = tempfile::tempdir().unwrap();
+        let mut builder = crate::WasiCtxBuilder::new();
+        builder
+            .preopened_dir(temp.path(), ".", FsPerms::ReadOnly)
+            .unwrap();
+        let mut ctx = builder.build();
+        let closed = Arc::new(AtomicBool::new(false));
+        let owner = Check {
+            fd: Arc::new(AtomicI32::new(ctx.filesystem.preopens[0].0.dir.as_raw_fd())),
+            closed: closed.clone(),
+        };
+        ctx.filesystem.set_operation_hook(move || {
+            let _ = &owner;
+            panic!("preopen issuance must not admit work");
+        });
+        if issue {
+            let mut table = ResourceTable::new();
+            WasiFilesystemCtxView {
+                ctx: &mut ctx.filesystem,
+                table: &mut table,
+            }
+            .get_directories()
+            .unwrap();
+            drop(table);
+        }
+        assert!(!closed.load(Ordering::SeqCst));
+        drop(ctx);
+        closed.load(Ordering::SeqCst)
+    });
+    assert_eq!(
+        preopens_closed,
+        [true, true],
+        "stored preopens must close before the context's factory owner releases"
+    );
 
     // Observe the actual child fd during failed insertion, not just the parent
     // handle or the descriptor allocation's reference count.
