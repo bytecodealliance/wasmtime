@@ -149,6 +149,9 @@ impl CompiledBlob {
                 .checked_add_signed(addend)
                 .unwrap()
         };
+        let pcrel_offset = |what: usize, at: *mut u8| {
+            i32::try_from(what.cast_signed() - at.expose_provenance().cast_signed())
+        };
 
         for (
             i,
@@ -179,9 +182,7 @@ impl CompiledBlob {
                 }
                 Reloc::X86PCRel4 => {
                     let what = relocation_target_addr(name, addend);
-                    let pcrel =
-                        i32::try_from(what.cast_signed() - at.expose_provenance().cast_signed())
-                            .unwrap();
+                    let pcrel = pcrel_offset(what, at).unwrap();
                     unsafe { write_unaligned(at.cast::<i32>(), pcrel) };
                 }
                 Reloc::X86CallPCRel4 | Reloc::X86CallPLTRel4 => {
@@ -192,9 +193,7 @@ impl CompiledBlob {
                     // transfers control to `what + 4`. The PLT form additionally permits
                     // resolution through a stub, which the veneer below provides.
                     let what = relocation_target_addr(name, addend);
-                    if let Ok(pcrel) =
-                        i32::try_from(what.cast_signed() - at.expose_provenance().cast_signed())
-                    {
+                    if let Ok(pcrel) = pcrel_offset(what, at) {
                         unsafe { write_unaligned(at.cast::<i32>(), pcrel) };
                     } else {
                         // The target is out of range for the 32-bit displacement, so
@@ -215,12 +214,7 @@ impl CompiledBlob {
 
                         // Point the original instruction at the veneer instead; the
                         // displacement is again relative to the end of the 4-byte field.
-                        let pcrel = i32::try_from(
-                            veneer.expose_provenance().cast_signed()
-                                - at.expose_provenance().cast_signed()
-                                - 4,
-                        )
-                        .unwrap();
+                        let pcrel = pcrel_offset(veneer.expose_provenance() - 4, at).unwrap();
                         unsafe { write_unaligned(at.cast::<i32>(), pcrel) };
                     }
                 }
@@ -244,7 +238,7 @@ impl CompiledBlob {
                     let is_rip_relative_mov = insn.is_some_and(
                         |insn| matches!(insn, [0x48..=0x4f, 0x8b, modrm] if modrm & 0xc7 == 0x05),
                     );
-                    let direct_pcrel = i32::try_from((symbol_addr as isize) - (at as isize) - 4);
+                    let direct_pcrel = pcrel_offset(symbol_addr.wrapping_sub(4), at);
                     match (is_rip_relative_mov, direct_pcrel) {
                         (true, Ok(pcrel)) if addend == -4 => unsafe {
                             at.sub(2).write(0x8d); // mov -> lea
@@ -371,10 +365,7 @@ impl CompiledBlob {
                     // 2. R_RISCV_PCREL_LO12_I on the `jalr`
 
                     let what = relocation_target_addr(name, addend);
-                    let pcrel =
-                        i32::try_from(what.cast_signed() - at.expose_provenance().cast_signed())
-                            .unwrap()
-                            .cast_unsigned();
+                    let pcrel = pcrel_offset(what, at).unwrap().cast_unsigned();
 
                     // See https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
                     // for a better explanation of the following code.
@@ -404,9 +395,7 @@ impl CompiledBlob {
                 }
                 Reloc::PulleyPcRel => {
                     let what = relocation_target_addr(name, addend);
-                    let pcrel =
-                        i32::try_from(what.cast_signed() - at.expose_provenance().cast_signed())
-                            .unwrap();
+                    let pcrel = pcrel_offset(what, at).unwrap();
                     let at = at.cast::<i32>();
                     unsafe {
                         at.write_unaligned(at.read_unaligned().wrapping_add(pcrel));
