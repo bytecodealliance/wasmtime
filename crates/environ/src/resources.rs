@@ -32,3 +32,30 @@ impl ResourcesRequired {
             core::cmp::max(self.max_initial_table_size, other.max_initial_table_size);
     }
 }
+
+impl crate::Module {
+    /// Returns a summary of the resources required to instantiate this
+    /// [`Module`].
+    pub fn resources_required(&self) -> ResourcesRequired {
+        let num_memories = u32::try_from(self.num_defined_memories()).unwrap();
+        let max_initial_memory_size = self
+            .memories
+            .values()
+            .skip(self.num_imported_memories)
+            .map(|memory| memory.limits.min)
+            .max();
+        let num_tables = u32::try_from(self.num_defined_tables()).unwrap();
+        let max_initial_table_size = self
+            .tables
+            .values()
+            .skip(self.num_imported_tables)
+            .map(|table| table.limits.min)
+            .max();
+        ResourcesRequired {
+            num_memories,
+            max_initial_memory_size,
+            num_tables,
+            max_initial_table_size,
+        }
+    }
+}
