@@ -102,11 +102,11 @@ impl crate::component::Component {
         &self,
         get_module: &'a dyn Fn(crate::StaticModuleIndex) -> &'a crate::Module,
     ) -> ComponentResourcesRequired {
-        use crate::component::{GlobalInitializer, InstantiateModule};
+        use crate::component::{GlobalInitializer::*, InstantiateModule};
         let mut resources = ComponentResourcesRequired::zero();
         for init in &self.initializers {
             match init {
-                GlobalInitializer::InstantiateModule(inst, _) => match inst {
+                InstantiateModule(inst, _) => match inst {
                     InstantiateModule::Static(index, _) => {
                         let module = get_module(*index);
                         resources.module_resources.add(&module.resources_required());
@@ -116,13 +116,13 @@ impl crate::component::Component {
                         // to instantiate this component.
                     }
                 },
-                GlobalInitializer::LowerImport { .. }
-                | GlobalInitializer::ExtractMemory(_)
-                | GlobalInitializer::ExtractTable(_)
-                | GlobalInitializer::ExtractRealloc(_)
-                | GlobalInitializer::ExtractCallback(_)
-                | GlobalInitializer::ExtractPostReturn(_)
-                | GlobalInitializer::Resource(_) => {}
+                LowerImport { .. }
+                | ExtractMemory(_)
+                | ExtractTable(_)
+                | ExtractRealloc(_)
+                | ExtractCallback(_)
+                | ExtractPostReturn(_)
+                | Resource(_) => {}
             }
         }
         resources
