@@ -34,13 +34,17 @@ fn main() -> Result<()> {
         .unwrap_any() // assert it's an anyref table
         .copied()
         .unwrap(); // assert the anyref isn't null
-    assert!(Rooted::ref_eq(&store, &elem, &anyref)?);
+    assert!(Rooted::ref_eq(&store, &elem.unwrap_rooted(), &anyref)?);
 
     println!("Touching `anyref` global...");
     let global = instance.get_global(&mut store, "global").unwrap();
     global.set(&mut store, Some(anyref).into())?;
     let global_val = global.get(&mut store).unwrap_anyref().copied().unwrap();
-    assert!(Rooted::ref_eq(&store, &global_val, &anyref)?);
+    assert!(Rooted::ref_eq(
+        &store,
+        &global_val.unwrap_rooted(),
+        &anyref
+    )?);
 
     println!("Passing `anyref` into func...");
     let func = instance.get_typed_func::<Option<Rooted<AnyRef>>, ()>(&mut store, "take_anyref")?;

@@ -8,6 +8,9 @@ mod disabled;
 #[cfg(not(feature = "gc"))]
 pub use disabled::*;
 
+mod maybe_rooted;
+pub use maybe_rooted::MaybeRooted;
+
 mod noextern;
 pub use noextern::NoExtern;
 

@@ -187,10 +187,10 @@ fn i31ref_global_get() -> Result<()> {
 
             let val = val
                 .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+                .and_then(|a| a.and_then(|a| a.unwrap_rooted().as_i31(&store).unwrap()));
             let got = got
                 .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+                .and_then(|a| a.and_then(|a| a.unwrap_rooted().as_i31(&store).unwrap()));
 
             assert_eq!(val, got);
         }
@@ -227,10 +227,10 @@ fn i31ref_global_set() -> Result<()> {
 
             let new_val = new_val
                 .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+                .and_then(|a| a.and_then(|a| a.unwrap_rooted().as_i31(&store).unwrap()));
             let got = got
                 .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+                .and_then(|a| a.and_then(|a| a.unwrap_rooted().as_i31(&store).unwrap()));
 
             assert_eq!(new_val, got);
         }
@@ -311,10 +311,10 @@ fn i31ref_as_anyref_global_get() -> Result<()> {
 
             let val = val
                 .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+                .and_then(|a| a.and_then(|a| a.unwrap_rooted().as_i31(&store).unwrap()));
             let got = got
                 .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+                .and_then(|a| a.and_then(|a| a.unwrap_rooted().as_i31(&store).unwrap()));
 
             assert_eq!(val, got);
         }
@@ -351,10 +351,10 @@ fn i31ref_as_anyref_global_set() -> Result<()> {
 
             let new_val = new_val
                 .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+                .and_then(|a| a.and_then(|a| a.unwrap_rooted().as_i31(&store).unwrap()));
             let got = got
                 .anyref()
-                .and_then(|a| a.and_then(|a| a.as_i31(&store).unwrap()));
+                .and_then(|a| a.and_then(|a| a.unwrap_rooted().as_i31(&store).unwrap()));
 
             assert_eq!(new_val, got);
         }

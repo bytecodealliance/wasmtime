@@ -842,19 +842,19 @@ unsafe fn read_value(
             let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { (address as *const u32).read_unaligned() };
             let value = AnyRef::_from_raw(&mut nogc, value);
-            Val::AnyRef(value)
+            Val::from(value)
         }
         FrameValType::ExnRef => {
             let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { (address as *const u32).read_unaligned() };
             let value = ExnRef::_from_raw(&mut nogc, value);
-            Val::ExnRef(value)
+            Val::from(value)
         }
         FrameValType::ExternRef => {
             let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { (address as *const u32).read_unaligned() };
             let value = ExternRef::_from_raw(&mut nogc, value);
-            Val::ExternRef(value)
+            Val::from(value)
         }
         FrameValType::FuncRef => {
             let value = unsafe { (address as *const *mut c_void).read_unaligned() };

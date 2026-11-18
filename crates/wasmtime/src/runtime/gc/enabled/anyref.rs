@@ -349,7 +349,11 @@ impl AnyRef {
     }
 
     pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<HeapType> {
-        let gc_ref = self.inner.try_gc_ref(store)?;
+        Self::ty_of_(store, self.inner.try_gc_ref(store)?)
+    }
+
+    /// The type of the `anyref` object `gc_ref`.
+    pub(crate) fn ty_of_(store: &StoreOpaque, gc_ref: &VMGcRef) -> Result<HeapType> {
         if gc_ref.is_i31() {
             return Ok(HeapType::I31);
         }
