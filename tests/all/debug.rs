@@ -3,9 +3,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{
-    AnyRef, AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine, Extern,
-    FrameHandle, Func, Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability,
-    Result, Rooted, Store, StoreContextMut, Trap, Val, ValType,
+    AnyRef, AsContext, AsContextMut, Caller, Collector, Config, DebugEvent, DebugHandler, Engine,
+    Extern, FrameHandle, Func, Global, GlobalType, Inlining, Instance, Module, ModulePC,
+    Mutability, Result, Rooted, Store, StoreContextMut, Trap, Val, ValType,
 };
 
 use crate::async_functions::PollOnce;
@@ -922,10 +922,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
 
     let (handler, counter) = D::new_and_counter();
     store.set_debug_handler(handler);
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .add_breakpoint(&module, ModulePC::new(0x28))?;
+    store.edit_breakpoints(|e| e.add_breakpoint(&module, ModulePC::new(0x28)))?;
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func = instance.get_func(&mut store, "main").unwrap();
@@ -940,10 +937,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
     assert!(Module::same(&breakpoints[0].module, &module));
     assert_eq!(breakpoints[0].pc, ModulePC::new(0x28));
 
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .remove_breakpoint(&module, ModulePC::new(0x28))?;
+    store.edit_breakpoints(|e| e.remove_breakpoint(&module, ModulePC::new(0x28)))?;
     func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
         .await?;
     assert_eq!(counter.load(Ordering::Relaxed), 1); // Should not have incremented from above.
@@ -951,7 +945,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
 
     // Enable single-step mode (on top of the breakpoint already enabled).
     assert!(!store.is_single_step());
-    store.edit_breakpoints().unwrap().single_step(true).unwrap();
+    store.edit_breakpoints(|e| e.single_step(true)).unwrap();
     assert!(store.is_single_step());
 
     debug_event_checker!(
@@ -998,18 +992,12 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
 
     // Re-enable individual breakpoint.
     store
-        .edit_breakpoints()
-        .unwrap()
-        .add_breakpoint(&module, ModulePC::new(0x28))
+        .edit_breakpoints(|e| e.add_breakpoint(&module, ModulePC::new(0x28)))
         .unwrap();
 
     // Now disable single-stepping. The single breakpoint set above
     // should still remain.
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .single_step(false)
-        .unwrap();
+    store.edit_breakpoints(|e| e.single_step(false)).unwrap();
 
     let (handler, counter) = D::new_and_counter();
     store.set_debug_handler(handler);
@@ -1057,10 +1045,7 @@ async fn breakpoints_in_inlined_code() -> wasmtime::Result<()> {
 
     let (handler, counter) = D::new_and_counter();
     store.set_debug_handler(handler);
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .add_breakpoint(&module, ModulePC::new(0x2d))?; // `i32.add` in `$f`.
+    store.edit_breakpoints(|e| e.add_breakpoint(&module, ModulePC::new(0x2d)))?; // `i32.add` in `$f`.
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func_main = instance.get_func(&mut store, "main").unwrap();
@@ -1281,7 +1266,7 @@ async fn invalidated_frame_handles_from_breakpoint() -> wasmtime::Result<()> {
 
     let handle = Arc::new(Mutex::new(None));
     let events = Arc::new(AtomicUsize::new(0));
-    store.edit_breakpoints().unwrap().single_step(true).unwrap();
+    store.edit_breakpoints(|e| e.single_step(true)).unwrap();
     store.set_debug_handler(H {
         handle: handle.clone(),
         events: events.clone(),
@@ -1527,7 +1512,7 @@ async fn single_step_before_instantiation() -> wasmtime::Result<()> {
 
     // Enable single-stepping *before* instantiation. The module has not
     // been registered with this store yet.
-    store.edit_breakpoints().unwrap().single_step(true).unwrap();
+    store.edit_breakpoints(|e| e.single_step(true)).unwrap();
     assert!(store.is_single_step());
 
     #[derive(Clone)]
@@ -1658,10 +1643,7 @@ async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
     let (handler, counter) = D::new_and_counter();
     store.set_debug_handler(handler);
 
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .add_breakpoint(&module, ModulePC::new(0x23))?;
+    store.edit_breakpoints(|e| e.add_breakpoint(&module, ModulePC::new(0x23)))?;
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func = instance.get_func(&mut store, "main").unwrap();
@@ -1677,16 +1659,258 @@ async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
     assert_eq!(breakpoints[0].pc, ModulePC::new(0x24));
 
     // Removing with the originally requested PC should work.
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .remove_breakpoint(&module, ModulePC::new(0x23))?;
+    store.edit_breakpoints(|e| e.remove_breakpoint(&module, ModulePC::new(0x23)))?;
     func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
         .await?;
     // Counter should not have incremented now that we removed the
     // breakpoint.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
 
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn slipped_breakpoint_added_twice_is_removed_twice() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // A breakpoint requested twice at a PC that slips forward (here,
+    // PC 0, which is before any function body) must be removed by
+    // removing it twice at that same PC.
+    let (module, mut store) =
+        get_module_and_store(|_config| {}, r#"(module (func (export "f") nop))"#)?;
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let pc = ModulePC::new(0);
+
+    for _ in 0..2 {
+        store.edit_breakpoints(|e| e.add_breakpoint(&module, pc))?;
+    }
+    let breakpoints = store.breakpoints().unwrap().collect::<Vec<_>>();
+    assert_eq!(breakpoints.len(), 1);
+    assert_ne!(breakpoints[0].pc, pc);
+
+    store.edit_breakpoints(|e| e.remove_breakpoint(&module, pc))?;
+    assert_eq!(store.breakpoints().unwrap().count(), 1);
+    store.edit_breakpoints(|e| e.remove_breakpoint(&module, pc))?;
+    assert_eq!(store.breakpoints().unwrap().count(), 0);
+
+    // And the breakpoint is no longer patched in: a debug handler
+    // that panics on any breakpoint event is never invoked.
+    #[derive(Clone)]
+    struct NoBreakpoints;
+    impl DebugHandler for NoBreakpoints {
+        type Data = ();
+        async fn handle(&self, _store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+            assert!(!matches!(event, DebugEvent::Breakpoint));
+        }
+    }
+    store.set_debug_handler(NoBreakpoints);
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    f.call_async(&mut store, ()).await?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn breakpoint_in_uninstantiated_component_module() -> wasmtime::Result<()> {
+    use wasmtime::component::{Component, Linker};
+
+    let _ = env_logger::try_init();
+
+    // Breakpoints can be set in core modules of a component that are
+    // never instantiated (here, just exported). This includes doing so
+    // while single-stepping in the same edit that enabled it, which
+    // must patch the module's code for single-stepping as the module
+    // is first registered with the store, while that code (shared
+    // with the component's other modules) is already being edited.
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+    (component
+      (core module $m1 (func nop))
+      (core module $m2 (func nop))
+      (export "m1" (core module $m1))
+      (export "m2" (core module $m2)))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let m1 = instance.get_module(&mut store, "m1").unwrap();
+    let m2 = instance.get_module(&mut store, "m2").unwrap();
+
+    store.edit_breakpoints(|e| e.add_breakpoint(&m1, ModulePC::new(0)))?;
+    assert_eq!(store.breakpoints().unwrap().count(), 1);
+
+    {
+        store.edit_breakpoints(|edit| {
+            edit.single_step(true)?;
+            edit.add_breakpoint(&m2, ModulePC::new(0))?;
+            Ok(())
+        })?;
+    }
+    let breakpoints = store.breakpoints().unwrap().collect::<Vec<_>>();
+    assert_eq!(breakpoints.len(), 2);
+    assert!(breakpoints.iter().any(|bp| Module::same(&bp.module, &m1)));
+    assert!(breakpoints.iter().any(|bp| Module::same(&bp.module, &m2)));
+
+    Ok(())
+}
+
+/// A debug handler that counts breakpoint and watchpoint events.
+#[derive(Clone)]
+struct CountBreakpoints(Arc<AtomicUsize>);
+
+impl DebugHandler for CountBreakpoints {
+    type Data = ();
+    async fn handle(&self, _store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+        if matches!(event, DebugEvent::Breakpoint | DebugEvent::Watchpoint(_)) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn panicking_breakpoint_edit_takes_no_effect() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // If the closure editing breakpoints panics, none of its edits
+    // take effect, and in particular the store's code is left
+    // executable.
+    let (module, mut store) = get_module_and_store(
+        |_config| {},
+        r#"
+    (module
+      (memory (export "m") 1)
+      (func (export "f") (i32.store (i32.const 0) (i32.const 1))))
+        "#,
+    )?;
+    let hits = Arc::new(AtomicUsize::new(0));
+    store.set_debug_handler(CountBreakpoints(hits.clone()));
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        store.edit_breakpoints(|edit| -> wasmtime::Result<()> {
+            edit.add_breakpoint(&module, ModulePC::new(0))?;
+            edit.single_step(true)?;
+            edit.watch(memory, 0..4)?;
+            panic!("panic while editing breakpoints");
+        })
+    }));
+    assert!(result.is_err());
+
+    assert_eq!(store.breakpoints().unwrap().count(), 0);
+    assert!(!store.as_context().is_single_step());
+    // No breakpoint, single-step, or watchpoint events.
+    f.call_async(&mut store, ()).await?;
+    assert_eq!(hits.load(Ordering::Relaxed), 0);
+
+    // The same watch, made without panicking, does take effect.
+    store.edit_breakpoints(|edit| edit.watch(memory, 0..4))?;
+    f.call_async(&mut store, ()).await?;
+    assert_eq!(hits.load(Ordering::Relaxed), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn batched_breakpoint_edits_take_effect_together() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // Edits within one `edit_breakpoints` take effect together when its
+    // closure returns, according to the breakpoint state at that
+    // point, however it was reached.
+    let (module, mut store) =
+        get_module_and_store(|_config| {}, r#"(module (func (export "f") nop))"#)?;
+    let hits = Arc::new(AtomicUsize::new(0));
+    store.set_debug_handler(CountBreakpoints(hits.clone()));
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    let pc = ModulePC::new(0);
+
+    // Added and removed: no breakpoint.
+    store.edit_breakpoints(|edit| {
+        edit.add_breakpoint(&module, pc)?;
+        edit.remove_breakpoint(&module, pc)
+    })?;
+    f.call_async(&mut store, ()).await?;
+    assert_eq!(hits.load(Ordering::Relaxed), 0);
+
+    // Added, then single-stepping toggled on and off: the breakpoint
+    // remains.
+    store.edit_breakpoints(|edit| {
+        edit.add_breakpoint(&module, pc)?;
+        edit.single_step(true)?;
+        edit.single_step(false)
+    })?;
+    f.call_async(&mut store, ()).await?;
+    assert_eq!(hits.load(Ordering::Relaxed), 1);
+
+    // Removed while single-stepping: every opcode still breaks (here
+    // `nop` and `end`) until single-stepping is turned off, after
+    // which no breakpoint remains.
+    store.edit_breakpoints(|edit| {
+        edit.single_step(true)?;
+        edit.remove_breakpoint(&module, pc)
+    })?;
+    f.call_async(&mut store, ()).await?;
+    assert_eq!(hits.load(Ordering::Relaxed), 3);
+    store.edit_breakpoints(|e| e.single_step(false))?;
+    f.call_async(&mut store, ()).await?;
+    assert_eq!(hits.load(Ordering::Relaxed), 3);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn failed_breakpoint_edit_closure_makes_no_edits() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // An edit that fails makes no change, so the closure can carry on
+    // and keep its other edits. But if the closure returns an error,
+    // none of its edits take effect.
+    let (module, mut store) = get_module_and_store(
+        |_config| {},
+        r#"(module (memory (export "m") 1) (func nop))"#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+
+    store.edit_breakpoints(|edit| {
+        edit.add_breakpoint(&module, ModulePC::new(0))?;
+        assert!(edit.watch(memory, 0..65537).is_err());
+        Ok(())
+    })?;
+    assert_eq!(store.breakpoints().unwrap().count(), 1);
+
+    let err = store
+        .edit_breakpoints(|edit| {
+            edit.remove_breakpoint(&module, ModulePC::new(0))?;
+            edit.single_step(true)?;
+            edit.watch(memory, 0..65537)
+        })
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("out of bounds"));
+    assert_eq!(store.breakpoints().unwrap().count(), 1);
+    assert!(!store.as_context().is_single_step());
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn edit_breakpoints_without_guest_debugging_fails() -> wasmtime::Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    assert!(store.edit_breakpoints(|_| Ok(())).is_err());
     Ok(())
 }
 
@@ -1823,29 +2047,23 @@ async fn component_breakpoint_stays_in_its_module() -> wasmtime::Result<()> {
     let pc = ModulePC::new(0x26);
 
     // A breakpoint in one module does not stop the other at the same PC.
-    let events = two_modules(|store, modules| {
-        store
-            .edit_breakpoints()
-            .unwrap()
-            .add_breakpoint(&modules[0], pc)
-    })
-    .await?;
+    let events =
+        two_modules(|store, modules| store.edit_breakpoints(|e| e.add_breakpoint(&modules[0], pc)))
+            .await?;
     assert_eq!(events, [vec![0x26], vec![]]);
-    let events = two_modules(|store, modules| {
-        store
-            .edit_breakpoints()
-            .unwrap()
-            .add_breakpoint(&modules[1], pc)
-    })
-    .await?;
+    let events =
+        two_modules(|store, modules| store.edit_breakpoints(|e| e.add_breakpoint(&modules[1], pc)))
+            .await?;
     assert_eq!(events, [vec![], vec![0x26]]);
 
     // Removing a breakpoint from one module keeps the other's at the same PC.
     let events = two_modules(|store, modules| {
-        let mut edit = store.edit_breakpoints().unwrap();
-        edit.add_breakpoint(&modules[0], pc)?;
-        edit.add_breakpoint(&modules[1], pc)?;
-        edit.remove_breakpoint(&modules[1], pc)
+        store.edit_breakpoints(|edit| {
+            edit.add_breakpoint(&modules[0], pc)?;
+            edit.add_breakpoint(&modules[1], pc)?;
+            edit.remove_breakpoint(&modules[1], pc)?;
+            Ok(())
+        })
     })
     .await?;
     assert_eq!(events, [vec![0x26], vec![]]);
@@ -1861,10 +2079,12 @@ async fn component_breakpoint_survives_single_step() -> wasmtime::Result<()> {
     // and off.
     for at in 0..2 {
         let events = two_modules(|store, modules| {
-            let mut edit = store.edit_breakpoints().unwrap();
-            edit.add_breakpoint(&modules[at], ModulePC::new(0x26))?;
-            edit.single_step(true)?;
-            edit.single_step(false)
+            store.edit_breakpoints(|edit| {
+                edit.add_breakpoint(&modules[at], ModulePC::new(0x26))?;
+                edit.single_step(true)?;
+                edit.single_step(false)?;
+                Ok(())
+            })
         })
         .await?;
         let mut wanted = [vec![], vec![]];
@@ -1884,7 +2104,7 @@ async fn component_breakpoint_slips_within_its_module() -> wasmtime::Result<()> 
         TWO_MODULES_PADDED,
         Inlining::No,
         &["f1", "f2"],
-        |store, _| store.edit_breakpoints().unwrap().single_step(true),
+        |store, _| store.edit_breakpoints(|e| e.single_step(true)),
     )
     .await?;
     let f1_last = *steps[0].iter().max().unwrap();
@@ -1897,10 +2117,7 @@ async fn component_breakpoint_slips_within_its_module() -> wasmtime::Result<()> 
         Inlining::No,
         &["f1", "f2"],
         |store, modules| {
-            store
-                .edit_breakpoints()
-                .unwrap()
-                .add_breakpoint(&modules[0], ModulePC::new(past_f1))
+            store.edit_breakpoints(|e| e.add_breakpoint(&modules[0], ModulePC::new(past_f1)))
         },
     )
     .await?;
@@ -1921,10 +2138,12 @@ async fn component_inlined_breakpoint_survives_single_step() -> wasmtime::Result
     // into `f1`'s module, and after single-stepping has been on and off.
     for inlining in [Inlining::No, Inlining::Yes] {
         let events = run_component(CALL_ACROSS_MODULES, inlining, &["f1"], |store, modules| {
-            let mut edit = store.edit_breakpoints().unwrap();
-            edit.add_breakpoint(&modules[0], ModulePC::new(0x26))?;
-            edit.single_step(true)?;
-            edit.single_step(false)
+            store.edit_breakpoints(|edit| {
+                edit.add_breakpoint(&modules[0], ModulePC::new(0x26))?;
+                edit.single_step(true)?;
+                edit.single_step(false)?;
+                Ok(())
+            })
         })
         .await?;
         assert_eq!(events, [vec![0x26]], "with {inlining:?}");
@@ -2006,14 +2225,8 @@ async fn component_module_relative_breakpoint_pcs() -> wasmtime::Result<()> {
 
     // Set breakpoints at the same module-relative PC (0x26) in both
     // modules.
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .add_breakpoint(&modules[0], breakpoint_pc)?;
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .add_breakpoint(&modules[1], breakpoint_pc)?;
+    store.edit_breakpoints(|e| e.add_breakpoint(&modules[0], breakpoint_pc))?;
+    store.edit_breakpoints(|e| e.add_breakpoint(&modules[1], breakpoint_pc))?;
 
     let f1 = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, "f1")?;
     let (result,) = f1.call_async(&mut store, (3, 5)).await?;
@@ -2151,7 +2364,7 @@ async fn fuel_visible_and_mutable_in_debug_handler() -> wasmtime::Result<()> {
     // breakpoint reflects consumption so far.
     let mut store = Store::new(&engine, ());
     store.set_fuel(1_000_000)?;
-    store.edit_breakpoints().unwrap().single_step(true)?;
+    store.edit_breakpoints(|e| e.single_step(true))?;
     let observed = Arc::new(Mutex::new(vec![]));
     store.set_debug_handler(FuelHandler {
         observed: observed.clone(),
@@ -2172,7 +2385,7 @@ async fn fuel_visible_and_mutable_in_debug_handler() -> wasmtime::Result<()> {
     // trap rather than running to completion.
     let mut store = Store::new(&engine, ());
     store.set_fuel(1_000_000)?;
-    store.edit_breakpoints().unwrap().single_step(true)?;
+    store.edit_breakpoints(|e| e.single_step(true))?;
     store.set_debug_handler(FuelHandler {
         observed: Arc::new(Mutex::new(vec![])),
         zero_fuel_at: 10,
@@ -2256,11 +2469,7 @@ async fn uninit_non_nullable_ref_local_in_single_step() -> Result<()> {
     store.set_debug_handler(handler.clone());
 
     let enable_single_step = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| {
-        caller
-            .edit_breakpoints()
-            .unwrap()
-            .single_step(true)
-            .unwrap();
+        caller.edit_breakpoints(|e| e.single_step(true)).unwrap();
     });
     let instance =
         Instance::new_async(&mut store, &module, &[Extern::Func(enable_single_step)]).await?;
@@ -2342,7 +2551,7 @@ async fn watchpoints_report_writes_before_they_happen() -> wasmtime::Result<()> 
 
     // Watch [17, 52): the i32 store overlaps it partially, and the store to
     // byte 100 not at all.
-    store.edit_breakpoints().unwrap().watch(memory, 17..52)?;
+    store.edit_breakpoints(|e| e.watch(memory, 17..52))?;
     main.call_async(&mut store, ()).await?;
     {
         let hits = recorder.0.lock().unwrap();
@@ -2369,16 +2578,14 @@ async fn watchpoints_report_writes_before_they_happen() -> wasmtime::Result<()> 
 
     // Unwatched bytes no longer report writes.
     recorder.0.lock().unwrap().clear();
-    store.edit_breakpoints().unwrap().unwatch(memory, 0..64)?;
+    store.edit_breakpoints(|e| e.unwatch(memory, 0..64))?;
     main.call_async(&mut store, ()).await?;
     assert!(recorder.0.lock().unwrap().is_empty());
 
     // Watches must be within the memory.
     assert!(
         store
-            .edit_breakpoints()
-            .unwrap()
-            .watch(memory, 0..65537)
+            .edit_breakpoints(|e| e.watch(memory, 0..65537))
             .is_err()
     );
     Ok(())
@@ -2417,13 +2624,10 @@ async fn watchpoints_on_imported_memory_follow_growth() -> wasmtime::Result<()> 
 
     // Watch a byte, then grow the memory, and watch a byte in the new pages
     // too.
-    store.edit_breakpoints().unwrap().watch(memory, 10..11)?;
+    store.edit_breakpoints(|e| e.watch(memory, 10..11))?;
     assert_eq!(grow.call_async(&mut store, 7).await?, 1);
     let high = 7 * 65536 + 3;
-    store
-        .edit_breakpoints()
-        .unwrap()
-        .watch(memory, high..high + 1)?;
+    store.edit_breakpoints(|e| e.watch(memory, high..high + 1))?;
 
     // Writes through the importing instance see both watches, and only
     // those.
@@ -2492,7 +2696,7 @@ async fn watchpoints_handler_may_grow_memory() -> wasmtime::Result<()> {
     store.set_debug_handler(grower.clone());
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let memory = instance.get_memory(&mut store, "memory").unwrap();
-    store.edit_breakpoints().unwrap().watch(memory, 0..64)?;
+    store.edit_breakpoints(|e| e.watch(memory, 0..64))?;
 
     let store_i32 = instance.get_typed_func::<(i32, i32), ()>(&mut store, "store")?;
     store_i32.call_async(&mut store, (0, 0x11111111)).await?;
@@ -2542,10 +2746,7 @@ async fn watchpoints_out_of_bounds_stores_trap() -> wasmtime::Result<()> {
         let instance = Instance::new_async(&mut store, &module, &[]).await?;
         let memory = instance.get_memory(&mut store, "memory").unwrap();
         let store_i64 = instance.get_typed_func::<i32, ()>(&mut store, "store")?;
-        store
-            .edit_breakpoints()
-            .unwrap()
-            .watch(memory, 65528..65536)?;
+        store.edit_breakpoints(|e| e.watch(memory, 65528..65536))?;
 
         // A store that is partially or entirely out of bounds traps before
         // checking for watchpoints.

@@ -9,8 +9,8 @@ use crate::host::{
 #[cfg(feature = "threads")]
 use std::sync::atomic::{AtomicU8, Ordering};
 use wasmtime::{
-    Engine, ExnRef, ExnRefPre, ExnType, FrameHandle, Func, FuncType, Global, Instance, Module,
-    OwnedRooted, Result, Table, Tag, TagType, Val, ValType,
+    AsContext, Engine, ExnRef, ExnRefPre, ExnType, FrameHandle, Func, FuncType, Global, Instance,
+    Module, OwnedRooted, Result, Table, Tag, TagType, Val, ValType,
 };
 
 #[cfg(feature = "threads")]
@@ -175,21 +175,15 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
     }
 
     async fn single_step(&mut self) -> Result<crate::DebugRunResult> {
-        self.with_store(|store| store.edit_breakpoints().unwrap().single_step(true).unwrap())
-            .await?;
+        self.with_store(|store| store.edit_breakpoints(|edit| edit.single_step(true)))
+            .await??;
 
         self.run().await
     }
 
     async fn continue_(&mut self) -> Result<crate::DebugRunResult> {
-        self.with_store(|store| {
-            store
-                .edit_breakpoints()
-                .unwrap()
-                .single_step(false)
-                .unwrap()
-        })
-        .await?;
+        self.with_store(|store| store.edit_breakpoints(|edit| edit.single_step(false)))
+            .await??;
 
         self.run().await
     }
@@ -525,16 +519,21 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 .checked_add(len)
                 .filter(|&end| end <= size)
                 .ok_or(wit::Error::OutOfBounds)?;
-            let mut breakpoints = store
-                .edit_breakpoints()
-                .ok_or(wit::Error::UnsupportedType)?;
-            let result = if watch {
-                breakpoints.watch(memory, addr..end)
-            } else {
-                breakpoints.unwatch(memory, addr..end)
-            };
-            result.map_err(|_| wit::Error::OutOfBounds)?;
-            Ok(())
+            if store.as_context().breakpoints().is_none() {
+                return Err(wit::Error::UnsupportedType.into());
+            }
+            // The edit's own error, if any, is reported as
+            // out-of-bounds; any error from applying it is returned
+            // as-is.
+            store
+                .edit_breakpoints(|breakpoints| {
+                    Ok(if watch {
+                        breakpoints.watch(memory, addr..end)
+                    } else {
+                        breakpoints.unwatch(memory, addr..end)
+                    })
+                })?
+                .map_err(|_| wit::Error::OutOfBounds.into())
         })
         .await?
     }
@@ -732,24 +731,26 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
 
     async fn module_add_breakpoint(&mut self, module: Module, pc: u32) -> Result<()> {
         self.with_store(move |store| -> Result<()> {
+            // The edit's own error, if any, is reported as an invalid
+            // PC; any error from applying it is returned as-is.
             store
-                .edit_breakpoints()
-                .expect("guest debugging is enabled")
-                .add_breakpoint(&module, wasmtime::ModulePC::new(pc))
-                .map_err(|_| wit::Error::InvalidPc)?;
-            Ok(())
+                .edit_breakpoints(|edit| {
+                    Ok(edit.add_breakpoint(&module, wasmtime::ModulePC::new(pc)))
+                })?
+                .map_err(|_| wit::Error::InvalidPc.into())
         })
         .await?
     }
 
     async fn module_remove_breakpoint(&mut self, module: Module, pc: u32) -> Result<()> {
         self.with_store(move |store| -> Result<()> {
+            // The edit's own error, if any, is reported as an invalid
+            // PC; any error from applying it is returned as-is.
             store
-                .edit_breakpoints()
-                .expect("guest debugging is enabled")
-                .remove_breakpoint(&module, wasmtime::ModulePC::new(pc))
-                .map_err(|_| wit::Error::InvalidPc)?;
-            Ok(())
+                .edit_breakpoints(|edit| {
+                    Ok(edit.remove_breakpoint(&module, wasmtime::ModulePC::new(pc)))
+                })?
+                .map_err(|_| wit::Error::InvalidPc.into())
         })
         .await?
     }
