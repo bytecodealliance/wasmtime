@@ -12,7 +12,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/cache/restore@v5
+    - uses: actions/cache/restore@v5.1.0
       id: cache-restore
       with:
         path: ${{ runner.tool_cache }}/${{ inputs.crate }}
@@ -35,7 +35,7 @@ runs:
     # cache space is at a premium with our CI. Only save these caches for the
     # main branch and for release branches.
     - name: Save Github Actions cache
-      uses: actions/cache/save@v5
+      uses: actions/cache/save@v5.1.0
       if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')
       with:
         path: ${{ runner.tool_cache }}/${{ inputs.crate }}
