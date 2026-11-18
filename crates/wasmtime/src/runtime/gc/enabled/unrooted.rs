@@ -1,4 +1,4 @@
-//! Unrooted references: cheap, weak, read-only references to GC objects.
+//! Unrooted references: cheap, read-only references to GC objects.
 
 use crate::runtime::epoch_state::EpochStateHandle;
 use crate::runtime::vm::{GcHeap, VMGcHeader, VMGcRef};
@@ -10,7 +10,7 @@ use crate::{
 };
 use core::any::Any;
 use core::fmt;
-use core::hash::{Hash, Hasher};
+use core::hash::Hasher;
 use core::marker;
 use core::num::NonZeroU32;
 use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
@@ -24,19 +24,15 @@ use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 /// GC heap. If it becomes invalid, APIs will fail cleanly (indicate
 /// that it is stale) rather than crashing or panicking.
 ///
-/// In exchange for this "weak" aspect, an `Unrooted` reference is
-/// *very cheap*: it does not need to do any rooting bookkeeping, so
-/// it effectively acts like a `Copy` pointer into the GC heap, plus a
-/// tiny "epoch" stamp that allows us to cheaply check if it has
-/// become invalid.
+/// In exchange, because `Unrooted` references are not recorded in the
+/// root set, they can be used in non-`mut` `Store` contexts, and
+/// operations on them are very cheap.
 ///
-/// Because the `Unrooted` reference does not need to update any
-/// bookkeeping metadata, it can be created with only read-only access
-/// to the `Store`. We also return `Unrooted` references from getters
-/// and allocation methods by default: the former allows full
-/// read-only heap traversal, and the latter works because *after* the
-/// allocation, the heap doesn't mutate. In both cases, the user is
-/// free to root the value themselves (see [`Unrooted::to_rooted`] or
+/// Getters and allocation methods return `Unrooted` references by
+/// default: the former allows full read-only heap traversal, and the
+/// latter works because *after* the allocation, the heap doesn't
+/// mutate. In both cases, the user is free to root the value
+/// themselves (see [`Unrooted::to_rooted`] or
 /// [`Unrooted::to_owned_rooted`]). This "opt-in" rooting is an
 /// intentional pay-as-you-go design choice.
 ///
@@ -64,9 +60,11 @@ use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 /// [`Val::ensure_all_rooted`] to root several unrooted references in
 /// a batch.
 ///
-/// Unrooted references compare equal, and hash the same, exactly when they
-/// are valid at the same time and refer to the same object (or are equal
-/// `i31`s).
+/// # Equality and Hashing
+///
+/// `Unrooted` does not implement [`PartialEq`], [`Eq`], or [`Hash`], for the
+/// same reasons that [`Rooted`] does not. Use [`Unrooted::ref_eq`] and
+/// [`Unrooted::ref_hash`] to compare and hash the referenced objects.
 pub struct Unrooted<T: GcRef> {
     repr: Repr,
     _phantom: marker::PhantomData<fn() -> T>,
@@ -76,7 +74,7 @@ pub struct Unrooted<T: GcRef> {
 ///
 /// Note that this is an enum, rather than a struct with an optional heap
 /// handle, so that it has a tag with plenty of niches; this keeps `Val` small.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug)]
 enum Repr {
     /// An `i31`, which is not an object in the heap, and so is always valid.
     I31(NonZeroU32),
@@ -105,20 +103,6 @@ impl<T: GcRef> fmt::Debug for Unrooted<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = format!("Unrooted<{}>", core::any::type_name::<T>());
         f.debug_tuple(&name).field(&self.repr).finish()
-    }
-}
-
-impl<T: GcRef> PartialEq for Unrooted<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.repr == other.repr
-    }
-}
-
-impl<T: GcRef> Eq for Unrooted<T> {}
-
-impl<T: GcRef> Hash for Unrooted<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.repr.hash(state);
     }
 }
 
@@ -220,6 +204,41 @@ impl<T: GcRef> Unrooted<T> {
         self.gc_ref(store.as_context().0).is_ok()
     }
 
+    /// Do these two unrooted references refer to the same GC object?
+    ///
+    /// This is reference equality, not Wasm-level structural equality; see
+    /// [`Rooted::ref_eq`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either reference is no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either reference is associated with a different store.
+    pub fn ref_eq(store: impl AsContext, a: &Self, b: &Self) -> Result<bool> {
+        let store = store.as_context().0;
+        Ok(a.gc_ref(store)? == b.gc_ref(store)?)
+    }
+
+    /// Hash the GC object that this unrooted reference refers to, consistently
+    /// with [`Unrooted::ref_eq`]; see [`Rooted::ref_hash`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this reference is no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn ref_hash<H>(&self, store: impl AsContext, state: &mut H) -> Result<()>
+    where
+        H: Hasher,
+    {
+        core::hash::Hash::hash(self.gc_ref(store.as_context().0)?, state);
+        Ok(())
+    }
+
     /// Roots the referenced object in the current LIFO rooting scope, to keep
     /// it alive and usable after this reference becomes invalid; see
     /// [`Rooted`].
@@ -235,13 +254,13 @@ impl<T: GcRef> Unrooted<T> {
     ///
     /// Panics if this reference is associated with a different store.
     pub fn to_rooted(&self, mut store: impl AsContextMut) -> Result<Rooted<T>> {
-        self._to_rooted(store.as_context_mut().0)
+        self.to_rooted_(store.as_context_mut().0)
     }
 
-    pub(crate) fn _to_rooted(&self, store: &mut StoreOpaque) -> Result<Rooted<T>> {
+    pub(crate) fn to_rooted_(&self, store: &mut StoreOpaque) -> Result<Rooted<T>> {
         self.gc_ref(store)?;
         let mut store = AutoAssertNoGc::new(store);
-        Ok(self.to_rooted_prevalidated(&mut store))
+        Ok(self.to_rooted_unchecked(&mut store))
     }
 
     /// Roots the referenced object until the returned handle is dropped, to
@@ -263,13 +282,13 @@ impl<T: GcRef> Unrooted<T> {
     ///
     /// Panics if this reference is associated with a different store.
     pub fn to_owned_rooted(&self, mut store: impl AsContextMut) -> Result<OwnedRooted<T>> {
-        self._to_owned_rooted(store.as_context_mut().0)
+        self.to_owned_rooted_(store.as_context_mut().0)
     }
 
-    pub(crate) fn _to_owned_rooted(&self, store: &mut StoreOpaque) -> Result<OwnedRooted<T>> {
+    pub(crate) fn to_owned_rooted_(&self, store: &mut StoreOpaque) -> Result<OwnedRooted<T>> {
         self.gc_ref(store)?;
         let mut store = AutoAssertNoGc::new(store);
-        self.to_owned_rooted_prevalidated(&mut store)
+        self.to_owned_rooted_unchecked(&mut store)
     }
 
     /// Check that every one of `refs` is still valid, as the first step of
@@ -295,28 +314,28 @@ impl<T: GcRef> Unrooted<T> {
     /// The caller must have checked, with `gc_ref`, that this reference was
     /// valid, and have done nothing since then but root unrooted references in
     /// this way, all within one `AutoAssertNoGc` scope.
-    fn prevalidated_gc_ref(&self) -> VMGcRef {
+    fn unchecked_gc_ref(&self) -> VMGcRef {
         match self.repr {
             Repr::I31(raw) | Repr::Object { raw, .. } => VMGcRef::from_raw_non_zero_u32(raw),
         }
     }
 
     /// Root this reference in the current LIFO rooting scope, after the caller
-    /// has checked that it is valid; see `prevalidated_gc_ref` for the
+    /// has checked that it is valid; see `unchecked_gc_ref` for the
     /// conditions.
-    pub(crate) fn to_rooted_prevalidated(&self, store: &mut AutoAssertNoGc<'_>) -> Rooted<T> {
-        let gc_ref = store.clone_gc_ref(&self.prevalidated_gc_ref());
+    pub(crate) fn to_rooted_unchecked(&self, store: &mut AutoAssertNoGc<'_>) -> Rooted<T> {
+        let gc_ref = store.clone_gc_ref(&self.unchecked_gc_ref());
         Rooted::new(store, gc_ref)
     }
 
     /// Root this reference until the returned handle is dropped, after the
-    /// caller has checked that it is valid; see `prevalidated_gc_ref` for the
+    /// caller has checked that it is valid; see `unchecked_gc_ref` for the
     /// conditions.
-    pub(crate) fn to_owned_rooted_prevalidated(
+    pub(crate) fn to_owned_rooted_unchecked(
         &self,
         store: &mut AutoAssertNoGc<'_>,
     ) -> Result<OwnedRooted<T>> {
-        let gc_ref = store.clone_gc_ref(&self.prevalidated_gc_ref());
+        let gc_ref = store.clone_gc_ref(&self.unchecked_gc_ref());
         Ok(OwnedRooted::new(store, gc_ref)?)
     }
 }
@@ -332,10 +351,10 @@ impl Unrooted<AnyRef> {
     ///
     /// Panics if this reference is associated with a different store.
     pub fn ty(&self, store: impl AsContext) -> Result<HeapType> {
-        self._ty(store.as_context().0)
+        self.ty_(store.as_context().0)
     }
 
-    pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<HeapType> {
+    pub(crate) fn ty_(&self, store: &StoreOpaque) -> Result<HeapType> {
         AnyRef::ty_of_(store, self.gc_ref(store)?)
     }
 
@@ -433,6 +452,9 @@ impl Unrooted<StructRef> {
     /// The value of the struct's `index`th field. `i8` and `i16` fields are
     /// zero-extended into `Val::I32`s.
     ///
+    /// Any GC reference in the returned value is unrooted, and so is valid only
+    /// until the store's GC heap next changes; see [`Unrooted`].
+    ///
     /// # Errors
     ///
     /// Returns an error if this reference is no longer valid, or if the
@@ -449,6 +471,9 @@ impl Unrooted<StructRef> {
 
     /// The values of the struct's fields; see [`Unrooted::<StructRef>::field`].
     ///
+    /// Any GC references in the returned values are unrooted, and so are valid
+    /// only until the store's GC heap next changes; see [`Unrooted`].
+    ///
     /// # Errors
     ///
     /// Returns an error if this reference is no longer valid.
@@ -456,10 +481,13 @@ impl Unrooted<StructRef> {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn fields(&self, store: impl AsContext) -> Result<Vec<Val>> {
-        let store = store.as_context().0;
+    pub fn fields<'a, T: 'static>(
+        &'a self,
+        store: impl Into<StoreContext<'a, T>>,
+    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
+        let store = store.into().0;
         let type_index = self.type_index(store, VMGcKind::StructRef)?;
-        read_fields(store, self.gc_ref(store)?, type_index, "struct")
+        Fields::new(store, self.gc_ref(store)?, type_index)
     }
 }
 
@@ -498,6 +526,9 @@ impl Unrooted<ArrayRef> {
 
     /// The value of the array's `index`th element. `i8` and `i16` elements
     /// are zero-extended into `Val::I32`s.
+    ///
+    /// Any GC reference in the returned value is unrooted, and so is valid only
+    /// until the store's GC heap next changes; see [`Unrooted`].
     ///
     /// # Errors
     ///
@@ -539,10 +570,10 @@ impl Unrooted<ExnRef> {
     ///
     /// Panics if this reference is associated with a different store.
     pub fn ty(&self, store: impl AsContext) -> Result<ExnType> {
-        self._ty(store.as_context().0)
+        self.ty_(store.as_context().0)
     }
 
-    pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<ExnType> {
+    pub(crate) fn ty_(&self, store: &StoreOpaque) -> Result<ExnType> {
         let index = self.type_index(store, VMGcKind::ExnRef)?;
         match ExnType::from_shared_type_index(store.engine(), index) {
             Some(ty) => Ok(ty),
@@ -570,6 +601,9 @@ impl Unrooted<ExnRef> {
 
     /// The value of the exception's `index`th payload field.
     ///
+    /// Any GC reference in the returned value is unrooted, and so is valid only
+    /// until the store's GC heap next changes; see [`Unrooted`].
+    ///
     /// # Errors
     ///
     /// Returns an error if this reference is no longer valid, or if the
@@ -584,7 +618,11 @@ impl Unrooted<ExnRef> {
         read_field(store, self.gc_ref(store)?, type_index, index, "exn")
     }
 
-    /// The values of the exception's payload fields.
+    /// The values of the exception's payload fields; see
+    /// [`Unrooted::<ExnRef>::field`].
+    ///
+    /// Any GC references in the returned values are unrooted, and so are valid
+    /// only until the store's GC heap next changes; see [`Unrooted`].
     ///
     /// # Errors
     ///
@@ -593,10 +631,13 @@ impl Unrooted<ExnRef> {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn fields(&self, store: impl AsContext) -> Result<Vec<Val>> {
-        let store = store.as_context().0;
+    pub fn fields<'a, T: 'static>(
+        &'a self,
+        store: impl Into<StoreContext<'a, T>>,
+    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
+        let store = store.into().0;
         let type_index = self.type_index(store, VMGcKind::ExnRef)?;
-        read_fields(store, self.gc_ref(store)?, type_index, "exn")
+        Fields::new(store, self.gc_ref(store)?, type_index)
     }
 }
 
@@ -659,16 +700,52 @@ fn read_field(
     gc_ref.read_val(store, field.element_type(), layout.fields[index].offset)
 }
 
-/// Reads every field of the struct or exception `gc_ref`, of type
-/// `type_index`.
-fn read_fields(
-    store: &StoreOpaque,
-    gc_ref: &VMGcRef,
-    type_index: VMSharedTypeIndex,
-    what: &str,
-) -> Result<Vec<Val>> {
-    let len = field_types(store, type_index)?.len();
-    (0..len)
-        .map(|i| read_field(store, gc_ref, type_index, i, what))
-        .collect()
+/// An iterator over the fields of the struct or exception `gc_ref`.
+///
+/// Like the iterators returned by [`StructRef::fields`] and
+/// [`ExnRef::fields`], this ends early if reading a field fails, which can only
+/// happen due to a bug, since the reference was valid when this was created and
+/// `store` is borrowed, so the heap cannot change in the meantime.
+struct Fields<'a> {
+    store: &'a StoreOpaque,
+    gc_ref: &'a VMGcRef,
+    fields: Vec<crate::FieldType>,
+    layout: alloc::sync::Arc<wasmtime_environ::GcStructLayout>,
+    index: usize,
 }
+
+impl<'a> Fields<'a> {
+    fn new(
+        store: &'a StoreOpaque,
+        gc_ref: &'a VMGcRef,
+        type_index: VMSharedTypeIndex,
+    ) -> Result<Self> {
+        Ok(Fields {
+            store,
+            gc_ref,
+            fields: field_types(store, type_index)?,
+            layout: super::gc_struct_layout(store.engine(), type_index)?,
+            index: 0,
+        })
+    }
+}
+
+impl Iterator for Fields<'_> {
+    type Item = Val;
+
+    fn next(&mut self) -> Option<Val> {
+        let field = self.fields.get(self.index)?;
+        let offset = self.layout.fields[self.index].offset;
+        self.index += 1;
+        self.gc_ref
+            .read_val(self.store, field.element_type(), offset)
+            .ok()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.fields.len() - self.index;
+        (len, Some(len))
+    }
+}
+
+impl ExactSizeIterator for Fields<'_> {}

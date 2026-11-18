@@ -1,4 +1,3 @@
-use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
@@ -8,7 +7,7 @@ use crate::{
 use core::any::Any;
 use core::convert::Infallible;
 use core::fmt;
-use core::hash::{Hash, Hasher};
+use core::hash::Hasher;
 use core::marker;
 
 /// This type has been disabled because the `gc` cargo feature was not enabled
@@ -32,20 +31,6 @@ impl<T: GcRef> fmt::Debug for Unrooted<T> {
     }
 }
 
-impl<T: GcRef> PartialEq for Unrooted<T> {
-    fn eq(&self, _other: &Self) -> bool {
-        match self.inner {}
-    }
-}
-
-impl<T: GcRef> Eq for Unrooted<T> {}
-
-impl<T: GcRef> Hash for Unrooted<T> {
-    fn hash<H: Hasher>(&self, _state: &mut H) {
-        match self.inner {}
-    }
-}
-
 impl<T: GcRef> Unrooted<T> {
     pub(crate) fn new(_store: &StoreOpaque, _gc_ref: &VMGcRef) -> Self {
         unreachable!("GC references without the `gc` feature")
@@ -64,7 +49,7 @@ impl<T: GcRef> Unrooted<T> {
         match self.inner {}
     }
 
-    pub(crate) fn to_rooted_prevalidated(&self, _store: &mut AutoAssertNoGc<'_>) -> Rooted<T> {
+    pub(crate) fn to_rooted_unchecked(&self, _store: &mut AutoAssertNoGc<'_>) -> Rooted<T> {
         match self.inner {}
     }
 
@@ -72,15 +57,26 @@ impl<T: GcRef> Unrooted<T> {
         match self.inner {}
     }
 
+    pub fn ref_eq(_store: impl AsContext, a: &Self, _b: &Self) -> Result<bool> {
+        match a.inner {}
+    }
+
+    pub fn ref_hash<H>(&self, _store: impl AsContext, _state: &mut H) -> Result<()>
+    where
+        H: Hasher,
+    {
+        match self.inner {}
+    }
+
     pub fn to_rooted(&self, _store: impl AsContextMut) -> Result<Rooted<T>> {
         match self.inner {}
     }
 
-    pub(crate) fn _to_rooted(&self, _store: &mut StoreOpaque) -> Result<Rooted<T>> {
+    pub(crate) fn to_rooted_(&self, _store: &mut StoreOpaque) -> Result<Rooted<T>> {
         match self.inner {}
     }
 
-    pub(crate) fn _to_owned_rooted(&self, _store: &mut StoreOpaque) -> Result<OwnedRooted<T>> {
+    pub(crate) fn to_owned_rooted_(&self, _store: &mut StoreOpaque) -> Result<OwnedRooted<T>> {
         match self.inner {}
     }
 
@@ -90,10 +86,6 @@ impl<T: GcRef> Unrooted<T> {
 }
 
 impl Unrooted<AnyRef> {
-    pub(crate) fn _ty(&self, _store: &StoreOpaque) -> Result<HeapType> {
-        match self.inner {}
-    }
-
     pub fn ty(&self, _store: impl AsContext) -> Result<HeapType> {
         match self.inner {}
     }
@@ -138,8 +130,12 @@ impl Unrooted<StructRef> {
         match self.inner {}
     }
 
-    pub fn fields(&self, _store: impl AsContext) -> Result<Vec<Val>> {
+    pub fn fields<'a, T: 'static>(
+        &'a self,
+        _store: impl Into<StoreContext<'a, T>>,
+    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         match self.inner {}
+        Ok([].into_iter())
     }
 }
 
@@ -162,10 +158,6 @@ impl Unrooted<ExnRef> {
         match self.inner {}
     }
 
-    pub(crate) fn _ty(&self, _store: &StoreOpaque) -> Result<ExnType> {
-        match self.inner {}
-    }
-
     pub fn tag(&self, _store: impl AsContext) -> Result<Tag> {
         match self.inner {}
     }
@@ -174,8 +166,12 @@ impl Unrooted<ExnRef> {
         match self.inner {}
     }
 
-    pub fn fields(&self, _store: impl AsContext) -> Result<Vec<Val>> {
+    pub fn fields<'a, T: 'static>(
+        &'a self,
+        _store: impl Into<StoreContext<'a, T>>,
+    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         match self.inner {}
+        Ok([].into_iter())
     }
 }
 

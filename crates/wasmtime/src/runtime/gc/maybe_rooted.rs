@@ -31,9 +31,6 @@ use core::fmt;
 /// [`Func::call`](crate::Func::call), mutate the store, which invalidates
 /// unrooted references, and so they require rooted references, and return an
 /// error for unrooted ones; root them first.
-///
-/// `MaybeRooted<T>` has no `OwnedRooted<T>` variant, so that it, like
-/// [`Val`](crate::Val), is `Copy`.
 pub enum MaybeRooted<T: GcRef> {
     /// A reference rooted in the current LIFO rooting scope; see [`Rooted`].
     Rooted(Rooted<T>),
@@ -136,6 +133,7 @@ impl<T: GcRef> MaybeRooted<T> {
     ///
     /// Panics if this reference is not rooted.
     #[inline]
+    #[track_caller]
     pub fn unwrap_rooted(&self) -> Rooted<T> {
         self.as_rooted()
             .expect("MaybeRooted::unwrap_rooted on a reference that is not rooted")
@@ -157,6 +155,7 @@ impl<T: GcRef> MaybeRooted<T> {
     ///
     /// Panics if this reference is not unrooted.
     #[inline]
+    #[track_caller]
     pub fn unwrap_unrooted(&self) -> Unrooted<T> {
         self.as_unrooted()
             .expect("MaybeRooted::unwrap_unrooted on a reference that is not unrooted")
@@ -236,7 +235,7 @@ impl<T: GcRef> MaybeRooted<T> {
                 );
                 Ok(*r)
             }
-            MaybeRooted::Unrooted(r) => r._to_rooted(store),
+            MaybeRooted::Unrooted(r) => r.to_rooted_(store),
         }
     }
 
@@ -253,12 +252,12 @@ impl<T: GcRef> MaybeRooted<T> {
     ///
     /// Panics if this reference is associated with a different store.
     pub fn to_unrooted(&self, store: impl AsContext) -> Result<Unrooted<T>> {
-        self._to_unrooted(store.as_context().0)
+        self.to_unrooted_(store.as_context().0)
     }
 
-    pub(crate) fn _to_unrooted(&self, store: &StoreOpaque) -> Result<Unrooted<T>> {
+    pub(crate) fn to_unrooted_(&self, store: &StoreOpaque) -> Result<Unrooted<T>> {
         match self {
-            MaybeRooted::Rooted(r) => r._to_unrooted(store),
+            MaybeRooted::Rooted(r) => r.to_unrooted_(store),
             MaybeRooted::Unrooted(r) => {
                 r.gc_ref(store)?;
                 Ok(*r)
@@ -283,7 +282,7 @@ impl<T: GcRef> MaybeRooted<T> {
     pub fn to_owned_rooted(&self, mut store: impl AsContextMut) -> Result<OwnedRooted<T>> {
         match self {
             MaybeRooted::Rooted(r) => r.to_owned_rooted(store),
-            MaybeRooted::Unrooted(r) => r._to_owned_rooted(store.as_context_mut().0),
+            MaybeRooted::Unrooted(r) => r.to_owned_rooted_(store.as_context_mut().0),
         }
     }
 
@@ -311,11 +310,11 @@ impl<T: GcRef> MaybeRooted<T> {
 
     /// Root this reference in place, if it is unrooted, after the caller has
     /// checked that it is valid (with `try_gc_ref`), as part of rooting several
-    /// references at once; see `Unrooted::prevalidated_gc_ref` for the
+    /// references at once; see `Unrooted::unchecked_gc_ref` for the
     /// conditions.
-    pub(crate) fn ensure_rooted_prevalidated(&mut self, store: &mut AutoAssertNoGc<'_>) {
+    pub(crate) fn ensure_rooted_unchecked(&mut self, store: &mut AutoAssertNoGc<'_>) {
         if let MaybeRooted::Unrooted(r) = self {
-            *self = MaybeRooted::Rooted(r.to_rooted_prevalidated(store));
+            *self = MaybeRooted::Rooted(r.to_rooted_unchecked(store));
         }
     }
 

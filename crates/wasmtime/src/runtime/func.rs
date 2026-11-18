@@ -1219,7 +1219,7 @@ impl Func {
         // heap, since that would invalidate them.
         for ((i, slot), val) in results.iter_mut().enumerate().zip(&values_vec) {
             let ty = ty.results().nth(i).unwrap();
-            *slot = unsafe { Val::_from_raw_unrooted(store.0, *val, &ty) };
+            *slot = unsafe { Val::from_raw_unrooted_(store.0, *val, &ty) };
         }
         values_vec.truncate(0);
         store.0.save_wasm_val_raw_storage(values_vec);

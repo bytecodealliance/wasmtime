@@ -97,16 +97,17 @@ impl<T: GcRef> Rooted<T> {
         match self.inner {}
     }
 
-    pub(crate) fn _to_unrooted(&self, _store: &StoreOpaque) -> Result<crate::Unrooted<T>> {
+    pub(crate) fn to_unrooted_(&self, _store: &StoreOpaque) -> Result<crate::Unrooted<T>> {
         match self.inner {}
     }
 
     pub fn to_all_rooted(
         _store: impl AsContextMut,
         refs: &[crate::Unrooted<T>],
-    ) -> Result<Vec<Rooted<T>>> {
+        _out: &mut Vec<Rooted<T>>,
+    ) -> Result<()> {
         match refs.first() {
-            None => Ok(Vec::new()),
+            None => Ok(()),
             Some(r) => match r.inner {},
         }
     }
@@ -218,9 +219,10 @@ where
     pub fn to_all_owned_rooted(
         _store: impl AsContextMut,
         refs: &[crate::Unrooted<T>],
-    ) -> Result<Vec<OwnedRooted<T>>> {
+        _out: &mut Vec<OwnedRooted<T>>,
+    ) -> Result<()> {
         match refs.first() {
-            None => Ok(Vec::new()),
+            None => Ok(()),
             Some(r) => match r.inner {},
         }
     }

@@ -1,7 +1,7 @@
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    AnyRef, ArrayRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapTopType, HeapType,
-    MaybeRooted, RefType, Rooted, StructRef, Unrooted, V128, ValType, prelude::*,
+    AnyRef, ArrayRef, AsContext, AsContextMut, EqRef, ExnRef, ExternRef, Func, HeapTopType,
+    HeapType, MaybeRooted, RefType, Rooted, StructRef, Unrooted, V128, ValType, prelude::*,
 };
 use core::ptr;
 
@@ -376,7 +376,7 @@ impl Val {
     /// # Safety
     ///
     /// Same as [`Self::from_raw`].
-    pub(crate) unsafe fn _from_raw_unrooted(
+    pub(crate) unsafe fn from_raw_unrooted_(
         store: &mut StoreOpaque,
         raw: ValRaw,
         ty: &ValType,
@@ -600,7 +600,17 @@ impl Val {
             Val::ExnRef(Some(r)) => {
                 r.ensure_rooted_(store)?;
             }
-            _ => {}
+            // TODO: handle continuation references here once they are GC objects.
+            Val::I32(_)
+            | Val::I64(_)
+            | Val::F32(_)
+            | Val::F64(_)
+            | Val::V128(_)
+            | Val::FuncRef(_)
+            | Val::ExternRef(None)
+            | Val::AnyRef(None)
+            | Val::ExnRef(None)
+            | Val::ContRef(_) => {}
         }
         Ok(())
     }
@@ -640,16 +650,36 @@ impl Val {
                 Val::ExnRef(Some(r)) => {
                     r.try_gc_ref(store)?;
                 }
-                _ => {}
+                // TODO: handle continuation references here once they are GC objects.
+                Val::I32(_)
+                | Val::I64(_)
+                | Val::F32(_)
+                | Val::F64(_)
+                | Val::V128(_)
+                | Val::FuncRef(_)
+                | Val::ExternRef(None)
+                | Val::AnyRef(None)
+                | Val::ExnRef(None)
+                | Val::ContRef(_) => {}
             }
         }
         let mut store = AutoAssertNoGc::new(store);
         for val in vals {
             match val {
-                Val::ExternRef(Some(r)) => r.ensure_rooted_prevalidated(&mut store),
-                Val::AnyRef(Some(r)) => r.ensure_rooted_prevalidated(&mut store),
-                Val::ExnRef(Some(r)) => r.ensure_rooted_prevalidated(&mut store),
-                _ => {}
+                Val::ExternRef(Some(r)) => r.ensure_rooted_unchecked(&mut store),
+                Val::AnyRef(Some(r)) => r.ensure_rooted_unchecked(&mut store),
+                Val::ExnRef(Some(r)) => r.ensure_rooted_unchecked(&mut store),
+                // TODO: handle continuation references here once they are GC objects.
+                Val::I32(_)
+                | Val::I64(_)
+                | Val::F32(_)
+                | Val::F64(_)
+                | Val::V128(_)
+                | Val::FuncRef(_)
+                | Val::ExternRef(None)
+                | Val::AnyRef(None)
+                | Val::ExnRef(None)
+                | Val::ContRef(_) => {}
             }
         }
         Ok(())
@@ -675,7 +705,17 @@ impl Val {
             Val::ExnRef(Some(r)) => {
                 r.validate_rooted()?;
             }
-            _ => {}
+            // TODO: handle continuation references here once they are GC objects.
+            Val::I32(_)
+            | Val::I64(_)
+            | Val::F32(_)
+            | Val::F64(_)
+            | Val::V128(_)
+            | Val::FuncRef(_)
+            | Val::ExternRef(None)
+            | Val::AnyRef(None)
+            | Val::ExnRef(None)
+            | Val::ContRef(_) => {}
         }
         Ok(())
     }
@@ -711,10 +751,20 @@ impl Val {
     pub fn to_unrooted(&self, store: impl AsContext) -> Result<Val> {
         let store = store.as_context().0;
         Ok(match self {
-            Val::ExternRef(Some(r)) => Val::from(r._to_unrooted(store)?),
-            Val::AnyRef(Some(r)) => Val::from(r._to_unrooted(store)?),
-            Val::ExnRef(Some(r)) => Val::from(r._to_unrooted(store)?),
-            _ => *self,
+            Val::ExternRef(Some(r)) => Val::from(r.to_unrooted_(store)?),
+            Val::AnyRef(Some(r)) => Val::from(r.to_unrooted_(store)?),
+            Val::ExnRef(Some(r)) => Val::from(r.to_unrooted_(store)?),
+            // TODO: handle continuation references here once they are GC objects.
+            Val::I32(_)
+            | Val::I64(_)
+            | Val::F32(_)
+            | Val::F64(_)
+            | Val::V128(_)
+            | Val::FuncRef(_)
+            | Val::ExternRef(None)
+            | Val::AnyRef(None)
+            | Val::ExnRef(None)
+            | Val::ContRef(_) => *self,
         })
     }
 
@@ -864,6 +914,48 @@ impl From<Unrooted<AnyRef>> for Val {
 impl From<Option<Unrooted<AnyRef>>> for Val {
     #[inline]
     fn from(val: Option<Unrooted<AnyRef>>) -> Val {
+        Val::AnyRef(val.map(Into::into))
+    }
+}
+
+impl From<Rooted<EqRef>> for Val {
+    #[inline]
+    fn from(val: Rooted<EqRef>) -> Val {
+        Val::AnyRef(Some(val.into()))
+    }
+}
+
+impl From<Option<Rooted<EqRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Rooted<EqRef>>) -> Val {
+        Val::AnyRef(val.map(Into::into))
+    }
+}
+
+impl From<MaybeRooted<EqRef>> for Val {
+    #[inline]
+    fn from(val: MaybeRooted<EqRef>) -> Val {
+        Val::AnyRef(Some(val.into()))
+    }
+}
+
+impl From<Option<MaybeRooted<EqRef>>> for Val {
+    #[inline]
+    fn from(val: Option<MaybeRooted<EqRef>>) -> Val {
+        Val::AnyRef(val.map(Into::into))
+    }
+}
+
+impl From<Unrooted<EqRef>> for Val {
+    #[inline]
+    fn from(val: Unrooted<EqRef>) -> Val {
+        Val::AnyRef(Some(val.into()))
+    }
+}
+
+impl From<Option<Unrooted<EqRef>>> for Val {
+    #[inline]
+    fn from(val: Option<Unrooted<EqRef>>) -> Val {
         Val::AnyRef(val.map(Into::into))
     }
 }
@@ -1210,6 +1302,48 @@ impl From<Unrooted<AnyRef>> for Ref {
 impl From<Option<Unrooted<AnyRef>>> for Ref {
     #[inline]
     fn from(e: Option<Unrooted<AnyRef>>) -> Ref {
+        Ref::Any(e.map(Into::into))
+    }
+}
+
+impl From<Rooted<EqRef>> for Ref {
+    #[inline]
+    fn from(e: Rooted<EqRef>) -> Ref {
+        Ref::Any(Some(e.into()))
+    }
+}
+
+impl From<Option<Rooted<EqRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Rooted<EqRef>>) -> Ref {
+        Ref::Any(e.map(Into::into))
+    }
+}
+
+impl From<MaybeRooted<EqRef>> for Ref {
+    #[inline]
+    fn from(e: MaybeRooted<EqRef>) -> Ref {
+        Ref::Any(Some(e.into()))
+    }
+}
+
+impl From<Option<MaybeRooted<EqRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<MaybeRooted<EqRef>>) -> Ref {
+        Ref::Any(e.map(Into::into))
+    }
+}
+
+impl From<Unrooted<EqRef>> for Ref {
+    #[inline]
+    fn from(e: Unrooted<EqRef>) -> Ref {
+        Ref::Any(Some(e.into()))
+    }
+}
+
+impl From<Option<Unrooted<EqRef>>> for Ref {
+    #[inline]
+    fn from(e: Option<Unrooted<EqRef>>) -> Ref {
         Ref::Any(e.map(Into::into))
     }
 }
@@ -1696,9 +1830,9 @@ impl Ref {
     pub fn to_unrooted(&self, store: impl AsContext) -> Result<Ref> {
         let store = store.as_context().0;
         Ok(match self {
-            Ref::Extern(Some(r)) => Ref::from(r._to_unrooted(store)?),
-            Ref::Any(Some(r)) => Ref::from(r._to_unrooted(store)?),
-            Ref::Exn(Some(r)) => Ref::from(r._to_unrooted(store)?),
+            Ref::Extern(Some(r)) => Ref::from(r.to_unrooted_(store)?),
+            Ref::Any(Some(r)) => Ref::from(r.to_unrooted_(store)?),
+            Ref::Exn(Some(r)) => Ref::from(r.to_unrooted_(store)?),
             Ref::Extern(None) | Ref::Any(None) | Ref::Exn(None) | Ref::Func(_) => self.clone(),
         })
     }

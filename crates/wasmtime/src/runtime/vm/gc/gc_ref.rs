@@ -207,8 +207,12 @@ impl VMGcRef {
     /// `Copy` and so cannot hold a `VMGcRef` itself, lends out the object it
     /// refers to.
     pub fn from_frozen_raw_u32(raw: &NonZeroU32) -> &VMGcRef {
+        const _: () = {
+            assert!(core::mem::size_of::<VMGcRef>() == core::mem::size_of::<NonZeroU32>());
+            assert!(core::mem::align_of::<VMGcRef>() == core::mem::align_of::<NonZeroU32>());
+        };
         // SAFETY: `VMGcRef` is a `#[repr(transparent)]` wrapper around a
-        // `NonZeroU32`.
+        // `NonZeroU32`, as the assertions above double-check.
         unsafe { &*(raw as *const NonZeroU32).cast::<VMGcRef>() }
     }
 

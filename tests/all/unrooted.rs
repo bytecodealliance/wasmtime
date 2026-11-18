@@ -117,8 +117,10 @@ fn read_gc_heap_graph_with_shared_store() -> Result<()> {
     let elem = array.get(store, 1)?;
     let elem = elem.unwrap_anyref().unwrap().unwrap_unrooted();
     let elem = elem.as_struct(store)?.unwrap();
-    let fields = elem.fields(store)?;
-    let inner = fields[0].unwrap_anyref().unwrap().unwrap_unrooted();
+    let mut fields = elem.fields(store)?;
+    assert_eq!(fields.len(), 1);
+    let inner = fields.next().unwrap();
+    let inner = inner.unwrap_anyref().unwrap().unwrap_unrooted();
     let inner = inner.as_struct(store)?.unwrap();
     assert_eq!(inner.field(store, 0)?.unwrap_i32(), 7);
     let first = outer.fields(store)?.next().unwrap();
@@ -153,7 +155,7 @@ fn unrooted_is_invalidated_by_heap_mutation() -> Result<()> {
     // As does rooting any unrooted reference, even another one.
     let u = s.to_unrooted(&store)?;
     let u2 = s.to_unrooted(&store)?;
-    assert_eq!(u, u2);
+    assert!(Unrooted::ref_eq(&store, &u, &u2)?);
     let r = u.to_rooted(&mut store)?;
     assert!(!u.is_valid(&store));
     assert!(!u2.is_valid(&store));
@@ -544,14 +546,22 @@ fn batch_rooting() -> Result<()> {
     let unrooted = [a.to_unrooted(&store)?, b.to_unrooted(&store)?];
 
     // Rooting several unrooted references at once.
-    let rooted = Rooted::to_all_rooted(&mut store, &unrooted)?;
+    let mut rooted = vec![];
+    Rooted::to_all_rooted(&mut store, &unrooted, &mut rooted)?;
     assert_eq!(rooted.len(), 2);
     assert!(Rooted::ref_eq(&store, &rooted[0], &a)?);
     assert!(Rooted::ref_eq(&store, &rooted[1], &b)?);
 
     let unrooted = [a.to_unrooted(&store)?, b.to_unrooted(&store)?];
-    let owned = OwnedRooted::to_all_owned_rooted(&mut store, &unrooted)?;
+    let mut owned = vec![];
+    OwnedRooted::to_all_owned_rooted(&mut store, &unrooted, &mut owned)?;
     assert_eq!(owned.len(), 2);
+
+    // Rooting appends to the given `Vec`.
+    let unrooted = [a.to_unrooted(&store)?];
+    Rooted::to_all_rooted(&mut store, &unrooted, &mut rooted)?;
+    assert_eq!(rooted.len(), 3);
+    assert!(Rooted::ref_eq(&store, &rooted[2], &a)?);
     assert!(Rooted::ref_eq(&store, &owned[0], &a)?);
     assert!(Rooted::ref_eq(&store, &owned[1], &b)?);
 
@@ -581,15 +591,21 @@ fn batch_rooting() -> Result<()> {
         .unwrap_err()
         .assert_contains("after the GC heap changed");
     assert!(vals[0].unwrap_anyref().unwrap().is_unrooted());
-    Rooted::to_all_rooted(&mut store, &[fresh_u, stale_u])
+    let mut rooted = vec![];
+    Rooted::to_all_rooted(&mut store, &[fresh_u, stale_u], &mut rooted)
         .unwrap_err()
         .assert_contains("after the GC heap changed");
-    OwnedRooted::to_all_owned_rooted(&mut store, &[fresh_u, stale_u])
+    assert!(rooted.is_empty());
+    let mut owned = vec![];
+    OwnedRooted::to_all_owned_rooted(&mut store, &[fresh_u, stale_u], &mut owned)
         .unwrap_err()
         .assert_contains("after the GC heap changed");
+    assert!(owned.is_empty());
 
     // Rooting nothing is fine.
-    assert!(Rooted::<AnyRef>::to_all_rooted(&mut store, &[])?.is_empty());
+    let mut rooted = vec![];
+    Rooted::<AnyRef>::to_all_rooted(&mut store, &[], &mut rooted)?;
+    assert!(rooted.is_empty());
     Val::ensure_all_rooted(&mut store, &mut [])?;
     Ok(())
 }
@@ -625,5 +641,34 @@ fn unrooted_externref_data() -> Result<()> {
     let u = e.to_unrooted(&store)?;
     let data = u.data(&store)?.unwrap().downcast_ref::<u32>().copied();
     assert_eq!(data, Some(1234));
+    Ok(())
+}
+
+#[test]
+fn unrooted_ref_eq_and_hash() -> Result<()> {
+    use std::hash::{DefaultHasher, Hasher};
+
+    let mut store = gc_store()?;
+    let a = new_struct(&mut store, 1)?;
+    let b = new_struct(&mut store, 1)?;
+    let a1 = a.to_unrooted(&store)?;
+    let a2 = a.to_unrooted(&store)?;
+    let b1 = b.to_unrooted(&store)?;
+
+    assert!(Unrooted::ref_eq(&store, &a1, &a2)?);
+    assert!(!Unrooted::ref_eq(&store, &a1, &b1)?);
+
+    let hash = |u: &Unrooted<StructRef>| -> Result<u64> {
+        let mut h = DefaultHasher::new();
+        u.ref_hash(&store, &mut h)?;
+        Ok(h.finish())
+    };
+    assert_eq!(hash(&a1)?, hash(&a2)?);
+
+    // Stale references are an error rather than a false answer.
+    new_struct(&mut store, 2)?;
+    Unrooted::ref_eq(&store, &a1, &a2)
+        .unwrap_err()
+        .assert_contains("after the GC heap changed");
     Ok(())
 }
