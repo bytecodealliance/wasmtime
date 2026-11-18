@@ -147,15 +147,14 @@ pub fn catch_unwind_and_record_trap<R>(
 where
     R: HostResult,
 {
+    // Wasm has called out to the host; transition out of "running"
+    // state.
+    store.store_opaque_mut().exit_wasm();
+
     // Invoke the closure `f`, optionally catching unwinds depending on `R`. The
     // return value is always provided and if unwind information is provided
     // (e.g. `ret` is a "false"-y value) then it's recorded in TLS for the
     // unwind operation that's about to happen from Cranelift-generated code.
-    //
-    // Control is passing from Wasm to the host, so first invalidate unrooted
-    // GC references, as a deferred effect of the Wasm that just ran; see
-    // `StoreOpaque::invalidate_unrooted_gc_refs`.
-    store.store_opaque_mut().invalidate_unrooted_gc_refs();
     let (ret, unwind) = R::maybe_catch_unwind(store, |store| f(store));
     if let Some(mut unwind) = unwind {
         if let UnwindReason::Trap(Ok(trap)) = &mut unwind {
@@ -163,6 +162,10 @@ where
         }
         tls::with(|info| info.unwrap().record_unwind(unwind));
     }
+
+    // We are returning back into Wasm.
+    store.store_opaque_mut().enter_wasm();
+
     ret
 }
 
@@ -517,6 +520,8 @@ where
 {
     let caller = store.0.default_caller();
 
+    store.0.enter_wasm();
+
     let result =
         CallThreadState::new(store.0, old_state, uncaught_exception).with(|_cx| {
             match store.0.executor() {
@@ -526,11 +531,7 @@ where
             }
         });
 
-    // Control is returning from Wasm to the host, however Wasm finished
-    // (returning, trapping, or unwinding a panic, which is resumed below), so
-    // invalidate unrooted GC references, as a deferred effect of the Wasm that
-    // just ran; see `StoreOpaque::invalidate_unrooted_gc_refs`.
-    store.0.invalidate_unrooted_gc_refs();
+    store.0.exit_wasm();
 
     match result {
         Ok(x) => Ok(x),
@@ -996,6 +997,19 @@ impl CallThreadState {
             payload2 = 0;
             self.unwind.set(unwind);
             break 'done; // be sure `'done` is considered used
+        }
+
+        // We are about to resume Wasm at `handler`: either a Wasm exception
+        // handler, or the entry trampoline's trap handler, which returns to
+        // `catch_traps`. Either way, Wasm frames are unwound, so record that
+        // control is re-entering Wasm.
+        //
+        // On native code, the resumption below never returns, so we do this
+        // here. On Pulley, it instead configures the interpreter and returns
+        // through the `raise` libcall's `catch_unwind_and_record_trap`, which
+        // records the re-entry itself.
+        if !matches!(store.executor(), ExecutorRef::Interpreter(_)) {
+            store.store_opaque_mut().enter_wasm();
         }
 
         unsafe {

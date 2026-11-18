@@ -3,7 +3,8 @@
 use super::store::AsStoreOpaque;
 use crate::code::StoreCode;
 use crate::module::RegisterBreakpointState;
-use crate::store::StoreId;
+use crate::runtime::epoch_state::EpochStateHandle;
+use crate::store::Running;
 use crate::sync::RwLock;
 use crate::vm::{Activation, Backtrace};
 use crate::{
@@ -467,12 +468,12 @@ pub struct FrameHandle {
     /// The index of the virtual frame within the physical frame.
     virtual_frame_idx: usize,
 
-    /// The unique Store this frame came from, to ensure the handle is
-    /// used with the correct Store.
-    store_id: StoreId,
-
-    /// Store `execution_version`.
-    store_version: u64,
+    /// Encapsulated proof/witness that Wasm is not running, and that
+    /// we are in the same "not running" epoch in which this handle
+    /// was created. Internally this holds a snapshot of the
+    /// monotonically incrementing counter that is bumped whenever
+    /// execution state changes in the store.
+    not_running: EpochStateHandle<Running>,
 }
 
 impl FrameHandle {
@@ -493,8 +494,7 @@ impl FrameHandle {
                 return Some(FrameHandle {
                     cursor,
                     virtual_frame_idx: 0,
-                    store_id: store.id(),
-                    store_version: store.vm_store_context().execution_version,
+                    not_running: store.wasm_not_running().handle(),
                 });
             }
             // SAFETY: activation is still valid (valid on entry per
@@ -510,18 +510,24 @@ impl FrameHandle {
 
     /// Determine whether this handle can still be used to refer to a
     /// frame.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
     pub fn is_valid(&self, store: impl AsContext) -> bool {
         self.is_valid_impl(store.as_context().0)
     }
 
     fn is_valid_impl(&self, store: &StoreOpaque) -> bool {
-        let id = store.id();
-        let version = store.vm_store_context().execution_version;
-        self.store_id == id && self.store_version == version
+        self.not_running.is_valid(store.wasm_not_running())
     }
 
     /// Get a handle to the next frame up the activation (the one that
     /// called this frame), if any.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
     pub fn parent(&self, store: impl AsContext) -> Result<Option<FrameHandle>> {
         let store = store.as_context().0;
         if !self.is_valid_impl(store) {
@@ -582,6 +588,10 @@ impl FrameHandle {
     }
 
     /// Get the instance associated with the current frame.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
     pub fn instance(&self, store: impl AsContext) -> Result<Instance> {
         let store = store.as_context().0;
         let instance = self.raw_instance(store)?;
@@ -590,6 +600,10 @@ impl FrameHandle {
 
     /// Get the module associated with the current frame, if any
     /// (i.e., not a container instance for a host-created entity).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
     pub fn module<'a, T: 'static>(
         &self,
         store: impl Into<StoreContext<'a, T>>,
@@ -603,6 +617,10 @@ impl FrameHandle {
     /// module-relative PC as an offset within the module binary, if
     /// this is a Wasm function directly from the given `Module`
     /// (rather than a trampoline).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
     pub fn wasm_function_index_and_pc(
         &self,
         store: impl AsContext,
@@ -624,12 +642,20 @@ impl FrameHandle {
     }
 
     /// Get the number of locals in this frame.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
     pub fn num_locals(&self, store: impl AsContext) -> Result<u32> {
         let frame_data = self.frame_data(store.as_context().0)?;
         Ok(u32::try_from(frame_data.locals.len()).unwrap())
     }
 
     /// Get the depth of the operand stack in this frame.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
     pub fn num_stacks(&self, store: impl AsContext) -> Result<u32> {
         let frame_data = self.frame_data(store.as_context().0)?;
         Ok(u32::try_from(frame_data.stack.len()).unwrap())
@@ -644,7 +670,8 @@ impl FrameHandle {
     ///
     /// # Panics
     ///
-    /// Panics if the index is out-of-range (greater than
+    /// Panics if `store` is not the store this frame handle came
+    /// from, or if the index is out-of-range (greater than
     /// `num_locals()`).
     pub fn local(&self, store: impl AsContext, index: u32) -> Result<Val> {
         let store = store.as_context().0;
@@ -671,7 +698,8 @@ impl FrameHandle {
     ///
     /// # Panics
     ///
-    /// Panics if the index is out-of-range (greater than
+    /// Panics if `store` is not the store this frame handle came
+    /// from, or if the index is out-of-range (greater than
     /// `num_stacks()`).
     pub fn stack(&self, store: impl AsContext, index: u32) -> Result<Val> {
         let store = store.as_context().0;
