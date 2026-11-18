@@ -7,8 +7,7 @@ use crate::prelude::*;
 use crate::runtime::vm::open_file_for_mmap;
 use crate::runtime::vm::{CompiledModuleId, VMArrayCallFunction, VMFuncRef, VMWasmCallFunction};
 use crate::{
-    Engine, Module, ResourcesRequired, code::EngineCode, code_memory::CodeMemory,
-    type_registry::TypeCollection,
+    Engine, Module, code::EngineCode, code_memory::CodeMemory, type_registry::TypeCollection,
 };
 use crate::{FuncType, ValType};
 use alloc::sync::Arc;
@@ -23,7 +22,7 @@ use wasmtime_environ::component::{
     TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
 };
 use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace, WasmChecksum};
-use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind};
+use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, ResourcesRequired};
 
 /// A compiled WebAssembly Component.
 ///
