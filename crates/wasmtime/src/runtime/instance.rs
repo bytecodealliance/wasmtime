@@ -9,8 +9,8 @@ use crate::store::{
 };
 use crate::types::matching;
 use crate::{
-    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, ModuleExport, SharedMemory,
-    StoreContext, StoreContextMut, Table, Tag, TypedFunc,
+    AsContext, AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, ModuleExport,
+    SharedMemory, StoreContext, StoreContextMut, Table, Tag, TypedFunc,
 };
 use alloc::sync::Arc;
 use core::ptr::NonNull;
@@ -342,7 +342,7 @@ impl Instance {
         Ok((instance, needs_startup))
     }
 
-    pub(crate) fn from_wasmtime(id: InstanceId, store: &mut StoreOpaque) -> Instance {
+    pub(crate) fn from_wasmtime(id: InstanceId, store: &StoreOpaque) -> Instance {
         Instance {
             id: StoreInstanceId::new(store.id(), id),
         }
@@ -472,6 +472,17 @@ impl Instance {
         Some(self._get_export(store, export.entity))
     }
 
+    /// Like `get_export`, for an export other than a function, which needs
+    /// only shared access to the store: function exports are populated
+    /// lazily.
+    fn get_data_export(&self, store: &StoreOpaque, name: &str) -> Option<Extern> {
+        let module = store[self.id].env_module();
+        let name = module.strings.get_atom(name)?;
+        let entity = *module.exports.get(&name)?;
+        let export = store[self.id].get_export_by_index(store.id(), entity)?;
+        Some(Extern::from_wasmtime_export(export, store.engine()))
+    }
+
     fn _get_export(&self, store: &mut StoreOpaque, entity: EntityIndex) -> Extern {
         let id = store.id();
         // SAFETY: the store `id` owns this instance and all exports contained
@@ -537,8 +548,9 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_table(&self, store: impl AsContextMut, name: &str) -> Option<Table> {
-        self.get_export(store, name)?.into_table()
+    pub fn get_table(&self, store: impl AsContext, name: &str) -> Option<Table> {
+        self.get_data_export(store.as_context().0, name)?
+            .into_table()
     }
 
     /// Looks up an exported [`Memory`] value by name.
@@ -549,8 +561,9 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_memory(&self, store: impl AsContextMut, name: &str) -> Option<Memory> {
-        self.get_export(store, name)?.into_memory()
+    pub fn get_memory(&self, store: impl AsContext, name: &str) -> Option<Memory> {
+        self.get_data_export(store.as_context().0, name)?
+            .into_memory()
     }
 
     /// Looks up an exported [`SharedMemory`] value by name.
@@ -561,13 +574,9 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_shared_memory(
-        &self,
-        mut store: impl AsContextMut,
-        name: &str,
-    ) -> Option<SharedMemory> {
-        let mut store = store.as_context_mut();
-        self.get_export(&mut store, name)?.into_shared_memory()
+    pub fn get_shared_memory(&self, store: impl AsContext, name: &str) -> Option<SharedMemory> {
+        self.get_data_export(store.as_context().0, name)?
+            .into_shared_memory()
     }
 
     /// Looks up an exported [`Global`] value by name.
@@ -578,8 +587,9 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_global(&self, store: impl AsContextMut, name: &str) -> Option<Global> {
-        self.get_export(store, name)?.into_global()
+    pub fn get_global(&self, store: impl AsContext, name: &str) -> Option<Global> {
+        self.get_data_export(store.as_context().0, name)?
+            .into_global()
     }
 
     /// Looks up a tag [`Tag`] by name.
@@ -590,8 +600,8 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_tag(&self, store: impl AsContextMut, name: &str) -> Option<Tag> {
-        self.get_export(store, name)?.into_tag()
+    pub fn get_tag(&self, store: impl AsContext, name: &str) -> Option<Tag> {
+        self.get_data_export(store.as_context().0, name)?.into_tag()
     }
 
     #[allow(

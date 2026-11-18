@@ -1690,10 +1690,8 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "debug")]
-    pub(crate) fn frame_data_cache_mut_and_registry(
-        &mut self,
-    ) -> (&mut FrameDataCache, &ModuleRegistry) {
-        (&mut self.frame_data_cache, &self.modules)
+    pub(crate) fn frame_data_cache(&self) -> &FrameDataCache {
+        &self.frame_data_cache
     }
 
     #[inline]
@@ -1835,7 +1833,7 @@ impl StoreOpaque {
     }
 
     /// Get all instances (ignoring dummy instances) within this store.
-    pub fn all_instances<'a>(&'a mut self) -> impl ExactSizeIterator<Item = Instance> + 'a {
+    pub fn all_instances<'a>(&'a self) -> impl ExactSizeIterator<Item = Instance> + 'a {
         let instances = self
             .instances
             .iter()
