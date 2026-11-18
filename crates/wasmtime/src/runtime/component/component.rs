@@ -184,6 +184,7 @@ impl Component {
     /// let component = Component::new(&engine, "(component (core module))")?;
     /// # Ok(())
     /// # }
+    /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
         crate::CodeBuilder::new(engine)
