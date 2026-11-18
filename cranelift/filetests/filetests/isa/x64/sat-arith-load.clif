@@ -1,0 +1,45 @@
+test compile
+target x86_64 sse42 has_avx
+
+;; Signed saturating adds and subtracts of 32-bit and 64-bit lanes are lowered
+;; by computing the wrapping result and then detecting overflow, which needs
+;; both operands in registers. A sinkable load used here must not be folded
+;; into the wrapping arithmetic: it is still needed by the overflow detection.
+;; See https://github.com/bytecodealliance/wasmtime/issues/15279.
+
+function %sadd_sat_i32x4_load(i32x4, i64) -> i32x4 {
+block0(v0: i32x4, v1: i64):
+  v2 = load.i32x4 v1
+  v3 = sadd_sat v0, v2
+  return v3
+}
+
+function %sadd_sat_i64x2_load(i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64):
+  v2 = load.i64x2 v1
+  v3 = sadd_sat v0, v2
+  return v3
+}
+
+function %ssub_sat_i32x4_load(i32x4, i64) -> i32x4 {
+block0(v0: i32x4, v1: i64):
+  v2 = load.i32x4 v1
+  v3 = ssub_sat v0, v2
+  return v3
+}
+
+function %ssub_sat_i64x2_load(i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64):
+  v2 = load.i64x2 v1
+  v3 = ssub_sat v0, v2
+  return v3
+}
+
+;; A load on either side must be materialized, and only once.
+function %sadd_sat_i32x4_two_loads(i64, i64) -> i32x4 {
+block0(v0: i64, v1: i64):
+  v2 = load.i32x4 v0
+  v3 = load.i32x4 v1
+  v4 = sadd_sat v2, v3
+  return v4
+}
