@@ -53,7 +53,6 @@ pub(crate) mod memory;
 pub(crate) mod module;
 #[cfg(feature = "debug-builtins")]
 pub(crate) mod native_debug;
-pub(crate) mod resources;
 pub(crate) mod store;
 pub(crate) mod trampoline;
 pub(crate) mod trap;
@@ -101,7 +100,6 @@ pub use limits::*;
 pub use linker::*;
 pub use memory::*;
 pub use module::{Module, ModuleExport, ModuleFunction};
-pub use resources::*;
 #[cfg(all(feature = "async", feature = "call-hook"))]
 pub use store::CallHookHandler;
 pub use store::{

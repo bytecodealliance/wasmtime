@@ -8,7 +8,6 @@ use crate::{
     code::EngineCode,
     code_memory::CodeMemory,
     instantiate::CompiledModule,
-    resources::ResourcesRequired,
     types::{ExportType, ExternType, ImportType},
 };
 use alloc::sync::Arc;
@@ -20,7 +19,8 @@ use std::{fs::File, path::Path};
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, FuncKey, HostPtr, ModuleTypes,
-    ObjectKind, StaticModuleIndex, TypeTrace, VMOffsets, VMSharedTypeIndex, WasmChecksum,
+    ObjectKind, ResourcesRequired, StaticModuleIndex, TypeTrace, VMOffsets, VMSharedTypeIndex,
+    WasmChecksum,
 };
 mod registry;
 

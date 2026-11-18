@@ -21,8 +21,9 @@ pub struct ResourcesRequired {
 }
 
 impl ResourcesRequired {
+    /// Adds the provided resource requirements to this set of requirements.
     #[cfg(feature = "component-model")]
-    pub(crate) fn add(&mut self, other: &ResourcesRequired) {
+    pub fn add(&mut self, other: &ResourcesRequired) {
         self.num_memories += other.num_memories;
         self.max_initial_memory_size =
             core::cmp::max(self.max_initial_memory_size, other.max_initial_memory_size);
