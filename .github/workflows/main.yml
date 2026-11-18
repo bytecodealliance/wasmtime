@@ -40,10 +40,10 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: rustup component add rustfmt
     - run: cargo fmt --all -- --check
 
@@ -53,7 +53,7 @@ jobs:
     name: Check JS
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
     - run: npm install
       working-directory: ./crates/explorer
     - run: npm run lint
@@ -68,7 +68,7 @@ jobs:
     name: Clang format
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
     - run: |
@@ -89,11 +89,11 @@ jobs:
     if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
-    - uses: ./.github/actions/cargo-install
+    - uses: $/.github/actions/install-rust
+    - uses: $/.github/actions/cargo-install
       with:
         crate: cargo-deny
         version: 0.18.2
@@ -115,11 +115,11 @@ jobs:
     outputs:
       outcome: ${{ steps.vet.outcome }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
-    - uses: ./.github/actions/cargo-install
+    - uses: $/.github/actions/install-rust
+    - uses: $/.github/actions/cargo-install
       with:
         crate: cargo-vet
         version: 0.10.2
@@ -190,7 +190,7 @@ jobs:
       platform-checks: ${{ steps.calculate.outputs.platform-checks }}
       test-gc-zeal: ${{ steps.calculate.outputs.test-gc-zeal }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
     - id: calculate
       env:
         GH_TOKEN: ${{ github.token }}
@@ -277,10 +277,10 @@ jobs:
       RUSTDOCFLAGS: -Dwarnings --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
       with:
         toolchain: wasmtime-ci-pinned-nightly
 
@@ -294,11 +294,11 @@ jobs:
     - run: cmake --build target/c-api --target doc
 
     # install mdbook, build the docs, and test the docs
-    - uses: ./.github/actions/cargo-install
+    - uses: $/.github/actions/cargo-install
       with:
         crate: mdbook
         version: 0.4.37
-    - uses: ./.github/actions/cargo-install
+    - uses: $/.github/actions/cargo-install
       with:
         crate: mdbook-langtabs
         version: 0.1.1
@@ -326,7 +326,7 @@ jobs:
         mv crates/c-api/html gh-pages/c-api
         mv target/doc gh-pages/api
         tar czf gh-pages.tar.gz gh-pages
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v6.0.0
       with:
         name: gh-pages
         path: gh-pages.tar.gz
@@ -472,10 +472,10 @@ jobs:
               -p wasmtime-cli-flags --no-default-features --all-features
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
 
     # Run the check.
     - run: |
@@ -491,10 +491,10 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-full
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: cargo test -p wasmtime-internal-fiber --no-default-features
     - run: cargo test -p cranelift-tools --test logged-filetests
 
@@ -505,10 +505,10 @@ jobs:
     env:
       CARGO_NDK_VERSION: 2.12.2
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
 
     - run: rustup component add clippy
     - run: cargo clippy --workspace --all-targets --features p3,component-model-async
@@ -522,10 +522,10 @@ jobs:
     name: MSRV check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
       with:
         toolchain: msrv
     - run: |
@@ -554,10 +554,10 @@ jobs:
     env:
       CARGO_NDK_VERSION: 2.12.2
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
 
     # Check that wasmtime compiles with panic=abort since there's some `#[cfg]`
     # for specifically panic=abort there.
@@ -667,17 +667,17 @@ jobs:
             CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_GNU_LINKER: loongarch64-linux-gnu-gcc-14
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: rustup target add ${{ matrix.target }}
     - name: Install cross
       run: |
         curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
         cargo binstall --no-confirm cross
       if: ${{ matrix.cross }}
-    - uses: ./.github/actions/apt-get-install
+    - uses: $/.github/actions/apt-get-install
       if: ${{ matrix.apt_packages }}
       with:
         packages: ${{ matrix.apt_packages }}
@@ -692,10 +692,10 @@ jobs:
     name: Nightly tests
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
       with:
         # This is pinned to match the version of Rust used on OSS-Fuzz to build
         # Wasmtime. Do not change this `toolchain` version.
@@ -734,11 +734,11 @@ jobs:
     #
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
-    - uses: ./.github/actions/cargo-install
+    - uses: $/.github/actions/cargo-install
       with:
         crate: cargo-fuzz
         version: 0.13.2
-    - uses: ./.github/actions/apt-get-install
+    - uses: $/.github/actions/apt-get-install
       with:
         packages: ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fuzz check --dev --features fuzz-xed
@@ -754,10 +754,10 @@ jobs:
     name: GC Zeal Tests
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - name: Run GC tests with cfg(gc_zeal) enabled
       env:
         WASMTIME_TEST_GC_KEYWORDS: "gc drc any eq struct array i31 extern exn ref rec"
@@ -812,16 +812,16 @@ jobs:
             flags: -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON
             name: Linux (ASAN)
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: rustup target add wasm32-wasip2
 
-    - uses: ./.github/actions/install-plugins-prerequisites
+    - uses: $/.github/actions/install-plugins-prerequisites
       if: runner.os == 'Linux'
 
-    - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+    - uses: ilammy/msvc-dev-cmd@v1.13.0
     # An ode to MinGW: man you're a pain to work around sometimes
     - run: rm /usr/bin/link
       if: runner.os == 'Windows'
@@ -849,10 +849,10 @@ jobs:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}
 
@@ -877,7 +877,7 @@ jobs:
       run: echo "C:\msys64\mingw64\bin" >> $Env:GITHUB_PATH
       if: matrix.target == 'x86_64-pc-windows-gnu'
 
-    - uses: ./.github/actions/apt-get-install
+    - uses: $/.github/actions/apt-get-install
       name: Install cross-compilation tools
       if: matrix.gcc_package != ''
       with:
@@ -891,13 +891,13 @@ jobs:
         echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
       if: matrix.gcc != ''
 
-    - uses: actions/cache@v5
+    - uses: actions/cache@v5.1.0
       with:
         path: ${{ runner.tool_cache }}/qemu
         key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchcpuinfo
       if: matrix.qemu != ''
 
-    - uses: actions/cache@v5
+    - uses: actions/cache@v5.1.0
       with:
         path: ${{ runner.tool_cache }}/sde
         key: sde-${{ env.SDE_BUILD_VERSION }}
@@ -1043,10 +1043,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - name: Configure OpenSSL (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
@@ -1070,10 +1070,10 @@ jobs:
     name: Test wasmtime-fuzzing
     runs-on: 'ubuntu-latest'
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
 
     # Run the tests
     - run: |
@@ -1086,17 +1086,17 @@ jobs:
     name: Test DWARF debugging
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: |
         rustup target add wasm32-wasip2 wasm32-wasip1 wasm32-unknown-unknown
         cd /tmp
         curl --retry 5 --retry-all-errors -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-30/wasi-sdk-30.0-x86_64-linux.tar.gz
         tar -xzf wasi-sdk-30.0-x86_64-linux.tar.gz
         mv wasi-sdk-30.0-x86_64-linux wasi-sdk
-    - uses: ./.github/actions/apt-get-install
+    - uses: $/.github/actions/apt-get-install
       with:
         packages: gdb lldb-18 llvm
     - run: |
@@ -1117,10 +1117,10 @@ jobs:
     name: Test guest debugging
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: |
         rustup target add wasm32-wasip2 wasm32-wasip1 wasm32-unknown-unknown
         cd /tmp
@@ -1142,10 +1142,10 @@ jobs:
       deployments: write
       contents: write
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: rustup target add wasm32-wasip2 wasm32-wasip1 wasm32-unknown-unknown
 
     - name: Install wasm-tools
@@ -1159,7 +1159,7 @@ jobs:
       env:
         VERSION: ${{ github.sha }}
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v6.0.0
       with:
         name: bins-wasi-preview1-component-adapter
         path: target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.*.wasm
@@ -1169,11 +1169,11 @@ jobs:
     needs: build-preview1-component-adapter
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
-    - uses: ./.github/actions/build-adapter-provider
+    - uses: $/.github/actions/install-rust
+    - uses: $/.github/actions/build-adapter-provider
       with:
         run-id: ${{ github.run_id }}
 
@@ -1184,11 +1184,11 @@ jobs:
     if: needs.determine.outputs.run-full
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
-    - uses: ./.github/actions/cargo-install
+    - uses: $/.github/actions/install-rust
+    - uses: $/.github/actions/cargo-install
       with:
         crate: cbindgen
         version: 0.29.0
@@ -1214,7 +1214,7 @@ jobs:
         MIN_PLATFORM_TEST_DISABLE_WASI: 1
 
     # Add the `wasmtime-platform.h` file as a release artifact
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v6.0.0
       with:
         name: wasmtime-platform-header
         path: examples/min-platform/embedding/wasmtime-platform.h
@@ -1225,10 +1225,10 @@ jobs:
     name: Run benchmarks
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: rustup target add wasm32-wasip2 wasm32-wasip1
     - run: cargo test --benches --release
 
@@ -1239,10 +1239,10 @@ jobs:
     name: Meta deterministic check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: cd cranelift/codegen && cargo build --features all-arch
     - run: ci/ensure_deterministic_build.sh
 
@@ -1251,10 +1251,10 @@ jobs:
     if: github.repository == 'bytecodealliance/wasmtime' && needs.determine.outputs.run-full
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: |
         cd ${{ runner.tool_cache }}
         curl --retry 5 --retry-all-errors -L -o sccache.tar.gz \
@@ -1300,14 +1300,14 @@ jobs:
     env:
       MIRIFLAGS: -Zmiri-permissive-provenance
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
       with:
         toolchain: wasmtime-ci-pinned-nightly
     - run: rustup component add rust-src miri
-    - uses: ./.github/actions/cargo-install
+    - uses: $/.github/actions/cargo-install
       with:
         crate: cargo-nextest
         version: 0.9.133
@@ -1324,10 +1324,10 @@ jobs:
     name: ISLE verifier basic check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
     - run: cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-fast.args --skip-solver
     - run: cargo run -p cranelift-isle-veri --bin veri -- --name x64 --rule iadd_base_case_32_or_64_lea --skip-solver
     - run: cargo run -p cranelift-isle-veri --bin veri -- --name opt --only-root simplify --default-excludes --skip-solver
@@ -1347,7 +1347,7 @@ jobs:
       matrix: ${{ fromJson(needs.determine.outputs.build-matrix) }}
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
 
@@ -1358,17 +1358,17 @@ jobs:
     #
     # The goal here is to hit the network less because apt-get servers tend
     # to be relatively flaky...
-    - uses: ./.github/actions/docker-build-cached
+    - uses: $/.github/actions/docker-build-cached
       if: ${{ matrix.env.DOCKER_IMAGE }}
       with:
         context: ci/docker
         file: ${{ matrix.env.DOCKER_IMAGE }}
         cache_key_prefix: docker-${{ matrix.target }}
 
-    - uses: ./.github/actions/install-ninja
+    - uses: $/.github/actions/install-ninja
       if: '${{ !matrix.env.DOCKER_IMAGE }}'
 
-    - uses: ./.github/actions/install-rust
+    - uses: $/.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}
     - run: |
@@ -1380,7 +1380,7 @@ jobs:
     - run: ./ci/build-src-tarball.sh
       if: matrix.build == 'x86_64-linux'
 
-    - uses: ./.github/actions/android-ndk
+    - uses: $/.github/actions/android-ndk
       if: contains(matrix.target, 'android')
       with:
         target: ${{ matrix.target }}
@@ -1391,10 +1391,21 @@ jobs:
     # unconditionally to this workflow's files so we have a copy of them.
     - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v6.0.0
       with:
         name: bins-${{ matrix.build }}
         path: dist
+
+  verify-gh-actions-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.1.0
+      - name: Verify actions.lock is up to date
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh extension install github/gh-actions-lock
+          gh actions-lock --verify
 
   # This is a "join node" which depends on all prior workflows. The merge queue,
   # for example, gates on this to ensure that everything has executed
@@ -1446,6 +1457,7 @@ jobs:
       - test-min-platform-example
       - check_js
       - gc_zeal
+      - verify-gh-actions-lockfile
     if: always()
     steps:
     # Calculate the exit status of the whole CI workflow.
@@ -1479,7 +1491,7 @@ jobs:
       && startsWith(github.ref, 'refs/heads/release-')
       && github.repository == 'bytecodealliance/wasmtime'
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v6.1.0
       with:
         submodules: true
         fetch-depth: 0
@@ -1527,7 +1539,7 @@ jobs:
     permissions:
       issues: write
     steps:
-    - uses: actions/github-script@v8
+    - uses: actions/github-script@v8.0.0
       with:
         script: |
           github.rest.issues.create({
