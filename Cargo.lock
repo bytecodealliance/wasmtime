@@ -84,7 +84,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43d5b281e737544384e969a5ccad3f1cdd24b48086a0fc1b2a5262a26b8f4f4a"
 dependencies = [
  "anstyle",
- "anstyle-parse",
+ "anstyle-parse 0.2.7",
+ "anstyle-query",
+ "anstyle-wincon",
+ "colorchoice",
+ "is_terminal_polyfill",
+ "utf8parse",
+]
+
+[[package]]
+name = "anstream"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "824a212faf96e9acacdbd09febd34438f8f711fb84e09a8916013cd7815ca28d"
+dependencies = [
+ "anstyle",
+ "anstyle-parse 1.0.0",
  "anstyle-query",
  "anstyle-wincon",
  "colorchoice",
@@ -94,15 +109,24 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.13"
+version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5192cca8006f1fd4f7237516f40fa183bb07f8fbdfedaa0036de5ea9b0b45e78"
+checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
 name = "anstyle-parse"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7644824f0aa2c7b9384579234ef10eb7efb6a0deb83f9630a49594dd9c15c2"
+dependencies = [
+ "utf8parse",
+]
+
+[[package]]
+name = "anstyle-parse"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52ce7f38b242319f7cabaa6813055467063ecdc9d355bbb4ce0c68908cd8130e"
 dependencies = [
  "utf8parse",
 ]
@@ -485,9 +509,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.48"
+version = "4.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2134bb3ea021b78629caa971416385309e0131b351b25e01dc16fb54e1b5fae"
+checksum = "ac230478587d0269d8d6998b82ae69ea51509d55df66d9e92edd1f986904cd4a"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -495,11 +519,11 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.48"
+version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2ba64afa3c0a6df7fa517765e31314e983f51dda798ffba27b988194fb65dc9"
+checksum = "ec0797fb7aeb1406c84efac526901f7ec3ead2124f946b494e72879d4b54704d"
 dependencies = [
- "anstream",
+ "anstream 1.0.0",
  "anstyle",
  "clap_lex",
  "strsim",
@@ -508,30 +532,30 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "4.5.58"
+version = "4.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75bf0b32ad2e152de789bb635ea4d3078f6b838ad7974143e99b99f45a04af4a"
+checksum = "6a35200383f20018d41c14d1ab19c1727c697f544492143f7d93aa39f0187848"
 dependencies = [
  "clap",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "4.5.47"
+version = "4.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbfd7eae0b0f1a6e63d4b13c9c478de77c2eb546fba158ad50b4203dc24b9f9c"
+checksum = "895c9d8d2ac2dd8b8a29f3724a14e72aaaa6debcf8c38c82f97305c6a172767a"
 dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.106",
+ "syn 3.0.10",
 ]
 
 [[package]]
 name = "clap_lex"
-version = "0.7.5"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
+checksum = "e0921b3876b3a1df8a1c9f912e7f94342458022c2e84288015893d83c4d62a79"
 
 [[package]]
 name = "cobs"
@@ -563,7 +587,7 @@ name = "component-async-tests"
 version = "0.0.0"
 dependencies = [
  "bytes",
- "env_logger 0.11.5",
+ "env_logger",
  "futures",
  "once_cell",
  "tempfile",
@@ -704,7 +728,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-isle",
  "criterion",
- "env_logger 0.11.5",
+ "env_logger",
  "gimli 0.33.0",
  "hashbrown 0.17.0",
  "libm",
@@ -790,7 +814,7 @@ name = "cranelift-frontend"
 version = "0.139.0-dev"
 dependencies = [
  "cranelift-codegen",
- "env_logger 0.11.5",
+ "env_logger",
  "hashbrown 0.17.0",
  "log",
  "similar",
@@ -842,7 +866,7 @@ dependencies = [
  "cranelift-isle",
  "cranelift-isle-veri-caching",
  "cranelift-isle-veri-test-macros",
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "num-bigint",
  "num-traits",
@@ -904,7 +928,7 @@ version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.5",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -1009,7 +1033,7 @@ dependencies = [
  "cranelift-native",
  "cranelift-object",
  "cranelift-reader",
- "env_logger 0.11.5",
+ "env_logger",
  "filecheck",
  "log",
  "pulley-interpreter",
@@ -1271,9 +1295,9 @@ dependencies = [
 
 [[package]]
 name = "env_filter"
-version = "0.1.2"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab"
+checksum = "900d271a03799a1ee8d1ca9b19893b48ca674a9284fefcfb85f05e74ed314217"
 dependencies = [
  "log",
  "regex",
@@ -1281,27 +1305,14 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.10.0"
+version = "0.11.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
+checksum = "de671bd27a75a797dc9ae289ba1e77276e75e2026408aab65185384e2d5cd3f6"
 dependencies = [
- "humantime",
- "is-terminal",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.11.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
-dependencies = [
- "anstream",
+ "anstream 1.0.0",
  "anstyle",
  "env_filter",
- "humantime",
+ "jiff",
  "log",
 ]
 
@@ -1373,11 +1384,11 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "file-per-thread-logger"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a3cc21c33af89af0930c8cae4ade5e6fdc17b5d2c97b3d2e2edb67a1cf683f3"
+checksum = "638378e0202f4c2170c51c21cc0db0413f40fde94989533e2f3021867db7cbd5"
 dependencies = [
- "env_logger 0.10.0",
+ "env_filter",
  "log",
 ]
 
@@ -1557,7 +1568,7 @@ checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.5",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -1872,12 +1883,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4a1e36c821dbe04574f602848a19f742f4fb3c98d40449f11bcad18d6b17421"
 
 [[package]]
-name = "humantime"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
-
-[[package]]
 name = "hyper"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2099,17 +2104,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "is-terminal"
-version = "0.4.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
-dependencies = [
- "hermit-abi",
- "libc",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2120,7 +2114,7 @@ name = "isle-fuzz"
 version = "0.0.0"
 dependencies = [
  "cranelift-isle",
- "env_logger 0.11.5",
+ "env_logger",
  "libfuzzer-sys",
  "log",
 ]
@@ -2131,7 +2125,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "cranelift-isle",
- "env_logger 0.11.5",
+ "env_logger",
 ]
 
 [[package]]
@@ -2176,6 +2170,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52f5385394064fa2c886205dba02598013ce83d3e92d33dbdc0c52fe0e7bf4fc"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "jiff"
+version = "0.2.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "175dc66334db3b9ab9985bf8b61cfed50dc16d20964bb47f9e479adcae984a7f"
+dependencies = [
+ "jiff-core",
+ "jiff-static",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde_core",
+]
+
+[[package]]
+name = "jiff-core"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e599b80292e597019b8b3e392de3f4bea2959ddfb8c7dff60e035e9e311a2c1b"
+dependencies = [
+ "log",
+]
+
+[[package]]
+name = "jiff-static"
+version = "0.2.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7b1af7547d47354bc438d797e3854601bde8f8d185780c5ba4ab27afa54f1ba"
+dependencies = [
+ "jiff-core",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2264,7 +2293,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5297962ef19edda4ce33aaa484386e0a5b3d7f2f4e037cbeee00503ef6b29d33"
 dependencies = [
- "anstream",
+ "anstream 0.6.21",
  "anstyle",
  "clap",
  "escape8259",
@@ -2290,9 +2319,9 @@ checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
 
 [[package]]
 name = "log"
-version = "0.4.28"
+version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
+checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "logos"
@@ -2312,8 +2341,8 @@ dependencies = [
  "fnv",
  "proc-macro2",
  "quote",
- "regex-automata 0.4.11",
- "regex-syntax 0.8.5",
+ "regex-automata 0.4.19",
+ "regex-syntax",
  "syn 2.0.106",
 ]
 
@@ -2349,7 +2378,7 @@ checksum = "6e7b3a5bbb2f63aaa223a671ea1bd0e7bc16bd30ce387324cf63995deaddbbd2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.5",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -2364,7 +2393,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
- "regex-automata 0.4.11",
+ "regex-automata 0.4.19",
 ]
 
 [[package]]
@@ -2675,7 +2704,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "637459f74d22a7bb772af9d3a5df61c88608d8daaa6fefe950849c7aabf891c3"
 dependencies = [
- "env_logger 0.11.5",
+ "env_logger",
  "libloading",
  "openvino-finder",
 ]
@@ -2842,6 +2871,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
+name = "portable-atomic"
+version = "1.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10ab3eb7f3becc3a1cbc4f2c6f20267996cfc1a6467a873763411b136a122715"
+dependencies = [
+ "portable-atomic",
+]
+
+[[package]]
 name = "postcard"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2882,14 +2926,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bfe0f4c752e450fc2faf62654f1c134747922825d5b04ca717b8874f41a40c0"
 dependencies = [
  "proc-macro2",
- "syn 3.0.5",
+ "syn 3.0.10",
 ]
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.101"
+version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de"
+checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
 ]
@@ -2907,7 +2951,7 @@ dependencies = [
  "rand 0.9.4",
  "rand_chacha 0.9.0",
  "rand_xorshift",
- "regex-syntax 0.8.5",
+ "regex-syntax",
  "rusty-fork",
  "tempfile",
  "unarray",
@@ -2921,7 +2965,7 @@ dependencies = [
  "arbitrary",
  "clap",
  "cranelift-bitset",
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "pulley-macros",
  "termcolor",
@@ -2932,7 +2976,7 @@ dependencies = [
 name = "pulley-interpreter-fuzz"
 version = "0.0.0"
 dependencies = [
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "pulley-interpreter",
 ]
@@ -2943,7 +2987,7 @@ version = "52.0.0-dev"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.5",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -2954,9 +2998,9 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quote"
-version = "1.0.41"
+version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce25767e7b499d1b604768e7cde645d14cc8584231ea6b295e9c9eb22c02e1d1"
+checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
 ]
@@ -3125,14 +3169,14 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.9.1"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2eae68fc220f7cf2532e4494aded17545fce192d59cd996e0fe7887f4ceb575"
+checksum = "9807af0e638c12e753aa1b4e601791bf2a8f71274023c8bbeec12fc149950857"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.3.3",
- "regex-syntax 0.7.4",
+ "regex-automata 0.4.19",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -3140,21 +3184,16 @@ name = "regex-automata"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39354c10dd07468c2e73926b23bb9c2caca74c5501e38a35da70406f1d923310"
-dependencies = [
- "aho-corasick",
- "memchr",
- "regex-syntax 0.7.4",
-]
 
 [[package]]
 name = "regex-automata"
-version = "0.4.11"
+version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "833eb9ce86d40ef33cb1306d8accf7bc8ec2bfea4355cbdebb3df68b40925cad"
+checksum = "41d60ef07df457506a0a1a2073112eb4aae5733dbd2813c3da77d1b0fd441158"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.8.5",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -3166,15 +3205,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.7.4"
+version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5ea92a5b6195c6ef2a0295ea818b312502c6fc94dde986c5553242e18fd4ce2"
-
-[[package]]
-name = "regex-syntax"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
+checksum = "d902046e6a28a1e4c3cab97258a0ce11e994903f01c2d97a9447a0b3df85f4f6"
 
 [[package]]
 name = "region"
@@ -3621,9 +3654,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.5"
+version = "3.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12df2e0110f65b775f769bb17ef989067a1d931b2eb822bd4346631eeada89f9"
+checksum = "4ae9ccbea3a7b0b09443036490c8f34a8b1b760fd345e5c0dae0aac718faea79"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4043,7 +4076,7 @@ dependencies = [
  "matchers",
  "nu-ansi-term",
  "once_cell",
- "regex-automata 0.4.11",
+ "regex-automata 0.4.19",
  "sharded-slab",
  "thread_local",
  "tracing",
@@ -4562,7 +4595,7 @@ dependencies = [
  "cc",
  "cranelift-native",
  "encoding_rs",
- "env_logger 0.11.5",
+ "env_logger",
  "foldhash 0.2.0",
  "futures",
  "fxprof-processed-profile",
@@ -4642,7 +4675,7 @@ version = "52.0.0-dev"
 dependencies = [
  "async-trait",
  "bytes",
- "env_logger 0.11.5",
+ "env_logger",
  "futures",
  "log",
  "tokio",
@@ -4673,7 +4706,7 @@ dependencies = [
  "cranelift-native",
  "cranelift-reader",
  "criterion",
- "env_logger 0.11.5",
+ "env_logger",
  "filecheck",
  "futures",
  "gimli 0.33.0",
@@ -4761,7 +4794,7 @@ dependencies = [
  "cranelift-bforest",
  "cranelift-bitset",
  "cranelift-entity",
- "env_logger 0.11.5",
+ "env_logger",
  "gimli 0.33.0",
  "hashbrown 0.17.0",
  "indexmap 2.14.0",
@@ -4789,7 +4822,7 @@ name = "wasmtime-environ-fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
- "env_logger 0.11.5",
+ "env_logger",
  "libfuzzer-sys",
  "wasmparser 0.263.0",
  "wasmprinter",
@@ -4812,7 +4845,7 @@ dependencies = [
  "cranelift-interpreter",
  "cranelift-native",
  "cranelift-reader",
- "env_logger 0.11.5",
+ "env_logger",
  "libfuzzer-sys",
  "log",
  "mutatis",
@@ -4838,7 +4871,7 @@ dependencies = [
  "backtrace",
  "cranelift-bforest",
  "cranelift-bitset",
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "mutatis",
  "rand 0.10.1",
@@ -4878,7 +4911,7 @@ version = "52.0.0-dev"
 dependencies = [
  "base64",
  "directories",
- "env_logger 0.11.5",
+ "env_logger",
  "filetime",
  "log",
  "postcard",
@@ -4905,7 +4938,7 @@ dependencies = [
  "serde",
  "serde_json",
  "similar",
- "syn 3.0.5",
+ "syn 3.0.10",
  "tracing",
  "wasmtime",
  "wasmtime-internal-component-util",
@@ -4955,7 +4988,7 @@ name = "wasmtime-internal-debugger"
 version = "52.0.0-dev"
 dependencies = [
  "async-trait",
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "tokio",
  "wasmtime",
@@ -4998,7 +5031,7 @@ version = "52.0.0-dev"
 dependencies = [
  "anyhow",
  "clap",
- "env_logger 0.11.5",
+ "env_logger",
  "futures",
  "gdbstub",
  "gdbstub_arch",
@@ -5050,7 +5083,7 @@ version = "52.0.0-dev"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.5",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -5102,7 +5135,7 @@ dependencies = [
  "anyhow",
  "proc-macro2",
  "quote",
- "syn 3.0.5",
+ "syn 3.0.10",
  "wasmtime-test-util",
 ]
 
@@ -5113,7 +5146,7 @@ dependencies = [
  "arbitrary",
  "arbtest",
  "clap",
- "env_logger 0.11.5",
+ "env_logger",
  "indexmap 2.14.0",
  "proc-macro2",
  "quote",
@@ -5138,7 +5171,7 @@ dependencies = [
  "async-trait",
  "bitflags 2.11.1",
  "bytes",
- "env_logger 0.11.5",
+ "env_logger",
  "futures",
  "libc",
  "rand 0.10.1",
@@ -5176,7 +5209,7 @@ dependencies = [
  "base64",
  "bytes",
  "criterion",
- "env_logger 0.11.5",
+ "env_logger",
  "flate2",
  "futures",
  "http",
@@ -5281,7 +5314,7 @@ version = "52.0.0-dev"
 dependencies = [
  "clap",
  "criterion",
- "env_logger 0.11.5",
+ "env_logger",
  "log",
  "rayon",
  "test-programs-artifacts",
@@ -5379,7 +5412,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 3.0.5",
+ "syn 3.0.10",
  "wasmtime-environ",
  "witx",
 ]
@@ -5389,7 +5422,7 @@ name = "wiggle-macro"
 version = "52.0.0-dev"
 dependencies = [
  "quote",
- "syn 3.0.5",
+ "syn 3.0.10",
  "wiggle",
  "wiggle-generate",
 ]
@@ -5398,7 +5431,7 @@ dependencies = [
 name = "wiggle-test"
 version = "0.0.0"
 dependencies = [
- "env_logger 0.11.5",
+ "env_logger",
  "proptest",
  "thiserror 2.0.17",
  "tracing",
@@ -5687,7 +5720,7 @@ dependencies = [
  "heck",
  "indexmap 2.14.0",
  "prettyplease 0.3.0",
- "syn 3.0.5",
+ "syn 3.0.10",
  "wasm-metadata 0.262.0",
  "wit-bindgen-core 0.63.0",
  "wit-component 0.262.0",
@@ -5719,7 +5752,7 @@ dependencies = [
  "prettyplease 0.3.0",
  "proc-macro2",
  "quote",
- "syn 3.0.5",
+ "syn 3.0.10",
  "wit-bindgen-core 0.63.0",
  "wit-bindgen-rust 0.63.0",
 ]
@@ -5853,7 +5886,7 @@ dependencies = [
 name = "wizer-fuzz"
 version = "0.0.0"
 dependencies = [
- "env_logger 0.11.5",
+ "env_logger",
  "libfuzzer-sys",
  "log",
  "wasm-smith",
