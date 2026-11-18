@@ -10,6 +10,7 @@ mod call_hook;
 mod cli_tests;
 mod compile_time_builtins;
 mod component_model;
+mod constant_pool;
 mod coredump;
 mod cross_engine;
 mod custom_code_memory;

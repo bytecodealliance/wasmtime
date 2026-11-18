@@ -537,6 +537,7 @@ information about this check\
             | "probestack_size_log2" // probestack above asserted disabled
             | "regalloc" // shouldn't change semantics
             | "enable_incremental_compilation_cache_checks" // shouldn't change semantics
+            | "separate_constant_pool" // where constants live, not what code does
             | "enable_atomics" => return Ok(()),
 
             // Everything else is unknown and needs to be added somewhere to

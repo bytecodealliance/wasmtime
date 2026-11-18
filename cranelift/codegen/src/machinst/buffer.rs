@@ -2605,6 +2605,10 @@ pub struct MachTextSectionBuilder<I: VCodeInst> {
     buf: MachBuffer<I>,
     next_func: usize,
     force_veneers: ForceVeneers,
+    /// References to constants, as the offset of the reference in the text,
+    /// how to patch it and the offset of the constant in the constants
+    /// section.
+    constant_refs: Vec<(CodeOffset, I::LabelUse, u64)>,
 }
 
 impl<I: VCodeInst> MachTextSectionBuilder<I> {
@@ -2617,6 +2621,7 @@ impl<I: VCodeInst> MachTextSectionBuilder<I> {
             buf,
             next_func: 0,
             force_veneers: ForceVeneers::No,
+            constant_refs: Vec::new(),
         }
     }
 }
@@ -2662,6 +2667,43 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
                 true
             }
             None => false,
+        }
+    }
+
+    fn resolve_constant_reloc(
+        &mut self,
+        offset: u64,
+        reloc: Reloc,
+        addend: Addend,
+        constant_offset: u64,
+    ) -> bool {
+        match I::LabelUse::from_reloc(reloc, addend) {
+            Some(label_use) => {
+                let offset = u32::try_from(offset).unwrap();
+                self.constant_refs
+                    .push((offset, label_use, constant_offset));
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn patch_constant_refs(&self, text: &mut [u8], constants_offset: u64) {
+        for &(offset, label_use, constant_offset) in &self.constant_refs {
+            let target = constants_offset + constant_offset;
+            let distance = target as i64 - i64::from(offset);
+            assert!(
+                distance <= i64::from(label_use.max_pos_range())
+                    && distance >= -i64::from(label_use.max_neg_range()),
+                "constant at {target:#x} is out of range of the reference at {offset:#x}"
+            );
+            let start = offset as usize;
+            let end = start + label_use.patch_size() as usize;
+            label_use.patch(
+                &mut text[start..end],
+                offset,
+                u32::try_from(target).unwrap(),
+            );
         }
     }
 
