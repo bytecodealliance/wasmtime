@@ -67,7 +67,7 @@ pub use crate::module::*;
 pub use crate::module_artifacts::*;
 pub use crate::module_types::*;
 pub use crate::ref_bits::*;
-pub use crate::resources::ResourcesRequired;
+pub use crate::resources::{ComponentResourcesRequired, ResourcesRequired};
 pub use crate::scopevec::ScopeVec;
 pub use crate::stack_map::*;
 pub use crate::stack_switching::*;
