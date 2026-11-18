@@ -236,7 +236,7 @@ async fn two_operand_case(case: Case) {
             .poll(&mut Context::from_waker(Waker::noop()))
             .is_pending()
     );
-    gate.started.recv_timeout(Duration::from_secs(30)).unwrap();
+    gate.wait_started();
     // The real worker reached its gate after capturing both operands.
     drop(residency);
     drop(future);

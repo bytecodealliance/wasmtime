@@ -1,8 +1,7 @@
 use super::*;
-use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Condvar, OnceLock, mpsc};
+use std::sync::mpsc;
 use std::task::{Context, Poll, Wake, Waker};
 use std::time::Duration;
 use tokio::sync::oneshot;
@@ -86,68 +85,12 @@ fn idle_descriptor_clones_retain_content_without_admission() {
     }
 }
 
-// A keyed gate in real multi-descriptor workers lets the initiating future and
-// both descriptor resources disappear while the worker still carries B.
-struct NativeWorkGate {
-    started: mpsc::Sender<()>,
-    released: Mutex<bool>,
-    wake: Condvar,
-}
-
-static NATIVE_WORK: OnceLock<Mutex<BTreeMap<usize, Arc<NativeWorkGate>>>> = OnceLock::new();
+#[path = "test_gate.rs"]
+mod test_gate;
+use test_gate::InstalledGate as InstalledNativeWork;
 
 pub(super) fn native_work_gate(file: &std::fs::File) {
-    let gate = NATIVE_WORK
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap()
-        .remove(&(file as *const std::fs::File as usize));
-    if let Some(gate) = gate {
-        let _ = gate.started.send(());
-        let mut released = gate.released.lock().unwrap();
-        while !*released {
-            released = gate.wake.wait(released).unwrap();
-        }
-    }
-}
-
-struct InstalledNativeWork {
-    key: usize,
-    gate: Arc<NativeWorkGate>,
-    started: mpsc::Receiver<()>,
-}
-
-impl InstalledNativeWork {
-    fn new(file: &std::fs::File) -> Self {
-        let (started, rx) = mpsc::channel();
-        let gate = Arc::new(NativeWorkGate {
-            started,
-            released: Mutex::new(false),
-            wake: Condvar::new(),
-        });
-        let key = file as *const std::fs::File as usize;
-        assert!(
-            NATIVE_WORK
-                .get_or_init(Default::default)
-                .lock()
-                .unwrap()
-                .insert(key, gate.clone())
-                .is_none()
-        );
-        Self {
-            key,
-            gate,
-            started: rx,
-        }
-    }
-}
-
-impl Drop for InstalledNativeWork {
-    fn drop(&mut self) {
-        *self.gate.released.lock().unwrap() = true;
-        self.gate.wake.notify_all();
-        NATIVE_WORK.get().unwrap().lock().unwrap().remove(&self.key);
-    }
+    test_gate::native_work_gate(file);
 }
 
 #[tokio::test]

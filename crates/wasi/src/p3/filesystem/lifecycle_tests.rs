@@ -92,88 +92,31 @@ fn terminal_write_and_append_retain_consumer_content() {
 }
 
 use futures::FutureExt as _;
-use std::collections::BTreeMap;
-use std::sync::{Condvar, Mutex, OnceLock, mpsc as sync_mpsc};
+use std::sync::{Mutex, mpsc as sync_mpsc};
 use std::time::Duration;
 use wasmtime::component::FutureConsumer;
 use wasmtime::{Config, Engine, Store};
 
-// Select the exact file under test so parallel filesystem tests cannot enter a
-// gate installed by another test. Timeouts only bound a broken test; channels
-// and the condition variable establish every ordering asserted below.
-struct NativeGate {
-    started: sync_mpsc::Sender<()>,
-    released: Mutex<bool>,
-    wake: Condvar,
-}
+#[path = "../../filesystem/test_gate.rs"]
+mod test_gate;
+use test_gate::{InstalledGate, NativeGate};
 
-static GATES: OnceLock<Mutex<BTreeMap<usize, Arc<NativeGate>>>> = OnceLock::new();
 static GUEST_GATES: Mutex<Vec<(std::fs::File, Arc<NativeGate>)>> = Mutex::new(Vec::new());
 
 pub(super) fn native_work_gate(file: &Arc<std::fs::File>) {
-    let gate = GATES
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap()
-        .remove(&(Arc::as_ptr(file) as usize));
-    // A guest opens its own File allocation. Match its native identity against
-    // a separately opened handle in the test's private temporary directory.
-    let gate = gate.or_else(|| {
+    if test_gate::native_work_gate(file) {
+        return;
+    }
+    // A guest opens its own allocation, so match native identity instead.
+    let gate = {
         let mut gates = GUEST_GATES.lock().unwrap();
-        let index = gates
+        gates
             .iter()
-            .position(|(native, _)| sys::is_same_file(native, file).unwrap())?;
-        Some(gates.swap_remove(index).1)
-    });
+            .position(|(native, _)| sys::is_same_file(native, file).unwrap())
+            .map(|index| gates.swap_remove(index).1)
+    };
     if let Some(gate) = gate {
-        let _ = gate.started.send(());
-        let mut released = gate.released.lock().unwrap();
-        while !*released {
-            released = gate.wake.wait(released).unwrap();
-        }
-    }
-}
-
-struct InstalledGate {
-    key: usize,
-    gate: Arc<NativeGate>,
-    started: sync_mpsc::Receiver<()>,
-}
-
-impl InstalledGate {
-    fn new(file: &Arc<std::fs::File>) -> Self {
-        let (tx, started) = sync_mpsc::channel();
-        let gate = Arc::new(NativeGate {
-            started: tx,
-            released: Mutex::new(false),
-            wake: Condvar::new(),
-        });
-        let key = Arc::as_ptr(file) as usize;
-        assert!(
-            GATES
-                .get_or_init(Default::default)
-                .lock()
-                .unwrap()
-                .insert(key, gate.clone())
-                .is_none()
-        );
-        Self { key, gate, started }
-    }
-
-    fn wait_started(&self) {
-        self.started.recv_timeout(Duration::from_secs(30)).unwrap();
-    }
-
-    fn release(&self) {
-        *self.gate.released.lock().unwrap() = true;
-        self.gate.wake.notify_all();
-    }
-}
-
-impl Drop for InstalledGate {
-    fn drop(&mut self) {
-        self.release();
-        GATES.get().unwrap().lock().unwrap().remove(&self.key);
+        gate.block();
     }
 }
 
@@ -186,12 +129,7 @@ struct GuestGate {
 #[cfg(feature = "p2")]
 impl GuestGate {
     fn new(file: std::fs::File) -> Self {
-        let (tx, started) = sync_mpsc::channel();
-        let gate = Arc::new(NativeGate {
-            started: tx,
-            released: Mutex::new(false),
-            wake: Condvar::new(),
-        });
+        let (gate, started) = NativeGate::new();
         GUEST_GATES.lock().unwrap().push((file, gate.clone()));
         Self { gate, started }
     }
@@ -201,8 +139,7 @@ impl GuestGate {
     }
 
     fn release(&self) {
-        *self.gate.released.lock().unwrap() = true;
-        self.gate.wake.notify_all();
+        self.gate.release();
     }
 }
 
