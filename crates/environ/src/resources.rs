@@ -77,7 +77,7 @@ impl crate::component::Component {
     pub fn resources_required<'a>(
         &self,
         get_module: &'a dyn Fn(crate::StaticModuleIndex) -> &'a crate::Module,
-    ) -> Option<ResourcesRequired> {
+    ) -> ResourcesRequired {
         use crate::component::{GlobalInitializer, InstantiateModule};
         let mut resources = ResourcesRequired {
             num_memories: 0,
@@ -95,7 +95,6 @@ impl crate::component::Component {
                     InstantiateModule::Import(_, _) => {
                         // We can't statically determine the resources required
                         // to instantiate this component.
-                        return None;
                     }
                 },
                 GlobalInitializer::LowerImport { .. }
@@ -107,6 +106,6 @@ impl crate::component::Component {
                 | GlobalInitializer::Resource(_) => {}
             }
         }
-        Some(resources)
+        resources
     }
 }
