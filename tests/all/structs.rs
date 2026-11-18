@@ -390,7 +390,7 @@ fn passing_structs_through_wasm_with_untyped_calls() -> Result<()> {
 
     let func = Func::new(&mut store, func_ty, |mut caller, args, results| {
         let s = args[0].unwrap_any_ref().unwrap();
-        let s = s.unwrap_rooted().unwrap_struct(&mut caller)?;
+        let s = s.to_rooted(&mut caller)?.unwrap_struct(&mut caller)?;
         assert_eq!(s.field(&mut caller, 0)?.unwrap_i32(), 42);
         results[0] = args[0];
         Ok(())

@@ -87,7 +87,7 @@ impl AnyRef {
         match *self {}
     }
 
-    pub(crate) fn _ty_of(_store: &StoreOpaque, _gc_ref: &VMGcRef) -> Result<HeapType> {
+    pub(crate) fn ty_of_(_store: &StoreOpaque, _gc_ref: &VMGcRef) -> Result<HeapType> {
         unreachable!()
     }
 

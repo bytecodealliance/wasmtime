@@ -558,7 +558,7 @@ fn passing_arrays_through_wasm_with_untyped_calls() -> Result<()> {
 
     let func = Func::new(&mut store, func_ty, |mut caller, args, results| {
         let a = args[0].unwrap_any_ref().unwrap();
-        let a = a.unwrap_rooted().unwrap_array(&mut caller)?;
+        let a = a.to_rooted(&mut caller)?.unwrap_array(&mut caller)?;
         assert_eq!(a.len(&mut caller)?, 1);
         assert_eq!(a.get(&mut caller, 0)?.unwrap_i32(), 42);
         results[0] = args[0];

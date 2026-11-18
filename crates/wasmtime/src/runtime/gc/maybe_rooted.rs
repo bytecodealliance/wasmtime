@@ -86,6 +86,53 @@ impl<T: GcRef> MaybeRooted<T> {
             .expect("MaybeRooted::unwrap_rooted on a reference that is not rooted")
     }
 
+    /// Root this reference in place, if it is not rooted already, in the
+    /// current LIFO rooting scope, and return it as a [`Rooted<T>`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this reference is no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn ensure_rooted(&mut self, mut store: impl AsContextMut) -> Result<Rooted<T>> {
+        self.ensure_rooted_(store.as_context_mut().0)
+    }
+
+    pub(crate) fn ensure_rooted_(&mut self, store: &mut StoreOpaque) -> Result<Rooted<T>> {
+        let rooted = self.to_rooted_(store)?;
+        *self = MaybeRooted::Rooted(rooted);
+        Ok(rooted)
+    }
+
+    /// Get a [`Rooted<T>`] referencing the same GC object as this reference,
+    /// rooting it in the current LIFO rooting scope if it is not rooted
+    /// already.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this reference is no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn to_rooted(&self, mut store: impl AsContextMut) -> Result<Rooted<T>> {
+        self.to_rooted_(store.as_context_mut().0)
+    }
+
+    pub(crate) fn to_rooted_(&self, store: &mut StoreOpaque) -> Result<Rooted<T>> {
+        match self {
+            MaybeRooted::Rooted(r) => {
+                assert!(
+                    r.comes_from_same_store(store),
+                    "object used with wrong store"
+                );
+                Ok(*r)
+            }
+        }
+    }
+
     /// Create an [`OwnedRooted<T>`] holding onto the same GC object as this
     /// reference.
     ///
@@ -144,7 +191,7 @@ impl<T: GcRef> MaybeRooted<T> {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
+    pub(crate) fn to_raw_(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
         let gc_ref = self.try_clone_gc_ref(store)?;
         let raw = match store.optional_gc_store_mut() {
             Some(s) => s.expose_gc_ref_to_wasm(gc_ref)?,
@@ -165,7 +212,7 @@ impl<T: GcRef> MaybeRooted<T> {
         store: &mut AutoAssertNoGc<'_>,
     ) -> Result<u32> {
         match this {
-            Some(r) => r._to_raw(store),
+            Some(r) => r.to_raw_(store),
             None => Ok(0),
         }
     }
@@ -173,7 +220,7 @@ impl<T: GcRef> MaybeRooted<T> {
 
 impl MaybeRooted<AnyRef> {
     /// The type of the referenced object; see [`AnyRef::ty`].
-    pub(crate) fn _ty(&self, store: &StoreOpaque) -> Result<HeapType> {
-        AnyRef::_ty_of(store, self.try_gc_ref(store)?)
+    pub(crate) fn ty_(&self, store: &StoreOpaque) -> Result<HeapType> {
+        AnyRef::ty_of_(store, self.try_gc_ref(store)?)
     }
 }

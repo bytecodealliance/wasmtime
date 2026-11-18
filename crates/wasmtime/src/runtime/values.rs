@@ -179,7 +179,7 @@ impl Val {
                 HeapType::ConcreteFunc(f.load_ty(store)),
             )),
             Val::AnyRef(None) => ValType::NULLREF,
-            Val::AnyRef(Some(a)) => ValType::Ref(RefType::new(false, a._ty(store)?)),
+            Val::AnyRef(Some(a)) => ValType::Ref(RefType::new(false, a.ty_(store)?)),
             Val::ExnRef(None) => ValType::NULLEXNREF,
             Val::ExnRef(Some(e)) => {
                 e.try_gc_ref(store)?;
@@ -513,6 +513,56 @@ impl Val {
     #[inline]
     pub fn unwrap_funcref(&self) -> Option<&Func> {
         self.funcref().expect("expected funcref")
+    }
+
+    /// Root any GC reference in this value, in place, in the current LIFO
+    /// rooting scope, if it is not rooted already.
+    ///
+    /// Afterwards, any GC reference in this value is a
+    /// [`MaybeRooted::Rooted`], and so stays valid until that scope exits.
+    /// Values that are not GC references, or that are already rooted, are left
+    /// unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this value holds a GC reference that is no longer
+    /// valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this value is associated with a different store.
+    pub fn ensure_rooted(&mut self, mut store: impl AsContextMut) -> Result<()> {
+        let store = store.as_context_mut().0;
+        match self {
+            Val::ExternRef(Some(r)) => {
+                r.ensure_rooted_(store)?;
+            }
+            Val::AnyRef(Some(r)) => {
+                r.ensure_rooted_(store)?;
+            }
+            Val::ExnRef(Some(r)) => {
+                r.ensure_rooted_(store)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Get a copy of this value in which any GC reference is rooted; see
+    /// [`Val::ensure_rooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this value holds a GC reference that is no longer
+    /// valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this value is associated with a different store.
+    pub fn to_rooted(&self, store: impl AsContextMut) -> Result<Val> {
+        let mut val = *self;
+        val.ensure_rooted(store)?;
+        Ok(val)
     }
 
     #[inline]
@@ -1192,7 +1242,7 @@ impl Ref {
                 Ref::Func(Some(f)) => HeapType::ConcreteFunc(f.load_ty(store)),
 
                 Ref::Any(None) => HeapType::None,
-                Ref::Any(Some(a)) => a._ty(store)?,
+                Ref::Any(Some(a)) => a.ty_(store)?,
 
                 Ref::Exn(None) => HeapType::NoExn,
                 Ref::Exn(Some(e)) => {
@@ -1234,7 +1284,7 @@ impl Ref {
             (Ref::Func(Some(f)), HeapType::ConcreteFunc(func_ty)) => f._matches_ty(store, func_ty),
             (Ref::Func(_), _) => false,
 
-            (Ref::Any(Some(a)), ty) => a._ty(store)?.matches(ty),
+            (Ref::Any(Some(a)), ty) => a.ty_(store)?.matches(ty),
             (
                 Ref::Any(None),
                 HeapType::Any
@@ -1271,6 +1321,49 @@ impl Ref {
             let actual_ty = self.load_ty(store)?;
             bail!("type mismatch: expected {ty}, found {actual_ty}")
         }
+    }
+
+    /// Root this reference, in place, if it is a GC reference that is not
+    /// rooted already; see [`Val::ensure_rooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this is a GC reference that is no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn ensure_rooted(&mut self, mut store: impl AsContextMut) -> Result<()> {
+        let store = store.as_context_mut().0;
+        match self {
+            Ref::Extern(Some(r)) => {
+                r.ensure_rooted_(store)?;
+            }
+            Ref::Any(Some(r)) => {
+                r.ensure_rooted_(store)?;
+            }
+            Ref::Exn(Some(r)) => {
+                r.ensure_rooted_(store)?;
+            }
+            Ref::Extern(None) | Ref::Any(None) | Ref::Exn(None) | Ref::Func(_) => {}
+        }
+        Ok(())
+    }
+
+    /// Get a copy of this reference that is rooted if it is a GC reference;
+    /// see [`Ref::ensure_rooted`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if this is a GC reference that is no longer valid.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this reference is associated with a different store.
+    pub fn to_rooted(&self, store: impl AsContextMut) -> Result<Ref> {
+        let mut r = self.clone();
+        r.ensure_rooted(store)?;
+        Ok(r)
     }
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
