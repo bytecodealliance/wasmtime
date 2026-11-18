@@ -22,9 +22,9 @@
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
-;;     region2 = 196 ""
-;;     region3 = 206 ""
+;;     region1 = 25 ""
+;;     region2 = 160 ""
+;;     region3 = 196 ""
 ;;     region4 = 147 ""
 ;;     region5 = 115 ""
 ;;     region6 = 77 ""
@@ -36,7 +36,7 @@
 ;;     region12 = 135 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+16
 ;;     sig0 = (i64 vmctx, i32) tail
 ;;     sig1 = (i64 vmctx) -> i8 tail
 ;;     fn0 = colocated u805306368:21 sig0
@@ -48,7 +48,7 @@
 ;;                                     store notrap aligned region12 v2, v145
 ;; @002f                               trapz v2, user16
 ;; @002f                               v6 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @002f                               v7 = load.i64 notrap aligned readonly can_move region2 v6+32
+;; @002f                               v7 = load.i64 notrap aligned readonly can_move region2 v6+24
 ;; @002f                               v5 = uextend.i64 v2
 ;; @002f                               v8 = iadd v7, v5
 ;; @002f                               v9 = iconst.i64 24

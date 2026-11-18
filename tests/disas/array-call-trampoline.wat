@@ -11,11 +11,11 @@
 ;; function u268435456:0(i64 vmctx, i64, i64, i64) -> i8 system_v {
 ;;     region0 = 17 ""
 ;;     region1 = 123 ""
-;;     region2 = 231 ""
-;;     region3 = 243 ""
-;;     region4 = 209 ""
-;;     region5 = 68 ""
-;;     region6 = 30 ""
+;;     region2 = 243 ""
+;;     region3 = 72 ""
+;;     region4 = 231 ""
+;;     region5 = 112 ""
+;;     region6 = 34 ""
 ;;     sig0 = (i64 vmctx, i64, i32, i64) -> i32, i64 tail
 ;;     fn0 = colocated u0:0 sig0
 ;;
@@ -30,11 +30,11 @@
 ;;     v7 = load.i64 notrap little region0 v2+16
 ;;     v9 = get_frame_pointer.i64 
 ;;     v8 = load.i64 notrap aligned readonly can_move region1 v0+8
-;;     store notrap aligned region2 v9, v8+72
+;;     store notrap aligned region2 v9, v8+64
 ;;     v10 = get_stack_pointer.i64 
-;;     store notrap aligned region3 v10, v8+64
+;;     store notrap aligned region3 v10, v8+56
 ;;     v11 = get_exception_handler_address.i64 block1, 0
-;;     store notrap aligned region4 v11, v8+80
+;;     store notrap aligned region4 v11, v8+72
 ;;     try_call fn0(v0, v1, v6, v7), sig0, block2(ret0, ret1), [ default: block3 ]
 ;;
 ;; block2(v12: i32, v13: i64):
@@ -45,9 +45,9 @@
 ;;
 ;; block3:
 ;;     v15 = iconst.i64 1
-;;     store notrap aligned region5 v15, v8+136  ; v15 = 1
+;;     store notrap aligned region5 v15, v8+128  ; v15 = 1
 ;;     v16 = iconst.i64 0
-;;     store notrap aligned region6 v16, v8+152  ; v16 = 0
+;;     store notrap aligned region6 v16, v8+144  ; v16 = 0
 ;;     v17 = iconst.i8 0
 ;;     return v17  ; v17 = 0
 ;; }
