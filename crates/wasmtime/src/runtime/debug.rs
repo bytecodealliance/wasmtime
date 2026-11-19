@@ -4,7 +4,7 @@ use super::store::AsStoreOpaque;
 use crate::code::StoreCode;
 use crate::module::RegisterBreakpointState;
 use crate::runtime::epoch_state::EpochStateHandle;
-use crate::store::Running;
+use crate::store::WasmState;
 use crate::sync::RwLock;
 use crate::vm::{Activation, Backtrace};
 use crate::{
@@ -468,12 +468,11 @@ pub struct FrameHandle {
     /// The index of the virtual frame within the physical frame.
     virtual_frame_idx: usize,
 
-    /// Encapsulated proof/witness that Wasm is not running, and that
-    /// we are in the same "not running" epoch in which this handle
-    /// was created. Internally this holds a snapshot of the
-    /// monotonically incrementing counter that is bumped whenever
-    /// execution state changes in the store.
-    not_running: EpochStateHandle<Running>,
+    /// Encapsulated proof/witness that Wasm has not executed in this
+    /// store since this handle was created. Internally this holds a
+    /// snapshot of the monotonically incrementing counter that is
+    /// bumped whenever Wasm executes in the store.
+    wasm_state: EpochStateHandle<WasmState>,
 }
 
 impl FrameHandle {
@@ -494,7 +493,7 @@ impl FrameHandle {
                 return Some(FrameHandle {
                     cursor,
                     virtual_frame_idx: 0,
-                    not_running: store.wasm_not_running().handle(),
+                    wasm_state: store.wasm_state().handle(),
                 });
             }
             // SAFETY: activation is still valid (valid on entry per
@@ -519,7 +518,7 @@ impl FrameHandle {
     }
 
     fn is_valid_impl(&self, store: &StoreOpaque) -> bool {
-        self.not_running.is_valid(store.wasm_not_running())
+        self.wasm_state.is_valid(store.wasm_state())
     }
 
     /// Get a handle to the next frame up the activation (the one that
