@@ -540,7 +540,12 @@ impl ComponentInstance {
         let store = unsafe { &mut *reference.store.0.as_ptr() };
 
         let instance = Instance::from_wasmtime(store, reference.id);
-        catch_unwind_and_record_trap(store, UncaughtException::Trap, |store| f(store, instance))
+        catch_unwind_and_record_trap(
+            store,
+            crate::runtime::vm::LibCallEffect::All,
+            UncaughtException::Trap,
+            |store| f(store, instance),
+        )
     }
 
     /// Returns the `InstanceId` associated with the `vmctx` provided.

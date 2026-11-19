@@ -109,6 +109,47 @@ pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
     tls::with(|info| unsafe { info.unwrap().unwind(store) })
 }
 
+/// The effects that a libcall (or other callee entered from Wasm
+/// through `catch_unwind_and_record_trap`) may have, used to decide
+/// whether entering it is an observable Wasm-to-host transition.
+///
+/// A transition from Wasm to the host normally invokes
+/// `StoreOpaque::on_wasm_to_host_transition`, invalidating handles
+/// (such as `Unrooted` GC refs and debugger `FrameHandle`s) to state
+/// that Wasm may have mutated. That invalidation only matters once
+/// host code can observe the state, though. A *leaf* callee -- one
+/// that cannot invoke other arbitrary host or Wasm code and that does
+/// not itself dereference any such handle -- is indistinguishable
+/// from more inline compiled Wasm code. Such libcalls are classified
+/// `Pure` or `LeafWithTrackedEffect` and skip the hook.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LibCallEffect {
+    /// A leaf with no semantically visible side effects. It may read state,
+    /// and may memoize results, but may not mutate Wasm state.
+    Pure,
+    /// A leaf whose side effects are tracked separately where
+    /// relevant: it may mutate Wasm-visible state (e.g. the linear
+    /// memory) directly, but any effect that host code must observe
+    /// -- such as a watchpoint hit -- is handled by a separate,
+    /// libcall that compiled code invokes.
+    LeafWithTrackedEffect,
+    /// Anything, including running embedder code. Always an observable
+    /// transition.
+    All,
+}
+
+impl LibCallEffect {
+    /// Whether entering a callee with this effect is an observable
+    /// Wasm-to-host transition, requiring the transition hook.
+    #[inline(always)]
+    pub const fn is_observable_transition(self) -> bool {
+        match self {
+            LibCallEffect::Pure | LibCallEffect::LeafWithTrackedEffect => false,
+            LibCallEffect::All => true,
+        }
+    }
+}
+
 /// Invokes the closure `f` and handles any error/panic/trap that happens
 /// within.
 ///
@@ -139,16 +180,26 @@ pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
 /// propagate the exception to their wasm caller, but component host functions
 /// and intrinsics are a component boundary which exceptions cannot cross, so
 /// there the exception is instead turned into a trap.
+///
+/// The `effect` parameter describes what `f` may do. Unless it is
+/// [`LibCallEffect::All`], the Wasm-to-host transition hook is
+/// skipped; see [`LibCallEffect`].
+#[inline]
 pub fn catch_unwind_and_record_trap<R>(
     store: &mut dyn VMStore,
+    effect: LibCallEffect,
     uncaught_exception: UncaughtException,
     f: impl FnOnce(&mut dyn VMStore) -> R,
 ) -> R::Abi
 where
     R: HostResult,
 {
-    // Wasm has called out to the host.
-    store.store_opaque_mut().on_wasm_to_host_transition();
+    // Wasm has called out to the host. If the callee can't run host code or
+    // otherwise observe Wasm-mutated state, this isn't an observable
+    // transition and we can skip the hook.
+    if effect.is_observable_transition() {
+        store.store_opaque_mut().on_wasm_to_host_transition();
+    }
 
     // Invoke the closure `f`, optionally catching unwinds depending on `R`. The
     // return value is always provided and if unwind information is provided

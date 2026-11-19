@@ -324,6 +324,27 @@ impl Instance {
     where
         R: HostResult,
     {
+        // SAFETY: same contract as this function.
+        unsafe {
+            Self::enter_host_from_wasm_with_effect(vmctx, crate::runtime::vm::LibCallEffect::All, f)
+        }
+    }
+
+    /// Like `enter_host_from_wasm`, but for a callee with only the given
+    /// effects; see `LibCallEffect`.
+    ///
+    /// # Safety
+    ///
+    /// Same as `enter_host_from_wasm`.
+    #[inline]
+    pub(crate) unsafe fn enter_host_from_wasm_with_effect<R>(
+        vmctx: NonNull<VMContext>,
+        effect: crate::runtime::vm::LibCallEffect,
+        f: impl FnOnce(&mut dyn VMStore, InstanceId) -> R,
+    ) -> R::Abi
+    where
+        R: HostResult,
+    {
         // SAFETY: It's a contract of this function that `vmctx` is a valid
         // pointer with neither the store nor other instances actively in use
         // when this is called, so it should be safe to acquire a mutable
@@ -337,7 +358,7 @@ impl Instance {
 
         // Thread the `store` and `instance` through panic/trap infrastructure
         // back into `f`.
-        catch_unwind_and_record_trap(store, UncaughtException::Propagate, |store| {
+        catch_unwind_and_record_trap(store, effect, UncaughtException::Propagate, |store| {
             f(store, instance)
         })
     }

@@ -76,6 +76,66 @@ use wasmtime_wmemcheck::AccessError::{
     DoubleMalloc, InvalidFree, InvalidRead, InvalidWrite, OutOfBounds,
 };
 
+/// The `LibCallEffect` of each libcall; see `LibCallEffect` for what each
+/// classification permits. Anything not listed here is `All`, which is always
+/// correct.
+macro_rules! libcall_effect {
+    // Pure computation on the arguments.
+    (ceil_f32) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (ceil_f64) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (floor_f32) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (floor_f64) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (trunc_f32) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (trunc_f64) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (nearest_f32) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (nearest_f64) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (i8x16_swizzle) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (i8x16_shuffle) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (fma_f32x4) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    (fma_f64x2) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    // Reads the engine's type registry, memoizing in a store-internal cache;
+    // memoization is semantically transparent.
+    (is_subtype) => {
+        crate::runtime::vm::LibCallEffect::Pure
+    };
+    // Raw `memmove`/`memset` on pointers computed (and bounds-checked) by
+    // compiled code; watchpoints are checked by a separate libcall first.
+    (memory_copy) => {
+        crate::runtime::vm::LibCallEffect::LeafWithTrackedEffect
+    };
+    (memory_fill) => {
+        crate::runtime::vm::LibCallEffect::LeafWithTrackedEffect
+    };
+    ($other:ident) => {
+        crate::runtime::vm::LibCallEffect::All
+    };
+}
+use libcall_effect;
+
 /// Raw functions which are actually called from compiled code.
 ///
 /// Invocation of a builtin currently looks like:
@@ -120,9 +180,11 @@ pub mod raw {
                 ) $(-> libcall!(@ty $result))? {
                     $(#[cfg($attr)])?
                     unsafe {
-                        Instance::enter_host_from_wasm(vmctx, |store, instance| {
-                            super::$name(store, instance, $($pname),*)
-                        })
+                        Instance::enter_host_from_wasm_with_effect(
+                            vmctx,
+                            super::libcall_effect!($name),
+                            |store, instance| super::$name(store, instance, $($pname),*),
+                        )
                     }
                     $(
                         #[cfg(not($attr))]
