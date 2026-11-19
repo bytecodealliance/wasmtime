@@ -539,9 +539,10 @@ impl InterpreterRef<'_> {
                 // borrowed, per this function's contract.
                 unsafe {
                     Instance::enter_host_from_wasm(caller, |store, _instance| {
-                        trap = store.modules().store_code_by_pc(regs.pc).and_then(
-                            |(code, text_offset)| code.code_memory().lookup_trap_code(text_offset),
-                        );
+                        trap = store
+                            .modules()
+                            .store_or_engine_code_by_pc(regs.pc)
+                            .and_then(|code| code.lookup_trap_code(code.offset()));
                     });
                 }
                 match trap {

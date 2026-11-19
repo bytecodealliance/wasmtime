@@ -50,10 +50,15 @@ pub unsafe fn compute_handler(
             frame.fp(),
             frame.pc()
         );
-        let (store_code, rel_pc) = store.modules().store_code_by_pc(frame.pc())?;
-        let et = ExceptionTable::parse(store_code.code_memory().exception_tables())
+        // Note that this lookup also resolves PCs within the engine's copy of
+        // code when the store has a private copy (as with guest debugging):
+        // store-invariant trampolines, such as the one that invokes resource
+        // destructors, run directly out of engine code and may have exception
+        // handlers of their own.
+        let code = store.modules().store_or_engine_code_by_pc(frame.pc())?;
+        let et = ExceptionTable::parse(code.exception_tables())
             .expect("Exception tables were validated on module load");
-        let (frame_offset, handlers) = et.lookup_pc(u32::try_from(rel_pc).unwrap());
+        let (frame_offset, handlers) = et.lookup_pc(u32::try_from(code.offset()).unwrap());
         let fp_to_sp = frame_offset.map(|frame_offset| -isize::try_from(frame_offset).unwrap());
         for handler in handlers {
             log::trace!("-> checking handler: {handler:?}");
@@ -107,10 +112,9 @@ pub unsafe fn compute_handler(
             if is_match {
                 let fp_to_sp = fp_to_sp.expect("frame offset must be known if we found a handler");
                 return Some((
-                    (store_code.text_range().start
-                        + usize::try_from(handler.handler_offset)
-                            .expect("Module larger than usize"))
-                    .raw(),
+                    code.pc_for_text_offset(
+                        usize::try_from(handler.handler_offset).expect("Module larger than usize"),
+                    ),
                     frame.fp().wrapping_add_signed(fp_to_sp),
                 ));
             }

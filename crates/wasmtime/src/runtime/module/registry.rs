@@ -82,6 +82,10 @@ struct LoadedCode {
     /// The StoreCode in this range.
     code: StoreCode,
 
+    /// The EngineCode from which `code` was created. This may be at a
+    /// different address than `code` if `code` is a private copy.
+    engine_code: Arc<EngineCode>,
+
     /// The index of compiled functions in `code`.
     ///
     /// This index is used to map from program counters back to a `FuncKey`.
@@ -104,6 +108,75 @@ struct LoadedCode {
 /// within the Engine.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RegisteredModuleId(CompiledModuleId);
+
+/// The result of [`ModuleRegistry::store_or_engine_code_by_pc`]: the copy
+/// of code containing a PC, along with the PC's offset from the start of
+/// that copy's text section.
+///
+/// Both copies of a given block of code have identical contents and
+/// metadata, so the metadata accessors here may be used regardless of
+/// which copy the PC is in.
+pub enum StoreOrEngineCodeAndOffset<'a> {
+    /// The PC is within the store's copy of the code.
+    StoreCode(&'a StoreCode, usize),
+    /// The PC is within the engine's copy of the code, which is not the
+    /// copy that the store uses for Wasm functions. This is the case for
+    /// store-invariant functions (e.g. trampolines) when the store has a
+    /// private copy of code.
+    EngineCode(&'a EngineCode, usize),
+}
+
+impl<'a> StoreOrEngineCodeAndOffset<'a> {
+    /// The offset of the looked-up PC from the start of the text section.
+    pub fn offset(&self) -> usize {
+        match self {
+            Self::StoreCode(_, offset) | Self::EngineCode(_, offset) => *offset,
+        }
+    }
+
+    /// Compute the absolute PC for the given offset into the text section,
+    /// within the same copy of the code as the looked-up PC.
+    pub fn pc_for_text_offset(&self, offset: usize) -> usize {
+        match self {
+            Self::StoreCode(code, _) => (code.text_range().start + offset).raw(),
+            Self::EngineCode(code, _) => (code.text_range().start + offset).raw(),
+        }
+    }
+
+    /// The encoded exception-tables section for this code.
+    pub fn exception_tables(&self) -> &'a [u8] {
+        match self {
+            Self::StoreCode(code, _) => code.code_memory().exception_tables(),
+            Self::EngineCode(code, _) => code.exception_tables(),
+        }
+    }
+
+    /// The encoded stack-map section for this code.
+    pub fn stack_map_data(&self) -> &'a [u8] {
+        match self {
+            Self::StoreCode(code, _) => code.code_memory().stack_map_data(),
+            Self::EngineCode(code, _) => code.stack_map_data(),
+        }
+    }
+
+    /// Look up the trap code, if any, for the given offset into the text
+    /// section.
+    pub fn lookup_trap_code(&self, text_offset: usize) -> Option<wasmtime_environ::CompiledTrap> {
+        match self {
+            Self::StoreCode(code, _) => code.code_memory().lookup_trap_code(text_offset),
+            Self::EngineCode(code, _) => code.lookup_trap_code(text_offset),
+        }
+    }
+
+    /// The parsed debug frame table for this code, if any.
+    #[cfg(feature = "debug")]
+    pub fn frame_table(&self) -> Option<wasmtime_environ::FrameTable<'a>> {
+        match self {
+            Self::StoreCode(code, _) => code.code_memory().frame_table(),
+            Self::EngineCode(code, _) => code.frame_table(),
+        }
+    }
+}
 
 fn assert_no_overlap(
     loaded_code: &TryBTreeMap<StoreCodePC, LoadedCode>,
@@ -175,14 +248,55 @@ impl ModuleRegistry {
         Some((code, offset))
     }
 
-    /// Consults this [`ModuleRegistry`] to see if `pc` corrseponds to any
-    /// previously-registered block of code.
+    /// Consults this [`ModuleRegistry`] to see if `pc` corresponds to
+    /// any previously-registered block of code.
     ///
-    /// Upon success returns the [`StoreCode`] as well as a relative pc from the
-    /// start of the text section.
+    /// Upon success returns the [`StoreCode`] as well as a relative
+    /// pc from the start of the text section.
     pub fn store_code_by_pc(&self, pc: usize) -> Option<(&StoreCode, usize)> {
         let (code, pc) = self.loaded_code_by_pc(pc)?;
         Some((&code.code, pc))
+    }
+
+    /// Consults this [`ModuleRegistry`] to see if `pc` corresponds to
+    /// the engine's canonical copy of any previously-registered block of
+    /// code.
+    ///
+    /// Note that when the store's code is shared with the engine (i.e.,
+    /// guest debugging is not enabled) this finds the same code as
+    /// [`ModuleRegistry::store_code_by_pc`]; otherwise, the engine's
+    /// copy is at a different address than the store's private copy.
+    ///
+    /// Upon success returns the [`EngineCode`] as well as a relative
+    /// pc from the start of the text section.
+    pub fn engine_code_by_pc(&self, pc: usize) -> Option<(&EngineCode, usize)> {
+        let (_, store_start) = self
+            .store_code
+            .range(..=EngineCodePC::from_raw(pc))
+            .next_back()?;
+        let code = self.loaded_code.get(*store_start)?;
+        let offset = EngineCodePC::offset_of(code.engine_code.text_range(), pc)?;
+        Some((&code.engine_code, offset))
+    }
+
+    /// Consults this [`ModuleRegistry`] to see if `pc` corresponds to
+    /// either the store's copy or the engine's copy of any
+    /// previously-registered block of code.
+    ///
+    /// When guest debugging is enabled each store has a private copy of
+    /// all code, but store-invariant functions (e.g. component trampolines
+    /// and the resource-drop trampoline) are still executed directly out of
+    /// the engine's copy of code. Frames for those functions don't fall
+    /// within any `StoreCode` text range, so any lookup of per-PC metadata
+    /// (exception tables, stack maps, etc.) for an arbitrary frame on the
+    /// stack must use this method rather than
+    /// [`ModuleRegistry::store_code_by_pc`].
+    pub fn store_or_engine_code_by_pc(&self, pc: usize) -> Option<StoreOrEngineCodeAndOffset<'_>> {
+        if let Some((code, offset)) = self.store_code_by_pc(pc) {
+            return Some(StoreOrEngineCodeAndOffset::StoreCode(code, offset));
+        }
+        let (code, offset) = self.engine_code_by_pc(pc)?;
+        Some(StoreOrEngineCodeAndOffset::EngineCode(code, offset))
     }
 
     /// Fetches the `StoreCode` for a given `EngineCode`.
@@ -326,6 +440,7 @@ impl ModuleRegistry {
                     store_code_pc,
                     LoadedCode {
                         code: store_code,
+                        engine_code: code.clone(),
                         index: index.clone(),
                         modules: Default::default(),
                     },
