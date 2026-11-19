@@ -2020,6 +2020,8 @@ impl<T: Send> wasmtime::CallHookHandler<T> for BlockingCallHookHandler {
 // hook abandons that call partway through, so the store must be poisoned
 // rather than left with a stale current guest task.
 async fn drop_run_concurrent_blocked_in_call_hook(which: BlockingCallHook) -> Result<()> {
+    _ = env_logger::try_init();
+
     let mut config = Config::new();
     config.wasm_component_model_async(true);
     let engine = Engine::new(&config)?;
@@ -2031,10 +2033,14 @@ async fn drop_run_concurrent_blocked_in_call_hook(which: BlockingCallHook) -> Re
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
-    *block.lock().unwrap() = Some(which);
-    let future = Box::pin(store.run_concurrent(async |a| run.call_concurrent(a, ()).await));
-    assert!(PollOnce::new(future).await.is_err());
-    *block.lock().unwrap() = None;
+    {
+        *block.lock().unwrap() = Some(which);
+        let mut future = pin!(store.run_concurrent(async |a| run.call_concurrent(a, ()).await));
+        for _ in 0..10 {
+            assert!(PollOnce::new(&mut future).await.is_err());
+        }
+        *block.lock().unwrap() = None;
+    }
 
     let err = store
         .run_concurrent(async |a| run.call_concurrent(a, ()).await)
@@ -3510,7 +3516,7 @@ async fn yield_callback_after_dropped_event_loop() -> Result<()> {
     (func (export "run") (result i32) (i32.const 1 (; YIELD ;)))
     (func (export "run-cb") (param i32 i32 i32) (result i32)
       (global.set $n (i32.add (global.get $n) (i32.const 1)))
-      (if (i32.ge_u (global.get $n) (i32.const 3))
+      (if (i32.ge_u (global.get $n) (i32.const 20))
         (then
           (call $task.return)
           (return (i32.const 0 (; EXIT ;)))))
@@ -3534,10 +3540,14 @@ async fn yield_callback_after_dropped_event_loop() -> Result<()> {
 
     // Drop the call when the event loop yields before calling the callback
     // again, then check that the next event loop finishes the task.
-    let future = run.call_async(&mut store, ());
-    assert!(PollOnce::new(Box::pin(future)).await.is_err());
+    {
+        let mut future = pin!(run.call_async(&mut store, ()));
+        for _ in 0..10 {
+            assert!(PollOnce::new(&mut future).await.is_err());
+        }
+    }
     store
-        .run_concurrent(async |_| yield_times(10).await)
+        .run_concurrent(async |_| yield_times(30).await)
         .await?;
     store.assert_concurrent_state_empty();
     Ok(())
@@ -3916,23 +3926,15 @@ async fn cancel_stream_read_completed_by_host() -> Result<()> {
     }
 }
 
-#[tokio::test]
-#[cfg_attr(miri, ignore)]
-async fn poll_ready_for_concurrent_call() -> Result<()> {
-    _ = env_logger::try_init();
-
-    let engine = Engine::new(&Config::new())?;
-    let component = Component::new(
-        &engine,
-        r#"
+static RETURN_THEN_YIELD_THEN_EXIT: &str = r#"
 (component
   (core module $m
     (import "" "task.return" (func $task.return))
     (func (export "run") (result i32)
+      (call $task.return)
       (i32.const 1 (; YIELD ;))
     )
     (func (export "cb") (param i32 i32 i32) (result i32)
-      (call $task.return)
       (i32.const 0 (; EXIT ;))
     )
   )
@@ -3944,8 +3946,15 @@ async fn poll_ready_for_concurrent_call() -> Result<()> {
   ))
   (func (export "run") async(canon lift (core func $i "run") async (callback (core func $i "cb"))))
 )
-"#,
-    )?;
+"#;
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn poll_ready_for_concurrent_call() -> Result<()> {
+    _ = env_logger::try_init();
+
+    let engine = Engine::new(&Config::new())?;
+    let component = Component::new(&engine, RETURN_THEN_YIELD_THEN_EXIT)?;
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine)
         .instantiate_async(&mut store, &component)
@@ -4002,6 +4011,35 @@ async fn poll_ready_for_concurrent_call() -> Result<()> {
                 State::Finish => call.as_mut().poll(cx),
             })
             .await
+        })
+        .await??;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn avoid_yield_starvation() -> Result<()> {
+    _ = env_logger::try_init();
+
+    let engine = Engine::new(&Config::new())?;
+    let component = Component::new(&engine, RETURN_THEN_YIELD_THEN_EXIT)?;
+    let mut store = Store::new(&engine, ());
+    let call_count = 32;
+    store.set_max_concurrent_state_table_capacity(call_count - 1);
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    store
+        .run_concurrent(async move |accessor| {
+            // Previously, this would hit the table capacity limit set above as
+            // new calls preempted existing, yielding tasks and thereby kept
+            // them alive longer than they ought to be.
+            for _ in 0..call_count {
+                run.call_concurrent(accessor, ()).await?;
+            }
+            Ok::<_, wasmtime::Error>(())
         })
         .await??;
 

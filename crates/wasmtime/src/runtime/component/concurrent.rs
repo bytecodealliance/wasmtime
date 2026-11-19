@@ -1164,6 +1164,12 @@ impl<T> Store<T> {
         self.as_context_mut().concurrent_state_table_size()
     }
 
+    #[doc(hidden)]
+    pub fn set_max_concurrent_state_table_capacity(&mut self, max: usize) {
+        self.as_context_mut()
+            .set_max_concurrent_state_table_capacity(max)
+    }
+
     /// Convenience wrapper for [`StoreContextMut::spawn`].
     pub fn spawn(
         &mut self,
@@ -1218,6 +1224,20 @@ impl<T> StoreContextMut<'_, T> {
     #[doc(hidden)]
     pub fn concurrent_state_table_size(&mut self) -> usize {
         self.0.concurrent_state_mut().unwrap().table.get_mut().len()
+    }
+
+    /// Helper function to set the maximum size of the table used to store
+    /// e.g. tasks, threads, waitables, etc.
+    ///
+    /// This is currently only intended for use in Wasmtime's own testing, but
+    /// could potentially be made part of the official public API if desired.
+    #[doc(hidden)]
+    pub fn set_max_concurrent_state_table_capacity(&mut self, max: usize) {
+        self.0
+            .concurrent_state_mut_without_forcing_current_thread()
+            .table
+            .get_mut()
+            .set_max_capacity(max);
     }
 
     /// Spawn a background task to run as part of this instance's event loop.
@@ -3455,7 +3475,12 @@ impl Instance {
                 },
             },
             if host_caller {
-                Priority::High
+                // We put host-initiated calls in the low priority queue so that
+                // they're in line behind any existing, yielding tasks.  This
+                // helps avoid starvation situations when the host is making new
+                // calls faster than old ones can complete.  See issue #14769
+                // for an example.
+                Priority::Low
             } else {
                 Priority::Switch
             },
@@ -6144,6 +6169,10 @@ impl From<TableId<HostTask>> for CurrentThread {
 
 enum Priority {
     Switch,
+    #[expect(
+        dead_code,
+        reason = "Here for completeness and in case we need it later"
+    )]
     High,
     Low,
 }
