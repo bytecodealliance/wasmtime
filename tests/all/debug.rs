@@ -2433,6 +2433,59 @@ async fn fuel_visible_and_mutable_in_debug_handler() -> wasmtime::Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn watchpoint_handler_may_set_fuel() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::default();
+    config.guest_debug(true).consume_fuel(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+    (module
+      (memory (export "memory") 1)
+      (func (export "store") (param $n i32)
+        (loop $l
+          (i32.store8 (i32.const 0) (local.get $n))
+          (local.tee $n (i32.sub (local.get $n) (i32.const 1)))
+          br_if $l))
+      (func (export "fill") (param $n i32)
+        (loop $l
+          (memory.fill (i32.const 0) (local.get $n) (i32.const 1))
+          (local.tee $n (i32.sub (local.get $n) (i32.const 1)))
+          br_if $l)))
+    "#,
+    )?;
+
+    #[derive(Clone)]
+    struct ZeroFuel;
+    impl DebugHandler for ZeroFuel {
+        type Data = ();
+        async fn handle(&self, mut store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+            if let DebugEvent::Watchpoint(_) = event {
+                store.set_fuel(0).unwrap();
+            }
+        }
+    }
+
+    for export in ["store", "fill"] {
+        let mut store = Store::new(&engine, ());
+        store.set_fuel(1_000_000)?;
+        store.set_debug_handler(ZeroFuel);
+        let instance = Instance::new_async(&mut store, &module, &[]).await?;
+        let memory = instance.get_memory(&mut store, "memory").unwrap();
+        store.edit_breakpoints().unwrap().watch(memory, 0..1)?;
+        let func = instance.get_typed_func::<i32, ()>(&mut store, export)?;
+        let err = func.call_async(&mut store, 100).await.unwrap_err();
+        assert_eq!(err.downcast::<Trap>()?, Trap::OutOfFuel, "{export}");
+        assert_eq!(store.get_fuel()?, 0, "{export}");
+    }
+
+    Ok(())
+}
+
 /// Records each watchpoint hit, with the watched memory's first 64 bytes as
 /// the handler sees them.
 #[derive(Clone, Default)]
