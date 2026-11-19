@@ -19,7 +19,7 @@ const WAT: &str = r#"
     )
 "#;
 
-fn engine(separate_constant_pool: bool) -> Result<Engine> {
+fn config(separate_constant_pool: bool) -> Config {
     let mut config = Config::new();
     unsafe {
         config.cranelift_flag_set(
@@ -31,7 +31,11 @@ fn engine(separate_constant_pool: bool) -> Result<Engine> {
             },
         );
     }
-    Engine::new(&config)
+    config
+}
+
+fn engine(separate_constant_pool: bool) -> Result<Engine> {
+    Engine::new(&config(separate_constant_pool))
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
@@ -138,5 +142,40 @@ fn constants_spanning_several_pages_load_correctly() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
     let f = instance.get_typed_func::<i64, i64>(&mut store, "f")?;
     assert_eq!(f.call(&mut store, arg as i64)?, expected);
+    Ok(())
+}
+
+/// With forced veneers the text builder emits an island before each body. The
+/// pending references to constants, which have no veneers, must survive it.
+#[test]
+fn constants_with_forced_jump_veneers() -> Result<()> {
+    let mut config = config(true);
+    unsafe {
+        config.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true");
+    }
+    let engine = Engine::new(&config)?;
+    let wat = r#"
+        (module
+            (func $a (export "a") (result i32)
+                (i32.add
+                    (i32x4.extract_lane 0 (v128.const i32x4 1 2 3 4))
+                    (call $b)))
+            (func $b (result i32)
+                (i32.add
+                    (i32x4.extract_lane 1 (v128.const i32x4 5 10 15 20))
+                    (call $c)))
+            (func $c (result i32)
+                (i32x4.extract_lane 2 (v128.const i32x4 7 8 100 9)))
+        )
+    "#;
+    let cwasm = engine.precompile_module(wat.as_bytes())?;
+    let elf = object::File::parse(&cwasm[..])?;
+    assert!(elf.section_by_name(".wasmtime.constants").is_some());
+
+    let module = unsafe { Module::deserialize(&engine, &cwasm)? };
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let a = instance.get_typed_func::<(), i32>(&mut store, "a")?;
+    assert_eq!(a.call(&mut store, ())?, 1 + 10 + 100);
     Ok(())
 }
