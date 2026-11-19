@@ -23,6 +23,17 @@ const KNOWN_FAILURES: &[&str] = &[
     // with the file stem, like so:
     // "multi-clock-wait",
     "http-request",
+    // Blocked on https://github.com/WebAssembly/wasi-testsuite/pull/297 landing
+    #[cfg(windows)]
+    "filesystem-hard-links",
+    #[cfg(windows)]
+    "filesystem-mkdir-rmdir",
+    #[cfg(windows)]
+    "filesystem-rename",
+    #[cfg(windows)]
+    "filesystem-stat",
+    #[cfg(windows)]
+    "filesystem-unlink-errors",
 ];
 
 const KNOWN_ADAPTER_FAILURES: &[&str] = &[
