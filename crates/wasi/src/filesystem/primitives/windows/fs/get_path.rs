@@ -26,6 +26,7 @@ pub(crate) fn get_path(file: &fs::File) -> io::Result<PathBuf> {
 /// Convenience function for calling `get_path` and concatenating the result
 /// with `path`.
 pub(super) fn concatenate(file: &fs::File, path: &Path) -> io::Result<PathBuf> {
+    super::check_no_colon(path)?;
     let file_path = get_path(file)?;
     Ok(file_path.join(path))
 }
