@@ -192,7 +192,9 @@ pub trait ModuleMemoryImageSource: Send + Sync + 'static {
 ///
 /// This trait should be implemented by nothing other than `StoreInner<T>` in
 /// this crate. It's not sound to implement it for anything else due to
-/// `unchecked_context_mut` below.
+/// `unchecked_context_mut`, `store_opaque`, and `store_opaque_mut` below, which
+/// cast the data pointer of a `dyn VMStore` to a `StoreInner<T>` or to its
+/// first field, a `StoreOpaque`.
 ///
 /// It's also worth nothing that there are various locations where a `*mut dyn
 /// VMStore` is asserted to be both `Send` and `Sync` which disregards the `T`
@@ -201,12 +203,6 @@ pub trait ModuleMemoryImageSource: Send + Sync + 'static {
 /// values (e.g. futures) and that internally in the runtime we aren't doing
 /// anything "weird" with threads for example.
 pub unsafe trait VMStore: 'static {
-    /// Get a shared borrow of this store's `StoreOpaque`.
-    fn store_opaque(&self) -> &StoreOpaque;
-
-    /// Get an exclusive borrow of this store's `StoreOpaque`.
-    fn store_opaque_mut(&mut self) -> &mut StoreOpaque;
-
     /// Returns a split borrow to the limiter plus `StoreOpaque` at the same
     /// time.
     fn resource_limiter_and_store_opaque(
@@ -249,6 +245,31 @@ impl DerefMut for dyn VMStore + '_ {
 }
 
 impl dyn VMStore + '_ {
+    /// Get a shared borrow of this store's `StoreOpaque`.
+    #[inline]
+    pub fn store_opaque(&self) -> &StoreOpaque {
+        // This is a pointer cast rather than a trait method so that
+        // it doesn't require a virtual call, which matters on hot
+        // paths such as libcalls.
+
+        // SAFETY: `VMStore` is only implemented by `StoreInner<T>` (see the
+        // trait's safety documentation), so the data pointer of this trait
+        // object points to a `StoreInner<T>`. That type is `#[repr(C)]` with a
+        // `StoreOpaque` as its first field, so the `StoreOpaque` lives at the
+        // same address. The pointer is derived from `self`, so it retains
+        // provenance over the whole `StoreInner<T>`.
+        unsafe { &*(self as *const dyn VMStore as *const StoreOpaque) }
+    }
+
+    /// Get an exclusive borrow of this store's `StoreOpaque`.
+    ///
+    /// See `store_opaque` for why this is a cast.
+    #[inline]
+    pub fn store_opaque_mut(&mut self) -> &mut StoreOpaque {
+        // SAFETY: see `store_opaque` above.
+        unsafe { &mut *(self as *mut dyn VMStore as *mut StoreOpaque) }
+    }
+
     /// Asserts that this `VMStore` was originally paired with `StoreInner<T>`
     /// and then casts to the `StoreContextMut` type.
     ///

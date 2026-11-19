@@ -139,6 +139,7 @@ pub(super) unsafe fn raise_preexisting_trap(store: &mut dyn VMStore) {
 /// propagate the exception to their wasm caller, but component host functions
 /// and intrinsics are a component boundary which exceptions cannot cross, so
 /// there the exception is instead turned into a trap.
+#[inline]
 pub fn catch_unwind_and_record_trap<R>(
     store: &mut dyn VMStore,
     uncaught_exception: UncaughtException,
