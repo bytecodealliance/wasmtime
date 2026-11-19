@@ -43,16 +43,6 @@ impl Server {
     where
         F: Future<Output = Result<()>>,
     {
-        Self::new_raw(conns, move |stream| run(TokioIo::new(stream)))
-    }
-
-    fn new_raw<F>(
-        conns: usize,
-        run: impl Fn(tokio::net::TcpStream) -> F + Send + 'static,
-    ) -> Result<Self>
-    where
-        F: Future<Output = Result<()>>,
-    {
         let thread = std::thread::spawn(|| -> Result<_> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -161,7 +151,7 @@ impl Server {
     /// 100000 plus only part of the body, then close the connection.
     pub fn http1_drop_mid_body(conns: usize) -> Result<Self> {
         debug!("initializing drop-mid-body http1 server");
-        Self::new_raw(conns, |mut stream| async move {
+        Self::new(conns, |mut stream| async move {
             use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
             let mut request = Vec::new();
