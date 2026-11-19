@@ -451,7 +451,7 @@ impl Module for ObjectModule {
         let alignment = res.buffer.min_alignment as u64;
 
         let compiled = ctx.compiled_code().unwrap();
-        if !compiled.buffer.constant_pool().is_empty() {
+        if compiled.constants.is_some() {
             return Err(ModuleError::Compilation(
                 cranelift_codegen::CodegenError::Unsupported(
                     "cranelift-object does not support the `separate_constant_pool` setting".into(),

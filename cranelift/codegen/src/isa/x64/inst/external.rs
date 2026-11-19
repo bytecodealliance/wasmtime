@@ -4,7 +4,7 @@ use super::{
     Amode, Gpr, Inst, LabelUse, MachBuffers, MachLabel, OperandVisitor, OperandVisitorImpl,
     SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm, args::FromWritableReg,
 };
-use crate::{Reg, Writable, ir::TrapCode};
+use crate::{Reg, Writable, binemit::Reloc, ir::TrapCode};
 use alloc::string::String;
 use cranelift_assembler_x64 as asm;
 use regalloc2::{PReg, RegClass};
@@ -468,9 +468,8 @@ impl asm::CodeSink for AsmCodeSink<'_, '_> {
                     .use_label_at_offset(offset, label.into(), LabelUse::JmpRel32);
             }
             asm::DeferredTarget::Constant(constant) => {
-                let label = self.sink.get_label_for_constant(constant.into());
                 self.sink
-                    .use_label_at_offset(offset, label, LabelUse::JmpRel32);
+                    .use_constant(offset, constant.into(), Reloc::X86PCRel4, -4);
             }
             asm::DeferredTarget::None => {}
         }

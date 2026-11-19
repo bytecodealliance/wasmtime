@@ -3443,15 +3443,6 @@ impl MachInstLabelUse for LabelUse {
             _ => None,
         }
     }
-
-    fn to_reloc(self) -> Option<(Reloc, Addend)> {
-        match self {
-            LabelUse::AdrpPage21 => Some((Reloc::Aarch64AdrPrelPgHi21, 0)),
-            LabelUse::LdstLo12 { shift: 3 } => Some((Reloc::Aarch64Ldst64AbsLo12Nc, 0)),
-            LabelUse::LdstLo12 { shift: 4 } => Some((Reloc::Aarch64Ldst128AbsLo12Nc, 0)),
-            _ => None,
-        }
-    }
 }
 
 #[test]

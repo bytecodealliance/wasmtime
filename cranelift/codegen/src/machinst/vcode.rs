@@ -213,6 +213,10 @@ pub struct EmitResult {
     /// The MachBuffer containing the machine code.
     pub buffer: MachBufferFinalized,
 
+    /// The constants kept out of `buffer` by the `separate_constant_pool`
+    /// setting, if the function has any.
+    pub constants: Option<MachConstantsFinalized>,
+
     /// Offset of each basic block, recorded during emission. Computed
     /// only if `machine_code_cfg_info` is enabled.
     pub bb_offsets: Vec<CodeOffset>,
@@ -746,7 +750,6 @@ impl<I: VCodeInst> VCode<I> {
         let _tt = timing::vcode_emit();
         let mut buffer = MachBuffer::new();
         buffer.set_log2_min_function_alignment(self.log2_min_function_alignment);
-        buffer.set_separate_constants(flags.separate_constant_pool());
         let mut bb_starts: Vec<Option<CodeOffset>> = vec![];
 
         // The first M MachLabels are reserved for block indices.
@@ -754,8 +757,9 @@ impl<I: VCodeInst> VCode<I> {
 
         // Register all allocated constants with the `MachBuffer` to ensure that
         // any references to the constants during instructions can be handled
-        // correctly.
-        let mut buffer = MachBuffers::text_only(&mut buffer);
+        // correctly. With `separate_constant_pool` they go to a second buffer.
+        let mut rodata = flags.separate_constant_pool().then(MachBuffer::new);
+        let mut buffer = MachBuffers::new(&mut buffer, rodata.as_mut());
         buffer.register_constants(&self.constants);
 
         // Construct the final order we emit code in: cold blocks at the end.
@@ -1178,8 +1182,11 @@ impl<I: VCodeInst> VCode<I> {
         // Store metadata about frame layout in the MachBuffer.
         buffer.set_frame_layout(self.abi.frame_slot_metadata());
 
+        let (buffer, constants) = buffer.finish(&self.constants, ctrl_plane);
+
         Ok(EmitResult {
-            buffer: buffer.finish(&self.constants, ctrl_plane),
+            buffer,
+            constants,
             bb_offsets,
             bb_edges,
             disasm: if want_disasm { Some(disasm) } else { None },

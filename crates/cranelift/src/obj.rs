@@ -14,8 +14,8 @@
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
 use crate::{CompiledFunction, Compiler};
-use cranelift_codegen::TextSectionBuilder;
 use cranelift_codegen::isa::unwind::{UnwindInfo, systemv};
+use cranelift_codegen::{MachConstantsFinalized, TextSectionBuilder};
 use cranelift_control::ControlPlane;
 use gimli::RunTimeEndian;
 use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
@@ -28,8 +28,31 @@ use wasmtime_environ::{Compiler as _, FuncKey, TripleExt, obj};
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
 /// Alignment of the constants section and of its size, which is also the
-/// largest alignment of a function's constant pool.
+/// largest alignment of a constant.
 const CONSTANTS_ALIGN: usize = 16;
+
+/// The offsets in a function's constants buffer that its code refers to, in
+/// order. Each starts a body of the text section, so that a relocation can
+/// name it.
+pub(crate) fn constant_offsets(constants: &MachConstantsFinalized) -> Vec<u32> {
+    let mut offsets: Vec<u32> = constants.refs.iter().map(|r| r.constant_offset).collect();
+    offsets.sort_unstable();
+    offsets.dedup();
+    assert_eq!(offsets.first(), Some(&0));
+    offsets
+}
+
+/// The alignment of the body that starts at `offset` in a constants buffer
+/// whose own alignment is `buffer_align`. It keeps the alignment `offset` has
+/// in the buffer even if something is placed between the bodies.
+fn constant_align(offset: u32, buffer_align: u32) -> u32 {
+    assert!(buffer_align as usize <= CONSTANTS_ALIGN);
+    if offset == 0 {
+        buffer_align
+    } else {
+        (1 << offset.trailing_zeros()).min(buffer_align)
+    }
+}
 
 fn text_align(compiler: &Compiler) -> u64 {
     // text pages will not be made executable with pulley, so the section
@@ -64,8 +87,13 @@ pub struct ModuleTextBuilder<'a> {
     /// build to resolve relocations (calls) between functions.
     text: Box<dyn TextSectionBuilder>,
 
-    /// All functions' separate constant pools, placed after `.text`.
-    constants: Vec<u8>,
+    /// Number of functions, which are bodies `0..num_funcs` of `text`. The
+    /// separate constants follow them as bodies of their own.
+    num_funcs: usize,
+
+    /// The separate constants (alignment and bytes) of all functions, in the
+    /// order of their bodies in `text`. They are placed after `.text`.
+    constants: Vec<(u32, &'a [u8])>,
 
     ctrl_plane: ControlPlane,
 }
@@ -81,6 +109,7 @@ impl<'a> ModuleTextBuilder<'a> {
         obj: &'a mut Object<'static>,
         compiler: &'a Compiler,
         text: Box<dyn TextSectionBuilder>,
+        num_funcs: usize,
     ) -> Self {
         // Entire code (functions and trampolines) will be placed
         // in the ".text" section.
@@ -107,6 +136,7 @@ impl<'a> ModuleTextBuilder<'a> {
             text_section,
             unwind_info: Default::default(),
             text,
+            num_funcs,
             constants: Vec::new(),
             ctrl_plane: ControlPlane::default(),
         }
@@ -200,27 +230,28 @@ impl<'a> ModuleTextBuilder<'a> {
         }
 
         // With `separate_constant_pool` the function's constants are kept out
-        // of its code and appended to the constants section instead.
-        let pool = compiled_func.buffer.constant_pool();
-        if !pool.is_empty() {
-            let align = usize::try_from(compiled_func.buffer.constant_pool_align()).unwrap();
-            assert!(align <= CONSTANTS_ALIGN);
-            let pool_offset = self.constants.len().next_multiple_of(align);
-            self.constants.resize(pool_offset, 0);
-            self.constants.extend_from_slice(pool);
-            for r in compiled_func.buffer.constant_pool_relocs() {
-                let constant_offset =
-                    u64::try_from(pool_offset).unwrap() + u64::from(r.constant_offset);
-                let resolved = self.text.resolve_constant_reloc(
+        // of its code. They are split into bodies placed after `.text`, and
+        // the references resolve to them like calls to another function.
+        if let Some(constants) = &compiled_func.constants {
+            let offsets = constant_offsets(constants);
+            let data = constants.buffer.data();
+            let first_body = self.num_funcs + self.constants.len();
+            for (i, &start) in offsets.iter().enumerate() {
+                let end = offsets.get(i + 1).map_or(data.len(), |&end| end as usize);
+                self.constants.push((
+                    constant_align(start, constants.buffer.min_alignment),
+                    &data[start as usize..end],
+                ));
+            }
+            for r in &constants.refs {
+                let body = offsets.binary_search(&r.constant_offset).unwrap();
+                let resolved = self.text.resolve_reloc(
                     off + u64::from(r.offset),
                     r.kind,
                     r.addend,
-                    constant_offset,
+                    first_body + body,
                 );
-                assert!(
-                    resolved,
-                    "failed to resolve constant pool relocation: {r:?}"
-                );
+                assert!(resolved, "failed to resolve constant relocation: {r:?}");
             }
         }
 
@@ -254,15 +285,34 @@ impl<'a> ModuleTextBuilder<'a> {
     /// Note that this will also write out the unwind information sections if
     /// necessary.
     pub fn finish(mut self, postprocess_text: impl FnOnce(&mut [u8])) {
-        // Finish up the text section now that we're done adding functions.
-        let mut text = self.text.finish(&mut self.ctrl_plane);
         let align = text_align(self.compiler);
 
-        // The constants, if any, are placed right after the text section once
-        // it is padded to a page boundary, so no executable page holds one.
-        // Their offset is known now, so point the code at them.
-        let constants_offset = u64::try_from(text.len()).unwrap().next_multiple_of(align);
-        self.text.patch_constant_refs(&mut text, constants_offset);
+        // The constants, if any, are bodies placed after the functions, once
+        // they are padded to a page boundary so no executable page holds one.
+        let mut constants_range = None;
+        if !self.constants.is_empty() {
+            let start = self.text.append(
+                false,
+                &[],
+                u32::try_from(align).unwrap(),
+                &mut self.ctrl_plane,
+            );
+            let mut end = start;
+            for (align, data) in &self.constants {
+                let offset = self.text.append(true, data, *align, &mut self.ctrl_plane);
+                end = offset + u64::try_from(data.len()).unwrap();
+            }
+            constants_range = Some(start..end);
+        }
+
+        // Finish up the text section now that we're done adding functions.
+        let mut text = self.text.finish(&mut self.ctrl_plane);
+        let constants = constants_range.map(|range| {
+            assert_eq!(u64::try_from(text.len()).unwrap(), range.end);
+            let mut constants = text.split_off(usize::try_from(range.start).unwrap());
+            constants.resize(constants.len().next_multiple_of(CONSTANTS_ALIGN), 0);
+            constants
+        });
 
         postprocess_text(&mut text[..]);
 
@@ -273,11 +323,8 @@ impl<'a> ModuleTextBuilder<'a> {
         // This write pads the text section to a page boundary and returns the
         // offset at that point, which is where the constants start.
         let mut text_section_size = self.obj.append_section_data(self.text_section, &[], align);
-        assert_eq!(text_section_size, constants_offset);
 
-        if !self.constants.is_empty() {
-            let mut constants = core::mem::take(&mut self.constants);
-            constants.resize(constants.len().next_multiple_of(CONSTANTS_ALIGN), 0);
+        if let Some(constants) = constants {
             let segment = self.obj.segment_name(StandardSegment::Data).to_vec();
             let section = self.obj.add_section(
                 segment,

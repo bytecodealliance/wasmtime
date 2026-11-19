@@ -486,7 +486,7 @@ impl Module for JITModule {
         let res = ctx.compile(self.isa(), ctrl_plane)?;
         let alignment = res.buffer.min_alignment as u64;
         let compiled_code = ctx.compiled_code().unwrap();
-        if !compiled_code.buffer.constant_pool().is_empty() {
+        if compiled_code.constants.is_some() {
             return Err(ModuleError::Compilation(
                 cranelift_codegen::CodegenError::Unsupported(
                     "cranelift-jit does not support the `separate_constant_pool` setting".into(),

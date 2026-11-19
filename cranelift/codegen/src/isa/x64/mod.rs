@@ -107,6 +107,7 @@ impl TargetIsa for X64Backend {
 
         Ok(CompiledCodeStencil(CompiledCode {
             buffer,
+            constants: emit_result.constants,
             vcode: emit_result.disasm,
             value_labels_ranges,
             bb_starts: emit_result.bb_offsets,
@@ -292,9 +293,7 @@ mod tests {
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{AbiParam, Function, InstBuilder, Signature, constant::ConstantData, types};
     use crate::isa::{CallConv, lookup};
-    use crate::machinst::MachConstantReloc;
     use crate::settings::{Configurable, Flags, builder};
-    use alloc::vec::Vec;
     use target_lexicon::triple;
 
     const CONSTANT: [u8; 16] = [
@@ -336,8 +335,7 @@ mod tests {
         let context = compile_vconst(false);
         let code = context.compiled_code().unwrap();
         assert!(contains(code.code_buffer(), &CONSTANT));
-        assert!(code.buffer.constant_pool().is_empty());
-        assert!(code.buffer.constant_pool_relocs().is_empty());
+        assert!(code.constants.is_none());
     }
 
     #[test]
@@ -345,17 +343,18 @@ mod tests {
         let context = compile_vconst(true);
         let code = context.compiled_code().unwrap();
         assert!(!contains(code.code_buffer(), &CONSTANT));
-        assert_eq!(code.buffer.constant_pool(), &CONSTANT);
-        assert_eq!(code.buffer.constant_pool_align(), 16);
+        let constants = code.constants.as_ref().unwrap();
+        assert_eq!(constants.buffer.data(), &CONSTANT);
+        assert_eq!(constants.buffer.min_alignment, 16);
 
         // The load's RIP-relative displacement is left zero for the embedder
         // to patch.
-        let relocs: Vec<MachConstantReloc> = code.buffer.constant_pool_relocs().to_vec();
-        assert_eq!(relocs.len(), 1);
-        assert_eq!(relocs[0].kind, Reloc::X86PCRel4);
-        assert_eq!(relocs[0].addend, -4);
-        assert_eq!(relocs[0].constant_offset, 0);
-        let disp = relocs[0].offset as usize;
+        assert_eq!(constants.refs.len(), 1);
+        let r = constants.refs[0];
+        assert_eq!(r.kind, Reloc::X86PCRel4);
+        assert_eq!(r.addend, -4);
+        assert_eq!(r.constant_offset, 0);
+        let disp = r.offset as usize;
         assert_eq!(&code.code_buffer()[disp..disp + 4], &[0; 4]);
     }
 }

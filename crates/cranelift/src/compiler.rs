@@ -2,6 +2,7 @@ use crate::TRAP_INTERNAL_ASSERT;
 use crate::alias_region::AliasRegions;
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
+use crate::obj::constant_offsets;
 use crate::translate::{FuncTranslator, VmctxLoadChain};
 use crate::{BuiltinFunctionSignatures, builder::LinkOptions, wasm_call_signature};
 use crate::{CompiledFunction, ModuleTextBuilder, array_call_signature};
@@ -687,11 +688,6 @@ impl wasmtime_environ::Compiler for Compiler {
             funcs.iter().map(|(sym, _, _)| sym).collect::<Vec<_>>()
         );
 
-        let mut builder =
-            ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
-        if self.linkopts.force_jump_veneers {
-            builder.force_veneers();
-        }
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
         let mut stack_maps = StackMapSection::default();
@@ -707,6 +703,22 @@ impl wasmtime_environ::Compiler for Compiler {
                 (sym, *key, func)
             })
             .collect::<Vec<_>>();
+
+        // Separate constants are bodies of the text section after the functions.
+        let num_constants: usize = funcs
+            .iter()
+            .filter_map(|(_, _, func)| func.constants.as_ref())
+            .map(|constants| constant_offsets(constants).len())
+            .sum();
+        let mut builder = ModuleTextBuilder::new(
+            obj,
+            self,
+            self.isa.text_section_builder(funcs.len() + num_constants),
+            funcs.len(),
+        );
+        if self.linkopts.force_jump_veneers {
+            builder.force_veneers();
+        }
 
         let mut frame_descriptors = HashMap::new();
         if self.tunables.debug_guest {
@@ -1760,6 +1772,7 @@ impl FunctionCompiler<'_> {
             context.func.params.user_named_funcs().clone(),
             alignment,
         );
+        compiled_function.constants = compiled_code.constants.clone();
 
         if let Some((body, tunables)) = body_and_tunables {
             let data = body.get_binary_reader();

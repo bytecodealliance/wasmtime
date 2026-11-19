@@ -1121,15 +1121,13 @@ impl MachInstEmit for Inst {
                     }
                     &AMode::ConstPageOff { rn, addr } => {
                         // The offset within the page is filled in when the
-                        // location of the separate constant pool is known.
-                        let label = sink.get_label_for_constant(addr);
-                        assert!(sink.is_separate_constant_label(label));
-                        let shift = access_ty.bytes().trailing_zeros() as u8;
-                        sink.use_label_at_offset(
-                            sink.cur_offset(),
-                            label,
-                            LabelUse::LdstLo12 { shift },
-                        );
+                        // embedder places the constant.
+                        let kind = match access_ty.bytes() {
+                            8 => Reloc::Aarch64Ldst64AbsLo12Nc,
+                            16 => Reloc::Aarch64Ldst128AbsLo12Nc,
+                            n => panic!("no relocation for a constant load of {n} bytes"),
+                        };
+                        sink.use_constant(sink.cur_offset(), addr, kind, 0);
                         let zero = UImm12Scaled::maybe_from_i64(0, access_ty).unwrap();
                         sink.put4(enc_ldst_uimm12(op, zero, rn, rd));
                     }
@@ -3655,11 +3653,8 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_adrp(off, rd));
             }
             &Inst::AdrpConst { rd, constant } => {
-                // The page offset is filled in when the location of the
-                // separate constant pool is known.
-                let label = sink.get_label_for_constant(constant);
-                assert!(sink.is_separate_constant_label(label));
-                sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::AdrpPage21);
+                // The page is filled in when the embedder places the constant.
+                sink.use_constant(sink.cur_offset(), constant, Reloc::Aarch64AdrPrelPgHi21, 0);
                 sink.put4(enc_adrp(0, rd));
             }
             &Inst::Word4 { data } => {
