@@ -1,0 +1,71 @@
+test inline precise-output
+target x86_64
+
+function %poll_callee(i64, i64, i64) -> i64 tail {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = interrupt_poll v1, v2, user3
+    return v3
+}
+
+; (no functions inlined into %poll_callee)
+
+;; This, since it uses a non-tail ABI, should not get an interrupt_poll caller
+;; inlined into it.
+function %poll_caller(i64, i64, i64) -> i64 system_v {
+    fn0 = %poll_callee(i64, i64, i64) -> i64 tail
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = call fn0(v0, v1, v2)
+    return v3
+}
+
+; (no functions inlined into %poll_caller)
+
+;; Make sure indirect inlining of interrupt_poll doesn't happen.
+function %poll_caller_caller(i64, i64, i64) -> i64 system_v {
+    fn0 = %poll_caller(i64, i64, i64) -> i64 system_v
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = call fn0(v0, v1, v2)
+    return v3
+}
+
+; function %poll_caller_caller(i64, i64, i64) -> i64 system_v {
+;     sig0 = (i64, i64, i64) -> i64 system_v
+;     sig1 = (i64, i64, i64) -> i64 tail
+;     fn0 = %poll_caller sig0
+;     fn1 = %poll_callee sig1
+; 
+; block0(v0: i64, v1: i64, v2: i64):
+;     jump block1
+; 
+; block1:
+;     v5 = call fn1(v0, v1, v2)
+;     jump block2(v5)
+; 
+; block2(v4: i64):
+;     v3 -> v4
+;     return v3
+; }
+
+;; Make sure we do inline interrupt_poll into a tail-ABI function.
+function %tail_poll_caller(i64, i64, i64) -> i64 tail {
+    fn0 = %poll_callee(i64, i64, i64) -> i64 tail
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = call fn0(v0, v1, v2)
+    return v3
+}
+
+; function %tail_poll_caller(i64, i64, i64) -> i64 tail {
+;     sig0 = (i64, i64, i64) -> i64 tail
+;     fn0 = %poll_callee sig0
+; 
+; block0(v0: i64, v1: i64, v2: i64):
+;     jump block1
+; 
+; block1:
+;     v5 = interrupt_poll.i64 v1, v2, user3
+;     jump block2(v5)
+; 
+; block2(v4: i64):
+;     v3 -> v4
+;     return v3
+; }

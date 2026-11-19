@@ -21,6 +21,7 @@
 
 use crate::cursor::{Cursor as _, FuncCursor};
 use crate::ir::{self, DebugTag, ExceptionTableData, ExceptionTableItem, InstBuilder as _};
+use crate::isa::CallConv;
 use crate::result::CodegenResult;
 use crate::trace;
 use crate::traversals::Dfs;
@@ -165,25 +166,27 @@ pub(crate) fn do_inlining(
                             callee,
                             visit_callee,
                         } => {
-                            let last_inlined_block = inline_one(
-                                &mut allocs,
-                                cursor.func,
-                                func_ref,
-                                block,
-                                inst,
-                                opcode,
-                                &callee,
-                                None,
-                            )?;
-                            inlined_any = true;
-                            if visit_callee {
-                                cursor.set_position(prev_pos);
-                            } else {
-                                // Arrange it so that the `next_block()` loop
-                                // will continue to the next block that is not
-                                // associated with the just-inlined callee.
-                                cursor.goto_bottom(last_inlined_block);
-                                continue 'block_loop;
+                            if !interrupt_poll_prevents(cursor.func, &callee) {
+                                let last_inlined_block = inline_one(
+                                    &mut allocs,
+                                    cursor.func,
+                                    func_ref,
+                                    block,
+                                    inst,
+                                    opcode,
+                                    &callee,
+                                    None,
+                                )?;
+                                inlined_any = true;
+                                if visit_callee {
+                                    cursor.set_position(prev_pos);
+                                } else {
+                                    // Arrange it so that the `next_block()` loop
+                                    // will continue to the next block that is not
+                                    // associated with the just-inlined callee.
+                                    cursor.goto_bottom(last_inlined_block);
+                                    continue 'block_loop;
+                                }
                             }
                         }
                     }
@@ -207,25 +210,27 @@ pub(crate) fn do_inlining(
                             callee,
                             visit_callee,
                         } => {
-                            let last_inlined_block = inline_one(
-                                &mut allocs,
-                                cursor.func,
-                                func_ref,
-                                block,
-                                inst,
-                                opcode,
-                                &callee,
-                                Some(exception),
-                            )?;
-                            inlined_any = true;
-                            if visit_callee {
-                                cursor.set_position(prev_pos);
-                            } else {
-                                // Arrange it so that the `next_block()` loop
-                                // will continue to the next block that is not
-                                // associated with the just-inlined callee.
-                                cursor.goto_bottom(last_inlined_block);
-                                continue 'block_loop;
+                            if !interrupt_poll_prevents(cursor.func, &callee) {
+                                let last_inlined_block = inline_one(
+                                    &mut allocs,
+                                    cursor.func,
+                                    func_ref,
+                                    block,
+                                    inst,
+                                    opcode,
+                                    &callee,
+                                    Some(exception),
+                                )?;
+                                inlined_any = true;
+                                if visit_callee {
+                                    cursor.set_position(prev_pos);
+                                } else {
+                                    // Arrange it so that the `next_block()` loop
+                                    // will continue to the next block that is not
+                                    // associated with the just-inlined callee.
+                                    cursor.goto_bottom(last_inlined_block);
+                                    continue 'block_loop;
+                                }
                             }
                         }
                     }
@@ -253,6 +258,30 @@ pub(crate) fn do_inlining(
     }
 
     Ok(inlined_any)
+}
+
+/// Returns whether the presence of `interrupt_poll`, which is valid only in
+/// `tail`-convention functions, disallows the proposed inlining.
+fn interrupt_poll_prevents(caller: &ir::Function, callee: &ir::Function) -> bool {
+    if caller.signature.call_conv == CallConv::Tail
+        // A verified non-`tail` callee can't contain `interrupt_poll`. This
+        // saves us scanning through the whole function.
+        || callee.signature.call_conv != CallConv::Tail
+    {
+        return false;
+    }
+    if callee
+        .layout
+        .blocks()
+        .flat_map(|b| callee.layout.block_insts(b))
+        .any(|i| callee.dfg.insts[i].opcode() == ir::Opcode::InterruptPoll)
+    {
+        trace!(
+            "  --> keeping call because callee uses `interrupt_poll` and caller doesn't use `tail` convention"
+        );
+        return true;
+    }
+    false
 }
 
 #[derive(Default)]
