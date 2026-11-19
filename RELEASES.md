@@ -1,3 +1,13 @@
+## 36.0.23
+
+Released 2026-11-19
+
+### Fixed
+
+* Fixed a CI issue preventing release artifacts from being published.
+
+--------------------------------------------------------------------------------
+
 ## 36.0.22
 
 Fixed 2026-11-19.
