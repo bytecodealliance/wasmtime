@@ -86,14 +86,23 @@ impl FilesystemOperation {
 }
 
 /// An embedder declined to start a native filesystem operation.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 #[non_exhaustive]
 pub enum FilesystemOperationError {
     /// Reported as `again` (P1), `would-block` (P2), or `busy` (P3).
     /// Operations without an error result, such as `is-same-object`, trap.
-    #[error("filesystem operation rejected")]
     Rejected,
 }
+
+impl std::fmt::Display for FilesystemOperationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Rejected => f.write_str("filesystem operation rejected"),
+        }
+    }
+}
+
+impl std::error::Error for FilesystemOperationError {}
 
 impl From<FilesystemOperationError> for std::io::Error {
     fn from(error: FilesystemOperationError) -> Self {
