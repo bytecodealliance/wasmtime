@@ -541,8 +541,8 @@ impl InterpreterRef<'_> {
                     Instance::enter_host_from_wasm(caller, |store, _instance| {
                         trap = store
                             .modules()
-                            .store_or_engine_code_by_pc(regs.pc)
-                            .and_then(|code| code.lookup_trap_code(code.offset()));
+                            .code_memory_by_pc(regs.pc)
+                            .and_then(|(code, text_offset)| code.lookup_trap_code(text_offset));
                     });
                 }
                 match trap {

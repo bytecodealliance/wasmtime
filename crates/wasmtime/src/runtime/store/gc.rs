@@ -757,11 +757,11 @@ impl StoreOpaque {
 
         // Note that this frame may be running out of the engine's copy of
         // code, rather than the store's, if it's a store-invariant function
-        // such as a trampoline; see `store_or_engine_code_by_pc`.
-        let code = modules
-            .store_or_engine_code_by_pc(pc)
+        // such as a trampoline; see `code_memory_by_pc`.
+        let (code, offset) = modules
+            .code_memory_by_pc(pc)
             .expect("should have code for Wasm frame");
-        let offset = u32::try_from(code.offset()).unwrap();
+        let offset = u32::try_from(offset).unwrap();
 
         let stack_map = wasmtime_environ::StackMap::lookup(offset, code.stack_map_data());
 

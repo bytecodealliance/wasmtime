@@ -221,13 +221,6 @@ impl EngineCode {
         self.original_code.exception_tables()
     }
 
-    /// Look up the trap code, if any, for the given offset into the
-    /// text section.
-    pub fn lookup_trap_code(&self, text_offset: usize) -> Option<wasmtime_environ::CompiledTrap> {
-        // As above, this is location-independent metadata.
-        self.original_code.lookup_trap_code(text_offset)
-    }
-
     /// Returns the data in the `ELF_NAME_DATA` section.
     #[inline]
     pub fn func_name_data(&self) -> &[u8] {

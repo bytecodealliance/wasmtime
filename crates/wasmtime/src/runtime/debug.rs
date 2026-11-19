@@ -790,12 +790,12 @@ impl VirtualFrame {
     fn decode(registry: &ModuleRegistry, pc: usize) -> (FrameTable<'_>, Vec<VirtualFrame>) {
         // Note that this frame may be running out of the engine's copy of
         // code, rather than the store's, if it's a store-invariant function
-        // such as a trampoline; see `store_or_engine_code_by_pc`.
-        let code = registry
-            .store_or_engine_code_by_pc(pc)
+        // such as a trampoline; see `code_memory_by_pc`.
+        let (code, offset) = registry
+            .code_memory_by_pc(pc)
             .expect("Wasm frame PC does not correspond to a module");
         let table = code.frame_table().unwrap();
-        let pc = u32::try_from(code.offset()).expect("PC offset too large");
+        let pc = u32::try_from(offset).expect("PC offset too large");
         // Functions without any program points (e.g. the module
         // start function, or trampolines) have no virtual frames.
         let frames = table

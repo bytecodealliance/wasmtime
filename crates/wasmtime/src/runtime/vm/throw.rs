@@ -55,10 +55,10 @@ pub unsafe fn compute_handler(
         // store-invariant trampolines, such as the one that invokes resource
         // destructors, run directly out of engine code and may have exception
         // handlers of their own.
-        let code = store.modules().store_or_engine_code_by_pc(frame.pc())?;
+        let (code, rel_pc) = store.modules().code_memory_by_pc(frame.pc())?;
         let et = ExceptionTable::parse(code.exception_tables())
             .expect("Exception tables were validated on module load");
-        let (frame_offset, handlers) = et.lookup_pc(u32::try_from(code.offset()).unwrap());
+        let (frame_offset, handlers) = et.lookup_pc(u32::try_from(rel_pc).unwrap());
         let fp_to_sp = frame_offset.map(|frame_offset| -isize::try_from(frame_offset).unwrap());
         for handler in handlers {
             log::trace!("-> checking handler: {handler:?}");
@@ -111,8 +111,13 @@ pub unsafe fn compute_handler(
             };
             if is_match {
                 let fp_to_sp = fp_to_sp.expect("frame offset must be known if we found a handler");
+                // Compute the handler PC relative to this frame's PC
+                // rather than `code`'s base address: the frame may be
+                // executing in the engine's copy of the code rather
+                // than the store's (see above).
+                let text_start = frame.pc().wrapping_sub(rel_pc);
                 return Some((
-                    code.pc_for_text_offset(
+                    text_start.wrapping_add(
                         usize::try_from(handler.handler_offset).expect("Module larger than usize"),
                     ),
                     frame.fp().wrapping_add_signed(fp_to_sp),
