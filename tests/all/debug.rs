@@ -1303,6 +1303,254 @@ async fn invalidated_frame_handles_from_breakpoint() -> wasmtime::Result<()> {
     Ok(())
 }
 
+/// Configurations to run the unwinding-invalidation tests below in:
+/// native code, where resuming at a handler after an unwind never
+/// returns to the `raise` libcall, and Pulley, where it does.
+fn native_and_pulley_configs() -> [fn(&mut Config); 2] {
+    [
+        |_config| {},
+        |config| {
+            use wasmtime_environ::TripleExt;
+            config
+                .target(&target_lexicon::Triple::pulley_host().to_string())
+                .unwrap();
+        },
+    ]
+}
+
+/// A debug handler that, on a trap, hostcall-error, or exception
+/// event, takes a handle to the innermost frame (which must have one
+/// `i32` local with value 7) and stores it for the test to check
+/// later.
+#[derive(Clone)]
+struct CaptureUnwindFrame(Arc<Mutex<Option<FrameHandle>>>);
+
+impl DebugHandler for CaptureUnwindFrame {
+    type Data = ();
+    async fn handle(&self, mut store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+        if matches!(
+            event,
+            DebugEvent::Trap(_) | DebugEvent::HostcallError(_) | DebugEvent::Exception(_)
+        ) {
+            let frame = store.debug_exit_frames().next().unwrap();
+            assert!(frame.is_valid(&mut store));
+            assert_eq!(frame.local(&mut store, 0).unwrap().unwrap_i32(), 7);
+            let old = self.0.lock().unwrap().replace(frame);
+            assert!(old.is_none(), "more than one unwind event");
+        }
+    }
+}
+
+/// Run `main` in `wat`, with a host import `"" "fail"` that returns an
+/// error, and check that the frame handle captured by the debug handler
+/// for the resulting unwind is invalid once `main` returns (with an
+/// error).
+async fn check_frame_handle_invalid_after_unwind(wat: &str) -> wasmtime::Result<()> {
+    for config in native_and_pulley_configs() {
+        let (module, mut store) = get_module_and_store(config, wat)?;
+        let slot = Arc::new(Mutex::new(None));
+        store.set_debug_handler(CaptureUnwindFrame(slot.clone()));
+
+        let fail = Func::wrap(&mut store, || -> wasmtime::Result<()> {
+            Err(wasmtime::format_err!("host error"))
+        });
+        let instance = Instance::new_async(&mut store, &module, &[Extern::Func(fail)]).await?;
+        let main = instance.get_func(&mut store, "main").unwrap();
+        assert!(main.call_async(&mut store, &[], &mut []).await.is_err());
+
+        let frame = slot.lock().unwrap().take().expect("no unwind event");
+        assert!(!frame.is_valid(&mut store));
+        assert!(frame.local(&mut store, 0).is_err());
+        assert!(frame.parent(&mut store).is_err());
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn invalidated_frame_handles_after_trap() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+    check_frame_handle_invalid_after_unwind(
+        r#"
+    (module
+      (import "" "fail" (func))
+      (func (export "main")
+        (local i32)
+        (local.set 0 (i32.const 7))
+        unreachable))
+        "#,
+    )
+    .await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn invalidated_frame_handles_after_hostcall_error() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+    check_frame_handle_invalid_after_unwind(
+        r#"
+    (module
+      (import "" "fail" (func))
+      (func (export "main")
+        (local i32)
+        (local.set 0 (i32.const 7))
+        call 0))
+        "#,
+    )
+    .await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn invalidated_frame_handles_after_uncaught_exception() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+    check_frame_handle_invalid_after_unwind(
+        r#"
+    (module
+      (import "" "fail" (func))
+      (tag $t)
+      (func (export "main")
+        (local i32)
+        (local.set 0 (i32.const 7))
+        (throw $t)))
+        "#,
+    )
+    .await
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn invalidated_frame_handles_after_caught_exception() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // An exception thrown in `$thrower` and caught in `main` unwinds
+    // `$thrower`'s frame, then resumes Wasm in `main` on the same
+    // stack. A handle to `$thrower`'s frame taken by the debug handler
+    // must be invalid by the time `main` next calls the host, even
+    // though the activation is still live.
+    for config in native_and_pulley_configs() {
+        let (module, mut store) = get_module_and_store(
+            config,
+            r#"
+    (module
+      (import "" "check" (func $check))
+      (tag $t)
+      (func $thrower
+        (local i32)
+        (local.set 0 (i32.const 7))
+        (throw $t))
+      (func (export "main")
+        (block $b
+          (try_table (catch $t $b)
+            call $thrower))
+        ;; Write over the dead frame's stack memory.
+        call $overwrite
+        call $check)
+      (func $overwrite
+        (local i32 i32 i32 i32)
+        (local.set 0 (i32.const -1))
+        (local.set 1 (i32.const -1))
+        (local.set 2 (i32.const -1))
+        (local.set 3 (i32.const -1))))
+            "#,
+        )?;
+        let slot = Arc::new(Mutex::new(None));
+        store.set_debug_handler(CaptureUnwindFrame(slot.clone()));
+
+        let checks = Arc::new(AtomicUsize::new(0));
+        let check = Func::wrap(&mut store, {
+            let slot = slot.clone();
+            let checks = checks.clone();
+            move |mut caller: Caller<'_, ()>| {
+                let frame = slot.lock().unwrap().take().expect("no exception event");
+                assert!(!frame.is_valid(&mut caller));
+                assert!(frame.local(&mut caller, 0).is_err());
+                // A fresh handle sees `main`'s frame, still live.
+                let frame = caller.debug_exit_frames().next().unwrap();
+                assert!(frame.is_valid(&mut caller));
+                assert_eq!(frame.num_locals(&mut caller).unwrap(), 0);
+                checks.fetch_add(1, Ordering::Relaxed);
+            }
+        });
+        let instance = Instance::new_async(&mut store, &module, &[Extern::Func(check)]).await?;
+        let main = instance.get_func(&mut store, "main").unwrap();
+        main.call_async(&mut store, &[], &mut []).await?;
+        assert_eq!(checks.load(Ordering::Relaxed), 1);
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn invalidated_frame_handles_after_component_host_call() -> wasmtime::Result<()> {
+    use wasmtime::component::{Component, Linker};
+
+    let _ = env_logger::try_init();
+
+    // A frame handle taken in a component host import must be invalid
+    // once that import has returned to Wasm, in particular after the
+    // frame it refers to has returned.
+    for config in native_and_pulley_configs() {
+        let mut c = Config::default();
+        c.guest_debug(true);
+        config(&mut c);
+        let engine = Engine::new(&c)?;
+        let component = Component::new(
+            &engine,
+            r#"
+    (component
+      (import "capture" (func $capture))
+      (import "check" (func $check))
+      (core func $capture (canon lower (func $capture)))
+      (core func $check (canon lower (func $check)))
+      (core module $m
+        (import "" "capture" (func $capture))
+        (import "" "check" (func $check))
+        (func $victim
+          (local i32)
+          (local.set 0 (i32.const 7))
+          (call $capture))
+        (func $overwrite
+          (local i32 i32 i32 i32)
+          (local.set 0 (i32.const -1))
+          (local.set 1 (i32.const -1))
+          (local.set 2 (i32.const -1))
+          (local.set 3 (i32.const -1)))
+        (func (export "run")
+          (call $victim)
+          (call $overwrite)
+          (call $check)))
+      (core instance $i (instantiate $m
+        (with "" (instance
+          (export "capture" (func $capture))
+          (export "check" (func $check))))))
+      (func (export "run") (canon lift (core func $i "run"))))
+            "#,
+        )?;
+
+        let mut linker = Linker::<Option<FrameHandle>>::new(&engine);
+        linker.root().func_wrap("capture", |mut store, (): ()| {
+            let frame = store.debug_exit_frames().next().unwrap();
+            assert!(frame.is_valid(&mut store));
+            assert_eq!(frame.local(&mut store, 0)?.unwrap_i32(), 7);
+            *store.data_mut() = Some(frame);
+            Ok(())
+        })?;
+        linker.root().func_wrap("check", |mut store, (): ()| {
+            let frame = store.data_mut().take().unwrap();
+            assert!(!frame.is_valid(&mut store));
+            assert!(frame.local(&mut store, 0).is_err());
+            Ok(())
+        })?;
+
+        let mut store = Store::new(&engine, None);
+        let instance = linker.instantiate(&mut store, &component)?;
+        let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+        run.call(&mut store, ())?;
+    }
+    Ok(())
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn module_bytecode() -> wasmtime::Result<()> {

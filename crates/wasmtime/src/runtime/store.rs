@@ -82,6 +82,7 @@ use crate::fiber;
 use crate::hash_map::HashMap;
 use crate::module::{RegisterBreakpointState, RegisteredModuleId};
 use crate::prelude::*;
+use crate::runtime::epoch_state::EpochState;
 #[cfg(feature = "stack-switching")]
 use crate::runtime::vm::VMContRef;
 use crate::runtime::vm::mpk::ProtectionKey;
@@ -467,6 +468,16 @@ pub struct StoreOpaque {
     engine: Engine,
     vm_store_context: VMStoreContext,
 
+    /// A stand-in for all state that Wasm execution can mutate in this
+    /// store (e.g. its stack frames); see `WasmState`.
+    ///
+    /// Invariant: this is mutated (and its epoch is thus bumped)
+    /// whenever Wasm executes, after it runs and before host code can
+    /// observe what it did. We ensure this by mutating it on every
+    /// transfer of control from Wasm to the host; see
+    /// `StoreOpaque::on_wasm_to_host_transition`.
+    wasm_state: EpochState<WasmState>,
+
     // Contains all continuations ever allocated throughout the lifetime of this
     // store.
     #[cfg(feature = "stack-switching")]
@@ -576,6 +587,22 @@ pub struct StoreOpaque {
     #[cfg(feature = "debug")]
     frame_data_cache: FrameDataCache,
 }
+
+/// A stand-in for the state that Wasm execution mutates in a store.
+///
+/// The actual state that Wasm mutates (e.g. its stack frames on the
+/// machine stack) can't be placed inside an `EpochState`, so instead
+/// we keep this unit type in an `EpochState` and mutate it whenever
+/// Wasm executes (see `StoreOpaque::wasm_state` for how this is
+/// ensured). Mutation of this value is thus a proxy for any mutation
+/// that actual Wasm code performs.
+///
+/// We use epoch handles (whose validity we can check, and which are
+/// invalidated by subsequent mutations) to guard other kinds of
+/// Wasm-mutated state, such as `FrameHandle`s in the debug API that
+/// refer to live (and frozen) Wasm stack frames.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WasmState;
 
 /// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
 /// used to copy into instances during instantiation.
@@ -753,11 +780,13 @@ impl<T> Store<T> {
         log::trace!("creating new store {:?}", store_data.id());
 
         let pkey = engine.allocator().next_available_pkey();
+        let wasm_state = EpochState::new(store_data.id(), WasmState);
 
         let inner = StoreOpaque {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
             vm_store_context: Default::default(),
+            wasm_state,
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
             instances: TryPrimaryMap::new(),
@@ -1908,33 +1937,55 @@ impl StoreOpaque {
         &mut self.vm_store_context
     }
 
-    /// Invalidate every [`Unrooted`](crate::Unrooted) reference into this
-    /// store's GC heap, because Wasm has just run, and may have mutated the
-    /// heap directly; see `GcStore::invalidate_unrooted_refs`.
+    /// Hook invoked on every transfer of control from Wasm to the host,
+    /// before any host code can observe what Wasm did: when a
+    /// host-to-Wasm call returns (normally, or by unwinding or trapping)
+    /// back to the host, and when Wasm calls out to the host (via a host
+    /// function or libcall).
     ///
-    /// Compiled Wasm mutates the GC heap without going through the heap's
-    /// `EpochState`, so we treat invalidation as a deferred effect of running
-    /// Wasm: it happens whenever control passes from Wasm back to the host,
-    /// before any host code runs, which is the only point at which the host
-    /// can observe what Wasm did. There are exactly two such points:
+    /// Wasm may have mutated state in this store without going through
+    /// the `EpochState`s that guard it, so we treat invalidation of
+    /// handles to that state as a deferred effect of running Wasm,
+    /// performed here. Specifically, we:
     ///
-    /// * Wasm calling into the host (host functions and libcalls, including
-    ///   the `raise` libcall that runs debug handlers for traps), all of which
-    ///   go through `catch_unwind_and_record_trap`.
+    /// - bump `wasm_state`'s epoch, invalidating handles to Wasm
+    ///   execution state, such as debugger `FrameHandle`s; and
+    /// - invalidate every [`Unrooted`](crate::Unrooted) reference into
+    ///   this store's GC heap, since compiled Wasm mutates the GC heap
+    ///   directly; see `GcStore::invalidate_unrooted_refs`. (The GC heap
+    ///   has its own `EpochState`, separate from `wasm_state`, because
+    ///   the host API can also mutate it.)
     ///
-    /// * Wasm returning, trapping, or unwinding back to the host code that
-    ///   called it, in `catch_traps`.
-    ///
-    /// No invalidation is needed when control passes from the host into Wasm
-    /// (calling Wasm, returning from a host function, or resuming a fiber),
-    /// since the host cannot observe anything Wasm does until the next of the
-    /// points above. Any new way for Wasm to transfer control to host code
-    /// must invalidate here too.
-    #[inline]
-    pub(crate) fn invalidate_unrooted_gc_refs(&mut self) {
+    /// NB: there is intentionally no corresponding hook for transfers
+    /// of control from the host to Wasm (calls into Wasm, returns from
+    /// host functions or libcalls back to Wasm, or resumption of Wasm at
+    /// an exception handler). Wasm has not run yet at that point, so
+    /// there is nothing to invalidate: host code cannot observe anything
+    /// Wasm does until control next transfers back to the host, which
+    /// comes through here. Avoiding work after host functions and
+    /// libcalls return is also important for performance: it would keep
+    /// state live across those calls and defeat tail calls in libcall
+    /// wrappers.
+    #[inline(always)]
+    pub(crate) fn on_wasm_to_host_transition(&mut self) {
+        let _ = self.wasm_state.get_mut();
         if let Some(gc_store) = &mut self.gc_store {
             gc_store.invalidate_unrooted_refs();
         }
+    }
+
+    /// The state standing in for all Wasm-mutated state in this store.
+    ///
+    /// The point of this is to allow taking handles from this
+    /// `EpochState`, and later checking if they are still valid. If an
+    /// epoch handle is still valid, that means that Wasm has not run in
+    /// this store since the handle was created. That allows us to make
+    /// certain assumptions, such as that observed Wasm stack frames are
+    /// still present, and build higher-level safe primitives for
+    /// observing these kinds of Wasm state.
+    #[cfg(feature = "debug")]
+    pub(crate) fn wasm_state(&self) -> &EpochState<WasmState> {
+        &self.wasm_state
     }
 
     /// Like `Self::optional_gc_store_mut`, but shared.
