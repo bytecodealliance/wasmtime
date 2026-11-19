@@ -2234,8 +2234,11 @@ fn test_riscv64_binemit() {
         let actual_printing = unit.inst.print_with_state(&mut EmitState::default());
         assert_eq!(unit.assembly, actual_printing);
         let mut buffer = MachBuffer::new();
-        unit.inst
-            .emit(&mut buffer, &emit_info, &mut Default::default());
+        unit.inst.emit(
+            &mut MachBuffers::text_only(&mut buffer),
+            &emit_info,
+            &mut Default::default(),
+        );
         let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let actual_encoding = buffer.stringify_code_bytes();
 
@@ -2326,7 +2329,11 @@ fn riscv64_worst_case_instruction_size() {
     for i in candidates {
         let mut buffer = MachBuffer::new();
         let mut emit_state = Default::default();
-        i.emit(&mut buffer, &emit_info, &mut emit_state);
+        i.emit(
+            &mut MachBuffers::text_only(&mut buffer),
+            &emit_info,
+            &mut emit_state,
+        );
         let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let length = buffer.data().len() as u32;
         if length > max.0 {

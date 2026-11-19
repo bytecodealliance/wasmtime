@@ -8,7 +8,7 @@ use cranelift_assembler_x64 as asm;
 
 /// A small helper to generate a signed conversion instruction.
 fn emit_signed_cvt(
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
     src: Reg,
@@ -29,7 +29,7 @@ fn emit_signed_cvt(
 }
 
 /// Emits a one way conditional jump if CC is set (true).
-fn one_way_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
+fn one_way_jmp(sink: &mut MachBuffers<Inst>, cc: CC, label: MachLabel) {
     let cond_start = sink.cur_offset();
     let cond_disp_off = cond_start + 2;
     sink.use_label_at_offset(cond_disp_off, label, LabelUse::JmpRel32);
@@ -39,7 +39,7 @@ fn one_way_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
 
 /// Like `one_way_jmp` above emitting a conditional jump, but also using
 /// `MachBuffer::add_cond_branch`.
-fn cond_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
+fn cond_jmp(sink: &mut MachBuffers<Inst>, cc: CC, label: MachLabel) {
     let cond_start = sink.cur_offset();
     let cond_disp_off = cond_start + 2;
     let cond_end = cond_start + 6;
@@ -56,7 +56,7 @@ fn cond_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
     debug_assert_eq!(sink.cur_offset(), cond_end);
 }
 
-fn emit_jcc_no_offset(sink: &mut MachBuffer<Inst>, cc: CC) {
+fn emit_jcc_no_offset(sink: &mut MachBuffers<Inst>, cc: CC) {
     // Note that the disassembler matches Capstone which doesn't match the `CC`
     // enum directly as Intel has multiple mnemonics use the same encoding.
     let inst: AsmInst = match cc {
@@ -85,7 +85,7 @@ fn emit_jcc_no_offset(sink: &mut MachBuffer<Inst>, cc: CC) {
 }
 
 /// Emits an unconditional branch.
-fn uncond_jmp(sink: &mut MachBuffer<Inst>, label: MachLabel) {
+fn uncond_jmp(sink: &mut MachBuffers<Inst>, label: MachLabel) {
     let uncond_start = sink.cur_offset();
     let uncond_disp_off = uncond_start + 1;
     let uncond_end = uncond_start + 5;
@@ -161,7 +161,7 @@ fn emit_reloc(sink: &mut MachBuffer<Inst>, kind: Reloc, name: &ExternalName, add
 ///   care?)
 pub(crate) fn emit(
     inst: &Inst,
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
 ) {
@@ -1903,7 +1903,7 @@ pub(crate) fn emit(
 ///
 /// * Move the return address into its stack slot.
 fn emit_return_call_common_sequence<T>(
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
     call_info: &ReturnCallInfo<T>,
@@ -1953,14 +1953,14 @@ fn emit_return_call_common_sequence<T>(
 
 /// Convenience trait to have an `emit` method on all `asm::inst::*` variants.
 trait ExternalEmit {
-    fn emit(self, sink: &mut MachBuffer<Inst>, info: &EmitInfo, state: &mut EmitState);
+    fn emit(self, sink: &mut MachBuffers<Inst>, info: &EmitInfo, state: &mut EmitState);
 }
 
 impl<I> ExternalEmit for I
 where
     I: Into<asm::inst::Inst<CraneliftRegisters>>,
 {
-    fn emit(self, sink: &mut MachBuffer<Inst>, info: &EmitInfo, state: &mut EmitState) {
+    fn emit(self, sink: &mut MachBuffers<Inst>, info: &EmitInfo, state: &mut EmitState) {
         Inst::External { inst: self.into() }.emit(sink, info, state)
     }
 }

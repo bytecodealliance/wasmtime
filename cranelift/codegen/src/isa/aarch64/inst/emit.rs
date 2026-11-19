@@ -12,7 +12,7 @@ use crate::trace;
 /// emitting some helper instructions that come immediately before the use
 /// of this amode.
 pub fn mem_finalize(
-    sink: Option<&mut MachBuffer<Inst>>,
+    sink: Option<&mut MachBuffers<Inst>>,
     mem: &AMode,
     access_ty: Type,
     state: &EmitState,
@@ -805,7 +805,7 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
+    fn emit(&self, sink: &mut MachBuffers<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
@@ -4196,7 +4196,7 @@ impl MachInstEmit for Inst {
 }
 
 fn emit_return_call_common_sequence<T>(
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
     info: &ReturnCallInfo<T>,

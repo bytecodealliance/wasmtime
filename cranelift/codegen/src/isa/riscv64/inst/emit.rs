@@ -228,7 +228,7 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
+    fn emit(&self, sink: &mut MachBuffers<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         // Check if we need to update the vector state before emitting this instruction
         if let Some(expected) = self.expected_vstate() {
             if state.vstate != EmitVState::Known(*expected) {
@@ -855,7 +855,7 @@ impl Inst {
 
     fn emit_uncompressed(
         &self,
-        sink: &mut MachBuffer<Inst>,
+        sink: &mut MachBuffers<Inst>,
         emit_info: &EmitInfo,
         state: &mut EmitState,
         start_off: &mut u32,
@@ -2781,7 +2781,7 @@ impl Inst {
 }
 
 fn emit_return_call_common_sequence<T>(
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
     info: &ReturnCallInfo<T>,
@@ -2795,7 +2795,12 @@ fn emit_return_call_common_sequence<T>(
     let mut buffer = MachBuffer::new();
     let mut fake_emit_state = state.clone();
 
-    return_call_emit_impl(&mut buffer, emit_info, &mut fake_emit_state, info);
+    return_call_emit_impl(
+        &mut MachBuffers::text_only(&mut buffer),
+        emit_info,
+        &mut fake_emit_state,
+        info,
+    );
 
     // Finalize the buffer and get the number of bytes emitted.
     let buffer = buffer.finish(&Default::default(), &mut Default::default());
@@ -2815,7 +2820,7 @@ fn emit_return_call_common_sequence<T>(
 
 /// This should not be called directly, Instead prefer to call [emit_return_call_common_sequence].
 fn return_call_emit_impl<T>(
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
     info: &ReturnCallInfo<T>,

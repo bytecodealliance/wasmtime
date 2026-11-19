@@ -283,6 +283,8 @@ pub mod abi;
 pub use abi::*;
 pub mod buffer;
 pub use buffer::*;
+pub mod buffers;
+pub use buffers::*;
 pub mod helpers;
 pub use helpers::*;
 pub mod valueregs;
@@ -572,7 +574,7 @@ pub trait MachInstEmit: MachInst {
     type Info;
 
     /// Emit the instruction.
-    fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
+    fn emit(&self, code: &mut MachBuffers<Self>, info: &Self::Info, state: &mut Self::State);
 
     /// Pretty-print the instruction.
     fn pretty_print_inst(&self, state: &mut Self::State) -> String;

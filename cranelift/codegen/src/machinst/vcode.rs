@@ -755,6 +755,7 @@ impl<I: VCodeInst> VCode<I> {
         // Register all allocated constants with the `MachBuffer` to ensure that
         // any references to the constants during instructions can be handled
         // correctly.
+        let mut buffer = MachBuffers::text_only(&mut buffer);
         buffer.register_constants(&self.constants);
 
         // Construct the final order we emit code in: cold blocks at the end.
@@ -840,7 +841,7 @@ impl<I: VCodeInst> VCode<I> {
             // after each instruction, ensure that the worst-case end of any
             // island the buffer might emit lies before the soonest deadline,
             // even after the next instruction.
-            let emit_island_if_needed = |buffer: &mut MachBuffer<I>, state: &mut I::State| {
+            let emit_island_if_needed = |buffer: &mut MachBuffers<I>, state: &mut I::State| {
                 let lookahead = I::worst_case_size() + I::worst_case_island_growth();
                 if buffer.island_needed(lookahead) {
                     let jump_around = buffer.get_label();
@@ -851,7 +852,7 @@ impl<I: VCodeInst> VCode<I> {
             };
             let emit_inst = |inst: &I,
                              disasm: &mut String,
-                             buffer: &mut MachBuffer<I>,
+                             buffer: &mut MachBuffers<I>,
                              state: &mut I::State| {
                 if want_disasm && !inst.is_args() {
                     let mut s = state.clone();
@@ -861,7 +862,7 @@ impl<I: VCodeInst> VCode<I> {
             };
             let do_emit = |inst: &I,
                            disasm: &mut String,
-                           buffer: &mut MachBuffer<I>,
+                           buffer: &mut MachBuffers<I>,
                            state: &mut I::State| {
                 emit_inst(inst, disasm, buffer, state);
                 emit_island_if_needed(buffer, state);

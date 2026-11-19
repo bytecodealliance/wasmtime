@@ -1,5 +1,5 @@
 use cranelift_codegen::{
-    MachBuffer, MachInstEmit,
+    MachBuffer, MachBuffers, MachInstEmit,
     isa::aarch64,
     isa::aarch64::inst::{
         Inst,
@@ -85,7 +85,11 @@ pub fn assemble(inst: &Inst) -> Vec<u8> {
     let isa_flags = aarch64::settings::Flags::new(&flags, &aarch64::settings::builder());
     let emit_info = EmitInfo::new(flags, isa_flags);
     let mut buffer = MachBuffer::new();
-    inst.emit(&mut buffer, &emit_info, &mut Default::default());
+    inst.emit(
+        &mut MachBuffers::text_only(&mut buffer),
+        &emit_info,
+        &mut Default::default(),
+    );
     let buffer = buffer.finish(&Default::default(), &mut Default::default());
     buffer.data().to_vec()
 }

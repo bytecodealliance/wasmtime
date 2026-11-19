@@ -14127,7 +14127,11 @@ fn test_s390x_binemit() {
         buffer.bind_label(label0, ctrl_plane);
 
         // Emit the instruction.
-        insn.emit(&mut buffer, &emit_info, &mut Default::default());
+        insn.emit(
+            &mut MachBuffers::text_only(&mut buffer),
+            &emit_info,
+            &mut Default::default(),
+        );
 
         // Label 1 after the instruction.
         let label1 = buffer.get_label();

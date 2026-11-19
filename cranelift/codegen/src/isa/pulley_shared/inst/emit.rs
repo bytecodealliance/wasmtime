@@ -92,7 +92,7 @@ where
     type State = EmitState<P>;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Self>, emit_info: &Self::Info, state: &mut Self::State) {
+    fn emit(&self, sink: &mut MachBuffers<Self>, emit_info: &Self::Info, state: &mut Self::State) {
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
@@ -117,7 +117,7 @@ where
 
 fn pulley_emit<P>(
     inst: &Inst,
-    sink: &mut MachBuffer<InstAndKind<P>>,
+    sink: &mut MachBuffers<InstAndKind<P>>,
     emit_info: &EmitInfo,
     state: &mut EmitState<P>,
     start_offset: &mut u32,
@@ -610,7 +610,7 @@ fn pulley_emit<P>(
 }
 
 fn emit_return_call_common_sequence<T, P>(
-    sink: &mut MachBuffer<InstAndKind<P>>,
+    sink: &mut MachBuffers<InstAndKind<P>>,
     emit_info: &EmitInfo,
     state: &mut EmitState<P>,
     info: &ReturnCallInfo<T>,
@@ -626,7 +626,12 @@ fn emit_return_call_common_sequence<T, P>(
     let mut buffer = MachBuffer::new();
     let mut fake_emit_state = state.clone();
 
-    return_call_emit_impl(&mut buffer, emit_info, &mut fake_emit_state, info);
+    return_call_emit_impl(
+        &mut MachBuffers::text_only(&mut buffer),
+        emit_info,
+        &mut fake_emit_state,
+        info,
+    );
 
     // Finalize the buffer and get the number of bytes emitted.
     let buffer = buffer.finish(&Default::default(), &mut Default::default());
@@ -646,7 +651,7 @@ fn emit_return_call_common_sequence<T, P>(
 
 /// This should not be called directly, Instead prefer to call [emit_return_call_common_sequence].
 fn return_call_emit_impl<T, P>(
-    sink: &mut MachBuffer<InstAndKind<P>>,
+    sink: &mut MachBuffers<InstAndKind<P>>,
     emit_info: &EmitInfo,
     state: &mut EmitState<P>,
     info: &ReturnCallInfo<T>,

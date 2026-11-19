@@ -10,8 +10,8 @@ use crate::{
     reg::writable,
 };
 use cranelift_codegen::{
-    CallInfo, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
-    MachLabel, PatchRegion, RelocDistance, Writable,
+    CallInfo, MachBuffer, MachBufferFinalized, MachBuffers, MachInst, MachInstEmit,
+    MachInstEmitState, MachLabel, PatchRegion, RelocDistance, Writable,
     binemit::Reloc,
     ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, Type, UserExternalNameRef, types},
     isa::{
@@ -337,7 +337,11 @@ impl Assembler {
     }
 
     fn emit(&mut self, inst: Inst) {
-        inst.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
+        inst.emit(
+            &mut MachBuffers::text_only(&mut self.buffer),
+            &self.emit_info,
+            &mut self.emit_state,
+        );
     }
 
     fn to_synthetic_amode(addr: &Address, memflags: MemFlagsData) -> SyntheticAmode {
