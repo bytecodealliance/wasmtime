@@ -910,15 +910,15 @@ impl ModuleStartup {
     }
 }
 
-/// The exports of a [`Module`], by name.
+/// The exports of a [`Module`].
 ///
-/// In addition to the name-to-entity map this maintains a reverse index which
-/// answers whether a given global, memory, or table is exported in constant
-/// time, see [`Module::is_exported_global`] and friends.
+/// In addition to the name-to-entity map this maintains sets for exported
+/// globals, memories and tables, such that [`Module::is_exported_global`],
+/// `-memory` and `-table` lookups are constant time.
 ///
-/// The reverse index is derived from the map: it is not serialized and is
-/// instead rebuilt on deserialization. The only way to add an export is
-/// [`ModuleExports::insert`], which keeps the two in sync.
+/// The sets are derived from the map during construction and during de-
+/// serialization (see the custom `serde` impl).
+/// [`ModuleExports::insert`] ensures the map and the sets remain in sync.
 #[derive(Debug, Default)]
 pub struct ModuleExports {
     map: TryIndexMap<Atom, EntityIndex>,
@@ -938,6 +938,7 @@ impl ModuleExports {
     /// Export names are unique within a module, so `name` must not already be
     /// exported.
     pub fn insert(&mut self, name: Atom, entity: EntityIndex) -> Result<(), OutOfMemory> {
+        self.map.reserve(1)?;
         Self::index(
             &mut self.globals,
             &mut self.memories,
@@ -996,7 +997,7 @@ impl serde::ser::Serialize for ModuleExports {
     where
         S: serde::Serializer,
     {
-        // Only the map is serialized, the reverse index is derived from it.
+        // Only the map is serialized, the sets are derived from it.
         self.map.serialize(serializer)
     }
 }
