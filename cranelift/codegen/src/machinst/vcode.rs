@@ -900,6 +900,19 @@ impl<I: VCodeInst> VCode<I> {
                 last_offset = Some(cur_offset);
             }
 
+            // Attribute any regalloc edits preceding the block's first
+            // instruction to that instruction, rather than to whichever
+            // unrelated block happened to be emitted just before this one
+            // (e.g. when cold blocks are sunk to the end of the function).
+            let first_srcloc = self.srclocs[self.block_ranges.get(block.index()).start];
+            if cur_srcloc != Some(first_srcloc) {
+                if cur_srcloc.is_some() {
+                    buffer.end_srcloc();
+                }
+                buffer.start_srcloc(first_srcloc);
+                cur_srcloc = Some(first_srcloc);
+            }
+
             if let Some(block_start) = I::gen_block_start(
                 self.block_order.is_indirect_branch_target(block),
                 is_forward_edge_cfi_enabled,
@@ -1625,6 +1638,10 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         // `Loop` pseudo-instruction aggregates all Operands so pinned
         // vregs (RealRegs) may occur more than once.
         true
+    }
+
+    fn is_block_cold(&self, block: BlockIndex) -> bool {
+        self.block_order.is_cold(block)
     }
 }
 

@@ -769,3 +769,46 @@ fn deserialize_raw_fails_for_native() {
         );
     }
 }
+
+/// `use_bti` and `use_csdb` only add instructions that every aarch64 CPU can
+/// run, as a `NOP` if nothing else, so enabling either must leave modules
+/// compilable and runnable on the host that compiled them.
+#[test]
+#[cfg_attr(miri, ignore)]
+#[cfg(target_arch = "aarch64")]
+fn aarch64_flags_without_host_detection_run_natively() -> Result<()> {
+    // `call_indirect` goes through a Spectre-guarded table access and
+    // `br_table` through a jump table, the two places `use_csdb` adds `csdb`.
+    let wat = r#"
+        (module
+            (table 1 funcref)
+            (elem (i32.const 0) $two)
+            (type $t (func (result i32)))
+            (func $two (type $t) (i32.const 2))
+            (func (export "run") (param i32) (result i32)
+                (block $default
+                    (block $zero
+                        (br_table $zero $default (local.get 0)))
+                    (return (call_indirect (type $t) (i32.const 0))))
+                (i32.const 3))
+        )
+    "#;
+    for flag in ["use_bti", "use_csdb"] {
+        let mut config = Config::new();
+        unsafe {
+            config.cranelift_flag_enable(flag);
+        }
+        let engine = Engine::new(&config)?;
+        let module = Module::new(&engine, wat).with_context(|| format!("compiling with {flag}"))?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let run = instance.get_typed_func::<i32, i32>(&mut store, "run")?;
+        assert_eq!(run.call(&mut store, 0)?, 2, "{flag}");
+        assert_eq!(run.call(&mut store, 1)?, 3, "{flag}");
+
+        let serialized = module.serialize()?;
+        unsafe { Module::deserialize(&engine, &serialized) }
+            .with_context(|| format!("loading a module serialized with {flag}"))?;
+    }
+    Ok(())
+}

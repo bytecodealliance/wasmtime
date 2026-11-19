@@ -14,7 +14,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       subq    $0x30, %rsp
-;;       movq    %r14, 0x20(%rsp)
+;;       movq    %r13, 0x20(%rsp)
 ;;       movq    8(%rdi), %rax
 ;;       movq    0x10(%rax), %rax
 ;;       movq    %rsp, %rcx
@@ -52,16 +52,16 @@
 ;;       xorl    %eax, %eax
 ;;       movl    $0, 8(%rsp)
 ;;       movl    %ecx, 0xc(%rsp)
-;;       movq    0x20(%rsp), %r14
+;;       movq    0x20(%rsp), %r13
 ;;       addq    $0x30, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   93: movq    %rdi, %r14
+;;   93: movq    %rdi, %r13
 ;;   96: xorl    %esi, %esi
 ;;   98: callq   0x1d3
 ;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x1e, slot at FP-0x30, locals , stack 
-;;   9d: movq    %r14, %rdi
+;;   9d: movq    %r13, %rdi
 ;;   a0: callq   0x204
 ;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x1e, slot at FP-0x30, locals , stack 
 ;;   a5: ud2

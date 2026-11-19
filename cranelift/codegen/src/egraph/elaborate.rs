@@ -70,10 +70,8 @@ pub(crate) struct Elaborator<'a> {
     /// For each loop currently on `loop_stack`, its index in that stack;
     /// `NOT_ON_LOOP_STACK` for every other loop.
     ///
-    /// This lets us compute `active_loop_depth` with a single walk up the loop
-    /// tree, rather than testing each entry of `loop_stack` for membership in
-    /// turn, which would be quadratic in the depth of the loop nest because
-    /// `LoopAnalysis::is_in_loop` itself walks the loop tree.
+    /// This lets us find `active_loop_depth` directly from the block's loops,
+    /// skipping stack entries for loops that have already exited.
     loop_stack_index: SecondaryMap<Loop, u32>,
     /// The current block into which we are elaborating.
     cur_block: Block,
