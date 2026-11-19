@@ -78,7 +78,7 @@ unsafe impl Sync for OpenvinoGraph {}
 
 impl BackendGraph for OpenvinoGraph {
     fn init_execution_context(&self) -> Result<ExecutionContext, BackendError> {
-        let mut compiled_model = self.0.lock().unwrap();
+        let compiled_model = self.0.lock().unwrap();
         let infer_request = compiled_model.create_infer_request()?;
         let box_: Box<dyn BackendExecutionContext> =
             Box::new(OpenvinoExecutionContext(infer_request, self.0.clone()));
