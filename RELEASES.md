@@ -1,3 +1,14 @@
+## 50.0.3
+
+Fixed 2026-11-19.
+
+### Fixed
+
+* WASI filesystem sandbox escape on Windows through a drive-prefixed path component
+  [GHSA-f2pq-268w-886c](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-f2pq-268w-886c)
+
+--------------------------------------------------------------------------------
+
 ## 50.0.2
 
 Released 2026-11-16.
