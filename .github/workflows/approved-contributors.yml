@@ -31,8 +31,8 @@ jobs:
       - uses: bytecodealliance/approved-contributors@v0.1
         with:
           permissions-repo: bytecodealliance/contributor-permissions
-          allowlist-path: approved-wasmtime-wasmtools-witbindgen.txt
-          blocklist-path: blocked.txt
+          allowlist-path: wasmtime-wasmtools-witbindgen-allowlist.txt
+          blocklist-path: wasmtime-wasmtools-witbindgen-blocklist.txt
           # Needs contents read/write on my-org/governance and organization
           # Members read, for vouch-team. See the README.
           permissions-token: ${{ secrets.APPROVED_CONTRIBUTORS_TOKEN }}
