@@ -1,0 +1,71 @@
+test interpret
+test run
+target x86_64
+set opt_level=speed
+target x86_64
+
+;; Regression test for #14660: widening an i8 constant multiply to i32 must
+;; preserve wrapping i8 results, including negative and unsigned constants.
+
+function %imul_i8_const_rhs(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 97
+    v2 = imul v0, v1
+    return v2
+}
+; run: %imul_i8_const_rhs(0) == 0
+; run: %imul_i8_const_rhs(2) == 0xc2
+; run: %imul_i8_const_rhs(0x7f) == 0x1f
+; run: %imul_i8_const_rhs(0x80) == 0x80
+; run: %imul_i8_const_rhs(0xff) == 0x9f
+
+function %imul_i8_const_lhs(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 193
+    v2 = imul v1, v0
+    return v2
+}
+; run: %imul_i8_const_lhs(1) == 0xc1
+; run: %imul_i8_const_lhs(2) == 0x82
+; run: %imul_i8_const_lhs(0x7f) == 0xbf
+; run: %imul_i8_const_lhs(0xff) == 0x3f
+
+;; ireduce can leave junk in the register's high bits. Only the low byte of
+;; the product may survive the uextend, even when that byte has its sign bit set.
+function %imul_i8_ireduce_negative(i64) -> i32 {
+block0(v0: i64):
+    v1 = ireduce.i8 v0
+    v2 = iconst.i8 -97
+    v3 = imul v1, v2
+    v4 = uextend.i32 v3
+    return v4
+}
+; run: %imul_i8_ireduce_negative(0x1234_5678_9abc_de00) == 0
+; run: %imul_i8_ireduce_negative(0x1234_5678_9abc_de01) == 159
+; run: %imul_i8_ireduce_negative(0x1234_5678_9abc_de02) == 62
+; run: %imul_i8_ireduce_negative(0x1234_5678_9abc_de80) == 128
+; run: %imul_i8_ireduce_negative(-1) == 97
+
+function %imul_i8_loaded(i64) -> i8 {
+block0(v0: i64):
+    v1 = load.i8 v0
+    v2 = iconst.i8 193
+    v3 = imul v2, v1
+    return v3
+}
+
+;; Use a separate function so store-to-load forwarding cannot remove the load.
+;; The compile test also checks that the memory access is not widened.
+function %imul_i8_load(i8) -> i8 {
+    ss0 = explicit_slot 1
+    fn0 = %imul_i8_loaded(i64) -> i8
+
+block0(v0: i8):
+    v1 = stack_addr.i64 ss0
+    store v0, v1
+    v2 = call fn0(v1)
+    return v2
+}
+; run: %imul_i8_load(2) == 0x82
+; run: %imul_i8_load(0x7f) == 0xbf
+; run: %imul_i8_load(0xff) == 0x3f
