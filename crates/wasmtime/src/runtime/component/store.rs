@@ -221,6 +221,10 @@ impl ComponentStoreData {
 
     #[cfg(feature = "component-model-async")]
     pub(crate) fn drop_fibers_and_futures(store: &mut dyn VMStore) {
+        // The store is being torn down, so don't allow anything run below,
+        // such as `Drop` impls using an `Accessor`, to enter guest code.
+        store.set_trapped();
+
         let mut fibers = Vec::new();
         let mut futures = Vec::new();
         store
