@@ -4190,3 +4190,47 @@ async fn stream_consumer_not_polled_after_dropped() -> Result<()> {
         }
     }
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn nested_event_loop_in_sync_host_function() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "f" (func $f))
+                (core func $f (canon lower (func $f)))
+                (core module $m
+                    (import "" "f" (func $f))
+                    (func (export "run") (call $f)))
+                (core instance $i (instantiate $m (with "" (instance (export "f" (func $f))))))
+                (func (export "run") (canon lift (core func $i "run"))))
+        "#,
+    )?;
+    let start = Component::new(
+        &engine,
+        r#"
+            (component
+                (core module $m (func $start) (start $start))
+                (core instance (instantiate $m)))
+        "#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap("f", move |mut store, ()| {
+        let linker = Linker::new(store.engine());
+        let instantiate = pin!(linker.instantiate_async(&mut store, &start));
+        match instantiate.poll(&mut Context::from_waker(Waker::noop())) {
+            Poll::Ready(result) => result.map(drop),
+            Poll::Pending => panic!("instantiation should complete in one poll"),
+        }
+    })?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call(&mut store, ())?;
+    run.call(&mut store, ())?;
+    Ok(())
+}

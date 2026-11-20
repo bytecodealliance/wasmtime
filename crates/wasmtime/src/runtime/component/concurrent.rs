@@ -1382,6 +1382,13 @@ impl<T> StoreContextMut<'_, T> {
     ) -> Result<R> {
         debug_assert!(self.0.concurrency_support());
         self.0.check_event_loop_not_running()?;
+
+        // Deferred host tasks are generally not expected when running an event
+        // loop itself. This only happens in odd situations like manually
+        // calling `poll` in a sync host function, but nevertheless just put
+        // things into a defined state for the event loop itself.
+        self.0.concurrent_state_mut()?.materialize_host_task()?;
+
         let token = StoreToken::new(self.as_context_mut());
 
         struct Dropper<'a, T: 'static, V> {
