@@ -1482,7 +1482,9 @@ impl<T> StoreContextMut<'_, T> {
             };
             let mut next = match reset.futures.as_mut() {
                 Some(f) => pin!(f.next()),
-                None => bail_bug!("concurrent state missing futures field"),
+                // The futures are taken out while the store is being torn
+                // down, at which point it can no longer be entered.
+                None => bail!(Trap::CannotEnterComponent),
             };
 
             enum PollResult<R> {
