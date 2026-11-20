@@ -165,6 +165,7 @@ impl<I, E> Drop for FallibleIteratorProducer<I, E> {
 ///         WasiCtxView{
 ///             ctx: &mut self.ctx,
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }
@@ -314,6 +315,7 @@ pub enum Interface {
 ///         WasiCtxView {
 ///             ctx: &mut self.contexts[id.0],
 ///             table: &mut self.table,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }

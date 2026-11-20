@@ -53,7 +53,11 @@
 //!
 //! impl WasiView for Ctx {
 //!     fn ctx(&mut self) -> WasiCtxView<'_> {
-//!         WasiCtxView { ctx: &mut self.wasi_ctx, table: &mut self.table }
+//!         WasiCtxView {
+//!             ctx: &mut self.wasi_ctx,
+//!             table: &mut self.table,
+//!             hooks: Default::default(),
+//!         }
 //!     }
 //! }
 //! ```

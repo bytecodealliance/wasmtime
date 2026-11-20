@@ -1,14 +1,20 @@
-use crate::p2::bindings::{sockets::network::IpAddressFamily, sockets::tcp_create_socket};
+use crate::WasiPermitType;
+use crate::p2::bindings::sockets::{network::IpAddressFamily, tcp::ErrorCode, tcp_create_socket};
 use crate::p2::{SocketResult, TcpSocket};
 use crate::sockets::{SocketAddressFamily, TcpSocket as P3Socket, WasiSocketsCtxView};
 use wasmtime::component::Resource;
 
 impl tcp_create_socket::Host for WasiSocketsCtxView<'_> {
-    fn create_tcp_socket(
+    async fn create_tcp_socket(
         &mut self,
         address_family: IpAddressFamily,
     ) -> SocketResult<Resource<TcpSocket>> {
-        let socket = P3Socket::new(self.ctx, address_family.into())?;
+        let permit = self
+            .hooks
+            .acquire(WasiPermitType::Socket)
+            .await
+            .map_err(|_| ErrorCode::NewSocketLimit)?;
+        let socket = P3Socket::new(self.ctx, address_family.into(), permit, self.hooks.owned())?;
         let socket = self.table.push(TcpSocket::new(socket))?;
         Ok(socket)
     }
@@ -19,6 +25,27 @@ impl From<IpAddressFamily> for SocketAddressFamily {
         match family {
             IpAddressFamily::Ipv4 => Self::Ipv4,
             IpAddressFamily::Ipv6 => Self::Ipv6,
+        }
+    }
+}
+
+pub mod sync {
+    use wasmtime::component::Resource;
+
+    use crate::p2::{
+        SocketResult, TcpSocket,
+        bindings::sockets::tcp_create_socket::Host as AsyncHost,
+        bindings::sync::sockets::{tcp::IpAddressFamily, tcp_create_socket},
+    };
+    use crate::runtime::in_tokio;
+    use crate::sockets::WasiSocketsCtxView;
+
+    impl tcp_create_socket::Host for WasiSocketsCtxView<'_> {
+        fn create_tcp_socket(
+            &mut self,
+            address_family: IpAddressFamily,
+        ) -> SocketResult<Resource<TcpSocket>> {
+            in_tokio(async { AsyncHost::create_tcp_socket(self, address_family).await })
         }
     }
 }
@@ -41,7 +68,7 @@ mod named {
             err.downcast()
         }
 
-        fn create_tcp_socket(
+        async fn create_tcp_socket(
             &mut self,
             id: NamedId,
             address_family: IpAddressFamily,
@@ -50,6 +77,7 @@ mod named {
                 &mut self.0.sockets(id),
                 address_family,
             )
+            .await
         }
     }
 }

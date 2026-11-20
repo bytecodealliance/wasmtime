@@ -527,6 +527,7 @@ async fn p2_environment_named_imports() -> Result<()> {
             WasiCtxView {
                 ctx: &mut self.wasi.default,
                 table: &mut self.wasi.table,
+                hooks: Default::default(),
             }
         }
     }
@@ -540,6 +541,7 @@ async fn p2_environment_named_imports() -> Result<()> {
                     _ => panic!("unexpected id: {}", id.0),
                 },
                 table: &mut self.wasi.table,
+                hooks: Default::default(),
             }
         }
     }

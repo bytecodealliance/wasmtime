@@ -204,7 +204,11 @@
 //!
 //! impl WasiView for MyClientState {
 //!     fn ctx(&mut self) -> WasiCtxView<'_> {
-//!         WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
+//!         WasiCtxView {
+//!             ctx: &mut self.wasi,
+//!             table: &mut self.table,
+//!             hooks: Default::default(),
+//!         }
 //!     }
 //! }
 //!
@@ -291,7 +295,11 @@ pub const DEFAULT_OUTGOING_BODY_CHUNK_SIZE: usize = 1024 * 1024;
 ///
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///         WasiCtxView {
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///             hooks: Default::default(),
+///         }
 ///     }
 /// }
 /// ```
@@ -496,7 +504,11 @@ where
 /// }
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///         WasiCtxView {
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///             hooks: Default::default(),
+///         }
 ///     }
 /// }
 /// ```

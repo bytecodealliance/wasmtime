@@ -5,6 +5,7 @@ use crate::sockets::{
     is_valid_remote_address, is_valid_unicast_address, set_receive_buffer_size,
     set_send_buffer_size, set_unicast_hop_limit, unspecified_addr,
 };
+use crate::{Permitted, WasiHooks, WasiPermit, WasiPermitType};
 use rustix::fd::AsFd;
 use rustix::io::Errno;
 use rustix::net::sockopt;
@@ -32,12 +33,12 @@ enum TcpState {
     /// have to.
     ///
     /// From here a socket can transition to `Listening` or `Connecting`.
-    Default(tokio::net::TcpSocket),
+    Default(Permitted<tokio::net::TcpSocket>),
 
     /// The socket is now listening and waiting for an incoming connection.
     ///
     /// Sockets will not leave this state.
-    Listening(Arc<tokio::net::TcpListener>),
+    Listening(Arc<Permitted<tokio::net::TcpListener>>),
 
     /// An outgoing connection is started.
     ///
@@ -45,7 +46,7 @@ enum TcpState {
     /// for the eventual result of the connect.
     ///
     /// From here a socket can transition to `Connected` or `Closed`.
-    Connecting(MaybeReady<Result<tokio::net::TcpStream, ErrorCode>>),
+    Connecting(MaybeReady<Result<Permitted<tokio::net::TcpStream>, ErrorCode>>),
 
     /// A connection has been established.
     ///
@@ -54,7 +55,7 @@ enum TcpState {
     ///
     /// A socket will not transition out of this state.
     Connected {
-        stream: Arc<tokio::net::TcpStream>,
+        stream: Arc<Permitted<tokio::net::TcpStream>>,
         /// Cached peer address, returned by `accept` or the first successful
         /// `peer_addr` query. The stream may no longer report it after a reset.
         peer: Option<SocketAddr>,
@@ -66,7 +67,7 @@ enum TcpState {
     Closed(ErrorCode),
 }
 impl TcpState {
-    fn connected(stream: tokio::net::TcpStream, peer: Option<SocketAddr>) -> Self {
+    fn connected(stream: Permitted<tokio::net::TcpStream>, peer: Option<SocketAddr>) -> Self {
         TcpState::Connected {
             stream: Arc::new(stream),
             peer,
@@ -110,6 +111,8 @@ pub struct TcpSocket {
     /// Cached value of whether the socket is bound. Various methods use the
     /// `.is_bound()` method, so we cache it to avoid redundant syscalls.
     is_bound: bool,
+
+    hooks: Arc<dyn WasiHooks>,
 }
 
 impl TcpSocket {
@@ -117,18 +120,21 @@ impl TcpSocket {
     pub(crate) fn new(
         ctx: &WasiSocketsCtx,
         family: SocketAddressFamily,
+        permit: Box<dyn WasiPermit>,
+        hooks: Arc<dyn WasiHooks>,
     ) -> Result<Self, ErrorCode> {
         ctx.allowed_network_uses.check_allowed_tcp()?;
 
         let socket = with_ambient_tokio_runtime(|| socket(family))?;
 
         Ok(Self {
-            tcp_state: TcpState::Default(socket),
+            tcp_state: TcpState::Default(Permitted::new(socket, permit)),
             listen_backlog_size: DEFAULT_BACKLOG,
             family,
             is_bound: false,
             listener_options: Default::default(),
             permissions: ctx.socket_addr_check.clone(),
+            hooks,
         })
     }
 
@@ -215,7 +221,9 @@ impl TcpSocket {
                 permissions.check(addr, SocketAddrUse::TcpConnect).await?;
             }
 
-            let stream = sock.connect(addr).await?;
+            let stream = sock
+                .try_map_async(async |sock| sock.connect(addr).await)
+                .await?;
             Ok(stream)
         })));
 
@@ -308,28 +316,31 @@ impl TcpSocket {
             bind(&sock, implicit)?;
         }
 
-        let listener = sock.listen(self.listen_backlog_size).map_err(|err| {
-            match Errno::from_io_error(&err) {
-                // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
-                // According to the docs, `listen` can return EMFILE on Windows.
-                // This is odd, because we're not trying to create a new socket
-                // or file descriptor of any kind. So we rewrite it to less
-                // surprising error code.
-                //
-                // At the time of writing, this behavior has never been experimentally
-                // observed by any of the wasmtime authors, so we're relying fully
-                // on Microsoft's documentation here.
-                #[cfg(windows)]
-                Some(Errno::MFILE) => Errno::NOBUFS.into(),
+        let listener = sock.try_map(|sock| {
+            sock.listen(self.listen_backlog_size).map_err(|err| {
+                match Errno::from_io_error(&err) {
+                    // See: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-listen#:~:text=WSAEMFILE
+                    // According to the docs, `listen` can return EMFILE on Windows.
+                    // This is odd, because we're not trying to create a new socket
+                    // or file descriptor of any kind. So we rewrite it to less
+                    // surprising error code.
+                    //
+                    // At the time of writing, this behavior has never been experimentally
+                    // observed by any of the wasmtime authors, so we're relying fully
+                    // on Microsoft's documentation here.
+                    #[cfg(windows)]
+                    Some(Errno::MFILE) => Errno::NOBUFS.into(),
 
-                _ => err,
-            }
+                    _ => err,
+                }
+            })
         })?;
         let listener = Arc::new(listener);
         self.tcp_state = TcpState::Listening(listener.clone());
 
         Ok(TcpListenStream {
             inner: listener,
+            hooks: self.hooks.clone(),
             listener_options: self.listener_options.clone(),
             family: self.family,
             permissions: self.permissions.clone(),
@@ -427,7 +438,8 @@ impl TcpSocket {
             TcpState::Listening(listener) => {
                 // Try to update the backlog by calling `listen` again.
                 // Not all platforms support this. We'll only update our own value if the OS supports changing the backlog size after the fact.
-                if rustix::net::listen(&listener, value.try_into().unwrap_or(i32::MAX)).is_err() {
+                if rustix::net::listen(&***listener, value.try_into().unwrap_or(i32::MAX)).is_err()
+                {
                     return Err(ErrorCode::NotSupported);
                 }
                 self.listen_backlog_size = value;
@@ -549,11 +561,13 @@ impl TcpSocket {
 }
 
 pub(crate) struct TcpListenStream {
-    inner: Arc<tokio::net::TcpListener>,
+    inner: Arc<Permitted<tokio::net::TcpListener>>,
+    hooks: Arc<dyn WasiHooks>,
     family: SocketAddressFamily,
     listener_options: NonInheritedOptions,
     permissions: SocketAddrCheck,
-    pending_accept: Option<MaybeReady<Result<(tokio::net::TcpStream, SocketAddr), ErrorCode>>>,
+    pending_accept:
+        Option<MaybeReady<Result<(Permitted<tokio::net::TcpStream>, SocketAddr), ErrorCode>>>,
 }
 impl TcpListenStream {
     pub(crate) fn poll_accept(&mut self, cx: &mut std::task::Context<'_>) -> Poll<TcpSocket> {
@@ -572,6 +586,7 @@ impl TcpListenStream {
             is_bound: true,
             listener_options: Default::default(),
             permissions: self.permissions.clone(),
+            hooks: self.hooks.clone(),
         })
     }
 
@@ -579,10 +594,15 @@ impl TcpListenStream {
         if self.pending_accept.is_none() {
             let listener = self.inner.clone();
             let permissions = self.permissions.clone();
+            let hooks = self.hooks.clone();
 
             self.pending_accept = Some(MaybeReady::new(Box::pin(async move {
                 loop {
-                    match accept(&listener).await {
+                    let permit = hooks
+                        .acquire(WasiPermitType::Socket)
+                        .await
+                        .map_err(|_| ErrorCode::NewSocketLimit)?;
+                    match accept(&listener, permit).await {
                         Ok((client, addr)) => {
                             if permissions
                                 .check(addr, SocketAddrUse::TcpAccept)
@@ -614,7 +634,7 @@ impl TcpListenStream {
 }
 
 pub(crate) struct TcpSendStream {
-    inner: Arc<tokio::net::TcpStream>,
+    inner: Arc<Permitted<tokio::net::TcpStream>>,
 }
 impl TcpSendStream {
     pub(crate) fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {
@@ -653,12 +673,12 @@ impl TcpSendStream {
 }
 impl Drop for TcpSendStream {
     fn drop(&mut self) {
-        _ = rustix::net::shutdown(&self.inner, rustix::net::Shutdown::Write);
+        _ = rustix::net::shutdown(&**self.inner, rustix::net::Shutdown::Write);
     }
 }
 
 pub(crate) struct TcpReceiveStream {
-    inner: Arc<tokio::net::TcpStream>,
+    inner: Arc<Permitted<tokio::net::TcpStream>>,
 }
 impl TcpReceiveStream {
     pub(crate) fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<()> {
@@ -691,7 +711,7 @@ impl TcpReceiveStream {
 }
 impl Drop for TcpReceiveStream {
     fn drop(&mut self) {
-        _ = rustix::net::shutdown(&self.inner, rustix::net::Shutdown::Read);
+        _ = rustix::net::shutdown(&**self.inner, rustix::net::Shutdown::Read);
     }
 }
 
@@ -843,10 +863,12 @@ fn bind(socket: &tokio::net::TcpSocket, local_address: SocketAddr) -> Result<(),
 
 async fn accept(
     listener: &tokio::net::TcpListener,
-) -> std::io::Result<(tokio::net::TcpStream, SocketAddr)> {
+    permit: Box<dyn WasiPermit>,
+) -> std::io::Result<(Permitted<tokio::net::TcpStream>, SocketAddr)> {
     listener
         .accept()
         .await
+        .map(move |(stream, addr)| (Permitted::new(stream, permit), addr))
         .map_err(|err| match Errno::from_io_error(&err) {
             // From: https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-accept#:~:text=WSAEINPROGRESS
             // > WSAEINPROGRESS: A blocking Windows Sockets 1.1 call is in progress,
@@ -882,7 +904,7 @@ async fn accept(
         })
 }
 
-fn reset(socket: tokio::net::TcpStream) {
+fn reset(socket: Permitted<tokio::net::TcpStream>) {
     _ = socket.set_zero_linger();
     drop(socket);
 }
@@ -908,14 +930,20 @@ fn clamp_keep_alive_count(value: u32) -> u32 {
 #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
 mod tests {
     use super::*;
-    use crate::WasiCtxBuilder;
+    use crate::{DummyPermit, WasiCtxBuilder};
 
     #[tokio::test]
     async fn accepted_remote_address_survives_reset() {
         let mut ctx = WasiCtxBuilder::new();
         ctx.inherit_network().allow_tcp(true);
         let ctx = ctx.build();
-        let mut socket = TcpSocket::new(&ctx.sockets, SocketAddressFamily::Ipv4).unwrap();
+        let mut socket = TcpSocket::new(
+            &ctx.sockets,
+            SocketAddressFamily::Ipv4,
+            Box::new(DummyPermit),
+            Arc::new([(); 0]),
+        )
+        .unwrap();
         socket.bind("127.0.0.1:0".parse().unwrap()).await.unwrap();
         let mut listener = socket.listen().await.unwrap();
 
@@ -957,7 +985,13 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let peer = listener.local_addr().unwrap();
 
-        let mut client = TcpSocket::new(&ctx.sockets, SocketAddressFamily::Ipv4).unwrap();
+        let mut client = TcpSocket::new(
+            &ctx.sockets,
+            SocketAddressFamily::Ipv4,
+            Box::new(DummyPermit),
+            Arc::new([(); 0]),
+        )
+        .unwrap();
         client.start_connect(peer).unwrap();
         poll_fn(|cx| client.poll_finish_connect(cx)).await.unwrap();
         let (server, _) = listener.accept().await.unwrap();

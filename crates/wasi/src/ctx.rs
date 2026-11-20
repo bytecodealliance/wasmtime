@@ -3,7 +3,7 @@ use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
 use crate::filesystem::{Dir, WasiFilesystemCtx};
 use crate::random::WasiRandomCtx;
 use crate::sockets::{SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
-use crate::{FsPerms, OpenMode};
+use crate::{DummyPermit, FsPerms, OpenMode};
 use rand::Rng;
 use std::future::Future;
 use std::mem;
@@ -330,6 +330,7 @@ impl WasiCtxBuilder {
                 perms,
                 open_mode,
                 self.filesystem.allow_blocking_current_thread,
+                Box::new(DummyPermit),
             ),
             guest_path.as_ref().to_owned(),
         ));
@@ -527,7 +528,11 @@ impl WasiCtxBuilder {
 ///
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> WasiCtxView<'_> {
-///         WasiCtxView { ctx: &mut self.ctx, table: &mut self.table }
+///         WasiCtxView {
+///             ctx: &mut self.ctx,
+///             table: &mut self.table,
+///             hooks: Default::default(),
+///         }
 ///     }
 /// }
 ///

@@ -1,3 +1,4 @@
+use crate::WasiPermitType;
 use crate::p3::bindings::sockets::types::{
     Duration, ErrorCode, HostTcpSocket, HostTcpSocketWithStore, IpAddressFamily, IpSocketAddress,
     TcpSocket,
@@ -345,9 +346,17 @@ impl HostTcpSocket for WasiSocketsCtxView<'_> {
         Ok(())
     }
 
-    fn create(&mut self, address_family: IpAddressFamily) -> SocketResult<Resource<TcpSocket>> {
+    async fn create(
+        &mut self,
+        address_family: IpAddressFamily,
+    ) -> SocketResult<Resource<TcpSocket>> {
         let family = address_family.into();
-        let socket = TcpSocket::new(self.ctx, family)?;
+        let permit = self
+            .hooks
+            .acquire(WasiPermitType::Socket)
+            .await
+            .map_err(|_| ErrorCode::from(crate::sockets::ErrorCode::NewSocketLimit))?;
+        let socket = TcpSocket::new(self.ctx, family, permit, self.hooks.owned())?;
         let resource = self
             .table
             .push(socket)
@@ -576,12 +585,12 @@ mod named {
             super::HostTcpSocket::bind(&mut self.0.sockets(id), socket, local_address).await
         }
 
-        fn create(
+        async fn create(
             &mut self,
             id: NamedId,
             address_family: IpAddressFamily,
         ) -> SocketResult<Resource<TcpSocket>> {
-            super::HostTcpSocket::create(&mut self.0.sockets(id), address_family)
+            super::HostTcpSocket::create(&mut self.0.sockets(id), address_family).await
         }
 
         fn get_local_address(

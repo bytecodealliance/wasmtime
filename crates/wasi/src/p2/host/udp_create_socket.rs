@@ -1,4 +1,5 @@
-use crate::p2::bindings::{sockets::network::IpAddressFamily, sockets::udp_create_socket};
+use crate::WasiPermitType;
+use crate::p2::bindings::sockets::{network::IpAddressFamily, udp::ErrorCode, udp_create_socket};
 use crate::p2::{SocketResult, UdpSocket};
 use crate::sockets::UdpSocket as P3Socket;
 use crate::sockets::WasiSocketsCtxView;
@@ -9,7 +10,12 @@ impl udp_create_socket::Host for WasiSocketsCtxView<'_> {
         &mut self,
         address_family: IpAddressFamily,
     ) -> SocketResult<Resource<UdpSocket>> {
-        let inner = P3Socket::new(self.ctx, address_family.into()).await?;
+        let permit = self
+            .hooks
+            .acquire(WasiPermitType::Socket)
+            .await
+            .map_err(|_| ErrorCode::NewSocketLimit)?;
+        let inner = P3Socket::new(self.ctx, address_family.into(), permit).await?;
         let socket = self.table.push(UdpSocket::new(inner))?;
         Ok(socket)
     }

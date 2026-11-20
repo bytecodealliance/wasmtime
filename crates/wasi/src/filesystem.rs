@@ -1,7 +1,7 @@
 use crate::clocks::Datetime;
 use crate::filesystem::primitives::{FollowSymlinks, Metadata, OpenOptions};
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
-use crate::{NamedId, WasiCtxNamedView};
+use crate::{NamedId, Permitted, WasiCtxNamedView, WasiHooks, WasiPermit};
 use std::collections::hash_map;
 use std::marker;
 use std::num::NonZeroUsize;
@@ -55,6 +55,7 @@ pub(crate) mod primitives;
 ///         |state| WasiFilesystemCtxView {
 ///             table: &mut state.table,
 ///             ctx: &mut state.filesystem,
+///             hooks: Default::default(),
 ///         },
 ///     )?;
 ///     Ok(())
@@ -86,6 +87,7 @@ impl Default for WasiFilesystemCtx {
 pub struct WasiFilesystemCtxView<'a> {
     pub ctx: &'a mut WasiFilesystemCtx,
     pub table: &'a mut ResourceTable,
+    pub hooks: &'a mut dyn WasiHooks,
 }
 
 pub trait WasiFilesystemView: Send {
@@ -687,7 +689,7 @@ pub struct File {
     /// Wrapped in an Arc because the same underlying file is used for
     /// implementing the stream types. A copy is also needed for
     /// `spawn_blocking`.
-    pub file: Arc<std::fs::File>,
+    pub file: Arc<Permitted<std::fs::File>>,
     /// Permissions to enforce on access to the file. These permissions are
     /// specified to the parent preopen by a user of the
     /// `crate::WasiCtxBuilder`, and are enforced prior to any enforced by the
@@ -708,9 +710,10 @@ impl File {
         perms: FsPerms,
         open_mode: OpenMode,
         allow_blocking_current_thread: bool,
+        permit: Box<dyn WasiPermit>,
     ) -> Self {
         Self {
-            file: Arc::new(file),
+            file: Arc::new(Permitted::new(file, permit)),
             perms,
             open_mode,
             allow_blocking_current_thread,
@@ -764,7 +767,7 @@ impl File {
 
     /// Returns reference to the underlying [`std::fs::File`]
     #[cfg(feature = "p3")]
-    pub(crate) fn as_file(&self) -> &Arc<std::fs::File> {
+    pub(crate) fn as_file(&self) -> &Arc<Permitted<std::fs::File>> {
         &self.file
     }
 
@@ -797,7 +800,7 @@ pub struct Dir {
     /// struct are sandboxed to be within this directory via `cap-primitives`.
     ///
     /// Wrapped in an Arc because a copy is needed for `run_blocking`.
-    pub dir: Arc<std::fs::File>,
+    pub dir: Arc<Permitted<std::fs::File>>,
     /// Permissions to enforce on access to the filesystem under this
     /// directory are specified by a user of the `crate::WasiCtxBuilder`, and
     /// are enforced prior to any enforced by the underlying operating system.
@@ -820,9 +823,10 @@ impl Dir {
         perms: FsPerms,
         open_mode: OpenMode,
         allow_blocking_current_thread: bool,
+        permit: Box<dyn WasiPermit>,
     ) -> Self {
         Dir {
-            dir: Arc::new(dir),
+            dir: Arc::new(Permitted::new(dir, permit)),
             perms,
             open_mode,
             allow_blocking_current_thread,
@@ -858,7 +862,7 @@ impl Dir {
 
     /// Returns reference to the underlying directory handle.
     #[cfg(feature = "p3")]
-    pub(crate) fn as_dir(&self) -> &Arc<std::fs::File> {
+    pub(crate) fn as_dir(&self) -> &Arc<Permitted<std::fs::File>> {
         &self.dir
     }
 
@@ -950,6 +954,7 @@ impl Dir {
         oflags: OpenFlags,
         flags: DescriptorFlags,
         allow_blocking_current_thread: bool,
+        permit: Box<dyn WasiPermit>,
     ) -> Result<Descriptor, ErrorCode> {
         // Track whether we are creating file, for permission check:
         let mut create = false;
@@ -1055,6 +1060,7 @@ impl Dir {
                 self.perms,
                 open_mode,
                 allow_blocking_current_thread,
+                permit,
             ))),
 
             OpenResult::File(file) => Ok(Descriptor::File(File::new(
@@ -1062,6 +1068,7 @@ impl Dir {
                 self.perms,
                 open_mode,
                 allow_blocking_current_thread,
+                permit,
             ))),
 
             OpenResult::NotDir => Err(ErrorCode::NotDirectory),
@@ -1228,6 +1235,7 @@ impl WasiFilesystemCtxView<'_> {
 ///         WasiFilesystemCtxView {
 ///             table: &mut self.table,
 ///             ctx,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }
@@ -1303,6 +1311,7 @@ where
 ///         WasiFilesystemCtxView {
 ///             table: &mut self.table,
 ///             ctx,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }

@@ -1,5 +1,5 @@
 use crate::runtime::{AbortOnDropJoinHandle, poll_noop};
-use crate::{NamedId, WasiCtxNamedView};
+use crate::{NamedId, WasiCtxNamedView, WasiHooks};
 use core::fmt;
 use core::future::Future;
 use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -55,6 +55,7 @@ pub use udp::UdpSocket;
 ///         |state| WasiSocketsCtxView {
 ///             ctx: &mut state.sockets,
 ///             table: &mut state.table,
+///             hooks: Default::default(),
 ///         },
 ///     )?;
 ///     Ok(())
@@ -86,6 +87,7 @@ impl Default for WasiSocketsCtx {
 pub struct WasiSocketsCtxView<'a> {
     pub ctx: &'a mut WasiSocketsCtx,
     pub table: &'a mut ResourceTable,
+    pub hooks: &'a mut dyn WasiHooks,
 }
 
 pub trait WasiSocketsView: Send {
@@ -321,6 +323,7 @@ pub enum ErrorCode {
     ConnectionReset,
     ConnectionAborted,
     DatagramTooLarge,
+    NewSocketLimit,
     Other,
 }
 
@@ -655,6 +658,7 @@ pub(crate) fn unspecified_addr(family: SocketAddressFamily) -> SocketAddr {
 ///         WasiSocketsCtxView {
 ///             table: &mut self.table,
 ///             ctx,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }
@@ -730,6 +734,7 @@ where
 ///         WasiSocketsCtxView {
 ///             table: &mut self.table,
 ///             ctx,
+///             hooks: Default::default(),
 ///         }
 ///     }
 /// }

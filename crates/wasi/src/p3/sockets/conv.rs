@@ -223,6 +223,9 @@ impl From<crate::sockets::ErrorCode> for types::ErrorCode {
             crate::sockets::ErrorCode::ConnectionReset => Self::ConnectionReset,
             crate::sockets::ErrorCode::ConnectionAborted => Self::ConnectionAborted,
             crate::sockets::ErrorCode::DatagramTooLarge => Self::DatagramTooLarge,
+            crate::sockets::ErrorCode::NewSocketLimit => {
+                Self::Other(Some("unable to acquire permit for socket".into()))
+            }
         }
     }
 }

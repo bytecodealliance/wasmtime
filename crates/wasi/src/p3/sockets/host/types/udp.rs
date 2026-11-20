@@ -1,9 +1,9 @@
-use crate::TrappableError;
 use crate::p3::bindings::sockets::types::{
     HostUdpSocket, HostUdpSocketWithStore, IpAddressFamily, IpSocketAddress,
 };
-use crate::p3::sockets::{SocketResult, WasiSockets};
+use crate::p3::sockets::{SocketResult, WasiSockets, types::ErrorCode};
 use crate::sockets::{UdpSocket, WasiSocketsCtxView};
+use crate::{TrappableError, WasiPermitType};
 use std::net::SocketAddr;
 use wasmtime::component::{Accessor, Resource, ResourceTable};
 use wasmtime::error::Context as _;
@@ -102,7 +102,12 @@ impl HostUdpSocket for WasiSocketsCtxView<'_> {
         &mut self,
         address_family: IpAddressFamily,
     ) -> SocketResult<Resource<UdpSocket>> {
-        let socket = UdpSocket::new(self.ctx, address_family.into()).await?;
+        let permit = self
+            .hooks
+            .acquire(WasiPermitType::Socket)
+            .await
+            .map_err(|_| ErrorCode::from(crate::sockets::ErrorCode::NewSocketLimit))?;
+        let socket = UdpSocket::new(self.ctx, address_family.into(), permit).await?;
         self.table
             .push(socket)
             .context("failed to push socket resource to table")

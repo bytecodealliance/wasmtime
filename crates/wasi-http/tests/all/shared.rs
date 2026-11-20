@@ -21,6 +21,7 @@ impl WasiView for NamedImportsData {
         WasiCtxView {
             ctx: &mut self.wasi,
             table: &mut self.table,
+            hooks: Default::default(),
         }
     }
 }
