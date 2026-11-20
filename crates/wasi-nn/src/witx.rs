@@ -138,10 +138,7 @@ impl generated::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
             let mut slices = vec![];
             for builder in builders.iter() {
                 let builder = memory.read(builder?)?;
-                let slice = memory.as_slice(builder)?.expect(
-                    "cannot use with shared memories; \
-                     see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
-                );
+                let slice = memory.as_cow(builder)?;
                 slices.push(slice);
             }
             let slice_refs = slices.iter().map(|s| s.as_ref()).collect::<Vec<_>>();
@@ -158,7 +155,7 @@ impl generated::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         memory: &mut GuestMemory<'_>,
         name: wiggle::GuestPtr<str>,
     ) -> Result<generated::types::Graph> {
-        let name = memory.as_str(name)?.unwrap();
+        let name = memory.as_cow_str(name)?;
         if let Some(graph) = self.registry.get_mut(&name) {
             let graph_id = self.graphs.insert(graph.clone());
             Ok(graph_id.into())
@@ -223,18 +220,12 @@ impl generated::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
     ) -> Result<u32> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
             let tensor = exec_context.get_output(Id::Index(index))?;
-            let destination = memory
-                .as_slice_mut(out_buffer.as_array(out_buffer_max_size))?
-                .expect(
-                    "cannot use with shared memories; \
-                     see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)",
-                );
-            if tensor.data.len() > destination.len() {
-                Err(WasiNnError::NotEnoughMemory(tensor.data.len()))
-            } else {
-                destination[..tensor.data.len()].copy_from_slice(&tensor.data);
-                Ok(tensor.data.len() as u32)
-            }
+            let len = match u32::try_from(tensor.data.len()) {
+                Ok(len) if len <= out_buffer_max_size => len,
+                _ => return Err(WasiNnError::NotEnoughMemory(tensor.data.len())),
+            };
+            memory.copy_from_slice(&tensor.data, out_buffer.as_array(len))?;
+            Ok(len)
         } else {
             Err(UsageError::InvalidGraphHandle.into())
         }
@@ -342,6 +333,35 @@ mod tests {
                 "{name}: {err:?}"
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn shared_memory_load_by_name() -> wasmtime::Result<()> {
+        let mut config = wasmtime::Config::new();
+        config.shared_memory(true);
+        let engine = Engine::new(&config)?;
+        let mut linker = Linker::<WasiNnCtx>::new(&engine);
+        add_to_linker(&mut linker, |s| s)?;
+        let module = Module::new(
+            &engine,
+            r#"(module
+                (import "wasi_ephemeral_nn" "load_by_name"
+                    (func $load_by_name (param i32 i32 i32) (result i32)))
+                (memory (export "memory") 1 1 shared)
+                (data (i32.const 0) "missing")
+                (func (export "load-by-name") (result i32)
+                    (call $load_by_name (i32.const 0) (i32.const 7) (i32.const 8))))"#,
+        )?;
+        let ctx = WasiNnCtx::new([], InMemoryRegistry::new().into());
+        let mut store = Store::new(&engine, ctx);
+        let instance = linker.instantiate(&mut store, &module)?;
+        let func = instance.get_typed_func::<(), i32>(&mut store, "load-by-name")?;
+        let errno = func.call(&mut store, ())?;
+        assert_eq!(
+            errno,
+            generated::types::NnErrno::UnsupportedOperation as i32
+        );
         Ok(())
     }
 }
