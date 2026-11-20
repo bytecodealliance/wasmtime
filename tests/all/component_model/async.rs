@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 use wasmtime::Result;
 use wasmtime::component::{TaskGroupHook, TaskGroupId};
-use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, component::*};
+use wasmtime::{AsContextMut, Config, Engine, Store, StoreContextMut, Trap, component::*};
 use wasmtime_component_util::REALLOC_AND_FREE;
 
 #[tokio::test(flavor = "current_thread")]
@@ -4189,4 +4189,63 @@ async fn stream_consumer_not_polled_after_dropped() -> Result<()> {
             Poll::Ready(Ok(StreamResult::Dropped))
         }
     }
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn no_guest_calls_while_store_drops() -> Result<()> {
+    struct Guard<'a> {
+        accessor: &'a Accessor<()>,
+        f: TypedFunc<(), ()>,
+    }
+
+    impl Drop for Guard<'_> {
+        fn drop(&mut self) {
+            self.accessor.with(|mut store| {
+                let err = self.f.call(&mut store, ()).unwrap_err();
+                assert_eq!(err.downcast_ref(), Some(&Trap::CannotEnterComponent));
+
+                {
+                    let run = pin!(store.as_context_mut().run_concurrent(async |_| ()));
+                    let Poll::Ready(result) = run.poll(&mut Context::from_waker(Waker::noop()))
+                    else {
+                        panic!("run_concurrent should not be pending");
+                    };
+                    let err = result.unwrap_err();
+                    assert_eq!(err.downcast_ref(), Some(&Trap::CannotEnterComponent));
+                }
+
+                let call = pin!(self.f.call_async(&mut store, ()));
+                let Poll::Ready(result) = call.poll(&mut Context::from_waker(Waker::noop())) else {
+                    panic!("call_async should not be pending");
+                };
+                let err = result.unwrap_err();
+                assert_eq!(err.downcast_ref(), Some(&Trap::CannotEnterComponent));
+            });
+        }
+    }
+
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (core module $m (func (export "f")))
+                (core instance $i (instantiate $m))
+                (func (export "f") (canon lift (core func $i "f"))))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    store.spawn(async move |accessor| {
+        let _guard = Guard { accessor, f };
+        _ = tx.send(());
+        std::future::pending().await
+    })?;
+    store.run_concurrent(async |_| rx.await).await??;
+    drop(store);
+    Ok(())
 }
