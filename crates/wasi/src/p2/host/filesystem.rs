@@ -1,4 +1,4 @@
-use crate::filesystem::sys;
+use crate::filesystem::primitives;
 use crate::filesystem::{Descriptor, WasiFilesystemCtxView};
 use crate::p2::bindings::clocks::wall_clock;
 use crate::p2::bindings::filesystem::preopens;
@@ -112,7 +112,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         let (mut buffer, r) = f
             .run_blocking(move |f| {
                 let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX).min(max)];
-                let r = sys::read_at_cursor_unspecified(f, &mut buffer, offset);
+                let r = primitives::read_at_cursor_unspecified(f, &mut buffer, offset);
                 (buffer, r)
             })
             .await;
@@ -139,7 +139,7 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         }
 
         let bytes_written = f
-            .run_blocking(move |f| sys::write_at_cursor_unspecified(f, &buf, offset))
+            .run_blocking(move |f| primitives::write_at_cursor_unspecified(f, &buf, offset))
             .await?;
 
         Ok(types::Filesize::try_from(bytes_written).expect("usize fits in Filesize"))

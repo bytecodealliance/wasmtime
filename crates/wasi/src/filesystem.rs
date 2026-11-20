@@ -3,6 +3,7 @@ use crate::filesystem::primitives::{FollowSymlinks, Metadata, OpenOptions};
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use crate::{NamedId, WasiCtxNamedView};
 use std::collections::hash_map;
+use std::io;
 use std::marker;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -11,16 +12,9 @@ use tracing::debug;
 use wasmtime::component::{HasData, Resource, ResourceTable};
 use wasmtime::error::Context as _;
 
-#[cfg(unix)]
-pub(crate) mod unix;
-#[cfg(unix)]
-pub(crate) use unix as sys;
-#[cfg(windows)]
-pub(crate) mod windows;
-#[cfg(windows)]
-pub(crate) use windows as sys;
-
 pub(crate) mod primitives;
+
+pub(crate) use primitives::{Advice, DescriptorFlags};
 
 /// A helper struct which implements [`HasData`] for the `wasi:filesystem` APIs.
 ///
@@ -160,52 +154,6 @@ bitflags::bitflags! {
     }
 }
 
-bitflags::bitflags! {
-    /// Descriptor flags.
-    ///
-    /// Note: This was called `fdflags` in earlier versions of WASI.
-    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-    pub(crate) struct DescriptorFlags: usize {
-        /// Read mode: Data can be read.
-        const READ = 0b1;
-        /// Write mode: Data can be written to.
-        const WRITE = 0b10;
-        /// Request that writes be performed according to synchronized I/O file
-        /// integrity completion. The data stored in the file and the file's
-        /// metadata are synchronized. This is similar to `O_SYNC` in POSIX.
-        ///
-        /// The precise semantics of this operation have not yet been defined for
-        /// WASI. At this time, it should be interpreted as a request, and not a
-        /// requirement.
-        const FILE_INTEGRITY_SYNC = 0b100;
-        /// Request that writes be performed according to synchronized I/O data
-        /// integrity completion. Only the data stored in the file is
-        /// synchronized. This is similar to `O_DSYNC` in POSIX.
-        ///
-        /// The precise semantics of this operation have not yet been defined for
-        /// WASI. At this time, it should be interpreted as a request, and not a
-        /// requirement.
-        const DATA_INTEGRITY_SYNC = 0b1000;
-        /// Requests that reads be performed at the same level of integrity
-        /// requested for writes. This is similar to `O_RSYNC` in POSIX.
-        ///
-        /// The precise semantics of this operation have not yet been defined for
-        /// WASI. At this time, it should be interpreted as a request, and not a
-        /// requirement.
-        const REQUESTED_WRITE_SYNC = 0b10000;
-        /// Mutating directories mode: Directory contents may be mutated.
-        ///
-        /// When this flag is unset on a descriptor, operations using the
-        /// descriptor which would create, rename, delete, modify the data or
-        /// metadata of filesystem objects, or obtain another handle which
-        /// would permit any of those, shall fail with `error-code::read-only` if
-        /// they would otherwise succeed.
-        ///
-        /// This may only be set on directories.
-        const MUTATE_DIRECTORY = 0b100000;
-    }
-}
-
 /// Error codes returned by functions, similar to `errno` in POSIX.
 /// Not all of these error codes are returned by the functions provided by this
 /// API; some are used in higher-level library layers, and others are provided
@@ -275,10 +223,6 @@ pub(crate) enum DescriptorType {
     /// any of the other types specified.
     Unknown,
     /// The descriptor refers to a block device inode.
-    #[cfg_attr(
-        windows,
-        expect(dead_code, reason = "windows has no notion of block devices")
-    )]
     BlockDevice,
     /// The descriptor refers to a character device inode.
     CharacterDevice,
@@ -298,8 +242,12 @@ impl From<crate::filesystem::primitives::FileType> for DescriptorType {
             DescriptorType::SymbolicLink
         } else if ft.is_file() {
             DescriptorType::RegularFile
+        } else if ft.is_block_device() {
+            DescriptorType::BlockDevice
+        } else if ft.is_char_device() {
+            DescriptorType::CharacterDevice
         } else {
-            sys::descriptor_type(ft)
+            DescriptorType::Unknown
         }
     }
 }
@@ -333,12 +281,11 @@ pub(crate) struct DescriptorStat {
 }
 
 impl DescriptorStat {
-    /// Creates a `DescriptorStat` from a `Metadata` plus the hard link
-    /// count.
-    fn new(meta: &Metadata, link_count: u64) -> Self {
+    /// Creates a `DescriptorStat` from a `Metadata`.
+    fn from_metadata(meta: &Metadata) -> Self {
         Self {
             type_: meta.file_type().into(),
-            link_count,
+            link_count: meta.nlink(),
             size: meta.len(),
             data_access_timestamp: meta
                 .accessed()
@@ -365,14 +312,14 @@ pub(crate) struct MetadataHashValue {
 impl MetadataHashValue {
     /// Creates a hash value from a file's unique identity, e.g. a
     /// device/inode number pair.
-    fn new(identity: impl std::hash::Hash) -> Self {
+    fn from_metadata(meta: &Metadata) -> Self {
         // Without incurring any deps, std provides us with a 64 bit hash
         // function:
-        use std::hash::Hasher as _;
+        use std::hash::{Hash as _, Hasher as _};
         // Note that this means that the metadata hash (which becomes a preview1 ino) may
         // change when a different rustc release is used to build this host implementation:
         let mut hasher = hash_map::DefaultHasher::new();
-        identity.hash(&mut hasher);
+        meta.identity().hash(&mut hasher);
         let lower = hasher.finish();
         // MetadataHashValue has a pair of 64-bit members for representing a
         // single 128-bit number. However, we only have 64 bits of entropy. To
@@ -388,14 +335,9 @@ impl MetadataHashValue {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub(crate) enum Advice {
-    Normal,
-    Sequential,
-    Random,
-    WillNeed,
-    DontNeed,
-    NoReuse,
+/// Returns whether `a` and `b` refer to the same underlying file.
+fn is_same_file(a: &std::fs::File, b: &std::fs::File) -> io::Result<bool> {
+    Ok(Metadata::from_file(a)?.identity() == Metadata::from_file(b)?.identity())
 }
 
 #[cfg(unix)]
@@ -553,7 +495,7 @@ impl Descriptor {
     pub(crate) async fn get_flags(&self) -> Result<DescriptorFlags, ErrorCode> {
         match self {
             Self::File(f) => {
-                let mut flags = f.run_blocking(|f| sys::get_flags(f)).await?;
+                let mut flags = f.run_blocking(|f| primitives::status_flags(f)).await?;
                 if f.open_mode.contains(OpenMode::READ) {
                     flags |= DescriptorFlags::READ;
                 }
@@ -563,7 +505,7 @@ impl Descriptor {
                 Ok(flags)
             }
             Self::Dir(d) => {
-                let mut flags = d.run_blocking(|d| sys::get_flags(d)).await?;
+                let mut flags = d.run_blocking(|d| primitives::status_flags(d)).await?;
                 if d.open_mode.contains(OpenMode::READ) {
                     flags |= DescriptorFlags::READ;
                 }
@@ -647,11 +589,17 @@ impl Descriptor {
         }
     }
 
-    pub(crate) async fn stat(&self) -> Result<DescriptorStat, ErrorCode> {
+    /// Returns the metadata of the file or directory this descriptor refers
+    /// to.
+    async fn metadata(&self) -> io::Result<Metadata> {
         match self {
-            Self::File(f) => Ok(f.run_blocking(|f| sys::stat(f)).await?),
-            Self::Dir(d) => Ok(d.run_blocking(|f| sys::stat(f)).await?),
+            Self::File(f) => f.run_blocking(|f| Metadata::from_file(f)).await,
+            Self::Dir(d) => d.run_blocking(|d| Metadata::from_file(d)).await,
         }
+    }
+
+    pub(crate) async fn stat(&self) -> Result<DescriptorStat, ErrorCode> {
+        Ok(DescriptorStat::from_metadata(&self.metadata().await?))
     }
 
     pub(crate) async fn is_same_object(&self, other: &Self) -> wasmtime::Result<bool> {
@@ -661,22 +609,13 @@ impl Descriptor {
             Self::Dir(d) => Arc::clone(&d.dir),
         };
         Ok(match self {
-            Self::File(f) => {
-                f.run_blocking(move |f| sys::is_same_file(f, &other))
-                    .await?
-            }
-            Self::Dir(d) => {
-                d.run_blocking(move |d| sys::is_same_file(d, &other))
-                    .await?
-            }
+            Self::File(f) => f.run_blocking(move |f| is_same_file(f, &other)).await?,
+            Self::Dir(d) => d.run_blocking(move |d| is_same_file(d, &other)).await?,
         })
     }
 
     pub(crate) async fn metadata_hash(&self) -> Result<MetadataHashValue, ErrorCode> {
-        match self {
-            Self::File(f) => Ok(f.run_blocking(|f| sys::metadata_hash(f)).await?),
-            Self::Dir(d) => Ok(d.run_blocking(|d| sys::metadata_hash(d)).await?),
-        }
+        Ok(MetadataHashValue::from_metadata(&self.metadata().await?))
     }
 }
 
@@ -774,7 +713,7 @@ impl File {
         len: u64,
         advice: Advice,
     ) -> Result<(), ErrorCode> {
-        self.run_blocking(move |f| sys::advise(f, offset, len, advice))
+        self.run_blocking(move |f| primitives::advise(f, offset, len, advice))
             .await?;
         Ok(())
     }
@@ -881,10 +820,10 @@ impl Dir {
         } else {
             FollowSymlinks::No
         };
-        let ret = self
-            .run_blocking(move |d| sys::stat_at(d, path.as_ref(), follow))
+        let meta = self
+            .run_blocking(move |d| primitives::stat(d, path.as_ref(), follow))
             .await?;
-        Ok(ret)
+        Ok(DescriptorStat::from_metadata(&meta))
     }
 
     pub(crate) async fn set_times_at(
@@ -957,7 +896,7 @@ impl Dir {
         let mut open_mode = OpenMode::empty();
         // Construct the OpenOptions to give the OS:
         let mut opts = OpenOptions::new();
-        sys::maybe_dir(&mut opts);
+        opts.maybe_dir(true);
 
         if oflags.contains(OpenFlags::CREATE) {
             if oflags.contains(OpenFlags::EXCLUSIVE) {
@@ -1122,7 +1061,7 @@ impl Dir {
         if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
-        self.run_blocking(move |d| sys::symlink(src_path.as_ref(), d, dest_path.as_ref()))
+        self.run_blocking(move |d| primitives::symlink(src_path.as_ref(), d, dest_path.as_ref()))
             .await?;
         Ok(())
     }
@@ -1131,7 +1070,7 @@ impl Dir {
         if self.perms.write_not_permitted() {
             return Err(ErrorCode::NotPermitted);
         }
-        self.run_blocking(move |d| sys::remove_file_or_symlink(d, path.as_ref()))
+        self.run_blocking(move |d| primitives::remove_file_or_symlink(d, path.as_ref()))
             .await?;
         Ok(())
     }
@@ -1147,10 +1086,10 @@ impl Dir {
         } else {
             FollowSymlinks::No
         };
-        let hash = self
-            .run_blocking(move |d| sys::metadata_hash_at(d, path.as_ref(), follow))
+        let meta = self
+            .run_blocking(move |d| primitives::stat(d, path.as_ref(), follow))
             .await?;
-        Ok(hash)
+        Ok(MetadataHashValue::from_metadata(&meta))
     }
 }
 

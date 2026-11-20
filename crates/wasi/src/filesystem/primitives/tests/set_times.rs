@@ -18,8 +18,8 @@ fn basic_times() {
     check!(h::create(&dir, "file"));
     check!(h::create_dir(&dir, "dir"));
     if test_symlinks {
-        check!(h::symlink_file(&dir, "file", "file_symlink_file"));
-        check!(h::symlink_dir(&dir, "dir", "dir_symlink_dir"));
+        check!(h::symlink(&dir, "file", "file_symlink_file"));
+        check!(h::symlink(&dir, "dir", "dir_symlink_dir"));
     }
 
     let file_time = SystemTime::UNIX_EPOCH;
@@ -53,8 +53,8 @@ fn symlink_times() {
     let dir = h::dir_of(&tmpdir);
     check!(h::create(&dir, "file"));
     check!(h::create_dir(&dir, "dir"));
-    check!(h::symlink_file(&dir, "file", "file_symlink_file"));
-    check!(h::symlink_dir(&dir, "dir", "dir_symlink_dir"));
+    check!(h::symlink(&dir, "file", "file_symlink_file"));
+    check!(h::symlink(&dir, "dir", "dir_symlink_dir"));
 
     let file_time = SystemTime::UNIX_EPOCH;
     check!(set_times(
@@ -109,8 +109,8 @@ fn symlink_itself_times() {
     let dir = h::dir_of(&tmpdir);
     check!(h::create(&dir, "file"));
     check!(h::create_dir(&dir, "dir"));
-    check!(h::symlink_file(&dir, "file", "file_symlink_file"));
-    check!(h::symlink_dir(&dir, "dir", "dir_symlink_dir"));
+    check!(h::symlink(&dir, "file", "file_symlink_file"));
+    check!(h::symlink(&dir, "dir", "dir_symlink_dir"));
 
     let file_time = SystemTime::UNIX_EPOCH;
     check!(set_times_nofollow(

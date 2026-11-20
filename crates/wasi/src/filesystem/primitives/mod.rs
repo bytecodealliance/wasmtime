@@ -11,9 +11,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 use std::{fs, io};
 
-mod file_type;
 mod maybe_owned_file;
-mod metadata;
 mod open_options;
 mod open_parent;
 mod open_unchecked_error;
@@ -38,13 +36,76 @@ use open_parent::open_parent;
 use open_unchecked_error::*;
 use sys::*;
 
-pub(crate) use file_type::FileType;
-pub(crate) use metadata::Metadata;
 pub(crate) use open_options::*;
+pub(crate) use sys::advise;
+pub(crate) use sys::append_cursor_unspecified;
 pub(crate) use sys::open_ambient_dir;
+pub(crate) use sys::read_at_cursor_unspecified;
 pub(crate) use sys::read_dir;
+pub(crate) use sys::remove_file_or_symlink;
 pub(crate) use sys::set_times;
 pub(crate) use sys::set_times_nofollow;
+pub(crate) use sys::status_flags;
+pub(crate) use sys::write_at_cursor_unspecified;
+pub(crate) use sys::{FileType, Metadata};
+
+/// Access-pattern advice for a region of a file, as passed to
+/// `posix_fadvise` on platforms that support it.
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum Advice {
+    Normal,
+    Sequential,
+    Random,
+    WillNeed,
+    DontNeed,
+    NoReuse,
+}
+
+bitflags::bitflags! {
+    /// Descriptor flags.
+    ///
+    /// Note: This was called `fdflags` in earlier versions of WASI.
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub(crate) struct DescriptorFlags: usize {
+        /// Read mode: Data can be read.
+        const READ = 0b1;
+        /// Write mode: Data can be written to.
+        const WRITE = 0b10;
+        /// Request that writes be performed according to synchronized I/O file
+        /// integrity completion. The data stored in the file and the file's
+        /// metadata are synchronized. This is similar to `O_SYNC` in POSIX.
+        ///
+        /// The precise semantics of this operation have not yet been defined for
+        /// WASI. At this time, it should be interpreted as a request, and not a
+        /// requirement.
+        const FILE_INTEGRITY_SYNC = 0b100;
+        /// Request that writes be performed according to synchronized I/O data
+        /// integrity completion. Only the data stored in the file is
+        /// synchronized. This is similar to `O_DSYNC` in POSIX.
+        ///
+        /// The precise semantics of this operation have not yet been defined for
+        /// WASI. At this time, it should be interpreted as a request, and not a
+        /// requirement.
+        const DATA_INTEGRITY_SYNC = 0b1000;
+        /// Requests that reads be performed at the same level of integrity
+        /// requested for writes. This is similar to `O_RSYNC` in POSIX.
+        ///
+        /// The precise semantics of this operation have not yet been defined for
+        /// WASI. At this time, it should be interpreted as a request, and not a
+        /// requirement.
+        const REQUESTED_WRITE_SYNC = 0b10000;
+        /// Mutating directories mode: Directory contents may be mutated.
+        ///
+        /// When this flag is unset on a descriptor, operations using the
+        /// descriptor which would create, rename, delete, modify the data or
+        /// metadata of filesystem objects, or obtain another handle which
+        /// would permit any of those, shall fail with `error-code::read-only` if
+        /// they would otherwise succeed.
+        ///
+        /// This may only be set on directories.
+        const MUTATE_DIRECTORY = 0b100000;
+    }
+}
 
 /// Set the timestamps of the file or directory that `fd` itself refers to.
 pub(crate) fn set_times_on_fd(
@@ -128,8 +189,9 @@ pub(crate) fn read_link(start: &fs::File, path: &Path) -> io::Result<PathBuf> {
 /// Perform a `symlinkat`-like operation, ensuring that the resolution of the
 /// path never escapes the directory tree rooted at `start`. An error is
 /// returned if the target path is absolute.
-#[cfg(not(windows))]
-#[inline]
+///
+/// This is implemented by `open`ing up the parent component of the path and
+/// then calling `symlink_unchecked` on the last component.
 pub(crate) fn symlink(old_path: &Path, new_start: &fs::File, new_path: &Path) -> io::Result<()> {
     // Don't allow creating symlinks to absolute paths. This isn't strictly
     // necessary to preserve the sandbox, since `open` will refuse to follow
@@ -140,47 +202,24 @@ pub(crate) fn symlink(old_path: &Path, new_start: &fs::File, new_path: &Path) ->
         return Err(errors::escape_attempt());
     }
 
-    let new_start = MaybeOwnedFile::borrowed(new_start);
-    let (new_dir, new_basename) = open_parent(new_start, new_path)?;
-    symlink_unchecked(old_path, &new_dir, new_basename.as_ref())
-}
-
-/// Perform a `symlink_file`-like operation, ensuring that the resolution of
-/// the path never escapes the directory tree rooted at `start`.
-#[cfg(windows)]
-#[inline]
-pub(crate) fn symlink_file(
-    old_path: &Path,
-    new_start: &fs::File,
-    new_path: &Path,
-) -> io::Result<()> {
-    // As above, don't allow creating symlinks to absolute paths.
-    if old_path.has_root() {
-        return Err(errors::escape_attempt());
+    // Like `symlinkat`, an empty target is an error on all platforms.
+    if old_path.as_os_str().is_empty() {
+        return Err(errors::no_such_file_or_directory());
     }
 
-    let new_start = MaybeOwnedFile::borrowed(new_start);
-    let (new_dir, new_basename) = open_parent(new_start, new_path)?;
-    symlink_file_unchecked(old_path, &new_dir, new_basename.as_ref())
-}
+    // Some platforms (Windows) need to know whether the target is a directory
+    // when creating a symlink. The target is resolved relative to the
+    // directory containing the new link, and the lookup is sandboxed to
+    // `new_start` so nothing is learned about paths outside of it. Targets
+    // which can't be looked up, such as dangling symlinks, are not
+    // considered directories.
+    let target_is_dir = || {
+        let new_dir = new_path.parent().unwrap_or(Path::new(""));
+        stat(new_start, &new_dir.join(old_path), FollowSymlinks::Yes).is_ok_and(|m| m.is_dir())
+    };
 
-/// Perform a `symlink_dir`-like operation, ensuring that the resolution of the
-/// path never escapes the directory tree rooted at `start`.
-#[cfg(windows)]
-#[inline]
-pub(crate) fn symlink_dir(
-    old_path: &Path,
-    new_start: &fs::File,
-    new_path: &Path,
-) -> io::Result<()> {
-    // As above, don't allow creating symlinks to absolute paths.
-    if old_path.has_root() {
-        return Err(errors::escape_attempt());
-    }
-
-    let new_start = MaybeOwnedFile::borrowed(new_start);
-    let (new_dir, new_basename) = open_parent(new_start, new_path)?;
-    symlink_dir_unchecked(old_path, &new_dir, new_basename.as_ref())
+    let (new_dir, new_basename) = open_parent(MaybeOwnedFile::borrowed(new_start), new_path)?;
+    symlink_unchecked(old_path, &new_dir, new_basename.as_ref(), target_is_dir)
 }
 
 /// Perform a `mkdirat`-like operation, ensuring that the resolution of the

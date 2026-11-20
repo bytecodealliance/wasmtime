@@ -19,7 +19,16 @@ pub(crate) fn stat_unchecked(
         FollowSymlinks::Yes => AtFlags::empty(),
         FollowSymlinks::No => AtFlags::SYMLINK_NOFOLLOW,
     };
+    statat_metadata(start, path, atflags)
+}
 
+/// Performs a `statat` of `path` relative to `start` with `atflags`,
+/// preferring `statx` where it's available.
+pub(super) fn statat_metadata(
+    start: &fs::File,
+    path: &Path,
+    atflags: AtFlags,
+) -> io::Result<Metadata> {
     // `statx` is preferred on regular Linux because it can return creation
     // times. Linux kernels prior to 4.11 don't have `statx` and return
     // `ENOSYS`. Older versions of Docker/seccomp would return `EPERM` for

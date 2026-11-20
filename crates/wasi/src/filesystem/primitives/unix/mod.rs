@@ -1,19 +1,20 @@
 use crate::filesystem::primitives::{
-    FileType, FollowSymlinks, MaybeOwnedFile, Metadata, OpenOptions, open, open_parent,
+    Advice, DescriptorFlags, FollowSymlinks, MaybeOwnedFile, OpenOptions, open, open_parent,
 };
-use rustix::fs::{AtFlags, Dir, RawMode, utimensat};
+use rustix::fs::{AtFlags, Dir, OFlags, fcntl_getfl, fcntl_setfl, utimensat};
 use rustix::io::Errno;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
-use std::os::unix::fs::{FileTypeExt, MetadataExt};
+use std::os::unix::fs::FileExt;
 use std::path::{Component, Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 mod create_dir_unchecked;
 mod dir_utils;
 mod hard_link_unchecked;
+mod metadata;
 mod oflags;
 mod open_options_ext;
 mod open_unchecked;
@@ -41,15 +42,18 @@ mod linux;
 #[cfg(any(target_os = "android", target_os = "linux"))]
 pub(crate) use self::linux::*;
 
+pub(crate) use super::remove_file as remove_file_or_symlink;
 pub(crate) use create_dir_unchecked::create_dir_unchecked;
 pub(crate) use dir_utils::*;
 pub(crate) use hard_link_unchecked::hard_link_unchecked;
+pub(crate) use metadata::Metadata;
 pub(crate) use open_options_ext::ImplOpenOptionsExt;
 pub(crate) use open_unchecked::open_unchecked;
 pub(crate) use read_link_unchecked::read_link_unchecked;
 pub(crate) use remove_dir_unchecked::remove_dir_unchecked;
 pub(crate) use remove_file_unchecked::remove_file_unchecked;
 pub(crate) use rename_unchecked::rename_unchecked;
+pub(crate) use rustix::fs::FileType;
 pub(crate) use stat_unchecked::stat_unchecked;
 pub(crate) use symlink_unchecked::symlink_unchecked;
 pub(crate) use times::to_timespec;
@@ -175,11 +179,10 @@ pub(crate) fn read_dir(
                 }
 
                 let file_type = cfg_select! {
-                    target_os = "illumos" => rustix::fs::FileType::Unknown,
+                    target_os = "illumos" => FileType::Unknown,
                     _ => entry.file_type(),
 
                 };
-                let file_type = FileType::Unix(file_type);
 
                 return Ok(Some((OsString::from_vec(file_name.to_vec()), file_type)));
             }
@@ -192,93 +195,107 @@ pub(crate) fn read_dir(
     }))
 }
 
-pub(super) fn system_time_from_rustix(sec: i64, nsec: u64) -> Option<SystemTime> {
-    if sec >= 0 {
-        SystemTime::UNIX_EPOCH.checked_add(Duration::new(u64::try_from(sec).unwrap(), nsec as _))
-    } else {
-        SystemTime::UNIX_EPOCH
-            .checked_sub(Duration::new(sec.unsigned_abs(), 0))
-            .map(|t| t.checked_add(Duration::new(0, nsec as u32)))
-            .flatten()
-    }
+/// Queries the synchronization-related status flags of `file`, as set at
+/// open time or with `F_SETFL`.
+pub(crate) fn status_flags(file: &fs::File) -> io::Result<DescriptorFlags> {
+    let flags = fcntl_getfl(file)?;
+    let mut ret = DescriptorFlags::empty();
+    #[cfg(not(target_os = "redox"))]
+    ret.set(
+        DescriptorFlags::REQUESTED_WRITE_SYNC,
+        flags.contains(OFlags::DSYNC),
+    );
+    ret.set(
+        DescriptorFlags::FILE_INTEGRITY_SYNC,
+        flags.contains(OFlags::SYNC),
+    );
+    #[cfg(not(any(target_vendor = "apple", target_os = "freebsd", target_os = "redox")))]
+    ret.set(
+        DescriptorFlags::DATA_INTEGRITY_SYNC,
+        flags.contains(OFlags::RSYNC),
+    );
+    Ok(ret)
 }
 
-impl Metadata {
-    #[inline]
-    pub fn dev(&self) -> u64 {
-        match self {
-            Metadata::Std(m) => m.dev(),
-            #[allow(unused_comparisons, reason = "platform-specific typedef")]
-            Metadata::Stat(m) => {
-                // The type of `st_dev` is `dev_t` which is signed on some
-                // platforms and unsigned on other platforms. A `u64` is enough
-                // to work for all unsigned platforms, and for signed platforms
-                // perform a sign extension to `i64` and then view that as an
-                // unsigned 64-bit number instead.
-                //
-                // Note that the `unused_comparisons` is ignored here for
-                // platforms where it's unsigned since the first branch here
-                // will never be taken.
-                if m.st_dev < 0 {
-                    i64::try_from(m.st_dev).unwrap().cast_unsigned()
-                } else {
-                    u64::try_from(m.st_dev).unwrap()
+/// Provides the OS with `advice` about the expected access pattern of the
+/// `len` bytes of `file` starting at `offset`.
+pub(crate) fn advise(file: &fs::File, offset: u64, len: u64, advice: Advice) -> io::Result<()> {
+    cfg_select! {
+        target_vendor = "apple" => {
+            match advice {
+                Advice::WillNeed => {
+                    rustix::fs::fcntl_rdadvise(file, offset, len)?;
                 }
+                Advice::Normal |
+                Advice::Sequential |
+                Advice::Random |
+                Advice::DontNeed |
+                Advice::NoReuse => {}
             }
-            #[cfg(target_os = "linux")]
-            Metadata::Statx(m) => rustix::fs::makedev(m.stx_dev_major, m.stx_dev_minor),
+        }
+        any(target_os = "linux", target_os = "android") => {
+            use std::num::NonZeroU64;
+            let advice = match advice {
+                Advice::Normal => rustix::fs::Advice::Normal,
+                Advice::Sequential => rustix::fs::Advice::Sequential,
+                Advice::Random => rustix::fs::Advice::Random,
+                Advice::WillNeed => rustix::fs::Advice::WillNeed,
+                Advice::DontNeed => rustix::fs::Advice::DontNeed,
+                Advice::NoReuse => rustix::fs::Advice::NoReuse,
+            };
+            rustix::fs::fadvise(file, offset, NonZeroU64::new(len), advice)?;
+        }
+        _ => {
+            // noop on other platforms
+            let _ = (file, offset, len, advice);
         }
     }
-
-    #[inline]
-    pub fn ino(&self) -> u64 {
-        match self {
-            Metadata::Std(m) => m.ino(),
-            Metadata::Stat(m) => m.st_ino,
-            #[cfg(target_os = "linux")]
-            Metadata::Statx(m) => m.stx_ino,
-        }
-    }
-
-    #[inline]
-    pub fn nlink(&self) -> u64 {
-        match self {
-            Metadata::Std(m) => m.nlink(),
-            Metadata::Stat(m) => m.st_nlink.into(),
-            #[cfg(target_os = "linux")]
-            Metadata::Statx(m) => m.stx_nlink.into(),
-        }
-    }
+    Ok(())
 }
 
-impl FileType {
-    pub(super) fn from_raw_mode(raw_mode: RawMode) -> Self {
-        Self::Unix(rustix::fs::FileType::from_raw_mode(raw_mode))
-    }
+/// Appends `data` to the end of `file`, leaving the file's current position
+/// unspecified afterwards.
+pub(crate) fn append_cursor_unspecified(file: &fs::File, data: &[u8]) -> io::Result<usize> {
+    // On Linux, use `pwritev2`.
+    #[cfg(target_os = "linux")]
+    {
+        use rustix::io::{ReadWriteFlags, pwritev2};
+        use std::io::IoSlice;
 
-    pub fn is_char_device(&self) -> bool {
-        match self {
-            Self::Std(std) => std.is_char_device(),
-            #[cfg(unix)]
-            Self::Unix(unix) => unix.is_char_device(),
+        let iovs = [IoSlice::new(data)];
+        match pwritev2(&file, &iovs, 0, ReadWriteFlags::APPEND) {
+            Err(Errno::NOSYS) | Err(Errno::NOTSUP) => {}
+            otherwise => return Ok(otherwise?),
         }
     }
 
-    pub fn is_block_device(&self) -> bool {
-        match self {
-            Self::Std(std) => std.is_block_device(),
-            #[cfg(unix)]
-            Self::Unix(unix) => unix.is_block_device(),
-        }
-    }
+    // Otherwise use `F_SETFL` to switch the file description to append
+    // mode, do the write, and switch back. This is not atomic with
+    // respect to other users of the file description, but WASI isn't fully
+    // threaded right now anyway.
+    let old_flags = fcntl_getfl(&file)?;
+    fcntl_setfl(&file, old_flags | OFlags::APPEND)?;
+    let result = rustix::io::write(&file, data);
+    fcntl_setfl(&file, old_flags).unwrap();
+    Ok(result?)
 }
 
-/// It should be possible to represent times before the Epoch.
-/// https://github.com/bytecodealliance/cap-std/issues/328
-#[test]
-fn negative_time() {
-    let system_time = system_time_from_rustix(-1, 1).unwrap();
-    let d = SystemTime::UNIX_EPOCH.duration_since(system_time).unwrap();
-    assert_eq!(d.as_secs(), 0);
-    assert_eq!(d.subsec_nanos(), 999999999);
+/// Writes `data` to `file` at `pos`, leaving the file's current position
+/// unspecified afterwards.
+pub(crate) fn write_at_cursor_unspecified(
+    file: &fs::File,
+    data: &[u8],
+    pos: u64,
+) -> io::Result<usize> {
+    file.write_at(data, pos)
+}
+
+/// Reads from `file` at `pos` into `buf`, leaving the file's current
+/// position unspecified afterwards.
+pub(crate) fn read_at_cursor_unspecified(
+    file: &fs::File,
+    buf: &mut [u8],
+    pos: u64,
+) -> io::Result<usize> {
+    file.read_at(buf, pos)
 }
