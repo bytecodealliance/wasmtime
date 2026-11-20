@@ -9,6 +9,7 @@ use std::pin::{Pin, pin};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
+use std::time::Duration;
 use wasmtime::Result;
 use wasmtime::component::{TaskGroupHook, TaskGroupId};
 use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, component::*};
@@ -4185,4 +4186,42 @@ async fn stream_consumer_not_polled_after_dropped() -> Result<()> {
             Poll::Ready(Ok(StreamResult::Dropped))
         }
     }
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn poll_ready_for_concurrent_call_no_busy_wait() -> Result<()> {
+    static POLLS: AtomicUsize = AtomicUsize::new(0);
+
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (core func $bp-inc (canon backpressure.inc))
+                (func (export "bp-on") (canon lift (core func $bp-inc)))
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let bp_on = instance.get_typed_func::<(), ()>(&mut store, "bp-on")?;
+    bp_on.call_async(&mut store, ()).await?;
+
+    // Wait for the instance to accept a concurrent call. Backpressure stays on,
+    // so this should stay pending without being polled again.
+    let func = *bp_on.func();
+    let wait = store.run_concurrent(async |accessor| {
+        future::poll_fn(|cx| {
+            POLLS.fetch_add(1, Ordering::Relaxed);
+            accessor.poll_ready_for_concurrent_call(func, cx)
+        })
+        .await
+    });
+    let _ = tokio::time::timeout(Duration::from_millis(10), wait).await;
+    let count = POLLS.load(Ordering::Relaxed);
+    assert!(count <= 10, "{count} > 10");
+    Ok(())
 }
