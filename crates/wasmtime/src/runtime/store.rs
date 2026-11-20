@@ -239,8 +239,15 @@ impl CallHook {
 /// The members of this struct are those that need to be generic over `T`, the
 /// store's internal type storage. Otherwise all things that don't rely on `T`
 /// should go into `StoreOpaque`.
+///
+/// This is `#[repr(C)]` with `inner` as its first field so that a `dyn VMStore`
+/// (which is always a `StoreInner<T>`) can be cast directly to its
+/// `StoreOpaque` without a virtual call; see the `Deref` impl for `dyn VMStore`.
+#[repr(C)]
 pub struct StoreInner<T: 'static> {
     /// Generic metadata about the store that doesn't need access to `T`.
+    ///
+    /// This must remain the first field; see above.
     inner: StoreOpaque,
 
     limiter: Option<ResourceLimiterInner<T>>,
@@ -2559,14 +2566,6 @@ unsafe impl<T> VMStore for StoreInner<T> {
         &mut self,
     ) -> &mut dyn crate::runtime::component::VMComponentAsyncStore {
         self
-    }
-
-    fn store_opaque(&self) -> &StoreOpaque {
-        &self.inner
-    }
-
-    fn store_opaque_mut(&mut self) -> &mut StoreOpaque {
-        &mut self.inner
     }
 
     #[cfg(feature = "call-hook")]
