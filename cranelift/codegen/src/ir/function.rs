@@ -207,6 +207,35 @@ pub struct FunctionStencil {
     /// ensure that a trap happens if the stack pointer goes below the
     /// threshold specified here.
     pub stack_limit: Option<ir::GlobalValue>,
+
+    /// An optional function to tail-call, rather than trapping, when the
+    /// `stack_limit` check fails.
+    ///
+    /// This may only be set when `stack_limit` is also set. When present, the
+    /// stack-limit check is performed at the very start of the function,
+    /// before any frame setup, and on overflow control is transferred to the
+    /// handler with a direct jump. At the point of that jump, the stack
+    /// pointer, the return address (whether in a register or on the stack),
+    /// and all argument registers are exactly as they were on entry to this
+    /// function: that is, the handler is effectively tail-called with this
+    /// function's own arguments. Only a few scratch registers that are neither
+    /// callee-saved nor used for arguments are clobbered.
+    ///
+    /// The handler must be `colocated`, must use the same calling
+    /// convention as this function, its parameters must be
+    /// "compatible" with this function's parameters, and it must not
+    /// return (i.e., it should either abort or unwind somehow). A
+    /// "compatible" stack-overflow handler signature is defined as:
+    ///
+    /// - `tail`: parameters of the handler are a prefix of this
+    ///   function's parameters, and neither this function nor the
+    ///   handler has a struct-return (`sret`) parameter. There are no
+    ///   restrictions on either signature's return values.
+    /// - other calling conventions: not supported.
+    ///
+    /// When absent, a failed stack-limit check traps with
+    /// `TrapCode::STACK_OVERFLOW`.
+    pub stack_limit_handler: Option<ir::FuncRef>,
 }
 
 impl FunctionStencil {
@@ -220,6 +249,7 @@ impl FunctionStencil {
         self.srclocs.clear();
         self.debug_tags.clear();
         self.stack_limit = None;
+        self.stack_limit_handler = None;
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new
@@ -419,6 +449,7 @@ impl Function {
                 layout: Layout::new(),
                 srclocs: SecondaryMap::new(),
                 stack_limit: None,
+                stack_limit_handler: None,
                 debug_tags: DebugTags::default(),
             },
             params: FunctionParameters::new(),

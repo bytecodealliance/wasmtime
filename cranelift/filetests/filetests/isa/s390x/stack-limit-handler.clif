@@ -1,0 +1,437 @@
+test compile precise-output
+set unwind_info=false
+set enable_multi_ret_implicit_sret
+target s390x
+
+function %foo() {
+block0:
+    return
+}
+
+; VCode:
+; block0:
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   br %r14
+
+;; A leaf function with no frame needs no stack check at all, even with a
+;; handler.
+function %handler_leaf_zero(i64 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+; block0:
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   br %r14
+
+;; A function that makes calls: the check happens before any frame setup and
+;; tail-calls the handler on overflow.
+function %handler_call_zero(i64 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    call fn0()
+    return
+}
+
+; VCode:
+;   lg %r1, 0(%r2)
+;   lg %r1, 8(%r1)
+;   la %r1, 224(%r1)
+;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -224
+;   std %f8, 160(%r15)
+;   std %f9, 168(%r15)
+;   std %f10, 176(%r15)
+;   std %f11, 184(%r15)
+;   std %f12, 192(%r15)
+;   std %f13, 200(%r15)
+;   std %f14, 208(%r15)
+;   std %f15, 216(%r15)
+; block0:
+;   bras %r1, 12 ; data %foo + 0 ; lg %r2, 0(%r1)
+;   basr %r14, %r2
+;   ld %f8, 160(%r15)
+;   ld %f9, 168(%r15)
+;   ld %f10, 176(%r15)
+;   ld %f11, 184(%r15)
+;   ld %f12, 192(%r15)
+;   ld %f13, 200(%r15)
+;   ld %f14, 208(%r15)
+;   ld %f15, 216(%r15)
+;   lmg %r14, %r15, 336(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lg %r1, 0(%r2)
+;   lg %r1, 8(%r1)
+;   la %r1, 0xe0(%r1)
+;   clgr %r15, %r1
+;   jgh 0x20
+;   jg 0x1a ; reloc_external PLTRel32Dbl %overflow 2
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xe0
+;   std %f8, 0xa0(%r15)
+;   std %f9, 0xa8(%r15)
+;   std %f10, 0xb0(%r15)
+;   std %f11, 0xb8(%r15)
+;   std %f12, 0xc0(%r15)
+;   std %f13, 0xc8(%r15)
+;   std %f14, 0xd0(%r15)
+;   std %f15, 0xd8(%r15)
+; block1: ; offset 0x4a
+;   bras %r1, 0x56
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %foo 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r2, 0(%r1)
+;   basr %r14, %r2
+;   ld %f8, 0xa0(%r15)
+;   ld %f9, 0xa8(%r15)
+;   ld %f10, 0xb0(%r15)
+;   ld %f11, 0xb8(%r15)
+;   ld %f12, 0xc0(%r15)
+;   ld %f13, 0xc8(%r15)
+;   ld %f14, 0xd0(%r15)
+;   ld %f15, 0xd8(%r15)
+;   lmg %r14, %r15, 0x150(%r15)
+;   br %r14
+
+;; The handler's parameters need only be a prefix of the function's, and the
+;; stack limit can be the vmctx itself.
+function %handler_prefix_params(i64 vmctx, i64, i64) -> i64 tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64, v1: i64, v2: i64):
+    call fn0()
+    v3 = iadd v1, v2
+    return v3
+}
+
+; VCode:
+;   la %r1, 224(%r2)
+;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -224
+;   std %f8, 160(%r15)
+;   std %f9, 168(%r15)
+;   std %f10, 176(%r15)
+;   std %f11, 184(%r15)
+;   std %f12, 192(%r15)
+;   std %f13, 200(%r15)
+;   std %f14, 208(%r15)
+;   std %f15, 216(%r15)
+; block0:
+;   lgr %r6, %r4
+;   lgr %r7, %r3
+;   bras %r1, 12 ; data %foo + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   lgr %r3, %r7
+;   lgr %r4, %r6
+;   agrk %r2, %r3, %r4
+;   ld %f8, 160(%r15)
+;   ld %f9, 168(%r15)
+;   ld %f10, 176(%r15)
+;   ld %f11, 184(%r15)
+;   ld %f12, 192(%r15)
+;   ld %f13, 200(%r15)
+;   ld %f14, 208(%r15)
+;   ld %f15, 216(%r15)
+;   lmg %r14, %r15, 336(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   la %r1, 0xe0(%r2)
+;   clgr %r15, %r1
+;   jgh 0x14
+;   jg 0xe ; reloc_external PLTRel32Dbl %overflow 2
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xe0
+;   std %f8, 0xa0(%r15)
+;   std %f9, 0xa8(%r15)
+;   std %f10, 0xb0(%r15)
+;   std %f11, 0xb8(%r15)
+;   std %f12, 0xc0(%r15)
+;   std %f13, 0xc8(%r15)
+;   std %f14, 0xd0(%r15)
+;   std %f15, 0xd8(%r15)
+; block1: ; offset 0x3e
+;   lgr %r6, %r4
+;   lgr %r7, %r3
+;   bras %r1, 0x52
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %foo 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   lgr %r3, %r7
+;   lgr %r4, %r6
+;   agrk %r2, %r3, %r4
+;   ld %f8, 0xa0(%r15)
+;   ld %f9, 0xa8(%r15)
+;   ld %f10, 0xb0(%r15)
+;   ld %f11, 0xb8(%r15)
+;   ld %f12, 0xc0(%r15)
+;   ld %f13, 0xc8(%r15)
+;   ld %f14, 0xd0(%r15)
+;   ld %f15, 0xd8(%r15)
+;   lmg %r14, %r15, 0x150(%r15)
+;   br %r14
+
+;; A small frame: the frame size (plus this function's own setup area) is added
+;; to the limit before comparing.
+function %handler_small_frame(i64 vmctx) tail {
+    ss0 = explicit_slot 168
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   lg %r1, 0(%r2)
+;   lg %r1, 8(%r1)
+;   la %r1, 168(%r1)
+;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   aghi %r15, -168
+; block0:
+;   aghi %r15, 168
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lg %r1, 0(%r2)
+;   lg %r1, 8(%r1)
+;   la %r1, 0xa8(%r1)
+;   clgr %r15, %r1
+;   jgh 0x20
+;   jg 0x1a ; reloc_external PLTRel32Dbl %overflow 2
+;   aghi %r15, -0xa8
+; block1: ; offset 0x24
+;   aghi %r15, 0xa8
+;   br %r14
+
+;; A huge frame: the limit is checked once directly (to guard against
+;; overflow in the addition) and then again with the frame size added.
+function %handler_huge_frame(i64 vmctx) tail {
+    ss0 = explicit_slot 400000
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   lg %r1, 0(%r2)
+;   lg %r1, 8(%r1)
+;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   lay %r1, 400000(%r1)
+;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   agfi %r15, -400000
+; block0:
+;   agfi %r15, 400000
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lg %r1, 0(%r2)
+;   lg %r1, 8(%r1)
+;   clgr %r15, %r1
+;   jgh 0x1c
+;   jg 0x16 ; reloc_external PLTRel32Dbl %overflow 2
+;   lay %r1, 0x61a80(%r1)
+;   clgr %r15, %r1
+;   jgh 0x32
+;   jg 0x2c ; reloc_external PLTRel32Dbl %overflow 2
+;   agfi %r15, -0x61a80
+; block1: ; offset 0x38
+;   agfi %r15, 0x61a80
+;   br %r14
+
+;; The `tail` calling convention, as used by Wasmtime, with stack arguments.
+function %handler_tail(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+    ss0 = explicit_slot 8
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64):
+    v11 = iadd v1, v10
+    v13 = stack_addr.i64 ss0
+    store v11, v13
+    v12 = load.i64 v13
+    return v12
+}
+
+; VCode:
+;   lg %r1, 0(%r2)
+;   lg %r1, 8(%r1)
+;   la %r1, 208(%r1)
+;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   aghi %r15, -8
+; block0:
+;   lg %r2, 200(%r15)
+;   agrk %r6, %r3, %r2
+;   la %r7, 0(%r15)
+;   stg %r6, 0(%r7)
+;   lg %r2, 0(%r7)
+;   aghi %r15, 208
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lg %r1, 0(%r2)
+;   lg %r1, 8(%r1)
+;   la %r1, 0xd0(%r1)
+;   clgr %r15, %r1
+;   jgh 0x20
+;   jg 0x1a ; reloc_external PLTRel32Dbl %overflow 2
+;   aghi %r15, -8
+; block1: ; offset 0x24
+;   lg %r2, 0xc8(%r15)
+;   agrk %r6, %r3, %r2
+;   la %r7, 0(%r15)
+;   stg %r6, 0(%r7) ; trap: heap_oob
+;   lg %r2, 0(%r7) ; trap: heap_oob
+;   aghi %r15, 0xd0
+;   br %r14
+
+
+;; Many return values: the implicit return-area pointer must not perturb the
+;; location of the vmctx argument that the handler receives.
+function %handler_many_returns(i64 vmctx) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    call fn0()
+    return v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0
+}
+
+; VCode:
+;   lg %r1, 0(%r2)
+;   lg %r1, 8(%r1)
+;   la %r1, 224(%r1)
+;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   stmg %r14, %r15, 112(%r15)
+;   aghi %r15, -224
+;   std %f8, 160(%r15)
+;   std %f9, 168(%r15)
+;   std %f10, 176(%r15)
+;   std %f11, 184(%r15)
+;   std %f12, 192(%r15)
+;   std %f13, 200(%r15)
+;   std %f14, 208(%r15)
+;   std %f15, 216(%r15)
+; block0:
+;   lgr %r6, %r3
+;   lgr %r7, %r2
+;   bras %r1, 12 ; data %foo + 0 ; lg %r3, 0(%r1)
+;   basr %r14, %r3
+;   lgr %r2, %r7
+;   lgr %r3, %r6
+;   stg %r2, 0(%r3)
+;   stg %r2, 8(%r3)
+;   stg %r2, 16(%r3)
+;   stg %r2, 24(%r3)
+;   stg %r2, 32(%r3)
+;   stg %r2, 40(%r3)
+;   lgr %r3, %r7
+;   lgr %r4, %r7
+;   lgr %r5, %r7
+;   lgr %r6, %r7
+;   ld %f8, 160(%r15)
+;   ld %f9, 168(%r15)
+;   ld %f10, 176(%r15)
+;   ld %f11, 184(%r15)
+;   ld %f12, 192(%r15)
+;   ld %f13, 200(%r15)
+;   ld %f14, 208(%r15)
+;   ld %f15, 216(%r15)
+;   lmg %r14, %r15, 336(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lg %r1, 0(%r2)
+;   lg %r1, 8(%r1)
+;   la %r1, 0xe0(%r1)
+;   clgr %r15, %r1
+;   jgh 0x20
+;   jg 0x1a ; reloc_external PLTRel32Dbl %overflow 2
+;   stmg %r14, %r15, 0x70(%r15)
+;   aghi %r15, -0xe0
+;   std %f8, 0xa0(%r15)
+;   std %f9, 0xa8(%r15)
+;   std %f10, 0xb0(%r15)
+;   std %f11, 0xb8(%r15)
+;   std %f12, 0xc0(%r15)
+;   std %f13, 0xc8(%r15)
+;   std %f14, 0xd0(%r15)
+;   std %f15, 0xd8(%r15)
+; block1: ; offset 0x4a
+;   lgr %r6, %r3
+;   lgr %r7, %r2
+;   bras %r1, 0x5e
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %foo 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r3, 0(%r1)
+;   basr %r14, %r3
+;   lgr %r2, %r7
+;   lgr %r3, %r6
+;   stg %r2, 0(%r3)
+;   stg %r2, 8(%r3)
+;   stg %r2, 0x10(%r3)
+;   stg %r2, 0x18(%r3)
+;   stg %r2, 0x20(%r3)
+;   stg %r2, 0x28(%r3)
+;   lgr %r3, %r7
+;   lgr %r4, %r7
+;   lgr %r5, %r7
+;   lgr %r6, %r7
+;   ld %f8, 0xa0(%r15)
+;   ld %f9, 0xa8(%r15)
+;   ld %f10, 0xb0(%r15)
+;   ld %f11, 0xb8(%r15)
+;   ld %f12, 0xc0(%r15)
+;   ld %f13, 0xc8(%r15)
+;   ld %f14, 0xd0(%r15)
+;   ld %f15, 0xd8(%r15)
+;   lmg %r14, %r15, 0x150(%r15)
+;   br %r14
+

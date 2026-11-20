@@ -199,7 +199,8 @@ impl Inst {
             | Inst::Popcnt { .. }
             | Inst::Cltz { .. }
             | Inst::Brev8 { .. }
-            | Inst::StackProbeLoop { .. } => None,
+            | Inst::StackProbeLoop { .. }
+            | Inst::StackLimitJump { .. } => None,
 
             // VecSetState does not expect any vstate, rather it updates it.
             Inst::VecSetState { .. } => None,
@@ -2183,6 +2184,29 @@ impl Inst {
                 .emit_uncompressed(sink, emit_info, state, start_off);
             }
 
+            &Inst::StackLimitJump { limit, ref handler } => {
+                // Generate the following code:
+                //         bgeu  sp, limit, .ok    ;; no overflow
+                //         auipc t6, handler       ;; tail call
+                //         jalr  x0, t6
+                // .ok:
+                let ok = sink.get_label();
+                Inst::CondBr {
+                    taken: CondBrTarget::Label(ok),
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: IntegerCompare {
+                        kind: IntCC::UnsignedGreaterThanOrEqual,
+                        rs1: stack_reg(),
+                        rs2: limit,
+                    },
+                }
+                .emit(sink, emit_info, state);
+                sink.add_reloc(Reloc::RiscvCallPlt, &**handler, 0);
+                Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
+                    .into_iter()
+                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
+                sink.bind_label(ok, &mut state.ctrl_plane);
+            }
             &Inst::TrapIf { cmp, trap_code } => {
                 let label_end = sink.get_label();
 

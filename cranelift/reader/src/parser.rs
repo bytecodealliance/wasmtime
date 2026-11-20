@@ -406,11 +406,17 @@ impl Context {
     }
 
     // Configure the stack limit of the current function.
-    fn add_stack_limit(&mut self, limit: GlobalValue, loc: Location) -> ParseResult<()> {
+    fn add_stack_limit(
+        &mut self,
+        limit: GlobalValue,
+        handler: Option<FuncRef>,
+        loc: Location,
+    ) -> ParseResult<()> {
         if self.function.stack_limit.is_some() {
             return err!(loc, "stack limit defined twice");
         }
         self.function.stack_limit = Some(limit);
+        self.function.stack_limit_handler = handler;
         Ok(())
     }
 
@@ -1512,7 +1518,7 @@ impl<'a> Parser<'a> {
                 Some(Token::Identifier("stack_limit")) => {
                     self.start_gathering_comments();
                     self.parse_stack_limit_decl()
-                        .and_then(|gv| ctx.add_stack_limit(gv, self.loc))
+                        .and_then(|(gv, handler)| ctx.add_stack_limit(gv, handler, self.loc))
                 }
                 Some(Token::AliasRegion(..)) => {
                     self.start_gathering_comments();
@@ -1977,24 +1983,31 @@ impl<'a> Parser<'a> {
 
     // Parse a stack limit decl
     //
-    // stack-limit-decl ::= * StackLimit "=" GlobalValue(gv)
-    fn parse_stack_limit_decl(&mut self) -> ParseResult<GlobalValue> {
+    // stack-limit-decl ::= * StackLimit "=" GlobalValue(gv) [ "," "handler" "=" FuncRef(fn) ]
+    fn parse_stack_limit_decl(&mut self) -> ParseResult<(GlobalValue, Option<FuncRef>)> {
         self.match_stack_limit()?;
         self.match_token(Token::Equal, "expected '=' in stack limit decl")?;
-        let limit = match self.token() {
-            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
-                Some(gv) => gv,
-                None => return err!(self.loc, "invalid global value number for stack limit"),
-            },
-            _ => return err!(self.loc, "expected global value"),
+        let limit = self.match_gv("expected global value for stack limit")?;
+
+        let handler = if self.optional(Token::Comma) {
+            match self.token() {
+                Some(Token::Identifier("handler")) => self.consume(),
+                _ => return err!(self.loc, "expected `handler` in stack limit decl"),
+            };
+            self.match_token(
+                Token::Equal,
+                "expected '=' after `handler` in stack limit decl",
+            )?;
+            Some(self.match_fn("expected function reference for stack limit handler")?)
+        } else {
+            None
         };
-        self.consume();
 
         // Collect any trailing comments.
         self.token();
         self.claim_gathered_comments(AnyEntity::StackLimit);
 
-        Ok(limit)
+        Ok((limit, handler))
     }
 
     // Parse a function body, add contents to `ctx`.

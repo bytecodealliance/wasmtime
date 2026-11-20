@@ -2151,6 +2151,77 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
+    /// A stack-limit handler is only meaningful alongside a stack limit, and
+    /// must be able to be tail-called with the function's own arguments.
+    fn verify_stack_limit(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
+        let Some(handler) = self.func.stack_limit_handler else {
+            return Ok(());
+        };
+        if self.func.stack_limit.is_none() {
+            return errors.fatal((
+                AnyEntity::StackLimit,
+                "a stack-limit handler requires a `stack_limit`",
+            ));
+        }
+        if !self.func.dfg.ext_funcs.is_valid(handler) {
+            return errors.fatal((
+                AnyEntity::StackLimit,
+                format!("invalid stack-limit handler {handler}"),
+            ));
+        }
+        let data = &self.func.dfg.ext_funcs[handler];
+        if !data.colocated {
+            errors.fatal((
+                AnyEntity::StackLimit,
+                format!("stack-limit handler {handler} must be `colocated`"),
+            ))?;
+        }
+        let sig = &self.func.dfg.signatures[data.signature];
+        let func_sig = &self.func.signature;
+        if sig.call_conv != func_sig.call_conv {
+            errors.fatal((
+                AnyEntity::StackLimit,
+                format!(
+                    "stack-limit handler {handler} must use the function's calling \
+                     convention `{}`, not `{}`",
+                    func_sig.call_conv, sig.call_conv
+                ),
+            ))?;
+        }
+        if func_sig.call_conv != CallConv::Tail {
+            return errors.fatal((
+                AnyEntity::StackLimit,
+                format!(
+                    "stack-limit handlers are only supported with the `tail` calling \
+                     convention, not `{}`",
+                    func_sig.call_conv
+                ),
+            ));
+        }
+        for (what, s) in [("the function", func_sig), ("the handler", sig)] {
+            if s.uses_struct_return_param() {
+                errors.fatal((
+                    AnyEntity::StackLimit,
+                    format!(
+                        "stack-limit handler {handler}: {what} must not have a \
+                         struct-return parameter"
+                    ),
+                ))?;
+            }
+        }
+        let params = &func_sig.params;
+        if sig.params.len() > params.len() || sig.params[..] != params[..sig.params.len()] {
+            errors.fatal((
+                AnyEntity::StackLimit,
+                format!(
+                    "stack-limit handler {handler}'s parameters must be a prefix of \
+                     the function's parameters"
+                ),
+            ))?;
+        }
+        Ok(())
+    }
+
     /// A `preserve_all` function must not clobber any register, but the
     /// prologue's stack-limit check and outline stack probe run before any
     /// registers are saved and need scratch registers (and, for the outline
@@ -2184,6 +2255,7 @@ impl<'a> Verifier<'a> {
         self.check_entry_not_cold(errors)?;
         self.typecheck_function_signature(errors)?;
         self.verify_signatures(errors)?;
+        self.verify_stack_limit(errors)?;
         self.verify_preserve_all_prologue(errors)?;
 
         for block in self.func.layout.blocks() {

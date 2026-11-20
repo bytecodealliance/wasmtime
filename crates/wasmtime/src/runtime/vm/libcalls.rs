@@ -1168,6 +1168,13 @@ fn raise(store: &mut dyn VMStore, _instance: InstanceId) {
     unsafe { crate::runtime::vm::traphandlers::raise_preexisting_trap(store) }
 }
 
+/// Records a stack-overflow trap, which the trampoline then raises.
+///
+/// See the `stack_overflow` builtin's documentation for how this is reached.
+fn stack_overflow(_store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
+    Err(Trap::StackOverflow.into())
+}
+
 // Builtins for continuations. These are thin wrappers around the
 // respective definitions in stack_switching.rs.
 #[cfg(feature = "stack-switching")]
