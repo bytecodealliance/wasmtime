@@ -857,6 +857,9 @@ impl<I: VCodeInst> VCode<I> {
                     writeln!(disasm, "  {}", inst.pretty_print_inst(&mut s)).unwrap();
                 }
                 inst.emit(buffer, &self.emit_info, state);
+                if inst.is_safepoint() {
+                    state.stack_map_emitter().assert_consumed();
+                }
             };
             let do_emit = |inst: &I,
                            disasm: &mut String,
@@ -971,7 +974,7 @@ impl<I: VCodeInst> VCode<I> {
                                 (user_stack_map, user_stack_map_disasm)
                             };
 
-                            state.pre_safepoint(user_stack_map);
+                            state.stack_map_emitter().pre_safepoint(user_stack_map);
 
                             user_stack_map_disasm
                         } else {

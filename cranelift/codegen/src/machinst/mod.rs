@@ -57,6 +57,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 use core::fmt::Debug;
+use core::marker::PhantomData;
 use core::num::NonZeroU8;
 use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
@@ -576,9 +577,12 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Create a new emission state given the ABI object.
     fn new(abi: &Callee<I::ABIMachineSpec>, ctrl_plane: ControlPlane) -> Self;
 
-    /// Update the emission state before emitting an instruction that is a
-    /// safepoint.
-    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>);
+    /// The helper that tracks user stack maps for safepoint instructions.
+    ///
+    /// The emission loop uses this to provide each safepoint instruction's
+    /// stack map before emitting it and to check afterwards that it was
+    /// consumed.
+    fn stack_map_emitter(&mut self) -> &mut StackMapEmitter<I>;
 
     /// The emission state holds ownership of a control plane, so it doesn't
     /// have to be passed around explicitly too much. `ctrl_plane_mut` may
@@ -596,6 +600,122 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
 
     /// The [`FrameLayout`] for the function currently being compiled.
     fn frame_layout(&self) -> &FrameLayout;
+}
+
+/// Tracks the user stack maps of safepoint instructions as they are emitted.
+///
+/// Each backend's emit state holds one of these. The VCode emission loop
+/// provides each safepoint instruction's stack map (if any) via
+/// [`StackMapEmitter::pre_safepoint`], the backend's emission code for that
+/// instruction then [takes](StackMapEmitter::take) it and
+/// [records](StackMapEmitter::push) it at the appropriate code offset, and
+/// finally the emission loop checks that it was
+/// [consumed](StackMapEmitter::assert_consumed).
+///
+/// Stack maps are keyed by code offset, so no two may be recorded at the same
+/// offset. This helper remembers where the last stack map was recorded and
+/// inserts padding when a new safepoint would otherwise collide with it (e.g.,
+/// a potentially-faulting load placed directly at the return address of a
+/// preceding call).
+pub struct StackMapEmitter<I: VCodeInst> {
+    /// The user stack map for the upcoming safepoint instruction, as provided
+    /// to `pre_safepoint()`.
+    pending: Option<ir::UserStackMap>,
+
+    /// The code offset at which the most recent user stack map was recorded,
+    /// if any.
+    last_offset: Option<CodeOffset>,
+
+    _phantom: PhantomData<fn() -> I>,
+}
+
+impl<I: VCodeInst> Default for StackMapEmitter<I> {
+    fn default() -> Self {
+        Self {
+            pending: None,
+            last_offset: None,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<I: VCodeInst> Clone for StackMapEmitter<I> {
+    fn clone(&self) -> Self {
+        Self {
+            pending: self.pending.clone(),
+            last_offset: self.last_offset,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<I: VCodeInst> fmt::Debug for StackMapEmitter<I> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StackMapEmitter")
+            .field("pending", &self.pending)
+            .field("last_offset", &self.last_offset)
+            .finish()
+    }
+}
+
+impl<I: VCodeInst> StackMapEmitter<I> {
+    /// Set the user stack map for the upcoming safepoint instruction.
+    ///
+    /// Called by the emission loop before emitting every safepoint
+    /// instruction.
+    pub fn pre_safepoint(&mut self, stack_map: Option<ir::UserStackMap>) {
+        self.pending = stack_map;
+    }
+
+    /// Take the user stack map for the safepoint instruction being emitted,
+    /// if any.
+    ///
+    /// If a stack map was already recorded at the current offset (e.g., at
+    /// the return address of an immediately-preceding call), a NOP is emitted
+    /// so that this safepoint's stack map lands at a distinct offset.
+    ///
+    /// For a safepoint whose stack map is recorded at the start of the
+    /// instruction (e.g., a potentially-faulting load), call this before
+    /// emitting any of the instruction's code. For a call, whose stack map is
+    /// recorded at the return address, call this after emitting the call
+    /// instruction itself, so that no padding is ever inserted.
+    pub fn take(&mut self, sink: &mut MachBuffer<I>) -> Option<ir::UserStackMap> {
+        let stack_map = self.pending.take()?;
+        if self.last_offset == Some(sink.cur_offset()) {
+            sink.put_data(&I::gen_nop_units()[0]);
+        }
+        Some(stack_map)
+    }
+
+    /// Discard the user stack map for the safepoint instruction being
+    /// emitted, if any, for safepoints that do not record one.
+    pub fn discard(&mut self) {
+        self.pending = None;
+    }
+
+    /// Record `stack_map` at code offset `offset` in `sink`.
+    pub fn push(
+        &mut self,
+        sink: &mut MachBuffer<I>,
+        frame_layout: &FrameLayout,
+        offset: CodeOffset,
+        stack_map: ir::UserStackMap,
+    ) {
+        sink.push_user_stack_map(frame_layout, offset, stack_map);
+        self.last_offset = Some(offset);
+    }
+
+    /// Assert (in debug builds) that the stack map provided to
+    /// `pre_safepoint()`, if any, has been consumed.
+    ///
+    /// Called by the emission loop after emitting every safepoint
+    /// instruction.
+    pub fn assert_consumed(&self) {
+        debug_assert!(
+            self.pending.is_none(),
+            "safepoint instruction did not consume its user stack map"
+        );
+    }
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine

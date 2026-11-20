@@ -199,16 +199,17 @@
 //!   all longer-range fixups to later.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
+use crate::ir;
 use crate::ir::function::FunctionParameters;
 use crate::ir::{
     DebugTag, ExceptionTag, ExternalName, MaybeRelSourceLoc, RelSourceLoc, SourceLoc, TrapCode,
 };
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
-    BlockIndex, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants, VCodeInst,
+    BlockIndex, FrameLayout, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants,
+    VCodeInst,
 };
 use crate::trace;
-use crate::{MachInstEmitState, ir};
 use crate::{VCodeConstantData, timing};
 use alloc::boxed::Box;
 use alloc::collections::BinaryHeap;
@@ -1858,11 +1859,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Stack maps must be pushed in strictly increasing `pc` order.
     pub fn push_user_stack_map(
         &mut self,
-        emit_state: &I::State,
+        frame_layout: &FrameLayout,
         pc: CodeOffset,
         mut stack_map: ir::UserStackMap,
     ) {
-        let span = emit_state.frame_layout().active_size();
+        let span = frame_layout.active_size();
         trace!("Adding user stack map @ {pc:#x} spanning {span} bytes: {stack_map:?}");
 
         debug_assert!(
@@ -1874,7 +1875,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             pc,
         );
 
-        stack_map.finalize(emit_state.frame_layout().sp_to_sized_stack_slots());
+        stack_map.finalize(frame_layout.sp_to_sized_stack_slots());
         self.user_stack_maps.push((pc, span, stack_map));
     }
 
