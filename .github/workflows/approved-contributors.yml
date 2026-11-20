@@ -33,9 +33,7 @@ jobs:
           permissions-repo: bytecodealliance/contributor-permissions
           allowlist-path: wasmtime-wasmtools-witbindgen-allowlist.txt
           blocklist-path: wasmtime-wasmtools-witbindgen-blocklist.txt
-          # Needs contents read/write on my-org/governance and organization
-          # Members read, for vouch-team. See the README.
-          permissions-token: ${{ secrets.APPROVED_CONTRIBUTORS_TOKEN }}
+          permissions-token: ${{ steps.app-token.outputs.token }}
           vouch-team: bytecodealliance/wasmtime-core
           message: |
             Thanks @{author} for your contribution to this repository, but
