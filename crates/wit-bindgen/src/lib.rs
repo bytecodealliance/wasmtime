@@ -1791,40 +1791,21 @@ impl Wasmtime {
 
         let flags = self.opts.imports.resource_drop_flags(resolve, key, name);
         if flags.contains(FunctionFlags::ASYNC) {
-            if flags.contains(FunctionFlags::STORE) {
-                uwriteln!(
-                    src,
-                    "{inst}.resource_concurrent(
-                        \"{name}\",
-                        {wt}::component::ResourceType::host::<{camel}>(),
-                        {id_outer}move |caller: &{wt}::component::Accessor::<T>, rep| {{
-                            {id_inner}
-                            {wt}::component::__internal::Box::pin(async move {{
-                                let accessor = &caller.with_getter::<D>(host_getter);
-                                {wt}::ToWasmtimeResult::to_wasmtime_result(
-                                    Host{camel}WithStore::<T>::drop(accessor, {id_arg}{wt}::component::Resource::new_own(rep)).await
-                                )
-                            }})
-                        }}{id_close},
-                    )?;"
-                )
-            } else {
-                uwriteln!(
-                    src,
-                    "{inst}.resource_async(
-                        \"{name}\",
-                        {wt}::component::ResourceType::host::<{camel}>(),
-                        {id_outer}move |mut store, rep| {{
-                            {id_inner}
-                            {wt}::component::__internal::Box::new(async move {{
-                                {wt}::ToWasmtimeResult::to_wasmtime_result(
-                                    Host{camel}::drop(&mut host_getter(store.data_mut()), {id_arg}{wt}::component::Resource::new_own(rep)).await
-                                )
-                            }})
-                        }}{id_close},
-                    )?;"
-                )
-            }
+            uwriteln!(
+                src,
+                "{inst}.resource_async(
+                    \"{name}\",
+                    {wt}::component::ResourceType::host::<{camel}>(),
+                    {id_outer}move |mut store, rep| {{
+                        {id_inner}
+                        {wt}::component::__internal::Box::new(async move {{
+                            {wt}::ToWasmtimeResult::to_wasmtime_result(
+                                Host{camel}::drop(&mut host_getter(store.data_mut()), {id_arg}{wt}::component::Resource::new_own(rep)).await
+                            )
+                        }})
+                    }}{id_close},
+                )?;"
+            )
         } else {
             let (first_arg, trait_suffix) = if flags.contains(FunctionFlags::STORE) {
                 (
@@ -3483,27 +3464,15 @@ pub fn add_to_linker<T, D>(
                     }
                     let camel = name.to_upper_camel_case();
 
-                    if flags.contains(FunctionFlags::ASYNC) {
-                        uwrite!(
-                            self.src,
-                            "
-fn drop(accessor: &{wt}::component::Accessor<T, Self>, {id_param}rep: {wt}::component::Resource<{camel}>)
-    -> impl ::core::future::Future<Output =
-"
-                        );
-                        self.push_wasmtime_or_anyhow_result();
-                        self.push_str("<()>> + Send where Self: Sized;");
-                    } else {
-                        uwrite!(
-                            self.src,
-                            "
+                    uwrite!(
+                        self.src,
+                        "
 fn drop(accessor: {wt}::component::Access<T, Self>, {id_param}rep: {wt}::component::Resource<{camel}>)
     ->
 "
-                        );
-                        self.push_wasmtime_or_anyhow_result();
-                        self.push_str("<()>;");
-                    }
+                    );
+                    self.push_wasmtime_or_anyhow_result();
+                    self.push_str("<()>;");
 
                     extra_with_store_function = true;
                 }

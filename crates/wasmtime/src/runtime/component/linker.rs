@@ -1069,45 +1069,6 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Ok(())
     }
 
-    /// Identical to [`Self::resource`], except that it takes a concurrent destructor.
-    #[cfg(feature = "component-model-async")]
-    pub fn resource_concurrent<F>(&mut self, name: &str, ty: ResourceType, dtor: F) -> Result<()>
-    where
-        T: Send + 'static,
-        F: Fn(&Accessor<T>, u32) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>
-            + Send
-            + Sync
-            + 'static,
-    {
-        if !self.engine.tunables().concurrency_support {
-            bail!("concurrent host functions require `Config::concurrency_support`");
-        }
-        // TODO: This isn't really concurrent -- it requires exclusive access to
-        // the store for the duration of the call, preventing guest code from
-        // running until it completes.  We should make it concurrent and clean
-        // up the implementation to avoid using e.g. `Accessor::new` and
-        // `tls::set` directly.
-        let dtor = Arc::new(dtor);
-        let dtor = Arc::new(crate::func::HostFunc::wrap_async(
-            &self.engine,
-            move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
-                let dtor = dtor.clone();
-                Box::new(async move {
-                    let mut store = cx.as_context_mut();
-                    let accessor =
-                        &Accessor::new(crate::store::StoreToken::new(store.as_context_mut()));
-                    let mut future = core::pin::pin!(dtor(accessor, param));
-                    core::future::poll_fn(|cx| {
-                        crate::component::concurrent::tls::set(store.0, || future.as_mut().poll(cx))
-                    })
-                    .await
-                })
-            },
-        )?);
-        self.insert(name, Definition::Resource(ty, dtor))?;
-        Ok(())
-    }
-
     /// Defines a nested instance within this instance.
     ///
     /// This can be used to describe arbitrarily nested levels of instances

@@ -1,11 +1,9 @@
 pub enum WorldResource {}
 pub trait HostWorldResourceWithStore<T>: wasmtime::component::HasData + Send {
     fn drop(
-        accessor: &wasmtime::component::Accessor<T, Self>,
+        accessor: wasmtime::component::Access<T, Self>,
         rep: wasmtime::component::Resource<WorldResource>,
-    ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
-    where
-        Self: Sized;
+    ) -> wasmtime::Result<()>;
     fn new(
         host: wasmtime::component::Access<T, Self>,
     ) -> impl ::core::future::Future<
@@ -254,22 +252,22 @@ const _: () = {
         {
             let mut linker = linker.root();
             linker
-                .resource_concurrent(
+                .resource(
                     "world-resource",
                     wasmtime::component::ResourceType::host::<WorldResource>(),
-                    move |caller: &wasmtime::component::Accessor<T>, rep| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter::<D>(host_getter);
-                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
-                                HostWorldResourceWithStore::<
+                    move |mut store, rep| -> wasmtime::Result<()> {
+                        let resource = wasmtime::component::Resource::new_own(rep);
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostWorldResourceWithStore::<
+                                T,
+                            >::drop(
+                                wasmtime::component::Access::<
                                     T,
-                                >::drop(
-                                        accessor,
-                                        wasmtime::component::Resource::new_own(rep),
-                                    )
-                                    .await,
-                            )
-                        })
+                                    D,
+                                >::new(store, host_getter),
+                                resource,
+                            ),
+                        )
                     },
                 )?;
             linker
@@ -427,11 +425,9 @@ pub mod foo {
             pub enum Bar {}
             pub trait HostBarWithStore<T>: wasmtime::component::HasData + Send {
                 fn drop(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    accessor: wasmtime::component::Access<T, Self>,
                     rep: wasmtime::component::Resource<Bar>,
-                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
-                where
-                    Self: Sized;
+                ) -> wasmtime::Result<()>;
                 fn new(
                     host: wasmtime::component::Access<T, Self>,
                 ) -> impl ::core::future::Future<
@@ -511,11 +507,9 @@ pub mod foo {
             pub enum Fallible {}
             pub trait HostFallibleWithStore<T>: wasmtime::component::HasData + Send {
                 fn drop(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    accessor: wasmtime::component::Access<T, Self>,
                     rep: wasmtime::component::Resource<Fallible>,
-                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
-                where
-                    Self: Sized;
+                ) -> wasmtime::Result<()>;
                 fn new(
                     host: wasmtime::component::Access<T, Self>,
                 ) -> impl ::core::future::Future<
@@ -630,40 +624,40 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                inst.resource_concurrent(
+                inst.resource(
                     "bar",
                     wasmtime::component::ResourceType::host::<Bar>(),
-                    move |caller: &wasmtime::component::Accessor<T>, rep| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter::<D>(host_getter);
-                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
-                                HostBarWithStore::<
+                    move |mut store, rep| -> wasmtime::Result<()> {
+                        let resource = wasmtime::component::Resource::new_own(rep);
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostBarWithStore::<
+                                T,
+                            >::drop(
+                                wasmtime::component::Access::<
                                     T,
-                                >::drop(
-                                        accessor,
-                                        wasmtime::component::Resource::new_own(rep),
-                                    )
-                                    .await,
-                            )
-                        })
+                                    D,
+                                >::new(store, host_getter),
+                                resource,
+                            ),
+                        )
                     },
                 )?;
-                inst.resource_concurrent(
+                inst.resource(
                     "fallible",
                     wasmtime::component::ResourceType::host::<Fallible>(),
-                    move |caller: &wasmtime::component::Accessor<T>, rep| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter::<D>(host_getter);
-                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
-                                HostFallibleWithStore::<
+                    move |mut store, rep| -> wasmtime::Result<()> {
+                        let resource = wasmtime::component::Resource::new_own(rep);
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostFallibleWithStore::<
+                                T,
+                            >::drop(
+                                wasmtime::component::Access::<
                                     T,
-                                >::drop(
-                                        accessor,
-                                        wasmtime::component::Resource::new_own(rep),
-                                    )
-                                    .await,
-                            )
-                        })
+                                    D,
+                                >::new(store, host_getter),
+                                resource,
+                            ),
+                        )
                     },
                 )?;
                 inst.func_wrap_async(
@@ -1132,23 +1126,21 @@ pub mod foo {
             pub enum A {}
             pub trait HostAWithStore<T>: wasmtime::component::HasData {
                 fn drop(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    accessor: wasmtime::component::Access<T, Self>,
                     rep: wasmtime::component::Resource<A>,
-                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
-                where
-                    Self: Sized;
+                ) -> wasmtime::Result<()>;
             }
             pub trait HostA {}
-            impl<_T: HostA + ?Sized + Send> HostA for &mut _T {}
+            impl<_T: HostA + ?Sized> HostA for &mut _T {}
             pub trait HostWithStore<
                 T,
-            >: wasmtime::component::HasData + HostAWithStore<T> + Send {}
+            >: wasmtime::component::HasData + HostAWithStore<T> {}
             impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                H: wasmtime::component::HasData + HostAWithStore<T> + Send,
+                H: wasmtime::component::HasData + HostAWithStore<T>,
             {}
-            pub trait Host: HostA + Send {}
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
+            pub trait Host: HostA {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker_instance<T, D>(
                 inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -1156,24 +1148,24 @@ pub mod foo {
             where
                 D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: 'static,
             {
-                inst.resource_concurrent(
+                inst.resource(
                     "a",
                     wasmtime::component::ResourceType::host::<A>(),
-                    move |caller: &wasmtime::component::Accessor<T>, rep| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter::<D>(host_getter);
-                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
-                                HostAWithStore::<
+                    move |mut store, rep| -> wasmtime::Result<()> {
+                        let resource = wasmtime::component::Resource::new_own(rep);
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostAWithStore::<
+                                T,
+                            >::drop(
+                                wasmtime::component::Access::<
                                     T,
-                                >::drop(
-                                        accessor,
-                                        wasmtime::component::Resource::new_own(rep),
-                                    )
-                                    .await,
-                            )
-                        })
+                                    D,
+                                >::new(store, host_getter),
+                                resource,
+                            ),
+                        )
                     },
                 )?;
                 Ok(())
@@ -1185,7 +1177,7 @@ pub mod foo {
             where
                 D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain1")?;
                 add_to_linker_instance::<T, D>(&mut inst, host_getter)
@@ -1324,23 +1316,21 @@ pub mod foo {
             pub enum Foo {}
             pub trait HostFooWithStore<T>: wasmtime::component::HasData {
                 fn drop(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    accessor: wasmtime::component::Access<T, Self>,
                     rep: wasmtime::component::Resource<Foo>,
-                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
-                where
-                    Self: Sized;
+                ) -> wasmtime::Result<()>;
             }
             pub trait HostFoo {}
-            impl<_T: HostFoo + ?Sized + Send> HostFoo for &mut _T {}
+            impl<_T: HostFoo + ?Sized> HostFoo for &mut _T {}
             pub trait HostWithStore<
                 T,
-            >: wasmtime::component::HasData + HostFooWithStore<T> + Send {}
+            >: wasmtime::component::HasData + HostFooWithStore<T> {}
             impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                H: wasmtime::component::HasData + HostFooWithStore<T> + Send,
+                H: wasmtime::component::HasData + HostFooWithStore<T>,
             {}
-            pub trait Host: HostFoo + Send {}
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
+            pub trait Host: HostFoo {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker_instance<T, D>(
                 inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -1348,24 +1338,24 @@ pub mod foo {
             where
                 D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: 'static,
             {
-                inst.resource_concurrent(
+                inst.resource(
                     "foo",
                     wasmtime::component::ResourceType::host::<Foo>(),
-                    move |caller: &wasmtime::component::Accessor<T>, rep| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter::<D>(host_getter);
-                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
-                                HostFooWithStore::<
+                    move |mut store, rep| -> wasmtime::Result<()> {
+                        let resource = wasmtime::component::Resource::new_own(rep);
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostFooWithStore::<
+                                T,
+                            >::drop(
+                                wasmtime::component::Access::<
                                     T,
-                                >::drop(
-                                        accessor,
-                                        wasmtime::component::Resource::new_own(rep),
-                                    )
-                                    .await,
-                            )
-                        })
+                                    D,
+                                >::new(store, host_getter),
+                                resource,
+                            ),
+                        )
                     },
                 )?;
                 Ok(())
@@ -1377,7 +1367,7 @@ pub mod foo {
             where
                 D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: 'static,
             {
                 let mut inst = linker
                     .instance("foo:foo/transitive-interface-with-resource")?;
