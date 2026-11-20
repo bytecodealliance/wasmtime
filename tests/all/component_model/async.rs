@@ -652,10 +652,6 @@ async fn require_concurrency_support() -> Result<()> {
         root.func_new_concurrent("f2", |_, _, _, _| { todo!() })
             .is_err()
     );
-    assert!(
-        root.resource_concurrent("f3", ResourceType::host::<u32>(), |_, _| { todo!() })
-            .is_err()
-    );
 
     Ok(())
 }
