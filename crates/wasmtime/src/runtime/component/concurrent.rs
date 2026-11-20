@@ -629,7 +629,7 @@ where
                     || !state.high_priority.is_empty()
                     || !state.low_priority.is_empty()
                 {
-                    state.ready_for_concurrent_call_waker = Some(cx.waker().clone());
+                    state.idle_waker = Some(cx.waker().clone());
                     return Poll::Pending;
                 }
             }
@@ -642,7 +642,7 @@ where
             } else {
                 store
                     .concurrent_state_mut_without_forcing_current_thread()
-                    .ready_for_concurrent_call_waker = Some(cx.waker().clone());
+                    .backpressure_waker = Some(cx.waker().clone());
                 Poll::Pending
             }
         })
@@ -1551,7 +1551,7 @@ impl<T> StoreContextMut<'_, T> {
                     }));
                 }
 
-                if let Some(waker) = state.ready_for_concurrent_call_waker.take() {
+                if let Some(waker) = state.idle_waker.take() {
                     waker.wake();
                 }
 
@@ -2448,8 +2448,7 @@ impl StoreOpaque {
     /// Iterate over `InstanceState::pending`, moving any ready items into the
     /// "high priority" work item queue.
     ///
-    /// Also, notify `ConcurrentState::ready_for_concurrent_call_waker` if
-    /// present.
+    /// Also, notify `ConcurrentState::backpressure_waker` if present.
     ///
     /// See `GuestCall::is_ready` for details.
     fn partition_pending(&mut self, instance: RuntimeInstance) -> Result<()> {
@@ -2471,11 +2470,7 @@ impl StoreOpaque {
         }
 
         if any_ready {
-            if let Some(waker) = self
-                .concurrent_state_mut()?
-                .ready_for_concurrent_call_waker
-                .take()
-            {
+            if let Some(waker) = self.concurrent_state_mut()?.backpressure_waker.take() {
                 waker.wake();
             }
         }
@@ -6263,7 +6258,13 @@ pub struct ConcurrentState {
     /// not-concurrently-callable to concurrently-callable.
     ///
     /// Used in the implementation of `Accessor::poll_ready_for_concurrent_call`.
-    ready_for_concurrent_call_waker: Option<Waker>,
+    backpressure_waker: Option<Waker>,
+
+    /// Single waker to notify when the store goes idle (i.e. has no queued work
+    /// items).
+    ///
+    /// Used in the implementation of `Accessor::poll_ready_for_concurrent_call`.
+    idle_waker: Option<Waker>,
 
     /// Whether the `StoreContextMut::poll_until` event loop is running.
     event_loop_running: bool,
@@ -6294,7 +6295,8 @@ impl Default for ConcurrentState {
             global_error_context_ref_counts: BTreeMap::new(),
             interesting_tasks: 0,
             interesting_tasks_empty_waker: None,
-            ready_for_concurrent_call_waker: None,
+            backpressure_waker: None,
+            idle_waker: None,
             event_loop_running: false,
             saved_next_switch_items: Vec::new(),
             #[cfg(feature = "task-group-hook")]
@@ -6341,7 +6343,8 @@ impl ConcurrentState {
             global_error_context_ref_counts: _,
             interesting_tasks: _,
             interesting_tasks_empty_waker: _,
-            ready_for_concurrent_call_waker: _,
+            idle_waker: _,
+            backpressure_waker: _,
             event_loop_running: _,
             #[cfg(feature = "task-group-hook")]
                 task_group_hook: _,
@@ -6452,7 +6455,8 @@ impl ConcurrentState {
             global_error_context_ref_counts: _,
             interesting_tasks: _,
             interesting_tasks_empty_waker: _,
-            ready_for_concurrent_call_waker: _,
+            idle_waker: _,
+            backpressure_waker: _,
             event_loop_running: _,
             #[cfg(feature = "task-group-hook")]
                 task_group_hook: _,
