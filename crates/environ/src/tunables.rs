@@ -158,8 +158,10 @@ define_tunables! {
         /// store, for watchpoints.
         pub memory_watchpoints: bool,
 
-        /// Whether recording in RR is enabled or not. This is used primarily
-        /// to signal checksum computation for compiled artifacts.
+        /// Whether recording or replaying in RR is enabled or not. This is
+        /// used to signal checksum computation for compiled artifacts, to
+        /// preserve component builtin calls for interception, and (for native
+        /// targets) to include the replay trampolines.
         pub recording: bool,
 
         /// Whether compiled stack-switching instructions must emit the

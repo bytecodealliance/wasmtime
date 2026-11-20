@@ -713,6 +713,8 @@ impl<'a> Instantiator<'a> {
         imports: &'a Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     ) -> Result<Instantiator<'a>> {
         let env_component = component.env_component();
+        #[cfg(feature = "rr")]
+        store.rr.reject("components")?;
         let (modules, engine, breakpoints) = store.modules_and_engine_and_breakpoints_mut();
         modules.register_component(component, engine, breakpoints)?;
         let imported_resources: ImportedResources =

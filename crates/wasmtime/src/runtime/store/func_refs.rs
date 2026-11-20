@@ -79,6 +79,11 @@ enum Storage {
 }
 
 impl FuncRefs {
+    #[cfg(feature = "rr")]
+    pub(crate) fn rr_is_empty(&self) -> bool {
+        self.storage.is_empty()
+    }
+
     /// Push the given `VMFuncRef` into this arena, returning a
     /// pinned pointer to it.
     ///
