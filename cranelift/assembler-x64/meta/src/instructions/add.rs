@@ -104,5 +104,6 @@ pub fn list() -> Vec<Inst> {
         // the two sources occupy ModRM.reg and ModRM.rm. `addq` is 64-bit so
         // the `W` bit is set (`.w1()`); use `.w0()` for the 32-bit `addl` form.
         inst("addq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x01).r(), _64b & apx),
+        inst("addl", fmt("RVM", [r(r32b), w(r32a), r(rm32)]), evex(L128, Full).map4().w0().nd().op(0x01).r(), _64b & apx),
     ]
 }
