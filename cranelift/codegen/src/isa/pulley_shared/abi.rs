@@ -252,6 +252,13 @@ where
         unimplemented!("pulley shouldn't need stack bound checks")
     }
 
+    fn gen_stack_lower_bound_jump(
+        _limit_reg: Reg,
+        _handler: &ir::ExternalName,
+    ) -> SmallInstVec<Self::I> {
+        unimplemented!("pulley shouldn't need stack bound checks")
+    }
+
     fn gen_get_stack_addr(mem: StackAMode, dst: Writable<Reg>) -> Self::I {
         let dst = dst.to_reg();
         let dst = XReg::new(dst).unwrap();

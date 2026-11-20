@@ -236,6 +236,7 @@ impl Inst {
             | Inst::Trap { .. }
             | Inst::JTSequence { .. }
             | Inst::StackProbeLoop { .. }
+            | Inst::StackLimitJump { .. }
             | Inst::LoadSymbolReloc { .. }
             | Inst::LoadAddr { .. }
             | Inst::Loop { .. }
@@ -1086,6 +1087,10 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         }
         Inst::StackProbeLoop { probe_count, .. } => {
             collector.reg_early_def(probe_count);
+        }
+        Inst::StackLimitJump { .. } => {
+            // Only generated in the prologue, after register allocation, using
+            // fixed scratch registers that aren't visible to regalloc.
         }
         Inst::Loop { body, .. } => {
             // `reuse_def` constraints can't be permitted in a Loop instruction because the operand
@@ -3689,6 +3694,11 @@ impl Inst {
                 };
                 let mem = mem.pretty_print_default();
                 format!("{op} {rd}, {mem}")
+            }
+            &Inst::StackLimitJump { limit, ref handler } => {
+                let limit = pretty_print_reg(limit);
+                let stack_reg = pretty_print_reg(stack_reg());
+                format!("clgr {stack_reg}, {limit} ; jgle {handler:?}")
             }
             &Inst::StackProbeLoop {
                 probe_count,

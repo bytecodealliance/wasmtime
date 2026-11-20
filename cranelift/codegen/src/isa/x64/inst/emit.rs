@@ -327,6 +327,21 @@ pub(crate) fn emit(
             sink.bind_label(next, state.ctrl_plane_mut());
         }
 
+        Inst::StackLimitJump { limit, handler } => {
+            // Generate the following code:
+            //         cmp  limit, rsp
+            //         jbe  .ok          ;; `limit <= rsp`: no overflow
+            //         jmp  handler      ;; tail call
+            // .ok:
+            asm::inst::cmpq_rm::new(Gpr::unwrap_new(*limit), Gpr::RSP).emit(sink, info, state);
+            let ok = sink.get_label();
+            one_way_jmp(sink, CC::BE, ok);
+            asm::inst::jmp_d32::new(0).emit(sink, info, state);
+            let offset = sink.cur_offset();
+            sink.add_reloc_at_offset(offset - 4, Reloc::X86CallPCRel4, &**handler, -4);
+            sink.bind_label(ok, state.ctrl_plane_mut());
+        }
+
         Inst::StackProbeLoop {
             tmp,
             frame_size,

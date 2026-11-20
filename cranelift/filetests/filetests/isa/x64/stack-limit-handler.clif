@@ -1,0 +1,400 @@
+test compile precise-output
+set unwind_info=false
+set enable_multi_ret_implicit_sret
+target x86_64
+
+function %foo() {
+block0:
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; A leaf function with no frame needs no stack check at all, even with a
+;; handler.
+function %handler_leaf_zero(i64 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; A function that makes calls: the check happens before any frame setup and
+;; tail-calls the handler on overflow.
+function %handler_call_zero(i64 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    call fn0()
+    return
+}
+
+; VCode:
+;   movq (%rdi), %r10
+;   movq 8(%r10), %r10
+;   addq $0x20, %r10
+;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   load_ext_name %foo+0, %rax
+;   call    *%rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movq (%rdi), %r10
+;   movq 8(%r10), %r10
+;   addq $0x20, %r10
+;   cmpq %rsp, %r10
+;   jbe 0x19
+;   jmp 0x19 ; reloc_external CallPCRel4 %overflow -4
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x1d
+;   movabsq $0, %rax ; reloc_external Abs8 %foo 0
+;   callq *%rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; The handler's parameters need only be a prefix of the function's, and the
+;; stack limit can be the vmctx itself.
+function %handler_prefix_params(i64 vmctx, i64, i64) -> i64 tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64, v1: i64, v2: i64):
+    call fn0()
+    v3 = iadd v1, v2
+    return v3
+}
+
+; VCode:
+;   movq %rdi, %r10
+;   addq $0x30, %r10
+;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+;   movq %r12, (%rsp)
+;   movq %r13, 8(%rsp)
+; block0:
+;   movq %rdx, %r12
+;   movq %rsi, %r13
+;   load_ext_name %foo+0, %rsi
+;   call    *%rsi
+;   movq %r12, %rdx
+;   movq %r13, %rsi
+;   leaq (%rsi, %rdx), %rax
+;   movq (%rsp), %r12
+;   movq 8(%rsp), %r13
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movq %rdi, %r10
+;   addq $0x30, %r10
+;   cmpq %rsp, %r10
+;   jbe 0x15
+;   jmp 0x15 ; reloc_external CallPCRel4 %overflow -4
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+;   movq %r12, (%rsp)
+;   movq %r13, 8(%rsp)
+; block1: ; offset 0x26
+;   movq %rdx, %r12
+;   movq %rsi, %r13
+;   movabsq $0, %rsi ; reloc_external Abs8 %foo 0
+;   callq *%rsi
+;   movq %r12, %rdx
+;   movq %r13, %rsi
+;   leaq (%rsi, %rdx), %rax
+;   movq (%rsp), %r12
+;   movq 8(%rsp), %r13
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; A small frame: the frame size (plus this function's own setup area) is added
+;; to the limit before comparing.
+function %handler_small_frame(i64 vmctx) tail {
+    ss0 = explicit_slot 168
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   movq (%rdi), %r10
+;   movq 8(%r10), %r10
+;   addq $0xc0, %r10
+;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0xb0, %rsp
+; block0:
+;   addq $0xb0, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movq (%rdi), %r10
+;   movq 8(%r10), %r10
+;   addq $0xc0, %r10
+;   cmpq %rsp, %r10
+;   jbe 0x1c
+;   jmp 0x1c ; reloc_external CallPCRel4 %overflow -4
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0xb0, %rsp
+; block1: ; offset 0x27
+;   addq $0xb0, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; A huge frame: the limit is checked once directly (to guard against
+;; overflow in the addition) and then again with the frame size added.
+function %handler_huge_frame(i64 vmctx) tail {
+    ss0 = explicit_slot 400000
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   movq (%rdi), %r10
+;   movq 8(%r10), %r10
+;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   addq $0x61a90, %r10
+;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x61a80, %rsp
+; block0:
+;   addq $0x61a80, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movq (%rdi), %r10
+;   movq 8(%r10), %r10
+;   cmpq %rsp, %r10
+;   jbe 0x15
+;   jmp 0x15 ; reloc_external CallPCRel4 %overflow -4
+;   addq $0x61a90, %r10
+;   cmpq %rsp, %r10
+;   jbe 0x2a
+;   jmp 0x2a ; reloc_external CallPCRel4 %overflow -4
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x61a80, %rsp
+; block1: ; offset 0x35
+;   addq $0x61a80, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; The `tail` calling convention, as used by Wasmtime, with stack arguments.
+function %handler_tail(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+    ss0 = explicit_slot 8
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64):
+    v11 = iadd v1, v10
+    v13 = stack_addr.i64 ss0
+    store v11, v13
+    v12 = load.i64 v13
+    return v12
+}
+
+; VCode:
+;   movq (%rdi), %r10
+;   movq 8(%r10), %r10
+;   addq $0x20, %r10
+;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block0:
+;   movq <offset:0>+-0x10(%rbp), %rdx
+;   leaq (%rsi, %rdx), %rsi
+;   movq %rsi, <offset:1>+(%rsp)
+;   movq <offset:1>+(%rsp), %rax
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq $0x30
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movq (%rdi), %r10
+;   movq 8(%r10), %r10
+;   addq $0x20, %r10
+;   cmpq %rsp, %r10
+;   jbe 0x19
+;   jmp 0x19 ; reloc_external CallPCRel4 %overflow -4
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+; block1: ; offset 0x21
+;   movq 0x30(%rbp), %rdx
+;   addq %rdx, %rsi
+;   movq %rsi, (%rsp)
+;   movq (%rsp), %rax
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq $0x30
+
+
+;; Many return values: the implicit return-area pointer must not perturb the
+;; location of the vmctx argument that the handler receives.
+function %handler_many_returns(i64 vmctx) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    call fn0()
+    return v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0
+}
+
+; VCode:
+;   movq (%rdi), %r10
+;   movq 8(%r10), %r10
+;   addq $0x30, %r10
+;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+;   movq %r12, (%rsp)
+;   movq %r13, 8(%rsp)
+; block0:
+;   movq %rdi, %r12
+;   movq %rsi, %r13
+;   load_ext_name %foo+0, %rsi
+;   call    *%rsi
+;   movq %r13, %rsi
+;   movq %r12, %rdi
+;   movq %rdi, (%rsi)
+;   movq %rdi, 8(%rsi)
+;   movq %rdi, 0x10(%rsi)
+;   movq %rdi, 0x18(%rsi)
+;   movq %rdi, %r10
+;   movq %r10, %rax
+;   movq %r10, %rcx
+;   movq %r10, %rdx
+;   movq %r10, %rsi
+;   movq %r10, %r8
+;   movq %r10, %r9
+;   movq (%rsp), %r12
+;   movq 8(%rsp), %r13
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   movq (%rdi), %r10
+;   movq 8(%r10), %r10
+;   addq $0x30, %r10
+;   cmpq %rsp, %r10
+;   jbe 0x19
+;   jmp 0x19 ; reloc_external CallPCRel4 %overflow -4
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+;   movq %r12, (%rsp)
+;   movq %r13, 8(%rsp)
+; block1: ; offset 0x2a
+;   movq %rdi, %r12
+;   movq %rsi, %r13
+;   movabsq $0, %rsi ; reloc_external Abs8 %foo 0
+;   callq *%rsi
+;   movq %r13, %rsi
+;   movq %r12, %rdi
+;   movq %rdi, (%rsi)
+;   movq %rdi, 8(%rsi)
+;   movq %rdi, 0x10(%rsi)
+;   movq %rdi, 0x18(%rsi)
+;   movq %rdi, %r10
+;   movq %r10, %rax
+;   movq %r10, %rcx
+;   movq %r10, %rdx
+;   movq %r10, %rsi
+;   movq %r10, %r8
+;   movq %r10, %r9
+;   movq (%rsp), %r12
+;   movq 8(%rsp), %r13
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

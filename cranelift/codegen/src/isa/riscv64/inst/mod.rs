@@ -559,6 +559,10 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(tmp2);
             collector.reg_early_def(rd);
         }
+        Inst::StackLimitJump { .. } => {
+            // Only generated in the prologue, after register allocation, using
+            // fixed scratch registers that aren't visible to regalloc.
+        }
         Inst::StackProbeLoop { .. } => {
             // StackProbeLoop has a tmp register and StackProbeLoop used at gen_prologue.
             // t3 will do the job. (t3 is caller-save register and not used directly by compiler like writable_spilltmp_reg)
@@ -976,6 +980,10 @@ impl Inst {
             }
             &Inst::Nop4 => {
                 format!("##fixed 4-size nop")
+            }
+            &Inst::StackLimitJump { limit, ref handler } => {
+                let limit = format_reg(limit);
+                format!("bgeu sp,{limit},$ok ; tail {handler:?} ; $ok:")
             }
             &Inst::StackProbeLoop {
                 guard_size,

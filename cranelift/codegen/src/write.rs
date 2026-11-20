@@ -98,7 +98,13 @@ pub trait FuncWriter {
 
         if let Some(limit) = func.stack_limit {
             any = true;
-            self.write_entity_definition(w, func, AnyEntity::StackLimit, &limit)?;
+            match func.stack_limit_handler {
+                None => self.write_entity_definition(w, func, AnyEntity::StackLimit, &limit)?,
+                Some(handler) => {
+                    let value = format!("{limit}, handler = {handler}");
+                    self.write_entity_definition(w, func, AnyEntity::StackLimit, &value)?
+                }
+            }
         }
 
         Ok(any)

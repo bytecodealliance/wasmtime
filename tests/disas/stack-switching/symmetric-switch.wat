@@ -62,8 +62,8 @@
 ;;     sig3 = (i64 vmctx, i32) -> i8 tail
 ;;     fn0 = colocated u0:1 sig0
 ;;     fn1 = colocated u268435456:1 sig1
-;;     fn2 = colocated u805306368:41 sig2
-;;     fn3 = colocated u805306368:43 sig3
+;;     fn2 = colocated u805306368:42 sig2
+;;     fn3 = colocated u805306368:44 sig3
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -356,7 +356,7 @@
 ;;     sig3 = (i64 vmctx) tail
 ;;     fn0 = colocated u0:0 sig0
 ;;     fn1 = colocated u268435456:0 sig1
-;;     fn2 = colocated u805306368:41 sig2
+;;     fn2 = colocated u805306368:42 sig2
 ;;     fn3 = colocated u805306368:40 sig3
 ;;     stack_limit = gv2
 ;;

@@ -93,6 +93,7 @@ impl Inst {
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
             | Inst::StackProbeLoop { .. }
+            | Inst::StackLimitJump { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
             | Inst::StackSwitchBasic { .. }
@@ -570,6 +571,11 @@ impl PrettyPrint for Inst {
                 )
             }
 
+            Inst::StackLimitJump { limit, handler } => {
+                let limit = pretty_print_reg(*limit, 8);
+                format!("cmpq %rsp, {limit} ; jbe $ok ; jmp {handler:?} ; $ok:")
+            }
+
             Inst::StackProbeLoop {
                 tmp,
                 frame_size,
@@ -982,6 +988,10 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::StackProbeLoop { tmp, .. } => {
             collector.reg_early_def(tmp);
+        }
+        Inst::StackLimitJump { .. } => {
+            // Only generated in the prologue, after register allocation, using
+            // fixed scratch registers that aren't visible to regalloc.
         }
 
         Inst::CallKnown { info } => {

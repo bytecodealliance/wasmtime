@@ -149,6 +149,20 @@ macro_rules! foreach_builtin_function {
             // been previously filled in.
             raise(vmctx: vmctx);
 
+            // Raises a stack-overflow trap.
+            //
+            // This is used when signals-based-traps are disabled: the
+            // stack-limit check in the prologue of each compiled wasm function
+            // tail-calls this builtin's trampoline if the stack limit has been
+            // exceeded. That happens before the wasm function has set up its
+            // frame, with all of its arguments still in place, which works
+            // because every wasm function's signature starts with the same
+            // `vmctx` parameter as this builtin's. The trampoline must never
+            // return to the wasm function's caller, which would be expecting
+            // a different signature's results; this always "fails" and so the
+            // trampoline always raises the trap.
+            stack_overflow(vmctx: vmctx) -> bool;
+
             // Creates a new continuation from a funcref.
             #[cfg(feature = "stack-switching")]
             cont_new(vmctx: vmctx, r: pointer, param_count: u32, result_count: u32, gc_refs: u32) -> pointer;
