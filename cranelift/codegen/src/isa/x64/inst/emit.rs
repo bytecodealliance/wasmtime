@@ -433,6 +433,7 @@ pub(crate) fn emit(
             } else {
                 sink.add_call_site();
             }
+            state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
             // Reclaim the outgoing argument area that was released by the
             // callee, to ensure that StackAMode values are always computed from
@@ -513,6 +514,7 @@ pub(crate) fn emit(
             } else {
                 sink.add_call_site();
             }
+            state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
@@ -1775,6 +1777,7 @@ pub(crate) fn emit(
                 -4,
             );
             sink.put4(0); // offset
+            state.post_call_debug_tag_offset = Some(sink.cur_offset());
         }
 
         Inst::MachOTlsGetAddr { symbol, dst } => {
@@ -1794,6 +1797,7 @@ pub(crate) fn emit(
                 trap: None,
             })
             .emit(sink, info, state);
+            state.post_call_debug_tag_offset = Some(sink.cur_offset());
         }
 
         Inst::CoffTlsGetAddr { symbol, dst, tmp } => {
