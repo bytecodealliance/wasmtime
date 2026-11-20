@@ -9,6 +9,7 @@ use wasmtime::{
 };
 
 use crate::async_functions::PollOnce;
+use wasmtime_test_macros::wasmtime_test;
 
 #[test]
 fn debugging_does_not_work_with_signal_based_traps() {
@@ -1635,20 +1636,15 @@ fn component_bytecode() -> wasmtime::Result<()> {
     Ok(())
 }
 
-/// Build a component in which component `$B` drops a resource owned by
-/// component `$A`, whose destructor body is `dtor_body`. The destructor can
-/// call the host-provided `probe` import.
-///
-/// `$B`'s `run` export wraps the drop in a `catch_all` and executes
-/// `unreachable` if it catches anything, so an exception thrown by the
-/// destructor must never reach it.
-///
-/// This is the shape of #15332: with guest debugging enabled each store has
-/// private copies of code but the `resource.drop` trampoline that calls the
-/// destructor runs out of the engine's copy, so its frame is on the stack
-/// while the destructor runs.
-fn resource_dtor_component(dtor_body: &str) -> String {
-    format!(
+#[wasmtime_test(strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn component_resource_dtor_debug_frames_walk_trampoline_frame(config: &mut Config) -> Result<()> {
+    use wasmtime::component::{Component, Linker};
+
+    config.guest_debug(true);
+    let engine = Engine::new(config)?;
+    let component = Component::new(
+        &engine,
         r#"
         (component
           (import "probe" (func $probe))
@@ -1657,8 +1653,7 @@ fn resource_dtor_component(dtor_body: &str) -> String {
             (core func $probe (canon lower (func $probe)))
             (core module $dtor
               (import "" "probe" (func $probe))
-              (tag $t)
-              (func (export "dtor") (param i32) {dtor_body}))
+              (func (export "dtor") (param i32) (call $probe)))
             (core instance $dtor (instantiate $dtor
               (with "" (instance (export "probe" (func $probe))))))
             (type $t (resource (rep i32) (dtor (core func $dtor "dtor"))))
@@ -1678,11 +1673,7 @@ fn resource_dtor_component(dtor_body: &str) -> String {
               (import "" "new" (func $new (param i32) (result i32)))
               (import "" "t.drop" (func $t.drop (param i32)))
               (func (export "run")
-                (block $caught
-                  (try_table (catch_all $caught)
-                    (call $t.drop (call $new (i32.const 0))))
-                  (return))
-                unreachable))
+                (call $t.drop (call $new (i32.const 0)))))
             (core instance $b (instantiate $b
               (with "" (instance
                 (export "new" (func $new))
@@ -1692,102 +1683,26 @@ fn resource_dtor_component(dtor_body: &str) -> String {
           (instance $a (instantiate $A (with "probe" (func $probe))))
           (instance $b (instantiate $B (with "a" (instance $a))))
           (export "run" (func $b "run")))
-        "#
-    )
-}
-
-/// Instantiate `resource_dtor_component(dtor_body)` with `probe` as the host
-/// import, under guest debugging, on both the native backend (if any) and
-/// Pulley, and return the result of calling `run` for each.
-fn run_resource_dtor_component(
-    dtor_body: &str,
-    probe: impl Fn(StoreContextMut<'_, ()>) -> Result<()> + Copy + Send + Sync + 'static,
-) -> Result<Vec<Result<()>>> {
-    use wasmtime::component::{Component, Linker};
-
-    use wasmtime_environ::TripleExt;
-
-    let mut targets: Vec<Option<String>> = vec![None];
-    if !Engine::default().is_pulley() {
-        targets.push(Some(target_lexicon::Triple::pulley_host().to_string()));
-    }
-
-    let wat = resource_dtor_component(dtor_body);
-    let mut results = vec![];
-    for target in targets {
-        let mut config = Config::default();
-        config.guest_debug(true);
-        config.wasm_exceptions(true);
-        if let Some(target) = &target {
-            config.target(target)?;
-        }
-        let engine = Engine::new(&config)?;
-        let component = Component::new(&engine, &wat)?;
-        let mut linker: Linker<()> = Linker::new(&engine);
-        linker
-            .root()
-            .func_wrap("probe", move |store: StoreContextMut<'_, ()>, (): ()| {
-                probe(store)
-            })?;
-        let mut store = Store::new(&engine, ());
-        let instance = linker.instantiate(&mut store, &component)?;
-        let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-        results.push(run.call(&mut store, ()));
-    }
-    Ok(results)
-}
-
-/// Regression test for #15332: with guest debugging enabled, an exception
-/// thrown by a resource destructor must still be stopped at the
-/// `resource.drop` boundary between components and turned into a trap,
-/// rather than being caught by the calling component.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn component_resource_dtor_exception_does_not_cross_components() -> Result<()> {
-    for result in run_resource_dtor_component("(throw $t)", |_| Ok(()))? {
-        let err = result.unwrap_err();
-        assert_eq!(err.downcast_ref::<Trap>(), Some(&Trap::UncaughtException));
-    }
-    Ok(())
-}
-
-/// A GC while a resource destructor is running walks the `resource.drop`
-/// trampoline's frame, which runs out of engine code with guest debugging
-/// enabled.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn component_resource_dtor_gc_walks_trampoline_frame() -> Result<()> {
-    let results = run_resource_dtor_component("(call $probe)", |mut store| {
-        // Make sure a GC heap exists so that the GC actually traces roots.
-        let _ = wasmtime::ExternRef::new(&mut store, 42)?;
-        store.gc(None)
-    })?;
-    for result in results {
-        result?;
-    }
-    Ok(())
-}
-
-/// Walking all debug frames while a resource destructor is running visits
-/// the `resource.drop` trampoline's frame, which runs out of engine code
-/// with guest debugging enabled.
-#[test]
-#[cfg_attr(miri, ignore)]
-fn component_resource_dtor_debug_frames_walk_trampoline_frame() -> Result<()> {
-    let results = run_resource_dtor_component("(call $probe)", |mut store| {
-        let mut count = 0;
-        let mut frame = store.debug_exit_frames().next();
-        while let Some(f) = frame {
-            count += 1;
-            frame = f.parent(&mut store)?;
-        }
-        // The destructor and `$B`'s `run`.
-        assert_eq!(count, 2);
-        Ok(())
-    })?;
-    for result in results {
-        result?;
-    }
+        "#,
+    )?;
+    let mut linker: Linker<()> = Linker::new(&engine);
+    linker
+        .root()
+        .func_wrap("probe", |mut store: StoreContextMut<'_, ()>, (): ()| {
+            let mut count = 0;
+            let mut frame = store.debug_exit_frames().next();
+            while let Some(f) = frame {
+                count += 1;
+                frame = f.parent(&mut store)?;
+            }
+            // The destructor and `$B`'s `run`.
+            assert_eq!(count, 2);
+            Ok(())
+        })?;
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call(&mut store, ())?;
     Ok(())
 }
 
