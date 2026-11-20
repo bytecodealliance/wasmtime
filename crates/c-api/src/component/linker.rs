@@ -200,6 +200,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func_async(
                     .collect::<Vec<_>>();
 
                 let mut c_rets = vec![wasmtime_component_val_t::Bool(false); rets.len()];
+                let c_ty = Box::new(wasmtime_component_func_type_t::from(ty));
 
                 let mut err = None;
                 extern "C" fn panic_callback(_: *mut c_void) -> bool {
@@ -213,7 +214,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func_async(
                 callback(
                     foreign.data,
                     ctx,
-                    &ty.into(),
+                    &c_ty,
                     c_args.as_mut_ptr(),
                     c_args.len(),
                     c_rets.as_mut_ptr(),
@@ -228,6 +229,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func_async(
 
                 Box::new(async move {
                     continuation.await;
+                    drop((c_ty, c_args));
                     for (rust_val, c_val) in std::iter::zip(rets, c_rets) {
                         *rust_val = Val::try_from(&c_val)?;
                     }
