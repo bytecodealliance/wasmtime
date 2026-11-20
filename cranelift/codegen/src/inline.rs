@@ -166,7 +166,7 @@ pub(crate) fn do_inlining(
                             callee,
                             visit_callee,
                         } => {
-                            if !interrupt_poll_prevents(cursor.func, &callee) {
+                            if can_inline(cursor.func, &callee) {
                                 let last_inlined_block = inline_one(
                                     &mut allocs,
                                     cursor.func,
@@ -210,7 +210,7 @@ pub(crate) fn do_inlining(
                             callee,
                             visit_callee,
                         } => {
-                            if !interrupt_poll_prevents(cursor.func, &callee) {
+                            if can_inline(cursor.func, &callee) {
                                 let last_inlined_block = inline_one(
                                     &mut allocs,
                                     cursor.func,
@@ -260,28 +260,33 @@ pub(crate) fn do_inlining(
     Ok(inlined_any)
 }
 
-/// Returns whether the presence of `interrupt_poll`, which is valid only in
-/// `tail`-convention functions, disallows the proposed inlining.
-fn interrupt_poll_prevents(caller: &ir::Function, callee: &ir::Function) -> bool {
-    if caller.signature.call_conv == CallConv::Tail
+/// Returns whether `callee` is allowed to be inlined into `caller`. Future ad
+/// hoc rules can accumulate here.
+fn can_inline(caller: &ir::Function, callee: &ir::Function) -> bool {
+    // `interrupt_poll` can occur only in functions with the `tail` calling
+    // convention, so don't inline functions using it into those with other
+    // conventions.
+    if caller.signature.call_conv != CallConv::Tail
         // A verified non-`tail` callee can't contain `interrupt_poll`. This
         // saves us scanning through the whole function.
-        || callee.signature.call_conv != CallConv::Tail
-    {
-        return false;
-    }
-    if callee
-        .layout
-        .blocks()
-        .flat_map(|b| callee.layout.block_insts(b))
-        .any(|i| callee.dfg.insts[i].opcode() == ir::Opcode::InterruptPoll)
+        && callee.signature.call_conv == CallConv::Tail
+        && contains_opcode(callee, ir::Opcode::InterruptPoll)
     {
         trace!(
             "  --> keeping call because callee uses `interrupt_poll` and caller doesn't use `tail` convention"
         );
-        return true;
+        return false;
     }
-    false
+
+    true
+}
+
+/// Returns whether a function contains a certain opcode.
+fn contains_opcode(func: &ir::Function, opcode: ir::Opcode) -> bool {
+    func.layout
+        .blocks()
+        .flat_map(|b| func.layout.block_insts(b))
+        .any(|i| func.dfg.insts[i].opcode() == opcode)
 }
 
 #[derive(Default)]
