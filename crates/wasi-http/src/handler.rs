@@ -544,13 +544,13 @@ where
             // `poll_fn` closure.
             let mut futures = pin!(futures);
             let handler = self.handler.clone();
-            let mut incoming_requests = pin!(futures::stream::unfold(
-                &handler.0.request_queue,
-                |queue| async move {
+            let new_incoming_requests = || {
+                futures::stream::unfold(&handler.0.request_queue, |queue| async move {
                     let pair = queue.pop().await;
                     Some((pair, queue))
-                }
-            ));
+                })
+            };
+            let mut incoming_requests = pin!(new_incoming_requests());
             let func = match proxy {
                 #[cfg(feature = "p3")]
                 Proxy::P3(guest) => *guest.wasi_http_handler().func_handle().func(),
@@ -636,11 +636,17 @@ where
                     // deduction above, then try to accept a new task. If that's
                     // successful then push it into `futures` and turn this loop
                     // again to see where we're at next time around.
-                    if self.available
-                        && let Poll::Ready(Some(req)) = incoming_requests.as_mut().poll_next(cx)
-                    {
-                        accept_request(req, &mut futures, &mut start_times, &mut reuse_count);
-                        continue;
+                    //
+                    // Otherwise though make sure that we cancel any pending
+                    // attempt to get a new request because were we to receive
+                    // it we'd not be ready to actually process it.
+                    if self.available {
+                        if let Poll::Ready(Some(req)) = incoming_requests.as_mut().poll_next(cx) {
+                            accept_request(req, &mut futures, &mut start_times, &mut reuse_count);
+                            continue;
+                        }
+                    } else {
+                        incoming_requests.set(new_incoming_requests());
                     }
 
                     // If, at this point, we still have some requests that are
