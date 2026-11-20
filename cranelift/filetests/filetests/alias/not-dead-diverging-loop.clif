@@ -1,0 +1,52 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; `block1` and `block2` diverge, so `block2` does not post-dominate `block1`.
+;; Keep the store in `block1`: on the `block3` branch, `fn0` can observe it.
+function %diverging_loop(i64, i32) {
+    sig0 = (i64)
+    fn0 = u0:0 sig0
+
+block0(v0: i64, v1: i32):
+    jump block1
+
+block1:
+    v2 = iconst.i64 111
+    store notrap aligned v2, v0
+    brif v1, block2, block3
+
+block2:
+    v3 = iconst.i64 222
+    store notrap aligned v3, v0
+    jump block1
+
+block3:
+    call fn0(v0)
+    jump block1
+}
+
+; function %diverging_loop(i64, i32) fast {
+;     sig0 = (i64) fast
+;     fn0 = u0:0 sig0
+;
+; block0(v0: i64, v1: i32):
+;     v2 = iconst.i64 111
+;     v3 = iconst.i64 222
+;     jump block1
+;
+; block1:
+;     v4 = iconst.i64 111
+;     store notrap aligned v4, v0  ; v4 = 111
+;     brif.i32 v1, block2, block3
+;
+; block2:
+;     v5 = iconst.i64 222
+;     store notrap aligned v5, v0  ; v5 = 222
+;     jump block1
+;
+; block3:
+;     call fn0(v0)
+;     jump block1
+; }
+

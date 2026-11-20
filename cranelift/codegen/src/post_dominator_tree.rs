@@ -190,8 +190,11 @@ impl PostDominatorTree {
         }
     }
 
-    /// Returns `true` if every path from `b` to a function exit (return or
-    /// trap) must go through `a`.
+    /// Returns `true` if every path from `block_b` to a function exit (return
+    /// or trap) must go through `block_a`.
+    ///
+    /// Every block post-dominates itself. If `block_a != block_b` and either
+    /// block diverges, returns `false`.
     pub fn block_post_dominates(&self, block_a: Block, block_b: Block) -> bool {
         self.dom_tree.block_dominates(block_a, block_b)
     }
@@ -740,6 +743,22 @@ mod tests {
                 ));
             }
 
+            // Diverging blocks only post-dominate themselves (`pdom[i]` stays `universe` when
+            // block `i` cannot reach the sink).
+            for a in 0..graph.blocks.len() {
+                let expect = if expect_diverges {
+                    a == i
+                } else {
+                    pdom[i] & bit(a) != 0
+                };
+                if pdt.block_post_dominates(blocks[a], blocks[i]) != expect {
+                    return Err(format!(
+                        "block_post_dominates({a}, {i}) = {}, expected {expect}",
+                        pdt.block_post_dominates(blocks[a], blocks[i]),
+                    ));
+                }
+            }
+
             if expect_diverges {
                 if pdt.immediate_post_dominator(blocks[i]).is_some() {
                     return Err(format!(
@@ -747,17 +766,6 @@ mod tests {
                     ));
                 }
                 continue;
-            }
-
-            // `a` post-dominates `i` iff `a ∈ pdom(i)`.
-            for a in 0..graph.blocks.len() {
-                let expect = pdom[i] & bit(a) != 0;
-                if pdt.block_post_dominates(blocks[a], blocks[i]) != expect {
-                    return Err(format!(
-                        "block_post_dominates({a}, {i}) = {}, expected {expect}",
-                        pdt.block_post_dominates(blocks[a], blocks[i]),
-                    ));
-                }
             }
 
             // The immediate post-dominator is the strict post-dominator with
