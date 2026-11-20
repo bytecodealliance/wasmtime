@@ -88,21 +88,21 @@ impl Response {
                 let is_forbidden = getter(store.as_context_mut().data_mut())
                     .hooks
                     .forbidden_header_filter();
+                let (body_result_tx, body_result_rx) = oneshot::channel();
+                _ = result_tx.send(Box::new(async move {
+                    if let Ok(err) = body_result_rx.await {
+                        return Err(err);
+                    };
+                    fut.await
+                }));
                 let body = body.with_filtered_trailers(is_forbidden);
-                if let Some(limit) = content_length {
-                    let (http_result_tx, http_result_rx) = oneshot::channel();
-                    _ = result_tx.send(Box::new(async move {
-                        if let Ok(err) = http_result_rx.await {
-                            return Err(err);
-                        };
-                        fut.await
-                    }));
-                    body.with_content_length(limit, http_result_tx, Error::HttpResponseBodySize)
+                let body = if let Some(limit) = content_length {
+                    body.with_content_length(limit, Error::HttpResponseBodySize)
                         .boxed_unsync()
                 } else {
-                    _ = result_tx.send(Box::new(fut));
                     body.boxed_unsync()
-                }
+                };
+                body.with_error_report(body_result_tx).boxed_unsync()
             }
         };
         Ok(http::Response::from_parts(res, body))

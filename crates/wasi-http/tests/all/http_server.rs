@@ -147,6 +147,32 @@ impl Server {
         })
     }
 
+    /// Send response headers declaring a `content-length` of
+    /// 100000 plus only part of the body, then close the connection.
+    pub fn http1_drop_mid_body(conns: usize) -> Result<Self> {
+        debug!("initializing drop-mid-body http1 server");
+        Self::new(conns, |mut stream| async move {
+            use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+            let mut request = Vec::new();
+            let mut buf = [0; 1024];
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = stream.read(&mut buf).await?;
+                if n == 0 {
+                    return Ok(());
+                }
+                request.extend_from_slice(&buf[..n]);
+            }
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 100000\r\n\r\n")
+                .await?;
+            stream.write_all(&[b'a'; 5000]).await?;
+            stream.flush().await?;
+            drop(stream);
+            Ok(())
+        })
+    }
+
     pub fn http2(conns: usize) -> Result<Self> {
         debug!("initializing http2 server");
         Self::new(conns, |stream| async move {
