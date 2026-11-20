@@ -247,6 +247,7 @@ pub struct ObjectModule {
     known_labels: HashMap<(FuncId, CodeOffset), SymbolId>,
     per_function_section: bool,
     per_data_object_section: bool,
+    macho_custom_sections: HashMap<(Vec<u8>, Vec<u8>, SectionKind, u32), SectionId>,
     #[cfg(feature = "unwind")]
     unwind: Option<crate::unwind::UnwindBuilder>,
 }
@@ -282,6 +283,7 @@ impl ObjectModule {
             known_labels: HashMap::new(),
             per_function_section: builder.per_function_section,
             per_data_object_section: builder.per_data_object_section,
+            macho_custom_sections: HashMap::new(),
             #[cfg(feature = "unwind")]
             unwind,
         }
@@ -559,37 +561,57 @@ impl Module for ObjectModule {
             let (segment, section, macho_flags) =
                 parse_section(custom_section.as_ref().unwrap(), self.object.format())
                     .map_err(ModuleError::Backend)?;
-            let section = self.object.add_section(
-                segment.to_string().into_bytes(),
-                section.to_string().into_bytes(),
-                if decl.writable {
-                    SectionKind::Data
-                } else if relocs.is_empty() {
-                    SectionKind::ReadOnlyData
-                } else {
-                    SectionKind::ReadOnlyDataWithRel
-                },
-            );
+            let kind = if decl.writable {
+                SectionKind::Data
+            } else if relocs.is_empty() {
+                SectionKind::ReadOnlyData
+            } else {
+                SectionKind::ReadOnlyDataWithRel
+            };
+            let segment = segment.to_string().into_bytes();
+            let section = section.to_string().into_bytes();
 
-            match self.object.section_flags_mut(section) {
-                SectionFlags::MachO { flags, .. } => {
-                    // There are no default flags for the `SectionKind`s that
-                    // we've specified above, so it's fine to override.
-                    //
-                    // (If we don't want to override, we'll have to be careful
-                    // with how we set these, to ensure we set the section
-                    // type properly).
-                    assert_eq!(flags.0, 0);
-                    *flags = macho_flags;
-                }
-                _ => {
-                    if macho_flags.0 != 0 {
-                        unreachable!("unsupported Mach-O flags for this platform: {macho_flags:?}");
+            // A Mach-O object holds at most 255 sections, so data objects naming the same custom
+            // section share one, as with LLVM (e.g. one `__mod_init_func` for every constructor).
+            if self.object.format() == BinaryFormat::MachO
+                && let Some(&section) = self.macho_custom_sections.get(&(
+                    segment.clone(),
+                    section.clone(),
+                    kind,
+                    macho_flags.0,
+                ))
+            {
+                section
+            } else {
+                let macho_key = (self.object.format() == BinaryFormat::MachO)
+                    .then(|| (segment.clone(), section.clone(), kind, macho_flags.0));
+                let section = self.object.add_section(segment, section, kind);
+
+                match self.object.section_flags_mut(section) {
+                    SectionFlags::MachO { flags, .. } => {
+                        // There are no default flags for the `SectionKind`s that
+                        // we've specified above, so it's fine to override.
+                        //
+                        // (If we don't want to override, we'll have to be careful
+                        // with how we set these, to ensure we set the section
+                        // type properly).
+                        assert_eq!(flags.0, 0);
+                        *flags = macho_flags;
+                    }
+                    _ => {
+                        if macho_flags.0 != 0 {
+                            unreachable!(
+                                "unsupported Mach-O flags for this platform: {macho_flags:?}"
+                            );
+                        }
                     }
                 }
-            }
 
-            section
+                if let Some(key) = macho_key {
+                    self.macho_custom_sections.insert(key, section);
+                }
+                section
+            }
         };
 
         let align = std::cmp::max(align.unwrap_or(1), self.isa.symbol_alignment());
