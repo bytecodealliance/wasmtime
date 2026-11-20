@@ -45,7 +45,7 @@ pub(crate) struct FreeList {
 /// Our minimum and maximum supported alignment. Every allocation is aligned to
 /// this. Additionally, this is the minimum allocation size, and every
 /// allocation is rounded up to this size.
-const ALIGN_U32: u32 = 16;
+pub(crate) const ALIGN_U32: u32 = 16;
 const ALIGN_USIZE: usize = ALIGN_U32 as usize;
 
 impl FreeList {
