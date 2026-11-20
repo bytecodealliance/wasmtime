@@ -3139,6 +3139,10 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
                 // Update the remaining count, falling through to break out if it's zero
                 // now.
+                //
+                // FIXME(#4311): needs memory64 treatment, `remaining` is an
+                // i32 but this uses pointer-width instructions for a 64-bit
+                // source memory
                 self.instruction(LocalGet(remaining.idx));
                 self.ptr_iconst(src_mem_opts, -1);
                 self.ptr_add(src_mem_opts);

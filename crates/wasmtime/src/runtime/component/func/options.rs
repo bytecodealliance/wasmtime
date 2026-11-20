@@ -202,6 +202,8 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             u32::try_from(new_size)?,
         );
 
+        // FIXME(#4311): needs memory64 treatment, where realloc's signature
+        // uses i64 pointers and sizes
         type ReallocFunc = crate::TypedFunc<(u32, u32, u32, u32), u32>;
 
         // Invoke the wasm malloc function using its raw and statically known
