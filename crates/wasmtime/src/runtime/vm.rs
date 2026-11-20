@@ -192,7 +192,7 @@ pub trait ModuleMemoryImageSource: Send + Sync + 'static {
 ///
 /// This trait should be implemented by nothing other than `StoreInner<T>` in
 /// this crate. It's not sound to implement it for anything else due to
-/// `unchecked_context_mut`, `store_opaque`, and `store_opaque_mut` below, which
+/// `unchecked_context_mut` and the `Deref`/`DerefMut` impls below, which
 /// cast the data pointer of a `dyn VMStore` to a `StoreInner<T>` or to its
 /// first field, a `StoreOpaque`.
 ///
@@ -233,21 +233,8 @@ pub unsafe trait VMStore: 'static {
 impl Deref for dyn VMStore + '_ {
     type Target = StoreOpaque;
 
-    fn deref(&self) -> &Self::Target {
-        self.store_opaque()
-    }
-}
-
-impl DerefMut for dyn VMStore + '_ {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.store_opaque_mut()
-    }
-}
-
-impl dyn VMStore + '_ {
-    /// Get a shared borrow of this store's `StoreOpaque`.
     #[inline]
-    pub fn store_opaque(&self) -> &StoreOpaque {
+    fn deref(&self) -> &Self::Target {
         // This is a pointer cast rather than a trait method so that
         // it doesn't require a virtual call, which matters on hot
         // paths such as libcalls.
@@ -260,16 +247,17 @@ impl dyn VMStore + '_ {
         // provenance over the whole `StoreInner<T>`.
         unsafe { &*(self as *const dyn VMStore as *const StoreOpaque) }
     }
+}
 
-    /// Get an exclusive borrow of this store's `StoreOpaque`.
-    ///
-    /// See `store_opaque` for why this is a cast.
+impl DerefMut for dyn VMStore + '_ {
     #[inline]
-    pub fn store_opaque_mut(&mut self) -> &mut StoreOpaque {
-        // SAFETY: see `store_opaque` above.
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // SAFETY: see `deref` above.
         unsafe { &mut *(self as *mut dyn VMStore as *mut StoreOpaque) }
     }
+}
 
+impl dyn VMStore + '_ {
     /// Asserts that this `VMStore` was originally paired with `StoreInner<T>`
     /// and then casts to the `StoreContextMut` type.
     ///

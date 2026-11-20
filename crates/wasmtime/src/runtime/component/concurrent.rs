@@ -1074,11 +1074,7 @@ fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
                             "event for {:?} on {set:?} no longer present; waiting again",
                             call.thread
                         );
-                        return instance.wait_with_callback(
-                            store.store_opaque_mut(),
-                            call.thread,
-                            set,
-                        );
+                        return instance.wait_with_callback(&mut **store, call.thread, set);
                     }
                     // When a thread yields it doesn't wait on a set and the
                     // event to be delivered isn't stored anywhere, and this is
@@ -3089,7 +3085,7 @@ impl Instance {
         store.set_thread(old_thread)?;
         log::trace!("callback-lifted call: restored {old_thread:?} as current thread");
 
-        let store = store.store_opaque_mut();
+        let store = &mut **store;
         let (code, set) = unpack_callback_code(code);
 
         log::trace!("received callback code from {guest_thread:?}: {code} (set: {set})");

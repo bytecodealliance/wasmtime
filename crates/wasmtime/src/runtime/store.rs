@@ -242,7 +242,7 @@ impl CallHook {
 ///
 /// This is `#[repr(C)]` with `inner` as its first field so that a `dyn VMStore`
 /// (which is always a `StoreInner<T>`) can be cast directly to its
-/// `StoreOpaque` without a virtual call; see `<dyn VMStore>::store_opaque`.
+/// `StoreOpaque` without a virtual call; see the `Deref` impl for `dyn VMStore`.
 #[repr(C)]
 pub struct StoreInner<T: 'static> {
     /// Generic metadata about the store that doesn't need access to `T`.
@@ -429,14 +429,6 @@ pub enum UpdateDeadline {
 }
 
 // Forward methods on `StoreOpaque` to also being on `StoreInner<T>`
-impl<T> StoreInner<T> {
-    /// Get an exclusive borrow of this store's `StoreOpaque`.
-    #[inline]
-    pub(crate) fn store_opaque_mut(&mut self) -> &mut StoreOpaque {
-        &mut self.inner
-    }
-}
-
 impl<T> Deref for StoreInner<T> {
     type Target = StoreOpaque;
     fn deref(&self) -> &Self::Target {

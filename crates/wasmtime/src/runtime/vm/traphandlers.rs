@@ -149,7 +149,7 @@ where
     R: HostResult,
 {
     // Wasm has called out to the host.
-    store.store_opaque_mut().on_wasm_to_host_transition();
+    store.on_wasm_to_host_transition();
 
     // Invoke the closure `f`, optionally catching unwinds depending on `R`. The
     // return value is always provided and if unwind information is provided
