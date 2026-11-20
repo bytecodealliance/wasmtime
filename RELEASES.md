@@ -1,6 +1,6 @@
 ## 51.0.0
 
-Unreleased.
+Released 2026-11-20.
 
 ### Added
 
