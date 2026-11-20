@@ -654,6 +654,79 @@
 (rule (apply_div_const_magic_s64_finish (Opcode.Sdiv) _numerator _divisor qf)
       qf)
 
+;;;;;; Divisibility-By-Constant Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Whether the result is used only in equality/inequality tests against zero.
+;; Uses are recorded at the start of each pass. Only query this for the
+;; skeleton instruction currently being rewritten.
+(decl pure remainder_zero_tests (Inst) bool)
+(extern constructor remainder_zero_tests remainder_zero_tests)
+
+;; The magic constructors require a non-zero divisor. They may only be used
+;; where the optimization guarantees or checks that precondition. See
+;; `cranelift/codegen/src/opts/div_const.rs` for how they are computed.
+(type DivConstTestMagic (enum (Test (mul_by u64)
+                                    (bias u64)
+                                    (threshold u64)
+                                    (shift_by u32))))
+
+(decl div_const_test_u32 (u32) DivConstTestMagic)
+(extern constructor div_const_test_u32 div_const_test_u32)
+
+(decl div_const_test_u64 (u64) DivConstTestMagic)
+(extern constructor div_const_test_u64 div_const_test_u64)
+
+(decl div_const_test_s32 (i32) DivConstTestMagic)
+(extern constructor div_const_test_s32 div_const_test_s32)
+
+(decl div_const_test_s64 (i64) DivConstTestMagic)
+(extern constructor div_const_test_s64 div_const_test_s64)
+
+;; For odd divisors, multiplication by the modular inverse maps multiples
+;; into [0, threshold]. For even divisors, rotating the product folds the
+;; low-bit test into the same comparison.
+(decl apply_div_const_test_u (Type IntCC Value DivConstTestMagic) Value)
+(rule 2 (apply_div_const_test_u ty cc x
+                               (DivConstTestMagic.Test mul_by _bias threshold 0))
+      (let ((prod Value (imul ty x (iconst_u ty mul_by))))
+        (apply_div_const_test_cmp ty cc prod threshold)))
+(rule 1 (apply_div_const_test_u ty cc x
+                               (DivConstTestMagic.Test mul_by _bias threshold (u32_extract_non_zero shift_by)))
+      (let ((prod Value (imul ty x (iconst_u ty mul_by)))
+            (rotated Value (rotr ty prod (iconst_u ty (u32_into_u64 shift_by)))))
+        (apply_div_const_test_cmp ty cc rotated threshold)))
+
+;; The bias moves negative multiples into the same range as positive ones.
+;; Check the low bits separately because the bias changes them.
+(decl apply_div_const_test_s (Type IntCC Value DivConstTestMagic) Value)
+(rule 2 (apply_div_const_test_s ty cc x
+                               (DivConstTestMagic.Test mul_by bias threshold 0))
+      (let ((prod Value (imul ty x (iconst_u ty mul_by)))
+            (biased Value (iadd ty prod (iconst_u ty bias))))
+        (apply_div_const_test_cmp ty cc biased threshold)))
+(rule 1 (apply_div_const_test_s ty cc x
+                               (DivConstTestMagic.Test mul_by bias threshold (u32_extract_non_zero shift_by)))
+      (let ((prod Value (imul ty x (iconst_u ty mul_by)))
+            (biased Value (iadd ty prod (iconst_u ty bias)))
+            (mask Value (iconst_u ty (u64_sub (u64_shl 1 shift_by) 1)))
+            (low Value (band ty x mask))
+            (test Value (apply_div_const_test_cmp ty cc biased threshold))
+            (low_is_zero Value (icmp ty cc low (iconst_u ty 0))))
+        (apply_div_const_test_combine cc test low_is_zero)))
+
+;; Compare the transformed value with the divisibility threshold.
+(decl apply_div_const_test_cmp (Type IntCC Value u64) Value)
+(rule (apply_div_const_test_cmp ty (IntCC.Equal) val threshold)
+      (icmp ty (IntCC.UnsignedLessThanOrEqual) val (iconst_u ty threshold)))
+(rule (apply_div_const_test_cmp ty (IntCC.NotEqual) val threshold)
+      (icmp ty (IntCC.UnsignedGreaterThan) val (iconst_u ty threshold)))
+
+;; Both halves of a signed test have to hold for `==`, and either one failing is
+;; enough for `!=`.
+(decl apply_div_const_test_combine (IntCC Value Value) Value)
+(rule (apply_div_const_test_combine (IntCC.Equal) a b) (band $I8 a b))
+(rule (apply_div_const_test_combine (IntCC.NotEqual) a b) (bor $I8 a b))
+
 (model Inst (type (bv)))
 (model ValueArray2 (type (bv)))
 (model ValueArray3 (type (bv)))
