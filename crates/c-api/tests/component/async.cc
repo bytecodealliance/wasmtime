@@ -182,4 +182,103 @@ TEST(component_async, host_func_async) {
   EXPECT_EQ(results[0].get_u32(), 69);
 }
 
+TEST(component_async, host_func_async_args_live_until_continuation_done) {
+  static constexpr auto component_text = std::string_view{
+      R"END(
+(component
+    (import "len" (func $len (param "s" string) (result u32)))
+    (core module $libc (memory (export "memory") 1))
+    (core instance $libc (instantiate $libc))
+    (core func $len_lower (canon lower (func $len) (memory (core memory $libc "memory"))))
+    (core module $m
+        (import "libc" "memory" (memory 1))
+        (import "host" "len" (func $len (param i32 i32) (result i32)))
+        (data (i32.const 100) "a string argument passed to an async host function")
+        (func (export "f") (result i32)
+            (call $len (i32.const 100) (i32.const 50))
+        )
+    )
+    (core instance $i (instantiate $m
+        (with "libc" (instance $libc))
+        (with "host" (instance (export "len" (func $len_lower))))
+    ))
+    (func $f (result u32) (canon lift (core func $i "f")))
+    (export "f" (func $f))
+)
+      )END",
+  };
+
+  Engine engine;
+  Store store(engine);
+  auto context = store.context();
+  auto component = Component::compile(engine, component_text).unwrap();
+  auto f = *component.export_index(nullptr, "f");
+
+  Linker linker(engine);
+  auto *root = wasmtime_component_linker_root(linker.capi());
+
+  // The callback does nothing itself: the continuation reads `ty` and `args`
+  // and writes `results`, after being polled a few times.
+  struct State {
+    const wasmtime_component_func_type_t *ty;
+    wasmtime_component_val_t *args;
+    wasmtime_component_val_t *results;
+    int polls;
+  };
+
+  wasmtime_component_func_async_callback_t callback =
+      [](void *, wasmtime_context_t *, const wasmtime_component_func_type_t *ty,
+         wasmtime_component_val_t *args, size_t,
+         wasmtime_component_val_t *results, size_t, wasmtime_error_t **,
+         wasmtime_async_continuation_t *cont) {
+        cont->env = new State{ty, args, results, 0};
+        cont->finalizer = [](void *env) { delete static_cast<State *>(env); };
+        cont->callback = [](void *env) -> bool {
+          auto *state = static_cast<State *>(env);
+          if (state->polls++ < 3) {
+            return false;
+          }
+          EXPECT_EQ(state->args[0].kind, WASMTIME_COMPONENT_STRING);
+          std::string_view s(state->args[0].of.string.data,
+                             state->args[0].of.string.size);
+          EXPECT_EQ(s, "a string argument passed to an async host function");
+          EXPECT_EQ(wasmtime_component_func_type_param_count(state->ty), 1);
+          state->results[0].kind = WASMTIME_COMPONENT_U32;
+          state->results[0].of.u32 = s.size();
+          return true;
+        };
+      };
+
+  auto *err = wasmtime_component_linker_instance_add_func_async(
+      root, "len", 3, callback, nullptr, nullptr);
+  EXPECT_EQ(err, nullptr);
+  wasmtime_component_linker_instance_delete(root);
+
+  wasmtime_component_instance_t raw_instance;
+  wasmtime_error_t *inst_error = nullptr;
+  auto *inst_future = wasmtime_component_linker_instantiate_async(
+      linker.capi(), context.capi(), component.capi(), &raw_instance,
+      &inst_error);
+  while (!wasmtime_call_future_poll(inst_future)) {
+  }
+  wasmtime_call_future_delete(inst_future);
+  EXPECT_EQ(inst_error, nullptr);
+
+  auto instance = Instance(raw_instance);
+  auto func = *instance.get_func(context, f);
+  auto results = std::array<Val, 1>{false};
+
+  wasmtime_error_t *error = nullptr;
+  auto *future = wasmtime_component_func_call_async(
+      func.capi(), context.capi(), nullptr, 0, Val::to_capi(results.data()),
+      results.size(), &error);
+  while (!wasmtime_call_future_poll(future)) {
+  }
+  wasmtime_call_future_delete(future);
+
+  EXPECT_EQ(error, nullptr);
+  EXPECT_TRUE(results[0].is_u32());
+  EXPECT_EQ(results[0].get_u32(), 50);
+}
+
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
