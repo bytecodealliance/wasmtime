@@ -118,8 +118,8 @@ fn colon_symlinks() {
     // Creating a symlink whose link name contains a colon is rejected.
     for path in PATHS {
         assert!(
-            p::symlink_file(Path::new("file"), &start, Path::new(path)).is_err(),
-            "symlink_file link {path:?}"
+            p::symlink(Path::new("file"), &start, Path::new(path)).is_err(),
+            "symlink link {path:?}"
         );
     }
 
@@ -131,7 +131,7 @@ fn colon_symlinks() {
     {
         let guest = format!("guest_link{i}");
         let host = format!("host_link{i}");
-        let _ = p::symlink_file(Path::new(target), &start, Path::new(&guest));
+        let _ = p::symlink(Path::new(target), &start, Path::new(&guest));
         check!(std::os::windows::fs::symlink_file(
             target,
             tmpdir.path().join(&host)
