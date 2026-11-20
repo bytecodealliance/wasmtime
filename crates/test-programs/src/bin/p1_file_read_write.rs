@@ -202,6 +202,64 @@ unsafe fn test_file_write_and_file_pos(dir_fd: wasip1::Fd, blocking_mode: Blocki
     wasip1::path_unlink_file(dir_fd, path).expect("removing a file");
 }
 
+// Interleaving reads and writes on one fd must observe the shared file
+// offset, not a stale cached stream.
+unsafe fn test_file_read_write_interleaved(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
+    let file_fd = wasip1::path_open(
+        dir_fd,
+        0,
+        "file3",
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
+        0,
+        blocking_mode.fd_flags(),
+    )
+    .expect("opening a file");
+
+    let write = |bytes: &[u8]| {
+        let ciovec = wasip1::Ciovec {
+            buf: bytes.as_ptr(),
+            buf_len: bytes.len(),
+        };
+        let n = blocking_mode.write(file_fd, &[ciovec]).expect("write");
+        assert_eq!(n, bytes.len());
+    };
+    let read = |len: usize| -> Vec<u8> {
+        let mut buf = vec![0u8; len];
+        let iovec = wasip1::Iovec {
+            buf: buf.as_mut_ptr(),
+            buf_len: len,
+        };
+        let n = blocking_mode.read(file_fd, &[iovec]).expect("read");
+        buf.truncate(n);
+        buf
+    };
+
+    write(b"abcd");
+
+    // read -> write -> read: second read must see offset 2, not the byte just written.
+    wasip1::fd_seek(file_fd, 0, wasip1::WHENCE_SET).unwrap();
+    assert_eq!(read(1), b"a");
+    write(b"A");
+    assert_eq!(read(1), b"c", "read after write returned a stale byte");
+
+    // write -> read -> write: second write must land at offset 2.
+    wasip1::fd_seek(file_fd, 0, wasip1::WHENCE_SET).unwrap();
+    write(b"W");
+    assert_eq!(read(1), b"A");
+    write(b"Z");
+
+    wasip1::fd_seek(file_fd, 0, wasip1::WHENCE_SET).unwrap();
+    assert_eq!(
+        read(4),
+        b"WAZd",
+        "write after read landed at the wrong offset"
+    );
+
+    wasip1::fd_close(file_fd).expect("closing a file");
+    wasip1::path_unlink_file(dir_fd, "file3").expect("removing a file");
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -227,5 +285,7 @@ fn main() {
         test_file_read_write(dir_fd, BlockingMode::NonBlocking);
         test_file_write_and_file_pos(dir_fd, BlockingMode::Blocking);
         test_file_write_and_file_pos(dir_fd, BlockingMode::NonBlocking);
+        test_file_read_write_interleaved(dir_fd, BlockingMode::Blocking);
+        test_file_read_write_interleaved(dir_fd, BlockingMode::NonBlocking);
     }
 }
