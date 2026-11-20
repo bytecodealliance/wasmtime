@@ -341,7 +341,7 @@ fn test_trap_stack_overflow_before_frame_setup(config: &mut Config) -> Result<()
         "#
     );
 
-    config.max_wasm_stack(1024);
+    config.max_wasm_stack(8192);
     config.wasm_backtrace_max_frames(NonZeroUsize::new(1000));
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wat)?;
@@ -354,7 +354,7 @@ fn test_trap_stack_overflow_before_frame_setup(config: &mut Config) -> Result<()
     // backtrace. Once `$rec` overflows at some depth, every deeper call traps
     // in that same `$rec` prologue and has the same number of `$rec` frames.
     let mut rec_limit = None;
-    for n in 0..100 {
+    for n in 0..1000 {
         let Err(e) = rec.call(&mut store, n) else {
             continue;
         };

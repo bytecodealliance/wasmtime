@@ -54,7 +54,7 @@ block0(v0: i64):
 ;   lg %r1, 0(%r2)
 ;   lg %r1, 8(%r1)
 ;   la %r1, 224(%r1)
-;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   clgr %r15, %r1 ; jgle TestCase(%overflow)
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -224
 ;   std %f8, 160(%r15)
@@ -85,8 +85,7 @@ block0(v0: i64):
 ;   lg %r1, 8(%r1)
 ;   la %r1, 0xe0(%r1)
 ;   clgr %r15, %r1
-;   jgh 0x20
-;   jg 0x1a ; reloc_external PLTRel32Dbl %overflow 2
+;   jgle 0x14 ; reloc_external PLTRel32Dbl %overflow 2
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xe0
 ;   std %f8, 0xa0(%r15)
@@ -97,8 +96,8 @@ block0(v0: i64):
 ;   std %f13, 0xc8(%r15)
 ;   std %f14, 0xd0(%r15)
 ;   std %f15, 0xd8(%r15)
-; block1: ; offset 0x4a
-;   bras %r1, 0x56
+; block1: ; offset 0x44
+;   bras %r1, 0x50
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
@@ -131,7 +130,7 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ;   la %r1, 224(%r2)
-;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   clgr %r15, %r1 ; jgle TestCase(%overflow)
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -224
 ;   std %f8, 160(%r15)
@@ -165,8 +164,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0: ; offset 0x0
 ;   la %r1, 0xe0(%r2)
 ;   clgr %r15, %r1
-;   jgh 0x14
-;   jg 0xe ; reloc_external PLTRel32Dbl %overflow 2
+;   jgle 8 ; reloc_external PLTRel32Dbl %overflow 2
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xe0
 ;   std %f8, 0xa0(%r15)
@@ -177,10 +175,10 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   std %f13, 0xc8(%r15)
 ;   std %f14, 0xd0(%r15)
 ;   std %f15, 0xd8(%r15)
-; block1: ; offset 0x3e
+; block1: ; offset 0x38
 ;   lgr %r6, %r4
 ;   lgr %r7, %r3
-;   bras %r1, 0x52
+;   bras %r1, 0x4c
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
@@ -218,7 +216,7 @@ block0(v0: i64):
 ;   lg %r1, 0(%r2)
 ;   lg %r1, 8(%r1)
 ;   la %r1, 168(%r1)
-;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   clgr %r15, %r1 ; jgle TestCase(%overflow)
 ;   aghi %r15, -168
 ; block0:
 ;   aghi %r15, 168
@@ -230,10 +228,9 @@ block0(v0: i64):
 ;   lg %r1, 8(%r1)
 ;   la %r1, 0xa8(%r1)
 ;   clgr %r15, %r1
-;   jgh 0x20
-;   jg 0x1a ; reloc_external PLTRel32Dbl %overflow 2
+;   jgle 0x14 ; reloc_external PLTRel32Dbl %overflow 2
 ;   aghi %r15, -0xa8
-; block1: ; offset 0x24
+; block1: ; offset 0x1e
 ;   aghi %r15, 0xa8
 ;   br %r14
 
@@ -253,9 +250,9 @@ block0(v0: i64):
 ; VCode:
 ;   lg %r1, 0(%r2)
 ;   lg %r1, 8(%r1)
-;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   clgr %r15, %r1 ; jgle TestCase(%overflow)
 ;   lay %r1, 400000(%r1)
-;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   clgr %r15, %r1 ; jgle TestCase(%overflow)
 ;   agfi %r15, -400000
 ; block0:
 ;   agfi %r15, 400000
@@ -266,14 +263,12 @@ block0(v0: i64):
 ;   lg %r1, 0(%r2)
 ;   lg %r1, 8(%r1)
 ;   clgr %r15, %r1
-;   jgh 0x1c
-;   jg 0x16 ; reloc_external PLTRel32Dbl %overflow 2
+;   jgle 0x10 ; reloc_external PLTRel32Dbl %overflow 2
 ;   lay %r1, 0x61a80(%r1)
 ;   clgr %r15, %r1
-;   jgh 0x32
-;   jg 0x2c ; reloc_external PLTRel32Dbl %overflow 2
+;   jgle 0x20 ; reloc_external PLTRel32Dbl %overflow 2
 ;   agfi %r15, -0x61a80
-; block1: ; offset 0x38
+; block1: ; offset 0x2c
 ;   agfi %r15, 0x61a80
 ;   br %r14
 
@@ -297,7 +292,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   lg %r1, 0(%r2)
 ;   lg %r1, 8(%r1)
 ;   la %r1, 208(%r1)
-;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   clgr %r15, %r1 ; jgle TestCase(%overflow)
 ;   aghi %r15, -8
 ; block0:
 ;   lg %r2, 200(%r15)
@@ -314,10 +309,9 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   lg %r1, 8(%r1)
 ;   la %r1, 0xd0(%r1)
 ;   clgr %r15, %r1
-;   jgh 0x20
-;   jg 0x1a ; reloc_external PLTRel32Dbl %overflow 2
+;   jgle 0x14 ; reloc_external PLTRel32Dbl %overflow 2
 ;   aghi %r15, -8
-; block1: ; offset 0x24
+; block1: ; offset 0x1e
 ;   lg %r2, 0xc8(%r15)
 ;   agrk %r6, %r3, %r2
 ;   la %r7, 0(%r15)
@@ -325,7 +319,6 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   lg %r2, 0(%r7) ; trap: heap_oob
 ;   aghi %r15, 0xd0
 ;   br %r14
-
 
 ;; Many return values: the implicit return-area pointer must not perturb the
 ;; location of the vmctx argument that the handler receives.
@@ -345,7 +338,7 @@ block0(v0: i64):
 ;   lg %r1, 0(%r2)
 ;   lg %r1, 8(%r1)
 ;   la %r1, 224(%r1)
-;   clgr %r15, %r1 ; jgh 0f ; jg TestCase(%overflow) ; 0:
+;   clgr %r15, %r1 ; jgle TestCase(%overflow)
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -224
 ;   std %f8, 160(%r15)
@@ -390,8 +383,7 @@ block0(v0: i64):
 ;   lg %r1, 8(%r1)
 ;   la %r1, 0xe0(%r1)
 ;   clgr %r15, %r1
-;   jgh 0x20
-;   jg 0x1a ; reloc_external PLTRel32Dbl %overflow 2
+;   jgle 0x14 ; reloc_external PLTRel32Dbl %overflow 2
 ;   stmg %r14, %r15, 0x70(%r15)
 ;   aghi %r15, -0xe0
 ;   std %f8, 0xa0(%r15)
@@ -402,10 +394,10 @@ block0(v0: i64):
 ;   std %f13, 0xc8(%r15)
 ;   std %f14, 0xd0(%r15)
 ;   std %f15, 0xd8(%r15)
-; block1: ; offset 0x4a
+; block1: ; offset 0x44
 ;   lgr %r6, %r3
 ;   lgr %r7, %r2
-;   bras %r1, 0x5e
+;   bras %r1, 0x58
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00

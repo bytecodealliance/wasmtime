@@ -3698,7 +3698,7 @@ impl Inst {
             &Inst::StackLimitJump { limit, ref handler } => {
                 let limit = pretty_print_reg(limit);
                 let stack_reg = pretty_print_reg(stack_reg());
-                format!("clgr {stack_reg}, {limit} ; jgh 0f ; jg {handler:?} ; 0:")
+                format!("clgr {stack_reg}, {limit} ; jgle {handler:?}")
             }
             &Inst::StackProbeLoop {
                 probe_count,

@@ -18,8 +18,7 @@
 ;;       lg      %r1, 0x10(%r1)
 ;;       la      %r1, 0xa0(%r1)
 ;;       clgr    %r15, %r1
-;;       jgh     0x20
-;;       jg      0x218
+;;       jgle    0x20c
 ;;       stmg    %r14, %r15, 0x70(%r15)
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
@@ -32,8 +31,7 @@
 ;;       lg      %r1, 0x10(%r1)
 ;;       la      %r1, 0xa0(%r1)
 ;;       clgr    %r15, %r1
-;;       jgh     0x5c
-;;       jg      0x218
+;;       jgle    0x20c
 ;;       stmg    %r8, %r15, 0x40(%r15)
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
