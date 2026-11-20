@@ -8,6 +8,56 @@ Wasmtime and Cranelift are very ambitious projects with many goals, and while
 we're confident we can achieve some of them, we see many opportunities for
 people to get involved and help us achieve even more.
 
+## AI Tool Use Policy
+
+The Bytecode Alliance has an [AI Tool Use
+Policy](https://github.com/bytecodealliance/governance/blob/main/AI_TOOL_POLICY.md)
+that applies to the Wasmtime project. Please read and understand this policy
+before making any contributions.
+
+## Approved Contributors
+
+The Wasmtime project has adopted [home-grown automation] that closes PRs
+opened by unknown contributors. This automation was reluctantly adopted by
+Wasmtime project maintainers to stem the flood of AI-generated PRs that have
+made outsize demands on the limited time and energy we have for code review.
+
+The Wasmtime project maintainers believe the most important thing our project
+creates is a community of humans who understand the Wasmtime project's code,
+the project's goals, and the context the project exists in for embedders and
+users. The code in the Wasmtime repository is second in importance behind that
+community. Wasmtime's community has continuity back to 2017, and fostering
+this community was a major reason the [Bytecode Alliance] was created.
+
+We have always welcomed humans to join the Wasmtime project's community.
+However, with the advent of AI tools, we can no longer assume that opening a
+PR means there is a human behind it. Unfortunately, a large and growing
+portion of the PRs opened in 2026 have been [extractive contributions], which
+cost our maintainers time and energy, and diminish our community. The
+project's maintainers all have numerous responsibilities besides reviewing
+PRs, so we want to focus our time and energy on reviewing PRs from people who
+demonstrate they have thought about our project.
+
+If you are a human who would like to contribute to Wasmtime, we're asking that
+you start a conversation in a suitable channel of the [Bytecode Alliance Zulip]
+and describe your goals and what sort of contribution you'd like to make. When
+doing so, please don't use any kind of AI-generated text. (Using an AI tool to
+translate from another language to English is allowed, but only if you are
+writing the original text yourself.) We don't want this to be a super high bar
+for anyone to clear, just demonstrate to us that you are putting the sort of
+mental effort into understanding our project and your contribution that we
+could take for granted when receiving a PR in the pre-AI era.
+
+Once you have engaged with the Wasmtime community on Zulip and a maintainer has
+asked you to open a PR, that maintainer can leave a `/vouch` comment on the PR,
+which will have our automation re-open your PR (if it was closed) and add
+you to our approved contributor allowlist.
+
+[home-grown automation]: https://github.com/bytecodealliance/approved-contributors
+[Bytecode Alliance]: https://bytecodealliance.org
+[extractive contributions]: https://github.com/bytecodealliance/governance/blob/main/AI_TOOL_POLICY.md#extractive-contributions
+[Bytecode Alliance Zulip]: https://bytecodealliance.zulipchat.com/
+
 ## Join Our Chat
 
 We chat about Wasmtime and Cranelift development on Zulip &mdash; [join

@@ -3,6 +3,9 @@
 # Docs: https://gh.io/actions-lockfile
 version: 'v0.0.3'
 workflows:
+    '.github/workflows/approved-contributors.yml':
+        - 'actions/create-github-app-token@v3.4.0'
+        - 'bytecodealliance/approved-contributors@v0.1'
     '.github/workflows/cargo-audit.yml':
         - 'actions/cache@v5.1.0'
         - 'actions/checkout@v7.0.1'
@@ -75,6 +78,11 @@ dependencies:
         commit: 'sha1-45bfe0192ca1faeb007ade9deae92b16b8254a0d'
         owner_id: 44036562
         repo_id: 513659658
+    'actions/create-github-app-token@v3.4.0':
+        ref: 'v3.4.0'
+        commit: 'sha1-f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc'
+        owner_id: 44036562
+        repo_id: 642580244
     'actions/deploy-pages@v5.0.1':
         ref: 'v5.0.1'
         commit: 'sha1-368f82528645a54fb793d4d04e342629a3f51346'
@@ -107,6 +115,11 @@ dependencies:
         repo_id: 496012378
         uses:
             - 'actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f'
+    'bytecodealliance/approved-contributors@v0.1':
+        ref: 'v0.1'
+        commit: 'sha1-db2f6a3f4c171ec6dd8ac92514628e8c674ff3dd'
+        owner_id: 54038801
+        repo_id: 1460662135
     'bytecodealliance/label-messager-action@v1.1.1':
         ref: 'v1.1.1'
         commit: 'sha1-2f83571c7af396405ff3bad7777b187b9dd60f88'
