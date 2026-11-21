@@ -299,7 +299,7 @@ pub fn cont_new(
 /// `CommonStackInformation` object. For continuations, this is stored in
 /// the `common_stack_information` field of the corresponding `VMContRef`.
 /// For the initial stack, the `InitialStack` variant contains a pointer to
-/// a `CommonStackInformation`. The latter will be allocated allocated on
+/// a `CommonStackInformation`. The latter will be allocated on
 /// the stack frame that executed by `invoke_wasm_and_catch_traps`.
 ///
 /// The following invariants hold for these `VMStackLimits` objects,
