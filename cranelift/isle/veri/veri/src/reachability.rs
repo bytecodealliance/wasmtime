@@ -18,7 +18,7 @@ impl Reachability {
         Self { reachable }
     }
 
-    /// Set of terms reachable from the the given source.
+    /// Set of terms reachable from the given source.
     pub fn reachable(&self, source: TermId) -> &HashSet<TermId> {
         &self.reachable[&source]
     }
