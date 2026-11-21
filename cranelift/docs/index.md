@@ -42,7 +42,7 @@
     together.
 
  - [cranelift-object](https://docs.rs/cranelift-object)
-    This crate provides a object-based backend for `cranelift-module`, which
+    This crate provides an object-based backend for `cranelift-module`, which
     emits native object files using the
     [object](https://github.com/gimli-rs/object) library.
 
