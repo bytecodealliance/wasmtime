@@ -247,7 +247,7 @@ pub struct CompiledFunctionBody {
 pub trait Compiler: Send + Sync {
     /// Get this compiler's inliner.
     ///
-    /// Consumers of this trait **must** check for when when this method returns
+    /// Consumers of this trait **must** check for when this method returns
     /// `Some(_)`, and **must** call `InliningCompiler::finish_compiling` on all
     /// `CompiledFunctionBody`s produced by this compiler in that case before
     /// passing the the compiled functions to `Compiler::append_code`, even if
