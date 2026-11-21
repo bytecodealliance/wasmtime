@@ -126,7 +126,7 @@ Then, as an implementation detail of the facade, we emit moves as necessary:
 
 For ISAs with
 ubiquitous use of modified registers and instructions in two-operand form, like
-x86, we implement this with methods methods on the ISA's `MachInst`. For other
+x86, we implement this with methods on the ISA's `MachInst`. For other
 ISAs that are RISCier and where modified registers are pretty rare, such as
 aarch64, we handle the handful of required cases at the
 `inst.isle` layer. Either way, the important thing is that the lowering rules
