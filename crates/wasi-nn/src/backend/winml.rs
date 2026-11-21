@@ -13,7 +13,7 @@ use crate::backend::{
 };
 use crate::wit::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
-use std::{fs::File, io::Read, mem::size_of, path::Path};
+use std::{fs::File, io::Read, path::Path};
 use windows::AI::MachineLearning::{
     ILearningModelFeatureDescriptor, LearningModel, LearningModelBinding, LearningModelDevice,
     LearningModelDeviceKind, LearningModelEvaluationResult, LearningModelSession,
@@ -283,30 +283,18 @@ fn to_inspectable(tensor: &Tensor) -> Result<IInspectable, Error> {
     match tensor.ty {
         // f16 is not official supported by stable version of Rust. https://github.com/rust-lang/rust/issues/116909
         // Therefore we create TensorFloat16Bit from f32 array. https://microsoft.github.io/windows-docs-rs/doc/windows/AI/MachineLearning/struct.TensorFloat16Bit.html#method.CreateFromArray
-        TensorType::Fp16 => unsafe {
-            let data = std::slice::from_raw_parts(
-                tensor.data.as_ptr().cast::<f32>(),
-                tensor.data.len() / size_of::<f32>(),
-            );
-            check_alignment::<f32>(data);
-            TensorFloat16Bit::CreateFromArray(&shape, data)?.cast::<IInspectable>()
-        },
-        TensorType::Fp32 => unsafe {
-            let data = std::slice::from_raw_parts(
-                tensor.data.as_ptr().cast::<f32>(),
-                tensor.data.len() / size_of::<f32>(),
-            );
-            check_alignment::<f32>(data);
-            TensorFloat::CreateFromArray(&shape, data)?.cast::<IInspectable>()
-        },
-        TensorType::I64 => unsafe {
-            let data = std::slice::from_raw_parts(
-                tensor.data.as_ptr().cast::<i64>(),
-                tensor.data.len() / size_of::<i64>(),
-            );
-            check_alignment::<i64>(data);
-            TensorInt64Bit::CreateFromArray(&shape, data)?.cast::<IInspectable>()
-        },
+        TensorType::Fp16 => {
+            let data = bytes_to_vec(&tensor.data, f32::from_le_bytes);
+            TensorFloat16Bit::CreateFromArray(&shape, &data)?.cast::<IInspectable>()
+        }
+        TensorType::Fp32 => {
+            let data = bytes_to_vec(&tensor.data, f32::from_le_bytes);
+            TensorFloat::CreateFromArray(&shape, &data)?.cast::<IInspectable>()
+        }
+        TensorType::I64 => {
+            let data = bytes_to_vec(&tensor.data, i64::from_le_bytes);
+            TensorInt64Bit::CreateFromArray(&shape, &data)?.cast::<IInspectable>()
+        }
         _ => unimplemented!(),
     }
 }
@@ -353,13 +341,12 @@ fn to_tensor(inspectable: IInspectable, tensor_kind: TensorKind) -> Result<Tenso
     Ok(tensor)
 }
 
-fn check_alignment<T>(data: &[T]) {
-    let (prefix, _slice, suffix) = unsafe { data.align_to::<T>() };
-    assert!(
-        prefix.is_empty() && suffix.is_empty(),
-        "Data is not aligned to {:?}'s alignment",
-        std::any::type_name::<T>()
-    );
+// Decode little-endian tensor bytes into `T`s. The tensor data is a byte
+// buffer with no alignment guarantee, so it cannot be reinterpreted in place.
+fn bytes_to_vec<T, const N: usize>(data: &[u8], from_le_bytes: fn([u8; N]) -> T) -> Vec<T> {
+    data.chunks_exact(N)
+        .map(|c| from_le_bytes(c.try_into().unwrap()))
+        .collect()
 }
 
 #[cfg(test)]
