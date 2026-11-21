@@ -218,7 +218,7 @@ impl VMGcObjectData {
         Ok(())
     }
 
-    /// Copy within this this object's data.
+    /// Copy within this object's data.
     ///
     /// Note that GC data is always stored in little-endian order, and this
     /// method does not do any conversions to/from host endianness for you.
