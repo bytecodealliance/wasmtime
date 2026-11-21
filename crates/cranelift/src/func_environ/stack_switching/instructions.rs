@@ -1400,7 +1400,7 @@ pub fn vmctx_set_active_continuation<'a>(
 /// trap(unhandled_tag)
 ///
 /// on_match(conref : VMContRef, handler_index : u32)
-/// ... execution continues here here ...
+/// ... execution continues here ...
 ///
 fn search_handler<'a>(
     env: &mut crate::func_environ::FuncEnvironment<'a>,
