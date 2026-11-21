@@ -163,7 +163,7 @@ macro_rules! for_each_vm_type {
                 /// module will not have a trampoline for it. This is actually okay, because
                 /// it means that the Wasm cannot actually call this function. But it does
                 /// mean that this field needs to be an `Option` even though it is non-null
-                /// the vast vast vast majority of the time.
+                /// the vast majority of the time.
                 ///
                 /// Once a `VMFuncRef` is exposed to compiled code this field
                 /// never changes again, so accesses of it are `readonly`. It is
