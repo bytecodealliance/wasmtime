@@ -694,8 +694,7 @@ impl Component {
     ///     )
     /// "#)?;
     ///
-    /// let resources = component.resources_required()
-    ///     .expect("this component does not import any core modules or instances");
+    /// let resources = component.resources_required();
     ///
     /// // Instantiating the component will require allocating two memories per
     /// // core instance, and there are three instances, so six total memories.
@@ -707,14 +706,14 @@ impl Component {
     /// assert_eq!(resources.max_initial_table_size, None);
     /// # Ok(()) }
     /// ```
-    #[allow(
-        dead_code,
-        reason = "temporarily demonstrate this is not currently used"
-    )]
-    fn resources_required(&self) -> Option<ResourcesRequired> {
-        // let get_module = |index| self.static_module(index).env_module().as_ref();
-        // self.env_component().resources_required(&get_module)
-        todo!("we will come back to this")
+    pub fn resources_required(&self) -> ResourcesRequired {
+        // We skip calculating the aggregate size of core wasm modules.
+        let skip = |_module: &wasmtime_environ::Module| 0_usize;
+        let get_module = |index| self.static_module(index).env_module().as_ref();
+
+        self.env_component()
+            .resources_required(&get_module, &skip)
+            .module_resources
     }
 
     /// Returns the range, in the host's address space, that this module's
