@@ -51,7 +51,7 @@ The current cache is also published as the `isle-veri-cache.tar.gz` asset on
 the rolling
 [`dev` release](https://github.com/bytecodealliance/wasmtime/releases/tag/dev)
 for local use: the "ISLE verifier full check" job in the CI workflow
-([`.github/workflows/main.yml`](../../.github/workflows/main.yml)) uploads the
+([`.github/workflows/main.yml`](../../../.github/workflows/main.yml)) uploads the
 rebuilt cache as a run artifact, and the
 [`publish-artifacts.yml`](../../.github/workflows/publish-artifacts.yml)
 workflow publishes it to the `dev` release when the run lands on `main`. The
