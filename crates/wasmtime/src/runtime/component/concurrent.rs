@@ -1074,11 +1074,7 @@ fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
                             "event for {:?} on {set:?} no longer present; waiting again",
                             call.thread
                         );
-                        return instance.wait_with_callback(
-                            store.store_opaque_mut(),
-                            call.thread,
-                            set,
-                        );
+                        return instance.wait_with_callback(&mut **store, call.thread, set);
                     }
                     // When a thread yields it doesn't wait on a set and the
                     // event to be delivered isn't stored anywhere, and this is
@@ -1164,6 +1160,12 @@ impl<T> Store<T> {
         self.as_context_mut().concurrent_state_table_size()
     }
 
+    #[doc(hidden)]
+    pub fn set_max_concurrent_state_table_capacity(&mut self, max: usize) {
+        self.as_context_mut()
+            .set_max_concurrent_state_table_capacity(max)
+    }
+
     /// Convenience wrapper for [`StoreContextMut::spawn`].
     pub fn spawn(
         &mut self,
@@ -1218,6 +1220,20 @@ impl<T> StoreContextMut<'_, T> {
     #[doc(hidden)]
     pub fn concurrent_state_table_size(&mut self) -> usize {
         self.0.concurrent_state_mut().unwrap().table.get_mut().len()
+    }
+
+    /// Helper function to set the maximum size of the table used to store
+    /// e.g. tasks, threads, waitables, etc.
+    ///
+    /// This is currently only intended for use in Wasmtime's own testing, but
+    /// could potentially be made part of the official public API if desired.
+    #[doc(hidden)]
+    pub fn set_max_concurrent_state_table_capacity(&mut self, max: usize) {
+        self.0
+            .concurrent_state_mut_without_forcing_current_thread()
+            .table
+            .get_mut()
+            .set_max_capacity(max);
     }
 
     /// Spawn a background task to run as part of this instance's event loop.
@@ -1366,6 +1382,13 @@ impl<T> StoreContextMut<'_, T> {
     ) -> Result<R> {
         debug_assert!(self.0.concurrency_support());
         self.0.check_event_loop_not_running()?;
+
+        // Deferred host tasks are generally not expected when running an event
+        // loop itself. This only happens in odd situations like manually
+        // calling `poll` in a sync host function, but nevertheless just put
+        // things into a defined state for the event loop itself.
+        self.0.concurrent_state_mut()?.materialize_host_task()?;
+
         let token = StoreToken::new(self.as_context_mut());
 
         struct Dropper<'a, T: 'static, V> {
@@ -3069,7 +3092,7 @@ impl Instance {
         store.set_thread(old_thread)?;
         log::trace!("callback-lifted call: restored {old_thread:?} as current thread");
 
-        let store = store.store_opaque_mut();
+        let store = &mut **store;
         let (code, set) = unpack_callback_code(code);
 
         log::trace!("received callback code from {guest_thread:?}: {code} (set: {set})");
@@ -3455,7 +3478,12 @@ impl Instance {
                 },
             },
             if host_caller {
-                Priority::High
+                // We put host-initiated calls in the low priority queue so that
+                // they're in line behind any existing, yielding tasks.  This
+                // helps avoid starvation situations when the host is making new
+                // calls faster than old ones can complete.  See issue #14769
+                // for an example.
+                Priority::Low
             } else {
                 Priority::Switch
             },
@@ -6144,6 +6172,10 @@ impl From<TableId<HostTask>> for CurrentThread {
 
 enum Priority {
     Switch,
+    #[expect(
+        dead_code,
+        reason = "Here for completeness and in case we need it later"
+    )]
     High,
     Low,
 }

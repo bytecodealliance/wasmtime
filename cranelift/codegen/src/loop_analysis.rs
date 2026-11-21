@@ -11,6 +11,7 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{Block, Function};
 use crate::packed_option::PackedOption;
 use crate::timing;
+use crate::traversals::Event;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
 
@@ -33,6 +34,10 @@ struct LoopData {
     header: Block,
     parent: PackedOption<Loop>,
     level: LoopLevel,
+    /// Position assigned when a depth-first traversal enters this loop.
+    preorder: u32,
+    /// First position after this loop and all its descendants.
+    subtree_end: u32,
 }
 
 /// A level in a loop nest.
@@ -83,6 +88,8 @@ impl LoopData {
             header,
             parent: parent.into(),
             level: LoopLevel::invalid(),
+            preorder: 0,
+            subtree_end: 0,
         }
     }
 }
@@ -142,7 +149,7 @@ impl LoopAnalysis {
             .filter(|&lp| self.loop_header(lp) == block)
     }
 
-    /// Determine if a Block belongs to a loop by running a finger along the loop tree.
+    /// Determine in constant time if a block belongs to a loop.
     ///
     /// Returns `true` if `block` is in loop `lp`.
     pub fn is_in_loop(&self, block: Block, lp: Loop) -> bool {
@@ -153,19 +160,11 @@ impl LoopAnalysis {
         }
     }
 
-    /// Determines if a loop is contained in another loop.
-    ///
-    /// `is_child_loop(child,parent)` returns `true` if and only if `child` is a child loop of
-    /// `parent` (or `child == parent`).
+    /// Returns whether `child` is `parent` or one of its descendants.
     pub fn is_child_loop(&self, child: Loop, parent: Loop) -> bool {
-        let mut finger = Some(child);
-        while let Some(finger_loop) = finger {
-            if finger_loop == parent {
-                return true;
-            }
-            finger = self.loop_parent(finger_loop);
-        }
-        false
+        let child = &self.loops[child];
+        let parent = &self.loops[parent];
+        parent.preorder <= child.preorder && child.preorder < parent.subtree_end
     }
 
     /// Returns the loop-nest level of a given block.
@@ -184,7 +183,7 @@ impl LoopAnalysis {
         self.block_loop_map.resize(func.dfg.num_blocks());
         self.find_loop_headers(cfg, domtree);
         self.discover_loop_blocks(cfg, domtree);
-        self.assign_loop_levels();
+        self.number_loops();
         self.valid = true;
     }
 
@@ -294,24 +293,45 @@ impl LoopAnalysis {
         }
     }
 
-    fn assign_loop_levels(&mut self) {
-        let mut stack: SmallVec<[Loop; 8]> = SmallVec::new();
+    fn number_loops(&mut self) {
+        #[derive(Clone, Copy, Default)]
+        struct Links {
+            first_child: PackedOption<Loop>,
+            next_sibling: PackedOption<Loop>,
+        }
+
+        let mut links: SecondaryMap<Loop, Links> = SecondaryMap::new();
+        links.resize(self.loops.len());
+        let mut stack: SmallVec<[(Event, Loop); 8]> = SmallVec::new();
         for lp in self.loops.keys() {
-            if self.loops[lp].level == LoopLevel::invalid() {
-                stack.push(lp);
-                while let Some(&lp) = stack.last() {
-                    if let Some(parent) = self.loops[lp].parent.into() {
-                        if self.loops[parent].level != LoopLevel::invalid() {
-                            self.loops[lp].level = self.loops[parent].level.inc();
-                            stack.pop();
-                        } else {
-                            stack.push(parent);
-                        }
-                    } else {
-                        self.loops[lp].level = LoopLevel::root().inc();
-                        stack.pop();
+            // In reverse postorder the parent has already been visited.
+            self.loops[lp].level = if let Some(parent) = self.loop_parent(lp) {
+                links[lp].next_sibling = links[parent].first_child;
+                links[parent].first_child = lp.into();
+                self.loops[parent].level.inc()
+            } else {
+                stack.push((Event::Enter, lp));
+                LoopLevel::root().inc()
+            };
+        }
+
+        // Number loops when entering them in the loop forest. On exit, every
+        // descendant has been numbered, so `next` is the exclusive upper bound.
+        let mut next = 0;
+        while let Some((event, lp)) = stack.pop() {
+            match event {
+                Event::Enter => {
+                    self.loops[lp].preorder = next;
+                    next += 1;
+                    if let Some(sibling) = links[lp].next_sibling.expand() {
+                        stack.push((Event::Enter, sibling));
+                    }
+                    stack.push((Event::Exit, lp));
+                    if let Some(child) = links[lp].first_child.expand() {
+                        stack.push((Event::Enter, child));
                     }
                 }
+                Event::Exit => self.loops[lp].subtree_end = next,
             }
         }
     }
@@ -322,9 +342,28 @@ mod tests {
     use crate::cursor::{Cursor, FuncCursor};
     use crate::dominator_tree::DominatorTree;
     use crate::flowgraph::ControlFlowGraph;
-    use crate::ir::{Function, InstBuilder, types};
-    use crate::loop_analysis::{Loop, LoopAnalysis};
+    use crate::ir::{Block, Function, InstBuilder, types};
+    use crate::loop_analysis::{Loop, LoopAnalysis, LoopData};
     use alloc::vec::Vec;
+
+    #[test]
+    fn loop_ranges_with_interleaved_roots() {
+        let mut analysis = LoopAnalysis::new();
+        // CFG reverse postorder can place a different root between a loop and
+        // its child. Each root still needs its own disjoint subtree range.
+        let outer = analysis.loops.push(LoopData::new(Block::from_u32(0), None));
+        let separate = analysis.loops.push(LoopData::new(Block::from_u32(1), None));
+        let inner = analysis
+            .loops
+            .push(LoopData::new(Block::from_u32(2), Some(outer)));
+        analysis.number_loops();
+
+        assert!(analysis.is_child_loop(inner, outer));
+        assert!(analysis.is_child_loop(outer, outer));
+        assert!(!analysis.is_child_loop(outer, inner));
+        assert!(!analysis.is_child_loop(separate, outer));
+        assert!(!analysis.is_child_loop(inner, separate));
+    }
 
     #[test]
     fn nested_loops_detection() {
@@ -450,6 +489,9 @@ mod tests {
         assert_eq!(loop_analysis.is_in_loop(block3, loops[1]), true);
         assert_eq!(loop_analysis.is_in_loop(block4, loops[1]), true);
         assert_eq!(loop_analysis.is_in_loop(block5, loops[0]), true);
+        assert!(!loop_analysis.is_child_loop(loops[1], loops[2]));
+        assert!(!loop_analysis.is_child_loop(loops[2], loops[1]));
+        assert!(!loop_analysis.is_in_loop(block6, loops[0]));
         assert_eq!(loop_analysis.loop_level(block0).level(), 1);
         assert_eq!(loop_analysis.loop_level(block1).level(), 2);
         assert_eq!(loop_analysis.loop_level(block2).level(), 2);

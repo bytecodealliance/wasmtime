@@ -84,7 +84,12 @@ impl From<PoolingAllocationConfig> for InstanceAllocationStrategy {
 #[derive(Clone)]
 /// Configure the strategy used for versioning in serializing and deserializing [`crate::Module`].
 pub enum ModuleVersionStrategy {
-    /// Use the wasmtime crate's Cargo package version.
+    /// Use the wasmtime crate's full Cargo package version, including the
+    /// major, minor, and patch components (e.g. `"50.0.1"`).
+    ///
+    /// This means that, by default, modules serialized by one release of
+    /// Wasmtime can only be deserialized by exactly the same release of
+    /// Wasmtime, including patch releases.
     WasmtimeVersion,
     /// Use a custom version string. Must be at most 255 bytes.
     Custom(String),
@@ -112,7 +117,7 @@ impl ModuleVersionStrategy {
     /// Get the string-encoding version of the module.
     pub fn as_str(&self) -> &str {
         match &self {
-            Self::WasmtimeVersion => env!("CARGO_PKG_VERSION_MAJOR"),
+            Self::WasmtimeVersion => env!("CARGO_PKG_VERSION"),
             Self::Custom(c) => c,
             Self::None => "",
         }
@@ -1476,7 +1481,9 @@ impl Config {
     /// and enables the `map<k, v>` type in WIT and the component binary
     /// format.
     ///
-    /// This is `false` by default.
+    /// The default value for this option is whether the `component-model`
+    /// crate feature of Wasmtime is enabled or not. By default this crate
+    /// feature is enabled.
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_map(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_MAP, enable);
@@ -2331,7 +2338,9 @@ impl Config {
     /// This effects the behavior of [`crate::Module::serialize()`], as well as
     /// [`crate::Module::deserialize()`] and related functions.
     ///
-    /// The default strategy is to use the wasmtime crate's Cargo package version.
+    /// The default strategy is to use the wasmtime crate's full Cargo package
+    /// version (major, minor, and patch), so artifacts are only compatible
+    /// with the exact same release of Wasmtime.
     pub fn module_version(&mut self, strategy: ModuleVersionStrategy) -> Result<&mut Self> {
         match strategy {
             // This case requires special precondition for assertion in SerializedModule::to_bytes
@@ -2724,6 +2733,7 @@ impl Config {
             WasmFeatures::COMPONENT_MODEL,
             cfg!(feature = "component-model"),
         );
+        features.set(WasmFeatures::CM_MAP, cfg!(feature = "component-model"));
         features.set(
             WasmFeatures::CM_ASYNC,
             self.tunables

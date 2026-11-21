@@ -128,6 +128,10 @@ for:
 
 Patch releases are guaranteed to maintain API and behavior
 backwards-compatibility and are intended to be trivial for users to upgrade to.
+Note, however, that precompiled `*.cwasm` artifacts (e.g. from `wasmtime
+compile`, `Module::serialize`, or `Engine::precompile_module`) are tied to the
+exact Wasmtime version, including the patch version, that produced them. Such
+artifacts must be recompiled when upgrading to a new patch release.
 
 The Wasmtime project guarantees backports and patch releases will be made for
 any discovered security issue. Other bug fixes are done on a best-effort basis

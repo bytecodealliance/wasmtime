@@ -8,6 +8,7 @@ pub(crate) fn symlink_unchecked(
     old_path: &Path,
     new_start: &fs::File,
     new_path: &Path,
+    _target_is_dir: impl FnOnce() -> bool,
 ) -> io::Result<()> {
     Ok(symlinkat(old_path, new_start, new_path)?)
 }

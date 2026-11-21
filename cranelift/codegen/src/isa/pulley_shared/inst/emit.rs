@@ -1,7 +1,7 @@
 //! Pulley binary code emission.
 
 use super::*;
-use crate::ir::{self, Endianness};
+use crate::ir::Endianness;
 use crate::isa;
 use crate::isa::pulley_shared::PointerWidth;
 use crate::isa::pulley_shared::abi::PulleyMachineDeps;
@@ -42,17 +42,9 @@ where
 {
     _phantom: PhantomData<P>,
     ctrl_plane: ControlPlane,
-    user_stack_map: Option<ir::UserStackMap>,
+    /// Tracks user stack maps for safepoint instructions.
+    stack_maps: StackMapEmitter<InstAndKind<P>>,
     frame_layout: FrameLayout,
-}
-
-impl<P> EmitState<P>
-where
-    P: PulleyTargetKind,
-{
-    fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
-        self.user_stack_map.take()
-    }
 }
 
 impl<P> MachInstEmitState<InstAndKind<P>> for EmitState<P>
@@ -63,13 +55,13 @@ where
         EmitState {
             _phantom: PhantomData,
             ctrl_plane,
-            user_stack_map: None,
+            stack_maps: StackMapEmitter::default(),
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
-        self.user_stack_map = user_stack_map;
+    fn stack_map_emitter(&mut self) -> &mut StackMapEmitter<InstAndKind<P>> {
+        &mut self.stack_maps
     }
 
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
@@ -188,9 +180,9 @@ fn pulley_emit<P>(
             });
             let end = sink.cur_offset();
             sink.add_reloc_at_offset(end - 4, Reloc::PulleyPcRel, &info.dest.name, 0);
-            if let Some(s) = state.take_stack_map() {
+            if let Some(s) = state.stack_maps.take(sink) {
                 let offset = sink.cur_offset();
-                sink.push_user_stack_map(state, offset, s);
+                state.stack_maps.push(sink, &state.frame_layout, offset, s);
             }
 
             if let Some(try_call) = info.try_call_info.as_ref() {
@@ -235,9 +227,9 @@ fn pulley_emit<P>(
         Inst::IndirectCall { info } => {
             enc::call_indirect(sink, info.dest);
 
-            if let Some(s) = state.take_stack_map() {
+            if let Some(s) = state.stack_maps.take(sink) {
                 let offset = sink.cur_offset();
-                sink.push_user_stack_map(state, offset, s);
+                state.stack_maps.push(sink, &state.frame_layout, offset, s);
             }
 
             if let Some(try_call) = info.try_call_info.as_ref() {
@@ -304,9 +296,9 @@ fn pulley_emit<P>(
             sink.add_reloc(Reloc::PulleyCallIndirectHost, &info.dest, 0);
             enc::call_indirect_host(sink, 0_u8);
 
-            if let Some(s) = state.take_stack_map() {
+            if let Some(s) = state.stack_maps.take(sink) {
                 let offset = sink.cur_offset();
-                sink.push_user_stack_map(state, offset, s);
+                state.stack_maps.push(sink, &state.frame_layout, offset, s);
             }
 
             if let Some(try_call) = info.try_call_info.as_ref() {
@@ -586,7 +578,14 @@ fn pulley_emit<P>(
             *start_offset = sink.cur_offset();
         }
 
-        Inst::Raw { raw } => super::generated::emit(raw, sink),
+        Inst::Raw { raw } => {
+            // `Trap` is a safepoint (see `is_safepoint`), but its stack map,
+            // if any, is not recorded.
+            if let RawInst::Trap { .. } = raw {
+                state.stack_maps.discard();
+            }
+            super::generated::emit(raw, sink)
+        }
 
         Inst::EmitIsland { space_needed } => {
             if sink.island_needed(*space_needed) {

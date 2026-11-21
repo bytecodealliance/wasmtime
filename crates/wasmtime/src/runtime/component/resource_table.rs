@@ -407,6 +407,10 @@ impl<D: DeleteWithTombstone> ResourceTable<D> {
         child: Resource<T>,
         parent: Resource<U>,
     ) -> Result<(), ResourceTableError> {
+        // Verify the parent exists first to ensure that when update the child's
+        // listing it's not pointing to some stale location.
+        self.occupied(parent.rep())?;
+
         let entry = self.occupied_mut(child.rep())?;
         assert!(entry.parent.is_none());
         entry.parent = Some(parent.rep());
@@ -616,6 +620,26 @@ pub fn test_free_list() {
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 2);
     assert_eq!(table.len(), 3);
+}
+
+#[test]
+fn test_add_child_missing_parent() {
+    let mut table = ResourceTable::new();
+    let parent = table.push(()).unwrap();
+    let parent_rep = parent.rep();
+    let child = table.push(1u32).unwrap();
+    let child_rep = child.rep();
+    table.delete(parent).unwrap();
+
+    assert!(matches!(
+        table.add_child(
+            Resource::<u32>::new_own(child_rep),
+            Resource::<()>::new_own(parent_rep),
+        ),
+        Err(ResourceTableError::NotPresent)
+    ));
+    assert_eq!(table.delete(child).unwrap(), 1);
+    assert!(table.is_empty());
 }
 
 #[test]

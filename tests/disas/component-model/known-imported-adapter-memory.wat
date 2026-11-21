@@ -61,10 +61,10 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 25 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+16
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
@@ -77,13 +77,13 @@
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 25 ""
 ;;     region2 = 215 ""
 ;;     region3 = 105 ""
 ;;     region4 = 171 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+16
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -103,10 +103,10 @@
 ;;
 ;; function u1:0(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 25 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+16
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
@@ -119,7 +119,7 @@
 ;;
 ;; function u2:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 25 ""
 ;;     region2 = 42 ""
 ;;     region3 = 75 ""
 ;;     region4 = 215 ""
@@ -127,7 +127,7 @@
 ;;     region6 = 184 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+16
 ;;     sig0 = (i64 vmctx, i64, i32, i32) tail
 ;;     fn0 = colocated u3:0 sig0
 ;;     stack_limit = gv2
@@ -148,7 +148,7 @@
 ;;
 ;; function u3:0(i64 vmctx, i64, i32, i32) tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 25 ""
 ;;     region2 = 57 ""
 ;;     region3 = 209 ""
 ;;     region4 = 42 ""
@@ -159,7 +159,7 @@
 ;;     region9 = 184 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+16
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     sig1 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     fn0 = colocated u0:1 sig1

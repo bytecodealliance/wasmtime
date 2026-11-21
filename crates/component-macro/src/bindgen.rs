@@ -588,6 +588,7 @@ fn parse_function_config(input: ParseStream<'_>) -> Result<FunctionConfig> {
     impl Parse for FunctionConfigSyntax {
         fn parse(input: ParseStream<'_>) -> Result<Self> {
             let l = input.lookahead1();
+            let span = input.span();
             let filter = if l.peek(syn::LitStr) {
                 FunctionFilter::Name(input.parse::<syn::LitStr>()?.value())
             } else if l.peek(Token![default]) {
@@ -628,6 +629,17 @@ fn parse_function_config(input: ParseStream<'_>) -> Result<FunctionConfig> {
                     input.parse::<Token![|]>()?;
                 } else {
                     break;
+                }
+            }
+
+            if let FunctionFilter::Name(name) = &filter {
+                if name.contains("[drop]")
+                    && flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE)
+                {
+                    return Err(Error::new(
+                        span,
+                        "resource destructors cannot be both `async` and `store`",
+                    ));
                 }
             }
 

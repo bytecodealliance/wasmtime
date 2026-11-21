@@ -25,7 +25,7 @@ pub mod limits {
     pub const TABLES_PER_MODULE: u32 = 5;
     pub const COMPONENT_INSTANCES: u32 = 50;
     pub const CORE_INSTANCES: u32 = 900;
-    pub const TABLE_ELEMENTS: usize = 1000;
+    pub const TABLE_ELEMENTS: usize = 10_000;
     pub const CORE_INSTANCE_SIZE: usize = 64 * 1024;
     pub const TOTAL_STACKS: u32 = 20;
 }
@@ -777,6 +777,14 @@ impl WastTest {
         if self
             .path
             .ends_with("component-model/test/async/cancel-instance-wide-resume.wast")
+        {
+            return true;
+        }
+
+        // Temporarily disabled pending https://github.com/WebAssembly/component-model/pull/770
+        if self
+            .path
+            .ends_with("component-model/test/async/during-sync-call-no-sibling-resume.wast")
         {
             return true;
         }
