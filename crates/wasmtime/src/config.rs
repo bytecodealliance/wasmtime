@@ -1852,7 +1852,7 @@ impl Config {
 
     /// Sets a custom stack creator.
     ///
-    /// Custom memory creators are used when creating creating async instance stacks for
+    /// Custom memory creators are used when creating async instance stacks for
     /// the on-demand instance allocation strategy.
     #[cfg(feature = "async")]
     pub fn with_host_stack(&mut self, stack_creator: Arc<dyn StackCreator>) -> &mut Self {
