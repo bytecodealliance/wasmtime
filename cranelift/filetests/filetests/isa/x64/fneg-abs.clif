@@ -1,0 +1,27 @@
+test compile
+set opt_level=speed
+target x86_64
+
+function %neg_abs_f32(f32) -> f32 {
+block0(v0: f32):
+    v1 = fabs v0
+    v2 = fneg v1
+    return v2
+}
+; not: andps
+; not: xorps
+; check: orps
+; not: andps
+; not: xorps
+
+function %neg_abs_f64(f64) -> f64 {
+block0(v0: f64):
+    v1 = fabs v0
+    v2 = fneg v1
+    return v2
+}
+; not: andpd
+; not: xorpd
+; check: orpd
+; not: andpd
+; not: xorpd
