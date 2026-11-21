@@ -63,7 +63,7 @@ automatic and this is documenting what automation does.
    * If enough has changed to be worth testing again, a new release candidate
      can be [triggered manually][ci-trigger] with the release branch selected
      and the `release-rc` argument. This opens a PR bumping to the next `-rc.N`;
-     merging it publishes that candidate and yanks the previous one.
+     merging it publishes that candidate.
 4. On the 20th of every month (same CI job as before) another CI job will run
    performing:
    * Reset to `release-X.0.0`
