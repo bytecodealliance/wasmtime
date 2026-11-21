@@ -403,7 +403,7 @@ In a domain such as instruction selection, we manipulate terms that
 represent computations described by an IR, and the terms are
 eventually rewritten into terms that name specific machine
 instructions. We can think of each term as having a denotational value
-that that *is* that program value. Then, any rewrite is correct if it
+that *is* that program value. Then, any rewrite is correct if it
 preserves the denotational value of the term.
 
 In other words, terms are just values, and rules specify alternative
