@@ -512,43 +512,30 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         offsets: &VMComponentOffsets<HostPtr>,
         get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
     ) -> Result<()> {
-        use wasmtime_environ::ResourcesRequired;
+        use wasmtime_environ::{ComponentResourcesRequired, ResourcesRequired};
 
-        let mut num_core_instances = 0;
-        let mut core_instances_aggregate_size: usize = 0;
-        let mut resources_required = ResourcesRequired::zero();
         for init in &component.initializers {
-            use wasmtime_environ::component::GlobalInitializer::*;
-            use wasmtime_environ::component::InstantiateModule;
-            match init {
-                InstantiateModule(InstantiateModule::Import(_, _), _) => {
-                    num_core_instances += 1;
-                    // Can't statically account for the total vmctx size, number
-                    // of memories, and number of tables in this component.
-                }
-                InstantiateModule(InstantiateModule::Static(static_module_index, _), _) => {
-                    let module = get_module(*static_module_index);
-                    let offsets = VMOffsets::new(HostPtr, &module);
-                    let layout = Instance::alloc_layout(&offsets);
-                    self.validate_module(module, &offsets)?;
-                    num_core_instances += 1;
-                    resources_required.add(&module.resources_required());
-                    core_instances_aggregate_size += layout.size();
-                }
-                LowerImport { .. }
-                | ExtractMemory(_)
-                | ExtractTable(_)
-                | ExtractRealloc(_)
-                | ExtractCallback(_)
-                | ExtractPostReturn(_)
-                | Resource(_) => {}
+            use wasmtime_environ::component::{GlobalInitializer::*, InstantiateModule};
+            if let InstantiateModule(InstantiateModule::Static(static_module_index, _), _) = init {
+                let module = get_module(*static_module_index);
+                let offsets = VMOffsets::new(HostPtr, &module);
+                self.validate_module(module, &offsets)?;
             }
         }
-        let ResourcesRequired {
-            num_memories,
-            num_tables,
-            ..
-        } = resources_required;
+
+        let ComponentResourcesRequired {
+            module_resources:
+                ResourcesRequired {
+                    num_memories,
+                    num_tables,
+                    ..
+                },
+            core_instances_aggregate_size,
+            num_core_instances,
+        } = component.resources_required(get_module, &|module: &Module| {
+            let offsets = VMOffsets::new(HostPtr, &module);
+            Instance::alloc_layout(&offsets).size()
+        });
 
         if num_core_instances
             > usize::try_from(self.config.limits.max_core_instances_per_component).unwrap()
