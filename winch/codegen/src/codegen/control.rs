@@ -1105,7 +1105,7 @@ impl ControlStackFrame {
     }
 
     /// Returns true if the current stack pointer is unbalanced
-    /// relative to the the expected control frame stack pointer
+    /// relative to the expected control frame stack pointer
     /// offset. The stack pointer is considered unbalanced relative
     /// to the control frame if the stack pointer is greater than the
     /// the target stack pointer offset expected by the control frame.
