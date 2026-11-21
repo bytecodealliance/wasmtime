@@ -356,6 +356,7 @@ macro_rules! foreach_config_option {
             wide_arithmetic
             compact_imports
             hogs_memory
+            guest_debug
             component_model_async
             component_model_more_async_builtins
             component_model_async_stackful
@@ -522,6 +523,11 @@ impl Compiler {
             }
 
             Compiler::Winch => {
+                // Winch doesn't support guest-debugging instrumentation.
+                if config.guest_debug() {
+                    return true;
+                }
+
                 if config.gc()
                     || config.function_references()
                     || config.relaxed_simd()
@@ -603,6 +609,8 @@ impl WastTest {
                 "misc_testsuite/threads/atomics_wait_address.wast",
                 "misc_testsuite/threads/wait_notify.wast",
                 "misc_testsuite/threads/shared-memory-imported-oob.wast",
+                "misc_testsuite/threads/shared-memory.wast",
+                "misc_testsuite/threads/shared-memory-grow.wast",
                 "spec_testsuite/proposals/threads/atomic.wast",
                 "spec_testsuite/proposals/threads/exports.wast",
                 "spec_testsuite/proposals/threads/memory.wast",

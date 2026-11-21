@@ -1,6 +1,7 @@
 //! Implements a registry of modules for a store.
 
 use crate::code::{EngineCode, EngineCodePC, ModuleWithCode, StoreCode, StoreCodePC};
+use crate::code_memory::CodeMemory;
 #[cfg(feature = "component-model")]
 use crate::component::Component;
 use crate::runtime::vm::VMWasmCallFunction;
@@ -175,14 +176,60 @@ impl ModuleRegistry {
         Some((code, offset))
     }
 
-    /// Consults this [`ModuleRegistry`] to see if `pc` corrseponds to any
-    /// previously-registered block of code.
+    /// Looks up `pc`, an absolute program counter address, to see if it
+    /// falls within the *engine's* canonical copy of any loaded code,
+    /// rather than the store's copy.
     ///
-    /// Upon success returns the [`StoreCode`] as well as a relative pc from the
-    /// start of the text section.
-    pub fn store_code_by_pc(&self, pc: usize) -> Option<(&StoreCode, usize)> {
-        let (code, pc) = self.loaded_code_by_pc(pc)?;
-        Some((&code.code, pc))
+    /// This can only succeed with a different result than
+    /// [`ModuleRegistry::loaded_code_by_pc`] when the store has a private
+    /// copy of code (i.e., guest debugging is enabled); otherwise the two
+    /// copies are at the same address and `loaded_code_by_pc` finds it
+    /// first.
+    ///
+    /// Returns the [`LoadedCode`] whose engine copy contains `pc` and the
+    /// relative pc from the start of the engine copy's text section.
+    fn loaded_code_by_engine_pc(&self, pc: usize) -> Option<(&LoadedCode, usize)> {
+        let (engine_start, store_start) = self
+            .store_code
+            .range(..=EngineCodePC::from_raw(pc))
+            .next_back()?;
+        let code = self.loaded_code.get(*store_start)?;
+        // The store's copy (if private) is a deep clone of the engine's
+        // image, so the text sections have identical lengths.
+        let offset = pc.wrapping_sub(engine_start.raw());
+        if offset < code.code.text().len() {
+            Some((code, offset))
+        } else {
+            None
+        }
+    }
+
+    /// Consults this [`ModuleRegistry`] to see if `pc` corresponds to any
+    /// previously-registered block of code, in either the store's copy or
+    /// the engine's copy of that code.
+    ///
+    /// When guest debugging is enabled each store has a private copy of
+    /// all code, but store-invariant functions (e.g. component trampolines
+    /// and the resource-drop trampoline) are still executed directly out of
+    /// the engine's copy of code. Frames for those functions don't fall
+    /// within any `StoreCode` text range, so any lookup of per-PC metadata
+    /// (exception tables, stack maps, etc.) for an arbitrary frame on the
+    /// stack must handle both.
+    ///
+    /// Upon success returns the store's [`CodeMemory`] as well as the
+    /// relative pc from the start of the text section of whichever copy
+    /// `pc` was found in. Both copies have identical contents and metadata
+    /// (the private copy is a deep clone of the whole image), so all
+    /// location-independent metadata in the returned `CodeMemory` applies
+    /// regardless of which copy `pc` is in. However, the returned
+    /// `CodeMemory`'s addresses are *not* necessarily those of the copy
+    /// containing `pc`: to compute another absolute address in the same
+    /// copy as `pc`, use `pc - offset + other_offset`.
+    pub fn code_memory_by_pc(&self, pc: usize) -> Option<(&CodeMemory, usize)> {
+        let (code, offset) = self
+            .loaded_code_by_pc(pc)
+            .or_else(|| self.loaded_code_by_engine_pc(pc))?;
+        Some((code.code.code_memory(), offset))
     }
 
     /// Fetches the `StoreCode` for a given `EngineCode`.

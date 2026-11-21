@@ -9,6 +9,7 @@ use wasmtime::{
 };
 
 use crate::async_functions::PollOnce;
+use wasmtime_test_macros::wasmtime_test;
 
 #[test]
 fn debugging_does_not_work_with_signal_based_traps() {
@@ -1632,6 +1633,76 @@ fn component_bytecode() -> wasmtime::Result<()> {
     assert_eq!(modules[0].debug_bytecode().unwrap(), &m1_wasm[..]);
     assert_eq!(modules[1].debug_bytecode().unwrap(), &m2_wasm[..]);
 
+    Ok(())
+}
+
+#[wasmtime_test(strategies(not(Winch)))]
+#[cfg_attr(miri, ignore)]
+fn component_resource_dtor_debug_frames_walk_trampoline_frame(config: &mut Config) -> Result<()> {
+    use wasmtime::component::{Component, Linker};
+
+    config.guest_debug(true);
+    let engine = Engine::new(config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+        (component
+          (import "probe" (func $probe))
+          (component $A
+            (import "probe" (func $probe))
+            (core func $probe (canon lower (func $probe)))
+            (core module $dtor
+              (import "" "probe" (func $probe))
+              (func (export "dtor") (param i32) (call $probe)))
+            (core instance $dtor (instantiate $dtor
+              (with "" (instance (export "probe" (func $probe))))))
+            (type $t (resource (rep i32) (dtor (core func $dtor "dtor"))))
+            (core func $t.new (canon resource.new $t))
+            (export $t' "t" (type $t))
+            (func (export "new") (param "rep" u32) (result (own $t'))
+              (canon lift (core func $t.new))))
+
+          (component $B
+            (import "a" (instance $a
+              (export "t" (type $t (sub resource)))
+              (export "new" (func (param "rep" u32) (result (own $t))))))
+            (core func $new (canon lower (func $a "new")))
+            (alias export $a "t" (type $t))
+            (core func $t.drop (canon resource.drop $t))
+            (core module $b
+              (import "" "new" (func $new (param i32) (result i32)))
+              (import "" "t.drop" (func $t.drop (param i32)))
+              (func (export "run")
+                (call $t.drop (call $new (i32.const 0)))))
+            (core instance $b (instantiate $b
+              (with "" (instance
+                (export "new" (func $new))
+                (export "t.drop" (func $t.drop))))))
+            (func (export "run") (canon lift (core func $b "run"))))
+
+          (instance $a (instantiate $A (with "probe" (func $probe))))
+          (instance $b (instantiate $B (with "a" (instance $a))))
+          (export "run" (func $b "run")))
+        "#,
+    )?;
+    let mut linker: Linker<()> = Linker::new(&engine);
+    linker
+        .root()
+        .func_wrap("probe", |mut store: StoreContextMut<'_, ()>, (): ()| {
+            let mut count = 0;
+            let mut frame = store.debug_exit_frames().next();
+            while let Some(f) = frame {
+                count += 1;
+                frame = f.parent(&mut store)?;
+            }
+            // The destructor and `$B`'s `run`.
+            assert_eq!(count, 2);
+            Ok(())
+        })?;
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call(&mut store, ())?;
     Ok(())
 }
 
