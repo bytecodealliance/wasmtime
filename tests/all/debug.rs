@@ -2689,7 +2689,7 @@ async fn watchpoint_handler_may_set_fuel() -> wasmtime::Result<()> {
         store.set_debug_handler(ZeroFuel);
         let instance = Instance::new_async(&mut store, &module, &[]).await?;
         let memory = instance.get_memory(&mut store, "memory").unwrap();
-        store.edit_breakpoints().unwrap().watch(memory, 0..1)?;
+        store.edit_breakpoints(|e| e.watch(memory, 0..1))?;
         let func = instance.get_typed_func::<i32, ()>(&mut store, export)?;
         let err = func.call_async(&mut store, 100).await.unwrap_err();
         assert_eq!(err.downcast::<Trap>()?, Trap::OutOfFuel, "{export}");
