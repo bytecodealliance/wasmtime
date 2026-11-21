@@ -21,7 +21,7 @@ use std::ptr;
 ///
 /// Also note that updating this is not done via mutation but rather it's done
 /// with `dup2` to replace the file descriptor that `File` points to in-place.
-/// The local copy of of `File` is then closed in the atfork handler.
+/// The local copy of `File` is then closed in the atfork handler.
 #[cfg(feature = "pooling-allocator")]
 static PROCESS_PAGEMAP: std::sync::LazyLock<Option<File>> = std::sync::LazyLock::new(|| {
     use rustix::fd::AsRawFd;
