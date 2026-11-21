@@ -53,7 +53,7 @@ the rolling
 for local use: the "ISLE verifier full check" job in the CI workflow
 ([`.github/workflows/main.yml`](../../../.github/workflows/main.yml)) uploads the
 rebuilt cache as a run artifact, and the
-[`publish-artifacts.yml`](../../.github/workflows/publish-artifacts.yml)
+[`publish-artifacts.yml`](../../../.github/workflows/publish-artifacts.yml)
 workflow publishes it to the `dev` release when the run lands on `main`. The
 job runs on full CI and, on pull requests, when the PR touches the ISLE
 sources (`cranelift/codegen/**/*.isle`) or the ISLE toolchain
