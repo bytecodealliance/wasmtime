@@ -2,7 +2,7 @@
 //!
 //! The `isa` module provides a `TargetIsa` trait which provides the behavior specialization needed
 //! by the ISA-independent code generator. The sub-modules of this module provide definitions for
-//! the instruction sets that Cranelift can target. Each sub-module has it's own implementation of
+//! the instruction sets that Cranelift can target. Each sub-module has its own implementation of
 //! `TargetIsa`.
 //!
 //! # Constructing a `TargetIsa` instance
