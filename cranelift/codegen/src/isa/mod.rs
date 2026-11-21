@@ -160,6 +160,18 @@ impl fmt::Display for LookupError {
     }
 }
 
+/// Returns an error if the `separate_constant_pool` setting is enabled, for
+/// backends that do not implement it.
+#[cfg(any(feature = "riscv64", feature = "s390x", feature = "pulley"))]
+fn check_no_separate_constant_pool(flags: &settings::Flags, arch: &str) -> CodegenResult<()> {
+    if flags.separate_constant_pool() {
+        return Err(crate::CodegenError::Unsupported(alloc::format!(
+            "separate_constant_pool is not supported on {arch}"
+        )));
+    }
+    Ok(())
+}
+
 /// The type of a polymorphic TargetISA object which is 'static.
 pub type OwnedTargetIsa = Arc<dyn TargetIsa>;
 

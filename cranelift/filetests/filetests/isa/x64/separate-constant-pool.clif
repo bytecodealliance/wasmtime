@@ -1,0 +1,94 @@
+test compile precise-output
+set separate_constant_pool=true
+target x86_64
+
+function %vconst() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    return v0
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu (%rip), %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rip), %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %two_uses(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    v2 = iadd v0, v1
+    v3 = bxor v2, v1
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu (%rip), %xmm4
+;   paddb %xmm4, %xmm0
+;   pxor %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rip), %xmm4
+;   paddb %xmm4, %xmm0
+;   pxor %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %two_constants(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    v2 = vconst.i8x16 [16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1]
+    v3 = iadd v0, v1
+    v4 = bxor v3, v2
+    return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu (%rip), %xmm5
+;   movdqu (%rip), %xmm6
+;   paddb %xmm5, %xmm0
+;   pxor %xmm6, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rip), %xmm5
+;   movdqu (%rip), %xmm6
+;   paddb %xmm5, %xmm0
+;   pxor %xmm6, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

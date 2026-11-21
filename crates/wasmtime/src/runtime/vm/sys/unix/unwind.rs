@@ -164,11 +164,10 @@ impl UnwindRegistration {
         unwind_info: *const u8,
         unwind_len: usize,
     ) -> Result<UnwindRegistration> {
-        #[cfg(has_virtual_memory)]
         debug_assert_eq!(
-            unwind_info as usize % crate::runtime::vm::host_page_size(),
+            unwind_info as usize % 8,
             0,
-            "The unwind info must always be aligned to a page"
+            "The unwind info must be aligned to 8 bytes"
         );
 
         let api = Libunwind::get();

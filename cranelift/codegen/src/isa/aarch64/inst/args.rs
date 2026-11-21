@@ -405,6 +405,10 @@ impl PrettyPrint for AMode {
                 format!("[sp], {simm9}")
             }
             AMode::Const { addr } => format!("[const({})]", addr.as_u32()),
+            &AMode::ConstPageOff { rn, addr } => {
+                let rn = pretty_print_reg(rn);
+                format!("[{rn}, const({})@pageoff]", addr.as_u32())
+            }
 
             // Eliminated by `mem_finalize()`.
             &AMode::SPOffset { .. }

@@ -1320,6 +1320,9 @@
 (decl pure partial preserve_frame_pointers () Unit)
 (extern constructor preserve_frame_pointers preserve_frame_pointers)
 
+(decl pure partial separate_constant_pool () Unit)
+(extern constructor separate_constant_pool separate_constant_pool)
+
 ;; This definition should be kept up to date with the values defined in
 ;; cranelift/codegen/meta/src/shared/settings.rs
 (type StackSwitchModel extern (enum (None) (Basic) (UpdateWindowsTib)))

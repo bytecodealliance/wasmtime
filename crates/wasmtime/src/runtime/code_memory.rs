@@ -156,6 +156,7 @@ impl CodeMemory {
         let mut func_name_data = 0..0;
         let mut info_data = 0..0;
         let mut wasm_dwarf = 0..0;
+        let mut constants = 0..0;
         let mut wasm_bytecode = 0..0;
         let mut wasm_bytecode_ends = 0..0;
         for section_header in sections.iter() {
@@ -220,6 +221,7 @@ impl CodeMemory {
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
                 obj::ELF_WASMTIME_DWARF => wasm_dwarf = range,
+                obj::ELF_WASMTIME_CONSTANTS => constants = range,
                 obj::ELF_WASMTIME_WASM_BYTECODE => wasm_bytecode = range,
                 obj::ELF_WASMTIME_WASM_BYTECODE_ENDS => wasm_bytecode_ends = range,
 
@@ -242,6 +244,13 @@ impl CodeMemory {
         // Silence unused `mut` warning.
         #[cfg(not(has_host_compiler_backend))]
         let _ = &mut unwind;
+
+        // Code reaches its constants at a fixed offset from `.text`, and they
+        // must not share a page with code, which `publish` makes executable.
+        ensure!(
+            constants.is_empty() || constants.start == text.end,
+            "constant pool section doesn't directly follow the text section",
+        );
 
         // Ensure that the exception table is well-formed. This parser
         // construction is cheap: it reads the header and validates

@@ -164,6 +164,22 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
+        "separate_constant_pool",
+        "Return each function's constants as a separate blob instead of in its code.",
+        r#"
+            Constants are then reached through relocations that the embedder
+            resolves once it places the blob, for example in a read-only,
+            non-executable section. See `MachBufferFinalized::constant_pool`.
+
+            This is currently supported on x86_64 and aarch64. Other targets
+            return an error when it is enabled, as do `cranelift-jit` and
+            `cranelift-object` for a function that has constants. Jump tables
+            and other data that is not a constant stay in the function's code.
+        "#,
+        false,
+    );
+
+    settings.add_bool(
         "enable_llvm_abi_extensions",
         "Enable various ABI extensions defined by LLVM's behavior.",
         r#"

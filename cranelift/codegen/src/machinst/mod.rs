@@ -488,6 +488,14 @@ pub trait MachInstLabelUse: Clone + Copy + Debug + Eq {
     /// This returns `None` if the relocation doesn't have a corresponding
     /// representation for the target architecture.
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self>;
+
+    /// The inverse of `from_reloc`, used for references into a separate
+    /// constant pool (the `separate_constant_pool` setting).
+    ///
+    /// This returns `None` if the label use has no corresponding relocation.
+    fn to_reloc(self) -> Option<(Reloc, Addend)> {
+        None
+    }
 }
 
 /// Classification of call instruction types for granular analysis.
@@ -976,6 +984,30 @@ pub trait TextSectionBuilder {
     /// will return `false`. Otherwise this function will return `true` and this
     /// relocation will be resolved in the final bytes returned by `finish`.
     fn resolve_reloc(&mut self, offset: u64, reloc: Reloc, addend: Addend, target: usize) -> bool;
+
+    /// Records that the text at `offset` refers to the constant at
+    /// `constant_offset` in a constants section that the caller places after
+    /// the text, as described by a `MachConstantReloc`.
+    ///
+    /// The reference is resolved by `patch_constant_refs` once the location
+    /// of the constants is known. If this builder does not know how to handle
+    /// `reloc` then this function returns `false`.
+    ///
+    /// Like a `MachBuffer` label use, resolving a reference adds to the bytes
+    /// already at `offset`. On x86-64 they hold minus the size of any bytes
+    /// that follow the displacement in the instruction.
+    fn resolve_constant_reloc(
+        &mut self,
+        offset: u64,
+        reloc: Reloc,
+        addend: Addend,
+        constant_offset: u64,
+    ) -> bool;
+
+    /// Resolves the references recorded by `resolve_constant_reloc` in the
+    /// finished `text`, where `constants_offset` is the offset of the
+    /// constants section from the start of the text.
+    fn patch_constant_refs(&self, text: &mut [u8], constants_offset: u64);
 
     /// A debug-only option which is used to for
     fn force_veneers(&mut self);

@@ -298,6 +298,7 @@ fn isa_constructor(
     shared_flags: Flags,
     builder: &shared_settings::Builder,
 ) -> CodegenResult<OwnedTargetIsa> {
+    super::check_no_separate_constant_pool(&shared_flags, "riscv64")?;
     let isa_flags = riscv_settings::Flags::new(&shared_flags, builder);
 
     // The RISC-V backend does not work without at least the G extension enabled.

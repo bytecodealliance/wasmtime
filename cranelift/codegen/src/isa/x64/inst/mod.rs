@@ -1752,4 +1752,11 @@ impl MachInstLabelUse for LabelUse {
             _ => None,
         }
     }
+
+    fn to_reloc(self) -> Option<(Reloc, Addend)> {
+        match self {
+            LabelUse::JmpRel32 => Some((Reloc::X86PCRel4, -4)),
+            LabelUse::PCRel32 => None,
+        }
+    }
 }

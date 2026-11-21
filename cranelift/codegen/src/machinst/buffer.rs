@@ -382,6 +382,14 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Indicates when a patchable region is currently open, to guard that it's
     /// not possible to nest patchable regions.
     open_patchable: bool,
+    /// Whether constants go to a separate pool instead of islands in the code.
+    separate_constants: bool,
+    /// With `separate_constants`, the constant each constant label stands for.
+    separate_constant_labels: crate::FxHashMap<MachLabel, VCodeConstant>,
+    /// With `separate_constants`, the constants in order of first use.
+    separate_constant_order: SmallVec<[VCodeConstant; 16]>,
+    /// With `separate_constants`, label uses that refer to constants.
+    separate_constant_fixups: SmallVec<[(CodeOffset, VCodeConstant, I::LabelUse); 16]>,
 }
 
 /// Bulk data that is common between `MachBuffer` and
@@ -439,6 +447,35 @@ pub struct MachBufferInner {
     pub(crate) srclocs: SmallVec<[MachSrcLoc; 64]>,
     /// The required alignment of this buffer.
     pub min_alignment: u32,
+    /// With `separate_constant_pool`, the function's constants, kept out of `data`.
+    pub(crate) constant_pool: Vec<u8>,
+    /// Required alignment of `constant_pool`.
+    pub(crate) constant_pool_align: u32,
+    /// References from `data` into `constant_pool`.
+    pub(crate) constant_pool_relocs: Vec<MachConstantReloc>,
+}
+
+/// A reference from code to a constant in a function's separate constant pool
+/// (see the `separate_constant_pool` setting).
+///
+/// It is resolved like a [`MachReloc`] whose target is the constant's address,
+/// except that, as for a label use, the result is added to the bytes already
+/// at `offset`. On x86-64 they hold minus the size of any immediate after the
+/// displacement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub struct MachConstantReloc {
+    /// Offset of the reference in the code.
+    pub offset: CodeOffset,
+    /// The kind of relocation to apply.
+    pub kind: Reloc,
+    /// The addend, as for `MachReloc::addend`.
+    pub addend: Addend,
+    /// Offset of the referenced constant within the function's constant pool.
+    pub constant_offset: u32,
 }
 
 impl<I: VCodeInst> Deref for MachBuffer<I> {
@@ -569,6 +606,9 @@ impl<I: VCodeInst> MachBuffer<I> {
             frame_layout: None,
             srclocs: SmallVec::new(),
             min_alignment: I::function_alignment().minimum,
+            constant_pool: Vec::new(),
+            constant_pool_align: 1,
+            constant_pool_relocs: Vec::new(),
         });
         MachBuffer {
             inner,
@@ -587,7 +627,22 @@ impl<I: VCodeInst> MachBuffer<I> {
             constants: Default::default(),
             used_constants: Default::default(),
             open_patchable: false,
+            separate_constants: false,
+            separate_constant_labels: Default::default(),
+            separate_constant_order: Default::default(),
+            separate_constant_fixups: Default::default(),
         }
+    }
+
+    /// Keep constants out of the code and return them as a separate pool
+    /// with relocations (the `separate_constant_pool` setting).
+    pub fn set_separate_constants(&mut self, enable: bool) {
+        self.separate_constants = enable;
+    }
+
+    /// Whether `label` refers to a constant in the separate constant pool.
+    pub fn is_separate_constant_label(&self, label: MachLabel) -> bool {
+        self.separate_constant_labels.contains_key(&label)
     }
 
     /// Current offset from start of buffer.
@@ -748,6 +803,40 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
+    /// Lays out the separate constant pool and turns constant label uses into
+    /// relocations into it.
+    fn finish_separate_constants(&mut self, constants: &VCodeConstants) {
+        if self.separate_constant_order.is_empty() {
+            return;
+        }
+        let mut offsets = SecondaryMap::<VCodeConstant, u32>::new();
+        let mut pool = Vec::new();
+        let mut pool_align = 1;
+        for &c in self.separate_constant_order.iter() {
+            let data = constants.get(c);
+            let align = data.alignment() as usize;
+            pool_align = pool_align.max(data.alignment());
+            pool.resize(pool.len().next_multiple_of(align), 0);
+            offsets[c] = u32::try_from(pool.len()).unwrap();
+            pool.extend_from_slice(data.as_slice());
+        }
+        let mut relocs = Vec::with_capacity(self.separate_constant_fixups.len());
+        for &(offset, c, kind) in self.separate_constant_fixups.iter() {
+            let (kind, addend) = kind
+                .to_reloc()
+                .unwrap_or_else(|| panic!("no relocation for constant label use {kind:?}"));
+            relocs.push(MachConstantReloc {
+                offset,
+                kind,
+                addend,
+                constant_offset: offsets[c],
+            });
+        }
+        self.inner.constant_pool = pool;
+        self.inner.constant_pool_align = pool_align;
+        self.inner.constant_pool_relocs = relocs;
+    }
+
     /// Returns a label that can be used to refer to the `constant` provided.
     ///
     /// This will automatically defer a new constant to be emitted for
@@ -767,6 +856,13 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
 
         let label = self.get_label();
+        if self.separate_constants {
+            // The label is never bound: its uses become constant pool relocations.
+            self.separate_constant_labels.insert(label, constant);
+            self.separate_constant_order.push(constant);
+            self.constants[constant].upcoming_label = Some(label);
+            return label;
+        }
         trace!(
             "defer constant: eventually emit {size} bytes aligned \
              to {align} at label {label:?}",
@@ -846,6 +942,11 @@ impl<I: VCodeInst> MachBuffer<I> {
             "MachBuffer: use_label_at_offset: offset {} label {:?} kind {:?}",
             offset, label, kind
         );
+
+        if let Some(&constant) = self.separate_constant_labels.get(&label) {
+            self.separate_constant_fixups.push((offset, constant, kind));
+            return;
+        }
 
         // Add the fixup, and update the worst-case island size based on a
         // veneer for this label use.
@@ -1688,6 +1789,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         self.finish_emission_maybe_forcing_veneers(ForceVeneers::No, ctrl_plane);
         self.finish_constants(constants);
+        self.finish_separate_constants(constants);
 
         // Resolve all labels to their offsets.
         let mut relocs = core::mem::take(&mut self.relocs);
@@ -1993,6 +2095,21 @@ impl MachBufferFinalized {
     /// Get the list of external relocations for this code.
     pub fn relocs(&self) -> &[MachReloc] {
         &self.relocs[..]
+    }
+
+    /// The separate constant pool (empty unless `separate_constant_pool` is set).
+    pub fn constant_pool(&self) -> &[u8] {
+        &self.constant_pool[..]
+    }
+
+    /// Required alignment of the separate constant pool.
+    pub fn constant_pool_align(&self) -> u32 {
+        self.constant_pool_align
+    }
+
+    /// References from the code into the separate constant pool.
+    pub fn constant_pool_relocs(&self) -> &[MachConstantReloc] {
+        &self.constant_pool_relocs[..]
     }
 
     /// Get the list of trap records for this code.
@@ -2494,6 +2611,10 @@ pub struct MachTextSectionBuilder<I: VCodeInst> {
     buf: MachBuffer<I>,
     next_func: usize,
     force_veneers: ForceVeneers,
+    /// References to constants, as the offset of the reference in the text,
+    /// how to patch it and the offset of the constant in the constants
+    /// section.
+    constant_refs: Vec<(CodeOffset, I::LabelUse, u64)>,
 }
 
 impl<I: VCodeInst> MachTextSectionBuilder<I> {
@@ -2506,6 +2627,7 @@ impl<I: VCodeInst> MachTextSectionBuilder<I> {
             buf,
             next_func: 0,
             force_veneers: ForceVeneers::No,
+            constant_refs: Vec::new(),
         }
     }
 }
@@ -2551,6 +2673,43 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
                 true
             }
             None => false,
+        }
+    }
+
+    fn resolve_constant_reloc(
+        &mut self,
+        offset: u64,
+        reloc: Reloc,
+        addend: Addend,
+        constant_offset: u64,
+    ) -> bool {
+        match I::LabelUse::from_reloc(reloc, addend) {
+            Some(label_use) => {
+                let offset = u32::try_from(offset).unwrap();
+                self.constant_refs
+                    .push((offset, label_use, constant_offset));
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn patch_constant_refs(&self, text: &mut [u8], constants_offset: u64) {
+        for &(offset, label_use, constant_offset) in &self.constant_refs {
+            let target = constants_offset + constant_offset;
+            let distance = target as i64 - i64::from(offset);
+            assert!(
+                distance <= i64::from(label_use.max_pos_range())
+                    && distance >= -i64::from(label_use.max_neg_range()),
+                "constant at {target:#x} is out of range of the reference at {offset:#x}"
+            );
+            let start = offset as usize;
+            let end = start + label_use.patch_size() as usize;
+            label_use.patch(
+                &mut text[start..end],
+                offset,
+                u32::try_from(target).unwrap(),
+            );
         }
     }
 
@@ -3175,5 +3334,79 @@ mod test {
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
         let _ = buf.total_size();
+    }
+
+    #[test]
+    fn test_separate_constants() {
+        use crate::ir::MemFlagsData;
+        use crate::isa::aarch64::inst::{AMode, writable_vreg, writable_xreg};
+
+        let info = emit_info();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let mut buf = MachBuffer::new();
+        buf.set_separate_constants(true);
+        let mut constants = VCodeConstants::with_capacity(1);
+        let constant = constants.insert(VCodeConstantData::U64([1, 2, 3, 4, 5, 6, 7, 8]));
+        buf.register_constants(&constants);
+
+        // `adrp x0, <page of constant>` and `ldr d0, [x0, <offset in page>]`.
+        Inst::AdrpConst {
+            rd: writable_xreg(0),
+            constant,
+        }
+        .emit(&mut buf, &info, &mut state);
+        Inst::FpuLoad64 {
+            rd: writable_vreg(0),
+            mem: AMode::ConstPageOff {
+                rn: xreg(0),
+                addr: constant,
+            },
+            flags: MemFlagsData::trusted(),
+        }
+        .emit(&mut buf, &info, &mut state);
+        let buf = buf.finish(&constants, state.ctrl_plane_mut());
+
+        // The constant is not in the code. The code refers to it with a
+        // relocation for each of the two instructions.
+        assert_eq!(buf.data().len(), 8);
+        assert_eq!(buf.constant_pool(), &[1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(buf.constant_pool_align(), 8);
+        let reloc = |offset, kind| MachConstantReloc {
+            offset,
+            kind,
+            addend: 0,
+            constant_offset: 0,
+        };
+        assert_eq!(
+            buf.constant_pool_relocs(),
+            &[
+                reloc(0, Reloc::Aarch64AdrPrelPgHi21),
+                reloc(4, Reloc::Aarch64Ldst64AbsLo12Nc),
+            ]
+        );
+
+        // Place the constant at 0x14028 from the start of the text, which is
+        // 0x14 pages and 0x28 bytes further on.
+        let mut ctrl_plane = ControlPlane::default();
+        let mut text = MachTextSectionBuilder::<Inst>::new(1);
+        text.append(true, buf.data(), 4, &mut ctrl_plane);
+        for r in buf.constant_pool_relocs() {
+            assert!(text.resolve_constant_reloc(
+                r.offset.into(),
+                r.kind,
+                r.addend,
+                0x28 + u64::from(r.constant_offset)
+            ));
+        }
+        let mut code = text.finish(&mut ctrl_plane);
+        text.patch_constant_refs(&mut code, 0x14000);
+        let words: Vec<u32> = code
+            .chunks(4)
+            .map(|w| u32::from_le_bytes(w.try_into().unwrap()))
+            .collect();
+        // adrp x0, #0x14000
+        assert_eq!(words[0], 0x9000_00a0);
+        // ldr d0, [x0, #0x28]
+        assert_eq!(words[1], 0xfd40_1400);
     }
 }
