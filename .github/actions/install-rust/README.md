@@ -8,7 +8,7 @@ Some gotchas:
 
 * Can't `--self-update` on Windows due to permission errors (a bug in Github
   Actions)
-* `rustup` isn't installed on macOS (a bug in Github Actions)
+* `rustup` isn't installed on macOS (a bug in GitHub Actions)
 
 When the above are fixed we should delete this action and just use this inline:
 
