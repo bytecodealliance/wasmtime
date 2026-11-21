@@ -646,7 +646,7 @@ impl RootSet {
     ///   Assume a sequence of root creation and drop events (and no
     ///   GCs, with a static GC graph, in the worst case -- only roots
     ///   are changing). We want to show that after N root creations,
-    ///   we have incurred only only O(N) cost scanning the
+    ///   we have incurred only O(N) cost scanning the
     ///   `liveness_flags` list over the whole sequence.
     ///
     ///   Assume a default high-water mark of D (e.g., 8) at
