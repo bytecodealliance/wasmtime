@@ -14,6 +14,10 @@ pub struct EmitState {
     /// A copy of the frame layout, used during the emission of `Inst::ReturnCallKnown` and
     /// `Inst::ReturnCallUnknown` instructions and exception callsites.
     pub frame_layout: FrameLayout,
+
+    /// Offset at which post-call debug tags for the call currently being
+    /// emitted should be placed (i.e., the call's return address).
+    pub(crate) post_call_debug_tag_offset: Option<CodeOffset>,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -22,6 +26,7 @@ impl MachInstEmitState<Inst> for EmitState {
             stack_maps: StackMapEmitter::default(),
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
+            post_call_debug_tag_offset: None,
         }
     }
 
@@ -39,5 +44,9 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
+    }
+
+    fn post_call_debug_tag_offset_mut(&mut self) -> &mut Option<CodeOffset> {
+        &mut self.post_call_debug_tag_offset
     }
 }

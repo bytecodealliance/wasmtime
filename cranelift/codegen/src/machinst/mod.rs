@@ -600,6 +600,16 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
 
     /// The [`FrameLayout`] for the function currently being compiled.
     fn frame_layout(&self) -> &FrameLayout;
+
+    /// The slot holding the offset at which post-call debug tags for
+    /// the call instruction currently being emitted should be placed.
+    ///
+    /// This is the call's return address, which may precede the end
+    /// of the emitted instruction: e.g., a call may be followed by
+    /// stack-pointer adjustments, loads of stack-carried return
+    /// values, or (for a `try_call`) a jump to the continuation
+    /// block.
+    fn post_call_debug_tag_offset_mut(&mut self) -> &mut Option<CodeOffset>;
 }
 
 /// Tracks the user stack maps of safepoint instructions as they are emitted.

@@ -25,7 +25,7 @@ block0(v0: i32, v1: i32):
 ;   movq %rdi, %r12
 ;   movq %rsi, %r13
 ;   call    *%r8
-;   ; ^-- debug @ Post: [StackSlot(ss0), User(0), User(0)]
+;   ; ^-- debug @ PostCall: [StackSlot(ss0), User(0), User(0)]
 ;   sequence_point
 ;   ; ^-- debug @ Pre: [StackSlot(ss0), User(1), User(0)]
 ;   leal (%r12, %r13), %eax
@@ -76,7 +76,7 @@ block0(v0: i32, v1: i32):
 ;   movq %rdi, %r12
 ;   movq %rsi, %r13
 ;   call    TestCase(%f1)
-;   ; ^-- debug @ Post: [StackSlot(ss0), User(0), User(0)]
+;   ; ^-- debug @ PostCall: [StackSlot(ss0), User(0), User(0)]
 ;   sequence_point
 ;   ; ^-- debug @ Pre: [StackSlot(ss0), User(1), User(0)]
 ;   leal (%r12, %r13), %eax

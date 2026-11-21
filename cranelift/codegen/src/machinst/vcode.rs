@@ -861,11 +861,16 @@ impl<I: VCodeInst> VCode<I> {
                     state.stack_map_emitter().assert_consumed();
                 }
             };
-            let do_emit = |inst: &I,
-                           disasm: &mut String,
-                           buffer: &mut MachBuffer<I>,
-                           state: &mut I::State| {
+            let do_aux_emit = |inst: &I,
+                               disasm: &mut String,
+                               buffer: &mut MachBuffer<I>,
+                               state: &mut I::State| {
                 emit_inst(inst, disasm, buffer, state);
+                // Instructions emitted this way (prologue, epilogue,
+                // regalloc moves) never carry debug tags, but may
+                // include calls (e.g. stack probes); discard any
+                // post-call debug tag offset they recorded.
+                let _ = state.post_call_debug_tag_offset_mut().take();
                 emit_island_if_needed(buffer, state);
             };
 
@@ -874,7 +879,7 @@ impl<I: VCodeInst> VCode<I> {
                 trace!(" -> entry block");
                 buffer.start_srcloc(Default::default());
                 for inst in &self.abi.gen_prologue() {
-                    do_emit(&inst, &mut disasm, &mut buffer, &mut state);
+                    do_aux_emit(&inst, &mut disasm, &mut buffer, &mut state);
                 }
                 buffer.end_srcloc();
             }
@@ -920,7 +925,7 @@ impl<I: VCodeInst> VCode<I> {
                 self.block_order.is_indirect_branch_target(block),
                 is_forward_edge_cfi_enabled,
             ) {
-                do_emit(&block_start, &mut disasm, &mut buffer, &mut state);
+                do_aux_emit(&block_start, &mut disasm, &mut buffer, &mut state);
             }
 
             for inst_or_edit in regalloc.block_insts_and_edits(&self, block) {
@@ -983,13 +988,16 @@ impl<I: VCodeInst> VCode<I> {
 
                         // Place debug tags in the emission buffer
                         // either at the offset prior to the
-                        // instruction or after the instruction,
-                        // depending on whether this is a call. See
-                        // the documentation on [`MachDebugTagPos`]
+                        // instruction or at the return address of the
+                        // call, depending on whether this is a call.
+                        // See the documentation on [`MachDebugTagPos`]
                         // for details on why.
                         let mut debug_tag_disasm = None;
                         let mut place_debug_tags =
-                            |this: &VCode<I>, pos: MachDebugTagPos, buffer: &mut MachBuffer<I>| {
+                            |this: &VCode<I>,
+                             pos: MachDebugTagPos,
+                             offset: CodeOffset,
+                             buffer: &mut MachBuffer<I>| {
                                 // As above, translate the forward instruction
                                 // index to a backward index for the lookup.
                                 let debug_tag_range = {
@@ -1005,18 +1013,19 @@ impl<I: VCodeInst> VCode<I> {
                                         debug_tag_disasm =
                                             Some(format!("  ; ^-- debug @ {pos:?}: {tags:?}"));
                                     }
-                                    buffer.push_debug_tags(pos, tags);
+                                    buffer.push_debug_tags_at(offset, pos, tags);
                                 }
                             };
                         let debug_tag_pos =
                             if self.insts[iix.index()].call_type() == CallType::Regular {
-                                MachDebugTagPos::Post
+                                MachDebugTagPos::PostCall
                             } else {
                                 MachDebugTagPos::Pre
                             };
 
                         if debug_tag_pos == MachDebugTagPos::Pre {
-                            place_debug_tags(&self, debug_tag_pos, &mut buffer);
+                            let offset = buffer.cur_offset();
+                            place_debug_tags(&self, debug_tag_pos, offset, &mut buffer);
                         }
 
                         // If the instruction we are about to emit is
@@ -1026,7 +1035,7 @@ impl<I: VCodeInst> VCode<I> {
                         if self.insts[iix.index()].is_term() == MachTerminator::Ret {
                             log::trace!("emitting epilogue");
                             for inst in self.abi.gen_epilogue() {
-                                do_emit(&inst, &mut disasm, &mut buffer, &mut state);
+                                do_aux_emit(&inst, &mut disasm, &mut buffer, &mut state);
                             }
                         } else {
                             // Update the operands for this inst using the
@@ -1061,10 +1070,21 @@ impl<I: VCodeInst> VCode<I> {
                                 &mut state,
                             );
 
-                            // Place post-position tags at the instruction's
-                            // end, before any island that follows it.
-                            if debug_tag_pos == MachDebugTagPos::Post {
-                                place_debug_tags(&self, debug_tag_pos, &mut buffer);
+                            // Place post-call tags at the call's return
+                            // address, as recorded by the backend while
+                            // emitting the call.
+                            let post_call_offset = state.post_call_debug_tag_offset_mut().take();
+                            if debug_tag_pos == MachDebugTagPos::PostCall {
+                                let offset = post_call_offset.expect(
+                                    "emission of a call instruction must record its post-call \
+                                     debug tag offset",
+                                );
+                                place_debug_tags(&self, debug_tag_pos, offset, &mut buffer);
+                            } else {
+                                debug_assert!(
+                                    post_call_offset.is_none(),
+                                    "post-call debug tag offset recorded by a non-call instruction"
+                                );
                             }
                             emit_island_if_needed(&mut buffer, &mut state);
 
@@ -1090,21 +1110,21 @@ impl<I: VCodeInst> VCode<I> {
                                 debug_assert_eq!(from.class(), to.class());
                                 let ty = I::canonical_type_for_rc(from.class());
                                 let mv = I::gen_move(to_rreg, from_rreg, ty);
-                                do_emit(&mv, &mut disasm, &mut buffer, &mut state);
+                                do_aux_emit(&mv, &mut disasm, &mut buffer, &mut state);
                             }
                             (Some(from), None) => {
                                 // Spill from register to spillslot.
                                 let to = to.as_stack().unwrap();
                                 let from_rreg = RealReg::from(from);
                                 let spill = self.abi.gen_spill(to, from_rreg);
-                                do_emit(&spill, &mut disasm, &mut buffer, &mut state);
+                                do_aux_emit(&spill, &mut disasm, &mut buffer, &mut state);
                             }
                             (None, Some(to)) => {
                                 // Load from spillslot to register.
                                 let from = from.as_stack().unwrap();
                                 let to_rreg = Writable::from_reg(RealReg::from(to));
                                 let reload = self.abi.gen_reload(to_rreg, from);
-                                do_emit(&reload, &mut disasm, &mut buffer, &mut state);
+                                do_aux_emit(&reload, &mut disasm, &mut buffer, &mut state);
                             }
                             (None, None) => {
                                 panic!("regalloc2 should have eliminated stack-to-stack moves!");

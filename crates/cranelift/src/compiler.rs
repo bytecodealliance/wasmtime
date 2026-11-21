@@ -1863,7 +1863,7 @@ fn clif_to_env_frame_tables<'a>(
             .checked_add(tag_site.offset)
             .unwrap();
         let pos = match tag_site.pos {
-            MachDebugTagPos::Post => FrameInstPos::Post,
+            MachDebugTagPos::PostCall => FrameInstPos::Post,
             MachDebugTagPos::Pre => FrameInstPos::Pre,
         };
         builder.add_program_point(native_pc_in_code_section, pos, &frames);
