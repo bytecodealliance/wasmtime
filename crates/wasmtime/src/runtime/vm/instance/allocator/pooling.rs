@@ -512,38 +512,33 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         offsets: &VMComponentOffsets<HostPtr>,
         get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
     ) -> Result<()> {
-        let mut num_core_instances = 0;
-        let mut num_memories = 0;
-        let mut num_tables = 0;
-        let mut core_instances_aggregate_size: usize = 0;
+        use wasmtime_environ::{ComponentResourcesRequired, ResourcesRequired};
+
+        let get_size = |module: &Module| {
+            let offsets = VMOffsets::new(HostPtr, &module);
+            let layout = Instance::alloc_layout(&offsets);
+            layout.size()
+        };
+
         for init in &component.initializers {
-            use wasmtime_environ::component::GlobalInitializer::*;
-            use wasmtime_environ::component::InstantiateModule;
-            match init {
-                InstantiateModule(InstantiateModule::Import(_, _), _) => {
-                    num_core_instances += 1;
-                    // Can't statically account for the total vmctx size, number
-                    // of memories, and number of tables in this component.
-                }
-                InstantiateModule(InstantiateModule::Static(static_module_index, _), _) => {
-                    let module = get_module(*static_module_index);
-                    let offsets = VMOffsets::new(HostPtr, &module);
-                    let layout = Instance::alloc_layout(&offsets);
-                    self.validate_module(module, &offsets)?;
-                    num_core_instances += 1;
-                    num_memories += module.num_defined_memories();
-                    num_tables += module.num_defined_tables();
-                    core_instances_aggregate_size += layout.size();
-                }
-                LowerImport { .. }
-                | ExtractMemory(_)
-                | ExtractTable(_)
-                | ExtractRealloc(_)
-                | ExtractCallback(_)
-                | ExtractPostReturn(_)
-                | Resource(_) => {}
+            use wasmtime_environ::component::{GlobalInitializer::*, InstantiateModule};
+            if let InstantiateModule(InstantiateModule::Static(static_module_index, _), _) = init {
+                let module = get_module(*static_module_index);
+                let offsets = VMOffsets::new(HostPtr, &module);
+                self.validate_module(module, &offsets)?;
             }
         }
+
+        let ComponentResourcesRequired {
+            module_resources:
+                ResourcesRequired {
+                    num_memories,
+                    num_tables,
+                    ..
+                },
+            core_instances_aggregate_size,
+            num_core_instances,
+        } = component.resources_required(get_module, &get_size);
 
         if num_core_instances
             > usize::try_from(self.config.limits.max_core_instances_per_component).unwrap()
@@ -555,7 +550,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
             );
         }
 
-        if num_memories > usize::try_from(self.config.limits.max_memories_per_component).unwrap() {
+        if num_memories > self.config.limits.max_memories_per_component {
             bail!(
                 "The component transitively contains {num_memories} Wasm linear memories, which \
                  exceeds the configured maximum of {} in the pooling allocator",
@@ -563,7 +558,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
             );
         }
 
-        if num_tables > usize::try_from(self.config.limits.max_tables_per_component).unwrap() {
+        if num_tables > self.config.limits.max_tables_per_component {
             bail!(
                 "The component transitively contains {num_tables} tables, which exceeds the \
                  configured maximum of {} in the pooling allocator",
