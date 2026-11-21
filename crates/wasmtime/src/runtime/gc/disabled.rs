@@ -4,7 +4,7 @@
 //! We provide dummy/uninhabited types so that downstream users (and the rest of
 //! Wasmtime) need to do fewer `#[cfg(...)]`s for when GC is enabled versus
 //! disabled at compile time. While we implement dummy methods for these types'
-//! public methods, we do not, however, create dummy constructors constructors.
+//! public methods, we do not, however, create dummy constructors.
 
 #![expect(missing_docs, unreachable_code, reason = "dummy module")]
 
