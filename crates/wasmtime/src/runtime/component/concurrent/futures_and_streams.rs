@@ -666,7 +666,7 @@ pub trait StreamProducer<D>: Send + 'static {
     ///   actually read some bytes.
     ///
     /// - Return `Poll::Ready(Ok(StreamResult::Completed))` after calling
-    ///   `Destination::set_buffer` with one more more items. Note, however,
+    ///   `Destination::set_buffer` with one more items. Note, however,
     ///   that this creates the hazard that the items will never be received by
     ///   the guest if it decides not to do another non-zero-length read before
     ///   closing the stream.  Moreover, if `Self::Item` is e.g. a
