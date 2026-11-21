@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set opt_level=speed
 target x86_64
 
@@ -8,11 +8,29 @@ block0(v0: f32):
     v2 = fneg v1
     return v2
 }
-; not: andps
-; not: xorps
-; check: orps
-; not: andps
-; not: xorps
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movl $0x80000000, %edx
+;   movd %edx, %xmm4
+;   orps %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $0x80000000, %edx
+;   movd %edx, %xmm4
+;   orps %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
 function %neg_abs_f64(f64) -> f64 {
 block0(v0: f64):
@@ -20,8 +38,26 @@ block0(v0: f64):
     v2 = fneg v1
     return v2
 }
-; not: andpd
-; not: xorpd
-; check: orpd
-; not: andpd
-; not: xorpd
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movabsq $0x8000000000000000, %rdx
+;   movq %rdx, %xmm4
+;   orpd %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $9223372036854775808, %rdx
+;   movq %rdx, %xmm4
+;   orpd %xmm4, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
