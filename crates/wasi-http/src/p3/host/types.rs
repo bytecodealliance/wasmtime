@@ -556,7 +556,13 @@ impl HostResponse for WasiHttpCtxView<'_> {
         let res = get_response_mut(self.table, &res)?;
         match http::StatusCode::from_u16(status_code) {
             Ok(status) if matches!(status_code, 100..=599) => {
-                res.status = status;
+                if status != res.status {
+                    res.status = status;
+                    // Clear out any possibly set "reason phrase" in the
+                    // response since by changing status codes the prior phrase
+                    // isn't applicable any more.
+                    res.extensions.remove::<hyper::ext::ReasonPhrase>();
+                }
                 Ok(Ok(()))
             }
             _ => Ok(Err(())),

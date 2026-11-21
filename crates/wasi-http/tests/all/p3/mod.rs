@@ -1107,10 +1107,10 @@ async fn p3_http_extensions() -> Result<()> {
 
 /// A non-canonical http/1 reason phrase from the backend, which `hyper`'s
 /// client records as a `ReasonPhrase` extension, survives the guest returning
-/// the backend's response.
+/// the backend's response, unless the guest changes its status.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_http_proxy_reason_phrase() -> Result<()> {
-    let (server, _requests) = Server::raw(1, |_head| {
+    let (server, _requests) = Server::raw(2, |_head| {
         b"HTTP/1.1 200 Quite Ok\r\ncontent-length: 0\r\n\r\n".to_vec()
     })?;
 
@@ -1128,6 +1128,22 @@ async fn p3_http_proxy_reason_phrase() -> Result<()> {
             .get::<hyper::ext::ReasonPhrase>()
             .map(|r| r.as_bytes()),
         Some(b"Quite Ok".as_slice()),
+    );
+
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET)
+        .header("url", format!("http://{}/", server.addr()))
+        .header("status", "404");
+    let response = run_http(P3_HTTP_PROXY_COMPONENT, request.body(Empty::new())?)
+        .await?
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 404);
+    assert!(
+        response
+            .extensions()
+            .get::<hyper::ext::ReasonPhrase>()
+            .is_none()
     );
 
     Ok(())

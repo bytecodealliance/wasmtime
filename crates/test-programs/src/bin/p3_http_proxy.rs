@@ -18,6 +18,12 @@ impl Handler for Component {
     // Forward the request body and trailers to a URL specified in a header.
     async fn handle(request: Request) -> Result<Response, ErrorCode> {
         let headers = request.get_headers().copy_all();
+        let requested_response_status = headers.iter().find_map(|(k, v)| {
+            (k == "status")
+                .then_some(v)
+                .and_then(|v| std::str::from_utf8(v).ok())
+                .and_then(|v| v.parse::<u16>().ok())
+        });
         Ok(
             if let Some(url) = headers.iter().find_map(|(k, v)| {
                 (k == "url")
@@ -42,7 +48,11 @@ impl Handler for Component {
                 outgoing_request
                     .set_authority(Some(url.authority()))
                     .unwrap();
-                client::send(outgoing_request).await?
+                let response = client::send(outgoing_request).await?;
+                if let Some(status) = requested_response_status {
+                    response.set_status_code(status).unwrap();
+                }
+                response
             } else {
                 bad_request()
             },
