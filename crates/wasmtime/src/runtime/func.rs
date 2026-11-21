@@ -2558,7 +2558,7 @@ impl HostFunc {
         ))
     }
 
-    /// Loads the the parameters of `ty` from `params` into a vector.
+    /// Loads the parameters of `ty` from `params` into a vector.
     ///
     /// This additionally pushes space onto the vector for all results to split
     /// the vector into params/results halves.
