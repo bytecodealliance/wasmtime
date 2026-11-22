@@ -1838,6 +1838,12 @@ impl FuncEnvironment<'_> {
             _ => unreachable!("unexpected store size {size}"),
         };
 
+        // Fold buffered fuel into `fuel_var` before branching so that both
+        // the hit and not-hit paths account for it; see `fuel_sync_around`.
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+        }
+
         let hit = builder.create_block();
         let done = builder.create_block();
         builder.ins().brif(watched, hit, &[], done, &[]);
@@ -1852,7 +1858,9 @@ impl FuncEnvironment<'_> {
         let addr = builder.ins().iadd_imm_s(index, offset.cast_signed());
         let len = builder.ins().iconst(I32, i64::from(size));
         let watch = self.builtin_functions.memory_watch_store(builder.func);
-        self.call_builtin(builder, watch, &[vmctx, memory, addr, len, lo, hi]);
+        self.fuel_sync_around(builder, |this, builder| {
+            this.call_builtin(builder, watch, &[vmctx, memory, addr, len, lo, hi]);
+        });
         builder.ins().jump(done, &[]);
         builder.switch_to_block(done);
         builder.seal_block(done);
@@ -1911,7 +1919,28 @@ impl FuncEnvironment<'_> {
         let dst = Self::to_u64(builder, dst);
         let len = Self::to_u64(builder, len);
         let watch = self.builtin_functions.memory_watch_range(builder.func);
-        self.call_builtin(builder, watch, &[vmctx, memory, dst, len]);
+        self.fuel_sync_around(builder, |this, builder| {
+            this.call_builtin(builder, watch, &[vmctx, memory, dst, len]);
+        });
+    }
+
+    /// Emits `f`, which calls a builtin that may invoke the debug handler,
+    /// with the locally cached fuel synchronized with the store around it:
+    /// the handler may observe or modify the store's fuel (e.g. with
+    /// `Store::set_fuel`).
+    fn fuel_sync_around(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        f: impl FnOnce(&mut Self, &mut FunctionBuilder<'_>),
+    ) {
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+            self.fuel_save_from_var(builder);
+        }
+        f(self, builder);
+        if self.tunables.consume_fuel {
+            self.fuel_load_into_var(builder);
+        }
     }
 
     fn to_u64(builder: &mut FunctionBuilder<'_>, value: ir::Value) -> ir::Value {
@@ -5741,16 +5770,11 @@ impl FuncEnvironment<'_> {
             // `fuel_before_op` so that the fuel visible at the breakpoint
             // accounts for all operators prior to (but not including) this
             // one.
-            if self.tunables.consume_fuel {
-                self.fuel_increment_var(builder);
-                self.fuel_save_from_var(builder);
-            }
             let builtin = self.builtin_functions.patchable_breakpoint(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
-            self.call_builtin(builder, builtin, &[vmctx]);
-            if self.tunables.consume_fuel {
-                self.fuel_load_into_var(builder);
-            }
+            self.fuel_sync_around(builder, |this, builder| {
+                this.call_builtin(builder, builtin, &[vmctx]);
+            });
         }
         if self.tunables.consume_fuel {
             self.fuel_before_op(op, builder, self.is_reachable());

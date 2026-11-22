@@ -863,6 +863,9 @@ impl<I: VCodeInst> VCode<I> {
                     writeln!(disasm, "  {}", inst.pretty_print_inst(&mut s)).unwrap();
                 }
                 inst.emit(buffer, &self.emit_info, state);
+                if inst.is_safepoint() {
+                    state.stack_map_emitter().assert_consumed();
+                }
             };
             let do_emit = |inst: &I,
                            disasm: &mut String,
@@ -904,6 +907,19 @@ impl<I: VCodeInst> VCode<I> {
                 }
                 bb_starts.push(Some(cur_offset));
                 last_offset = Some(cur_offset);
+            }
+
+            // Attribute any regalloc edits preceding the block's first
+            // instruction to that instruction, rather than to whichever
+            // unrelated block happened to be emitted just before this one
+            // (e.g. when cold blocks are sunk to the end of the function).
+            let first_srcloc = self.srclocs[self.block_ranges.get(block.index()).start];
+            if cur_srcloc != Some(first_srcloc) {
+                if cur_srcloc.is_some() {
+                    buffer.end_srcloc();
+                }
+                buffer.start_srcloc(first_srcloc);
+                cur_srcloc = Some(first_srcloc);
             }
 
             if let Some(block_start) = I::gen_block_start(
@@ -964,7 +980,7 @@ impl<I: VCodeInst> VCode<I> {
                                 (user_stack_map, user_stack_map_disasm)
                             };
 
-                            state.pre_safepoint(user_stack_map);
+                            state.stack_map_emitter().pre_safepoint(user_stack_map);
 
                             user_stack_map_disasm
                         } else {
@@ -1634,6 +1650,10 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         // `Loop` pseudo-instruction aggregates all Operands so pinned
         // vregs (RealRegs) may occur more than once.
         true
+    }
+
+    fn is_block_cold(&self, block: BlockIndex) -> bool {
+        self.block_order.is_cold(block)
     }
 }
 

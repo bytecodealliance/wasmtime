@@ -203,11 +203,24 @@ impl TypeChecker<'_> {
         match (&self.a_types[o1], &self.b_types[o2]) {
             // Concrete resource types are the same if they map back to the
             // exact same `ResourceType` at runtime, so look them up in resource
-            // type tables and compare the types themselves.
+            // type tables and compare the types themselves. Resources missing
+            // from a table, e.g. in an uninstantiated component's type, are
+            // uninstantiated resource types, as in
+            // `InstanceType::resource_type`.
             (
                 TypeResourceTable::Concrete { ty: a, .. },
                 TypeResourceTable::Concrete { ty: b, .. },
-            ) => self.a_resource.unwrap()[*a] == self.b_resource.unwrap()[*b],
+            ) => {
+                let a = self
+                    .a_resource
+                    .and_then(|t| t.get(*a).copied())
+                    .unwrap_or_else(|| ResourceType::uninstantiated(self.a_types, *a));
+                let b = self
+                    .b_resource
+                    .and_then(|t| t.get(*b).copied())
+                    .unwrap_or_else(|| ResourceType::uninstantiated(self.b_types, *b));
+                a == b
+            }
             (TypeResourceTable::Concrete { .. }, _) => false,
 
             // Abstract resource types are only the same if they have the same

@@ -1,0 +1,64 @@
+# Copy to .github/workflows/ in the repository you want to protect.
+name: Approved Contributors
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: approved-contributors
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      # Have a bytecodealliance org owner add the `ba-approved-contributors`
+      # app to the repo this action is installed in, so that the action can
+      # mint a token for read-write to the contributor-permissions repo.
+      - id: app-token
+        uses: actions/create-github-app-token@v3.4.0
+        with:
+          client-id: ${{ vars.APPROVED_CONTRIBUTORS_APP_ID }}
+          private-key: ${{ secrets.APPROVED_CONTRIBUTORS_APP_KEY }}
+          owner: bytecodealliance
+          repositories: contributor-permissions
+      - uses: bytecodealliance/approved-contributors@v0.1
+        with:
+          permissions-repo: bytecodealliance/contributor-permissions
+          allowlist-path: wasmtime-wasmtools-witbindgen-allowlist.txt
+          blocklist-path: wasmtime-wasmtools-witbindgen-blocklist.txt
+          permissions-token: ${{ steps.app-token.outputs.token }}
+          vouch-team: bytecodealliance/wasmtime-core
+          message: |
+            Thanks @{author} for your contribution to this repository, but
+            this automated bot is closing this PR.
+
+            Bytecode Alliance projects have been overwhelmed with AI-generated
+            PRs that monopolize reviewer time, and this bot is an attempt to
+            push back. Please discuss this change on [zulip] with maintainers
+            first before jumping straight into making a PR. After discussion,
+            a maintainer may reopen this PR.
+
+            AI usage must abide by the [Bytecode Alliance's AI Tool Use
+            Policy](https://github.com/bytecodealliance/governance/blob/main/AI_TOOL_POLICY.md),
+            and we ask that new contributors engage with maintainers
+            beforehand as humans to ensure that what you're working on is
+            reasonable for a newcomer to tackle. For more information, see
+            [the contributing
+            docs](https://docs.wasmtime.dev/contributing.html).
+
+            If you believe this PR was caught by this bot erroneously, reach
+            out to us on [zulip].
+          blocked-message: |
+            @{author} is not permitted to contribute to this project, so this
+            pull request has been closed automatically. For more information
+            see the Wasmtime [Contributing
+            docs](https://docs.wasmtime.dev/contributing.html).
+
+

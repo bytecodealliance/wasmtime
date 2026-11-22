@@ -28,9 +28,6 @@ jobs:
     - run: cargo run -p wasmtime-publish publish
       env:
         CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-    - run: cargo run -p wasmtime-publish yank-old-rcs
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
     # Manifest and publish the wasi-preview1-component-adapter-provider
     - uses: $/.github/actions/fetch-run-id

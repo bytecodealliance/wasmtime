@@ -10,7 +10,7 @@ use crate::{
     ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque},
 };
-use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, bail_bug, prelude::*};
+use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContext, Tag, bail_bug, prelude::*};
 use alloc::sync::Arc;
 use core::mem;
 use core::mem::MaybeUninit;
@@ -193,6 +193,10 @@ impl ExnRef {
     /// types of the `allocator`'s exception type, an error is
     /// returned.
     ///
+    /// If the `fields` values hold a GC reference that is not rooted,
+    /// an error is returned, since allocating may collect garbage; see
+    /// [`Val::ensure_rooted`].
+    ///
     /// If the allocation cannot be satisfied because the GC heap is currently
     /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
     /// error is returned. The allocation might succeed on a second attempt if
@@ -240,6 +244,10 @@ impl ExnRef {
     /// If the given `fields` values' types do not match the field
     /// types of the `allocator`'s exception type, an error is
     /// returned.
+    ///
+    /// If the `fields` values hold a GC reference that is not rooted,
+    /// an error is returned, since allocating may collect garbage; see
+    /// [`Val::ensure_rooted`].
     ///
     /// If the allocation cannot be satisfied because the GC heap is currently
     /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
@@ -313,6 +321,8 @@ impl ExnRef {
                 val.comes_from_same_store(store),
                 "field value comes from the wrong store",
             );
+            // Allocation may collect garbage, so the values must be rooted.
+            val.validate_rooted().context("unrooted field value")?;
             let ty = ty.element_type().unpack();
             val.ensure_matches_ty(store, ty)
                 .context("field type mismatch")?;
@@ -484,6 +494,12 @@ impl ExnRef {
 
     /// Get the values of this exception object's fields.
     ///
+    /// GC references are returned as unrooted references
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes; root them with
+    /// [`Val::ensure_rooted`] or [`Val::ensure_all_rooted`] to keep them for
+    /// longer.
+    ///
     /// # Errors
     ///
     /// Return an error if this reference has been unrooted.
@@ -493,19 +509,18 @@ impl ExnRef {
     /// Panics if this reference is associated with a different store.
     pub fn fields<'a, T: 'static>(
         &'a self,
-        store: impl Into<StoreContextMut<'a, T>>,
+        store: impl Into<StoreContext<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         self._fields(store.into().0)
     }
 
     pub(crate) fn _fields<'a>(
         &'a self,
-        store: &'a mut StoreOpaque,
+        store: &'a StoreOpaque,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
         assert!(self.comes_from_same_store(store));
-        let store = AutoAssertNoGc::new(store);
 
-        let gc_ref = self.inner.try_gc_ref(&store)?;
+        let gc_ref = self.inner.try_gc_ref(store)?;
         let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.matches_kind(VMGcKind::ExnRef));
 
@@ -526,14 +541,14 @@ impl ExnRef {
             len,
         });
 
-        struct Fields<'a, 'b> {
+        struct Fields<'a> {
             exnref: &'a ExnRef,
-            store: AutoAssertNoGc<'b>,
+            store: &'a StoreOpaque,
             index: usize,
             len: usize,
         }
 
-        impl Iterator for Fields<'_, '_> {
+        impl Iterator for Fields<'_> {
             type Item = Val;
 
             #[inline]
@@ -544,7 +559,7 @@ impl ExnRef {
                     return None;
                 }
                 self.index += 1;
-                self.exnref._field(&mut self.store, i).ok()
+                self.exnref._field(self.store, i).ok()
             }
 
             #[inline]
@@ -554,7 +569,7 @@ impl ExnRef {
             }
         }
 
-        impl ExactSizeIterator for Fields<'_, '_> {
+        impl ExactSizeIterator for Fields<'_> {
             #[inline]
             fn len(&self) -> usize {
                 self.len - self.index
@@ -562,20 +577,20 @@ impl ExnRef {
         }
     }
 
-    fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
+    fn header<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcHeader> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
         Ok(store.require_gc_store()?.header(gc_ref)?)
     }
 
-    fn exnref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMExnRef> {
+    fn exnref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMExnRef> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
         debug_assert!(self.header(store)?.matches_kind(VMGcKind::ExnRef));
         Ok(gc_ref.as_exnref_unchecked())
     }
 
-    fn layout(&self, store: &AutoAssertNoGc<'_>) -> Result<Arc<GcStructLayout>> {
+    fn layout(&self, store: &StoreOpaque) -> Result<Arc<GcStructLayout>> {
         assert!(self.comes_from_same_store(&store));
         let type_index = self.type_index(store)?;
         super::gc_struct_layout(store.engine(), type_index)
@@ -594,6 +609,12 @@ impl ExnRef {
 
     /// Get this exception object's `index`th field.
     ///
+    /// GC references are returned as unrooted references
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes; root them with
+    /// [`Val::ensure_rooted`] or [`Val::ensure_all_rooted`] to keep them for
+    /// longer.
+    ///
     /// # Errors
     ///
     /// Returns an `Err(_)` if the index is out of bounds or this reference has
@@ -602,14 +623,13 @@ impl ExnRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn field(&self, mut store: impl AsContextMut, index: usize) -> Result<Val> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._field(&mut store, index)
+    pub fn field(&self, store: impl AsContext, index: usize) -> Result<Val> {
+        self._field(store.as_context().0, index)
     }
 
-    pub(crate) fn _field(&self, store: &mut AutoAssertNoGc<'_>, index: usize) -> Result<Val> {
+    pub(crate) fn _field(&self, store: &StoreOpaque, index: usize) -> Result<Val> {
         assert!(self.comes_from_same_store(store));
-        let exnref = self.exnref(store)?.unchecked_copy();
+        let exnref = self.exnref(store)?;
         let field_ty = self.field_ty(store, index)?;
         let layout = self.layout(store)?;
         exnref.read_field(store, &layout, field_ty.element_type(), index)
@@ -624,12 +644,11 @@ impl ExnRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn tag(&self, mut store: impl AsContextMut) -> Result<Tag> {
-        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        assert!(self.comes_from_same_store(&store));
-        let exnref = self.exnref(&store)?.unchecked_copy();
-        let (instance, index) = exnref.tag(&mut store)?;
-        match Tag::from_raw_indices(&*store, instance, index) {
+    pub fn tag(&self, store: impl AsContext) -> Result<Tag> {
+        let store = store.as_context().0;
+        assert!(self.comes_from_same_store(store));
+        let (instance, index) = self.exnref(store)?.tag(store)?;
+        match Tag::from_raw_indices(store, instance, index) {
             Some(tag) => Ok(tag),
             None => bail_bug!("invalid tag indices in exception object"),
         }

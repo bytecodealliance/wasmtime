@@ -208,6 +208,7 @@ impl DataFlowGraph {
         self.constants.clear();
         self.immediates.clear();
         self.jump_tables.clear();
+        self.exception_tables.clear();
         self.mem_flags.clear();
         self.alias_regions.clear();
     }

@@ -82,6 +82,7 @@ use crate::fiber;
 use crate::hash_map::HashMap;
 use crate::module::{RegisterBreakpointState, RegisteredModuleId};
 use crate::prelude::*;
+use crate::runtime::epoch_state::EpochState;
 #[cfg(feature = "stack-switching")]
 use crate::runtime::vm::VMContRef;
 use crate::runtime::vm::mpk::ProtectionKey;
@@ -238,8 +239,15 @@ impl CallHook {
 /// The members of this struct are those that need to be generic over `T`, the
 /// store's internal type storage. Otherwise all things that don't rely on `T`
 /// should go into `StoreOpaque`.
+///
+/// This is `#[repr(C)]` with `inner` as its first field so that a `dyn VMStore`
+/// (which is always a `StoreInner<T>`) can be cast directly to its
+/// `StoreOpaque` without a virtual call; see the `Deref` impl for `dyn VMStore`.
+#[repr(C)]
 pub struct StoreInner<T: 'static> {
     /// Generic metadata about the store that doesn't need access to `T`.
+    ///
+    /// This must remain the first field; see above.
     inner: StoreOpaque,
 
     limiter: Option<ResourceLimiterInner<T>>,
@@ -467,6 +475,16 @@ pub struct StoreOpaque {
     engine: Engine,
     vm_store_context: VMStoreContext,
 
+    /// A stand-in for all state that Wasm execution can mutate in this
+    /// store (e.g. its stack frames); see `WasmState`.
+    ///
+    /// Invariant: this is mutated (and its epoch is thus bumped)
+    /// whenever Wasm executes, after it runs and before host code can
+    /// observe what it did. We ensure this by mutating it on every
+    /// transfer of control from Wasm to the host; see
+    /// `StoreOpaque::on_wasm_to_host_transition`.
+    wasm_state: EpochState<WasmState>,
+
     // Contains all continuations ever allocated throughout the lifetime of this
     // store.
     #[cfg(feature = "stack-switching")]
@@ -577,6 +595,22 @@ pub struct StoreOpaque {
     frame_data_cache: FrameDataCache,
 }
 
+/// A stand-in for the state that Wasm execution mutates in a store.
+///
+/// The actual state that Wasm mutates (e.g. its stack frames on the
+/// machine stack) can't be placed inside an `EpochState`, so instead
+/// we keep this unit type in an `EpochState` and mutate it whenever
+/// Wasm executes (see `StoreOpaque::wasm_state` for how this is
+/// ensured). Mutation of this value is thus a proxy for any mutation
+/// that actual Wasm code performs.
+///
+/// We use epoch handles (whose validity we can check, and which are
+/// invalidated by subsequent mutations) to guard other kinds of
+/// Wasm-mutated state, such as `FrameHandle`s in the debug API that
+/// refer to live (and frozen) Wasm stack frames.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WasmState;
+
 /// Self-pointer to `StoreInner<T>` from within a `StoreOpaque` which is chiefly
 /// used to copy into instances during instantiation.
 ///
@@ -637,7 +671,7 @@ impl<'a> AutoAssertNoGc<'a> {
         let entered = if !cfg!(feature = "gc") {
             false
         } else if let Some(gc_store) = store.gc_store.as_mut() {
-            gc_store.gc_heap.enter_no_gc_scope();
+            gc_store.gc_heap.get_mut().enter_no_gc_scope();
             true
         } else {
             false
@@ -690,7 +724,11 @@ impl Drop for AutoAssertNoGc<'_> {
     #[inline]
     fn drop(&mut self) {
         if self.entered {
-            self.store.unwrap_gc_store_mut().gc_heap.exit_no_gc_scope();
+            self.store
+                .unwrap_gc_store_mut()
+                .gc_heap
+                .get_mut()
+                .exit_no_gc_scope();
         }
     }
 }
@@ -749,11 +787,13 @@ impl<T> Store<T> {
         log::trace!("creating new store {:?}", store_data.id());
 
         let pkey = engine.allocator().next_available_pkey();
+        let wasm_state = EpochState::new(store_data.id(), WasmState);
 
         let inner = StoreOpaque {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
             vm_store_context: Default::default(),
+            wasm_state,
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
             instances: TryPrimaryMap::new(),
@@ -1686,10 +1726,8 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "debug")]
-    pub(crate) fn frame_data_cache_mut_and_registry(
-        &mut self,
-    ) -> (&mut FrameDataCache, &ModuleRegistry) {
-        (&mut self.frame_data_cache, &self.modules)
+    pub(crate) fn frame_data_cache(&self) -> &FrameDataCache {
+        &self.frame_data_cache
     }
 
     #[inline]
@@ -1831,7 +1869,7 @@ impl StoreOpaque {
     }
 
     /// Get all instances (ignoring dummy instances) within this store.
-    pub fn all_instances<'a>(&'a mut self) -> impl ExactSizeIterator<Item = Instance> + 'a {
+    pub fn all_instances<'a>(&'a self) -> impl ExactSizeIterator<Item = Instance> + 'a {
         let instances = self
             .instances
             .iter()
@@ -1904,6 +1942,64 @@ impl StoreOpaque {
     #[inline]
     pub fn vm_store_context_mut(&mut self) -> &mut VMStoreContext {
         &mut self.vm_store_context
+    }
+
+    /// Hook invoked on every transfer of control from Wasm to the host,
+    /// before any host code can observe what Wasm did: when a
+    /// host-to-Wasm call returns (normally, or by unwinding or trapping)
+    /// back to the host, and when Wasm calls out to the host (via a host
+    /// function or libcall).
+    ///
+    /// Wasm may have mutated state in this store without going through
+    /// the `EpochState`s that guard it, so we treat invalidation of
+    /// handles to that state as a deferred effect of running Wasm,
+    /// performed here. Specifically, we:
+    ///
+    /// - bump `wasm_state`'s epoch, invalidating handles to Wasm
+    ///   execution state, such as debugger `FrameHandle`s; and
+    /// - invalidate every [`Unrooted`](crate::Unrooted) reference into
+    ///   this store's GC heap, since compiled Wasm mutates the GC heap
+    ///   directly; see `GcStore::invalidate_unrooted_refs`. (The GC heap
+    ///   has its own `EpochState`, separate from `wasm_state`, because
+    ///   the host API can also mutate it.)
+    ///
+    /// NB: there is intentionally no corresponding hook for transfers
+    /// of control from the host to Wasm (calls into Wasm, returns from
+    /// host functions or libcalls back to Wasm, or resumption of Wasm at
+    /// an exception handler). Wasm has not run yet at that point, so
+    /// there is nothing to invalidate: host code cannot observe anything
+    /// Wasm does until control next transfers back to the host, which
+    /// comes through here. Avoiding work after host functions and
+    /// libcalls return is also important for performance: it would keep
+    /// state live across those calls and defeat tail calls in libcall
+    /// wrappers.
+    #[inline(always)]
+    pub(crate) fn on_wasm_to_host_transition(&mut self) {
+        let _ = self.wasm_state.get_mut();
+        if let Some(gc_store) = &mut self.gc_store {
+            gc_store.invalidate_unrooted_refs();
+        }
+    }
+
+    /// The state standing in for all Wasm-mutated state in this store.
+    ///
+    /// The point of this is to allow taking handles from this
+    /// `EpochState`, and later checking if they are still valid. If an
+    /// epoch handle is still valid, that means that Wasm has not run in
+    /// this store since the handle was created. That allows us to make
+    /// certain assumptions, such as that observed Wasm stack frames are
+    /// still present, and build higher-level safe primitives for
+    /// observing these kinds of Wasm state.
+    #[cfg(feature = "debug")]
+    pub(crate) fn wasm_state(&self) -> &EpochState<WasmState> {
+        &self.wasm_state
+    }
+
+    /// Like `Self::optional_gc_store_mut`, but shared.
+    #[inline]
+    #[cfg(feature = "gc")]
+    pub(crate) fn optional_gc_store(&self) -> Option<&GcStore> {
+        self.gc_store.as_ref()
     }
 
     /// Attempts to access the GC store that has been previously allocated.
@@ -1984,6 +2080,7 @@ impl StoreOpaque {
 
     /// Helper function to clone `gc_ref` notably avoiding allocating a
     /// `GcStore` where possible.
+    #[cfg(feature = "gc")]
     pub(crate) fn clone_gc_ref(&mut self, gc_ref: &VMGcRef) -> VMGcRef {
         if gc_ref.is_i31() {
             gc_ref.copy_i31()
@@ -2471,14 +2568,6 @@ unsafe impl<T> VMStore for StoreInner<T> {
         self
     }
 
-    fn store_opaque(&self) -> &StoreOpaque {
-        &self.inner
-    }
-
-    fn store_opaque_mut(&mut self) -> &mut StoreOpaque {
-        &mut self.inner
-    }
-
     #[cfg(feature = "call-hook")]
     fn call_hook(&mut self, s: CallHook) -> Result<()> {
         StoreInner::call_hook(self, s)
@@ -2587,9 +2676,9 @@ impl Drop for StoreOpaque {
                 let gc_alloc_index = gc_store.allocation_index;
                 log::trace!("store {store_id:?} is deallocating GC heap {gc_alloc_index:?}");
                 debug_assert!(self.engine.features().gc_types());
-                let mem = gc_store.gc_heap.detach();
+                let mem = gc_store.gc_heap.get_mut().detach();
                 let mem_alloc_index =
-                    allocator.deallocate_gc_heap(gc_alloc_index, gc_store.gc_heap);
+                    allocator.deallocate_gc_heap(gc_alloc_index, gc_store.gc_heap.into_inner());
                 allocator.deallocate_memory(None, mem_alloc_index, mem);
             }
 

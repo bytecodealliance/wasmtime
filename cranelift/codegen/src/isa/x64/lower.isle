@@ -300,12 +300,20 @@
 ;; sum, i.e. when the sign bit of `(x ^ sum) & (y ^ sum)` is set. On overflow
 ;; the sum's sign is the opposite of the operands' sign, so the saturated value
 ;; is `MAX` when the sum is negative and `MIN` otherwise.
+;;
+;; Both operands are used again by the overflow detection, so force them into
+;; registers: letting the wrapping add sink a load into its memory operand
+;; would leave the load unavailable for the later uses.
 (rule (lower (sadd_sat ty @ (multi_lane 32 4) x y))
-      (let ((sum Xmm (x64_paddd x y)))
+      (let ((x Xmm (put_in_xmm x))
+            (y Xmm (put_in_xmm y))
+            (sum Xmm (x64_paddd x y)))
         (lower_sadd_sat_wide ty x y sum)))
 
 (rule (lower (sadd_sat ty @ (multi_lane 64 2) x y))
-      (let ((sum Xmm (x64_paddq x y)))
+      (let ((x Xmm (put_in_xmm x))
+            (y Xmm (put_in_xmm y))
+            (sum Xmm (x64_paddq x y)))
         (lower_sadd_sat_wide ty x y sum)))
 
 (decl lower_sadd_sat_wide (Type Xmm Xmm Xmm) Xmm)
@@ -415,12 +423,19 @@
 ;; `(x ^ y) & (x ^ diff)` is set. On overflow the difference's sign is the
 ;; opposite of the minuend's, so the saturated value is `MAX` when the
 ;; difference is negative and `MIN` otherwise.
+;;
+;; As above, the operands are used again by the overflow detection, so they
+;; must be in registers rather than sunk into the wrapping subtraction.
 (rule (lower (ssub_sat ty @ (multi_lane 32 4) x y))
-      (let ((diff Xmm (x64_psubd x y)))
+      (let ((x Xmm (put_in_xmm x))
+            (y Xmm (put_in_xmm y))
+            (diff Xmm (x64_psubd x y)))
         (lower_ssub_sat_wide ty x y diff)))
 
 (rule (lower (ssub_sat ty @ (multi_lane 64 2) x y))
-      (let ((diff Xmm (x64_psubq x y)))
+      (let ((x Xmm (put_in_xmm x))
+            (y Xmm (put_in_xmm y))
+            (diff Xmm (x64_psubq x y)))
         (lower_ssub_sat_wide ty x y diff)))
 
 (decl lower_ssub_sat_wide (Type Xmm Xmm Xmm) Xmm)
@@ -1554,6 +1569,13 @@
              (x64_psrlq (vector_all_ones) (xmi_imm 1))))
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Negating an absolute value sets the sign bit and preserves all other bits.
+(rule 1 (lower (fneg $F32 (fabs $F32 x)))
+      (x64_orps x (xmm_new (imm $F32 0x80000000))))
+
+(rule 1 (lower (fneg $F64 (fabs $F64 x)))
+      (x64_orpd x (xmm_new (imm $F64 0x8000000000000000))))
 
 (rule (lower (fneg $F32 x))
       (x64_xorps x (xmm_new (imm $F32 0x80000000))))

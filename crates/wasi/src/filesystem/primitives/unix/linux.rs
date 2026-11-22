@@ -2,9 +2,7 @@ use crate::filesystem::primitives::unix::{compute_oflags, to_timespec};
 use crate::filesystem::primitives::{
     FollowSymlinks, Metadata, OpenOptions, OpenOptionsExt, errors, open,
 };
-use rustix::fs::{
-    AtFlags, Mode, OFlags, RawMode, ResolveFlags, Timestamps, openat2, statat, utimensat,
-};
+use rustix::fs::{AtFlags, Mode, OFlags, RawMode, ResolveFlags, Timestamps, openat2, utimensat};
 use rustix::io::Errno;
 use rustix::path::{Arg, DecInt};
 use rustix_linux_procfs::proc_self_fd;
@@ -174,32 +172,9 @@ pub(crate) fn stat_fast(
     );
 
     match result {
-        // Like `file.metadata()`, but works with `O_PATH` descriptors on old
-        // (pre 3.6) versions of Linux too.
-        Ok(file) => {
-            // Record whether we've seen an `EBADF` from an `fstat` on an
-            // `O_PATH` file descriptor, meaning we're on a Linux that doesn't
-            // support it.
-            static FSTAT_PATH_BADF: AtomicBool = AtomicBool::new(false);
-
-            if !FSTAT_PATH_BADF.load(Relaxed) {
-                match Metadata::from_file(&file) {
-                    Ok(metadata) => return Ok(Some(metadata)),
-                    Err(err) => match Errno::from_io_error(&err) {
-                        // Before Linux 3.6, `fstat` with `O_PATH` returned
-                        // `EBADF`.
-                        Some(Errno::BADF) => FSTAT_PATH_BADF.store(true, Relaxed),
-                        _ => return Err(err),
-                    },
-                }
-            }
-
-            // If `fstat` with `O_PATH` isn't supported, use `statat` with
-            // `AT_EMPTY_PATH`.
-            Ok(Some(
-                statat(file, "", AtFlags::EMPTY_PATH).map(Metadata::Stat)?,
-            ))
-        }
+        // Note that `Metadata::from_file` works with `O_PATH` descriptors,
+        // even on old (pre 3.6) versions of Linux.
+        Ok(file) => Ok(Some(Metadata::from_file(&file)?)),
         Err(err) => match Errno::from_io_error(&err) {
             // `ENOSYS` from `open_beneath` means `openat2` is unavailable
             // and we should use a fallback.

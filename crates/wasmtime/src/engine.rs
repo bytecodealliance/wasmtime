@@ -617,6 +617,10 @@ information about this check\
             // is safe to enable it regardless of whether the host supports it
             // or not.
             "use_bti" => return Ok(()),
+            // `CSDB` is encoded in the hint space, so CPUs that don't
+            // implement it run it as a `NOP`, and it is safe to enable
+            // regardless of the host.
+            "use_csdb" => return Ok(()),
 
             // s390x features to detect
             "has_vxrs_ext2" => "vxrs_ext2",

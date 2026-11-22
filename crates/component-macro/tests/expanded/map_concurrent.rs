@@ -192,14 +192,12 @@ pub mod foo {
             pub enum Thing {}
             pub trait HostThingWithStore<T>: wasmtime::component::HasData {
                 fn drop(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    accessor: wasmtime::component::Access<T, Self>,
                     rep: wasmtime::component::Resource<Thing>,
-                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
-                where
-                    Self: Sized;
+                ) -> wasmtime::Result<()>;
             }
             pub trait HostThing {}
-            impl<_T: HostThing + ?Sized + Send> HostThing for &mut _T {}
+            impl<_T: HostThing + ?Sized> HostThing for &mut _T {}
             pub type NamesById = wasmtime::component::__internal::BTreeMap<
                 u32,
                 wasmtime::component::__internal::String,
@@ -457,22 +455,22 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                inst.resource_concurrent(
+                inst.resource(
                     "thing",
                     wasmtime::component::ResourceType::host::<Thing>(),
-                    move |caller: &wasmtime::component::Accessor<T>, rep| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter::<D>(host_getter);
-                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
-                                HostThingWithStore::<
+                    move |mut store, rep| -> wasmtime::Result<()> {
+                        let resource = wasmtime::component::Resource::new_own(rep);
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostThingWithStore::<
+                                T,
+                            >::drop(
+                                wasmtime::component::Access::<
                                     T,
-                                >::drop(
-                                        accessor,
-                                        wasmtime::component::Resource::new_own(rep),
-                                    )
-                                    .await,
-                            )
-                        })
+                                    D,
+                                >::new(store, host_getter),
+                                resource,
+                            ),
+                        )
                     },
                 )?;
                 inst.func_wrap_async(

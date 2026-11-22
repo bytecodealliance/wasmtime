@@ -58,32 +58,32 @@
 ;; function u2:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 32, align = 8
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 25 ""
 ;;     region2 = 57 ""
 ;;     region3 = 209 ""
 ;;     region4 = 42 ""
-;;     region5 = 68 ""
+;;     region5 = 112 ""
 ;;     region6 = 237 ""
 ;;     region7 = 126 ""
 ;;     region8 = 221 ""
-;;     region9 = 112 ""
+;;     region9 = 67 ""
 ;;     region10 = 71 ""
-;;     region11 = 149 ""
+;;     region11 = 197 ""
 ;;     region12 = 93 ""
-;;     region13 = 30 ""
+;;     region13 = 34 ""
 ;;     region14 = 184 ""
 ;;     region15 = 108 ""
 ;;     region16 = 8 ""
 ;;     region17 = 218 ""
 ;;     region18 = 252 ""
 ;;     region19 = 13 ""
-;;     region20 = 34 ""
+;;     region20 = 68 ""
 ;;     region21 = 195 ""
 ;;     region22 = 158 ""
 ;;     region23 = 174 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+16
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     sig1 = (i64 vmctx, i64, i32, i32) tail
 ;;     sig2 = (i64 vmctx, i64, i32) -> i32 tail
@@ -104,22 +104,22 @@
 ;;
 ;;                                 block7:
 ;; @00fc                               v13 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @00fc                               v14 = load.i64 notrap aligned region5 v13+136
+;; @00fc                               v14 = load.i64 notrap aligned region5 v13+128
 ;; @00fc                               v12 = stack_addr.i64 ss0
 ;; @00fc                               store notrap aligned region6 v14, v12
 ;; @00e1                               v3 = iconst.i32 0
 ;; @00fc                               store notrap aligned region7 v3, v12+8  ; v3 = 0
 ;; @00fa                               v10 = iconst.i32 1
 ;; @00fc                               store notrap aligned region8 v10, v12+12  ; v10 = 1
-;; @00fc                               v15 = load.i32 notrap aligned region9 v13+128
+;; @00fc                               v15 = load.i32 notrap aligned region9 v13+120
 ;; @00fc                               store notrap aligned region10 v15, v12+16
-;; @00fc                               store notrap aligned region9 v3, v13+128  ; v3 = 0
-;; @00fc                               v17 = load.i32 notrap aligned region11 v13+132
+;; @00fc                               store notrap aligned region9 v3, v13+120  ; v3 = 0
+;; @00fc                               v17 = load.i32 notrap aligned region11 v13+124
 ;; @00fc                               store notrap aligned region12 v17, v12+20
-;; @00fc                               store notrap aligned region11 v3, v13+132  ; v3 = 0
-;; @00fc                               v19 = load.i64 notrap aligned region13 v13+152
+;; @00fc                               store notrap aligned region11 v3, v13+124  ; v3 = 0
+;; @00fc                               v19 = load.i64 notrap aligned region13 v13+144
 ;; @00fc                               store notrap aligned region14 v19, v12+24
-;; @00fc                               store notrap aligned region5 v12, v13+136
+;; @00fc                               store notrap aligned region5 v12, v13+128
 ;; @0100                               jump block11
 ;;
 ;;                                 block11:
@@ -157,7 +157,7 @@
 ;;                                 block15:
 ;; @0100                               v46 = load.i32 notrap aligned region19 v37+8
 ;; @0100                               v78 = iconst.i32 2
-;; @0100                               v47 = load.i64 notrap aligned readonly can_move region20 v13+144
+;; @0100                               v47 = load.i64 notrap aligned readonly can_move region20 v13+136
 ;;                                     v71 = iconst.i64 3
 ;;                                     v72 = ishl.i64 v19, v71  ; v71 = 3
 ;; @0100                               v50 = iadd v47, v72
@@ -165,7 +165,7 @@
 ;; @0100                               store.i32 notrap aligned region22 v2, v50+4
 ;; @0100                               v52 = iconst.i64 1
 ;; @0100                               v53 = iadd.i64 v19, v52  ; v52 = 1
-;; @0100                               store notrap aligned region13 v53, v13+152
+;; @0100                               store notrap aligned region13 v53, v13+144
 ;; @0100                               jump block10(v46)
 ;;
 ;;                                 block9 cold:
@@ -179,19 +179,19 @@
 ;; @0102                               try_call fn0(v56, v0, v23), sig2, block16(ret0), [ context v0, default: block6(exn0) ]
 ;;
 ;;                                 block16(v57: i32):
-;; @0106                               v61 = load.i64 notrap aligned region5 v13+136
+;; @0106                               v61 = load.i64 notrap aligned region5 v13+128
 ;; @0106                               v62 = icmp eq v61, v12
 ;; @0106                               brif v62, block17, block18
 ;;
 ;;                                 block17:
 ;; @0106                               v63 = load.i64 notrap aligned region6 v12
-;; @0106                               store notrap aligned region5 v63, v13+136
+;; @0106                               store notrap aligned region5 v63, v13+128
 ;; @0106                               v64 = load.i64 notrap aligned region14 v12+24
-;; @0106                               store notrap aligned region13 v64, v13+152
+;; @0106                               store notrap aligned region13 v64, v13+144
 ;; @0106                               v65 = load.i32 notrap aligned region10 v12+16
-;; @0106                               store notrap aligned region9 v65, v13+128
+;; @0106                               store notrap aligned region9 v65, v13+120
 ;; @0106                               v66 = load.i32 notrap aligned region12 v12+20
-;; @0106                               store notrap aligned region11 v66, v13+132
+;; @0106                               store notrap aligned region11 v66, v13+124
 ;; @0106                               jump block19
 ;;
 ;;                                 block18 cold:

@@ -1,6 +1,6 @@
 //! S390x ISA: binary code emission.
 
-use crate::ir::{self, LibCall, MemFlagsData, TrapCode};
+use crate::ir::{LibCall, MemFlagsData, TrapCode};
 use crate::isa::CallConv;
 use crate::isa::s390x::abi::REG_SAVE_AREA_SIZE;
 use crate::isa::s390x::inst::*;
@@ -1398,9 +1398,8 @@ pub struct EmitState {
     /// for functions using the tail-call ABI.
     pub(crate) incoming_args_size: u32,
 
-    /// The user stack map for the upcoming instruction, as provided to
-    /// `pre_safepoint()`.
-    user_stack_map: Option<ir::UserStackMap>,
+    /// Tracks user stack maps for safepoint instructions.
+    stack_maps: StackMapEmitter<Inst>,
 
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
@@ -1420,14 +1419,14 @@ impl MachInstEmitState<Inst> for EmitState {
             nominal_sp_offset: 0,
             outgoing_sp_offset: 0,
             incoming_args_size,
-            user_stack_map: None,
+            stack_maps: StackMapEmitter::default(),
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
-        self.user_stack_map = user_stack_map;
+    fn stack_map_emitter(&mut self) -> &mut StackMapEmitter<Inst> {
+        &mut self.stack_maps
     }
 
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
@@ -1440,16 +1439,6 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
-    }
-}
-
-impl EmitState {
-    fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
-        self.user_stack_map.take()
-    }
-
-    fn clear_post_insn(&mut self) {
-        self.user_stack_map = None;
     }
 }
 
@@ -3786,11 +3775,11 @@ impl Inst {
                         &enc_rr(opcode, link.to_reg(), *reg)
                     }
                 };
-                if let Some(s) = state.take_stack_map() {
-                    let offset = sink.cur_offset() + enc.len() as u32;
-                    sink.push_user_stack_map(state, offset, s);
-                }
                 put(sink, enc);
+                if let Some(s) = state.stack_maps.take(sink) {
+                    let offset = sink.cur_offset();
+                    state.stack_maps.push(sink, &state.frame_layout, offset, s);
+                }
 
                 if let Some(try_call) = info.try_call_info.as_ref() {
                     sink.add_try_call_site(
@@ -4029,7 +4018,5 @@ impl Inst {
                 // Nothing.
             }
         }
-
-        state.clear_post_insn();
     }
 }

@@ -112,36 +112,6 @@ pub fn read_to_string(d: &File, path: impl AsRef<Path>) -> io::Result<String> {
     Ok(s)
 }
 
-#[cfg(not(windows))]
 pub fn symlink(d: &File, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
     p::symlink(src.as_ref(), d, dst.as_ref())
-}
-
-#[cfg(windows)]
-pub fn symlink(d: &File, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    if is_dir(d, src.as_ref()) {
-        p::symlink_dir(src.as_ref(), d, dst.as_ref())
-    } else {
-        p::symlink_file(src.as_ref(), d, dst.as_ref())
-    }
-}
-
-#[cfg(not(windows))]
-pub fn symlink_file(d: &File, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    p::symlink(src.as_ref(), d, dst.as_ref())
-}
-
-#[cfg(windows)]
-pub fn symlink_file(d: &File, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    p::symlink_file(src.as_ref(), d, dst.as_ref())
-}
-
-#[cfg(not(windows))]
-pub fn symlink_dir(d: &File, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    p::symlink(src.as_ref(), d, dst.as_ref())
-}
-
-#[cfg(windows)]
-pub fn symlink_dir(d: &File, src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    p::symlink_dir(src.as_ref(), d, dst.as_ref())
 }

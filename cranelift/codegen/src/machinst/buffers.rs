@@ -10,8 +10,8 @@
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir;
 use crate::machinst::{
-    MachBuffer, MachBufferFinalized, MachInstLabelUse, MachLabel, VCodeConstant, VCodeConstants,
-    VCodeInst,
+    FrameLayout, MachBuffer, MachBufferFinalized, MachInstLabelUse, MachLabel, VCodeConstant,
+    VCodeConstants, VCodeInst,
 };
 use alloc::vec::Vec;
 use core::ops::{Deref, DerefMut};
@@ -147,11 +147,11 @@ impl<'a, I: VCodeInst> MachBuffers<'a, I> {
     /// See [`MachBuffer::push_user_stack_map`].
     pub fn push_user_stack_map(
         &mut self,
-        emit_state: &I::State,
+        frame_layout: &FrameLayout,
         pc: CodeOffset,
         stack_map: ir::UserStackMap,
     ) {
-        self.text.push_user_stack_map(emit_state, pc, stack_map);
+        self.text.push_user_stack_map(frame_layout, pc, stack_map);
     }
 
     /// Finishes both buffers. The second result is `None` without a buffer for

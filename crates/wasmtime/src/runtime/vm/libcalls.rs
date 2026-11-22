@@ -420,17 +420,14 @@ fn table_get_lazy_init_func_ref(
 fn drop_gc_ref(store: &mut dyn VMStore, _instance: InstanceId, gc_ref: u32) {
     log::trace!("libcalls::drop_gc_ref({gc_ref:#x})");
     let gc_ref = VMGcRef::from_raw_u32(gc_ref).expect("non-null VMGcRef");
-    store
-        .store_opaque_mut()
-        .unwrap_gc_store_mut()
-        .drop_gc_ref(gc_ref);
+    store.unwrap_gc_store_mut().drop_gc_ref(gc_ref);
 }
 
 /// Force a DRC GC cycle.
 #[cfg(feature = "gc-drc")]
 #[inline]
 fn force_gc(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
-    let store = store.store_opaque_mut();
+    let store = &mut **store;
     block_on!(store, async |store, asyncness| {
         store.gc(None, None, None, asyncness).await?;
         Ok::<(), Error>(())
@@ -446,6 +443,7 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
         store
             .require_gc_store()?
             .gc_heap
+            .get()
             .vmmemory()
             .current_length(),
     )
@@ -466,6 +464,7 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
         store
             .require_gc_store()?
             .gc_heap
+            .get()
             .vmmemory()
             .current_length(),
     )
@@ -518,7 +517,7 @@ fn gc_alloc_raw(
 
     // Fast path: when the GC store already exists, try to allocate directly to
     // skip the async/fiber machinery.
-    let opaque = store.store_opaque_mut();
+    let opaque = &mut **store;
     if let Some(gc_store) = opaque.try_gc_store_mut() {
         if let Ok(gc_ref) = gc_store.alloc_raw(header, layout)? {
             let raw = gc_store.expose_gc_ref_to_wasm(gc_ref)?;
@@ -555,7 +554,7 @@ unsafe fn intern_func_ref_for_gc_heap(
     use crate::{store::AutoAssertNoGc, vm::SendSyncPtr};
     use core::ptr::NonNull;
 
-    let mut store = AutoAssertNoGc::new(store.store_opaque_mut());
+    let mut store = AutoAssertNoGc::new(&mut **store);
 
     let func_ref = func_ref.cast::<VMFuncRef>();
     let func_ref = NonNull::new(func_ref).map(SendSyncPtr::new);
@@ -585,7 +584,7 @@ fn get_interned_func_ref(
     use crate::store::AutoAssertNoGc;
     use wasmtime_environ::{ModuleInternedTypeIndex, packed_option::ReservedValue};
 
-    let store = AutoAssertNoGc::new(store.store_opaque_mut());
+    let store = AutoAssertNoGc::new(&mut **store);
 
     let func_ref_id = match FuncRefTableId::from_raw(func_ref_id) {
         Some(id) => id,
@@ -624,7 +623,7 @@ unsafe fn intern_contref_for_gc_heap(
 ) -> Result<u32> {
     use crate::store::AutoAssertNoGc;
 
-    let mut store = AutoAssertNoGc::new(store.store_opaque_mut());
+    let mut store = AutoAssertNoGc::new(&mut **store);
     let contobj = unsafe { crate::vm::VMContObj::from_raw_parts(contref, revision.addr()) };
     let id = unsafe { store.require_gc_store_mut()?.cont_ref_table.intern(contobj) };
     Ok(id)
@@ -644,7 +643,7 @@ unsafe fn get_interned_contref(
     use crate::store::AutoAssertNoGc;
     use core::ptr::NonNull;
 
-    let store = AutoAssertNoGc::new(store.store_opaque_mut());
+    let store = AutoAssertNoGc::new(&mut **store);
     let contobj = store.unwrap_gc_store().cont_ref_table.get(contref_id)?;
     let raw = match contobj {
         Some(contobj) => VMRawContObj {
@@ -1269,7 +1268,7 @@ fn watched_write(
     len: u64,
     value: Option<u128>,
 ) -> Result<()> {
-    let opaque = store.store_opaque_mut();
+    let opaque = &mut **store;
     let store_id = opaque.id();
     let memory = match opaque
         .instance_mut(instance)

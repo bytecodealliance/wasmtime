@@ -2,7 +2,7 @@
 
 use cranelift_control::ControlPlane;
 
-use crate::ir::{self, types::*};
+use crate::ir::types::*;
 use crate::isa::aarch64;
 use crate::isa::aarch64::inst::*;
 use crate::trace;
@@ -741,9 +741,8 @@ fn enc_asimd_mod_imm(rd: Writable<Reg>, q_op: u32, cmode: u32, imm: u8) -> u32 {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    /// The user stack map for the upcoming instruction, as provided to
-    /// `pre_safepoint()`.
-    user_stack_map: Option<ir::UserStackMap>,
+    /// Tracks user stack maps for safepoint instructions.
+    stack_maps: StackMapEmitter<Inst>,
 
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
@@ -755,14 +754,14 @@ pub struct EmitState {
 impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<AArch64MachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
-            user_stack_map: None,
+            stack_maps: StackMapEmitter::default(),
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
         }
     }
 
-    fn pre_safepoint(&mut self, user_stack_map: Option<ir::UserStackMap>) {
-        self.user_stack_map = user_stack_map;
+    fn stack_map_emitter(&mut self) -> &mut StackMapEmitter<Inst> {
+        &mut self.stack_maps
     }
 
     fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
@@ -775,16 +774,6 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
-    }
-}
-
-impl EmitState {
-    fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
-        self.user_stack_map.take()
-    }
-
-    fn clear_post_insn(&mut self) {
-        self.user_stack_map = None;
     }
 }
 
@@ -3425,12 +3414,11 @@ impl MachInstEmit for Inst {
             }
             &Inst::Call { ref info } => {
                 let start = sink.cur_offset();
-                let user_stack_map = state.take_stack_map();
                 sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
-                if let Some(s) = user_stack_map {
+                if let Some(s) = state.stack_maps.take(sink) {
                     let offset = sink.cur_offset();
-                    sink.push_user_stack_map(state, offset, s);
+                    state.stack_maps.push(sink, &state.frame_layout, offset, s);
                 }
 
                 if let Some(try_call) = info.try_call_info.as_ref() {
@@ -3475,13 +3463,12 @@ impl MachInstEmit for Inst {
                 start_off = sink.cur_offset();
             }
             &Inst::CallInd { ref info } => {
-                let user_stack_map = state.take_stack_map();
                 sink.put4(
                     0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(info.dest) << 5),
                 );
-                if let Some(s) = user_stack_map {
+                if let Some(s) = state.stack_maps.take(sink) {
                     let offset = sink.cur_offset();
-                    sink.push_user_stack_map(state, offset, s);
+                    state.stack_maps.push(sink, &state.frame_layout, offset, s);
                 }
 
                 if let Some(try_call) = info.try_call_info.as_ref() {
@@ -4145,7 +4132,9 @@ impl MachInstEmit for Inst {
                 trap_code,
                 ..
             } => {
-                let stack_map = state.take_stack_map();
+                // Note: this may emit a NOP, so it must come before recording
+                // the trap below.
+                let stack_map = state.stack_maps.take(sink);
 
                 // Record the address of the load in the trap table so a signal
                 // handler can later distinguish whether a segfault is its
@@ -4155,7 +4144,10 @@ impl MachInstEmit for Inst {
                 // SIGSEGV reports the PC of the faulting load, so the stack map
                 // is associated with the load itself.
                 if let Some(stack_map) = stack_map {
-                    sink.push_user_stack_map(state, sink.cur_offset(), stack_map);
+                    let offset = sink.cur_offset();
+                    state
+                        .stack_maps
+                        .push(sink, &state.frame_layout, offset, stack_map);
                 }
 
                 // Emit `ldr dst, [load_ptr]`. Reuse the `dst` address as the
@@ -4181,8 +4173,6 @@ impl MachInstEmit for Inst {
             self,
             end_off - start_off
         );
-
-        state.clear_post_insn();
     }
 
     fn pretty_print_inst(&self, state: &mut Self::State) -> String {

@@ -239,6 +239,13 @@ fn get_mut_by_index_from(
     }
 }
 
+/// Lowers items from the `buffer` of a host `{Stream,Future}Producer` `P` into
+/// a guest's linear memory, where `T` is `P::Item`.
+///
+/// `Lower` requires `T::typecheck` to pass for `ty`'s payload, but no check is
+/// done here. `ty` is the type of the read end's entry in the guest's handle
+/// table, so by the invariant on `lower_transmit_to_index`,
+/// `P::Item::typecheck` has already passed for `ty`'s payload.
 fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
     mut store: StoreContextMut<U>,
     instance: Instance,
@@ -902,7 +909,7 @@ impl<'a, T> Source<'a, T> {
                 bail_bug!("expected WriteState::GuestReady");
             };
 
-            let cx = &mut LiftContext::new(store.0.store_opaque_mut(), options, instance)?;
+            let cx = &mut LiftContext::new(&mut **store.0, options, instance)?;
             let ty = ty.payload(cx.types);
             let old_remaining = buffer.remaining_capacity();
             lift::<T, B>(
@@ -1246,6 +1253,9 @@ pub trait FutureConsumer<D>: Send + 'static {
 /// ensure that disposal happens automatically.
 pub struct FutureReader<T> {
     idx: HostResourceIndex,
+    // It has already been checked that this read end is connected to a
+    // `FutureProducer` with `Item = T`.
+    producer_type_match_checked: bool,
     _phantom: PhantomData<T>,
 }
 
@@ -1307,16 +1317,21 @@ impl<T> FutureReader<T> {
             }
         }
 
-        Ok(Self::new_(
-            store
+        Ok(Self {
+            idx: store
                 .as_context_mut()
                 .new_transmit(TransmitKind::Future, Producer(producer))?,
-        ))
+            producer_type_match_checked: true,
+            _phantom: PhantomData,
+        })
     }
 
     pub(super) fn new_(idx: HostResourceIndex) -> Self {
         Self {
             idx,
+            // It isn't known if this future comes from a `FutureProducer` with
+            // `Item = T`.
+            producer_type_match_checked: false,
             _phantom: PhantomData,
         }
     }
@@ -1481,11 +1496,6 @@ pub(super) fn lift_index_to_future(
 
 /// Checks that the host-owned read end `idx` may be lowered into a guest as a
 /// future or stream with the payload type `payload`.
-///
-/// Note that this is technically redundant for `StreamReader<T>` where its
-/// static typecheck already verified this, but this is otherwise required in
-/// the face of the `{Stream,Future}Any` abstraction to handle various use cases
-/// of types dynamically being labeled or possibly switched.
 fn typecheck_lowered_transmit<U>(
     idx: HostResourceIndex,
     cx: &mut LowerContext<'_, U>,
@@ -1513,15 +1523,29 @@ fn typecheck_lowered_transmit<U>(
 }
 
 /// Transfer ownership of the read end of a future from the host to a guest.
+/// `item_already_typechecked` should only be set to `true` when lowering a
+/// `FutureReader<T>` which contains a `FutureProducer<Item = T>`.
 pub(super) fn lower_future_to_index<U>(
     idx: HostResourceIndex,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
+    item_already_typechecked: bool,
 ) -> Result<u32> {
     match ty {
         InterfaceType::Future(dst) => {
-            let types = cx.types;
-            typecheck_lowered_transmit(idx, cx, types[types[dst].ty].payload.as_ref())?;
+            // Maintains the invariant on `lower_transmit_to_index`: if this read
+            // end comes from a host `FutureProducer` `P`, then
+            // `P::Item::typecheck` must pass for `ty`'s payload.
+            //
+            // If `item_already_typechecked` is true, then we're lowering a
+            // `FutureReader<T>`, which means `FutureReader<T>::typecheck` has
+            // already passed for `ty` (as required by the `Lower` trait). This
+            // includes running `T::typecheck` for `ty`'s payload, and
+            // since `P::Item = T` the invariant is already satisfied.
+            if !item_already_typechecked {
+                let types = cx.types;
+                typecheck_lowered_transmit(idx, cx, types[types[dst].ty].payload.as_ref())?;
+            }
             let id = cx.store.0.host_reader_take(idx)?;
             cx.instance_handle()
                 .lower_transmit_to_index(cx.store.0, TransmitIndex::Future(dst), id)
@@ -1556,7 +1580,8 @@ unsafe impl<T: ComponentType> func::Lower for FutureReader<T> {
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_flat(cx, InterfaceType::U32, dst)
+        lower_future_to_index(self.idx, cx, ty, self.producer_type_match_checked)?
+            .linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
     fn linear_lower_to_memory<U>(
@@ -1565,11 +1590,8 @@ unsafe impl<T: ComponentType> func::Lower for FutureReader<T> {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        lower_future_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
-            cx,
-            InterfaceType::U32,
-            offset,
-        )
+        lower_future_to_index(self.idx, cx, ty, self.producer_type_match_checked)?
+            .linear_lower_to_memory(cx, InterfaceType::U32, offset)
     }
 }
 
@@ -1676,6 +1698,9 @@ where
 /// disposal happens automatically.
 pub struct StreamReader<T> {
     idx: HostResourceIndex,
+    // It has already been checked that this read end is connected to a
+    // `StreamProducer` with `Item = T`.
+    producer_type_match_checked: bool,
     _phantom: PhantomData<T>,
 }
 
@@ -1699,16 +1724,21 @@ impl<T> StreamReader<T> {
             store.as_context().0.concurrency_support(),
             "concurrency support is not enabled",
         );
-        Ok(Self::new_(
-            store
+        Ok(Self {
+            idx: store
                 .as_context_mut()
                 .new_transmit(TransmitKind::Stream, producer)?,
-        ))
+            producer_type_match_checked: true,
+            _phantom: PhantomData,
+        })
     }
 
     pub(super) fn new_(idx: HostResourceIndex) -> Self {
         Self {
             idx,
+            // It isn't known if this stream comes from a `StreamProducer` with
+            // `Item = T`.
+            producer_type_match_checked: false,
             _phantom: PhantomData,
         }
     }
@@ -1871,15 +1901,29 @@ pub(super) fn lift_index_to_stream(
 }
 
 /// Transfer ownership of the read end of a stream from the host to a guest.
+/// `item_already_typechecked` should only be set to `true` when lowering a
+/// `StreamReader<T>` which contains a `StreamProducer<Item = T>`.
 pub(super) fn lower_stream_to_index<U>(
     idx: HostResourceIndex,
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
+    item_already_typechecked: bool,
 ) -> Result<u32> {
     match ty {
         InterfaceType::Stream(dst) => {
-            let types = cx.types;
-            typecheck_lowered_transmit(idx, cx, types[types[dst].ty].payload.as_ref())?;
+            // Maintains the invariant on `lower_transmit_to_index`: if this read
+            // end comes from a host `StreamProducer` `P`, then
+            // `P::Item::typecheck` must pass for `ty`'s payload.
+            //
+            // If `item_already_typechecked` is true, then we're lowering a
+            // `StreamReader<T>`, which means `StreamReader<T>::typecheck` has
+            // already passed for `ty` (as required by the `Lower` trait). This
+            // includes running `T::typecheck` for `ty`'s payload, and
+            // since `P::Item = T` the invariant is already satisfied.
+            if !item_already_typechecked {
+                let types = cx.types;
+                typecheck_lowered_transmit(idx, cx, types[types[dst].ty].payload.as_ref())?;
+            }
             let id = cx.store.0.host_reader_take(idx)?;
             cx.instance_handle()
                 .lower_transmit_to_index(cx.store.0, TransmitIndex::Stream(dst), id)
@@ -1914,7 +1958,8 @@ unsafe impl<T: ComponentType> func::Lower for StreamReader<T> {
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
-        lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_flat(cx, InterfaceType::U32, dst)
+        lower_stream_to_index(self.idx, cx, ty, self.producer_type_match_checked)?
+            .linear_lower_to_flat(cx, InterfaceType::U32, dst)
     }
 
     fn linear_lower_to_memory<U>(
@@ -1923,11 +1968,8 @@ unsafe impl<T: ComponentType> func::Lower for StreamReader<T> {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        lower_stream_to_index(self.idx, cx, ty)?.linear_lower_to_memory(
-            cx,
-            InterfaceType::U32,
-            offset,
-        )
+        lower_stream_to_index(self.idx, cx, ty, self.producer_type_match_checked)?
+            .linear_lower_to_memory(cx, InterfaceType::U32, offset)
     }
 }
 
@@ -2659,6 +2701,12 @@ impl StoreOpaque {
     }
 }
 
+struct ProducerState<P, B> {
+    producer: P,
+    buffer: B,
+    dropped: bool,
+}
+
 impl<T> StoreContextMut<'_, T> {
     fn new_transmit<P: StreamProducer<T>>(
         mut self,
@@ -2673,16 +2721,19 @@ impl<T> StoreContextMut<'_, T> {
         let (_, read) = state.new_transmit(TransmitOrigin::Host {
             typecheck: types::typecheck_payload::<P::Item>,
         })?;
-        let producer = Arc::new(LockedState::new((Box::pin(producer), P::Buffer::default())));
+        let producer = Arc::new(LockedState::new(ProducerState {
+            producer: Box::pin(producer),
+            buffer: P::Buffer::default(),
+            dropped: false,
+        }));
         let id = state.get_mut(read)?.state;
-        let mut dropped = false;
         let produce = Box::new({
             let producer = producer.clone();
             move || {
                 let producer = producer.clone();
                 async move {
                     let mut state = producer.take()?;
-                    let (mine, buffer) = &mut *state;
+                    let ProducerState { producer: mine, buffer, dropped } = &mut *state;
 
                     let (result, cancelled) = if buffer.remaining().is_empty() {
                         future::poll_fn(|cx| {
@@ -2752,9 +2803,9 @@ impl<T> StoreContextMut<'_, T> {
                                                  after producing at least one item"
                                             )
                                         }
-                                         Some(cx.waker().clone())
+                                        Some(cx.waker().clone())
                                     } else {
-                                         None
+                                        None
                                     };
                                 }
 
@@ -2810,11 +2861,13 @@ impl<T> StoreContextMut<'_, T> {
                             }
                         }
                         StreamResult::Dropped => {
-                            dropped = true;
+                            *dropped = true;
                         }
                     }
 
                     let write_buffer = !buffer.remaining().is_empty() || host_offset > 0;
+
+                    let dropped = *dropped;
 
                     drop(state);
 
@@ -2823,7 +2876,7 @@ impl<T> StoreContextMut<'_, T> {
                     }
 
                     Ok(if dropped {
-                        if producer.with(|p| p.1.remaining().is_empty())?  {
+                        if producer.with(|p| p.buffer.remaining().is_empty())? {
                             StreamResult::Dropped
                         } else {
                             StreamResult::Completed
@@ -2836,11 +2889,19 @@ impl<T> StoreContextMut<'_, T> {
             }
         });
         let try_into = Box::new(move |ty| {
-            let (mine, buffer) = producer.try_lock().ok()?.take()?;
+            let ProducerState {
+                producer: mine,
+                buffer,
+                dropped,
+            } = producer.try_lock().ok()?.take()?;
             match P::try_into(mine, buffer, ty) {
                 Ok(value) => Some(value),
                 Err((mine, buffer)) => {
-                    *producer.try_lock().ok()? = Some((mine, buffer));
+                    *producer.try_lock().ok()? = Some(ProducerState {
+                        producer: mine,
+                        buffer,
+                        dropped,
+                    });
                     None
                 }
             }
@@ -3071,7 +3132,7 @@ impl<T> StoreContextMut<'_, T> {
 async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: WriteBuffer<T>>(
     token: StoreToken<D>,
     id: TableId<TransmitState>,
-    pair: Arc<LockedState<(P, B)>>,
+    producer: Arc<LockedState<ProducerState<P, B>>>,
     kind: TransmitKind,
 ) -> Result<()> {
     let (read, guest_offset) = tls::get(|store| {
@@ -3112,11 +3173,11 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                 })?;
             }
 
-            let old_remaining = pair.with(|p| p.1.remaining().len())?;
+            let old_remaining = producer.with(|p| p.buffer.remaining().len())?;
             let accept = {
-                let pair = pair.clone();
+                let producer = producer.clone();
                 move |mut store: StoreContextMut<D>| {
-                    let mut state = pair.take()?;
+                    let mut state = producer.take()?;
                     lower::<T, B, D>(
                         store.as_context_mut(),
                         instance,
@@ -3124,7 +3185,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                         ty,
                         address + (T::SIZE32 * guest_offset.as_usize()),
                         count.as_usize() - guest_offset.as_usize(),
-                        &mut state.1,
+                        &mut state.buffer,
                     )?;
                     crate::error::Ok(())
                 }
@@ -3171,7 +3232,7 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
             }
 
             tls::get(|store| {
-                let count = old_remaining - pair.with(|p| p.1.remaining().len())?;
+                let count = old_remaining - producer.with(|p| p.buffer.remaining().len())?;
 
                 let transmit = store.concurrent_state_mut()?.get_mut(id)?;
 
@@ -3213,8 +3274,8 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
             }
 
             {
-                let mut pair = pair.take()?;
-                let (_, buffer) = &mut *pair;
+                let mut producer = producer.take()?;
+                let ProducerState { buffer, .. } = &mut *producer;
 
                 while !(matches!(state, StreamResult::Dropped) || buffer.remaining().is_empty()) {
                     state = accept(&mut UntypedWriteBuffer::new(buffer)).await?;
@@ -3488,15 +3549,14 @@ impl Instance {
                     Some(ty) => ty,
                     None => bail_bug!("expected read payload type to be present"),
                 };
-                let lift =
-                    &mut LiftContext::new(store.store_opaque_mut(), write_options, write_instance)?;
+                let lift = &mut LiftContext::new(&mut **store, write_options, write_instance)?;
                 if let Some(abi) = flat_abi {
                     // The host copies these bytes itself rather than wasm, so
                     // charge them against hostcall fuel.
                     lift.consume_fuel_array(count, usize::try_from(abi.size)?)?;
 
                     // Fast path memcpy for "flat" (i.e. no pointers or handles) payloads:
-                    let store_opaque = store.store_opaque_mut();
+                    let store_opaque = &mut **store;
 
                     assert_eq!(read_length_in_bytes, write_length_in_bytes);
 
@@ -4647,6 +4707,11 @@ impl Instance {
 
     /// Transfer ownership of the specified stream or future read end from one
     /// guest to another.
+    ///
+    /// Maintains the invariant on `lower_transmit_to_index`: component
+    /// validation requires `src` and `dst` to have equivalent payload types, so
+    /// if `P::Item::typecheck` passed for `src`'s payload, it also passes for
+    /// `dst`'s.
     fn guest_transfer(
         self,
         store: &mut StoreOpaque,
@@ -4668,6 +4733,8 @@ impl Instance {
         lift_index_to_transmit(instance, state.concurrent_state_mut(), ty, src_idx)
     }
 
+    /// Callers must maintain the invariant on the free function
+    /// `lower_transmit_to_index`.
     fn lower_transmit_to_index(
         self,
         store: &mut StoreOpaque,
@@ -4808,6 +4875,13 @@ fn lift_index_to_transmit(
 
 /// Performs the opertion of lowering a future or stream `TransmitHandle` into
 /// an instance.
+///
+/// Invariant: if the read end of a stream or future is in a guest's handle
+/// table under type `ty`, and it comes from a host `{Stream,Future}Producer`
+/// `P`, then `P::Item::typecheck` has passed for `ty`'s payload. Apart from
+/// `guest_new`, which only creates guest-written transmits, this is the only
+/// place read ends are inserted into a guest's table, so callers must maintain
+/// this invariant.
 fn lower_transmit_to_index(
     instance: Pin<&mut ComponentInstance>,
     counter: &mut HandleCounter,
