@@ -4913,6 +4913,7 @@ dependencies = [
  "directories",
  "env_logger",
  "filetime",
+ "libc",
  "log",
  "postcard",
  "rustix 1.1.6",
