@@ -259,6 +259,24 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<Reg>>(
                     CallFrameInstruction::ValOffset(reg, off),
                 ));
             }
+            &UnwindInst::FrameRecordMoved { size } => {
+                // Keep the CFA at the original caller SP and describe the
+                // relocated frame record relative to it.
+                cfa_offset += size;
+                clobber_offset_to_cfa += size;
+                let offset = cfa_offset as i32;
+                instructions.extend([
+                    (instruction_offset, CallFrameInstruction::CfaOffset(offset)),
+                    (
+                        instruction_offset,
+                        CallFrameInstruction::Offset(gimli::X86_64::RBP.0, -offset),
+                    ),
+                    (
+                        instruction_offset,
+                        CallFrameInstruction::Offset(gimli::X86_64::RA.0, 8 - offset),
+                    ),
+                ]);
+            }
             &UnwindInst::Aarch64SetPointerAuth { return_addresses } => {
                 instructions.push((
                     instruction_offset,
