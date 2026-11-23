@@ -66,6 +66,7 @@ TEST(Config, Smoke) {
   config.memory_guard_size(0);
   config.memory_may_move(false);
   config.memory_init_cow(false);
+  config.memory_guaranteed_dense_image_size(1024 * 1024);
   config.native_unwind_info(false);
   config.asan_compatible_code(false);
   config.macos_use_mach_ports(false);
