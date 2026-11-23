@@ -158,11 +158,7 @@ impl ComponentStoreData {
         let guest = instance.map(|i| {
             let i = i.id();
             i.assert_belongs_to(store_id);
-            self.instances[i.instance]
-                .as_mut()
-                .unwrap()
-                .get_mut()
-                .instance_states_and_published()
+            self.instances[i.instance].as_mut().unwrap().get_mut()
         });
         (
             vm::component::ResourceTables {
