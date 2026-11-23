@@ -62,6 +62,7 @@ use crate::hash_set::HashSet;
 use crate::module::ModuleRegistry;
 use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
+use crate::sync::Mutex;
 #[cfg(feature = "gc")]
 use crate::vm::GcRootsList;
 use crate::vm::VMScope;
@@ -78,6 +79,7 @@ use crate::{Instance as ModuleInstance, bail_bug};
 use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::Entry;
 use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
+use alloc::sync::Arc;
 use core::any::Any;
 use core::cell::UnsafeCell;
 use core::fmt;
@@ -769,7 +771,6 @@ enum GuestCallKind {
         /// Whether the task was previously pending due to e.g. backpressure.
         was_pending: bool,
     },
-    StartExplicit(Box<dyn FnOnce(&mut dyn VMStore) -> Result<()> + Send + Sync>),
 }
 
 impl fmt::Debug for GuestCallKind {
@@ -784,7 +785,6 @@ impl fmt::Debug for GuestCallKind {
                 .debug_struct("StartImplicit")
                 .field("was_pending", was_pending)
                 .finish(),
-            Self::StartExplicit(_) => f.debug_tuple("StartExplicit").finish(),
         }
     }
 }
@@ -862,7 +862,6 @@ impl GuestCall {
                     true
                 }
             }
-            GuestCallKind::StartExplicit(_) => true,
         };
         log::trace!(
             "call {self:?} ready? {ready} (do_not_enter: {}; backpressure: {}; pending_start_count: {})",
@@ -1109,9 +1108,6 @@ fn handle_guest_call(store: &mut dyn VMStore, call: GuestCall) -> Result<()> {
         }
         GuestCallKind::StartImplicit { closure, .. } => {
             closure(store)?;
-        }
-        GuestCallKind::StartExplicit(fun) => {
-            fun(store)?;
         }
     }
 
@@ -4447,8 +4443,16 @@ impl Instance {
         }
 
         let token = StoreToken::new(store.as_context_mut());
-        let start_func = Box::new(
-            move |store: &mut dyn VMStore, guest_thread: QualifiedThreadId| -> Result<()> {
+        let current_thread = store.0.current_guest_thread()?;
+        let parent_task = current_thread.task;
+
+        let thread_cell = Arc::new(Mutex::new(None));
+        let id_for_fiber = thread_cell.clone();
+        let this = self;
+
+        let fiber = match unsafe {
+            fiber::make_fiber_unchecked(store.0, move |store| {
+                let guest_thread = (*id_for_fiber.lock()).expect("thread id must be initialized");
                 let old_thread = store.set_thread(guest_thread)?;
                 log::trace!(
                     "thread start: replaced {old_thread:?} with {guest_thread:?} as current thread"
@@ -4458,11 +4462,11 @@ impl Instance {
                 let mut params = [ValRaw::i32(context)];
                 // Use call_unchecked rather than call or call_async, as we don't want to run the function
                 // on a separate fiber if we're running in an async store.
-                unsafe { callee.call_unchecked(store.as_context_mut(), &mut params)? };
+                callee.call_unchecked(store.as_context_mut(), &mut params)?;
 
                 store.0.set_thread(old_thread)?;
 
-                let runtime_instance = self.runtime_instance(runtime_instance);
+                let runtime_instance = this.runtime_instance(runtime_instance);
 
                 // We're not returning to any caller, so we may need to switch
                 // or trap if the instance has an outstanding sync-typed call:
@@ -4480,16 +4484,23 @@ impl Instance {
                 log::trace!("thread start: restored {old_thread:?} as current thread");
 
                 Ok(())
-            },
-        );
+            })
+        } {
+            Ok(fiber) => fiber,
+            Err(e) => {
+                log::trace!("fiber allocation failed in thread.new-indirect: {e}");
+                return Ok(u32::MAX);
+            }
+        };
 
-        let current_thread = store.0.current_guest_thread()?;
         let state = store.0.concurrent_state_mut()?;
-        let parent_task = current_thread.task;
-
-        let new_thread = GuestThread::new_explicit(state, parent_task, start_func)?;
+        let new_thread = GuestThread::new_explicit(state, parent_task, fiber)?;
         let thread_id = state.push(new_thread)?;
         state.get_mut(parent_task)?.threads.insert(thread_id);
+        *thread_cell.lock() = Some(QualifiedThreadId {
+            task: parent_task,
+            thread: thread_id,
+        });
 
         log::trace!("new thread with id {thread_id:?} created");
 
@@ -4540,10 +4551,6 @@ impl Instance {
                                     // gate on that.
                                     GuestCallKind::DeliverEvent { .. } => !do_not_enter,
 
-                                    // A not-yet-started thread made ready via
-                                    // `thread.resume-later`.
-                                    GuestCallKind::StartExplicit(_) => true,
-
                                     // Technically shouldn't be possible since
                                     // if this hasn't started nothing could get
                                     // its id...
@@ -4563,7 +4570,6 @@ impl Instance {
         // When resuming a thread it must be in a suspended state otherwise
         // this operation is a trap.
         match &thread.state {
-            GuestThreadState::NotStartedExplicit(_) => {}
             GuestThreadState::Suspended(_) => {
                 log::trace!("resuming thread {thread_id:?} that was suspended");
                 state.schedule_suspended_thread(
@@ -4571,30 +4577,10 @@ impl Instance {
                     self.runtime_instance(runtime_instance),
                     priority,
                 )?;
-                return Ok(true);
+                Ok(true)
             }
             _ => bail!(Trap::CannotResumeThread),
         }
-        match mem::replace(&mut thread.state, GuestThreadState::Running) {
-            GuestThreadState::NotStartedExplicit(start_func) => {
-                log::trace!("starting thread {guest_thread:?}");
-                let guest_call = WorkItem::GuestCall {
-                    instance: self.runtime_instance(runtime_instance),
-                    call: GuestCall {
-                        thread: guest_thread,
-                        kind: GuestCallKind::StartExplicit(Box::new(move |store| {
-                            start_func(store, guest_thread)
-                        })),
-                    },
-                };
-                state.push_work_item(guest_call, priority)?;
-            }
-            other => {
-                thread.state = other;
-                bail_bug!("thread state checked to be resumable above");
-            }
-        }
-        Ok(true)
     }
 
     fn add_guest_thread_to_instance_table(
@@ -5584,14 +5570,9 @@ impl fmt::Debug for QualifiedThreadId {
 
 enum GuestThreadState {
     NotStartedImplicit,
-    NotStartedExplicit(
-        Box<dyn FnOnce(&mut dyn VMStore, QualifiedThreadId) -> Result<()> + Send + Sync>,
-    ),
     Running,
     Suspended(StoreFiber<'static>),
-    Ready {
-        fiber: StoreFiber<'static>,
-    },
+    Ready { fiber: StoreFiber<'static> },
     Completed,
 }
 
@@ -5599,10 +5580,7 @@ impl GuestThreadState {
     fn check_no_fiber(&self) -> Result<()> {
         match self {
             Self::Suspended(_) | Self::Ready { .. } => bail_bug!("thread already owns a fiber"),
-            Self::NotStartedImplicit
-            | Self::NotStartedExplicit(_)
-            | Self::Running
-            | Self::Completed => Ok(()),
+            Self::NotStartedImplicit | Self::Running | Self::Completed => Ok(()),
         }
     }
 }
@@ -5611,7 +5589,6 @@ impl fmt::Debug for GuestThreadState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotStartedImplicit => f.debug_tuple("NotStartedImplicit").finish(),
-            Self::NotStartedExplicit(_) => f.debug_tuple("NotStartedExplicit").finish(),
             Self::Running => f.debug_tuple("Running").finish(),
             Self::Suspended(_) => f.debug_tuple("Suspended").finish(),
             Self::Ready { .. } => f.debug_struct("Ready").finish(),
@@ -5697,9 +5674,7 @@ impl GuestThread {
     fn new_explicit(
         state: &mut ConcurrentState,
         parent_task: TableId<GuestTask>,
-        start_func: Box<
-            dyn FnOnce(&mut dyn VMStore, QualifiedThreadId) -> Result<()> + Send + Sync,
-        >,
+        fiber: StoreFiber<'static>,
     ) -> Result<Self> {
         state.increment_task_ref_count(parent_task)?;
         let sync_call_set = state.push(WaitableSet {
@@ -5710,7 +5685,7 @@ impl GuestThread {
             context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
             parent_task,
             wake_on_cancel: WakeOnCancel::None,
-            state: GuestThreadState::NotStartedExplicit(start_func),
+            state: GuestThreadState::Suspended(fiber),
             instance_rep: None,
             sync_call_set,
             old_do_not_suspend: None,
@@ -6374,7 +6349,6 @@ impl ConcurrentState {
                         fibers.push(fiber);
                     }
                     GuestThreadState::NotStartedImplicit
-                    | GuestThreadState::NotStartedExplicit(_)
                     | GuestThreadState::Running
                     | GuestThreadState::Completed => {}
                 }
@@ -6484,7 +6458,6 @@ impl ConcurrentState {
                         fiber.trace_gc_roots(modules, unwind, gc_roots_list);
                     }
                     GuestThreadState::NotStartedImplicit
-                    | GuestThreadState::NotStartedExplicit(_)
                     | GuestThreadState::Running
                     | GuestThreadState::Completed => {}
                 }

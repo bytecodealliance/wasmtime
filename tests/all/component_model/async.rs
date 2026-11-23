@@ -3850,6 +3850,92 @@ async fn max_fibers() -> Result<()> {
 
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
+async fn thread_new_indirect_fiber_limit() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async_stackful(true);
+    config.wasm_component_model_threading(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "report-result" (func $report-result (param "result" s32)))
+            (core module $libc
+                (table (export "__indirect_function_table") 1 funcref))
+
+            (core module $m
+                (import "host" "report-result" (func $report-result (param i32)))
+                (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
+                (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
+
+                (func (export "spawn")
+                    (call $report-result (call $thread-new-indirect (i32.const 0) (i32.const 0)))
+                )
+                (func $thread-entry (param i32))
+                (elem (table $indirect-function-table) (i32.const 0) func $thread-entry)
+            )
+            (core instance $libc (instantiate $libc))
+            (core type $start-func-ty (func (param i32)))
+            (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
+            (core func $thread-new-indirect
+                (canon thread.new-indirect $start-func-ty (core table $indirect-function-table)))
+            (core func $report-result (canon lower (func $report-result)))
+
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "thread.new-indirect" (func $thread-new-indirect))
+                ))
+                (with "host" (instance
+                    (export "report-result" (func $report-result))
+                ))
+                (with "libc" (instance $libc))
+            ))
+            (func (export "spawn") async
+                (canon lift (core func $i "spawn")))
+        )"#,
+    )?;
+
+    let mut linker = Linker::<Arc<std::sync::Mutex<i32>>>::new(&engine);
+    linker.root().func_wrap(
+        "report-result",
+        |cx: StoreContextMut<Arc<std::sync::Mutex<i32>>>, (val,): (i32,)| {
+            *cx.data().lock().unwrap() = val;
+            Ok(())
+        },
+    )?;
+
+    // With max_fibers = 1, the calling thread occupies the only fiber,
+    // so thread.new-indirect fails fiber allocation and returns -1 rather than trapping.
+    {
+        let reported = Arc::new(std::sync::Mutex::new(0));
+        let mut store = Store::new(&engine, reported.clone());
+        store.set_max_fibers(1);
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+        let spawn = instance.get_typed_func::<(), ()>(&mut store, "spawn")?;
+        store
+            .run_concurrent(async |a| spawn.call_concurrent(a, ()).await)
+            .await??;
+        assert_eq!(*reported.lock().unwrap(), -1);
+    }
+
+    // With max_fibers = 2, allocating the new thread succeeds and returns a valid thread index (>= 0).
+    {
+        let reported = Arc::new(std::sync::Mutex::new(-99));
+        let mut store = Store::new(&engine, reported.clone());
+        store.set_max_fibers(2);
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+        let spawn = instance.get_typed_func::<(), ()>(&mut store, "spawn")?;
+        store
+            .run_concurrent(async |a| spawn.call_concurrent(a, ()).await)
+            .await??;
+        assert!(*reported.lock().unwrap() >= 0);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn cancel_stream_read_completed_by_host() -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_async(true);
