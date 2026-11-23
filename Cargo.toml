@@ -365,7 +365,7 @@ pulley-interpreter-fuzz = { path = 'pulley/fuzz' }
 
 # Bytecode Alliance maintained dependencies:
 # ---------------------------
-regalloc2 = "0.15.2"
+regalloc2 = "0.15.3"
 wasip1 = { version = "1.0.0", default-features = false }
 
 # cap-std family:
@@ -396,7 +396,7 @@ wasip2 = "1.0"
 # --------------------------
 arbitrary = "1.4.2"
 backtrace = "0.3.76"
-bumpalo = "3.20.2"
+bumpalo = "3.20.4"
 mutatis = { version = "0.5.2", features = ["alloc", "derive", "check"] }
 cc = "1.2.0" # intentionally smaller-than-latest to accommodate rust-lang/rust
 object = { version = "0.40.0", default-features = false, features = ['read_core', 'elf'] }
@@ -407,8 +407,8 @@ anyhow-for-testing = { package = "anyhow", version = "1.0.100", default-features
 windows-sys = "0.61.2"
 env_logger = "0.11.5"
 log = { version = "0.4.28", default-features = false }
-clap = { version = "4.5.48", default-features = false, features = ["std", "derive"] }
-clap_complete = "4.5.58"
+clap = { version = "4.6.8", default-features = false, features = ["std", "derive"] }
+clap_complete = "4.6.8"
 hashbrown = { version = "0.17", default-features = false }
 foldhash = { version = "0.2.0", default-features = false }
 capstone = { version = "0.14.0", default-features = false, features = ['full', 'arch_x86', 'arch_riscv', 'arch_arm64', 'arch_sysz'] }
@@ -434,7 +434,7 @@ walkdir = "2.5.0"
 tempfile = "3.27.0"
 filecheck = "0.5.0"
 libc = { version = "0.2.190", default-features = true }
-file-per-thread-logger = "0.2.0"
+file-per-thread-logger = "0.2.1"
 tokio = { version = "1.51.6", features = [ "rt", "time" ] }
 hyper = "1.12.0"
 hyper-util = { version = "0.1", features = ["tokio"] }

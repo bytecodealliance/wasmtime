@@ -264,6 +264,13 @@ impl WastContext {
             .func_wrap("wasmtime", "get-fuel", |caller: Caller<_>| {
                 caller.get_fuel()
             })?;
+        self.core_linker.func_wrap(
+            "wasmtime",
+            "new-externref",
+            |mut caller: Caller<_>, x: u32| -> Result<Option<Rooted<ExternRef>>> {
+                Ok(Some(ExternRef::new(&mut caller, x)?))
+            },
+        )?;
         #[cfg(feature = "component-model")]
         {
             let mut i = self.component_linker.instance("wasmtime")?;
@@ -343,7 +350,12 @@ impl WastContext {
                     };
 
                     Ok(match result {
-                        Ok(()) => Outcome::Ok(Results::Core(results)),
+                        Ok(()) => {
+                            // Results are unrooted; root them all at once so
+                            // that they survive the comparisons below.
+                            Val::ensure_all_rooted(&mut self.core_store, &mut results)?;
+                            Outcome::Ok(Results::Core(results))
+                        }
                         Err(e) => Outcome::Trap(e),
                     })
                 }
@@ -518,9 +530,9 @@ impl WastContext {
             #[cfg(feature = "component-model")]
             Export::Component(..) => bail!("no global named `{field}`"),
         };
-        Ok(Outcome::Ok(Results::Core(vec![
-            global.get(&mut self.core_store),
-        ])))
+        let mut val = global.get(&mut self.core_store);
+        val.ensure_rooted(&mut self.core_store)?;
+        Ok(Outcome::Ok(Results::Core(vec![val])))
     }
 
     fn assert_return(&mut self, result: Outcome, results: &[Const]) -> Result<()> {

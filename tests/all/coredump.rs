@@ -202,6 +202,72 @@ fn coredump_has_defined_globals_and_memory() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn coredump_with_custom_page_size_and_partial_chunk() -> Result<()> {
+    let mut config = Config::default();
+    config.coredump_on_trap(true);
+    config.wasm_custom_page_sizes(true);
+    let engine = Engine::new(&config)?;
+
+    // Core dump serialization uses 4096-byte chunks. This 5000-byte memory
+    // has a partial tail with non-zero data that must not be dropped.
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 5000 (pagesize 1))
+                (data (i32.const 4999) "\2a")
+                (func (export "a") unreachable)
+            )
+        "#,
+    )?;
+    let mut store = Store::<()>::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let a_func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
+    let err = a_func.call(&mut store, ()).unwrap_err();
+    let core_dump = err.downcast_ref::<WasmCoreDump>().unwrap();
+    assert_eq!(core_dump.memories().len(), 1);
+    let bytes = core_dump.serialize(&mut store, "custom-page-size");
+
+    let mut memory_types = vec![];
+    let mut saw_tail_byte = false;
+    for payload in wasmparser::Parser::new(0).parse_all(&bytes) {
+        match payload? {
+            wasmparser::Payload::MemorySection(s) => {
+                for ty in s {
+                    memory_types.push(ty?);
+                }
+            }
+            wasmparser::Payload::DataSection(s) => {
+                for data in s {
+                    let data = data?;
+                    let wasmparser::DataKind::Active { offset_expr, .. } = data.kind else {
+                        continue;
+                    };
+                    let mut ops = offset_expr.get_operators_reader();
+                    let wasmparser::Operator::I32Const { value } = ops.read()? else {
+                        panic!("unexpected data segment offset expression");
+                    };
+                    let start = usize::try_from(value).unwrap();
+                    if (start..start + data.data.len()).contains(&4999) {
+                        assert_eq!(data.data[4999 - start], 0x2a);
+                        saw_tail_byte = true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    assert!(saw_tail_byte, "data in the final partial chunk was dropped");
+    assert_eq!(memory_types.len(), 1);
+    assert_eq!(memory_types[0].page_size_log2, Some(0));
+    assert_eq!(memory_types[0].initial, 5000);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn multiple_globals_memories_and_instances() -> Result<()> {
     let mut config = Config::default();
     config.wasm_multi_memory(true);

@@ -11,20 +11,20 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i64 tail {
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
-;;     region2 = 196 ""
-;;     region3 = 206 ""
+;;     region1 = 25 ""
+;;     region2 = 160 ""
+;;     region3 = 196 ""
 ;;     region4 = 108 ""
 ;;     region5 = 5 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+16
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @0022                               trapz v2, user16
 ;; @0022                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0022                               v6 = load.i64 notrap aligned readonly can_move region2 v5+32
+;; @0022                               v6 = load.i64 notrap aligned readonly can_move region2 v5+24
 ;; @0022                               v4 = uextend.i64 v2
 ;; @0022                               v7 = iadd v6, v4
 ;; @0022                               v8 = iconst.i64 8
@@ -43,13 +43,13 @@
 ;; @0022                               v18 = iconst.i32 16
 ;; @0022                               v19 = uadd_overflow_trap v42, v18, user2  ; v18 = 16
 ;; @0022                               v23 = uadd_overflow_trap v2, v19, user2
-;; @0022                               v24 = uextend.i64 v23
-;; @0022                               v27 = iadd v6, v24
+;; @0022                               v26 = uextend.i64 v23
+;; @0022                               v29 = iadd v6, v26
 ;;                                     v47 = ishl v3, v41  ; v41 = 3
 ;; @0022                               v22 = iadd v47, v18  ; v18 = 16
-;; @0022                               v28 = isub v19, v22
-;; @0022                               v29 = uextend.i64 v28
-;; @0022                               v30 = isub v27, v29
+;; @0022                               v24 = isub v19, v22
+;; @0022                               v25 = uextend.i64 v24
+;; @0022                               v30 = isub v29, v25
 ;; @0022                               v31 = load.i64 user2 little region5 v30
 ;; @0025                               jump block1
 ;;

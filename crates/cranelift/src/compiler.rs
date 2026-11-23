@@ -274,8 +274,6 @@ impl Compiler {
             &[callee_vmctx, caller_vmctx, args_base, args_len],
         );
 
-        self.bump_execution_version(&mut builder, &mut alias_regions, caller_vmctx);
-
         // Invoke `raise` if the callee (host) returned an error.
         let succeeded = builder.func.dfg.inst_results(call)[0];
         self.raise_if_host_trapped(&mut builder, &mut alias_regions, caller_vmctx, succeeded);
@@ -364,8 +362,6 @@ impl Compiler {
             host_sig,
         );
         let results = builder.func.dfg.inst_results(call).to_vec();
-
-        self.bump_execution_version(&mut builder, &mut alias_regions, vmctx);
 
         // Libcalls do not explicitly jump/raise on traps but instead return a
         // code indicating whether they trapped or not. This means that it's the
@@ -780,11 +776,12 @@ impl wasmtime_environ::Compiler for Compiler {
             ret.push((sym_id, info));
         }
 
-        // Sort breakpoints by Wasm PC now. Note that the same Wasm PC
-        // may appear in multiple functions (due to inlining) so it is
-        // only now that we can aggregate all appearances of a PC
-        // together for breakpoint metadata indexed by that PC.
-        breakpoint_table.sort_by_key(|(_module, wasm_pc, _text_range)| *wasm_pc);
+        // Sort breakpoints by module, then Wasm PC, now. Note that the
+        // same Wasm PC may appear in multiple functions (due to
+        // inlining), even in another module's functions, so it is only
+        // now that we can aggregate all appearances of a PC together
+        // for breakpoint metadata indexed by that module and PC.
+        breakpoint_table.sort_by_key(|(module, wasm_pc, _text_range)| (*module, *wasm_pc));
 
         builder.finish(|text| {
             if !breakpoint_table.is_empty() {
@@ -1321,39 +1318,6 @@ impl Compiler {
                     })
                 }),
         }
-    }
-
-    /// Increments the "execution version" in the `VMStoreContext` if guest
-    /// debugging is enabled.
-    ///
-    /// This must be done whenever execution resumes in Wasm after the host
-    /// has had a chance to run (and thus possibly capture `FrameHandle`s),
-    /// so that any such handles are invalidated.
-    fn bump_execution_version<O>(
-        &self,
-        builder: &mut FunctionBuilder<'_>,
-        alias_regions: &mut AliasRegions<O>,
-        vmctx: ir::Value,
-    ) where
-        O: GetPtrSize,
-    {
-        if !self.tunables.debug_guest {
-            return;
-        }
-        let vmstore_ctx_ptr = alias_regions
-            .vmctx()
-            .store_context()
-            .load(&mut builder.cursor(), vmctx);
-        let old_version = alias_regions
-            .vm_store_context()
-            .execution_version()
-            .load(&mut builder.cursor(), vmstore_ctx_ptr);
-        let new_version = builder.ins().iadd_imm_s(old_version, 1);
-        alias_regions.vm_store_context().execution_version().store(
-            &mut builder.cursor(),
-            vmstore_ctx_ptr,
-            new_version,
-        );
     }
 
     /// Invokes the `raise` libcall in `vmctx` if the `succeeded` value

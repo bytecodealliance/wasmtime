@@ -59,12 +59,12 @@ use core::mem::MaybeUninit;
 /// // then we need to do the opposite unpacking to extract the result.
 /// let i31 = I31::wrapping_u32(0x1234);
 /// let anyref = AnyRef::from_i31(&mut store, i31);
-/// let val = Val::AnyRef(Some(anyref));
+/// let val = Val::from(anyref);
 /// let mut results = [Val::null_any_ref()];
 /// inc_i31.call(&mut store, &[val], &mut results)?;
 /// let nullable_anyref = results[0].unwrap_anyref();
-/// let anyref = nullable_anyref.unwrap();
-/// let i31 = anyref.unwrap_i31(&store)?;
+/// let anyref = nullable_anyref.unwrap().unwrap_unrooted();
+/// let i31 = anyref.as_i31(&store)?.unwrap();
 /// assert_eq!(i31.get_u32(), 0x1235);
 ///
 /// // Alternatively, we can use the typed function API to make this all a lot

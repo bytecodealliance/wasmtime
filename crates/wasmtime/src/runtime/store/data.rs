@@ -138,7 +138,7 @@ where
     type Output = <StoreOpaque as Index<I>>::Output;
 
     fn index(&self, index: I) -> &Self::Output {
-        self.store_opaque().index(index)
+        (**self).index(index)
     }
 }
 
@@ -147,7 +147,7 @@ where
     StoreOpaque: IndexMut<I>,
 {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
-        self.store_opaque_mut().index_mut(index)
+        (**self).index_mut(index)
     }
 }
 

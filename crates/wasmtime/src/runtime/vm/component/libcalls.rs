@@ -1250,7 +1250,7 @@ fn error_context_new(
     debug_msg_len: u32,
 ) -> Result<u32> {
     instance.error_context_new(
-        store.store_opaque_mut(),
+        &mut **store,
         TypeComponentLocalErrorContextTableIndex::from_u32(ty),
         OptionsIndex::from_u32(options),
         debug_msg_address,

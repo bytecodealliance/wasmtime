@@ -28,7 +28,8 @@ function %f(i32) -> i32 {
 ;   testl %edi, %edi
 ;   jnz     label4; j label1
 ; block1:
-;   testl %eax, %eax
+;   movq %rdi, %r8
+;   addl $0x1, %r8d
 ;   jnz     label2; j label3
 ; block2:
 ;   jmp     label8
@@ -59,24 +60,25 @@ function %f(i32) -> i32 {
 ; block1: ; offset 0x4
 ;   leal 1(%rdi), %eax
 ;   testl %edi, %edi
-;   jne 0x1f
+;   jne 0x24
 ; block2: ; offset 0xf
-;   testl %eax, %eax
-;   jne 0x34
-; block3: ; offset 0x17
-;   movq %rdi, %rax
-;   jmp 0x2f
-; block4: ; offset 0x1f
-;   testl %edi, %edi
-;   je 0x2f
-; block5: ; offset 0x27
+;   movq %rdi, %r8
+;   addl $1, %r8d
+;   jne 0x39
+; block3: ; offset 0x1c
 ;   movq %rdi, %rax
 ;   jmp 0x34
-; block6: ; offset 0x2f
+; block4: ; offset 0x24
+;   testl %edi, %edi
+;   je 0x34
+; block5: ; offset 0x2c
+;   movq %rdi, %rax
+;   jmp 0x39
+; block6: ; offset 0x34
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block7: ; offset 0x34
+; block7: ; offset 0x39
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

@@ -2214,6 +2214,12 @@
 (rule (x64_or_with_flags_paired_side_effect ty src1 src2)
       (asm_produce_flags_side_effect (x64_or_raw ty src1 src2)))
 
+;; When using `or` for its flags (SF, ZF, PF) and its result, we track that
+;; the flags are changed.
+(decl x64_or_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_or_with_flags_paired ty src1 src2)
+      (asm_produce_flags (x64_or_raw ty src1 src2)))
+
 ;; Helper for emitting `xor` instructions.
 (decl x64_xor (Type Gpr GprMemImm) Gpr)
 
@@ -2237,6 +2243,22 @@
 (rule 0 (x64_xor ty @ $I16 src1 (is_gpr_mem src2)) (x64_xorw_rm src1 (gpr_mem_16_for_ty ty src2)))
 (rule 0 (x64_xor ty @ $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm src1 (gpr_mem_32_for_ty ty src2)))
 (rule 0 (x64_xor ty @ $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm src1 (gpr_mem_64_for_ty ty src2)))
+
+;; When using a 32- or 64-bit `xor` for its flags (SF, ZF, PF) and its result,
+;; we track that the flags are changed. The encodings match those of `x64_xor`.
+(decl x64_xor_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
+(rule 2 (x64_xor_with_flags_paired $I32 src1 (is_simm8 src2))
+      (asm_produce_flags (x64_xorl_mi_sxb_raw src1 src2)))
+(rule 2 (x64_xor_with_flags_paired $I64 src1 (is_simm8 src2))
+      (asm_produce_flags (x64_xorq_mi_sxb_raw src1 src2)))
+(rule 1 (x64_xor_with_flags_paired $I32 src1 (is_imm32 src2))
+      (asm_produce_flags (x64_xorl_mi_raw src1 src2)))
+(rule 1 (x64_xor_with_flags_paired $I64 src1 (is_simm32 src2))
+      (asm_produce_flags (x64_xorq_mi_sxl_raw src1 src2)))
+(rule 0 (x64_xor_with_flags_paired ty @ $I32 src1 (is_gpr_mem src2))
+      (asm_produce_flags (x64_xorl_rm_raw src1 (gpr_mem_32_for_ty ty src2))))
+(rule 0 (x64_xor_with_flags_paired ty @ $I64 src1 (is_gpr_mem src2))
+      (asm_produce_flags (x64_xorq_rm_raw src1 (gpr_mem_64_for_ty ty src2))))
 
 ;; Helper for `andn` instructions
 ;;
@@ -3891,6 +3913,27 @@
 (rule 2 (is_nonzero (uextend _ (vany_true _ vec))) (is_vany_true vec))
 (rule 2 (is_nonzero (band _ a @ (value_type (ty_int (fits_in_64 ty))) b))
       (is_nonzero_band ty a b))
+
+;; `add`, `sub`, `or` and `xor` set ZF according to their result, so testing
+;; the result of a 32- or 64-bit `iadd`, `isub`, `bor` or `bxor` for nonzero
+;; can use the flags of the operation itself instead of a separate `test`. The
+;; operation's result is given as an opportunistic def, so a value that is also
+;; used elsewhere is usually still computed only once; when it is not, the
+;; operation is emitted a second time in place of the `test`. Only the
+;; zero/nonzero conditions are produced: OF and CF after an `add` or `sub`
+;; differ from those of a `test` of the result.
+(rule 2 (is_nonzero val @ (iadd (ty_int (ty_32_or_64 ty)) x y))
+      (is_nonzero_with_flags (x64_add_with_flags_paired ty x y) val))
+(rule 2 (is_nonzero val @ (isub (ty_int (ty_32_or_64 ty)) x y))
+      (is_nonzero_with_flags (x64_sub_with_flags_paired ty x y) val))
+(rule 2 (is_nonzero val @ (bor (ty_int (ty_32_or_64 ty)) x y))
+      (is_nonzero_with_flags (x64_or_with_flags_paired ty x y) val))
+(rule 2 (is_nonzero val @ (bxor (ty_int (ty_32_or_64 ty)) x y))
+      (is_nonzero_with_flags (x64_xor_with_flags_paired ty x y) val))
+
+(decl is_nonzero_with_flags (ProducesFlags Value) CondResult)
+(rule (is_nonzero_with_flags producer val)
+      (CondResult.CC (produces_flags_opportunistic_def producer val) (CC.NZ)))
 
 ;; Using the flags output of `uadd_overflow`, `usub_overflow`, `sadd_overflow`
 ;; or `ssub_overflow` can produce a `CC` and give an opportunistic def of the

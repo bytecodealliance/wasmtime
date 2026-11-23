@@ -14,6 +14,6 @@ runs:
       shell: bash
     - name: Install ninja (Linux)
       if: runner.os == 'Linux'
-      uses: ./.github/actions/apt-get-install
+      uses: $/.github/actions/apt-get-install
       with:
         packages: ninja-build

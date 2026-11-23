@@ -82,6 +82,11 @@ fn maybe_dir() {
     // Opening directories fails on Windows.
     #[cfg(windows)]
     assert!(h::open(&start, "dir").is_err());
+
+    // With `maybe_dir`, opening directories works on all platforms.
+    let mut options = p::OpenOptions::new();
+    options.read(true).maybe_dir(true);
+    check!(p::open(&start, Path::new("dir"), &options));
 }
 
 #[test]
@@ -114,8 +119,7 @@ fn dotdot_at_end_of_symlink() {
     let foo = b"foo";
     check!(h::write(&start, "target", foo));
     check!(h::create_dir(&start, "b"));
-    let b = check!(p::open_dir(&start, Path::new("b")));
-    check!(h::symlink_dir(&b, "..", "up"));
+    check!(h::symlink(&start, "..", "b/up"));
 
     // Do some things with `path` that might break with an `O_PATH` fd.
     // The `permissions` part of this test is gone with `set_permissions`, but
@@ -140,8 +144,7 @@ fn dotdot_at_end_of_symlink_all_inside_dir() {
     check!(h::create_dir(&start, "dir"));
     check!(h::write(&start, "dir/target", foo));
     check!(h::create_dir(&start, "dir/b"));
-    let b = check!(p::open_dir(&start, Path::new("dir/b")));
-    check!(h::symlink_dir(&b, "..", "up"));
+    check!(h::symlink(&start, "..", "dir/b/up"));
 
     // Do some things with `path` that might break with an `O_PATH` fd.
     // The `permissions` part of this test is gone with `set_permissions`, but
@@ -166,8 +169,7 @@ fn dotdot_slashdot_at_end_of_symlink() {
     let foo = b"foo";
     check!(h::write(&start, "target", foo));
     check!(h::create_dir(&start, "b"));
-    let b = check!(p::open_dir(&start, Path::new("b")));
-    check!(h::symlink_dir(&b, "../.", "up"));
+    check!(h::symlink(&start, "../.", "b/up"));
 
     // Do some things with `path` that might break with an `O_PATH` fd.
     // The `permissions` part of this test is gone with `set_permissions`, but
@@ -193,8 +195,7 @@ fn dotdot_slashdot_at_end_of_symlink_all_inside_dir() {
     check!(h::create_dir(&start, "dir"));
     check!(h::write(&start, "dir/target", foo));
     check!(h::create_dir(&start, "dir/b"));
-    let b = check!(p::open_dir(&start, Path::new("dir/b")));
-    check!(h::symlink_dir(&b, "../.", "up"));
+    check!(h::symlink(&start, "../.", "dir/b/up"));
 
     // Do some things with `path` that might break with an `O_PATH` fd.
     // The `permissions` part of this test is gone with `set_permissions`, but
@@ -318,10 +319,10 @@ fn remove_dir_trailing_slash_symlink() {
     let start = h::dir_of(&tmpdir);
     check!(h::create_dir(&start, "dir"));
     check!(h::create(&start, "file"));
-    check!(h::symlink_dir(&start, "dir", "dir_link"));
-    check!(h::symlink_file(&start, "file", "file_link"));
-    check!(h::symlink_dir(&start, "missing", "dangling"));
-    check!(h::symlink_dir(&start, "..", "up"));
+    check!(h::symlink(&start, "dir", "dir_link"));
+    check!(h::symlink(&start, "file", "file_link"));
+    check!(h::symlink(&start, "missing", "dangling"));
+    check!(h::symlink(&start, "..", "up"));
 
     // Like Linux, the symlink isn't followed, whatever it points to, and both
     // it and its target stay in place.
@@ -533,10 +534,10 @@ fn follow_dotdot_symlink() {
 
     let start = h::dir_of(&tmpdir);
     check!(h::create_dir_all(&start, "a/b"));
-    check!(h::symlink_dir(&start, "..", "a/b/c"));
-    check!(h::symlink_dir(&start, "../..", "a/b/d"));
-    check!(h::symlink_dir(&start, "../../..", "a/b/e"));
-    check!(h::symlink_dir(&start, "../../../..", "a/b/f"));
+    check!(h::symlink(&start, "..", "a/b/c"));
+    check!(h::symlink(&start, "../..", "a/b/d"));
+    check!(h::symlink(&start, "../../..", "a/b/e"));
+    check!(h::symlink(&start, "../../../..", "a/b/f"));
 
     check!(p::open_dir(&start, Path::new("a/b/c")));
     assert!(check!(h::metadata(&start, "a/b/c")).is_dir());
@@ -546,11 +547,11 @@ fn follow_dotdot_symlink() {
         error!(p::open_dir(&start, Path::new("a/b/d")), 123);
         error!(h::metadata(&start, "a/b/d"), 123);
 
-        error!(p::open_dir(&start, Path::new("a/b/e")), 123);
-        error!(h::metadata(&start, "a/b/e"), 123);
+        assert!(p::open_dir(&start, Path::new("a/b/e")).is_err());
+        assert!(h::metadata(&start, "a/b/e").is_err());
 
-        error!(p::open_dir(&start, Path::new("a/b/f")), 123);
-        error!(h::metadata(&start, "a/b/f"), 123);
+        assert!(p::open_dir(&start, Path::new("a/b/f")).is_err());
+        assert!(h::metadata(&start, "a/b/f").is_err());
     }
 
     #[cfg(not(windows))]
@@ -624,10 +625,10 @@ fn follow_file_symlink() {
 
     check!(h::create(&start, "file"));
 
-    check!(h::symlink_file(&start, "file", "link"));
-    check!(h::symlink_dir(&start, "file/", "link_slash"));
-    check!(h::symlink_file(&start, "file/.", "link_slashdot"));
-    check!(h::symlink_dir(&start, "file/..", "link_slashdotdot"));
+    check!(h::symlink(&start, "file", "link"));
+    check!(h::symlink(&start, "file/", "link_slash"));
+    check!(h::symlink(&start, "file/.", "link_slashdot"));
+    check!(h::symlink(&start, "file/..", "link_slashdotdot"));
 
     check!(h::open(&start, "link"));
     assert!(h::open(&start, "link_slash").is_err());
@@ -891,7 +892,7 @@ fn symlink_hard_link() {
     let start = h::dir_of(&tmpdir);
 
     check!(h::create(&start, "file"));
-    check!(h::symlink_file(&start, "file", "symlink"));
+    check!(h::symlink(&start, "file", "symlink"));
     check!(p::hard_link(
         &start,
         Path::new("symlink"),
@@ -1055,8 +1056,7 @@ fn check_metadata(std: &std::fs::Metadata, cap: &p::Metadata) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        assert_eq!(std.dev(), cap.dev());
-        assert_eq!(std.ino(), cap.ino());
+        assert_eq!((std.dev(), std.ino()), cap.identity());
         assert_eq!(std.nlink(), cap.nlink());
     }
 }
@@ -1071,8 +1071,7 @@ fn dotdot_in_middle_of_symlink() {
     let foo = b"foo";
     check!(h::write(&start, "target", foo));
     check!(h::create_dir(&start, "b"));
-    let b = check!(p::open_dir(&start, Path::new("b")));
-    check!(h::symlink_dir(&b, "..", "up"));
+    check!(h::symlink(&start, "..", "b/up"));
 
     let path = "b/up/target";
     let mut file = check!(h::open(&start, path));
@@ -1093,8 +1092,7 @@ fn dotdot_slashdot_in_middle_of_symlink() {
     let foo = b"foo";
     check!(h::write(&start, "target", foo));
     check!(h::create_dir(&start, "b"));
-    let b = check!(p::open_dir(&start, Path::new("b")));
-    check!(h::symlink_dir(&b, "../.", "up"));
+    check!(h::symlink(&start, "../.", "b/up"));
 
     let path = "b/up/target";
     let mut file = check!(h::open(&start, path));
@@ -1115,8 +1113,7 @@ fn dotdot_more_in_middle_of_symlink() {
     let foo = b"foo";
     check!(h::write(&start, "target", foo));
     check!(h::create_dir_all(&start, "b/c"));
-    let b = check!(p::open_dir(&start, Path::new("b")));
-    check!(h::symlink_dir(&b, "c/../..", "up"));
+    check!(h::symlink(&start, "c/../..", "b/up"));
 
     let path = "b/up/target";
     let mut file = check!(h::open(&start, path));
@@ -1137,8 +1134,7 @@ fn dotdot_slashdot_more_in_middle_of_symlink() {
     let foo = b"foo";
     check!(h::write(&start, "target", foo));
     check!(h::create_dir_all(&start, "b/c"));
-    let b = check!(p::open_dir(&start, Path::new("b")));
-    check!(h::symlink_dir(&b, "c/../../.", "up"));
+    check!(h::symlink(&start, "c/../../.", "b/up"));
 
     let path = "b/up/target";
     let mut file = check!(h::open(&start, path));
@@ -1160,8 +1156,7 @@ fn dotdot_other_in_middle_of_symlink() {
     let foo = b"foo";
     check!(h::write(&start, "target", foo));
     check!(h::create_dir_all(&start, "b/c"));
-    let c = check!(p::open_dir(&start, Path::new("b/c")));
-    check!(h::symlink_dir(&c, "../..", "up"));
+    check!(h::symlink(&start, "../..", "b/c/up"));
 
     let path = "b/c/up/target";
     let mut file = check!(h::open(&start, path));
@@ -1182,8 +1177,7 @@ fn dotdot_slashdot_other_in_middle_of_symlink() {
     let foo = b"foo";
     check!(h::write(&start, "target", foo));
     check!(h::create_dir_all(&start, "b/c"));
-    let c = check!(p::open_dir(&start, Path::new("b/c")));
-    check!(h::symlink_dir(&c, "../../.", "up"));
+    check!(h::symlink(&start, "../../.", "b/c/up"));
 
     let path = "b/c/up/target";
     let mut file = check!(h::open(&start, path));
@@ -1202,8 +1196,7 @@ fn dotdot_even_more_in_middle_of_symlink() {
     let foo = b"foo";
     check!(h::create_dir_all(&start, "b/c"));
     check!(h::write(&start, "b/target", foo));
-    let b = check!(p::open_dir(&start, Path::new("b")));
-    check!(h::symlink_dir(&b, "c/../../b", "up"));
+    check!(h::symlink(&start, "c/../../b", "b/up"));
 
     let path = "b/up/target";
     let mut file = check!(h::open(&start, path));
@@ -1224,8 +1217,7 @@ fn dotdot_slashdot_even_more_in_middle_of_symlink() {
     let foo = b"foo";
     check!(h::create_dir_all(&start, "b/c"));
     check!(h::write(&start, "b/target", foo));
-    let b = check!(p::open_dir(&start, Path::new("b")));
-    check!(h::symlink_dir(&b, "c/../../b/.", "up"));
+    check!(h::symlink(&start, "c/../../b/.", "b/up"));
 
     let path = "b/up/target";
     let mut file = check!(h::open(&start, path));
@@ -1244,8 +1236,7 @@ fn dotdot_even_other_in_middle_of_symlink() {
     let foo = b"foo";
     check!(h::create_dir_all(&start, "b/c"));
     check!(h::write(&start, "b/target", foo));
-    let c = check!(p::open_dir(&start, Path::new("b/c")));
-    check!(h::symlink_dir(&c, "../../b", "up"));
+    check!(h::symlink(&start, "../../b", "b/c/up"));
 
     let path = "b/c/up/target";
     let mut file = check!(h::open(&start, path));
@@ -1266,8 +1257,7 @@ fn dotdot_slashdot_even_other_in_middle_of_symlink() {
     let foo = b"foo";
     check!(h::create_dir_all(&start, "b/c"));
     check!(h::write(&start, "b/target", foo));
-    let c = check!(p::open_dir(&start, Path::new("b/c")));
-    check!(h::symlink_dir(&c, "../../b/.", "up"));
+    check!(h::symlink(&start, "../../b/.", "b/c/up"));
 
     let path = "b/c/up/target";
     let mut file = check!(h::open(&start, path));
@@ -1325,8 +1315,8 @@ fn trailing_slash_symlink() {
     let start = h::dir_of(&tmpdir);
 
     check!(h::create_dir(&start, "sandbox"));
-    check!(h::symlink_dir(&start, "../outside", "sandbox/hidden"));
-    check!(h::symlink_dir(&start, "hidden/", "sandbox/indirect"));
+    check!(h::symlink(&start, "../outside", "sandbox/hidden"));
+    check!(h::symlink(&start, "hidden/", "sandbox/indirect"));
 
     let sandbox = check!(p::open_dir(&start, Path::new("sandbox")));
 
@@ -1431,8 +1421,8 @@ fn trailing_slash_requires_a_directory() {
     }
 
     if symlink_supported() {
-        check!(h::symlink_dir(&start, "dir", "sym_dir"));
-        check!(h::symlink_file(&start, "file", "sym_file"));
+        check!(h::symlink(&start, "dir", "sym_dir"));
+        check!(h::symlink(&start, "file", "sym_file"));
 
         let stat_sym = check!(p::stat(&start, "sym_dir".as_ref(), p::FollowSymlinks::No));
         assert!(stat_sym.file_type().is_symlink());

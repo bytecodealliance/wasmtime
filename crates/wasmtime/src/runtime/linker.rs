@@ -70,6 +70,11 @@ use wasmtime_environ::{Atom, PanicOnOom, StringPool};
 /// point only the [`Store`] that owns the [`Global`] can be used to instantiate
 /// modules.
 ///
+/// After that [`Store`] is dropped the [`Linker`] should no longer be used to
+/// instantiate modules which import its items. The type-checking of such
+/// imports may panic or erroneously succeed, but instantiating them in any
+/// other [`Store`] will always return an error.
+///
 /// ## Multiple `Engine`s
 ///
 /// The [`Linker`] type is not compatible with usage between multiple [`Engine`]
@@ -1133,6 +1138,12 @@ impl<T> Linker<T> {
     ///
     /// Returns an error which may be downcast to an [`UnknownImportError`] if
     /// the module has any unresolvable imports.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `module` imports an item defined in this linker whose
+    /// [`Store`](crate::Store) has been dropped. See the [`Linker`]
+    /// documentation for more information.
     ///
     /// # Examples
     ///

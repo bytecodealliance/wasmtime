@@ -755,3 +755,26 @@ fn linker_clone_drop_original_then_instantiate() -> Result<()> {
     assert_eq!(f.call(&mut store, ())?, 42);
     Ok(())
 }
+
+// Usage of a `Linker` with items from a `Store` that has been dropped is a bit
+// non-deterministic. This could panic or spuriously accept the wrong items
+// during type-checking, but no matter what instantiation in a different store
+// MUST always fail. This test might need updating over time to match precise
+// behavior, but no matter what the instantiation cannot succeed.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn linker_outlives_store_of_its_definitions() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::<()>::new(&engine);
+    {
+        let mut store = Store::new(&engine, ());
+        let ty = FuncType::new(&engine, [ValType::I32], []);
+        let f = Func::new(&mut store, ty, |_, _, _| Ok(()));
+        linker.define(&store, "a", "x", f)?;
+    }
+
+    let module = Module::new(&engine, r#"(module (import "a" "x" (func)))"#)?;
+    let mut store = Store::new(&engine, ());
+    assert!(linker.instantiate(&mut store, &module).is_err());
+    Ok(())
+}

@@ -106,6 +106,15 @@ impl FunctionConfig {
     ) -> FunctionFlags {
         let mut ret = FunctionFlags::empty();
         self.add_function_flags(resolve, ns, &format!("[drop]{resource_name}"), &mut ret);
+
+        // For convenience just remove the `async` flag if present. Async+store
+        // destructors aren't supported at this time in Wasmtime. A `default`
+        // rule could apply async here and it'd mostly just be annoying to try
+        // to remove it. Specifying a destructor itself as async+store is
+        // disallowed when parsing.
+        if ret.contains(FunctionFlags::STORE) {
+            ret.remove(FunctionFlags::ASYNC);
+        }
         ret
     }
 

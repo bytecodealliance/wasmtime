@@ -83,6 +83,23 @@
                             (u64_and (ty_mask ty) (u64_not y))))
       (bor ty x z))
 
+;; Setting or flipping bits that are subsequently masked off is a no-op:
+;;
+;; (x | C1) & C2 --> x & C2, if C1 & C2 == 0
+;; (x ^ C1) & C2 --> x & C2, if C1 & C2 == 0
+(rule band_bor_disjoint_const
+      (simplify (band (fits_in_64 (ty_int ty))
+                      (bor ty x (iconst ty c1))
+                      c2 @ (iconst ty c2_imm)))
+      (if-let true (u64_eq 0 (u64_uextend_imm64 ty (imm64_and ty c1 c2_imm))))
+      (band ty x c2))
+(rule band_bxor_disjoint_const
+      (simplify (band (fits_in_64 (ty_int ty))
+                      (bxor ty x (iconst ty c1))
+                      c2 @ (iconst ty c2_imm)))
+      (if-let true (u64_eq 0 (u64_uextend_imm64 ty (imm64_and ty c1 c2_imm))))
+      (band ty x c2))
+
 ;; (x ^ -1) can be replaced with the `bnot` instruction
 (rule (simplify (bxor ty x (iconst_s ty -1)))
   (bnot ty x))

@@ -29,7 +29,6 @@ use std::fmt;
 /// [`Func::call`]: crate::Func::call
 /// [`Instance::new`]: crate::Instance::new
 pub struct WasmCoreDump {
-    name: String,
     modules: Vec<Module>,
     instances: Vec<Instance>,
     memories: Vec<Memory>,
@@ -52,7 +51,6 @@ impl WasmCoreDump {
         store.for_each_global(|_store, global| store_globals.push(global));
 
         WasmCoreDump {
-            name: String::from("store_name"),
             modules,
             instances,
             memories: store_memories,
@@ -130,7 +128,10 @@ impl WasmCoreDump {
                     maximum: ty.maximum(),
                     memory64: ty.is_64(),
                     shared: ty.is_shared(),
-                    page_size_log2: None,
+                    page_size_log2: match ty.page_size_log2() {
+                        16 => None,
+                        n => Some(n.into()),
+                    },
                 });
 
                 // Attach the memory data, balancing number of data segments and
@@ -144,7 +145,7 @@ impl WasmCoreDump {
                 // into reasonably-sized chunks and then trim runs of zeroes
                 // from the start and end of each chunk.
                 const CHUNK_SIZE: usize = 4096;
-                for (i, chunk) in mem.data(&store).chunks_exact(CHUNK_SIZE).enumerate() {
+                for (i, chunk) in mem.data(&store).chunks(CHUNK_SIZE).enumerate() {
                     if let Some(start) = chunk.iter().position(|byte| *byte != 0) {
                         let end = chunk.iter().rposition(|byte| *byte != 0).unwrap() + 1;
                         let offset = i * CHUNK_SIZE + start;
@@ -348,31 +349,7 @@ impl WasmCoreDump {
 
 impl fmt::Display for WasmCoreDump {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "wasm coredump generated while executing {}:", self.name)?;
-        writeln!(f, "modules:")?;
-        for module in self.modules.iter() {
-            writeln!(f, "  {}", module.name().unwrap_or("<module>"))?;
-        }
-
-        writeln!(f, "instances:")?;
-        for instance in self.instances.iter() {
-            writeln!(f, "  {instance:?}")?;
-        }
-
-        writeln!(f, "memories:")?;
-        for memory in self.memories.iter() {
-            writeln!(f, "  {memory:?}")?;
-        }
-
-        writeln!(f, "globals:")?;
-        for global in self.globals.iter() {
-            writeln!(f, "  {global:?}")?;
-        }
-
-        writeln!(f, "backtrace:")?;
-        write!(f, "{}", self.backtrace)?;
-
-        Ok(())
+        write!(f, "wasm core dump captured")
     }
 }
 

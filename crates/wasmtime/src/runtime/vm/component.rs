@@ -174,7 +174,10 @@ impl VMScope {
     }
 
     /// A concurrent host-task scope.
-    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(dead_code, reason = "only used with component-model-async")
+    )]
     pub(crate) fn host_id(id: u32) -> VMScope {
         VMScope {
             kind: Self::KIND_HOST_ID,
@@ -1169,7 +1172,7 @@ impl ComponentInstance {
 
     /// As `instance_states`, plus the vmctx entries through which compiled
     /// code reads each instance's handle table.
-    pub fn instance_states_and_published(
+    fn instance_states_and_published(
         mut self: Pin<&mut Self>,
     ) -> (
         &mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,

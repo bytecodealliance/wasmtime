@@ -148,6 +148,8 @@ where
     eclass_size: &'opt mut SecondaryMap<Value, u8>,
     pub(crate) gvn_map: &'opt mut ScopedHashMap<(Type, InstructionData), Option<Value>>,
     pub(crate) gvn_map_blocks: &'opt Vec<Block>,
+    /// The index of each block in `gvn_map_blocks`, set when the block is pushed.
+    gvn_map_depth: &'opt SecondaryMap<Block, u32>,
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
     pub(crate) stats: &'opt mut Stats,
     domtree: &'opt DominatorTree,
@@ -359,13 +361,10 @@ where
             block,
             self.gvn_map_blocks
         );
-        self.gvn_map_blocks
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|&(_, b)| *b == block)
-            .unwrap()
-            .0
+        let depth =
+            usize::try_from(self.gvn_map_depth[block]).expect("GVN depth should fit in usize");
+        debug_assert_eq!(self.gvn_map_blocks[depth], block);
+        depth
     }
 
     /// Optimizes an enode by applying any matching mid-end rewrite
@@ -919,6 +918,7 @@ impl<'a> EgraphPass<'a> {
         // The block in the domtree preorder traversal at each level
         // of the GVN map.
         let mut gvn_map_blocks: Vec<Block> = vec![];
+        let mut gvn_map_depth: SecondaryMap<Block, u32> = SecondaryMap::new();
 
         // To get the best possible merging and canonicalization, we
         // track where a value is "available" at: this is the
@@ -962,6 +962,8 @@ impl<'a> EgraphPass<'a> {
             }
 
             gvn_map.increment_depth();
+            gvn_map_depth[block] =
+                u32::try_from(gvn_map_blocks.len()).expect("GVN depth should fit in u32");
             gvn_map_blocks.push(block);
 
             let mut alias_analysis_state = self.alias_analysis.push_scope(&*self.cfg, block);
@@ -1018,6 +1020,7 @@ impl<'a> EgraphPass<'a> {
                     value_to_opt_value: &mut value_to_opt_value,
                     gvn_map: &mut gvn_map,
                     gvn_map_blocks: &mut gvn_map_blocks,
+                    gvn_map_depth: &gvn_map_depth,
                     available_block: &mut available_block,
                     eclass_size: &mut eclass_size,
                     rewrite_depth: 0,

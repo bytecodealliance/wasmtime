@@ -60,10 +60,10 @@ impl udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         Resource<udp::IncomingDatagramStream>,
         Resource<udp::OutgoingDatagramStream>,
     )> {
-        let has_active_streams = self
-            .table
-            .iter_children(&this)?
-            .any(|c| c.is::<IncomingDatagramStream>() || c.is::<OutgoingDatagramStream>());
+        let has_active_streams = self.table.iter_children(&this)?.any(|c| {
+            let c = c.entry();
+            c.is::<IncomingDatagramStream>() || c.is::<OutgoingDatagramStream>()
+        });
 
         if has_active_streams {
             return Err(SocketError::trap(format_err!(

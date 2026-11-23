@@ -693,14 +693,28 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
         wasmtime_wast::Async::Yes
     };
     log::debug!("async: {async_:?}");
+
     // The test's configuration is layered on top of the fuzz configuration toe
     // ensure that any explicitly specified configuration overrides whatever the
     // fuzz-generated input selected.
+    //
+    // With some fuzz-generated configurations this might end up causing
+    // `Engine` creation to fail due to invalid settings. The
+    // `make_internally_consistent` method generally handles that but that works
+    // on fuzz-generated configuration, not `CommonOptions`, so just throw out
+    // the test case here in that situation.
     let mut opts = fuzz_config.to_common_options();
     test.config
         .apply(&mut opts)
         .expect("invalid `flags` in wast test");
-    let engine = Engine::new(&fuzz_config.to_wasmtime_with(&mut opts)).unwrap();
+    let engine = match Engine::new(&fuzz_config.to_wasmtime_with(&mut opts)) {
+        Ok(engine) => engine,
+        Err(e) => {
+            log::debug!("failed to create engine: {e:?}");
+            return Err(arbitrary::Error::IncorrectFormat);
+        }
+    };
+
     let mut wast_context = WastContext::new(&engine, async_, move |store| {
         fuzz_config.configure_store_epoch_and_fuel(store);
         opts.configure_store(store).unwrap();
@@ -963,10 +977,10 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
             );
             let args: Vec<_> = (0..ops.limits.num_params)
                 .map(|_| {
-                    Ok(Val::ExternRef(Some(ExternRef::new(
+                    Ok(Val::from(ExternRef::new(
                         &mut scope,
                         CountDrops::new(&expected_drops, num_dropped.clone()),
-                    )?)))
+                    )?))
                 })
                 .collect::<Result<_>>()?;
             log::info!(

@@ -84,7 +84,7 @@ impl WasmValue {
     pub(crate) fn into_val(self, store: impl wasmtime::AsContextMut) -> Val {
         match self {
             WasmValue::Primitive(v) => v,
-            WasmValue::Exn(Some(owned)) => Val::ExnRef(Some(owned.to_rooted(store))),
+            WasmValue::Exn(Some(owned)) => Val::from(owned.to_rooted(store)),
             WasmValue::Exn(None) => Val::ExnRef(None),
             WasmValue::Func(Some(f)) => Val::FuncRef(Some(f)),
             WasmValue::Func(None) => Val::FuncRef(None),

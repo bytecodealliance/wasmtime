@@ -86,9 +86,14 @@ fn handle_module(
     let test_file = parse_test(&buffer, ParseOptions::default())
         .with_context(|| format!("failed to parse {name}"))?;
 
-    // If we have an isa from the command-line, use that. Otherwise if the
-    // file contains a unique isa, use that.
-    let isa = fisa.isa.or(test_file.isa_spec.unique_isa());
+    // If we have an isa from the command-line, use that, unless the file
+    // names exactly the same target: the file's isa also carries its `set`
+    // lines. Otherwise if the file contains a unique isa, use that.
+    let file_isa = test_file.isa_spec.unique_isa();
+    let isa = match (fisa.isa, file_isa) {
+        (Some(cli), Some(file)) if cli.triple() == file.triple() => Some(file),
+        (cli, file) => cli.or(file),
+    };
 
     let isa = match isa {
         None => anyhow::bail!("compilation requires a target isa"),
@@ -142,4 +147,32 @@ fn handle_module(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn matching_target_keeps_file_settings() {
+        // Returning a vector on riscv64 needs the file's
+        // `enable_multi_ret_implicit_sret` setting.
+        let clif = "set enable_multi_ret_implicit_sret=true
+target riscv64 has_v
+
+function %vec_ret() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 0x00
+    return v0
+}
+";
+        let path =
+            std::env::temp_dir().join(format!("clif-util-compile-{}.clif", std::process::id()));
+        std::fs::write(&path, clif).unwrap();
+        let options =
+            Options::parse_from(["compile", "--target", "riscv64", path.to_str().unwrap()]);
+        let result = run(&options);
+        std::fs::remove_file(&path).unwrap();
+        result.unwrap();
+    }
 }

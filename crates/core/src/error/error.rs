@@ -5,7 +5,7 @@ use super::vtable::Vtable;
 use crate::error::{OutOfMemory, Result};
 use core::{
     any::TypeId,
-    fmt::{self, Debug},
+    fmt::{self, Debug, Write},
     iter::FusedIterator,
     mem,
     ptr::NonNull,
@@ -446,12 +446,20 @@ impl fmt::Debug for Error {
             f.write_str("\n\nCaused by:\n")?;
             let multiple_causes = source.source().is_some();
             for (i, e) in source.chain().enumerate() {
-                if multiple_causes {
+                let indent = if multiple_causes {
                     write!(f, "{i: >5}: ")?;
+                    "       "
                 } else {
                     write!(f, "    ")?;
-                }
-                writeln!(f, "{e}")?;
+                    "    "
+                };
+
+                let mut indented = Indented {
+                    inner: f,
+                    indent,
+                    at_line_start: false,
+                };
+                writeln!(indented, "{e}")?;
             }
         }
 
@@ -464,6 +472,34 @@ impl fmt::Debug for Error {
             }
         }
 
+        Ok(())
+    }
+}
+
+/// A writer which indents each line after the first with `indent`.
+///
+/// Empty lines aren't indented, to avoid trailing whitespace.
+struct Indented<'a, 'b> {
+    inner: &'a mut fmt::Formatter<'b>,
+    indent: &'static str,
+    at_line_start: bool,
+}
+
+impl fmt::Write for Indented<'_, '_> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        for (i, line) in s.split('\n').enumerate() {
+            if i > 0 {
+                self.inner.write_str("\n")?;
+                self.at_line_start = true;
+            }
+            if !line.is_empty() {
+                if self.at_line_start {
+                    self.inner.write_str(self.indent)?;
+                    self.at_line_start = false;
+                }
+                self.inner.write_str(line)?;
+            }
+        }
         Ok(())
     }
 }

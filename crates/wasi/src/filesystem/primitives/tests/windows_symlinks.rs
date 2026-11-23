@@ -9,6 +9,8 @@ use std::path::Path;
 
 #[test]
 fn windows_symlinks() {
+    use std::os::windows::fs::{symlink_dir, symlink_file};
+
     if !symlink_supported() {
         return;
     }
@@ -20,9 +22,10 @@ fn windows_symlinks() {
     check!(h::create(&start, "file"));
     check!(h::create_dir(&start, "dir"));
 
-    // Windows lets these succeed.
-    check!(h::symlink_dir(&start, "file", "file_symlink_dir"));
-    check!(h::symlink_file(&start, "dir", "dir_symlink_file"));
+    // Windows lets these succeed. The sandboxed `symlink` picks the link
+    // kind from the target's type, so create the mismatched kinds directly.
+    check!(symlink_dir("file", tmpdir.path().join("file_symlink_dir")));
+    check!(symlink_file("dir", tmpdir.path().join("dir_symlink_file")));
 
     // But accessing them fails.
     assert!(h::open(&start, "dir_symlink_file").is_err());

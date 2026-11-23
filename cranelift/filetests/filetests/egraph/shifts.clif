@@ -859,6 +859,166 @@ block0(v0: i8):
 ; check: v8 = select v0, v6, v7  ; v6 = 12, v7 = 20
 ; check: return v8
 
+function %ishl_const_select(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 9
+    v2 = iconst.i32 1
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 -1
+    v5 = ishl v4, v3
+    return v5
+}
+; check: v6 = iconst.i32 -512
+; check: v7 = iconst.i32 -2
+; check: v8 = select v0, v6, v7  ; v6 = -512, v7 = -2
+; check: return v8
+
+function %ishl_const_select_wide_amt(i8) -> i16 {
+block0(v0: i8):
+    v1 = iconst.i64 17
+    v2 = iconst.i64 3
+    v3 = select v0, v1, v2
+    v4 = iconst.i16 0x0101
+    v5 = ishl v4, v3
+    return v5
+}
+; check: v6 = iconst.i16 514
+; check: v7 = iconst.i16 2056
+; check: v8 = select v0, v6, v7  ; v6 = 514, v7 = 2056
+; check: return v8
+
+function %ushr_const_select(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 4
+    v2 = iconst.i32 28
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 0xf000_0000
+    v5 = ushr v4, v3
+    return v5
+}
+; check: v6 = iconst.i32 0x0f00_0000
+; check: v7 = iconst.i32 15
+; check: v8 = select v0, v6, v7  ; v6 = 0x0f00_0000, v7 = 15
+; check: return v8
+
+function %sshr_const_select(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 4
+    v2 = iconst.i32 28
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 0xf000_0000
+    v5 = sshr v4, v3
+    return v5
+}
+; check: v6 = iconst.i32 -16777216
+; check: v7 = iconst.i32 -1
+; check: v8 = select v0, v6, v7  ; v6 = -16777216, v7 = -1
+; check: return v8
+
+function %rotl_const_select(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i32 4
+    v2 = iconst.i32 8
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 0xf000_0001
+    v5 = rotl v4, v3
+    return v5
+}
+; check: v6 = iconst.i32 31
+; check: v7 = iconst.i32 496
+; check: v8 = select v0, v6, v7  ; v6 = 31, v7 = 496
+; check: return v8
+
+function %rotr_const_select(i8) -> i32 {
+block0(v0: i8):
+    v1 = iconst.i64 4
+    v2 = iconst.i64 40
+    v3 = select v0, v1, v2
+    v4 = iconst.i32 0xf000_0001
+    v5 = rotr v4, v3
+    return v5
+}
+; check: v6 = iconst.i32 0x1f00_0000
+; check: v7 = iconst.i32 0x01f0_0000
+; check: v8 = select v0, v6, v7  ; v6 = 0x1f00_0000, v7 = 0x01f0_0000
+; check: return v8
+
+function %ishl_band_redundant_mask(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x3fff_ffff
+    v2 = band v0, v1
+    v3 = iconst.i32 2
+    v4 = ishl v2, v3
+    return v4
+}
+; check: v3 = iconst.i32 2
+; check: v5 = ishl v0, v3  ; v3 = 2
+; check: return v5
+
+function %ishl_band_redundant_mask_byte(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0xff
+    v2 = band v0, v1
+    v3 = iconst.i32 24
+    v4 = ishl v2, v3
+    return v4
+}
+; check: v3 = iconst.i32 24
+; check: v5 = ishl v0, v3  ; v3 = 24
+; check: return v5
+
+function %ishl_band_needed_mask(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x1fff_ffff
+    v2 = band v0, v1
+    v3 = iconst.i32 2
+    v4 = ishl v2, v3
+    return v4
+}
+; check: v1 = iconst.i32 0x1fff_ffff
+; check: v2 = band v0, v1  ; v1 = 0x1fff_ffff
+; check: v3 = iconst.i32 2
+; check: v4 = ishl v2, v3  ; v3 = 2
+; check: return v4
+
+function %ushr_band_redundant_mask(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -16
+    v2 = band v0, v1
+    v3 = iconst.i32 4
+    v4 = ushr v2, v3
+    return v4
+}
+; check: v3 = iconst.i32 4
+; check: v5 = ushr v0, v3  ; v3 = 4
+; check: return v5
+
+function %sshr_band_redundant_mask(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -16
+    v2 = band v0, v1
+    v3 = iconst.i32 4
+    v4 = sshr v2, v3
+    return v4
+}
+; check: v3 = iconst.i32 4
+; check: v5 = sshr v0, v3  ; v3 = 4
+; check: return v5
+
+function %sshr_band_needed_mask(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0x7fff_fff0
+    v2 = band v0, v1
+    v3 = iconst.i32 4
+    v4 = sshr v2, v3
+    return v4
+}
+; check: v1 = iconst.i32 0x7fff_fff0
+; check: v2 = band v0, v1  ; v1 = 0x7fff_fff0
+; check: v3 = iconst.i32 4
+; check: v4 = sshr v2, v3  ; v3 = 4
+; check: return v4
+
 function %bor_sshr_sshr_same_count_i32(i32, i32, i8) -> i32 {
 block0(v0: i32, v1: i32, v2: i8):
     v3 = sshr v0, v2

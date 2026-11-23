@@ -14,12 +14,12 @@
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     ss2 = explicit_slot 4, align = 4
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 25 ""
 ;;     region2 = 130 ""
 ;;     region3 = 134 ""
-;;     region4 = 196 ""
+;;     region4 = 160 ""
 ;;     region5 = 108 ""
-;;     region6 = 206 ""
+;;     region6 = 196 ""
 ;;     region7 = 5 ""
 ;;     region8 = 115 ""
 ;;     region9 = 135 ""
@@ -27,7 +27,7 @@
 ;;     region11 = 26 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+16
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u805306368:23 sig0
 ;;     stack_limit = gv2
@@ -47,7 +47,7 @@
 ;; @0025                               v18 = call fn0(v0, v14, v16, v216, v17), stack_map=[i32 @ ss2+0, i32 @ ss1+0, i32 @ ss0+0]  ; v14 = -1476395008, v216 = 40, v17 = 8
 ;; @0025                               v5 = iconst.i32 3
 ;; @0025                               v19 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0025                               v20 = load.i64 notrap aligned readonly can_move region4 v19+32
+;; @0025                               v20 = load.i64 notrap aligned readonly can_move region4 v19+24
 ;; @0025                               v21 = uextend.i64 v18
 ;; @0025                               v22 = iadd v20, v21
 ;; @0025                               v23 = iconst.i64 24
@@ -76,10 +76,10 @@
 ;; @0025                               jump block3
 ;;
 ;;                                 block3:
-;; @0025                               v46 = uextend.i64 v45
-;; @0025                               v49 = iadd.i64 v20, v46
+;; @0025                               v48 = uextend.i64 v45
+;; @0025                               v51 = iadd.i64 v20, v48
 ;;                                     v206 = iconst.i64 12
-;; @0025                               v52 = isub v49, v206  ; v206 = 12
+;; @0025                               v52 = isub v51, v206  ; v206 = 12
 ;; @0025                               store.i32 user2 little region7 v201, v52
 ;;                                     v191 = load.i32 notrap aligned region10 v203
 ;; @0025                               v307 = iconst.i32 1
@@ -103,7 +103,7 @@
 ;;
 ;;                                 block5:
 ;; @0025                               v313 = iconst.i64 8
-;; @0025                               v101 = isub.i64 v49, v313  ; v313 = 8
+;; @0025                               v101 = isub.i64 v51, v313  ; v313 = 8
 ;; @0025                               store.i32 user2 little region7 v191, v101
 ;;                                     v181 = load.i32 notrap aligned region9 v204
 ;; @0025                               v314 = iconst.i32 1
@@ -127,7 +127,7 @@
 ;;
 ;;                                 block7:
 ;; @0025                               v8 = iconst.i64 4
-;; @0025                               v150 = isub.i64 v49, v8  ; v8 = 4
+;; @0025                               v150 = isub.i64 v51, v8  ; v8 = 4
 ;; @0025                               store.i32 user2 little region7 v181, v150
 ;; @0029                               jump block1
 ;;

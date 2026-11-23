@@ -81,10 +81,6 @@ Release candidates come with no support or stability guarantees:
 
 * They receive no security advisories, and will not be listed as affected
   versions in advisories for the releases they precede.
-* Publishing a new release candidate yanks the previous one, and publishing
-  `X.0.0` itself yanks the last candidate that preceded it, so a candidate can
-  disappear from under you at any time. No release candidate outlives the
-  release it was a candidate for.
 * They should never be a permanent dependency of anything. Treat a release
   candidate exactly as you would treat a `git` dependency on an arbitrary commit
   of a release branch.
@@ -128,6 +124,10 @@ for:
 
 Patch releases are guaranteed to maintain API and behavior
 backwards-compatibility and are intended to be trivial for users to upgrade to.
+Note, however, that precompiled `*.cwasm` artifacts (e.g. from `wasmtime
+compile`, `Module::serialize`, or `Engine::precompile_module`) are tied to the
+exact Wasmtime version, including the patch version, that produced them. Such
+artifacts must be recompiled when upgrading to a new patch release.
 
 The Wasmtime project guarantees backports and patch releases will be made for
 any discovered security issue. Other bug fixes are done on a best-effort basis

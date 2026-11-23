@@ -1222,6 +1222,43 @@ fn substituted_component_type_with_exported_resource() -> Result<()> {
 }
 
 #[test]
+fn compare_types_with_uninstantiated_resources() -> Result<()> {
+    let engine = super::engine();
+    let wat = r#"
+        (component
+            (type $r' (resource (rep i32)))
+            (export $r "r" (type $r'))
+            (core module $m (func (export "f") (param i32 i32)))
+            (core instance $i (instantiate $m))
+            (func (export "f") (param "x" (option (own $r)))
+                (canon lift (core func $i "f")))
+        )
+    "#;
+    let c1 = Component::new(&engine, wat)?;
+    let c2 = Component::new(&engine, wat)?;
+    let param = |c: &Component| {
+        let ty = c.component_type();
+        let (_, item) = ty.exports(&engine).nth(1).unwrap();
+        let ComponentItem::ComponentFunc(f) = item.ty else {
+            panic!("`f` export item of wrong type")
+        };
+        f.params().next().unwrap().1
+    };
+
+    assert!(param(&c1) == param(&c1));
+    assert!(param(&c1) != param(&c2));
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &c1)?;
+    let f = instance.get_func(&mut store, "f").unwrap();
+    let instantiated = f.ty(&store).params().next().unwrap().1;
+    assert!(param(&c1) != instantiated);
+    assert!(instantiated == f.ty(&store).params().next().unwrap().1);
+
+    Ok(())
+}
+
+#[test]
 fn flags_beyond_end() -> Result<()> {
     let engine = super::engine();
 

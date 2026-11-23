@@ -202,6 +202,8 @@ impl<'a, T: 'static> LowerContext<'a, T> {
             u32::try_from(new_size)?,
         );
 
+        // FIXME(#4311): needs memory64 treatment, where realloc's signature
+        // uses i64 pointers and sizes
         type ReallocFunc = crate::TypedFunc<(u32, u32, u32, u32), u32>;
 
         // Invoke the wasm malloc function using its raw and statically known
@@ -546,7 +548,7 @@ impl<'a> LiftContext<'a> {
                 host_table: self.host_table,
                 handle_counter: self.handle_counter,
                 task_state: self.task_state,
-                guest: Some(self.instance.as_mut().instance_states_and_published()),
+                guest: Some(self.instance.as_mut()),
                 current_scope: self.current_scope,
             },
             self.host_resource_data,

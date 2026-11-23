@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 use wasmtime::Result;
 use wasmtime::component::{TaskGroupHook, TaskGroupId};
-use wasmtime::{Config, Engine, Store, StoreContextMut, Trap, component::*};
+use wasmtime::{AsContextMut, Config, Engine, Store, StoreContextMut, Trap, component::*};
 use wasmtime_component_util::REALLOC_AND_FREE;
 
 #[tokio::test(flavor = "current_thread")]
@@ -650,10 +650,6 @@ async fn require_concurrency_support() -> Result<()> {
     );
     assert!(
         root.func_new_concurrent("f2", |_, _, _, _| { todo!() })
-            .is_err()
-    );
-    assert!(
-        root.resource_concurrent("f3", ResourceType::host::<u32>(), |_, _| { todo!() })
             .is_err()
     );
 
@@ -2020,6 +2016,8 @@ impl<T: Send> wasmtime::CallHookHandler<T> for BlockingCallHookHandler {
 // hook abandons that call partway through, so the store must be poisoned
 // rather than left with a stale current guest task.
 async fn drop_run_concurrent_blocked_in_call_hook(which: BlockingCallHook) -> Result<()> {
+    _ = env_logger::try_init();
+
     let mut config = Config::new();
     config.wasm_component_model_async(true);
     let engine = Engine::new(&config)?;
@@ -2031,10 +2029,14 @@ async fn drop_run_concurrent_blocked_in_call_hook(which: BlockingCallHook) -> Re
     let instance = linker.instantiate_async(&mut store, &component).await?;
     let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
-    *block.lock().unwrap() = Some(which);
-    let future = Box::pin(store.run_concurrent(async |a| run.call_concurrent(a, ()).await));
-    assert!(PollOnce::new(future).await.is_err());
-    *block.lock().unwrap() = None;
+    {
+        *block.lock().unwrap() = Some(which);
+        let mut future = pin!(store.run_concurrent(async |a| run.call_concurrent(a, ()).await));
+        for _ in 0..10 {
+            assert!(PollOnce::new(&mut future).await.is_err());
+        }
+        *block.lock().unwrap() = None;
+    }
 
     let err = store
         .run_concurrent(async |a| run.call_concurrent(a, ()).await)
@@ -2492,6 +2494,24 @@ async fn lower_stream_payload_type_mismatch() -> wasmtime::Result<()> {
         instance.get_typed_func::<(StreamReader<StreamAny>,), ()>(&mut store, "take-stream-u32")?;
     let (stream,) = new.call_async(&mut store, ()).await?;
     assert!(take.call_async(&mut store, (stream,)).await.is_err());
+
+    // The same through a typed reader re-typed via `StreamAny`, whose
+    // `StreamReader<StreamAny>` type doesn't match the items it was created
+    // with.
+    let (mut store, instance) = instantiate().await?;
+    let echo = instance
+        .get_typed_func::<(StreamReader<StreamReader<String>>,), (StreamReader<StreamAny>,)>(
+            &mut store,
+            "echo-stream",
+        )?;
+    let take =
+        instance.get_typed_func::<(StreamReader<StreamAny>,), ()>(&mut store, "take-stream-u32")?;
+    let inner = StreamReader::new(&mut store, vec!["hello".to_string()])?;
+    let outer = StreamReader::new(&mut store, vec![inner])?;
+    let (outer,) = echo.call_async(&mut store, (outer,)).await?;
+    let outer = StreamAny::try_from_stream_reader(&mut store, outer)?
+        .try_into_stream_reader::<StreamAny>()?;
+    assert!(take.call_async(&mut store, (outer,)).await.is_err());
 
     // A matching payload type is still accepted.
     let (mut store, instance) = instantiate().await?;
@@ -3492,7 +3512,7 @@ async fn yield_callback_after_dropped_event_loop() -> Result<()> {
     (func (export "run") (result i32) (i32.const 1 (; YIELD ;)))
     (func (export "run-cb") (param i32 i32 i32) (result i32)
       (global.set $n (i32.add (global.get $n) (i32.const 1)))
-      (if (i32.ge_u (global.get $n) (i32.const 3))
+      (if (i32.ge_u (global.get $n) (i32.const 20))
         (then
           (call $task.return)
           (return (i32.const 0 (; EXIT ;)))))
@@ -3516,10 +3536,14 @@ async fn yield_callback_after_dropped_event_loop() -> Result<()> {
 
     // Drop the call when the event loop yields before calling the callback
     // again, then check that the next event loop finishes the task.
-    let future = run.call_async(&mut store, ());
-    assert!(PollOnce::new(Box::pin(future)).await.is_err());
+    {
+        let mut future = pin!(run.call_async(&mut store, ()));
+        for _ in 0..10 {
+            assert!(PollOnce::new(&mut future).await.is_err());
+        }
+    }
     store
-        .run_concurrent(async |_| yield_times(10).await)
+        .run_concurrent(async |_| yield_times(30).await)
         .await?;
     store.assert_concurrent_state_empty();
     Ok(())
@@ -3896,4 +3920,372 @@ async fn cancel_stream_read_completed_by_host() -> Result<()> {
             }
         }
     }
+}
+
+static RETURN_THEN_YIELD_THEN_EXIT: &str = r#"
+(component
+  (core module $m
+    (import "" "task.return" (func $task.return))
+    (func (export "run") (result i32)
+      (call $task.return)
+      (i32.const 1 (; YIELD ;))
+    )
+    (func (export "cb") (param i32 i32 i32) (result i32)
+      (i32.const 0 (; EXIT ;))
+    )
+  )
+  (core func $task.return (canon task.return))
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "task.return" (func $task.return))
+    ))
+  ))
+  (func (export "run") async(canon lift (core func $i "run") async (callback (core func $i "cb"))))
+)
+"#;
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn poll_ready_for_concurrent_call() -> Result<()> {
+    _ = env_logger::try_init();
+
+    let engine = Engine::new(&Config::new())?;
+    let component = Component::new(&engine, RETURN_THEN_YIELD_THEN_EXIT)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    store
+        .run_concurrent(async move |accessor| {
+            future::poll_fn(|cx| {
+                assert!(
+                    accessor
+                        .poll_ready_for_concurrent_call(*run.func(), cx)
+                        .is_ready()
+                );
+                Poll::Ready(())
+            })
+            .await;
+
+            let mut call = pin!(run.call_concurrent(accessor, ()));
+
+            enum State {
+                Start,
+                Polled,
+                Finish,
+            }
+
+            let mut state = State::Start;
+
+            future::poll_fn(move |cx| match state {
+                State::Start => {
+                    state = State::Polled;
+                    assert!(call.as_mut().poll(cx).is_pending());
+                    Poll::Pending
+                }
+
+                State::Polled => {
+                    state = State::Finish;
+                    // Instance should not be considered ready for another call
+                    // while work is queued (in this case, the call to the guest
+                    // callback function).
+                    //
+                    // See also
+                    // crates/misc/component-async-tests/tests/scenario/backpressure.rs,
+                    // which tests that
+                    // `Accessor::poll_ready_for_concurrent_call` waits for
+                    // backpressure to clear before returning `Poll::Ready(())`.
+                    assert!(
+                        accessor
+                            .poll_ready_for_concurrent_call(*run.func(), cx)
+                            .is_pending()
+                    );
+                    Poll::Pending
+                }
+
+                State::Finish => call.as_mut().poll(cx),
+            })
+            .await
+        })
+        .await??;
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn avoid_yield_starvation() -> Result<()> {
+    _ = env_logger::try_init();
+
+    let engine = Engine::new(&Config::new())?;
+    let component = Component::new(&engine, RETURN_THEN_YIELD_THEN_EXIT)?;
+    let mut store = Store::new(&engine, ());
+    let call_count = 32;
+    store.set_max_concurrent_state_table_capacity(call_count - 1);
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    store
+        .run_concurrent(async move |accessor| {
+            // Previously, this would hit the table capacity limit set above as
+            // new calls preempted existing, yielding tasks and thereby kept
+            // them alive longer than they ought to be.
+            for _ in 0..call_count {
+                run.call_concurrent(accessor, ()).await?;
+            }
+            Ok::<_, wasmtime::Error>(())
+        })
+        .await??;
+
+    Ok(())
+}
+
+/// A `StreamProducer` which returns `StreamResult::Dropped` must not be polled
+/// again, even if a guest reads its buffered items over several reads. Once
+/// the buffer is drained the guest should see `DROPPED`.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn stream_producer_not_polled_after_dropped() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+  (core module $libc (memory (export "mem") 1))
+  (core instance $libc (instantiate $libc))
+  (core module $m
+    (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+    (global $r (mut i32) (i32.const 0))
+    (func (export "start") (param i32) (global.set $r (local.get 0)))
+    (func (export "read") (result i32)
+      (call $stream.read (global.get $r) (i32.const 100) (i32.const 1))))
+  (type $s (stream u8))
+  (core func $stream.read (canon stream.read $s async (memory (core memory $libc "mem"))))
+  (core instance $i (instantiate $m (with "" (instance
+    (export "stream.read" (func $stream.read))))))
+  (func (export "start") (param "s" (stream u8)) (canon lift (core func $i "start")))
+  (func (export "read") (result u32) (canon lift (core func $i "read")))
+)
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+    let start = instance.get_typed_func::<(StreamReader<u8>,), ()>(&mut store, "start")?;
+    let read = instance.get_typed_func::<(), (u32,)>(&mut store, "read")?;
+
+    let reader = StreamReader::new(&mut store, Producer { polled: false })?;
+    start.call_async(&mut store, (reader,)).await?;
+
+    // COMPLETED(1)
+    assert_eq!(read.call_async(&mut store, ()).await?, (0x10,));
+    assert_eq!(read.call_async(&mut store, ()).await?, (0x10,));
+    // DROPPED(1)
+    assert_eq!(read.call_async(&mut store, ()).await?, (0x11,));
+
+    return Ok(());
+
+    /// Produces 3 items along with `Dropped` the first time it's polled.
+    struct Producer {
+        polled: bool,
+    }
+
+    impl StreamProducer<()> for Producer {
+        type Item = u8;
+        type Buffer = VecBuffer<u8>;
+
+        fn poll_produce<'a>(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<'a, ()>,
+            mut destination: Destination<'a, u8, VecBuffer<u8>>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            assert!(!self.polled, "producer polled after returning `Dropped`");
+            self.polled = true;
+            destination.set_buffer(vec![1, 2, 3].into());
+            Poll::Ready(Ok(StreamResult::Dropped))
+        }
+    }
+}
+
+/// A `StreamConsumer` which returns `StreamResult::Dropped` must not be polled
+/// again, even if the host producer piped into it has more buffered items.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn stream_consumer_not_polled_after_dropped() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let got = Arc::new(Mutex::new(Vec::new()));
+    let reader = StreamReader::new(&mut store, Producer)?;
+    reader.pipe(
+        &mut store,
+        Consumer {
+            got: got.clone(),
+            polled: false,
+        },
+    )?;
+    store
+        .run_concurrent(async |_| yield_times(10).await)
+        .await?;
+    assert_eq!(*got.lock().unwrap(), [1]);
+
+    return Ok(());
+
+    /// Produces 3 items every time it's polled.
+    struct Producer;
+
+    impl StreamProducer<()> for Producer {
+        type Item = u8;
+        type Buffer = VecBuffer<u8>;
+
+        fn poll_produce<'a>(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _store: StoreContextMut<'a, ()>,
+            mut destination: Destination<'a, u8, VecBuffer<u8>>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            destination.set_buffer(vec![1, 2, 3].into());
+            Poll::Ready(Ok(StreamResult::Completed))
+        }
+    }
+
+    /// Consumes a single item and returns `Dropped` the first time it's
+    /// polled.
+    struct Consumer {
+        got: Arc<Mutex<Vec<u8>>>,
+        polled: bool,
+    }
+
+    impl StreamConsumer<()> for Consumer {
+        type Item = u8;
+
+        fn poll_consume(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            mut store: StoreContextMut<()>,
+            mut source: Source<'_, u8>,
+            _finish: bool,
+        ) -> Poll<Result<StreamResult>> {
+            assert!(!self.polled, "consumer polled after returning `Dropped`");
+            self.polled = true;
+            let mut item = None;
+            source.read(&mut store, &mut item)?;
+            Extend::extend(&mut *self.got.lock().unwrap(), item);
+            Poll::Ready(Ok(StreamResult::Dropped))
+        }
+    }
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn nested_event_loop_in_sync_host_function() -> Result<()> {
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "f" (func $f))
+                (core func $f (canon lower (func $f)))
+                (core module $m
+                    (import "" "f" (func $f))
+                    (func (export "run") (call $f)))
+                (core instance $i (instantiate $m (with "" (instance (export "f" (func $f))))))
+                (func (export "run") (canon lift (core func $i "run"))))
+        "#,
+    )?;
+    let start = Component::new(
+        &engine,
+        r#"
+            (component
+                (core module $m (func $start) (start $start))
+                (core instance (instantiate $m)))
+        "#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap("f", move |mut store, ()| {
+        let linker = Linker::new(store.engine());
+        let instantiate = pin!(linker.instantiate_async(&mut store, &start));
+        match instantiate.poll(&mut Context::from_waker(Waker::noop())) {
+            Poll::Ready(result) => result.map(drop),
+            Poll::Pending => panic!("instantiation should complete in one poll"),
+        }
+    })?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    run.call(&mut store, ())?;
+    run.call(&mut store, ())?;
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn no_guest_calls_while_store_drops() -> Result<()> {
+    struct Guard<'a> {
+        accessor: &'a Accessor<()>,
+        f: TypedFunc<(), ()>,
+    }
+
+    impl Drop for Guard<'_> {
+        fn drop(&mut self) {
+            self.accessor.with(|mut store| {
+                let err = self.f.call(&mut store, ()).unwrap_err();
+                assert_eq!(err.downcast_ref(), Some(&Trap::CannotEnterComponent));
+
+                {
+                    let run = pin!(store.as_context_mut().run_concurrent(async |_| ()));
+                    let Poll::Ready(result) = run.poll(&mut Context::from_waker(Waker::noop()))
+                    else {
+                        panic!("run_concurrent should not be pending");
+                    };
+                    let err = result.unwrap_err();
+                    assert_eq!(err.downcast_ref(), Some(&Trap::CannotEnterComponent));
+                }
+
+                let call = pin!(self.f.call_async(&mut store, ()));
+                let Poll::Ready(result) = call.poll(&mut Context::from_waker(Waker::noop())) else {
+                    panic!("call_async should not be pending");
+                };
+                let err = result.unwrap_err();
+                assert_eq!(err.downcast_ref(), Some(&Trap::CannotEnterComponent));
+            });
+        }
+    }
+
+    let engine = Engine::default();
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (core module $m (func (export "f")))
+                (core instance $i (instantiate $m))
+                (func (export "f") (canon lift (core func $i "f"))))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    store.spawn(async move |accessor| {
+        let _guard = Guard { accessor, f };
+        _ = tx.send(());
+        std::future::pending().await
+    })?;
+    store.run_concurrent(async |_| rx.await).await??;
+    drop(store);
+    Ok(())
 }

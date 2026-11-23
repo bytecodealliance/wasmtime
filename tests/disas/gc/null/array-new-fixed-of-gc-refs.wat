@@ -14,11 +14,11 @@
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     ss2 = explicit_slot 4, align = 4
 ;;     region0 = 123 ""
-;;     region1 = 160 ""
+;;     region1 = 25 ""
 ;;     region2 = 65 ""
 ;;     region3 = 177 ""
-;;     region4 = 206 ""
-;;     region5 = 196 ""
+;;     region4 = 196 ""
+;;     region5 = 160 ""
 ;;     region6 = 130 ""
 ;;     region7 = 134 ""
 ;;     region8 = 77 ""
@@ -30,7 +30,7 @@
 ;;     region14 = 26 ""
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned region1 gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+16
 ;;     sig0 = (i64 vmctx, i64) -> i8 tail
 ;;     fn0 = colocated u805306368:22 sig0
 ;;     stack_limit = gv2
@@ -51,14 +51,14 @@
 ;;                                     v144 = iconst.i32 24
 ;; @0025                               v24 = uadd_overflow_trap v23, v144, user18  ; v144 = 24
 ;; @0025                               v26 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0025                               v27 = load.i64 notrap aligned region4 v26+40
+;; @0025                               v27 = load.i64 notrap aligned region4 v26+32
 ;; @0025                               v25 = uextend.i64 v24
 ;; @0025                               v28 = icmp ule v25, v27
 ;; @0025                               brif v28, block2, block3
 ;;
 ;;                                 block2:
 ;;                                     v158 = iconst.i32 -1476394984
-;; @0025                               v32 = load.i64 notrap aligned readonly can_move region5 v26+32
+;; @0025                               v32 = load.i64 notrap aligned readonly can_move region5 v26+24
 ;; @0025                               v253 = band.i32 v21, v157  ; v157 = -8
 ;; @0025                               v254 = uextend.i64 v253
 ;; @0025                               v34 = iadd v32, v254
@@ -75,17 +75,17 @@
 ;;                                     v255 = iconst.i32 24
 ;; @0025                               v61 = uadd_overflow_trap v253, v255, user2  ; v255 = 24
 ;;                                     v130 = load.i32 notrap aligned region14 v131
-;; @0025                               v62 = uextend.i64 v61
-;; @0025                               v65 = iadd v32, v62
+;; @0025                               v64 = uextend.i64 v61
+;; @0025                               v67 = iadd v32, v64
 ;;                                     v135 = iconst.i64 12
-;; @0025                               v68 = isub v65, v135  ; v135 = 12
+;; @0025                               v68 = isub v67, v135  ; v135 = 12
 ;; @0025                               store user2 little region11 v130, v68
 ;;                                     v128 = load.i32 notrap aligned region13 v132
-;; @0025                               v96 = isub v65, v39  ; v39 = 8
+;; @0025                               v96 = isub v67, v39  ; v39 = 8
 ;; @0025                               store user2 little region11 v128, v96
 ;;                                     v126 = load.i32 notrap aligned region12 v133
 ;; @0025                               v8 = iconst.i64 4
-;; @0025                               v124 = isub v65, v8  ; v8 = 4
+;; @0025                               v124 = isub v67, v8  ; v8 = 4
 ;; @0025                               store user2 little region11 v126, v124
 ;; @0029                               jump block1
 ;;

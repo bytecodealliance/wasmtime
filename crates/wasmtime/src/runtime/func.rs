@@ -927,6 +927,12 @@ impl Func {
     /// or error of any kind. In this situation the results will be written to
     /// the provided `results` array.
     ///
+    /// GC references in `params` must be rooted (see [`Val::ensure_rooted`]).
+    /// GC references in `results` are written as unrooted references
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes; root them, all at once, with
+    /// [`Val::ensure_all_rooted`] to keep them for longer.
+    ///
     /// # Errors
     ///
     /// Any error which occurs throughout the execution of the function will be
@@ -1082,11 +1088,11 @@ impl Func {
     /// The returned value is only valid for as long as the store is alive.
     /// This value is safe to pass to [`Func::from_raw`] so long as the same
     /// `store` is provided.
-    pub fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
-        self.to_raw_(store.as_context_mut().0)
+    pub fn to_raw(&self, store: impl AsContext) -> *mut c_void {
+        self.to_raw_(store.as_context().0)
     }
 
-    pub(crate) fn to_raw_(&self, store: &mut StoreOpaque) -> *mut c_void {
+    pub(crate) fn to_raw_(&self, store: &StoreOpaque) -> *mut c_void {
         self.vm_func_ref(store).as_ptr().cast()
     }
 
@@ -1167,6 +1173,7 @@ impl Func {
         }
 
         for (ty, arg) in ty.params().zip(params) {
+            arg.validate_rooted().context("unrooted argument")?;
             arg.ensure_matches_ty(store.0, &ty)
                 .context("argument type mismatch")?;
             if !arg.comes_from_same_store(store.0) {
@@ -1207,9 +1214,12 @@ impl Func {
             )?;
         }
 
+        // Read the results as unrooted references, so that the caller can
+        // choose whether and how to root them. Nothing below may change the GC
+        // heap, since that would invalidate them.
         for ((i, slot), val) in results.iter_mut().enumerate().zip(&values_vec) {
             let ty = ty.results().nth(i).unwrap();
-            *slot = unsafe { Val::from_raw(&mut *store, *val, ty) };
+            *slot = unsafe { Val::from_raw_unrooted_(store.0, *val, &ty) };
         }
         values_vec.truncate(0);
         store.0.save_wasm_val_raw_storage(values_vec);
@@ -2592,6 +2602,8 @@ impl HostFunc {
         // values, and we need to catch that here.
         let results = &args_then_results[ty.params().len()..];
         for (i, (ret, ty)) in results.iter().zip(ty.results()).enumerate() {
+            ret.validate_rooted()
+                .context("function attempted to return an unrooted value")?;
             ret.ensure_matches_ty(store.0, &ty)
                 .context("function attempted to return an incompatible value")?;
             storage[i].write(ret.to_raw(store.as_context_mut())?);

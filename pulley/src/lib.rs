@@ -656,6 +656,13 @@ macro_rules! for_each_extended_op {
             /// Gets the special "lr" register and moves it into `dst`.
             xmov_lr = XmovLr { dst: XReg };
 
+            /// Macro-instruction to enter a function in its full generality.
+            ///
+            /// This is equivalent to `stack_alloc32 pre`, `push_frame`,
+            /// `stack_alloc32 amt`, then saving all of `regs` to the top of
+            /// the stack just allocated by `amt`.
+            push_frame_full = PushFrameFull { pre: u32, amt: u32, regs: UpperRegSet<XReg> };
+
             /// `dst = byteswap(low32(src))`
             bswap32 = Bswap32 { dst: XReg, src: XReg };
             /// `dst = byteswap(src)`

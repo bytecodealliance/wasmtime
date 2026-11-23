@@ -721,8 +721,12 @@ fn import_works() -> Result<()> {
 
     let instance = Instance::new(&mut store, &module, &imports)?;
     let run = instance.get_func(&mut store, "run").unwrap();
-    let hello = Val::ExternRef(Some(ExternRef::new(&mut store, "hello".to_string())?));
-    let goodbye = Val::ExternRef(Some(ExternRef::new(&mut store, "goodbye".to_string())?));
+    let hello = Val::ExternRef(Some(
+        ExternRef::new(&mut store, "hello".to_string())?.into(),
+    ));
+    let goodbye = Val::ExternRef(Some(
+        ExternRef::new(&mut store, "goodbye".to_string())?.into(),
+    ));
     let funcref = Val::FuncRef(Some(Func::wrap(&mut store, || -> i32 { 42 })));
     run.call(&mut store, &[hello, goodbye, funcref], &mut [])?;
 
@@ -1623,10 +1627,17 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> wasmtime::Result<()>
     assert!(b.is_none());
     untyped.call(
         &mut store,
-        &[Val::FuncRef(None), Val::ExternRef(Some(my_externref))],
+        &[
+            Val::FuncRef(None),
+            Val::ExternRef(Some(my_externref.into())),
+        ],
         &mut results,
     )?;
-    assert_my_externref(&store, results[0].unwrap_externref().copied());
+    let externref = results[0]
+        .unwrap_externref()
+        .map(|e| e.to_rooted(&mut store))
+        .transpose()?;
+    assert_my_externref(&store, externref);
     assert!(results[1].unwrap_funcref().is_none());
 
     // funcref=Some, externref=Some
@@ -1637,11 +1648,15 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> wasmtime::Result<()>
         &mut store,
         &[
             Val::FuncRef(Some(my_funcref)),
-            Val::ExternRef(Some(my_externref)),
+            Val::ExternRef(Some(my_externref.into())),
         ],
         &mut results,
     )?;
-    assert_my_externref(&store, results[0].unwrap_externref().copied());
+    let externref = results[0]
+        .unwrap_externref()
+        .map(|e| e.to_rooted(&mut store))
+        .transpose()?;
+    assert_my_externref(&store, externref);
     assert_my_funcref(&mut store, results[1].unwrap_funcref())?;
 
     Ok(())

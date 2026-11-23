@@ -24,7 +24,6 @@ pub struct OpenOptions {
     pub(crate) create: bool,
     pub(crate) create_new: bool,
     pub(crate) dir_required: bool,
-    #[cfg(windows)]
     pub(crate) maybe_dir: bool,
     pub(crate) sync: bool,
     pub(crate) dsync: bool,
@@ -63,7 +62,6 @@ impl OpenOptions {
             create: false,
             create_new: false,
             dir_required: false,
-            #[cfg(windows)]
             maybe_dir: false,
             sync: false,
             dsync: false,
@@ -154,6 +152,18 @@ impl OpenOptions {
     #[cfg(not(windows))]
     pub(crate) fn readdir_required(&mut self, readdir_required: bool) -> &mut Self {
         self.readdir_required = readdir_required;
+        self
+    }
+
+    /// Sets the option to allow the opened object to be a directory.
+    ///
+    /// On Windows, opening a directory requires `FILE_FLAG_BACKUP_SEMANTICS`
+    /// and directories are opened without `FILE_SHARE_DELETE` so they can't
+    /// be renamed or removed underneath sandboxed path lookups. On other
+    /// platforms this is the default and this option is a no-op.
+    #[inline]
+    pub(crate) fn maybe_dir(&mut self, maybe_dir: bool) -> &mut Self {
+        self.maybe_dir = maybe_dir;
         self
     }
 

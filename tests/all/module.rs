@@ -409,6 +409,42 @@ fn cross_engine_module_exports() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn caller_module_export_without_wasm_caller() -> Result<()> {
+    let engine = Engine::default();
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "host" "f" (func $f (result i32)))
+                (func (export "call-f") (result i32) (call $f))
+                (export "f" (func $f))
+                (memory (export "memory") 1)
+            )
+        "#,
+    )?;
+    let export = module.get_export_index("memory").unwrap();
+
+    let mut store = Store::new(&engine, ());
+    let f = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>| -> i32 {
+        match caller.get_module_export(&export) {
+            Some(Extern::Memory(_)) => 1,
+            Some(_) => unreachable!(),
+            None => 0,
+        }
+    });
+    let instance = Instance::new(&mut store, &module, &[f.into()])?;
+
+    let call_f = instance.get_typed_func::<(), i32>(&mut store, "call-f")?;
+    assert_eq!(call_f.call(&mut store, ())?, 1);
+
+    assert_eq!(f.typed::<(), i32>(&store)?.call(&mut store, ())?, 0);
+    let reexport = instance.get_typed_func::<(), i32>(&mut store, "f")?;
+    assert_eq!(reexport.call(&mut store, ())?, 0);
+    Ok(())
+}
+
 /// Smoke test for registering and unregistering modules (and their rec group
 /// entries) concurrently.
 #[wasmtime_test(wasm_features(gc, function_references))]
@@ -732,4 +768,47 @@ fn deserialize_raw_fails_for_native() {
             "this target requires virtual memory to be enabled"
         );
     }
+}
+
+/// `use_bti` and `use_csdb` only add instructions that every aarch64 CPU can
+/// run, as a `NOP` if nothing else, so enabling either must leave modules
+/// compilable and runnable on the host that compiled them.
+#[test]
+#[cfg_attr(miri, ignore)]
+#[cfg(target_arch = "aarch64")]
+fn aarch64_flags_without_host_detection_run_natively() -> Result<()> {
+    // `call_indirect` goes through a Spectre-guarded table access and
+    // `br_table` through a jump table, the two places `use_csdb` adds `csdb`.
+    let wat = r#"
+        (module
+            (table 1 funcref)
+            (elem (i32.const 0) $two)
+            (type $t (func (result i32)))
+            (func $two (type $t) (i32.const 2))
+            (func (export "run") (param i32) (result i32)
+                (block $default
+                    (block $zero
+                        (br_table $zero $default (local.get 0)))
+                    (return (call_indirect (type $t) (i32.const 0))))
+                (i32.const 3))
+        )
+    "#;
+    for flag in ["use_bti", "use_csdb"] {
+        let mut config = Config::new();
+        unsafe {
+            config.cranelift_flag_enable(flag);
+        }
+        let engine = Engine::new(&config)?;
+        let module = Module::new(&engine, wat).with_context(|| format!("compiling with {flag}"))?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let run = instance.get_typed_func::<i32, i32>(&mut store, "run")?;
+        assert_eq!(run.call(&mut store, 0)?, 2, "{flag}");
+        assert_eq!(run.call(&mut store, 1)?, 3, "{flag}");
+
+        let serialized = module.serialize()?;
+        unsafe { Module::deserialize(&engine, &serialized) }
+            .with_context(|| format!("loading a module serialized with {flag}"))?;
+    }
+    Ok(())
 }

@@ -40,6 +40,7 @@ pub(crate) mod code;
 pub(crate) mod code_memory;
 #[cfg(feature = "debug")]
 pub(crate) mod debug;
+pub(crate) mod epoch_state;
 pub(crate) mod exception;
 pub(crate) mod externals;
 #[cfg(feature = "async")]

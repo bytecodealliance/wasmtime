@@ -752,3 +752,4 @@
 (attr u64_div (tag slow))
 (attr u64_rem (tag slow))
 (attr rule imul_ineg_const (tag slow))
+(attr rule imul_ishl_const (tag slow))

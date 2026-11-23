@@ -27,7 +27,7 @@ pub fn got_symlink_permission(tmpdir: &File) -> bool {
     }
     let link = "some_hopefully_unique_link_name";
 
-    match h::symlink_file(tmpdir, r"nonexisting_target", link) {
+    match h::symlink(tmpdir, r"nonexisting_target", link) {
         // ERROR_PRIVILEGE_NOT_HELD = 1314
         Err(ref err) if err.raw_os_error() == Some(1314) => false,
         Ok(_) | Err(_) => true,
@@ -43,8 +43,11 @@ fn open_directory_with_truncate_is_error() {
     let tmpdir = tmpdir();
     let start = h::dir_of(&tmpdir);
     let mut options = p::OpenOptions::new();
-    // The `maybe_dir` part of this test is gone along with the option itself.
-    options.truncate(true).read(true).write(true);
+    options
+        .maybe_dir(true)
+        .truncate(true)
+        .read(true)
+        .write(true);
     p::create_dir(&start, Path::new("test")).unwrap();
     assert!(p::open(&start, Path::new("test"), &options).is_err());
 }
@@ -747,7 +750,7 @@ fn symlinks_work() {
     let out = "out.txt";
 
     check!(check!(h::create(&start, &input)).write("foobar".as_bytes()));
-    check!(h::symlink_file(&start, &input, &out));
+    check!(h::symlink(&start, &input, &out));
     assert!(
         check!(h::symlink_metadata(&start, out))
             .file_type()
@@ -773,7 +776,7 @@ fn symlink_noexist() {
 
     // Use a relative path for testing. Symlinks get normalized by Windows,
     // so we might not get the same path back for absolute paths
-    check!(h::symlink_file(&start, &"foo", "bar"));
+    check!(h::symlink(&start, &"foo", "bar"));
     assert_eq!(
         check!(p::read_link(&start, Path::new("bar")))
             .to_str()
@@ -808,7 +811,7 @@ fn read_link() {
     if !got_symlink_permission(&start) {
         return;
     };
-    check!(h::symlink_file(&start, &"foo", &link));
+    check!(h::symlink(&start, &"foo", &link));
     assert_eq!(
         check!(p::read_link(&start, Path::new(&link)))
             .to_str()
@@ -836,7 +839,7 @@ fn read_link_relative() {
     if !got_symlink_permission(&start) {
         return;
     };
-    check!(h::symlink_file(&start, &"foo", &link));
+    check!(h::symlink(&start, &"foo", &link));
     assert_eq!(
         check!(super::super::read_link(&start, Path::new(link)))
             .to_str()
@@ -883,7 +886,7 @@ fn read_link_escape() {
         tmpdir.path().join("nope"),
     ];
     if got_symlink_permission(&root) {
-        check!(h::symlink_file(&root, &"secret", &"link"));
+        check!(h::symlink(&root, &"secret", &"link"));
         paths.push(PathBuf::from("../link"));
         paths.push(tmpdir.path().join("link"));
     }
@@ -1098,7 +1101,7 @@ fn create_dir_all_with_junctions() {
     if !got_symlink_permission(&start) {
         return;
     };
-    check!(h::symlink_dir(&start, &target, &link));
+    check!(h::symlink(&start, &target, &link));
     check!(h::create_dir_all(&start, &d));
     assert!(h::is_dir(&start, link));
     assert!(h::exists(&start, d));
@@ -1154,7 +1157,7 @@ fn symlink_hard_link() {
     check!(h::create(&start, "file"));
 
     // Create "symlink", a symlink to "file".
-    check!(h::symlink_file(&start, "file", "symlink"));
+    check!(h::symlink(&start, "file", "symlink"));
 
     // Create "hard_link", a hard link to "symlink".
     check!(p::hard_link(

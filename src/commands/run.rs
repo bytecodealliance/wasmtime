@@ -1116,14 +1116,15 @@ impl RunCommand {
             Some(path) => path,
             None => return err,
         };
-        if !err.is::<wasmtime::Trap>() {
+        let Some(core_dump) = err.downcast_ref::<wasmtime::WasmCoreDump>() else {
             return err;
-        }
+        };
         let source_name = self.module_and_args[0]
             .to_str()
             .unwrap_or_else(|| "unknown");
 
-        if let Err(coredump_err) = super::write_core_dump(store, &err, &source_name, coredump_path)
+        if let Err(coredump_err) =
+            super::write_core_dump(store, core_dump, &source_name, coredump_path)
         {
             eprintln!("warning: coredump failed to generate: {coredump_err}");
             err

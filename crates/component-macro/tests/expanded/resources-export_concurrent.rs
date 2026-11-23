@@ -201,8 +201,8 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::transitive_import::HostWithStore<T> + Send,
-            for<'a> D::Data<'a>: foo::foo::transitive_import::Host + Send,
+            D: foo::foo::transitive_import::HostWithStore<T>,
+            for<'a> D::Data<'a>: foo::foo::transitive_import::Host,
             T: 'static + Send,
         {
             foo::foo::transitive_import::add_to_linker::<T, D>(linker, host_getter)?;
@@ -237,23 +237,21 @@ pub mod foo {
             pub enum Y {}
             pub trait HostYWithStore<T>: wasmtime::component::HasData {
                 fn drop(
-                    accessor: &wasmtime::component::Accessor<T, Self>,
+                    accessor: wasmtime::component::Access<T, Self>,
                     rep: wasmtime::component::Resource<Y>,
-                ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
-                where
-                    Self: Sized;
+                ) -> wasmtime::Result<()>;
             }
             pub trait HostY {}
-            impl<_T: HostY + ?Sized + Send> HostY for &mut _T {}
+            impl<_T: HostY + ?Sized> HostY for &mut _T {}
             pub trait HostWithStore<
                 T,
-            >: wasmtime::component::HasData + HostYWithStore<T> + Send {}
+            >: wasmtime::component::HasData + HostYWithStore<T> {}
             impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                H: wasmtime::component::HasData + HostYWithStore<T> + Send,
+                H: wasmtime::component::HasData + HostYWithStore<T>,
             {}
-            pub trait Host: HostY + Send {}
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
+            pub trait Host: HostY {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker_instance<T, D>(
                 inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -261,24 +259,24 @@ pub mod foo {
             where
                 D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: 'static,
             {
-                inst.resource_concurrent(
+                inst.resource(
                     "y",
                     wasmtime::component::ResourceType::host::<Y>(),
-                    move |caller: &wasmtime::component::Accessor<T>, rep| {
-                        wasmtime::component::__internal::Box::pin(async move {
-                            let accessor = &caller.with_getter::<D>(host_getter);
-                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
-                                HostYWithStore::<
+                    move |mut store, rep| -> wasmtime::Result<()> {
+                        let resource = wasmtime::component::Resource::new_own(rep);
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostYWithStore::<
+                                T,
+                            >::drop(
+                                wasmtime::component::Access::<
                                     T,
-                                >::drop(
-                                        accessor,
-                                        wasmtime::component::Resource::new_own(rep),
-                                    )
-                                    .await,
-                            )
-                        })
+                                    D,
+                                >::new(store, host_getter),
+                                resource,
+                            ),
+                        )
                     },
                 )?;
                 Ok(())
@@ -290,7 +288,7 @@ pub mod foo {
             where
                 D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
-                T: 'static + Send,
+                T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/transitive-import")?;
                 add_to_linker_instance::<T, D>(&mut inst, host_getter)

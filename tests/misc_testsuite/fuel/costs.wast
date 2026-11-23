@@ -1,7 +1,9 @@
 ;;! bulk_memory = true
 ;;! reference_types = true
 ;;! exceptions = true
-;;! flags = "-W fuel=1000000000"
+;;! # Force table-lazy-init on to avoid fuzzing turning it off in order to keep
+;;! # fuel costs deterministic below.
+;;! flags = "-W fuel=1000000000 -O table-lazy-init"
 
 ;; Each test sets the store's fuel to 1000, instantiates a module (usually
 ;; running its start function), and checks exactly how much fuel is left.

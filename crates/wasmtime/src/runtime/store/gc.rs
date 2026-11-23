@@ -2,7 +2,6 @@
 
 use crate::RootSet;
 use crate::error::{Context, ensure};
-use crate::hash_map::HashMap;
 use crate::module::ModuleRegistry;
 use crate::store::{
     Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
@@ -21,8 +20,8 @@ use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
+use wasmtime_environ::DefinedTagIndex;
 use wasmtime_environ::packed_option::ReservedValue;
-use wasmtime_environ::{DefinedTagIndex, VMSharedTypeIndex};
 
 #[derive(Default)]
 pub(crate) struct StoreGcData {
@@ -44,28 +43,6 @@ pub(crate) struct StoreGcData {
     /// refinement of `VMGcRef`, but rooting APIs right now make it difficult to
     /// work with that directly so this is stored as `VMGcRef` instead.
     pending_exception: Option<VMGcRef>,
-
-    /// A store-local cache of engine-level subtype checks.
-    ///
-    /// Dynamic subtype checks (e.g. for `ref.cast` instructions) consult the
-    /// engine's type registry, which is protected by a read-write lock.
-    /// Testing locally shows that parallel readers take a significant
-    /// performance hit when using this lock (as measured with `wasmtime
-    /// serve`). Thus this cache is intended to serve as a fast path where the
-    /// lock need not be hit at all.
-    ///
-    /// Note that the size of this cache is currently bounded to a fixed size.
-    /// Once this cache is full then all future consultations which aren't in
-    /// the cache go upstream to the engine itself (slow). In the future
-    /// this'll either be removed entirely (see #13484) or will have some sort
-    /// of LRU-like behavior.
-    ///
-    /// FIXME(#13484) this field is a temporary workaround for a "true
-    /// solution" where supertypes are stored inline in a compiled-code-visible
-    /// location which means that a libcall isn't needed at all (nor
-    /// synchronization) to determine subtype/supertype relationships.
-    subtype_check_cache:
-        HashMap<(VMSharedTypeIndex, VMSharedTypeIndex), bool, foldhash::fast::FixedState>,
 }
 
 impl<T> Store<T> {
@@ -332,14 +309,14 @@ impl StoreOpaque {
         if self
             .gc_store
             .as_ref()
-            .map_or(false, |gc| gc.gc_heap.needs_gc_before_next_growth())
+            .map_or(false, |gc| gc.gc_heap.get().needs_gc_before_next_growth())
         {
             self.do_gc(asyncness).await?;
             debug_assert!(
                 !self
                     .gc_store
                     .as_ref()
-                    .map_or(false, |gc| gc.gc_heap.needs_gc_before_next_growth()),
+                    .map_or(false, |gc| gc.gc_heap.get().needs_gc_before_next_growth()),
                 "needs_gc_before_next_growth should return false after a GC"
             );
         }
@@ -418,7 +395,9 @@ impl StoreOpaque {
         impl<'a> TakenGcHeap<'a> {
             fn new(store: &'a mut StoreOpaque) -> TakenGcHeap<'a> {
                 TakenGcHeap {
-                    memory: ManuallyDrop::new(store.unwrap_gc_store_mut().gc_heap.take_memory()),
+                    memory: ManuallyDrop::new(
+                        store.unwrap_gc_store_mut().gc_heap.get_mut().take_memory(),
+                    ),
                     store,
                     delta_bytes_grown: 0,
                 }
@@ -433,10 +412,14 @@ impl StoreOpaque {
                 // taken when this was created so it should be safe to place
                 // back inside the GC heap.
                 unsafe {
-                    self.store.unwrap_gc_store_mut().gc_heap.replace_memory(
-                        ManuallyDrop::take(&mut self.memory),
-                        self.delta_bytes_grown,
-                    );
+                    self.store
+                        .unwrap_gc_store_mut()
+                        .gc_heap
+                        .get_mut()
+                        .replace_memory(
+                            ManuallyDrop::take(&mut self.memory),
+                            self.delta_bytes_grown,
+                        );
                 }
             }
         }
@@ -548,7 +531,7 @@ impl StoreOpaque {
     ///
     /// GC barriers are not required by the caller of this function.
     pub(crate) fn set_pending_exception(&mut self, exnref: &VMGcRef) -> crate::Error {
-        debug_assert!(exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
+        debug_assert!(exnref.is_exnref(&**self.unwrap_gc_store_mut().gc_heap.get()));
         let gc_store = self.gc_store.as_mut().unwrap();
         match gc_store.write_gc_ref(&mut self.gc_data.pending_exception, Some(exnref)) {
             Ok(()) => ThrownException.into(),
@@ -561,7 +544,7 @@ impl StoreOpaque {
     pub(crate) fn expose_pending_exception_to_wasm(&mut self) -> Option<NonZeroU32> {
         let exnref = self.gc_data.pending_exception.take()?;
         let gc_store = self.unwrap_gc_store_mut();
-        debug_assert!(exnref.is_exnref(&*gc_store.gc_heap));
+        debug_assert!(exnref.is_exnref(&**gc_store.gc_heap.get()));
         Some(gc_store.expose_gc_ref_to_wasm(exnref).unwrap())
     }
 
@@ -569,7 +552,7 @@ impl StoreOpaque {
     /// reference to the `Rooted` that's returned.
     fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
         let vmexnref = self.gc_data.pending_exception.take()?;
-        debug_assert!(vmexnref.is_exnref(&*self.unwrap_gc_store().gc_heap));
+        debug_assert!(vmexnref.is_exnref(&**self.unwrap_gc_store().gc_heap.get()));
         let mut nogc = AutoAssertNoGc::new(self);
         Some(Rooted::new(&mut nogc, vmexnref))
     }
@@ -580,8 +563,8 @@ impl StoreOpaque {
         &mut self,
     ) -> Option<(InstanceId, DefinedTagIndex)> {
         let pending_exnref = self.gc_data.pending_exception.as_ref()?.unchecked_copy();
-        debug_assert!(pending_exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
-        let mut store = AutoAssertNoGc::new(self);
+        debug_assert!(pending_exnref.is_exnref(&**self.unwrap_gc_store_mut().gc_heap.get()));
+        let store = AutoAssertNoGc::new(self);
 
         // Note that if the GC heap is corrupt this will return an error, and in
         // such as situation we return `None` here pretending that there's no
@@ -589,10 +572,7 @@ impl StoreOpaque {
         // later. This method is primarily called right now to determine if
         // there's a handler for an exception, and by returning `None` here this
         // turns into just any old embedder error.
-        let (instance, index) = pending_exnref
-            .into_exnref_unchecked()
-            .tag(&mut store)
-            .ok()?;
+        let (instance, index) = pending_exnref.into_exnref_unchecked().tag(&store).ok()?;
 
         // Validate the heap-derived indices: handler lookup only compares them
         // against live tags, so an unvalidated pair can match the wrong
@@ -1048,7 +1028,12 @@ impl StoreOpaque {
             };
         heap.attach(mem);
 
-        let gc_store = GcStore::new(index, heap, engine.tunables().gc_zeal_alloc_counter);
+        let gc_store = GcStore::new(
+            self.id(),
+            index,
+            heap,
+            engine.tunables().gc_zeal_alloc_counter,
+        );
         *self.vm_store_context.gc_heap.get_mut() = gc_store.vmmemory_definition();
         Ok(self.gc_store.insert(gc_store))
     }
@@ -1078,36 +1063,6 @@ impl StoreOpaque {
         self.gc_data
             .gc_roots
             .exit_lifo_scope(self.gc_store.as_mut(), scope);
-    }
-
-    /// Is type `sub` a subtype of `sup`?
-    ///
-    /// Equivalent to `self.engine().signatures().is_subtype(sub, sup)` but
-    /// caches results store-locally to avoid contention on the engine's type
-    /// registry lock. See the documentation of the `subtype_check_cache` field
-    /// for details.
-    pub(crate) fn is_subtype_cached(
-        &mut self,
-        sub: VMSharedTypeIndex,
-        sup: VMSharedTypeIndex,
-    ) -> bool {
-        const MAX_SIZE: usize = 1 << 16; // 64k entries
-
-        let key = (sub, sup);
-        let engine_answer = || self.engine.signatures().is_subtype(sub, sup);
-        if self.gc_data.subtype_check_cache.len() < MAX_SIZE {
-            *self
-                .gc_data
-                .subtype_check_cache
-                .entry(key)
-                .or_insert_with(engine_answer)
-        } else {
-            self.gc_data
-                .subtype_check_cache
-                .get(&key)
-                .copied()
-                .unwrap_or_else(engine_answer)
-        }
     }
 }
 

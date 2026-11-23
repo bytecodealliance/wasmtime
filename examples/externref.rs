@@ -52,13 +52,19 @@ fn main() -> Result<()> {
         .unwrap() // assert in bounds
         .unwrap_extern() // assert it's an externref table
         .copied()
-        .unwrap(); // assert the externref isn't null
+        .unwrap() // assert the externref isn't null
+        .to_rooted(&mut store)?; // root it, since getters return unrooted references
     assert!(Rooted::ref_eq(&store, &elem, &externref)?);
 
     println!("Touching `externref` global...");
     let global = instance.get_global(&mut store, "global").unwrap();
     global.set(&mut store, Some(externref).into())?;
-    let global_val = global.get(&mut store).unwrap_externref().copied().unwrap();
+    let global_val = global
+        .get(&mut store)
+        .unwrap_externref()
+        .copied()
+        .unwrap()
+        .to_rooted(&mut store)?;
     assert!(Rooted::ref_eq(&store, &global_val, &externref)?);
 
     println!("Calling `externref` func...");

@@ -63,7 +63,7 @@ automatic and this is documenting what automation does.
    * If enough has changed to be worth testing again, a new release candidate
      can be [triggered manually][ci-trigger] with the release branch selected
      and the `release-rc` argument. This opens a PR bumping to the next `-rc.N`;
-     merging it publishes that candidate and yanks the previous one.
+     merging it publishes that candidate.
 4. On the 20th of every month (same CI job as before) another CI job will run
    performing:
    * Reset to `release-X.0.0`
@@ -114,12 +114,13 @@ of criteria. It's done on an as-needed basis. Requirements, however, are:
   list of `PUBLIC_CRATES` in `crates/misc/publish/src/main.rs` is the list of
   crates to worry about in terms of breaking changes.
 
-* Wasm-level ABI-breaking changes are by default not allowed in patch releases.
-  Users are expected to, for example, be able to load `*.cwasm` artifacts from
-  before the patch release is made. If an ABI-breaking change is necessary then
-  be sure to update `crates/wasmtime/src/engine/serialization.rs` and the
-  `WasmtimeVersion` matching strategy to modify the string to ensure older
-  artifacts cannot be loaded.
+* Precompiled `*.cwasm` artifacts are not compatible across patch releases.
+  By default (`ModuleVersionStrategy::WasmtimeVersion`) the full crate version,
+  including the minor and patch components, is embedded in compiled artifacts
+  and must match exactly when they are loaded. This means patch releases are
+  free to change internal VM data structures and compiled code (for example as
+  part of a security fix) without any further action, and users must recompile
+  their `*.cwasm` artifacts when upgrading to a patch release.
 
 Making a patch release is somewhat more manual than a major version, but like
 before there's automation to help guide the process as well and take care of

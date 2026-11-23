@@ -3,20 +3,24 @@
 use super::store::AsStoreOpaque;
 use crate::code::StoreCode;
 use crate::module::RegisterBreakpointState;
-use crate::store::StoreId;
+use crate::runtime::epoch_state::EpochStateHandle;
+use crate::store::WasmState;
+use crate::sync::RwLock;
 use crate::vm::{Activation, Backtrace};
 use crate::{
-    AnyRef, AsContextMut, CodeMemory, ExnRef, Extern, ExternRef, Func, Instance, Module,
-    OwnedRooted, StoreContext, StoreContextMut, Val,
+    AnyRef, AsContext, AsContextMut, CodeMemory, ExnRef, Extern, ExternRef, Func, Instance, Module,
+    OwnedRooted, StoreContext, StoreContextMut, Unrooted, Val,
     code::StoreCodePC,
     module::ModuleRegistry,
-    store::{AutoAssertNoGc, StoreOpaque},
+    store::StoreOpaque,
     vm::{CompiledModuleId, VMContext},
 };
 use crate::{Caller, Result, Store};
-use alloc::collections::{BTreeMap, BTreeSet, btree_map::Entry};
+use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::ops::Range;
 use core::{ffi::c_void, ptr::NonNull};
 #[cfg(feature = "gc")]
 use wasmtime_environ::FrameTable;
@@ -47,12 +51,24 @@ impl<T> Store<T> {
         self.as_store_opaque().debug_exit_frames()
     }
 
-    /// Borrow this store's [`BreakpointState`], to edit its
-    /// breakpoints, single-stepping, or watchpoints.
+    /// Edit this store's breakpoints, single-stepping, or
+    /// watchpoints, with `f`.
     ///
-    /// Returns `None` if guest debugging is not enabled.
-    pub fn edit_breakpoints<'a>(&'a mut self) -> Option<BreakpointState<'a>> {
-        self.as_store_opaque().edit_breakpoints()
+    /// The edits that `f` makes with the given [`BreakpointState`]
+    /// take effect together once it returns `Ok`, and that result is
+    /// returned. If `f` instead returns `Err` (or panics), none of its
+    /// edits take effect. See [`BreakpointState`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error, and makes no edits, if guest debugging is not
+    /// enabled, if `f` returns an error (which is returned), or if the
+    /// store's code cannot be made writable to patch it.
+    pub fn edit_breakpoints<R>(
+        &mut self,
+        f: impl FnOnce(&mut BreakpointState<'_>) -> Result<R>,
+    ) -> Result<R> {
+        self.as_store_opaque().edit_breakpoints(f)
     }
 
     /// Get a vector of all Instances held in the Store, for debug
@@ -83,11 +99,15 @@ impl<'a, T> StoreContextMut<'a, T> {
         self.0.as_store_opaque().debug_exit_frames()
     }
 
-    /// Borrow this store's [`BreakpointState`].
+    /// Edit this store's breakpoints, single-stepping, or
+    /// watchpoints, with `f`.
     ///
     /// See [`Store::edit_breakpoints`] for more details.
-    pub fn edit_breakpoints(self) -> Option<BreakpointState<'a>> {
-        self.0.as_store_opaque().edit_breakpoints()
+    pub fn edit_breakpoints<R>(
+        self,
+        f: impl FnOnce(&mut BreakpointState<'_>) -> Result<R>,
+    ) -> Result<R> {
+        self.0.as_store_opaque().edit_breakpoints(f)
     }
 
     /// Get a vector of all Instances held in the Store, for debug
@@ -116,11 +136,15 @@ impl<'a, T> Caller<'a, T> {
         self.store.0.as_store_opaque().debug_exit_frames()
     }
 
-    /// Borrow this store's [`BreakpointState`].
+    /// Edit this store's breakpoints, single-stepping, or
+    /// watchpoints, with `f`.
     ///
     /// See [`Store::edit_breakpoints`] for more details.
-    pub fn edit_breakpoints<'b>(&'b mut self) -> Option<BreakpointState<'b>> {
-        self.store.0.as_store_opaque().edit_breakpoints()
+    pub fn edit_breakpoints<R>(
+        &mut self,
+        f: impl FnOnce(&mut BreakpointState<'_>) -> Result<R>,
+    ) -> Result<R> {
+        self.store.0.as_store_opaque().edit_breakpoints(f)
     }
 
     /// Get a vector of all Instances held in the Store, for debug
@@ -143,29 +167,33 @@ impl<'a, T> Caller<'a, T> {
 impl StoreOpaque {
     /// Sets or clears the watch bits of the bytes in `range` of `memory`; see
     /// [`BreakpointState::watch`].
-    pub(crate) fn debug_set_watch(
-        &mut self,
-        memory: crate::Memory,
-        range: core::ops::Range<u64>,
-        watch: bool,
-    ) -> Result<()> {
-        let Some(shadow) = memory.vm_shadow_mut(self) else {
+    /// Check that the bytes in `range` of `memory` can be watched (or
+    /// unwatched), returning the range as indices into its shadow.
+    fn debug_check_watch(&self, memory: crate::Memory, range: Range<u64>) -> Result<Range<usize>> {
+        let Some(shadow) = memory.vm_shadow(self) else {
             crate::error::bail!("watchpoints require guest debugging");
         };
-        let bytes = shadow.bytes_mut();
         let start = usize::try_from(range.start)?;
         let end = usize::try_from(range.end)?;
-        let Some(bytes) = bytes.get_mut(start..end) else {
+        if start > end || end > shadow.bytes().len() {
             crate::error::bail!("watchpoint range is out of bounds of the memory");
-        };
-        for byte in bytes {
+        }
+        Ok(start..end)
+    }
+
+    /// Watch (or unwatch) the bytes in `range` of `memory`, which
+    /// must have been checked with `debug_check_watch`.
+    fn debug_set_watch(&mut self, memory: crate::Memory, range: Range<usize>, watch: bool) {
+        let shadow = memory
+            .vm_shadow_mut(self)
+            .expect("watch range was checked when it was recorded");
+        for byte in &mut shadow.bytes_mut()[range] {
             if watch {
                 *byte |= crate::runtime::vm::WATCH_DEBUG;
             } else {
                 *byte &= !crate::runtime::vm::WATCH_DEBUG;
             }
         }
-        Ok(())
     }
 
     fn debug_exit_frames(&mut self) -> impl Iterator<Item = FrameHandle> {
@@ -182,18 +210,32 @@ impl StoreOpaque {
             .filter_map(|act| unsafe { FrameHandle::exit_frame(self, act) })
     }
 
-    pub(crate) fn edit_breakpoints<'a>(&'a mut self) -> Option<BreakpointState<'a>> {
-        if !self.engine().tunables().debug_guest {
-            return None;
-        }
+    pub(crate) fn edit_breakpoints<R>(
+        &mut self,
+        f: impl FnOnce(&mut BreakpointState<'_>) -> Result<R>,
+    ) -> Result<R> {
+        crate::ensure!(
+            self.engine().tunables().debug_guest,
+            "guest debugging is not enabled"
+        );
 
-        Some(BreakpointState {
+        let (breakpoints, _, _) = self.breakpoints_and_registry_and_engine_mut();
+        let edited = breakpoints.clone();
+        let mut state = BreakpointState {
             store: self,
-            dirty_modules: BTreeSet::new(),
-        })
+            edited,
+            pending: BTreeMap::new(),
+            watches: Vec::new(),
+        };
+        // If `f` fails (or panics), `state` is discarded, and its edits
+        // with it: nothing has been applied to the store, and in
+        // particular all code remains executable.
+        let result = f(&mut state)?;
+        state.commit()?;
+        Ok(result)
     }
 
-    fn debug_all_instances(&mut self) -> Vec<Instance> {
+    fn debug_all_instances(&self) -> Vec<Instance> {
         if !self.engine().tunables().debug_guest {
             return vec![];
         }
@@ -228,13 +270,9 @@ impl Instance {
     ///
     /// `None` is returned if guest-debugging is not enabled in the
     /// engine configuration for this Store.
-    pub fn debug_global(
-        &self,
-        mut store: impl AsContextMut,
-        global_index: u32,
-    ) -> Option<crate::Global> {
+    pub fn debug_global(&self, store: impl AsContext, global_index: u32) -> Option<crate::Global> {
         self.debug_export(
-            store.as_context_mut().0,
+            store.as_context().0,
             GlobalIndex::from_bits(global_index).into(),
         )
         .and_then(|s| s.into_global())
@@ -257,13 +295,9 @@ impl Instance {
     ///
     /// `None` is returned if guest-debugging is not enabled in the
     /// engine configuration for this Store.
-    pub fn debug_memory(
-        &self,
-        mut store: impl AsContextMut,
-        memory_index: u32,
-    ) -> Option<crate::Memory> {
+    pub fn debug_memory(&self, store: impl AsContext, memory_index: u32) -> Option<crate::Memory> {
         self.debug_export(
-            store.as_context_mut().0,
+            store.as_context().0,
             MemoryIndex::from_bits(memory_index).into(),
         )
         .and_then(|s| s.into_memory())
@@ -288,11 +322,11 @@ impl Instance {
     /// engine configuration for this Store.
     pub fn debug_shared_memory(
         &self,
-        mut store: impl AsContextMut,
+        store: impl AsContext,
         memory_index: u32,
     ) -> Option<crate::SharedMemory> {
         self.debug_export(
-            store.as_context_mut().0,
+            store.as_context().0,
             MemoryIndex::from_bits(memory_index).into(),
         )
         .and_then(|s| s.into_shared_memory())
@@ -312,13 +346,9 @@ impl Instance {
     ///
     /// `None` is returned if guest-debugging is not enabled in the
     /// engine configuration for this Store.
-    pub fn debug_table(
-        &self,
-        mut store: impl AsContextMut,
-        table_index: u32,
-    ) -> Option<crate::Table> {
+    pub fn debug_table(&self, store: impl AsContext, table_index: u32) -> Option<crate::Table> {
         self.debug_export(
-            store.as_context_mut().0,
+            store.as_context().0,
             TableIndex::from_bits(table_index).into(),
         )
         .and_then(|s| s.into_table())
@@ -344,7 +374,7 @@ impl Instance {
         mut store: impl AsContextMut,
         function_index: u32,
     ) -> Option<crate::Func> {
-        self.debug_export(
+        self.debug_export_mut(
             store.as_context_mut().0,
             FuncIndex::from_bits(function_index).into(),
         )
@@ -364,15 +394,38 @@ impl Instance {
     ///
     /// `None` is returned if guest-debugging is not enabled in the
     /// engine configuration for this Store.
-    pub fn debug_tag(&self, mut store: impl AsContextMut, tag_index: u32) -> Option<crate::Tag> {
-        self.debug_export(
-            store.as_context_mut().0,
-            TagIndex::from_bits(tag_index).into(),
-        )
-        .and_then(|s| s.into_tag())
+    pub fn debug_tag(&self, store: impl AsContext, tag_index: u32) -> Option<crate::Tag> {
+        self.debug_export(store.as_context().0, TagIndex::from_bits(tag_index).into())
+            .and_then(|s| s.into_tag())
     }
 
-    fn debug_export(&self, store: &mut StoreOpaque, index: EntityIndex) -> Option<Extern> {
+    /// Looks up the entity at `index` in this instance's index
+    /// spaces, for debugging. Returns `None` if guest debugging is
+    /// disabled, if `index` is out of bounds, or if `index` refers to
+    /// a function.
+    ///
+    /// This needs only shared access to the store, so it cannot
+    /// return functions (because of lazy init); use
+    /// `debug_export_mut` for those.
+    fn debug_export(&self, store: &StoreOpaque, index: EntityIndex) -> Option<Extern> {
+        if !store.engine().tunables().debug_guest {
+            return None;
+        }
+
+        let env_module = self._module(store).env_module();
+        if !env_module.is_valid(index) {
+            return None;
+        }
+        let export = store[self.id].get_export_by_index(store.id(), index)?;
+        Some(Extern::from_wasmtime_export(export, store.engine()))
+    }
+
+    /// Like `debug_export`, but also returns functions.
+    ///
+    /// Looking up a function needs mutable access to the store because an
+    /// instance's defined functions' `VMFuncRef`s are initialized lazily, on
+    /// first use, and looking one up may be that first use.
+    fn debug_export_mut(&self, store: &mut StoreOpaque, index: EntityIndex) -> Option<Extern> {
         if !store.engine().tunables().debug_guest {
             return None;
         }
@@ -392,6 +445,22 @@ impl Instance {
 }
 
 impl<'a, T> StoreContext<'a, T> {
+    /// Get a vector of all Instances held in the Store, for debug
+    /// purposes.
+    ///
+    /// See [`Store::debug_all_instances`] for more details.
+    pub fn debug_all_instances(self) -> Vec<Instance> {
+        self.0.debug_all_instances()
+    }
+
+    /// Get a vector of all Modules held in the Store, for debug
+    /// purposes.
+    ///
+    /// See [`Store::debug_all_modules`] for more details.
+    pub fn debug_all_modules(self) -> Vec<Module> {
+        self.0.debug_all_modules()
+    }
+
     /// Return all breakpoints.
     pub fn breakpoints(self) -> Option<impl Iterator<Item = Breakpoint> + 'a> {
         if !self.engine().tunables().debug_guest {
@@ -438,12 +507,11 @@ pub struct FrameHandle {
     /// The index of the virtual frame within the physical frame.
     virtual_frame_idx: usize,
 
-    /// The unique Store this frame came from, to ensure the handle is
-    /// used with the correct Store.
-    store_id: StoreId,
-
-    /// Store `execution_version`.
-    store_version: u64,
+    /// Encapsulated proof/witness that Wasm has not executed in this
+    /// store since this handle was created. Internally this holds a
+    /// snapshot of the monotonically incrementing counter that is
+    /// bumped whenever Wasm executes in the store.
+    wasm_state: EpochStateHandle<WasmState>,
 }
 
 impl FrameHandle {
@@ -452,21 +520,19 @@ impl FrameHandle {
     /// # Safety
     ///
     /// The provided activation must be valid currently.
-    unsafe fn exit_frame(store: &mut StoreOpaque, activation: Activation) -> Option<FrameHandle> {
+    unsafe fn exit_frame(store: &StoreOpaque, activation: Activation) -> Option<FrameHandle> {
         // SAFETY: activation is valid as per our safety condition.
         let mut cursor = unsafe { activation.cursor() };
 
         // Find the first virtual frame. Each physical frame may have
         // zero or more virtual frames.
         while !cursor.done() {
-            let (cache, registry) = store.frame_data_cache_mut_and_registry();
-            let frames = cache.lookup_or_compute(registry, cursor.frame());
+            let frames = FrameDataCache::frames(store, cursor.frame());
             if frames.len() > 0 {
                 return Some(FrameHandle {
                     cursor,
                     virtual_frame_idx: 0,
-                    store_id: store.id(),
-                    store_version: store.vm_store_context().execution_version,
+                    wasm_state: store.wasm_state().handle(),
                 });
             }
             // SAFETY: activation is still valid (valid on entry per
@@ -482,22 +548,27 @@ impl FrameHandle {
 
     /// Determine whether this handle can still be used to refer to a
     /// frame.
-    pub fn is_valid(&self, mut store: impl AsContextMut) -> bool {
-        let store = store.as_context_mut();
-        self.is_valid_impl(store.0.as_store_opaque())
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
+    pub fn is_valid(&self, store: impl AsContext) -> bool {
+        self.is_valid_impl(store.as_context().0)
     }
 
     fn is_valid_impl(&self, store: &StoreOpaque) -> bool {
-        let id = store.id();
-        let version = store.vm_store_context().execution_version;
-        self.store_id == id && self.store_version == version
+        self.wasm_state.is_valid(store.wasm_state())
     }
 
     /// Get a handle to the next frame up the activation (the one that
     /// called this frame), if any.
-    pub fn parent(&self, mut store: impl AsContextMut) -> Result<Option<FrameHandle>> {
-        let mut store = store.as_context_mut();
-        if !self.is_valid(&mut store) {
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
+    pub fn parent(&self, store: impl AsContext) -> Result<Option<FrameHandle>> {
+        let store = store.as_context().0;
+        if !self.is_valid_impl(store) {
             crate::error::bail!("Frame handle is no longer valid.");
         }
 
@@ -505,11 +576,7 @@ impl FrameHandle {
         parent.virtual_frame_idx += 1;
 
         while !parent.cursor.done() {
-            let (cache, registry) = store
-                .0
-                .as_store_opaque()
-                .frame_data_cache_mut_and_registry();
-            let frames = cache.lookup_or_compute(registry, parent.cursor.frame());
+            let frames = FrameDataCache::frames(store, parent.cursor.frame());
             if parent.virtual_frame_idx < frames.len() {
                 return Ok(Some(parent));
             }
@@ -518,26 +585,26 @@ impl FrameHandle {
             // wrt execution version at the top of this function, and
             // we have not returned since.
             unsafe {
-                parent.cursor.advance(store.0.as_store_opaque().unwinder());
+                parent.cursor.advance(store.unwinder());
             }
         }
 
         Ok(None)
     }
 
-    fn frame_data<'a>(&self, store: &'a mut StoreOpaque) -> Result<&'a FrameData> {
+    fn frame_data(&self, store: &StoreOpaque) -> Result<FrameDataRef> {
         if !self.is_valid_impl(store) {
             crate::error::bail!("Frame handle is no longer valid.");
         }
-        let (cache, registry) = store.frame_data_cache_mut_and_registry();
-        let frames = cache.lookup_or_compute(registry, self.cursor.frame());
+        let frames = FrameDataCache::frames(store, self.cursor.frame());
         // `virtual_frame_idx` counts up for ease of iteration
         // behavior, while the frames are stored in outer-to-inner
         // (i.e., caller to callee) order, so we need to reverse here.
-        Ok(&frames[frames.len() - 1 - self.virtual_frame_idx])
+        let index = frames.len() - 1 - self.virtual_frame_idx;
+        Ok(FrameDataRef { frames, index })
     }
 
-    fn raw_instance<'a>(&self, store: &mut StoreOpaque) -> Result<&'a crate::vm::Instance> {
+    fn raw_instance<'a>(&self, store: &StoreOpaque) -> Result<&'a crate::vm::Instance> {
         let frame_data = self.frame_data(store)?;
 
         // Read out the vmctx slot.
@@ -559,21 +626,28 @@ impl FrameHandle {
     }
 
     /// Get the instance associated with the current frame.
-    pub fn instance(&self, mut store: impl AsContextMut) -> Result<Instance> {
-        let store = store.as_context_mut();
-        let instance = self.raw_instance(store.0.as_store_opaque())?;
-        let id = instance.id();
-        Ok(Instance::from_wasmtime(id, store.0.as_store_opaque()))
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
+    pub fn instance(&self, store: impl AsContext) -> Result<Instance> {
+        let store = store.as_context().0;
+        let instance = self.raw_instance(store)?;
+        Ok(Instance::from_wasmtime(instance.id(), store))
     }
 
     /// Get the module associated with the current frame, if any
     /// (i.e., not a container instance for a host-created entity).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
     pub fn module<'a, T: 'static>(
         &self,
-        store: impl Into<StoreContextMut<'a, T>>,
+        store: impl Into<StoreContext<'a, T>>,
     ) -> Result<Option<&'a Module>> {
         let store = store.into();
-        let instance = self.raw_instance(store.0.as_store_opaque())?;
+        let instance = self.raw_instance(store.0)?;
         Ok(instance.runtime_module())
     }
 
@@ -581,19 +655,23 @@ impl FrameHandle {
     /// module-relative PC as an offset within the module binary, if
     /// this is a Wasm function directly from the given `Module`
     /// (rather than a trampoline).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
     pub fn wasm_function_index_and_pc(
         &self,
-        mut store: impl AsContextMut,
+        store: impl AsContext,
     ) -> Result<Option<(DefinedFuncIndex, ModulePC)>> {
-        let mut store = store.as_context_mut();
-        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+        let store = store.as_context();
+        let frame_data = self.frame_data(store.0)?;
         let FuncKey::DefinedWasmFunction(module, func) = frame_data.func_key else {
             return Ok(None);
         };
         let wasm_pc = frame_data.wasm_pc;
         debug_assert_eq!(
             module,
-            self.module(&mut store)?
+            self.module(&store)?
                 .expect("module should be defined if this is a defined function")
                 .env_module()
                 .module_index
@@ -602,35 +680,47 @@ impl FrameHandle {
     }
 
     /// Get the number of locals in this frame.
-    pub fn num_locals(&self, mut store: impl AsContextMut) -> Result<u32> {
-        let store = store.as_context_mut();
-        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
+    pub fn num_locals(&self, store: impl AsContext) -> Result<u32> {
+        let frame_data = self.frame_data(store.as_context().0)?;
         Ok(u32::try_from(frame_data.locals.len()).unwrap())
     }
 
     /// Get the depth of the operand stack in this frame.
-    pub fn num_stacks(&self, mut store: impl AsContextMut) -> Result<u32> {
-        let store = store.as_context_mut();
-        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came from.
+    pub fn num_stacks(&self, store: impl AsContext) -> Result<u32> {
+        let frame_data = self.frame_data(store.as_context().0)?;
         Ok(u32::try_from(frame_data.stack.len()).unwrap())
     }
 
     /// Get the type and value of the given local in this frame.
     ///
+    /// A GC reference is returned as an unrooted reference
+    /// ([`MaybeRooted::Unrooted`](crate::MaybeRooted::Unrooted)), valid until
+    /// the store's GC heap next changes, for example when execution resumes;
+    /// root it with [`Val::ensure_rooted`] to keep it for longer.
+    ///
     /// # Panics
     ///
-    /// Panics if the index is out-of-range (greater than
+    /// Panics if `store` is not the store this frame handle came
+    /// from, or if the index is out-of-range (greater than
     /// `num_locals()`).
-    pub fn local(&self, mut store: impl AsContextMut, index: u32) -> Result<Val> {
-        let store = store.as_context_mut();
-        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+    pub fn local(&self, store: impl AsContext, index: u32) -> Result<Val> {
+        let store = store.as_context().0;
+        let frame_data = self.frame_data(store)?;
         let (offset, ty) = frame_data.locals[usize::try_from(index).unwrap()];
         let slot_addr = frame_data.slot_addr(self.cursor.frame().fp());
         // SAFETY: compiler produced metadata to describe this local
         // slot and stored a value of the correct type into it. Slot
         // address is valid because we checked liveness of the
         // activation/frame via `frame_data` above.
-        Ok(unsafe { read_value(store.0.as_store_opaque(), slot_addr, offset, ty) })
+        Ok(unsafe { read_value(store, slot_addr, offset, ty) })
     }
 
     /// Get the type and value of the given operand-stack value in
@@ -640,16 +730,25 @@ impl FrameHandle {
     /// from there are more recently pushed values.  In other words,
     /// index order reads the Wasm virtual machine's abstract stack
     /// state left-to-right.
-    pub fn stack(&self, mut store: impl AsContextMut, index: u32) -> Result<Val> {
-        let store = store.as_context_mut();
-        let frame_data = self.frame_data(store.0.as_store_opaque())?;
+    ///
+    /// A GC reference is returned as an unrooted reference, as with
+    /// [`FrameHandle::local`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` is not the store this frame handle came
+    /// from, or if the index is out-of-range (greater than
+    /// `num_stacks()`).
+    pub fn stack(&self, store: impl AsContext, index: u32) -> Result<Val> {
+        let store = store.as_context().0;
+        let frame_data = self.frame_data(store)?;
         let (offset, ty) = frame_data.stack[usize::try_from(index).unwrap()];
         let slot_addr = frame_data.slot_addr(self.cursor.frame().fp());
         // SAFETY: compiler produced metadata to describe this
         // operand-stack slot and stored a value of the correct type
         // into it. Slot address is valid because we checked liveness
         // of the activation/frame via `frame_data` above.
-        Ok(unsafe { read_value(store.0.as_store_opaque(), slot_addr, offset, ty) })
+        Ok(unsafe { read_value(store, slot_addr, offset, ty) })
     }
 }
 
@@ -658,40 +757,55 @@ impl FrameHandle {
 /// present at that physical PC.
 pub(crate) struct FrameDataCache {
     /// For a given physical PC, the list of virtual frames, from
-    /// inner (most recently called/inlined) to outer.
-    by_pc: BTreeMap<StoreCodePC, Vec<FrameData>>,
+    /// outer (caller) to inner (most recently called/inlined).
+    by_pc: RwLock<BTreeMap<StoreCodePC, Arc<[FrameData]>>>,
 }
 
 impl FrameDataCache {
     pub(crate) fn new() -> FrameDataCache {
         FrameDataCache {
-            by_pc: BTreeMap::new(),
+            by_pc: RwLock::new(BTreeMap::new()),
         }
     }
 
-    /// Look up (or compute) the list of `FrameData`s from a physical
-    /// `Frame`.
-    fn lookup_or_compute<'a>(
-        &'a mut self,
-        registry: &ModuleRegistry,
-        frame: Frame,
-    ) -> &'a [FrameData] {
+    /// Look up (or compute and cache) the list of `FrameData`s for a
+    /// physical `Frame`.
+    fn frames(store: &StoreOpaque, frame: Frame) -> Arc<[FrameData]> {
         let pc = StoreCodePC::from_raw(frame.pc());
-        match self.by_pc.entry(pc) {
-            Entry::Occupied(frames) => frames.into_mut(),
-            Entry::Vacant(v) => {
-                // Although inlining can mix modules, `module` is the
-                // module that actually contains the physical PC
-                // (i.e., the outermost function that inlined the
-                // others).
-                let (store_code, frames) = VirtualFrame::decode(registry, frame.pc());
-                let frames = frames
-                    .into_iter()
-                    .map(|frame| FrameData::compute(frame, store_code))
-                    .collect::<Vec<_>>();
-                v.insert(frames)
-            }
+        let cache = &store.frame_data_cache().by_pc;
+        if let Some(frames) = cache.read().get(&pc) {
+            return frames.clone();
         }
+        // Compute without holding the lock. If another thread fills
+        // in the same PC meanwhile, keep whichever was inserted first;
+        // both are equal.
+        let frames: Arc<[FrameData]> = Self::compute(store.modules(), frame).into();
+        cache.write().entry(pc).or_insert(frames).clone()
+    }
+
+    fn compute(registry: &ModuleRegistry, frame: Frame) -> Vec<FrameData> {
+        // Although inlining can mix modules, `module` is the module that
+        // actually contains the physical PC (i.e., the outermost function
+        // that inlined the others).
+        let (store_code, frames) = VirtualFrame::decode(registry, frame.pc());
+        frames
+            .into_iter()
+            .map(|frame| FrameData::compute(frame, store_code))
+            .collect()
+    }
+}
+
+/// A reference to one virtual frame's `FrameData` in a
+/// `FrameDataCache` entry.
+struct FrameDataRef {
+    frames: Arc<[FrameData]>,
+    index: usize,
+}
+
+impl core::ops::Deref for FrameDataRef {
+    type Target = FrameData;
+    fn deref(&self) -> &FrameData {
+        &self.frames[self.index]
     }
 }
 
@@ -735,6 +849,7 @@ impl VirtualFrame {
 }
 
 /// Data computed when we visit a given frame.
+#[derive(Clone)]
 struct FrameData {
     slot_to_fp_offset: usize,
     func_key: FuncKey,
@@ -805,7 +920,7 @@ impl FrameData {
 /// instrumentation is correct, and as long as the tables are
 /// preserved through serialization).
 unsafe fn read_value(
-    store: &mut StoreOpaque,
+    store: &StoreOpaque,
     slot_base: *const u8,
     offset: FrameStateSlotOffset,
     ty: FrameValType,
@@ -815,50 +930,26 @@ unsafe fn read_value(
     // SAFETY: each case reads a value from memory that should be valid
     // according to our safety condition. State-slot values are packed without
     // alignment padding, so these loads must accept unaligned addresses.
+    let raw = || unsafe { (address as *const u32).read_unaligned() };
     match ty {
-        FrameValType::I32 => {
-            let value = unsafe { (address as *const i32).read_unaligned() };
-            Val::I32(value)
-        }
-        FrameValType::I64 => {
-            let value = unsafe { (address as *const i64).read_unaligned() };
-            Val::I64(value)
-        }
-        FrameValType::F32 => {
-            let value = unsafe { (address as *const u32).read_unaligned() };
-            Val::F32(value)
-        }
-        FrameValType::F64 => {
-            let value = unsafe { (address as *const u64).read_unaligned() };
-            Val::F64(value)
-        }
+        FrameValType::I32 => Val::I32(unsafe { (address as *const i32).read_unaligned() }),
+        FrameValType::I64 => Val::I64(unsafe { (address as *const i64).read_unaligned() }),
+        FrameValType::F32 => Val::F32(raw()),
+        FrameValType::F64 => Val::F64(unsafe { (address as *const u64).read_unaligned() }),
         FrameValType::V128 => {
             // Vectors are always stored as little-endian.
             let value =
                 unsafe { u128::from_le_bytes((address as *const [u8; 16]).read_unaligned()) };
             Val::V128(value.into())
         }
-        FrameValType::AnyRef => {
-            let mut nogc = AutoAssertNoGc::new(store);
-            let value = unsafe { (address as *const u32).read_unaligned() };
-            let value = AnyRef::_from_raw(&mut nogc, value);
-            Val::AnyRef(value)
-        }
-        FrameValType::ExnRef => {
-            let mut nogc = AutoAssertNoGc::new(store);
-            let value = unsafe { (address as *const u32).read_unaligned() };
-            let value = ExnRef::_from_raw(&mut nogc, value);
-            Val::ExnRef(value)
-        }
-        FrameValType::ExternRef => {
-            let mut nogc = AutoAssertNoGc::new(store);
-            let value = unsafe { (address as *const u32).read_unaligned() };
-            let value = ExternRef::_from_raw(&mut nogc, value);
-            Val::ExternRef(value)
-        }
+        FrameValType::AnyRef => Val::from(Unrooted::<AnyRef>::from_raw_u32(store, raw())),
+        FrameValType::ExnRef => Val::from(Unrooted::<ExnRef>::from_raw_u32(store, raw())),
+        FrameValType::ExternRef => Val::from(Unrooted::<ExternRef>::from_raw_u32(store, raw())),
         FrameValType::FuncRef => {
             let value = unsafe { (address as *const *mut c_void).read_unaligned() };
-            let value = unsafe { Func::_from_raw(store, value) };
+            // SAFETY: the slot holds a function reference of this store.
+            let value = NonNull::new(value.cast())
+                .map(|f| unsafe { Func::from_vm_func_ref(store.id(), f) });
             Val::FuncRef(value)
         }
         FrameValType::ContRef => {
@@ -1013,7 +1104,7 @@ pub trait DebugHandler: Clone + Send + Sync + 'static {
 }
 
 /// Breakpoint state for modules within a store.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct Breakpoints {
     /// Single-step mode.
     single_step: bool,
@@ -1021,12 +1112,11 @@ pub(crate) struct Breakpoints {
     /// (possibly slipped-forward) breakpoint key to a reference
     /// count. Multiple requested PCs may map to the same actual
     /// breakpoint when they are slipped forward.
+    ///
+    /// Slipping is a pure function of the module and requested PC
+    /// (see `BreakpointState::actual_key`), so `remove_breakpoint`
+    /// recomputes it rather than recording it per request.
     breakpoints: BTreeMap<BreakpointKey, usize>,
-    /// When a requested breakpoint PC does not exactly match an
-    /// opcode boundary, we "slip" it forward to the next available
-    /// PC. This map records the redirect from the requested key to
-    /// the actual key so that `remove_breakpoint` can undo it.
-    breakpoint_redirects: BTreeMap<BreakpointKey, BreakpointKey>,
 }
 
 /// A breakpoint.
@@ -1057,19 +1147,43 @@ impl BreakpointKey {
 /// A store's breakpoint state: its breakpoints, single-stepping, and
 /// watchpoints, borrowed for editing.
 ///
-/// Obtained with [`Store::edit_breakpoints`] (or the same method on
+/// Available within [`Store::edit_breakpoints`] (or the same method on
 /// [`StoreContextMut`] and [`Caller`]).
 ///
-/// Changes to breakpoints and single-stepping are batched for
-/// efficiency, because code-patching has some overhead (e.g. syscalls
-/// to write-protect/re-publish code).
+/// Edits made with a `BreakpointState` take effect together once the
+/// closure passed to `edit_breakpoints` returns `Ok`. This batches the
+/// code-patching that breakpoints and single-stepping require, which
+/// has some overhead (e.g. syscalls to write-protect/re-publish code).
+/// If the closure instead returns `Err` or panics, or applying the
+/// edits fails, none of them take effect.
+///
+/// An edit method that returns an error makes no edit, so the closure
+/// may handle the error and carry on to make (and keep) other edits.
 pub struct BreakpointState<'a> {
     store: &'a mut StoreOpaque,
-    /// Modules that have been edited.
+    /// The store's breakpoint state with the edits made so far, which
+    /// replaces the store's on commit.
+    edited: Breakpoints,
+    /// Code that must be re-patched on commit, to match `edited`.
     ///
-    /// Invariant: each of these modules' CodeMemory objects is
-    /// *unpublished* when in the dirty set.
-    dirty_modules: BTreeSet<StoreCodePC>,
+    /// Code is patched only on commit, rather than as edits are made,
+    /// so that it is never left unpublished (non-executable) if the
+    /// edits are not committed (e.g. on a panic).
+    pending: BTreeMap<StoreCodePC, PendingPatches>,
+    /// Watchpoint edits to apply on commit, in order: memory, range
+    /// (already checked) within its shadow, and whether to watch or
+    /// unwatch.
+    watches: Vec<(crate::Memory, Range<usize>, bool)>,
+}
+
+/// Breakpoint sites within one `StoreCode` that must be re-patched.
+#[derive(Default)]
+struct PendingPatches {
+    /// Modules all of whose breakpoint sites must be re-patched
+    /// (because single-stepping is toggled).
+    modules: BTreeSet<CompiledModuleId>,
+    /// Individual breakpoint sites that must be re-patched.
+    sites: BTreeSet<BreakpointKey>,
 }
 
 impl Breakpoints {
@@ -1092,10 +1206,15 @@ impl Breakpoints {
         // Apply single-step state if single-stepping is enabled. Note
         // that no other individual breakpoints will exist yet (as
         // this is a newly registered module).
+        //
+        // Note that this may run while a `BreakpointState` is editing
+        // other modules that share this code (as the modules within a
+        // component do). That is fine: the `BreakpointState` leaves
+        // code published until its edits are committed.
         if self.single_step {
             let mem = code.code_memory_mut().unwrap();
             mem.unpublish()?;
-            BreakpointState::apply_single_step(mem, module, true, |_key| false)?;
+            BreakpointState::apply_single_step(mem, module, true, |_key| false);
             mem.publish()?;
         }
         Ok(())
@@ -1118,23 +1237,30 @@ impl<'a> BreakpointState<'a> {
         Ok(())
     }
 
-    fn get_code_memory<'b>(
-        breakpoints: &Breakpoints,
-        registry: &'b mut ModuleRegistry,
-        dirty_modules: &mut BTreeSet<StoreCodePC>,
-        module: &Module,
-    ) -> Result<&'b mut CodeMemory> {
+    /// Register `module` with the store if it is not already, and get
+    /// the base of its code, for which patches are pending.
+    fn register(&mut self, module: &Module) -> Result<StoreCodePC> {
+        let (committed, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
         let store_code_pc =
-            registry.store_code_base_or_register(module, RegisterBreakpointState(breakpoints))?;
-        let code_memory = registry
-            .store_code_mut(store_code_pc)
-            .expect("Just checked presence above")
-            .code_memory_mut()
-            .expect("Must have unique ownership of StoreCode in guest-debug mode");
-        if dirty_modules.insert(store_code_pc) {
-            code_memory.unpublish()?;
+            registry.store_code_base_or_register(module, RegisterBreakpointState(committed))?;
+        let pending = self.pending.entry(store_code_pc).or_default();
+        // The module's code is patched for the committed
+        // single-stepping state (including if it was just registered,
+        // above), so if this transaction changes it, all of the
+        // module's sites must be re-patched.
+        if committed.single_step != self.edited.single_step {
+            pending.modules.insert(module.id());
         }
-        Ok(code_memory)
+        Ok(store_code_pc)
+    }
+
+    /// Get the `CodeMemory` for the code at `store_code_base`.
+    fn code_memory(registry: &mut ModuleRegistry, store_code_base: StoreCodePC) -> &mut CodeMemory {
+        registry
+            .store_code_mut(store_code_base)
+            .expect("code with pending patches must be registered")
+            .code_memory_mut()
+            .expect("Must have unique ownership of StoreCode in guest-debug mode")
     }
 
     fn patch<'b>(
@@ -1154,6 +1280,25 @@ impl<'a> BreakpointState<'a> {
         }
     }
 
+    /// The key for the breakpoint actually set for a request at `pc`
+    /// in `module`: if `pc` does not fall exactly on an opcode
+    /// boundary, it is "slipped" forward to the next available opcode
+    /// PC.
+    fn actual_key(module: &Module, pc: ModulePC) -> BreakpointKey {
+        let frame_table = module
+            .frame_table()
+            .expect("Frame table must be present when guest-debug is enabled");
+        let index = module.compiled_module().module_index();
+        let actual_pc = frame_table.nearest_breakpoint(index, pc).unwrap_or(pc);
+        if actual_pc != pc {
+            log::trace!(
+                "slipping breakpoint from {:?} to {actual_pc:?}",
+                BreakpointKey::from_raw(module, pc)
+            );
+        }
+        BreakpointKey::from_raw(module, actual_pc)
+    }
+
     /// Add a breakpoint in the given module at the given PC in that
     /// module.
     ///
@@ -1169,26 +1314,20 @@ impl<'a> BreakpointState<'a> {
     /// the store being edited.
     pub fn add_breakpoint(&mut self, module: &Module, pc: ModulePC) -> Result<()> {
         self.check_engine(module)?;
-        let frame_table = module
-            .frame_table()
-            .expect("Frame table must be present when guest-debug is enabled");
-        let actual_pc = frame_table.nearest_breakpoint(pc).unwrap_or(pc);
-        let requested_key = BreakpointKey::from_raw(module, pc);
-        let actual_key = BreakpointKey::from_raw(module, actual_pc);
+        let actual_key = Self::actual_key(module, pc);
 
-        let (state, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
-        if actual_pc != pc {
-            log::trace!("slipping breakpoint from {requested_key:?} to {actual_key:?}");
-            state.breakpoint_redirects.insert(requested_key, actual_key);
-        }
-
-        let refcount = state.breakpoints.entry(actual_key).or_insert(0);
+        // Register the module first, so that on failure no breakpoint
+        // is recorded.
+        let store_code_pc = self.register(module)?;
+        let refcount = self.edited.breakpoints.entry(actual_key).or_insert(0);
         *refcount += 1;
         if *refcount == 1 {
-            // First reference: actually patch the code.
-            let mem = Self::get_code_memory(state, registry, &mut self.dirty_modules, module)?;
-            let patches = frame_table.lookup_breakpoint_patches_by_pc(actual_pc);
-            Self::patch(patches, mem, true);
+            // First reference: the code must be patched.
+            self.pending
+                .entry(store_code_pc)
+                .or_default()
+                .sites
+                .insert(actual_key);
         }
         Ok(())
     }
@@ -1204,28 +1343,24 @@ impl<'a> BreakpointState<'a> {
     /// the store being edited.
     pub fn remove_breakpoint(&mut self, module: &Module, pc: ModulePC) -> Result<()> {
         self.check_engine(module)?;
-        let (state, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
-        let requested_key = BreakpointKey::from_raw(module, pc);
-        let actual_key = state
-            .breakpoint_redirects
-            .remove(&requested_key)
-            .unwrap_or(requested_key);
-        let actual_pc = actual_key.1;
+        let actual_key = Self::actual_key(module, pc);
+        if !self.edited.breakpoints.contains_key(&actual_key) {
+            return Ok(());
+        }
 
-        if let Some(refcount) = state.breakpoints.get_mut(&actual_key) {
-            *refcount -= 1;
-            if *refcount == 0 {
-                state.breakpoints.remove(&actual_key);
-                if !state.single_step {
-                    let mem =
-                        Self::get_code_memory(state, registry, &mut self.dirty_modules, module)?;
-                    let frame_table = module
-                        .frame_table()
-                        .expect("Frame table must be present when guest-debug is enabled");
-                    let patches = frame_table.lookup_breakpoint_patches_by_pc(actual_pc);
-                    Self::patch(patches, mem, false);
-                }
-            }
+        // Register the module (it already is, since it has a
+        // breakpoint) before editing, so that on failure nothing
+        // changes.
+        let store_code_pc = self.register(module)?;
+        let refcount = self.edited.breakpoints.get_mut(&actual_key).unwrap();
+        *refcount -= 1;
+        if *refcount == 0 {
+            self.edited.breakpoints.remove(&actual_key);
+            self.pending
+                .entry(store_code_pc)
+                .or_default()
+                .sites
+                .insert(actual_key);
         }
         Ok(())
     }
@@ -1235,17 +1370,12 @@ impl<'a> BreakpointState<'a> {
         module: &Module,
         enabled: bool,
         key_enabled: F,
-    ) -> Result<()> {
+    ) {
         let table = module
             .frame_table()
             .expect("Frame table must be present when guest-debug is enabled");
-        // A component's modules share one code image, and so its frame table: leave the
-        // other modules' code to them, or this module's breakpoints decide theirs.
         let index = module.compiled_module().module_index();
-        for (patch_module, wasm_pc, patch) in table.breakpoint_patches() {
-            if patch_module != index {
-                continue;
-            }
+        for (wasm_pc, patch) in table.breakpoint_patches(index) {
             let key = BreakpointKey::from_raw(&module, wasm_pc);
             let this_enabled = enabled || key_enabled(&key);
             log::trace!(
@@ -1253,7 +1383,6 @@ impl<'a> BreakpointState<'a> {
             );
             Self::patch(core::iter::once(patch), mem, this_enabled);
         }
-        Ok(())
     }
 
     /// Turn on or off single-step mode.
@@ -1261,29 +1390,31 @@ impl<'a> BreakpointState<'a> {
     /// In single-step mode, a breakpoint event is emitted at every
     /// Wasm PC.
     pub fn single_step(&mut self, enabled: bool) -> Result<()> {
-        let (state, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
         log::trace!(
             "single_step({enabled}) with breakpoint set {:?}",
-            state.breakpoints
+            self.edited.breakpoints
         );
-        if state.single_step == enabled {
-            // No change to current state; don't go through the effort of re-patching and
-            // re-publishing code.
+        if self.edited.single_step == enabled {
+            // No change to current state; don't go through the effort
+            // of re-patching code.
             return Ok(());
         }
-        let modules = registry
+        self.edited.single_step = enabled;
+        let modules = self
+            .store
+            .modules()
             .all_modules()
             .map(|(_, m)| m.clone())
             .collect::<Vec<_>>();
         for module in modules {
-            let mem = Self::get_code_memory(state, registry, &mut self.dirty_modules, &module)?;
-            Self::apply_single_step(mem, &module, enabled, |key| {
-                state.breakpoints.contains_key(key)
-            })?;
+            // Already registered, so this cannot fail.
+            let store_code_pc = self.register(&module)?;
+            self.pending
+                .entry(store_code_pc)
+                .or_default()
+                .modules
+                .insert(module.id());
         }
-
-        state.single_step = enabled;
-
         Ok(())
     }
 
@@ -1302,8 +1433,10 @@ impl<'a> BreakpointState<'a> {
     /// # Panics
     ///
     /// Panics if `memory` does not belong to this store.
-    pub fn watch(&mut self, memory: crate::Memory, range: core::ops::Range<u64>) -> Result<()> {
-        self.store.debug_set_watch(memory, range, true)
+    pub fn watch(&mut self, memory: crate::Memory, range: Range<u64>) -> Result<()> {
+        let range = self.store.debug_check_watch(memory, range)?;
+        self.watches.push((memory, range, true));
+        Ok(())
     }
 
     /// Stops watching guest writes to the bytes in `range` of `memory`.
@@ -1319,24 +1452,92 @@ impl<'a> BreakpointState<'a> {
     /// # Panics
     ///
     /// Panics if `memory` does not belong to this store.
-    pub fn unwatch(&mut self, memory: crate::Memory, range: core::ops::Range<u64>) -> Result<()> {
-        self.store.debug_set_watch(memory, range, false)
+    pub fn unwatch(&mut self, memory: crate::Memory, range: Range<u64>) -> Result<()> {
+        let range = self.store.debug_check_watch(memory, range)?;
+        self.watches.push((memory, range, false));
+        Ok(())
     }
-}
 
-impl<'a> Drop for BreakpointState<'a> {
-    fn drop(&mut self) {
-        let (_, registry, _) = self.store.breakpoints_and_registry_and_engine_mut();
-        for &store_code_base in &self.dirty_modules {
-            let store_code = registry.store_code_mut(store_code_base).unwrap();
-            if let Err(e) = store_code
-                .code_memory_mut()
-                .expect("Must have unique ownership of StoreCode in guest-debug mode")
-                .publish()
-            {
+    /// Apply all edits made with this `BreakpointState`.
+    ///
+    /// Returns an error if the store's code cannot be made writable to
+    /// patch it. In that case, none of the edits take effect.
+    fn commit(self) -> Result<()> {
+        let BreakpointState {
+            store,
+            edited,
+            pending,
+            watches,
+        } = self;
+        let (committed, registry, _) = store.breakpoints_and_registry_and_engine_mut();
+
+        // Look up the modules to patch before borrowing their code
+        // mutably.
+        let module = |id: CompiledModuleId| {
+            registry
+                .module_by_compiled_id(id)
+                .expect("Module with pending breakpoint patches must be registered")
+                .clone()
+        };
+        let regions = pending
+            .into_iter()
+            .map(|(store_code_base, pending)| {
+                let modules = pending
+                    .modules
+                    .iter()
+                    .map(|&id| module(id))
+                    .collect::<Vec<_>>();
+                let sites = pending
+                    .sites
+                    .iter()
+                    .map(|key| (*key, module(key.0)))
+                    .collect::<Vec<_>>();
+                (store_code_base, modules, sites)
+            })
+            .collect::<Vec<_>>();
+
+        // Make all code to patch writable first, so that if that fails,
+        // we can back out without having changed anything.
+        for (i, (store_code_base, _, _)) in regions.iter().enumerate() {
+            if let Err(e) = Self::code_memory(registry, *store_code_base).unpublish() {
+                // The code that failed remains executable; re-publish
+                // the rest.
+                for (store_code_base, _, _) in &regions[..i] {
+                    if let Err(e) = Self::code_memory(registry, *store_code_base).publish() {
+                        abort_on_republish_error(e);
+                    }
+                }
+                return Err(e);
+            }
+        }
+
+        // Patch every pending site to match the edited breakpoint
+        // state, regardless of the edits that led to it.
+        let enabled =
+            |key: &BreakpointKey| edited.single_step || edited.breakpoints.contains_key(key);
+        for (store_code_base, modules, sites) in &regions {
+            let mem = Self::code_memory(registry, *store_code_base);
+            for module in modules {
+                Self::apply_single_step(mem, module, false, enabled);
+            }
+            for (key, module) in sites {
+                let frame_table = module
+                    .frame_table()
+                    .expect("Frame table must be present when guest-debug is enabled");
+                let index = module.compiled_module().module_index();
+                let patches = frame_table.lookup_breakpoint_patches_by_pc(index, key.1);
+                Self::patch(patches, mem, enabled(key));
+            }
+            if let Err(e) = mem.publish() {
                 abort_on_republish_error(e);
             }
         }
+
+        *committed = edited;
+        for (memory, range, watch) in watches {
+            store.debug_set_watch(memory, range, watch);
+        }
+        Ok(())
     }
 }
 

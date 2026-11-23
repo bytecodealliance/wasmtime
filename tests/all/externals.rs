@@ -172,12 +172,14 @@ fn get_set_externref_globals_via_api() -> wasmtime::Result<()> {
     global.set(&mut store, hello.into())?;
     let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
     assert!(
-        r.data(&store)?
+        r.unwrap_unrooted()
+            .data(&store)?
             .expect("should have host data")
             .is::<String>()
     );
     assert_eq!(
-        r.data(&store)?
+        r.unwrap_unrooted()
+            .data(&store)?
             .expect("should have host data")
             .downcast_ref::<String>()
             .unwrap(),
@@ -193,9 +195,15 @@ fn get_set_externref_globals_via_api() -> wasmtime::Result<()> {
         externref.into(),
     )?;
     let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
-    assert!(r.data(&store)?.expect("should have host data").is::<i32>());
+    assert!(
+        r.unwrap_unrooted()
+            .data(&store)?
+            .expect("should have host data")
+            .is::<i32>()
+    );
     assert_eq!(
-        r.data(&store)?
+        r.unwrap_unrooted()
+            .data(&store)?
             .expect("should have host data")
             .downcast_ref::<i32>()
             .copied()
@@ -320,6 +328,7 @@ fn create_get_set_externref_tables_via_api() -> wasmtime::Result<()> {
             .unwrap()
             .unwrap_extern()
             .unwrap()
+            .unwrap_unrooted()
             .data(&store)?
             .expect("should have host data")
             .downcast_ref::<usize>()
@@ -359,6 +368,7 @@ fn fill_externref_tables_via_api() -> wasmtime::Result<()> {
                 .unwrap()
                 .unwrap_extern()
                 .unwrap()
+                .unwrap_unrooted()
                 .data(&store)?
                 .expect("should have host data")
                 .downcast_ref::<usize>()

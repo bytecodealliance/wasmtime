@@ -20,20 +20,16 @@
 //! about ABI details can be found in lifting/lowering throughout Wasmtime,
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
-use super::{HandleCounter, HandleTable, HandleTableInsertion, InstanceState, RemovedResource};
+use super::{ComponentInstance, HandleCounter, HandleTable, HandleTableInsertion, RemovedResource};
 use crate::bail_bug;
 use crate::component::store::ComponentTaskState;
 use crate::prelude::*;
-use crate::runtime::vm::{
-    VMHandleTable, VMResourceIndex, VMScope, VMStoreContext, VMTypedResource,
-};
+use crate::runtime::vm::{VMResourceIndex, VMScope, VMStoreContext, VMTypedResource};
 use core::error::Error;
 use core::fmt;
 use core::mem;
-use wasmtime_environ::component::{
-    ComponentTypes, RuntimeComponentInstanceIndex, TypeResourceTableIndex,
-};
-use wasmtime_environ::prelude::TryPrimaryMap;
+use core::pin::Pin;
+use wasmtime_environ::component::TypeResourceTableIndex;
 
 /// Contextual state necessary to perform resource-related operations.
 ///
@@ -59,13 +55,11 @@ pub struct ResourceTables<'a> {
     /// `ResourceAny::resource_drop` which won't consult this table as it's
     /// only operating over the host table.
     ///
-    /// The slice holds the `VMComponentContext` entries through which compiled
-    /// code reads each instance's handle table.
-    pub guest: Option<(
-        &'a mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
-        &'a ComponentTypes,
-        &'a mut [VMHandleTable],
-    )>,
+    /// This is the component instance itself rather than its tables so that
+    /// insertions, which must keep the instance's `VMComponentContext` copy of
+    /// a table's slots pointer current, can reach it without every other
+    /// operation paying to look it up.
+    pub guest: Option<Pin<&'a mut ComponentInstance>>,
 
     /// Runtime state for resources currently owned by the host.
     ///
@@ -94,7 +88,10 @@ pub enum CurrentScope {
     /// A scope which already has an ID in the component task state.
     Id(VMScope),
     /// A host scope whose task has not yet been materialized.
-    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(dead_code, reason = "only used with component-model-async")
+    )]
     DeferredHost,
 }
 
@@ -143,7 +140,10 @@ pub struct CallContext {
 }
 
 impl CallContext {
-    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "component-model-async"),
+        expect(dead_code, reason = "only used with component-model-async")
+    )]
     pub(crate) fn is_empty(&self) -> bool {
         self.lenders.is_empty() && self.borrow_count == 0
     }
@@ -156,15 +156,9 @@ impl ResourceTables<'_> {
             // SAFETY: the host table is never published to compiled code.
             None => unsafe { self.host_table.insert_unpublished(counter) },
             Some(ty) => {
-                let (states, types, published) = self.guest.as_mut().unwrap();
-                let i = types[ty].unwrap_concrete_instance();
-                // SAFETY: `published[i]` is where compiled code reads instance
-                // `i`'s handle table.
-                unsafe {
-                    states[i]
-                        .handle_table()
-                        .insert(counter, &mut published[i.as_u32() as usize])
-                }
+                let instance = self.guest.as_mut().unwrap();
+                let i = instance.component().types()[ty].unwrap_concrete_instance();
+                instance.as_mut().handle_table_insertion(i, counter)
             }
         }
     }
@@ -176,7 +170,7 @@ impl ResourceTables<'_> {
         let table = match index {
             TypedResourceIndex::Host(_) => &mut *self.host_table,
             TypedResourceIndex::Component { ty, .. } => {
-                let (states, types, _published) = self.guest.as_mut().unwrap();
+                let (states, types) = self.guest.as_mut().unwrap().as_mut().instance_states();
                 states[types[*ty].unwrap_concrete_instance()].handle_table()
             }
         };
