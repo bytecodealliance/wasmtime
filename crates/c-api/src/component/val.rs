@@ -355,6 +355,14 @@ impl From<&Val> for wasmtime_component_val_t {
             Val::Char(x) => wasmtime_component_val_t::Char(*x as _),
             Val::String(x) => wasmtime_component_val_t::String(wasm_name_t::from_name(x.clone())),
             Val::List(x) => wasmtime_component_val_t::List(x.as_slice().into()),
+            Val::ListU8(bytes) => wasmtime_component_val_t::List(
+                bytes
+                    .iter()
+                    .copied()
+                    .map(wasmtime_component_val_t::U8)
+                    .collect::<Vec<_>>()
+                    .into(),
+            ),
             Val::Record(x) => wasmtime_component_val_t::Record(x.as_slice().into()),
             Val::Tuple(x) => wasmtime_component_val_t::Tuple(x.as_slice().into()),
             Val::Variant(discriminant, val) => {

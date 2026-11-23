@@ -137,7 +137,7 @@ impl WasmValue for component::Val {
             Self::Float64(_) => WasmTypeKind::F64,
             Self::Char(_) => WasmTypeKind::Char,
             Self::String(_) => WasmTypeKind::String,
-            Self::List(_) => WasmTypeKind::List,
+            Self::List(_) | Self::ListU8(_) => WasmTypeKind::List,
             Self::Record(_) => WasmTypeKind::Record,
             Self::Tuple(_) => WasmTypeKind::Tuple,
             Self::Variant(..) => WasmTypeKind::Variant,
@@ -274,11 +274,11 @@ impl WasmValue for component::Val {
         unwrap_val!(self, Self::String, "string").into()
     }
     fn unwrap_list(&self) -> Box<dyn Iterator<Item = Cow<'_, Self>> + '_> {
-        let list = match self {
-            Self::List(list) | Self::FixedLengthList(list) => list,
+        match self {
+            Self::List(list) | Self::FixedLengthList(list) => Box::new(list.iter().map(cow)),
+            Self::ListU8(bytes) => Box::new(bytes.iter().copied().map(Self::U8).map(Cow::Owned)),
             _ => panic!("called unwrap_list on non-list value"),
-        };
-        Box::new(list.iter().map(cow))
+        }
     }
     fn unwrap_record(&self) -> Box<dyn Iterator<Item = (Cow<'_, str>, Cow<'_, Self>)> + '_> {
         let record = unwrap_val!(self, Self::Record, "record");
@@ -337,6 +337,9 @@ fn ensure_type_val(ty: &component::Type, val: &component::Val) -> Result<(), Was
             for val in vals {
                 ensure_type_val(&list_type, val)?;
             }
+        }
+        component::Val::ListU8(_) if !matches!(ty.unwrap_list().ty(), component::Type::U8) => {
+            return wrong_value_type();
         }
         component::Val::Map(entries) => {
             let component::Type::Map(map_type) = ty else {

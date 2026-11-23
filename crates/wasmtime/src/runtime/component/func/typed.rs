@@ -1733,7 +1733,7 @@ where
 // pointer to memory (I guess from `MemoryMut` itself?). Overall I'm not really
 // clear on what's happening there, but this is surely going to be a performance
 // bottleneck in the future.
-fn lower_list<T, U>(
+pub(crate) fn lower_list<T, U>(
     cx: &mut LowerContext<'_, U>,
     ty: InterfaceType,
     list: &[T],
