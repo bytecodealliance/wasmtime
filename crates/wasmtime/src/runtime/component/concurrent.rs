@@ -1796,12 +1796,41 @@ impl<T> StoreContextMut<'_, T> {
                         // yielded to.
                         state.take_next_switch_item()?;
 
-                        let state = self.0.instance_state(instance).concurrent_state();
-
-                        state.pending.insert(call.thread, call.kind);
+                        // Per the spec (`Task.enter_implicit_thread`), getting
+                        // in line only forces a task to suspend once; after
+                        // that, its own backpressure check decides when it
+                        // runs. If that check already passes (e.g. for a
+                        // stackful task, which doesn't need the exclusive
+                        // lock, queued behind one that does), nothing would
+                        // re-examine `pending` for it, so requeue it at high
+                        // priority instead, which is where `partition_pending`
+                        // puts the calls it releases. This happens at most
+                        // once per call, and only after the call has already
+                        // been dispatched from where it was first queued (low
+                        // priority, for host-initiated calls), so it doesn't
+                        // let new host calls starve yielding tasks.
+                        //
+                        // Note that `was_pending` is now set, so `is_ready`
+                        // doesn't depend on `pending_start_count` here.
+                        let requeue = increment && call.is_ready(self.0)?;
 
                         if increment {
-                            state.pending_start_count += 1;
+                            self.0
+                                .instance_state(instance)
+                                .concurrent_state()
+                                .pending_start_count += 1;
+                        }
+
+                        if requeue {
+                            self.0
+                                .concurrent_state_mut()?
+                                .push_high_priority(WorkItem::GuestCall { instance, call });
+                        } else {
+                            self.0
+                                .instance_state(instance)
+                                .concurrent_state()
+                                .pending
+                                .insert(call.thread, call.kind);
                         }
                     }
                 }
