@@ -1,5 +1,8 @@
 ;;! gc = true
-;;! flags = "-C collector=drc"
+;;! flags = "-C collector=drc -O gc-zeal-alloc-counter=1000"
+
+;; FIXME(#15433): remove the `gc-zeal-alloc-counter=1000` workaround above when
+;; the issue is fixed.
 
 ;; The first allocation in a store grows the GC heap. The heap must grow enough
 ;; for the allocation's rounded-up size plus the free list's reserved first
