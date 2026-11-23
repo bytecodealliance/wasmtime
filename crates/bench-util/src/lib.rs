@@ -16,18 +16,30 @@
 //! valgrind --tool=callgrind --instr-atstart=no <bench executable> --bench --test
 //! ```
 //!
-//! Each benchmark then produces one dump, in the order Criterion prints its
-//! `Testing <id>` lines. Whether to measure is decided by asking Valgrind
-//! whether it is running the process, so there is nothing to configure.
+//! Callgrind writes its dumps to files, which say nothing of which benchmark
+//! made them, so each dump is also announced on stdout with a [`MARKER`] line,
+//! numbered from 1 in the order of the dumps. Criterion's test mode prints
+//! `Testing <id>` on stdout before each benchmark, so the markers between one
+//! `Testing` line and the next are that benchmark's dumps.
+//!
+//! Whether to measure is decided by asking Valgrind whether it is running the
+//! process, so there is nothing to configure.
 
 use std::ffi::CStr;
+use std::io::Write;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use valgrind_requests::{callgrind, valgrind};
 
 /// The label of each dump a [`Timer`] makes, which Callgrind records as
 /// `Client Request: wasmtime-bench` in the dump's `desc: Trigger:` line.
 pub const DUMP_LABEL: &CStr = c"wasmtime-bench";
+
+/// The start of the line [`Timer::stop`] prints on stdout after each dump,
+/// followed by the dump's number: `wasmtime-bench dump 1` for the process's
+/// first [`DUMP_LABEL`] dump, and so on.
+pub const MARKER: &str = "wasmtime-bench dump ";
 
 /// Whether this process is running under Valgrind, with any tool.
 ///
@@ -48,15 +60,8 @@ pub fn on_valgrind() -> bool {
 /// Under Callgrind, each benchmark must start and stop exactly one `Timer`,
 /// once, in the single run of its routine that Criterion's test mode makes.
 /// Each [`Timer::start`] zeroes Callgrind's counts and each [`Timer::stop`]
-/// makes a dump, and a reader of the dumps matches them to benchmarks by
-/// order, one each. So:
-///
-/// - A benchmark that times more than one region, such as one per iteration
-///   or one per phase, makes extra dumps, and every benchmark after it is
-///   matched to the wrong one.
-/// - A benchmark that times nothing makes no dump, with the same effect.
-/// - Overlapping timers measure the wrong thing: starting the inner one zeroes
-///   the outer one's counts.
+/// makes a dump and prints a [`MARKER`], and a reader of the dumps takes a
+/// benchmark's measurement from the one dump its marker announces.
 ///
 /// To time one of several regions, pick it with a parameter and skip the
 /// others. [`iter`] starts one timer around its whole loop, so it follows
@@ -82,10 +87,13 @@ impl Timer {
     }
 
     /// Stops timing and returns the time since [`Timer::start`], and under
-    /// Valgrind dumps Callgrind's counts.
+    /// Valgrind dumps Callgrind's counts and prints a [`MARKER`] line.
     pub fn stop(self) -> Duration {
         if on_valgrind() {
+            static DUMPS: AtomicU32 = AtomicU32::new(0);
             callgrind::dump_stats_at(DUMP_LABEL);
+            let n = DUMPS.fetch_add(1, Ordering::Relaxed) + 1;
+            println!("{MARKER}{n}");
         }
         self.start.elapsed()
     }
