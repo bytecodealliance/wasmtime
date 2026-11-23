@@ -48,10 +48,9 @@ impl IsAsync {
     }
 }
 
-/// The number of memories in the pooling allocator under Valgrind, whose
-/// address space must hold every pooled engine alive at once: up to four, each
-/// reserving `memory_reservation` and guards for every memory.
-const VALGRIND_POOL_SIZE: u32 = 2;
+/// The number of memories in the pooling allocator. This needs to be limited to
+/// support running under valgrind.
+const POOL_SIZE: u32 = 2;
 
 fn engines(concurrency_support: bool) -> Vec<(Engine, IsAsync)> {
     let mut config = Config::new();
@@ -66,11 +65,7 @@ fn engines(concurrency_support: bool) -> Vec<(Engine, IsAsync)> {
     if std::env::var("WASMTIME_TEST_FORCE_MPK").is_ok() {
         pool.memory_protection_keys(Enabled::Yes);
     }
-    if bench::on_valgrind() {
-        // The default pool reserves more address space than Valgrind gives a
-        // process.
-        pool.total_memories(VALGRIND_POOL_SIZE);
-    }
+    pool.total_memories(POOL_SIZE);
 
     vec![
         (Engine::new(&config).unwrap(), IsAsync::No),
