@@ -388,6 +388,14 @@ impl RunCommand {
         let host = Host::default();
 
         let mut store = Store::new(&engine, host);
+
+        // The `run` subcommand of Wasmtime runs just a single component in its
+        // own process, so we're not worried about resource exhaustion here
+        // really. Increase the default maximum number of fibers to being
+        // limited by system resources instead of whatever `wasmtime`'s default
+        // is.
+        store.set_max_fibers(u32::MAX);
+
         self.populate_with_wasi(&mut linker, &mut store)?;
         self.run.configure_store(&mut store, |t| &mut t.limits)?;
 
