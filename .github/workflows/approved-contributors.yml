@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   sweep:
+    if: github.repository == 'bytecodealliance/wasmtime'
     runs-on: ubuntu-latest
     steps:
       # Have a bytecodealliance org owner add the `ba-approved-contributors`
