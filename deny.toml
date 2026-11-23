@@ -39,6 +39,7 @@ skip = [
     { name = "cpufeatures", reason = "requires an update to `sha2` which pulls in a lot of other dependencies which doesn't seem worth it" },
     { name = "hashbrown", reason = "waiting on lots of crates to update" },
     { name = "gimli", reason = "waiting on a few crates to update" },
+    { name = "itertools", reason = "`criterion` and `bindgen`, which `wasmtime-bench-util` depends on, need an older version" },
 ]
 skip-tree = [
     { name = "rand", reason = "waiting on `proptest` to update" },
