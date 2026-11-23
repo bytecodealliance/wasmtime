@@ -26,7 +26,6 @@
 //! process, so there is nothing to configure.
 
 use std::ffi::CStr;
-use std::io::Write;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
