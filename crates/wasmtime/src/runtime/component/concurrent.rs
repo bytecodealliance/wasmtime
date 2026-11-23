@@ -2731,10 +2731,6 @@ impl StoreOpaque {
     ///
     /// * This will perform conditional cleanup of the `GuestTask` that owns
     ///   this thread if `cleanup_task` is `CleanupTask::Yes`.
-    /// * If there are no more threads in the `GuestTask` that this thread is
-    ///   associated with, and if the task hasn't produced a result (e.g. it's not
-    ///   returned or cancelled), then a trap will be raised that a result
-    ///   wasn't ever produced.
     /// * If this task is finished, meaning the top-level thread exited and
     ///   additionally it's been returned or cancelled, then this will handle
     ///   management of the store's "active interesting tasks" counter.
@@ -2773,10 +2769,6 @@ impl StoreOpaque {
         state.delete(sync_call_set)?;
         let task = state.get_mut(guest_thread.task)?;
         task.threads.remove(&guest_thread.thread);
-
-        if task.threads.is_empty() && !task.returned_or_cancelled() {
-            bail!(Trap::NoAsyncResult);
-        }
 
         if !task.decremented_interesting_task_count && task.exited && task.returned_or_cancelled() {
             task.decremented_interesting_task_count = true;
@@ -6893,12 +6885,16 @@ impl ConcurrentState {
             self.decrement_group_ref_count(task.group)?;
 
             // When a guest task is created it increments the
-            // `ConcurrentState::interesting_tasks` counter, and that needs
-            // to be paired with a decrement. There are a few situations in
-            // which the decrement needs to happen which don't all funnel
-            // through here, so in lieu of that at least try to catch issues
-            // where we forgot to do a decrement.
-            debug_assert!(task.decremented_interesting_task_count);
+            // `ConcurrentState::interesting_tasks` counter, and that should be
+            // paired with a decrement if the task is resolved. There are a few
+            // situations in which the decrement needs to happen which don't
+            // all funnel through here, so in lieu of that at least try to
+            // catch issues where we forgot to do a decrement.
+            //
+            // IF the task didn't actually resolve though then it's possible for
+            // all references to get cleaned up (hence this running) as well as
+            // no decrement happening, but that's ok and expected behavior.
+            debug_assert!(task.decremented_interesting_task_count || !task.returned_or_cancelled());
         }
         Ok(())
     }
@@ -7196,7 +7192,7 @@ where
                 Ok(r) => Ok(*r),
                 Err(_) => bail_bug!("wrong type of value produced"),
             },
-            Err(oneshot::Canceled) => bail_bug!("channel erroneously dropped"),
+            Err(oneshot::Canceled) => Err(Trap::NoAsyncResult.into()),
         })
     }
 }
