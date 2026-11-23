@@ -279,6 +279,14 @@ impl BlockingMode {
         input_stream: Resource<streams::InputStream>,
         max_size: usize,
     ) -> Result<Vec<u8>, types::Error> {
+        // For zero-length reads, the `read` man page says that it may or may
+        // not check for errors, and `pread` apparently just immediately returns
+        // zero while maybe validating things like an offset. Just return 0 here
+        // for now. Note that this doesn't naturally fall out of falling-through
+        // due to the `Intr`-return below.
+        if max_size == 0 {
+            return Ok(Vec::new());
+        }
         let max_size = max_size.try_into().unwrap_or(u64::MAX);
         match streams::HostInputStream::blocking_read(host, input_stream, max_size).await {
             Ok(r) if r.is_empty() => Err(types::Errno::Intr.into()),
