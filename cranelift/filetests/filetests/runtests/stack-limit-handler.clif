@@ -1,0 +1,150 @@
+test run
+set preserve_frame_pointers=true
+set enable_multi_ret_implicit_sret
+
+target x86_64
+target aarch64
+target aarch64 use_bti sign_return_address
+target riscv64
+target s390x
+target pulley64
+target pulley64be
+
+;; Tests that a `stack_limit` with a `handler` jumps to the handler on stack
+;; overflow with the stack pointer, return address, and arguments of the
+;; original function intact: here the handler is itself a function with the same
+;; signature, so it is effectively tail-called by the overflowing function and
+;; returns directly to that function's caller.
+
+;; The "vmctx" here just holds the stack limit.
+
+;; Many return values, so that the `tail` ABI passes an implicit return-area
+;; pointer (which must not perturb the explicit arguments' locations, and which
+;; the handler must also receive in order to return through it).
+function %handler_many(i64 vmctx, i64, i64) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+block0(v0: i64, v1: i64, v2: i64):
+    v5 = iconst.i64 1000
+    v3 = imul v1, v5
+    v4 = iadd v3, v2
+    return v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4
+}
+
+function %callee_many(i64 vmctx, i64, i64) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    stack_limit = gv1, handler = fn0
+    fn0 = colocated %handler_many(i64 vmctx, i64, i64) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail
+
+    ;; A big frame, so that the check is emitted and accounts for it.
+    ss0 = explicit_slot 4096
+
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = iadd v1, v2
+    v5 = stack_addr.i64 ss0
+    store v3, v5
+    v4 = load.i64 v5
+    return v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4
+}
+
+function %caller_many(i64, i64, i64) -> i64 {
+    fn0 = colocated %callee_many(i64 vmctx, i64, i64) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = stack_addr.i64 ss0
+    store.i64 notrap aligned v0, v3
+    v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23 = call fn0(v3, v1, v2)
+    ;; Return the first and last results, to check both register and
+    ;; return-area results.
+    v24 = iadd v4, v23
+    return v24
+}
+
+;; A stack limit of zero never overflows; the callee runs normally.
+; run: %caller_many(0, 3, 4) == 14
+;; A stack limit above any real stack pointer always overflows; the handler
+;; runs instead (note that the limit plus frame size must not wrap).
+; run: %caller_many(0x7fff_ffff_ffff_ffff, 3, 4) == 6008
+
+;; With enough arguments that some are passed on the stack.
+
+function %handler_tail(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64):
+    v13 = iconst.i64 1000
+    v11 = imul v1, v13
+    v12 = iadd v11, v10
+    return v12
+}
+
+function %callee_tail(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    stack_limit = gv1, handler = fn0
+    fn0 = colocated %handler_tail(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+    ss0 = explicit_slot 4096
+
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64):
+    v11 = iadd v1, v10
+    v13 = stack_addr.i64 ss0
+    store v11, v13
+    v12 = load.i64 v13
+    return v12
+}
+
+function %caller_tail(i64, i64, i64) -> i64 {
+    fn0 = colocated %callee_tail(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = stack_addr.i64 ss0
+    store.i64 notrap aligned v0, v3
+    v5 = iconst.i64 0
+    v6 = call fn0(v3, v1, v5, v5, v5, v5, v5, v5, v5, v5, v2)
+    return v6
+}
+
+; run: %caller_tail(0, 3, 4) == 7
+; run: %caller_tail(0x7fff_ffff_ffff_ffff, 3, 4) == 3004
+
+;; With both many arguments and many return values, so that the implicit
+;; return-area pointer is itself passed on the stack, after the other stack
+;; arguments.
+
+function %handler_both(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64):
+    v13 = iconst.i64 1000
+    v11 = imul v1, v13
+    v12 = iadd v11, v10
+    return v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12
+}
+
+function %callee_both(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    stack_limit = gv1, handler = fn0
+    fn0 = colocated %handler_both(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail
+    ss0 = explicit_slot 4096
+
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64):
+    v11 = iadd v1, v10
+    v13 = stack_addr.i64 ss0
+    store v11, v13
+    v12 = load.i64 v13
+    return v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12, v12
+}
+
+function %caller_both(i64, i64, i64) -> i64 {
+    fn0 = colocated %callee_both(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = stack_addr.i64 ss0
+    store.i64 notrap aligned v0, v3
+    v4 = iconst.i64 0
+    v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24 = call fn0(v3, v1, v4, v4, v4, v4, v4, v4, v4, v4, v2)
+    v25 = iadd v5, v24
+    return v25
+}
+
+; run: %caller_both(0, 3, 4) == 14
+; run: %caller_both(0x7fff_ffff_ffff_ffff, 3, 4) == 6008

@@ -22,7 +22,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::ops::Range;
 use core::{ffi::c_void, ptr::NonNull};
-#[cfg(feature = "gc")]
 use wasmtime_environ::FrameTable;
 // Re-export ModulePC so downstream crates can use it.
 pub use wasmtime_environ::ModulePC;
@@ -787,10 +786,10 @@ impl FrameDataCache {
         // Although inlining can mix modules, `module` is the module that
         // actually contains the physical PC (i.e., the outermost function
         // that inlined the others).
-        let (store_code, frames) = VirtualFrame::decode(registry, frame.pc());
+        let (frame_table, frames) = VirtualFrame::decode(registry, frame.pc());
         frames
             .into_iter()
-            .map(|frame| FrameData::compute(frame, store_code))
+            .map(|frame| FrameData::compute(frame, &frame_table))
             .collect()
     }
 }
@@ -825,12 +824,17 @@ struct VirtualFrame {
 impl VirtualFrame {
     /// Return virtual frames corresponding to a physical frame, from
     /// outermost to innermost.
-    fn decode(registry: &ModuleRegistry, pc: usize) -> (&StoreCode, Vec<VirtualFrame>) {
-        let (store_code, pc) = registry
-            .store_code_by_pc(pc)
+    ///
+    /// Also returns the frame table for the code containing `pc`.
+    fn decode(registry: &ModuleRegistry, pc: usize) -> (FrameTable<'_>, Vec<VirtualFrame>) {
+        // Note that this frame may be running out of the engine's copy of
+        // code, rather than the store's, if it's a store-invariant function
+        // such as a trampoline; see `code_memory_by_pc`.
+        let (code, offset) = registry
+            .code_memory_by_pc(pc)
             .expect("Wasm frame PC does not correspond to a module");
-        let table = store_code.code_memory().frame_table().unwrap();
-        let pc = u32::try_from(pc).expect("PC offset too large");
+        let table = code.frame_table().unwrap();
+        let pc = u32::try_from(offset).expect("PC offset too large");
         // Functions without any program points (e.g. the module
         // start function, or trampolines) have no virtual frames.
         let frames = table
@@ -844,7 +848,7 @@ impl VirtualFrame {
             })
             .collect();
 
-        (store_code, frames)
+        (table, frames)
     }
 }
 
@@ -873,8 +877,7 @@ struct FrameData {
 }
 
 impl FrameData {
-    fn compute(frame: VirtualFrame, store_code: &StoreCode) -> Self {
-        let frame_table = store_code.code_memory().frame_table().unwrap();
+    fn compute(frame: VirtualFrame, frame_table: &FrameTable<'_>) -> Self {
         // Parse the frame descriptor.
         let (data, slot_to_fp_offset) = frame_table
             .frame_descriptor(frame.frame_descriptor)

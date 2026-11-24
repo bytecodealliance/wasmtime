@@ -749,6 +749,8 @@ pub struct EmitState {
     ctrl_plane: ControlPlane,
 
     frame_layout: FrameLayout,
+
+    post_call_debug_tag_offset: Option<CodeOffset>,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -757,6 +759,7 @@ impl MachInstEmitState<Inst> for EmitState {
             stack_maps: StackMapEmitter::default(),
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
+            post_call_debug_tag_offset: None,
         }
     }
 
@@ -774,6 +777,10 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
+    }
+
+    fn post_call_debug_tag_offset_mut(&mut self) -> &mut Option<CodeOffset> {
+        &mut self.post_call_debug_tag_offset
     }
 }
 
@@ -3425,6 +3432,7 @@ impl MachInstEmit for Inst {
                 } else {
                     sink.add_call_site();
                 }
+                state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
                 if info.callee_pop_size > 0 {
                     let callee_pop_size =
@@ -3476,6 +3484,7 @@ impl MachInstEmit for Inst {
                 } else {
                     sink.add_call_site();
                 }
+                state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
                 if info.callee_pop_size > 0 {
                     let callee_pop_size =
@@ -4059,6 +4068,32 @@ impl MachInstEmit for Inst {
                 // Nothing.
             }
 
+            &Inst::StackLimitJump { limit, ref handler } => {
+                // Generate the following code:
+                //         subs  xzr, sp, limit, uxtx
+                //         b.hs  .ok          ;; `sp >= limit`: no overflow
+                //         b     handler      ;; tail call
+                // .ok:
+                Inst::AluRRRExtend {
+                    alu_op: ALUOp::SubS,
+                    size: OperandSize::Size64,
+                    rd: writable_zero_reg(),
+                    rn: stack_reg(),
+                    rm: limit,
+                    extendop: ExtendOp::UXTX,
+                }
+                .emit(sink, emit_info, state);
+                let ok = sink.get_label();
+                let off = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(ok),
+                    CondBrKind::Cond(Cond::Hs),
+                ));
+                sink.use_label_at_offset(off, ok, LabelUse::Branch19);
+                sink.add_reloc(Reloc::Arm64Call, &**handler, 0);
+                sink.put4(enc_jump26(0b000101, 0));
+                sink.bind_label(ok, state.ctrl_plane_mut());
+            }
             &Inst::StackProbeLoop { start, end, step } => {
                 assert!(emit_info.flags.enable_probestack());
 

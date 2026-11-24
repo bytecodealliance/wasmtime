@@ -25,7 +25,7 @@ block2:
 ;   movq %r15, 0x60(%rsp)
 ; block0:
 ;   call    TestCase(%callee); jmp MachLabel(1); catch [default: MachLabel(2)]
-;   ; ^-- debug @ Post: [StackSlot(ss0), User(1), User(2)]
+;   ; ^-- debug @ PostCall: [StackSlot(ss0), User(1), User(2)]
 ; block1:
 ;   movq 0x40(%rsp), %rbx
 ;   movq 0x48(%rsp), %r12

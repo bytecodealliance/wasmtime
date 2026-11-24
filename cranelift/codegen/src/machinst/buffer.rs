@@ -1898,12 +1898,31 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Push a debug tag associated with the current buffer offset.
     pub fn push_debug_tags(&mut self, pos: MachDebugTagPos, tags: &[DebugTag]) {
-        trace!("debug tags at offset {}: {tags:?}", self.cur_offset());
+        self.push_debug_tags_at(self.cur_offset(), pos, tags);
+    }
+
+    /// Push debug tags associated with the given offset, which must
+    /// be at or before the current offset and at or after the offset
+    /// of any previously-pushed debug tags.
+    pub fn push_debug_tags_at(
+        &mut self,
+        offset: CodeOffset,
+        pos: MachDebugTagPos,
+        tags: &[DebugTag],
+    ) {
+        trace!("debug tags at offset {offset}: {tags:?}");
+        debug_assert!(offset <= self.cur_offset());
+        debug_assert!(
+            self.inner
+                .debug_tags
+                .last()
+                .map_or(true, |last| last.offset <= offset)
+        );
         let start = u32::try_from(self.debug_tag_pool.len()).unwrap();
         self.debug_tag_pool.extend(tags.iter().cloned());
         let end = u32::try_from(self.debug_tag_pool.len()).unwrap();
         self.inner.debug_tags.push(MachDebugTags {
-            offset: self.cur_offset(),
+            offset,
             pos,
             range: start..end,
         });
@@ -2437,7 +2456,7 @@ pub(crate) struct MachDebugTags {
 /// address after the call. If the stack is walked and interpreted
 /// with debug tags upon a trap of the following instruction, it will
 /// be the PC of that instruction -- which is the same PC! Thus to
-/// disambiguate which tags we want, we attach a "pre/post" flag to
+/// disambiguate which tags we want, we attach a "pre/post-call" flag to
 /// every group of tags at an offset; and when we look up tags, we
 /// look them up for an offset and "position" at that offset.
 ///
@@ -2446,7 +2465,7 @@ pub(crate) struct MachDebugTags {
 ///
 /// ```plain
 /// 0: call ...
-///                          4, post: <tag1, tag2>
+///                          4, post-call: <tag1, tag2>
 ///                          4, pre: <tag3, tag4>
 /// 4: trapping_store ...
 /// ```
@@ -2456,11 +2475,14 @@ pub(crate) struct MachDebugTags {
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
 pub enum MachDebugTagPos {
-    /// Tags attached after the instruction that ends at this offset.
+    /// Tags attached to a call whose return address is this offset.
     ///
     /// This is used to attach tags to a call, because the PC we see
-    /// when walking the stack is the *return point*.
-    Post,
+    /// when walking the stack is the *return point*. Note that the
+    /// return address need not be the end of the call instruction as
+    /// emitted: e.g., a `try_call` is followed by a jump to its
+    /// continuation block.
+    PostCall,
     /// Tags attached before the instruction that starts at this offset.
     ///
     /// This is used to attach tags to every other kind of
@@ -2475,8 +2497,9 @@ pub struct MachBufferDebugTagList<'a> {
     /// Offset at which this tag applies.
     pub offset: CodeOffset,
 
-    /// Position at this offset ("post", attaching to prior
-    /// instruction, or "pre", attaching to next instruction).
+    /// Position at this offset ("post-call", attaching to the call
+    /// whose return address this is, or "pre", attaching to next
+    /// instruction).
     pub pos: MachDebugTagPos,
 
     /// The underlying tags.

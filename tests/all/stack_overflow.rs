@@ -205,3 +205,54 @@ fn tiny_wasm_stack_traps_on_entry(config: &mut Config) -> Result<()> {
     }
     Ok(())
 }
+
+// With signals-based traps disabled the stack-limit check happens before the
+// overflowing function has set up its frame. Test that the backtrace is still
+// correct: it contains all the frames that fit on the stack, the most recent of
+// which is the caller of the overflowing function.
+//
+// Other aspects of stack overflow without signals-based traps are tested in
+// `tests/misc_testsuite/stack-overflow-*.wast`.
+#[test]
+fn backtrace_without_signals_based_traps() -> Result<()> {
+    const STACK_SIZE: usize = 512 << 10;
+    const NUM_LIVE: usize = 4096;
+
+    // Keep many values live across the recursive call to get a big frame.
+    let calls = "(call $one) ".repeat(NUM_LIVE);
+    let adds = "i64.add ".repeat(NUM_LIVE);
+    let wat = format!(
+        r#"
+            (module
+                (func $one (result i64) (i64.const 1))
+                (func $big (export "big") (result i64)
+                    {calls}
+                    (call $big)
+                    {adds}))
+        "#
+    );
+
+    let mut config = Config::new();
+    config.signals_based_traps(false);
+    config.max_wasm_stack(STACK_SIZE);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, &wat)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let big = instance.get_typed_func::<(), i64>(&mut store, "big")?;
+
+    let err = big.call(&mut store, ()).unwrap_err();
+    assert_eq!(err.downcast_ref::<Trap>(), Some(&Trap::StackOverflow));
+
+    let frames = err.downcast_ref::<WasmBacktrace>().unwrap().frames();
+    let max_frames = STACK_SIZE / (NUM_LIVE * 8);
+    assert!(
+        frames.len() > 1 && frames.len() <= max_frames,
+        "unexpected backtrace length {}: {frames:?}",
+        frames.len()
+    );
+    for frame in frames {
+        assert_eq!(frame.func_name(), Some("big"));
+    }
+    Ok(())
+}

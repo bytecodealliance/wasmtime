@@ -45,6 +45,7 @@ where
     /// Tracks user stack maps for safepoint instructions.
     stack_maps: StackMapEmitter<InstAndKind<P>>,
     frame_layout: FrameLayout,
+    post_call_debug_tag_offset: Option<CodeOffset>,
 }
 
 impl<P> MachInstEmitState<InstAndKind<P>> for EmitState<P>
@@ -57,6 +58,7 @@ where
             ctrl_plane,
             stack_maps: StackMapEmitter::default(),
             frame_layout: abi.frame_layout().clone(),
+            post_call_debug_tag_offset: None,
         }
     }
 
@@ -74,6 +76,10 @@ where
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
+    }
+
+    fn post_call_debug_tag_offset_mut(&mut self) -> &mut Option<CodeOffset> {
+        &mut self.post_call_debug_tag_offset
     }
 }
 
@@ -193,6 +199,7 @@ fn pulley_emit<P>(
             } else {
                 sink.add_call_site();
             }
+            state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
             if info.patchable {
                 let call_len = sink.cur_offset() - start;
@@ -241,6 +248,7 @@ fn pulley_emit<P>(
             } else {
                 sink.add_call_site();
             }
+            state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
             let adjust = -i32::try_from(info.callee_pop_size).unwrap();
             for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
@@ -310,6 +318,7 @@ fn pulley_emit<P>(
             } else {
                 sink.add_call_site();
             }
+            state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
             // If a callee pop is happening here that means that something has
             // messed up, these are expected to be "very simple" signatures.
@@ -606,6 +615,25 @@ fn pulley_emit<P>(
         Inst::SequencePoint { .. } => {
             // Nothing.
         }
+
+        Inst::StackLimitJump { limit, handler } => {
+            // A single conditional branch directly to the handler. All branches
+            // have their `PcRelOffset` as their trailing 4 bytes.
+            let cond = stack_limit_cond::<P>(*limit);
+            patch_pc_rel_offset(sink, |sink| cond.encode(sink, 0));
+            let end = sink.cur_offset();
+            sink.add_reloc_at_offset(end - 4, Reloc::PulleyPcRel, &**handler, 0);
+        }
+    }
+}
+
+/// The condition, for `Inst::StackLimitJump`, that the stack has overflowed.
+pub(super) fn stack_limit_cond<P: PulleyTargetKind>(limit: XReg) -> Cond {
+    let src1 = XReg::new(stack_reg()).unwrap();
+    let src2 = limit;
+    match P::pointer_width() {
+        PointerWidth::PointerWidth32 => Cond::IfXult32 { src1, src2 },
+        PointerWidth::PointerWidth64 => Cond::IfXult64 { src1, src2 },
     }
 }
 

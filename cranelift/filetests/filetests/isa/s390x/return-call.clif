@@ -112,13 +112,11 @@ block0(v0: i64):
 ;   aghi %r15, -160
 ;   stg %r1, 0(%r15)
 ; block0:
-;   lgr %r8, %r2
+;   lgr %r8, %r3
 ;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r5, 0(%r1)
-;   lgr %r2, %r3
 ;   basr %r14, %r5
 ;   bras %r1, 12 ; data %callee_i64_multiret + 0 ; lg %r5, 0(%r1)
-;   lgr %r3, %r2
-;   lgr %r2, %r8
+;   lgr %r3, %r8
 ;   lmg %r8, %r15, 224(%r15) ; br %r5
 ;
 ; Disassembled:
@@ -128,23 +126,21 @@ block0(v0: i64):
 ;   aghi %r15, -0xa0
 ;   stg %r1, 0(%r15)
 ; block1: ; offset 0x14
-;   lgr %r8, %r2
+;   lgr %r8, %r3
 ;   bras %r1, 0x24
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   lg %r5, 0(%r1)
-;   lgr %r2, %r3
 ;   basr %r14, %r5
-;   bras %r1, 0x3c
+;   bras %r1, 0x38
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_i64_multiret 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   lg %r5, 0(%r1)
-;   lgr %r3, %r2
-;   lgr %r2, %r8
+;   lgr %r3, %r8
 ;   lmg %r8, %r15, 0xe0(%r15)
 ;   br %r5
 

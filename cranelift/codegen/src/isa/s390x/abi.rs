@@ -319,7 +319,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut next_vr = 0;
         let mut next_stack: u32 = 0;
 
-        let ret_area_ptr = if add_ret_area_ptr {
+        let is_tail = call_conv == isa::CallConv::Tail;
+        let ret_area_ptr = if add_ret_area_ptr && !is_tail {
             debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             next_gpr += 1;
             Some(ABIArg::reg(
@@ -440,6 +441,31 @@ impl ABIMachineSpec for S390xMachineDeps {
                 });
             }
         }
+
+        let ret_area_ptr = if add_ret_area_ptr && is_tail {
+            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
+            Some(match get_intreg_for_arg(call_conv, next_gpr) {
+                Some(reg) => ABIArg::reg(
+                    reg.to_real_reg().unwrap(),
+                    types::I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ),
+                None => {
+                    next_stack = align_to(next_stack, 8);
+                    let offset = next_stack as i64;
+                    next_stack += 8;
+                    ABIArg::stack(
+                        offset,
+                        types::I64,
+                        ir::ArgumentExtension::None,
+                        ir::ArgumentPurpose::Normal,
+                    )
+                }
+            })
+        } else {
+            ret_area_ptr
+        };
 
         next_stack = align_to(next_stack, 8);
 
@@ -564,6 +590,16 @@ impl ABIMachineSpec for S390xMachineDeps {
             trap_code: ir::TrapCode::STACK_OVERFLOW,
         });
         insts
+    }
+
+    fn gen_stack_lower_bound_jump(
+        limit_reg: Reg,
+        handler: &ir::ExternalName,
+    ) -> SmallInstVec<Inst> {
+        smallvec![Inst::StackLimitJump {
+            limit: limit_reg,
+            handler: Box::new(handler.clone()),
+        }]
     }
 
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Inst {

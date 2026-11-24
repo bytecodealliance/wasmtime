@@ -58,6 +58,8 @@ pub struct EmitState {
     vstate: EmitVState,
 
     frame_layout: FrameLayout,
+
+    post_call_debug_tag_offset: Option<CodeOffset>,
 }
 
 impl EmitState {
@@ -76,6 +78,7 @@ impl MachInstEmitState<Inst> for EmitState {
             ctrl_plane,
             vstate: EmitVState::Unknown,
             frame_layout: abi.frame_layout().clone(),
+            post_call_debug_tag_offset: None,
         }
     }
 
@@ -98,6 +101,10 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
+    }
+
+    fn post_call_debug_tag_offset_mut(&mut self) -> &mut Option<CodeOffset> {
+        &mut self.post_call_debug_tag_offset
     }
 }
 
@@ -194,7 +201,8 @@ impl Inst {
             | Inst::Popcnt { .. }
             | Inst::Cltz { .. }
             | Inst::Brev8 { .. }
-            | Inst::StackProbeLoop { .. } => None,
+            | Inst::StackProbeLoop { .. }
+            | Inst::StackLimitJump { .. } => None,
 
             // VecSetState does not expect any vstate, rather it updates it.
             Inst::VecSetState { .. } => None,
@@ -1225,6 +1233,7 @@ impl Inst {
                 } else {
                     sink.add_call_site();
                 }
+                state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
                 let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
                 if callee_pop_size > 0 {
@@ -1277,6 +1286,7 @@ impl Inst {
                 } else {
                     sink.add_call_site();
                 }
+                state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
                 let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
                 if callee_pop_size > 0 {
@@ -2174,6 +2184,29 @@ impl Inst {
                 .emit_uncompressed(sink, emit_info, state, start_off);
             }
 
+            &Inst::StackLimitJump { limit, ref handler } => {
+                // Generate the following code:
+                //         bgeu  sp, limit, .ok    ;; no overflow
+                //         auipc t6, handler       ;; tail call
+                //         jalr  x0, t6
+                // .ok:
+                let ok = sink.get_label();
+                Inst::CondBr {
+                    taken: CondBrTarget::Label(ok),
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: IntegerCompare {
+                        kind: IntCC::UnsignedGreaterThanOrEqual,
+                        rs1: stack_reg(),
+                        rs2: limit,
+                    },
+                }
+                .emit(sink, emit_info, state);
+                sink.add_reloc(Reloc::RiscvCallPlt, &**handler, 0);
+                Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
+                    .into_iter()
+                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
+                sink.bind_label(ok, &mut state.ctrl_plane);
+            }
             &Inst::TrapIf { cmp, trap_code } => {
                 let label_end = sink.get_label();
 

@@ -554,6 +554,35 @@ GV = [colocated] symbol Name
     :arg Name: External name.
     :result GV: Global value.
 
+### Stack limits
+
+A function may declare a stack limit in its preamble, as a global value. The
+prologue then checks that the function's stack frame (plus the frame-setup area
+of any function it calls) fits above that limit, assuming a downward-growing
+stack, and takes an overflow action if it doesn't. Leaf functions with no stack
+frame need no check. Currently the global value must be a `vmctx` or a chain
+of `load`s based on one.
+
+```
+stack_limit = GV
+stack_limit = GV, handler = FN
+```
+
+In the first form, the overflow action is to trap with the `stack_overflow`
+trap code.
+
+In the second form, the overflow action is a tail call to the function
+`FN`, which must be declared `colocated` and must have parameters that
+are a prefix of this function's parameters. This form is only
+supported for functions using the `tail` calling convention, and the
+handler must use it too; neither signature may have an `sret`
+parameter, but there are no restrictions on return values. The check
+is done at the very start of the function, before any frame setup, and
+the tail call is a direct jump: so on entry to the handler the stack
+pointer, the return address (whether in a register or on the stack),
+and all argument registers are exactly as they were on entry to this
+function. The handler must not return.
+
 ### Constant materialization
 
 A few instructions have variants that take immediate operands, but in general

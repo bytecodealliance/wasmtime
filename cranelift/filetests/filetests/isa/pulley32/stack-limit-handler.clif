@@ -1,0 +1,304 @@
+test compile precise-output
+set enable_multi_ret_implicit_sret
+target pulley32
+
+function %foo() {
+block0:
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; ret
+
+;; A leaf function with no frame needs no stack check at all, even with a
+;; handler.
+function %handler_leaf_zero(i32 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i32 notrap aligned gv0
+    gv2 = load.i32 notrap aligned gv1+4
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i32 vmctx) tail
+block0(v0: i32):
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; ret
+
+;; A function that makes calls: the check happens before any frame setup and
+;; tail-calls the handler on overflow.
+function %handler_call_zero(i32 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i32 notrap aligned gv0
+    gv2 = load.i32 notrap aligned gv1+4
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i32 vmctx) tail
+block0(v0: i32):
+    call fn0()
+    return
+}
+
+; VCode:
+;   x31 = xload32 x0+0 // flags = notrap aligned
+;   x31 = xload32 x31+4 // flags = notrap aligned
+;   xadd32_u32 x31, x31, 16
+;   br_if_xult32 x30, x31, TestCase(%overflow)
+;   push_frame
+; block0:
+;   indirect_call_host CallInfo { dest: TestCase(%foo), uses: [], defs: [], clobbers: PRegSet { bits: [65535, 4294967295, 4294967295, 0] }, callee_conv: Fast, caller_conv: Tail, callee_pop_size: 0, try_call_info: None, patchable: false }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; xload32le_o32 spilltmp0, x0, 0
+; xload32le_o32 spilltmp0, spilltmp0, 4
+; xadd32_u32 spilltmp0, spilltmp0, 16
+; br_if_xult32 sp, spilltmp0, 0x3    // target = 0x18
+; push_frame
+; call_indirect_host 0
+; pop_frame
+; ret
+
+;; The handler's parameters need only be a prefix of the function's, and the
+;; stack limit can be the vmctx itself.
+function %handler_prefix_params(i32 vmctx, i64, i64) -> i64 tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i32 vmctx) tail
+block0(v0: i32, v1: i64, v2: i64):
+    call fn0()
+    v3 = iadd v1, v2
+    return v3
+}
+
+; VCode:
+;   xadd32_u32 x31, x0, 32
+;   br_if_xult32 x30, x31, TestCase(%overflow)
+;   push_frame_save 16, {x16, x17}
+; block0:
+;   xmov x16, x2
+;   xmov x17, x1
+;   indirect_call_host CallInfo { dest: TestCase(%foo), uses: [], defs: [], clobbers: PRegSet { bits: [65535, 4294967295, 4294967295, 0] }, callee_conv: Fast, caller_conv: Tail, callee_pop_size: 0, try_call_info: None, patchable: false }
+;   xmov x1, x17
+;   xmov x2, x16
+;   xadd64 x0, x1, x2
+;   pop_frame_restore 16, {x16, x17}
+;   ret
+;
+; Disassembled:
+; xadd32_u32 spilltmp0, x0, 32
+; br_if_xult32 sp, spilltmp0, 0x3    // target = 0xa
+; push_frame_save 16, x16, x17
+; xmov x16, x2
+; xmov x17, x1
+; call_indirect_host 0
+; xmov x1, x17
+; xmov x2, x16
+; xadd64 x0, x1, x2
+; pop_frame_restore 16, x16, x17
+; ret
+
+;; A small frame: the frame size (plus this function's own setup area) is added
+;; to the limit before comparing.
+function %handler_small_frame(i32 vmctx) tail {
+    ss0 = explicit_slot 168
+    gv0 = vmctx
+    gv1 = load.i32 notrap aligned gv0
+    gv2 = load.i32 notrap aligned gv1+4
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i32 vmctx) tail
+block0(v0: i32):
+    return
+}
+
+; VCode:
+;   x31 = xload32 x0+0 // flags = notrap aligned
+;   x31 = xload32 x31+4 // flags = notrap aligned
+;   xadd32_u32 x31, x31, 184
+;   br_if_xult32 x30, x31, TestCase(%overflow)
+;   push_frame_save 176, {}
+; block0:
+;   pop_frame_restore 176, {}
+;   ret
+;
+; Disassembled:
+; xload32le_o32 spilltmp0, x0, 0
+; xload32le_o32 spilltmp0, spilltmp0, 4
+; xadd32_u32 spilltmp0, spilltmp0, 184
+; br_if_xult32 sp, spilltmp0, 0x3    // target = 0x18
+; push_frame_save 176, 
+; pop_frame_restore 176, 
+; ret
+
+;; A huge frame: the limit is checked once directly (to guard against
+;; overflow in the addition) and then again with the frame size added.
+function %handler_huge_frame(i32 vmctx) tail {
+    ss0 = explicit_slot 400000
+    gv0 = vmctx
+    gv1 = load.i32 notrap aligned gv0
+    gv2 = load.i32 notrap aligned gv1+4
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i32 vmctx) tail
+block0(v0: i32):
+    return
+}
+
+; VCode:
+;   x31 = xload32 x0+0 // flags = notrap aligned
+;   x31 = xload32 x31+4 // flags = notrap aligned
+;   br_if_xult32 x30, x31, TestCase(%overflow)
+;   xadd32_u32 x31, x31, 400008
+;   br_if_xult32 x30, x31, TestCase(%overflow)
+;   push_frame
+;   stack_alloc32 400000
+; block0:
+;   stack_free32 400000
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; xload32le_o32 spilltmp0, x0, 0
+; xload32le_o32 spilltmp0, spilltmp0, 4
+; br_if_xult32 sp, spilltmp0, 0x3    // target = 0x11
+; xadd32_u32 spilltmp0, spilltmp0, 400008
+; br_if_xult32 sp, spilltmp0, 0x3    // target = 0x1f
+; push_frame
+; stack_alloc32 400000
+; stack_free32 400000
+; pop_frame
+; ret
+
+;; The `tail` calling convention, as used by Wasmtime, with stack arguments.
+function %handler_tail(i32 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+    ss0 = explicit_slot 8
+    gv0 = vmctx
+    gv1 = load.i32 notrap aligned gv0
+    gv2 = load.i32 notrap aligned gv1+4
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i32 vmctx) tail
+block0(v0: i32, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64):
+    v11 = iadd v1, v10
+    v13 = stack_addr.i32 ss0
+    store v11, v13
+    v12 = load.i64 v13
+    return v12
+}
+
+; VCode:
+;   x31 = xload32 x0+0 // flags = notrap aligned
+;   x31 = xload32 x31+4 // flags = notrap aligned
+;   xadd32_u32 x31, x31, 24
+;   br_if_xult32 x30, x31, TestCase(%overflow)
+;   push_frame_save 16, {}
+; block0:
+;   xadd64 x5, x1, x10
+;   x6 = load_addr Slot(0)
+;   xstore64le_z x6, 0, x5 // trap=TrapCode(253)
+;   xload64le_z x0, x6, 0 // trap=TrapCode(253)
+;   pop_frame_restore 16, {}
+;   ret
+;
+; Disassembled:
+; xload32le_o32 spilltmp0, x0, 0
+; xload32le_o32 spilltmp0, spilltmp0, 4
+; xadd32_u32 spilltmp0, spilltmp0, 24
+; br_if_xult32 sp, spilltmp0, 0x3    // target = 0x18
+; push_frame_save 16, 
+; xadd64 x5, x1, x10
+; xmov x6, sp
+; xstore64le_z x6, 0, x5
+; xload64le_z x0, x6, 0
+; pop_frame_restore 16, 
+; ret
+
+;; Many return values: the implicit return-area pointer must not perturb the
+;; location of the vmctx argument that the handler receives.
+function %handler_many_returns(i32 vmctx) -> i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32 tail {
+    gv0 = vmctx
+    gv1 = load.i32 notrap aligned gv0
+    gv2 = load.i32 notrap aligned gv1+4
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i32 vmctx) tail
+block0(v0: i32):
+    call fn0()
+    return v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0
+}
+
+; VCode:
+;   x31 = xload32 x0+0 // flags = notrap aligned
+;   x31 = xload32 x31+4 // flags = notrap aligned
+;   xadd32_u32 x31, x31, 32
+;   br_if_xult32 x30, x31, TestCase(%overflow)
+;   push_frame_save 16, {x16, x17}
+; block0:
+;   xmov x16, x0
+;   xmov x17, x1
+;   indirect_call_host CallInfo { dest: TestCase(%foo), uses: [], defs: [], clobbers: PRegSet { bits: [65535, 4294967295, 4294967295, 0] }, callee_conv: Fast, caller_conv: Tail, callee_pop_size: 0, try_call_info: None, patchable: false }
+;   xmov x0, x16
+;   xmov x1, x17
+;   xstore32 x1+0, x0 // flags =  notrap aligned
+;   xstore32 x1+8, x0 // flags =  notrap aligned
+;   xstore32 x1+16, x0 // flags =  notrap aligned
+;   xstore32 x1+24, x0 // flags =  notrap aligned
+;   xstore32 x1+32, x0 // flags =  notrap aligned
+;   xmov x14, x0
+;   xmov x1, x14
+;   xmov x2, x14
+;   xmov x3, x14
+;   xmov x4, x14
+;   xmov x5, x14
+;   xmov x6, x14
+;   xmov x7, x14
+;   xmov x8, x14
+;   xmov x9, x14
+;   xmov x10, x14
+;   xmov x11, x14
+;   xmov x12, x14
+;   xmov x13, x14
+;   pop_frame_restore 16, {x16, x17}
+;   ret
+;
+; Disassembled:
+; xload32le_o32 spilltmp0, x0, 0
+; xload32le_o32 spilltmp0, spilltmp0, 4
+; xadd32_u32 spilltmp0, spilltmp0, 32
+; br_if_xult32 sp, spilltmp0, 0x3    // target = 0x18
+; push_frame_save 16, x16, x17
+; xmov x16, x0
+; xmov x17, x1
+; call_indirect_host 0
+; xmov x0, x16
+; xmov x1, x17
+; xstore32le_o32 x1, 0, x0
+; xstore32le_o32 x1, 8, x0
+; xstore32le_o32 x1, 16, x0
+; xstore32le_o32 x1, 24, x0
+; xstore32le_o32 x1, 32, x0
+; xmov x14, x0
+; xmov x1, x14
+; xmov x2, x14
+; xmov x3, x14
+; xmov x4, x14
+; xmov x5, x14
+; xmov x6, x14
+; xmov x7, x14
+; xmov x8, x14
+; xmov x9, x14
+; xmov x10, x14
+; xmov x11, x14
+; xmov x12, x14
+; xmov x13, x14
+; pop_frame_restore 16, x16, x17
+; ret
+

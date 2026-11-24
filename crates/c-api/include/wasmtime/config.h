@@ -738,6 +738,15 @@ wasmtime_config_host_memory_creator_set(wasm_config_t *,
  */
 WASMTIME_CONFIG_PROP(void, memory_init_cow, bool)
 
+/**
+ * \brief Configures the size, in bytes, of the memory guaranteed dense image
+ * size.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_guaranteed_dense_image_size
+ */
+WASMTIME_CONFIG_PROP(void, memory_guaranteed_dense_image_size, uint64_t)
+
 #ifdef WASMTIME_FEATURE_POOLING_ALLOCATOR
 
 /**

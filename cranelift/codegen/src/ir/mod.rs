@@ -47,7 +47,7 @@ pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
 };
 pub use crate::ir::extname::{ExternalName, UserExternalName, UserFuncName};
-pub use crate::ir::function::Function;
+pub use crate::ir::function::{Function, StackLimit};
 pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::instructions::{
     BlockArg, BlockCall, InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,

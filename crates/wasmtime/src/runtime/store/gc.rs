@@ -755,13 +755,15 @@ impl StoreOpaque {
             "we should always get a valid frame pointer for Wasm frames"
         );
 
-        let (store_code, offset) = modules
-            .store_code_by_pc(pc)
-            .expect("should have store code for Wasm frame");
+        // Note that this frame may be running out of the engine's copy of
+        // code, rather than the store's, if it's a store-invariant function
+        // such as a trampoline; see `code_memory_by_pc`.
+        let (code, offset) = modules
+            .code_memory_by_pc(pc)
+            .expect("should have code for Wasm frame");
         let offset = u32::try_from(offset).unwrap();
 
-        let stack_map =
-            wasmtime_environ::StackMap::lookup(offset, store_code.code_memory().stack_map_data());
+        let stack_map = wasmtime_environ::StackMap::lookup(offset, code.stack_map_data());
 
         if let Some(stack_map) = stack_map {
             log::trace!(
@@ -778,7 +780,7 @@ impl StoreOpaque {
         }
 
         #[cfg(feature = "debug")]
-        if let Some(frame_table) = store_code.code_memory().frame_table() {
+        if let Some(frame_table) = code.frame_table() {
             for stack_slot in crate::debug::gc_refs_in_frame(frame_table, offset, fp) {
                 unsafe {
                     Self::trace_wasm_stack_slot(gc_roots_list, stack_slot);
