@@ -358,12 +358,18 @@ impl DominatorTree {
 
     /// Returns `true` if `block_a` dominates `block_b`.
     ///
-    /// A block is considered to dominate itself.
+    /// Every block dominates itself. If `block_a != block_b` and either block
+    /// is unreachable, returns `false`.
+    ///
     /// This uses preorder numbers for O(1) constant time performance.
     pub fn block_dominates(&self, block_a: Block, block_b: Block) -> bool {
         let na = &self.nodes[block_a];
         let nb = &self.nodes[block_b];
-        na.dom_pre_number <= nb.dom_pre_number && na.dom_pre_max >= nb.dom_pre_max
+        block_a == block_b
+            // Unreachable blocks have dom_pre_number == dom_pre_max == 0.
+            || (na.dom_pre_number != 0
+                && na.dom_pre_number <= nb.dom_pre_number
+                && na.dom_pre_max >= nb.dom_pre_max)
     }
 
     /// Returns `true` if the CFG edge `from -> to` is a retreating edge.
@@ -735,6 +741,42 @@ mod tests {
         assert!(!dt.block_dominates(block2, block0));
         assert!(!dt.block_dominates(block2, block1));
         assert!(dt.block_dominates(block2, block2));
+    }
+
+    #[test]
+    fn unreachable_blocks_do_not_dominate_each_other() {
+        let mut func = Function::new();
+        let block0 = func.dfg.make_block();
+        let block1 = func.dfg.make_block();
+        let block2 = func.dfg.make_block();
+
+        let mut cur = FuncCursor::new(&mut func);
+
+        cur.insert_block(block0);
+        cur.ins().return_(&[]);
+
+        // Two unreachable blocks.
+        cur.insert_block(block1);
+        let jmp12 = cur.ins().jump(block2, &[]);
+
+        cur.insert_block(block2);
+        let jmp21 = cur.ins().jump(block1, &[]);
+
+        let cfg = ControlFlowGraph::with_function(cur.func);
+        let dt = DominatorTree::with_function(cur.func, &cfg);
+
+        assert!(!dt.is_reachable(block1));
+        assert!(!dt.is_reachable(block2));
+
+        // Unreachable blocks dominate themselves but nothing else.
+        assert!(dt.block_dominates(block1, block1));
+        assert!(dt.block_dominates(block2, block2));
+        assert!(!dt.block_dominates(block1, block2));
+        assert!(!dt.block_dominates(block2, block1));
+        assert!(!dt.block_dominates(block1, block0));
+        assert!(!dt.dominates(block1, block2, &cur.func.layout));
+        assert!(!dt.dominates(jmp12, jmp21, &cur.func.layout));
+        assert!(!dt.dominates(jmp21, jmp12, &cur.func.layout));
     }
 
     #[test]
