@@ -137,7 +137,7 @@ implementations within Wasmtime.
 | implements                | 🏷️     | ✅      | ✅    | ✅       | ❌     | ✅  | ✅     |
 | more async options [^c2]  | 🚝    | ❌      | ✅    | ❌       | ❌     | ✅  | ✅     |
 | stackful async [^c2]      | 🚟    | ❌      | ✅    | ❌       | ❌     | ✅  | ✅     |
-| threading                 | 🧵    | ❌      | ✅    | ❌       | ❌     | ✅  | ❌     |
+| threading                 | 🧵    | ❌      | ✅    | ✅       | ❌     | ✅  | ✅     |
 | fixed-length-lists        | 🔧    | ❌      | ✅    | 🚧       | ❌     | ✅  | ❌     |
 | memory64                  | 🐘    | ❌      | 🚧    | 🚧       | ❌     | 🚧  | ❌     |
 | error-context [^c2]       | 📝    | ❌      | ❌    | ❌       | ❌     | 🚧  | ❌     |

@@ -793,6 +793,16 @@ public:
   void wasm_component_model_async_stackful(bool enable) {
     wasmtime_config_wasm_component_model_async_stackful_set(ptr.get(), enable);
   }
+
+  /**
+   * \brief Configures whether the threading intrinsics (`thread.*`) are
+   * enabled for the component model.
+   *
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_threading
+   */
+  void wasm_component_model_threading(bool enable) {
+    wasmtime_config_wasm_component_model_threading_set(ptr.get(), enable);
+  }
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
 };
 

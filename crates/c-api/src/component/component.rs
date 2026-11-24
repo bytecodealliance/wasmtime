@@ -69,6 +69,15 @@ pub extern "C" fn wasmtime_config_wasm_component_model_async_stackful_set(
     c.config.wasm_component_model_async_stackful(enable);
 }
 
+#[unsafe(no_mangle)]
+#[cfg(feature = "component-model-async")]
+pub extern "C" fn wasmtime_config_wasm_component_model_threading_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_component_model_threading(enable);
+}
+
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct wasmtime_component_t {
