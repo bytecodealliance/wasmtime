@@ -1,0 +1,83 @@
+test compile precise-output
+set separate_constant_pool=true
+target s390x
+
+function %vconst() -> i64x2 {
+block0:
+  v0 = vconst.i64x2 [1 2]
+  return v0
+}
+
+; VCode:
+; block0:
+;   larl %r1, [const(0)] ; vl %v24, 0(%r1)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_constant PCRel32Dbl constant0 2
+;   vl %v24, 0(%r1)
+;   br %r14
+; constant0: ; offset 0x0
+;   .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
+;   .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02
+
+function %two_uses(i64x2) -> i64x2 {
+block0(v0: i64x2):
+  v1 = vconst.i64x2 [1 2]
+  v2 = iadd v0, v1
+  v3 = bxor v2, v1
+  return v3
+}
+
+; VCode:
+; block0:
+;   larl %r1, [const(0)] ; vl %v4, 0(%r1)
+;   vag %v5, %v24, %v4
+;   vx %v24, %v5, %v4
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_constant PCRel32Dbl constant0 2
+;   vl %v4, 0(%r1)
+;   vag %v5, %v24, %v4
+;   vx %v24, %v5, %v4
+;   br %r14
+; constant0: ; offset 0x0
+;   .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
+;   .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02
+
+function %two_constants(i64x2) -> i64x2 {
+block0(v0: i64x2):
+  v1 = vconst.i64x2 [1 2]
+  v2 = vconst.i64x2 [3 4]
+  v3 = iadd v0, v1
+  v4 = bxor v3, v2
+  return v4
+}
+
+; VCode:
+; block0:
+;   larl %r1, [const(1)] ; vl %v5, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v6, 0(%r1)
+;   vag %v5, %v24, %v5
+;   vx %v24, %v5, %v6
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0 ; reloc_constant PCRel32Dbl constant0 2
+;   vl %v5, 0(%r1)
+;   larl %r1, 0xc ; reloc_constant PCRel32Dbl constant1 2
+;   vl %v6, 0(%r1)
+;   vag %v5, %v24, %v5
+;   vx %v24, %v5, %v6
+;   br %r14
+; constant0: ; offset 0x0
+;   .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
+;   .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02
+; constant1: ; offset 0x10
+;   .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03
+;   .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04
+

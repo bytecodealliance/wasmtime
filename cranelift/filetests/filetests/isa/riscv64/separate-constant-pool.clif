@@ -1,0 +1,74 @@
+test compile precise-output
+set separate_constant_pool=true
+set unwind_info=false
+target riscv64
+
+function %load() -> i64 {
+block0:
+  v0 = iconst.i64 0xf34bf0a31212003a
+  return v0
+}
+
+; VCode:
+; block0:
+;   ld a0,[const(0)]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a0, 0 ; reloc_constant RiscvPCRelHi20 constant0 0
+;   ld a0, 0(a0) ; reloc_constant RiscvPCRelLo12I constant0 0
+;   ret
+; constant0: ; offset 0x0
+;   .byte 0x3a, 0x00, 0x12, 0x12, 0xa3, 0xf0, 0x4b, 0xf3
+
+function %two_constants() -> i64 {
+block0:
+  v0 = iconst.i64 0xf34bf0a31212003a
+  v1 = iconst.i64 0xffff0000ffffffff
+  v2 = bxor v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   ld a0,[const(1)]
+;   ld a1,[const(0)]
+;   xor a0,a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a0, 0 ; reloc_constant RiscvPCRelHi20 constant0 0
+;   ld a0, 0(a0) ; reloc_constant RiscvPCRelLo12I constant0 0
+;   auipc a1, 0 ; reloc_constant RiscvPCRelHi20 constant1 0
+;   ld a1, 0(a1) ; reloc_constant RiscvPCRelLo12I constant1 0
+;   xor a0, a0, a1
+;   ret
+; constant0: ; offset 0x0
+;   .byte 0x3a, 0x00, 0x12, 0x12, 0xa3, 0xf0, 0x4b, 0xf3
+; constant1: ; offset 0x8
+;   .byte 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff, 0xff
+
+function %reused() -> i64 {
+block0:
+  v0 = iconst.i64 0xf34bf0a31212003a
+  v1 = iadd v0, v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   ld a0,[const(0)]
+;   add a0,a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   auipc a0, 0 ; reloc_constant RiscvPCRelHi20 constant0 0
+;   ld a0, 0(a0) ; reloc_constant RiscvPCRelLo12I constant0 0
+;   add a0, a0, a0
+;   ret
+; constant0: ; offset 0x0
+;   .byte 0x3a, 0x00, 0x12, 0x12, 0xa3, 0xf0, 0x4b, 0xf3
+

@@ -1,0 +1,20 @@
+test compile precise-output
+set separate_constant_pool=true
+target pulley64
+
+;; Pulley encodes constants in the instruction, so nothing is left to separate.
+function %vconst() -> i8x16 {
+block0:
+  v0 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+  return v0
+}
+
+; VCode:
+; block0:
+;   vconst128 v0, 21345817372864405881847059188222722561
+;   ret
+;
+; Disassembled:
+; vconst128 v0, 21345817372864405881847059188222722561
+; ret
+

@@ -16,9 +16,12 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   adrp x0, #0
-;   ldr q0, [x0]
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant0 0
+;   ldr q0, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant0 0
 ;   ret
+; constant0: ; offset 0x0
+;   .byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+;   .byte 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
 
 function %f64const() -> f64 {
 block0:
@@ -34,9 +37,11 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   adrp x0, #0
-;   ldr d0, [x0]
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant0 0
+;   ldr d0, [x0] ; reloc_constant Aarch64Ldst64AbsLo12Nc constant0 0
 ;   ret
+; constant0: ; offset 0x0
+;   .byte 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0xf2, 0x3f
 
 ;; An `f32` constant is built in a register and does not use the pool.
 function %f32const() -> f32 {
@@ -81,13 +86,19 @@ block0(v0: i8x16):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   adrp x6, #0
-;   ldr q16, [x6]
-;   adrp x6, #0
-;   ldr q17, [x6]
+;   adrp x6, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant0 0
+;   ldr q16, [x6] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant0 0
+;   adrp x6, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant1 0
+;   ldr q17, [x6] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant1 0
 ;   add v7.16b, v0.16b, v16.16b
 ;   eor v0.16b, v7.16b, v17.16b
 ;   ret
+; constant0: ; offset 0x0
+;   .byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+;   .byte 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
+; constant1: ; offset 0x10
+;   .byte 0x10, 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09
+;   .byte 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01
 
 ;; The register allocator picks the register for the page address, so it has
 ;; to avoid the registers of the live arguments.
@@ -123,8 +134,8 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   adrp x8, #0
-;   ldr q20, [x8]
+;   adrp x8, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant0 0
+;   ldr q20, [x8] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant0 0
 ;   mov x8, v20.d[0]
 ;   add x0, x0, x1
 ;   add x0, x0, x2
@@ -135,4 +146,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64):
 ;   add x0, x0, x7
 ;   add x0, x0, x8
 ;   ret
+; constant0: ; offset 0x0
+;   .byte 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11
+;   .byte 0x00, 0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99
 
