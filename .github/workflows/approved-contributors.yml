@@ -37,29 +37,15 @@ jobs:
           permissions-token: ${{ steps.app-token.outputs.token }}
           vouch-team: bytecodealliance/wasmtime-core
           message: |
-            Thanks @{author} for your contribution to this repository, but
-            this automated bot is closing this PR.
+            Thanks @{author} for your contribution to this repository, but this automated bot is closing this PR.
 
-            Bytecode Alliance projects have been overwhelmed with AI-generated
-            PRs that monopolize reviewer time, and this bot is an attempt to
-            push back. Please discuss this change on [zulip] with maintainers
-            first before jumping straight into making a PR. After discussion,
-            a maintainer may reopen this PR.
+            Bytecode Alliance projects have been overwhelmed with AI-generated PRs that monopolize reviewer time, and this bot is an attempt to push back. Please discuss this change on [zulip] with maintainers first before jumping straight into making a PR. After discussion, a maintainer may reopen this PR.
 
-            AI usage must abide by the [Bytecode Alliance's AI Tool Use
-            Policy](https://github.com/bytecodealliance/governance/blob/main/AI_TOOL_POLICY.md),
-            and we ask that new contributors engage with maintainers
-            beforehand as humans to ensure that what you're working on is
-            reasonable for a newcomer to tackle. For more information, see
-            [the contributing
-            docs](https://docs.wasmtime.dev/contributing.html).
+            AI usage must abide by the [Bytecode Alliance's AI Tool Use Policy](https://github.com/bytecodealliance/governance/blob/main/AI_TOOL_POLICY.md), and we ask that new contributors engage with maintainers beforehand as humans to ensure that what you're working on is reasonable for a newcomer to tackle. For more information, see [the contributing docs](https://docs.wasmtime.dev/contributing.html).
 
-            If you believe this PR was caught by this bot erroneously, reach
-            out to us on [zulip].
+            If you believe this PR was caught by this bot erroneously, reach out to us on [zulip].
+
+            [zulip]: https://bytecodealliance.zulipchat.com/
           blocked-message: |
-            @{author} is not permitted to contribute to this project, so this
-            pull request has been closed automatically. For more information
-            see the Wasmtime [Contributing
-            docs](https://docs.wasmtime.dev/contributing.html).
-
-
+            @{author} is not permitted to contribute to this project, so this pull request has been closed automatically. For more information see the Wasmtime [Contributing docs](https://docs.wasmtime.dev/contributing.html).
+            
