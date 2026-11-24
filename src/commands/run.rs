@@ -1175,6 +1175,14 @@ impl RunCommand {
         }
 
         if self.run.common.wasi.nn == Some(true) {
+            eprintln!(
+                "\
+warning: Support for wasmtime-wasi-nn will soon be removed from this CLI and \
+maintained in a separate https://github.com/bytecodealliance/wasmtime-wasi-nn \
+repository and for more information see \
+https://github.com/bytecodealliance/wasmtime/issues/14937\
+"
+            );
             #[cfg(not(feature = "wasi-nn"))]
             {
                 bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
