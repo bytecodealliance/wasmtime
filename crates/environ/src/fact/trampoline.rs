@@ -43,7 +43,6 @@ use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 use super::DataModel;
 
 const MAX_STRING_BYTE_LENGTH: u32 = (1 << 31) - 1;
-const UTF16_TAG: u32 = 1 << 31;
 
 /// This value is arbitrarily chosen and should be fine to change at any time,
 /// it just seemed like a halfway reasonable starting point.
@@ -1658,7 +1657,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 // Test the tag big to see if this is a utf16 or a latin1 string
                 // at runtime...
                 self.instruction(LocalGet(src_str.len.idx));
-                self.ptr_uconst(src_mem_opts, UTF16_TAG);
+                self.ptr_utf16_tag(src_mem_opts);
                 self.ptr_and(src_mem_opts);
                 self.ptr_if(src_mem_opts, BlockType::Empty);
 
@@ -1666,7 +1665,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 // so further calculations have the right value. Afterwards the
                 // string transcode proceeds assuming utf16.
                 self.instruction(LocalGet(src_str.len.idx));
-                self.ptr_uconst(src_mem_opts, UTF16_TAG);
+                self.ptr_utf16_tag(src_mem_opts);
                 self.ptr_xor(src_mem_opts);
                 self.instruction(LocalSet(src_str.len.idx));
 
@@ -2230,7 +2229,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // source code unit length.
         if self.module.tunables.debug_adapter_modules {
             self.instruction(LocalGet(dst.len.idx));
-            self.ptr_uconst(dst_mem_opts, !UTF16_TAG);
+            self.ptr_utf16_untag_mask(dst_mem_opts);
             self.ptr_and(dst_mem_opts);
             self.convert_src_len_to_dst(src.len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
             self.ptr_ne(dst_mem_opts);
@@ -2239,11 +2238,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(End);
         }
 
-        // If the UTF16_TAG is set then utf16 was used and the destination
+        // If the utf16 tag is set then utf16 was used and the destination
         // should be appropriately sized. Bail out of the "is this string
         // empty" block and fall through otherwise to resizing.
         self.instruction(LocalGet(dst.len.idx));
-        self.ptr_uconst(dst_mem_opts, UTF16_TAG);
+        self.ptr_utf16_tag(dst_mem_opts);
         self.ptr_and(dst_mem_opts);
         self.ptr_br_if(dst_mem_opts, 0);
 
@@ -2416,7 +2415,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         // Tag the returned pointer as utf16
         self.instruction(LocalGet(dst.len.idx));
-        self.ptr_uconst(dst_mem_opts, UTF16_TAG);
+        self.ptr_utf16_tag(dst_mem_opts);
         self.ptr_or(dst_mem_opts);
         self.instruction(LocalSet(dst.len.idx));
 
@@ -4299,6 +4298,24 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(I64Const(val.into()));
         } else {
             self.instruction(I32Const(val.cast_signed()));
+        }
+    }
+
+    /// Pushes the `latin1+utf16` utf16 tag for `opts`'s memory.
+    fn ptr_utf16_tag(&mut self, opts: &LinearMemoryOptions) {
+        if opts.memory64() {
+            self.instruction(I64Const(i64::MIN));
+        } else {
+            self.instruction(I32Const(i32::MIN));
+        }
+    }
+
+    /// Pushes the mask that clears `ptr_utf16_tag` for `opts`'s memory.
+    fn ptr_utf16_untag_mask(&mut self, opts: &LinearMemoryOptions) {
+        if opts.memory64() {
+            self.instruction(I64Const(i64::MAX));
+        } else {
+            self.instruction(I32Const(i32::MAX));
         }
     }
 

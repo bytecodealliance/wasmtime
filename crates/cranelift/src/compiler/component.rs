@@ -1933,11 +1933,28 @@ impl TrampolineCompiler<'_> {
             }
 
             Transcode::Utf8ToUtf16
-            | Transcode::Utf16ToCompactProbablyUtf16
             | Transcode::Utf8ToCompactUtf16
             | Transcode::Utf16ToCompactUtf16 => {
                 self.raise_if_transcode_trapped(results[0]);
                 raw_results.push(self.cast_from_pointer(results[0], to64));
+            }
+
+            Transcode::Utf16ToCompactProbablyUtf16 => {
+                self.raise_if_transcode_trapped(results[0]);
+                let mut len = self.cast_from_pointer(results[0], to64);
+
+                // The libcall's utf16 tag is not the high bit of a 64-bit
+                // memory's pointer width, so move it there.
+                if to64 {
+                    let tag = Transcode::UTF16_TO_COMPACT_PROBABLY_UTF16_TAG;
+                    let tag_bit = self.builder.ins().band_imm_u(len, i64::from(tag));
+                    let untagged = self.builder.ins().bxor(len, tag_bit);
+                    let shift = i64::from(63 - tag.trailing_zeros());
+                    let new_tag_bit = self.builder.ins().ishl_imm_u(tag_bit, shift);
+                    len = self.builder.ins().bor(untagged, new_tag_bit);
+                }
+
+                raw_results.push(len);
             }
 
             Transcode::Latin1ToUtf8
