@@ -3242,10 +3242,9 @@ pub enum LabelUse {
     /// relocation. This has the same 4KiB-alignment requirement as
     /// `AdrpPage21`, with which it is paired.
     AddLo12,
-    /// The low 12 bits of the label's address divided by the access size, in
-    /// bits 21:10 of a load or store. Equivalent to
-    /// `R_AARCH64_LDST64_ABS_LO12_NC` and `R_AARCH64_LDST128_ABS_LO12_NC`.
-    /// Like `AdrpPage21`, it needs 4KiB-aligned code.
+    /// Equivalent to `R_AARCH64_LDST64_ABS_LO12_NC` or
+    /// `R_AARCH64_LDST128_ABS_LO12_NC`, depending on the access size. This has
+    /// the same 4KiB-alignment requirement as `AdrpPage21`.
     LdstLo12 {
         /// The log2 of the access size in bytes.
         shift: u8,

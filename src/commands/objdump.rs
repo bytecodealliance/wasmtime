@@ -74,7 +74,7 @@ pub struct ObjdumpCommand {
     #[arg(long, require_equals = true, value_name = "true|false")]
     frame_tables: Option<Option<bool>>,
 
-    /// Whether or not to dump the constants section, if there is one.
+    /// Whether or not to show the constants section.
     #[arg(long, require_equals = true, value_name = "true|false")]
     constants: Option<Option<bool>>,
 }
@@ -150,7 +150,6 @@ impl ObjdumpCommand {
         let text = elf
             .section_by_name(".text")
             .context("missing .text section")?;
-        let text_range = text.file_range();
         let text = text.data()?;
 
         let frame_table_descriptors = elf
@@ -429,16 +428,12 @@ impl ObjdumpCommand {
                 stdout.reset()?;
                 writeln!(stdout, ":")?;
 
-                // The code reaches the constants relative to `.text`, so print
-                // the offset from the start of `.text`.
-                let start = match (section.file_range(), text_range) {
-                    (Some((constants, _)), Some((text, _))) => constants - text,
-                    _ => bail!("missing file ranges for the constants section"),
-                };
+                // The constants directly follow `.text`, so print their offsets
+                // from its start.
                 let width = self.address_width;
                 for (i, line) in section.data()?.chunks(16).enumerate() {
                     stdout.set_color(&color_address)?;
-                    write!(stdout, "{:>width$x}: ", start + i as u64 * 16)?;
+                    write!(stdout, "{:>width$x}: ", text.len() + i * 16)?;
                     stdout.reset()?;
                     stdout.set_color(&color_bytes)?;
                     for (i, byte) in line.iter().enumerate() {

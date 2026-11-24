@@ -757,7 +757,8 @@ impl<I: VCodeInst> VCode<I> {
 
         // Register all allocated constants with the `MachBuffer` to ensure that
         // any references to the constants during instructions can be handled
-        // correctly. With `separate_constant_pool` they go in a second buffer.
+        // correctly. With `separate_constant_pool` the constants go in a second
+        // buffer.
         let mut rodata = flags.separate_constant_pool().then(MachBuffer::new);
         match &mut rodata {
             Some(rodata) => rodata.register_constants(&self.constants),

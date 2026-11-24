@@ -245,8 +245,8 @@ impl CodeMemory {
         #[cfg(not(has_host_compiler_backend))]
         let _ = &mut unwind;
 
-        // The code reaches the constants by a fixed offset, so their section
-        // must directly follow `.text`.
+        // The code refers to the constants with PC-relative offsets, so their
+        // section must directly follow `.text`.
         ensure!(
             constants.is_empty() || constants.start == text.end,
             "the constants section does not directly follow the text section",

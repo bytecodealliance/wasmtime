@@ -170,7 +170,7 @@ impl AMode {
     }
 }
 
-/// What an `auipc` and the instruction after it refer to.
+/// The label or constant that an `auipc` and the instruction after it refer to.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum PcRelTarget {
     Label(MachLabel),
@@ -191,8 +191,7 @@ impl PcRelTarget {
         }
     }
 
-    /// Makes the instruction at the current offset, which follows the `auipc`, refer to the
-    /// target.
+    /// Makes the instruction after the `auipc`, at the current offset, refer to the target.
     pub(crate) fn use_lo12(self, sink: &mut MachBuffers<Inst>) {
         let offset = sink.cur_offset();
         match self {

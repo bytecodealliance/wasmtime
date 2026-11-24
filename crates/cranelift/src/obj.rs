@@ -27,12 +27,12 @@ use wasmtime_environ::{Compiler as _, FuncKey, TripleExt, obj};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
-/// The constants section and its size are aligned to 16 bytes, which is the
-/// alignment of the largest constant.
+/// The alignment of the constants section and of its size. No constant needs a
+/// larger alignment.
 const CONSTANTS_ALIGN: usize = 16;
 
-/// The alignment of the constant that starts at `offset` in a constants buffer
-/// aligned to `buffer_align`.
+/// The alignment that a constant has at `offset` in a buffer aligned to
+/// `buffer_align`.
 fn constant_align(offset: u32, buffer_align: u32) -> u32 {
     assert!(buffer_align as usize <= CONSTANTS_ALIGN);
     if offset == 0 {
@@ -75,12 +75,11 @@ pub struct ModuleTextBuilder<'a> {
     /// build to resolve relocations (calls) between functions.
     text: Box<dyn TextSectionBuilder>,
 
-    /// The number of functions. In `text`, the constants come after them.
+    /// The number of functions. `text` numbers the constants after the functions.
     num_funcs: usize,
 
-    /// The separate constants of all functions, as an alignment and bytes. They are
-    /// entries of `text` so that relocations can refer to them, but they are
-    /// written to the constants section instead of `.text`.
+    /// The alignment and bytes of each separate constant. `finish` writes the
+    /// constants to their own section.
     constants: Vec<(u32, &'a [u8])>,
 
     ctrl_plane: ControlPlane,
@@ -217,8 +216,8 @@ impl<'a> ModuleTextBuilder<'a> {
             panic!("failed to resolve relocation: {r:?} -> {target}");
         }
 
-        // Each separate constant is its own entry in `text`, so that a
-        // relocation can refer to it like it refers to a function.
+        // Each constant gets its own label in `text`, numbered after the
+        // functions. A reference to a constant is resolved like a call.
         if let Some(constants) = &compiled_func.constants {
             let data = constants.buffer.data();
             let first = self.num_funcs + self.constants.len();
@@ -275,8 +274,8 @@ impl<'a> ModuleTextBuilder<'a> {
     pub fn finish(mut self, postprocess_text: impl FnOnce(&mut [u8])) {
         let align = text_align(self.compiler);
 
-        // The constants go after `.text`, on a page of their own, so that no
-        // executable page holds one.
+        // The constants are placed in `.wasmtime.constants`, which comes after
+        // `.text` and is page-aligned.
         let mut constants_range = None;
         if !self.constants.is_empty() {
             let start = self.text.append(
@@ -308,8 +307,7 @@ impl<'a> ModuleTextBuilder<'a> {
             .section_mut(self.text_section)
             .set_data(text, align);
 
-        // This pads `.text` to a page boundary. The offset it returns is where
-        // the constants start.
+        // Pad `.text` to a page boundary. The result is the padded size.
         let mut text_section_size = self.obj.append_section_data(self.text_section, &[], align);
 
         if let Some(constants) = constants {
@@ -321,8 +319,8 @@ impl<'a> ModuleTextBuilder<'a> {
             );
             self.obj
                 .append_section_data(section, &constants, CONSTANTS_ALIGN as u64);
-            // The unwind information follows the constants. Only `.text` has
-            // to end on a page boundary.
+            // The unwind information comes after the constants. The constants
+            // do not have to end on a page boundary.
             text_section_size += u64::try_from(constants.len()).unwrap();
         }
 
@@ -469,11 +467,11 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// Appends the unwind information section, if any, to the `obj` specified.
     ///
     /// This function must be called immediately after the text section was
-    /// added to a builder. The unwind information section must trail the text
-    /// section immediately, except for the constants section if there is one.
+    /// added to a builder. The unwind information section must directly follow
+    /// the text section, or the constants section if there is one.
     ///
-    /// `text_section_size` is where the unwind information starts, as an offset
-    /// from the start of `.text`.
+    /// `text_section_size` is the offset of the unwind information from the
+    /// start of `.text`.
     fn append_section(&self, compiler: &Compiler, obj: &mut Object<'_>, text_section_size: u64) {
         if self.windows_xdata.len() > 0 {
             assert!(self.systemv_unwind_info.len() == 0);

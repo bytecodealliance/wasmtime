@@ -909,7 +909,7 @@ impl CompiledCode {
             }
         }
 
-        // The separate constants, one label for each.
+        // Print the separate constants, each under its own label.
         if let Some(constants) = &self.constants {
             let data = constants.buffer.data();
             let ends = constants.offsets[1..]

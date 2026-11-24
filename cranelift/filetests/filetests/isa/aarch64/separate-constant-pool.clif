@@ -100,8 +100,7 @@ block0(v0: i8x16):
 ;   .byte 0x10, 0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09
 ;   .byte 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01
 
-;; The register allocator picks the register for the page address, so it has
-;; to avoid the registers of the live arguments.
+;; The page address must not be placed in the register of a live argument.
 function %live_arguments(i64, i64, i64, i64, i64, i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64):
     v8 = vconst.i64x2 [0x1122334455667788 0x99aabbccddeeff00]

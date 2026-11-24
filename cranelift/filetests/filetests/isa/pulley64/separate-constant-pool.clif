@@ -2,7 +2,7 @@ test compile precise-output
 set separate_constant_pool=true
 target pulley64
 
-;; Pulley encodes constants in the instruction, so nothing is left to separate.
+;; Pulley encodes constants in its instructions, so the setting has no effect.
 function %vconst() -> i8x16 {
 block0:
   v0 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]

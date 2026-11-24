@@ -1109,7 +1109,7 @@ impl MachInstEmit for Inst {
                         ));
                     }
                     &AMode::ConstPageOff { rn, addr } => {
-                        // The embedder fills in the offset in the page.
+                        // The relocation fills in the constant's offset within its page.
                         let kind = match access_ty.bytes() {
                             8 => Reloc::Aarch64Ldst64AbsLo12Nc,
                             16 => Reloc::Aarch64Ldst128AbsLo12Nc,
@@ -3637,7 +3637,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_adrp(off, rd));
             }
             &Inst::AdrpConst { rd, constant } => {
-                // The embedder fills in the page.
+                // The relocation fills in the page address.
                 sink.use_constant(sink.cur_offset(), constant, Reloc::Aarch64AdrPrelPgHi21, 0);
                 sink.put4(enc_adrp(0, rd));
             }

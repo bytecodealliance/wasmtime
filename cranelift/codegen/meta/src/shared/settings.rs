@@ -165,15 +165,13 @@ pub(crate) fn define() -> SettingGroup {
 
     settings.add_bool(
         "separate_constant_pool",
-        "Emit each function's constants into a buffer of their own, not into its code.",
+        "Emit a function's constants into a separate buffer instead of its code.",
         r#"
-            The code reaches the constants through relocations. The embedder
-            resolves them when it places the constants, for example in a
-            read-only section. The constants are in `CompiledCode::constants`.
+            The constants are in `CompiledCode::constants`. The embedder places
+            the constants and resolves the relocations that refer to them.
 
             `cranelift-jit` and `cranelift-object` return an error for a
-            function that has constants. Jump tables and other data stay in
-            the code.
+            function that has constants. Jump tables stay in the code.
         "#,
         false,
     );

@@ -699,9 +699,9 @@ impl wasmtime_environ::Compiler for Compiler {
             })
             .collect::<Vec<_>>();
 
-        // The text builder also holds the separate constants, after the
-        // functions, so that relocations can refer to them. They are written
-        // to `.wasmtime.constants`, not to `.text`.
+        // The text builder places the constants after the functions so that it
+        // can resolve relocations to them. `ModuleTextBuilder::finish` then
+        // moves the constants to `.wasmtime.constants`.
         let num_constants: usize = funcs
             .iter()
             .filter_map(|(_, _, func)| func.constants.as_ref())

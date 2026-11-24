@@ -2,8 +2,8 @@ test compile precise-output
 set separate_constant_pool=true
 target aarch64
 
-;; The frame is larger than a scaled `ldr q` can reach, so the register allocator
-;; addresses spill slots through x16. The constant loads must not depend on x16.
+;; The frame is too large for a scaled `ldr q`, so spill slots are addressed
+;; through x16. The constant loads must not use x16.
 function %spills() -> i8x16 {
     ss0 = explicit_slot 70000
 block0:

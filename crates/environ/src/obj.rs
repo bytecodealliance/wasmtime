@@ -144,8 +144,8 @@ pub const ELF_NAME_DATA: &'static str = ".name.wasm";
 /// metadata.
 pub const ELF_WASMTIME_DWARF: &str = ".wasmtime.dwarf";
 
-/// Read-only section for the constants that are kept out of `.text`. It starts
-/// on the page after `.text`.
+/// This section holds the constants that are not in `.text`. It is read-only
+/// and starts on the page after `.text`.
 pub const ELF_WASMTIME_CONSTANTS: &str = ".wasmtime.constants";
 
 /// This is the name of the section in the final ELF image which contains the
