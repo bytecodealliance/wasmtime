@@ -145,6 +145,67 @@ impl FunctionParameters {
     }
 }
 
+/// The stack-limit check performed in a function's prologue.
+///
+/// The `limit` is a global value which represents an expression evaluating to
+/// the stack limit for this function. It is interpreted in the prologue, if
+/// necessary, to check that the stack pointer does not go below the limit.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub enum StackLimit {
+    /// No stack-limit check.
+    #[default]
+    None,
+
+    /// Trap with `TrapCode::STACK_OVERFLOW` when the check fails.
+    Trap {
+        /// The stack limit.
+        limit: GlobalValue,
+    },
+
+    /// Tail-call a handler function when the check fails.
+    ///
+    /// The stack-limit check is performed at the very start of the function,
+    /// before any frame setup, and on overflow control is transferred to the
+    /// handler with a tail call.
+    ///
+    /// The handler must be `colocated`, must use the same calling
+    /// convention as this function, its parameters must be
+    /// "compatible" with this function's parameters, and it must not
+    /// return (i.e., it should either abort or unwind somehow). A
+    /// "compatible" stack-overflow handler signature is defined as:
+    ///
+    /// - `tail`: parameters of the handler are a prefix of this
+    ///   function's parameters, and neither this function nor the
+    ///   handler has a struct-return (`sret`) parameter. There are no
+    ///   restrictions on either signature's return values.
+    /// - other calling conventions: not supported.
+    Call {
+        /// The stack limit.
+        limit: GlobalValue,
+        /// The handler to tail-call.
+        func: FuncRef,
+    },
+}
+
+impl StackLimit {
+    /// The stack limit to check against, if any.
+    pub fn limit(&self) -> Option<GlobalValue> {
+        match *self {
+            StackLimit::None => None,
+            StackLimit::Trap { limit } | StackLimit::Call { limit, .. } => Some(limit),
+        }
+    }
+
+    /// The function to tail-call when the check fails, if any.
+    pub fn handler(&self) -> Option<FuncRef> {
+        match *self {
+            StackLimit::None | StackLimit::Trap { .. } => None,
+            StackLimit::Call { func, .. } => Some(func),
+        }
+    }
+}
+
 /// Function fields needed when compiling a function.
 ///
 /// Additionally, these fields can be the same for two functions that would be compiled the same
@@ -201,41 +262,9 @@ pub struct FunctionStencil {
     /// call instructions.
     pub debug_tags: DebugTags,
 
-    /// An optional global value which represents an expression evaluating to
-    /// the stack limit for this function. This `GlobalValue` will be
-    /// interpreted in the prologue, if necessary, to insert a stack check to
-    /// ensure that a trap happens if the stack pointer goes below the
-    /// threshold specified here.
-    pub stack_limit: Option<ir::GlobalValue>,
-
-    /// An optional function to tail-call, rather than trapping, when the
-    /// `stack_limit` check fails.
-    ///
-    /// This may only be set when `stack_limit` is also set. When present, the
-    /// stack-limit check is performed at the very start of the function,
-    /// before any frame setup, and on overflow control is transferred to the
-    /// handler with a direct jump. At the point of that jump, the stack
-    /// pointer, the return address (whether in a register or on the stack),
-    /// and all argument registers are exactly as they were on entry to this
-    /// function: that is, the handler is effectively tail-called with this
-    /// function's own arguments. Only a few scratch registers that are neither
-    /// callee-saved nor used for arguments are clobbered.
-    ///
-    /// The handler must be `colocated`, must use the same calling
-    /// convention as this function, its parameters must be
-    /// "compatible" with this function's parameters, and it must not
-    /// return (i.e., it should either abort or unwind somehow). A
-    /// "compatible" stack-overflow handler signature is defined as:
-    ///
-    /// - `tail`: parameters of the handler are a prefix of this
-    ///   function's parameters, and neither this function nor the
-    ///   handler has a struct-return (`sret`) parameter. There are no
-    ///   restrictions on either signature's return values.
-    /// - other calling conventions: not supported.
-    ///
-    /// When absent, a failed stack-limit check traps with
-    /// `TrapCode::STACK_OVERFLOW`.
-    pub stack_limit_handler: Option<ir::FuncRef>,
+    /// The stack-limit check, if any, to perform in this function's prologue,
+    /// and what to do if it fails.
+    pub stack_limit: StackLimit,
 }
 
 impl FunctionStencil {
@@ -248,8 +277,7 @@ impl FunctionStencil {
         self.layout.clear();
         self.srclocs.clear();
         self.debug_tags.clear();
-        self.stack_limit = None;
-        self.stack_limit_handler = None;
+        self.stack_limit = StackLimit::None;
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new
@@ -448,8 +476,7 @@ impl Function {
                 dfg: DataFlowGraph::new(),
                 layout: Layout::new(),
                 srclocs: SecondaryMap::new(),
-                stack_limit: None,
-                stack_limit_handler: None,
+                stack_limit: StackLimit::None,
                 debug_tags: DebugTags::default(),
             },
             params: FunctionParameters::new(),

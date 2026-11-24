@@ -992,6 +992,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::StackLimitJump { .. } => {
             // Only generated in the prologue, after register allocation, using
             // fixed scratch registers that aren't visible to regalloc.
+            unreachable!("only generated after register allocation")
         }
 
         Inst::CallKnown { info } => {

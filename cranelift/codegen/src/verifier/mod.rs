@@ -72,8 +72,8 @@ use crate::ir::instructions::{CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{self, ArgumentExtension, BlockArg, ExceptionTable};
 use crate::ir::{
     ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue, Inst,
-    JumpTable, MemFlags, MemFlagsData, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList,
-    types,
+    JumpTable, MemFlags, MemFlagsData, Opcode, SigRef, StackLimit, StackSlot, Type, Value,
+    ValueDef, ValueList, types,
 };
 use crate::ir::{ExceptionTableItem, Signature};
 use crate::isa::{CallConv, TargetIsa};
@@ -2151,18 +2151,12 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    /// A stack-limit handler is only meaningful alongside a stack limit, and
-    /// must be able to be tail-called with the function's own arguments.
+    /// A stack-limit handler must be able to be tail-called with the function's
+    /// own arguments.
     fn verify_stack_limit(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
-        let Some(handler) = self.func.stack_limit_handler else {
+        let Some(handler) = self.func.stack_limit.handler() else {
             return Ok(());
         };
-        if self.func.stack_limit.is_none() {
-            return errors.fatal((
-                AnyEntity::StackLimit,
-                "a stack-limit handler requires a `stack_limit`",
-            ));
-        }
         if !self.func.dfg.ext_funcs.is_valid(handler) {
             return errors.fatal((
                 AnyEntity::StackLimit,
@@ -2230,7 +2224,7 @@ impl<'a> Verifier<'a> {
         if self.func.signature.call_conv != CallConv::PreserveAll {
             return Ok(());
         }
-        if self.func.stack_limit.is_some() {
+        if self.func.stack_limit != StackLimit::None {
             errors.fatal((
                 AnyEntity::Function,
                 "functions with the `preserve_all` ABI cannot have a `stack_limit`",

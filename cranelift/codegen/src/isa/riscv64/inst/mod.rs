@@ -562,6 +562,7 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::StackLimitJump { .. } => {
             // Only generated in the prologue, after register allocation, using
             // fixed scratch registers that aren't visible to regalloc.
+            unreachable!("only generated after register allocation")
         }
         Inst::StackProbeLoop { .. } => {
             // StackProbeLoop has a tmp register and StackProbeLoop used at gen_prologue.

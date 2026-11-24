@@ -560,20 +560,21 @@ impl wasmtime_environ::Compiler for Compiler {
                 .stack_limit()
                 .to_deferred_load(&mut context.func);
             let stack_limit = VmctxLoadChain::new([store_ctx, stack_limit].into());
-            context.func.stack_limit = Some(stack_limit.emit_global(&mut context.func));
-            if !self.tunables.signals_based_traps {
+            let limit = stack_limit.emit_global(&mut context.func);
+            context.func.stack_limit = if self.tunables.signals_based_traps {
+                ir::StackLimit::Trap { limit }
+            } else {
                 // Without signal handlers we can't simply trap on overflow, so
                 // instead the prologue's check tail-calls the `stack_overflow`
                 // builtin's trampoline, which raises the trap. This works
                 // because every wasm function's signature begins with the same
                 // `vmctx` parameter as the trampoline's: see the builtin's
                 // documentation.
-                context.func.stack_limit_handler = Some(
-                    func_env
-                        .builtin_functions
-                        .load_builtin(&mut context.func, BuiltinFunctionIndex::stack_overflow()),
-                );
-            }
+                let func = func_env
+                    .builtin_functions
+                    .load_builtin(&mut context.func, BuiltinFunctionIndex::stack_overflow());
+                ir::StackLimit::Call { limit, func }
+            };
         }
         let mut validator =
             validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));

@@ -1091,6 +1091,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         Inst::StackLimitJump { .. } => {
             // Only generated in the prologue, after register allocation, using
             // fixed scratch registers that aren't visible to regalloc.
+            unreachable!("only generated after register allocation")
         }
         Inst::Loop { body, .. } => {
             // `reuse_def` constraints can't be permitted in a Loop instruction because the operand

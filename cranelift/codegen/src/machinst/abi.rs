@@ -1384,14 +1384,12 @@ impl<M: ABIMachineSpec> Callee<M> {
         // from the arguments.
         let stack_limit = f
             .stack_limit
+            .limit()
             .map(|gv| gen_stack_limit::<M>(f, sigs, sig, gv));
-        let stack_limit_handler = f.stack_limit_handler.map(|handler| {
-            assert!(
-                f.stack_limit.is_some(),
-                "stack limit handler requires a stack limit"
-            );
-            f.dfg.ext_funcs[handler].name.clone()
-        });
+        let stack_limit_handler = f
+            .stack_limit
+            .handler()
+            .map(|handler| f.dfg.ext_funcs[handler].name.clone());
 
         let tail_args_size = sigs[sig].sized_stack_arg_space;
 
