@@ -1,0 +1,83 @@
+test verifier
+
+;; The handler must be tail-callable with the function's own arguments.
+
+function %ok(i64 vmctx, i64) tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn0
+    fn0 = colocated %h(i64 vmctx) tail
+block0(v0: i64, v1: i64):
+    return
+}
+
+function %not_colocated(i64 vmctx) tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn0 ; error: stack-limit handler fn0 must be `colocated`
+    fn0 = %h(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+function %wrong_call_conv(i64 vmctx) tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn0 ; error: must use the function's calling convention `tail`, not `system_v`
+    fn0 = colocated %h(i64 vmctx) system_v
+block0(v0: i64):
+    return
+}
+
+function %not_prefix(i64 vmctx) tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn0 ; error: parameters must be a prefix of the function's parameters
+    fn0 = colocated %h(i64 vmctx, i64) tail
+block0(v0: i64):
+    return
+}
+
+function %wrong_param_type(i64 vmctx, i32) tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn0 ; error: parameters must be a prefix of the function's parameters
+    fn0 = colocated %h(i64 vmctx, i64) tail
+block0(v0: i64, v1: i32):
+    return
+}
+
+function %ok_multi_return(i64 vmctx, i64) -> i64, i64 tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn0
+    fn0 = colocated %h(i64 vmctx) -> i8, i32, i64 tail
+block0(v0: i64, v1: i64):
+    return v1, v1
+}
+
+function %system_v(i64 vmctx) system_v {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn0 ; error: stack-limit handlers are only supported with the `tail` calling convention, not `system_v`
+    fn0 = colocated %h(i64 vmctx) system_v
+block0(v0: i64):
+    return
+}
+
+function %fast(i64 vmctx) fast {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn0 ; error: stack-limit handlers are only supported with the `tail` calling convention, not `fast`
+    fn0 = colocated %h(i64 vmctx) fast
+block0(v0: i64):
+    return
+}
+
+function %func_sret(i64 sret, i64 vmctx) tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn0 ; error: the function must not have a struct-return parameter
+    fn0 = colocated %h(i64 sret) tail
+block0(v0: i64, v1: i64):
+    return
+}
+
+function %handler_sret(i64, i64 vmctx) tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn0 ; error: the handler must not have a struct-return parameter
+    fn0 = colocated %h(i64 sret) tail
+block0(v0: i64, v1: i64):
+    return
+}

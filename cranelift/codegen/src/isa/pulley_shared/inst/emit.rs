@@ -605,6 +605,25 @@ fn pulley_emit<P>(
         Inst::SequencePoint { .. } => {
             // Nothing.
         }
+
+        Inst::StackLimitJump { limit, handler } => {
+            // A single conditional branch directly to the handler. All branches
+            // have their `PcRelOffset` as their trailing 4 bytes.
+            let cond = stack_limit_cond::<P>(*limit);
+            patch_pc_rel_offset(sink, |sink| cond.encode(sink, 0));
+            let end = sink.cur_offset();
+            sink.add_reloc_at_offset(end - 4, Reloc::PulleyPcRel, &**handler, 0);
+        }
+    }
+}
+
+/// The condition, for `Inst::StackLimitJump`, that the stack has overflowed.
+pub(super) fn stack_limit_cond<P: PulleyTargetKind>(limit: XReg) -> Cond {
+    let src1 = XReg::new(stack_reg()).unwrap();
+    let src2 = limit;
+    match P::pointer_width() {
+        PointerWidth::PointerWidth32 => Cond::IfXult32 { src1, src2 },
+        PointerWidth::PointerWidth64 => Cond::IfXult64 { src1, src2 },
     }
 }
 

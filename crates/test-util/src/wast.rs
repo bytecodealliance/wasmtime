@@ -641,6 +641,10 @@ impl WastTest {
                 "misc_testsuite/fuel/bulk-ops.wast",
                 "misc_testsuite/many_table_gets_lead_to_gc.wast",
                 "misc_testsuite/no-panic.wast",
+                // Winch requires signals-based traps.
+                "misc_testsuite/stack-overflow-big-frame-recursion.wast",
+                "misc_testsuite/stack-overflow-big-frame-tiny-stack.wast",
+                "misc_testsuite/stack-overflow-many-results.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {

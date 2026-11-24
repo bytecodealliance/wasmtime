@@ -465,6 +465,35 @@ pub trait ABIMachineSpec {
     /// stack grows downward).
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Self::I>;
 
+    /// Generate a sequence that, if the stack pointer is less than the given
+    /// limit register (assuming the stack grows downward), performs a direct
+    /// jump (i.e. a tail call) to the `colocated` function `handler`. If the
+    /// stack pointer is not below the limit, execution falls through.
+    ///
+    /// This sequence is emitted at the very start of the function, before
+    /// frame setup, so the jump must leave the stack pointer, return address,
+    /// and argument registers untouched. `limit_reg` is
+    /// [`ABIMachineSpec::get_stacklimit_reg`] and may be freely clobbered, as
+    /// may other caller-saved, non-argument scratch registers.
+    fn gen_stack_lower_bound_jump(
+        limit_reg: Reg,
+        handler: &ir::ExternalName,
+    ) -> SmallInstVec<Self::I>;
+
+    /// Generate any instructions that must come first in a function body
+    /// (e.g. a branch-target landing pad such as AArch64's `bti c`) when other
+    /// code is going to be emitted ahead of the normal
+    /// [`ABIMachineSpec::gen_prologue_frame_setup`] sequence.
+    ///
+    /// Emitting these again as part of the normal frame setup must be
+    /// harmless.
+    fn gen_entry_landing_pad(
+        _call_conv: isa::CallConv,
+        _isa_flags: &Self::F,
+    ) -> SmallInstVec<Self::I> {
+        smallvec![]
+    }
+
     /// Generate an instruction to compute an address of a stack slot (FP- or
     /// SP-based offset).
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Self::I;
@@ -1199,6 +1228,10 @@ pub struct Callee<M: ABIMachineSpec> {
     /// manually register-allocated and carefully only use caller-saved
     /// registers and keep nothing live after this sequence of instructions.
     stack_limit: Option<(Reg, SmallInstVec<M::I>)>,
+    /// If this function has a stack limit handler specified, then this is the
+    /// name of the function to jump to when the stack-limit check fails,
+    /// instead of trapping.
+    stack_limit_handler: Option<ir::ExternalName>,
 
     _mach: PhantomData<M>,
 }
@@ -1351,7 +1384,12 @@ impl<M: ABIMachineSpec> Callee<M> {
         // from the arguments.
         let stack_limit = f
             .stack_limit
+            .limit()
             .map(|gv| gen_stack_limit::<M>(f, sigs, sig, gv));
+        let stack_limit_handler = f
+            .stack_limit
+            .handler()
+            .map(|handler| f.dfg.ext_funcs[handler].name.clone());
 
         let tail_args_size = sigs[sig].sized_stack_arg_space;
 
@@ -1372,6 +1410,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             flags,
             isa_flags: isa_flags.clone(),
             stack_limit,
+            stack_limit_handler,
             _mach: PhantomData,
         })
     }
@@ -1405,11 +1444,18 @@ impl<M: ABIMachineSpec> Callee<M> {
         stack_size: u32,
         insts: &mut SmallInstVec<M::I>,
     ) {
+        // Emits the actual comparison of the stack pointer against `limit`,
+        // either trapping or jumping to the handler on failure.
+        let check = |insts: &mut SmallInstVec<M::I>, limit: Reg| match &self.stack_limit_handler {
+            None => insts.extend(M::gen_stack_lower_bound_trap(limit)),
+            Some(handler) => insts.extend(M::gen_stack_lower_bound_jump(limit, handler)),
+        };
+
         // With no explicit stack allocated we can just emit the simple check of
         // the stack registers against the stack limit register, and trap if
         // it's out of bounds.
         if stack_size == 0 {
-            insts.extend(M::gen_stack_lower_bound_trap(stack_limit));
+            check(insts, stack_limit);
             return;
         }
 
@@ -1418,7 +1464,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         // that we're protecting against overflow in the addition that happens
         // below.
         if stack_size >= 32 * 1024 {
-            insts.extend(M::gen_stack_lower_bound_trap(stack_limit));
+            check(insts, stack_limit);
         }
 
         // Add the `stack_size` to `stack_limit`, placing the result in
@@ -1435,7 +1481,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             stack_limit,
             stack_size,
         ));
-        insts.extend(M::gen_stack_lower_bound_trap(scratch.to_reg()));
+        check(insts, scratch.to_reg());
     }
 }
 
@@ -2345,14 +2391,6 @@ impl<M: ABIMachineSpec> Callee<M> {
         let frame_layout = self.frame_layout();
         let mut insts = smallvec![];
 
-        // Set up frame.
-        insts.extend(M::gen_prologue_frame_setup(
-            self.call_conv,
-            &self.flags,
-            &self.isa_flags,
-            &frame_layout,
-        ));
-
         // The stack limit check needs to cover all the stack adjustments we
         // might make, up to the next stack limit check in any function we
         // call. Since this happens after frame setup, the current function's
@@ -2373,10 +2411,43 @@ impl<M: ABIMachineSpec> Callee<M> {
 
         // Leaf functions with zero stack don't need a stack check if one's
         // specified, otherwise always insert the stack check.
-        if total_stacksize > 0 || frame_layout.function_calls != FunctionCalls::None {
-            if let Some((reg, stack_limit_load)) = &self.stack_limit {
-                insts.extend(stack_limit_load.clone());
-                self.insert_stack_check(*reg, total_stacksize, &mut insts);
+        let needs_stack_check =
+            total_stacksize > 0 || frame_layout.function_calls != FunctionCalls::None;
+
+        // If the stack-limit check jumps to a handler on failure, then it is
+        // performed before any frame setup at all, so that the handler sees
+        // exactly the stack pointer, return address and argument registers
+        // that this function was entered with. This means that the check
+        // must additionally account for this function's own setup area,
+        // which hasn't been allocated yet.
+        if needs_stack_check && self.stack_limit_handler.is_some() {
+            let (reg, stack_limit_load) = self
+                .stack_limit
+                .as_ref()
+                .expect("stack limit handler requires a stack limit");
+            insts.extend(M::gen_entry_landing_pad(self.call_conv, &self.isa_flags));
+            insts.extend(stack_limit_load.clone());
+            self.insert_stack_check(
+                *reg,
+                total_stacksize + frame_layout.setup_area_size,
+                &mut insts,
+            );
+        }
+
+        // Set up frame.
+        insts.extend(M::gen_prologue_frame_setup(
+            self.call_conv,
+            &self.flags,
+            &self.isa_flags,
+            &frame_layout,
+        ));
+
+        if needs_stack_check {
+            if self.stack_limit_handler.is_none() {
+                if let Some((reg, stack_limit_load)) = &self.stack_limit {
+                    insts.extend(stack_limit_load.clone());
+                    self.insert_stack_check(*reg, total_stacksize, &mut insts);
+                }
             }
 
             if self.flags.enable_probestack() {

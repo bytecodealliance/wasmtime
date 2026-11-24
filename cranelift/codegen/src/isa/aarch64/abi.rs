@@ -564,6 +564,29 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
+    fn gen_stack_lower_bound_jump(limit_reg: Reg, handler: &ExternalName) -> SmallInstVec<Inst> {
+        smallvec![Inst::StackLimitJump {
+            limit: limit_reg,
+            handler: Box::new(handler.clone()),
+        }]
+    }
+
+    fn gen_entry_landing_pad(
+        _call_conv: isa::CallConv,
+        isa_flags: &aarch64_settings::Flags,
+    ) -> SmallInstVec<Inst> {
+        // A stack-limit check emitted before frame setup would otherwise
+        // precede the `bti c` (or `paci*sp`) landing pad that frame setup
+        // starts with, so make sure the function still starts with one.
+        if isa_flags.use_bti() {
+            smallvec![Inst::Bti {
+                targets: BranchTargetType::C,
+            }]
+        } else {
+            smallvec![]
+        }
+    }
+
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Inst {
         // FIXME: Do something different for dynamic types?
         let mem = mem.into();

@@ -98,6 +98,12 @@
 
     ;; A pseudoinstruction that serves as a sequence point.
     (SequencePoint)
+
+    ;; A stack-limit check that, if `sp` is below `limit`, jumps to the
+    ;; `colocated` function `handler`; otherwise falls through. See
+    ;; `ABIMachineSpec::gen_stack_lower_bound_jump`. This is only ever
+    ;; generated in the prologue, after register allocation.
+    (StackLimitJump (limit XReg) (handler BoxExternalName))
   )
 )
 

@@ -1,0 +1,442 @@
+test compile precise-output
+set unwind_info=false
+set enable_multi_ret_implicit_sret
+target riscv64
+
+function %foo() {
+block0:
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+;; A leaf function with no frame needs no stack check at all, even with a
+;; handler.
+function %handler_leaf_zero(i64 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+;; A function that makes calls: the check happens before any frame setup and
+;; tail-calls the handler on overflow.
+function %handler_call_zero(i64 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    call fn0()
+    return
+}
+
+; VCode:
+;   ld t6,0(a0)
+;   ld t6,8(t6)
+;   addi t6,t6,32
+;   bgeu sp,t6,$ok ; tail TestCase(%overflow) ; $ok:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   load_ext_name_far a0,%foo+0
+;   callind a0
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ld t6, 0(a0)
+;   ld t6, 8(t6)
+;   addi t6, t6, 0x20
+;   bgeu sp, t6, 0xc
+;   auipc t6, 0 ; reloc_external RiscvCallPlt %overflow 0
+;   jr t6
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x28
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr a0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+;; The handler's parameters need only be a prefix of the function's, and the
+;; stack limit can be the vmctx itself.
+function %handler_prefix_params(i64 vmctx, i64, i64) -> i64 tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64, v1: i64, v2: i64):
+    call fn0()
+    v3 = iadd v1, v2
+    return v3
+}
+
+; VCode:
+;   addi t6,a0,48
+;   bgeu sp,t6,$ok ; tail TestCase(%overflow) ; $ok:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+;   sd s1,8(sp)
+;   sd s2,0(sp)
+; block0:
+;   mv s1,a2
+;   mv s2,a1
+;   load_ext_name_far a0,%foo+0
+;   callind a0
+;   mv a1,s2
+;   mv a2,s1
+;   add a0,a1,a2
+;   ld s1,8(sp)
+;   ld s2,0(sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi t6, a0, 0x30
+;   bgeu sp, t6, 0xc
+;   auipc t6, 0 ; reloc_external RiscvCallPlt %overflow 0
+;   jr t6
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+;   sd s1, 8(sp)
+;   sd s2, 0(sp)
+; block1: ; offset 0x2c
+;   mv s1, a2
+;   mv s2, a1
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr a0
+;   mv a1, s2
+;   mv a2, s1
+;   add a0, a1, a2
+;   ld s1, 8(sp)
+;   ld s2, 0(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+;; A small frame: the frame size (plus this function's own setup area) is added
+;; to the limit before comparing.
+function %handler_small_frame(i64 vmctx) tail {
+    ss0 = explicit_slot 168
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   ld t6,0(a0)
+;   ld t6,8(t6)
+;   addi t6,t6,192
+;   bgeu sp,t6,$ok ; tail TestCase(%overflow) ; $ok:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-176
+; block0:
+;   addi sp,sp,176
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ld t6, 0(a0)
+;   ld t6, 8(t6)
+;   addi t6, t6, 0xc0
+;   bgeu sp, t6, 0xc
+;   auipc t6, 0 ; reloc_external RiscvCallPlt %overflow 0
+;   jr t6
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0xb0
+; block1: ; offset 0x2c
+;   addi sp, sp, 0xb0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+;; A huge frame: the limit is checked once directly (to guard against
+;; overflow in the addition) and then again with the frame size added.
+function %handler_huge_frame(i64 vmctx) tail {
+    ss0 = explicit_slot 400000
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   ld t6,0(a0)
+;   ld t6,8(t6)
+;   bgeu sp,t6,$ok ; tail TestCase(%overflow) ; $ok:
+;   lui t5,98
+;   addi t5,t5,-1392
+;   add t6,t5,t6
+;   bgeu sp,t6,$ok ; tail TestCase(%overflow) ; $ok:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   lui t6,-98
+;   addi t6,t6,1408
+;   add sp,sp,t6
+; block0:
+;   lui t6,98
+;   addi t6,t6,-1408
+;   add sp,sp,t6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ld t6, 0(a0)
+;   ld t6, 8(t6)
+;   bgeu sp, t6, 0xc
+;   auipc t6, 0 ; reloc_external RiscvCallPlt %overflow 0
+;   jr t6
+;   lui t5, 0x62
+;   addi t5, t5, -0x570
+;   add t6, t5, t6
+;   bgeu sp, t6, 0xc
+;   auipc t6, 0 ; reloc_external RiscvCallPlt %overflow 0
+;   jr t6
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   lui t6, 0xfff9e
+;   addi t6, t6, 0x580
+;   add sp, sp, t6
+; block1: ; offset 0x48
+;   lui t6, 0x62
+;   addi t6, t6, -0x580
+;   add sp, sp, t6
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+;; The `tail` calling convention, as used by Wasmtime, with stack arguments.
+function %handler_tail(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+    ss0 = explicit_slot 8
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64):
+    v11 = iadd v1, v10
+    v13 = stack_addr.i64 ss0
+    store v11, v13
+    v12 = load.i64 v13
+    return v12
+}
+
+; VCode:
+;   ld t6,0(a0)
+;   ld t6,8(t6)
+;   addi t6,t6,32
+;   bgeu sp,t6,$ok ; tail TestCase(%overflow) ; $ok:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+; block0:
+;   ld a0,-16(incoming_arg)
+;   add a0,a1,a0
+;   sd a0,0(slot)
+;   ld a0,0(slot)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   addi sp,sp,32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ld t6, 0(a0)
+;   ld t6, 8(t6)
+;   addi t6, t6, 0x20
+;   bgeu sp, t6, 0xc
+;   auipc t6, 0 ; reloc_external RiscvCallPlt %overflow 0
+;   jr t6
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+; block1: ; offset 0x2c
+;   ld a0, 0x30(sp)
+;   add a0, a1, a0
+;   sd a0, 0(sp) ; trap: heap_oob
+;   ld a0, 0(sp) ; trap: heap_oob
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   addi sp, sp, 0x20
+;   ret
+
+
+;; Many return values: the implicit return-area pointer must not perturb the
+;; location of the vmctx argument that the handler receives.
+function %handler_many_returns(i64 vmctx) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    call fn0()
+    return v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0
+}
+
+; VCode:
+;   ld t6,0(a0)
+;   ld t6,8(t6)
+;   addi t6,t6,48
+;   bgeu sp,t6,$ok ; tail TestCase(%overflow) ; $ok:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+;   sd s1,8(sp)
+;   sd s2,0(sp)
+; block0:
+;   mv s1,a0
+;   mv s2,a1
+;   load_ext_name_far a0,%foo+0
+;   callind a0
+;   mv a0,s1
+;   mv a1,s2
+;   sd a0,0(a1)
+;   sd a0,8(a1)
+;   sd a0,16(a1)
+;   sd a0,24(a1)
+;   sd a0,32(a1)
+;   sd a0,40(a1)
+;   sd a0,48(a1)
+;   sd a0,56(a1)
+;   sd a0,64(a1)
+;   sd a0,72(a1)
+;   mv a1,a0
+;   ld s1,8(sp)
+;   ld s2,0(sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ld t6, 0(a0)
+;   ld t6, 8(t6)
+;   addi t6, t6, 0x30
+;   bgeu sp, t6, 0xc
+;   auipc t6, 0 ; reloc_external RiscvCallPlt %overflow 0
+;   jr t6
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+;   sd s1, 8(sp)
+;   sd s2, 0(sp)
+; block1: ; offset 0x34
+;   mv s1, a0
+;   mv s2, a1
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr a0
+;   mv a0, s1
+;   mv a1, s2
+;   sd a0, 0(a1)
+;   sd a0, 8(a1)
+;   sd a0, 0x10(a1)
+;   sd a0, 0x18(a1)
+;   sd a0, 0x20(a1)
+;   sd a0, 0x28(a1)
+;   sd a0, 0x30(a1)
+;   sd a0, 0x38(a1)
+;   sd a0, 0x40(a1)
+;   sd a0, 0x48(a1)
+;   mv a1, a0
+;   ld s1, 8(sp)
+;   ld s2, 0(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

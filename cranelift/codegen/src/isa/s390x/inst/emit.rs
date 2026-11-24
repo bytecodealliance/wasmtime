@@ -3970,6 +3970,22 @@ impl Inst {
                 }
             }
 
+            Inst::StackLimitJump { limit, handler } => {
+                // Generate the following code:
+                //         clgr  %r15, limit
+                //         jgle  handler        ;; `%r15 <= limit`: overflow; tail call
+                Inst::CmpRR {
+                    op: CmpOp::CmpL64,
+                    rn: stack_reg(),
+                    rm: *limit,
+                }
+                .emit(sink, emit_info, state);
+                let opcode = 0xc04; // BCRL
+                let cond = Cond::from_intcc(crate::ir::condcodes::IntCC::UnsignedLessThanOrEqual);
+                let offset = sink.cur_offset() + 2;
+                sink.add_reloc_at_offset(offset, Reloc::S390xPLTRel32Dbl, &**handler, 2);
+                put(sink, &enc_ril_c(opcode, cond.bits(), 0));
+            }
             Inst::StackProbeLoop {
                 probe_count,
                 guard_size,
