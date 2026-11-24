@@ -1057,6 +1057,15 @@ WASMTIME_CONFIG_PROP(void, wasm_component_model_more_async_builtins, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_component_model_async_stackful, bool)
 
+/**
+ * \brief Configures whether the threading intrinsics (`thread.*`) are enabled
+ * for the component model.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_threading.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_threading, bool)
+
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
 
 #ifdef __cplusplus

@@ -16,6 +16,7 @@ TEST(component_async, config) {
   config.wasm_component_model_async(true);
   config.wasm_component_model_more_async_builtins(true);
   config.wasm_component_model_async_stackful(true);
+  config.wasm_component_model_threading(true);
   Engine engine(std::move(config));
 }
 
