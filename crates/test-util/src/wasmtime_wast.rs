@@ -28,6 +28,11 @@ impl TestConfig {
     /// the target, or the pooling allocator.
     pub fn apply(&self, opts: &mut CommonOptions) -> Result<()> {
         self.apply_features(opts);
+        if self.guest_debug() {
+            // Guest debugging is incompatible with signals-based traps.
+            opts.debug.guest_debug = Some(true);
+            opts.opts.signals_based_traps = Some(false);
+        }
         let mut flags = self.flags()?;
         opts.merge(&mut flags)?;
 
@@ -93,6 +98,7 @@ impl TestConfig {
 
             // Not features.
             hogs_memory: _,
+            guest_debug: _,
             spec_test: _,
             flags: _,
         } = *self;

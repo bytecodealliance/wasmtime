@@ -74,6 +74,14 @@ impl StoreCodePC {
     }
 }
 
+impl EngineCodePC {
+    /// Construct an EngineCodePC for search purposes from a raw PC
+    /// observed during execution.
+    pub fn from_raw(pc: usize) -> EngineCodePC {
+        EngineCodePC(pc)
+    }
+}
+
 /// Metadata about, and original machine code for, a loaded compiled
 /// artifact in memory which is ready for Wasmtime to execute.
 ///
