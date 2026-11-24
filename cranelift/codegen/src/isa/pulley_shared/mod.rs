@@ -290,7 +290,6 @@ fn isa_constructor_32(
     builder: &shared_settings::Builder,
 ) -> CodegenResult<OwnedTargetIsa> {
     use crate::settings::Configurable;
-    super::check_no_separate_constant_pool(&shared_flags, "pulley32")?;
     let mut builder = builder.clone();
     builder.set("pointer_width", "pointer32").unwrap();
     if triple.endianness().unwrap() == target_lexicon::Endianness::Big {
@@ -309,7 +308,6 @@ fn isa_constructor_64(
     builder: &shared_settings::Builder,
 ) -> CodegenResult<OwnedTargetIsa> {
     use crate::settings::Configurable;
-    super::check_no_separate_constant_pool(&shared_flags, "pulley64")?;
     let mut builder = builder.clone();
     builder.set("pointer_width", "pointer64").unwrap();
     if triple.endianness().unwrap() == target_lexicon::Endianness::Big {

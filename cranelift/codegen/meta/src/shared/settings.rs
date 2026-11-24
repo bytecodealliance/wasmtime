@@ -165,16 +165,15 @@ pub(crate) fn define() -> SettingGroup {
 
     settings.add_bool(
         "separate_constant_pool",
-        "Return each function's constants as a separate blob instead of in its code.",
+        "Emit each function's constants into a buffer of their own, not into its code.",
         r#"
-            Constants are then reached through relocations that the embedder
-            resolves once it places the blob, for example in a read-only,
-            non-executable section. See `MachBufferFinalized::constant_pool`.
+            The code reaches the constants through relocations. The embedder
+            resolves them when it places the constants, for example in a
+            read-only section. The constants are in `CompiledCode::constants`.
 
-            This is currently supported on x86_64 and aarch64. Other targets
-            return an error when it is enabled, as do `cranelift-jit` and
-            `cranelift-object` for a function that has constants. Jump tables
-            and other data that is not a constant stay in the function's code.
+            `cranelift-jit` and `cranelift-object` return an error for a
+            function that has constants. Jump tables and other data stay in
+            the code.
         "#,
         false,
     );

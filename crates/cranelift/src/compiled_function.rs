@@ -59,8 +59,8 @@ pub struct CompiledFunctionMetadata {
 pub struct CompiledFunction {
     /// The machine code buffer for this function.
     pub buffer: MachBufferFinalized,
-    /// The constants kept out of `buffer` by the `separate_constant_pool`
-    /// setting, if the function has any.
+    /// The constants of the function, if the `separate_constant_pool` setting is
+    /// on and the function has any.
     pub constants: Option<MachConstantsFinalized>,
     /// What names each name ref corresponds to.
     name_map: PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,

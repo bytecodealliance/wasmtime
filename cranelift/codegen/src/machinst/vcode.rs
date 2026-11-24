@@ -213,8 +213,8 @@ pub struct EmitResult {
     /// The MachBuffer containing the machine code.
     pub buffer: MachBufferFinalized,
 
-    /// The constants kept out of `buffer` by the `separate_constant_pool`
-    /// setting, if the function has any.
+    /// The constants of the function, if the `separate_constant_pool` setting is
+    /// on and the function has any.
     pub constants: Option<MachConstantsFinalized>,
 
     /// Offset of each basic block, recorded during emission. Computed
@@ -748,19 +748,22 @@ impl<I: VCodeInst> VCode<I> {
         I: VCodeInst,
     {
         let _tt = timing::vcode_emit();
-        let mut buffer = MachBuffer::new();
-        buffer.set_log2_min_function_alignment(self.log2_min_function_alignment);
+        let mut text = MachBuffer::new();
+        text.set_log2_min_function_alignment(self.log2_min_function_alignment);
         let mut bb_starts: Vec<Option<CodeOffset>> = vec![];
 
         // The first M MachLabels are reserved for block indices.
-        buffer.reserve_labels_for_blocks(self.num_blocks());
+        text.reserve_labels_for_blocks(self.num_blocks());
 
         // Register all allocated constants with the `MachBuffer` to ensure that
         // any references to the constants during instructions can be handled
-        // correctly. With `separate_constant_pool` they go to a second buffer.
+        // correctly. With `separate_constant_pool` they go in a second buffer.
         let mut rodata = flags.separate_constant_pool().then(MachBuffer::new);
-        let mut buffer = MachBuffers::new(&mut buffer, rodata.as_mut());
-        buffer.register_constants(&self.constants);
+        match &mut rodata {
+            Some(rodata) => rodata.register_constants(&self.constants),
+            None => text.register_constants(&self.constants),
+        }
+        let mut buffer = MachBuffers::new(&mut text, rodata.as_mut());
 
         // Construct the final order we emit code in: cold blocks at the end.
         let mut final_order: SmallVec<[BlockIndex; 16]> = smallvec![];
@@ -1198,10 +1201,17 @@ impl<I: VCodeInst> VCode<I> {
         // Store metadata about frame layout in the MachBuffer.
         buffer.set_frame_layout(self.abi.frame_slot_metadata());
 
-        let (buffer, constants) = buffer.finish(&self.constants, ctrl_plane);
+        let (offsets, refs) = buffer.finish(ctrl_plane);
+        let constants = rodata
+            .filter(|_| !refs.is_empty())
+            .map(|rodata| MachConstantsFinalized {
+                buffer: rodata.finish(&self.constants, ctrl_plane),
+                offsets,
+                refs,
+            });
 
         Ok(EmitResult {
-            buffer,
+            buffer: text.finish(&self.constants, ctrl_plane),
             constants,
             bb_offsets,
             bb_edges,

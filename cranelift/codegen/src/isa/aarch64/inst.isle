@@ -993,8 +993,8 @@
         (rd WritableReg)
         (off i32))
 
-       ;; Compute the address of the 4KB page of a constant that lives in the
-       ;; separate constant pool (`separate_constant_pool`).
+       ;; Computes the address of the 4KB page that holds a constant in the
+       ;; separate constant buffer.
        (AdrpConst
         (rd WritableReg)
         (constant VCodeConstant))
@@ -1583,8 +1583,8 @@
         (Const
           (addr VCodeConstant))
 
-        ;; The low 12 bits of a constant's address, added to `rn`, which holds
-        ;; the address of the constant's page (see `AdrpConst`).
+        ;; A constant in the separate constant buffer. `rn` holds the address of
+        ;; its page (see `AdrpConst`), and the offset in the page is added to it.
         (ConstPageOff
           (rn Reg)
           (addr VCodeConstant))
@@ -4445,10 +4445,8 @@
 (rule (constant_f128 n)
       (fpu_load128 (constant_amode (emit_u128_le_const n)) (mem_flags_trusted_data)))
 
-;; The addressing mode for loading a constant. With `separate_constant_pool` the
-;; constant is too far away for a literal load, so its page address is formed
-;; with `adrp` into a virtual register that the register allocator assigns.
-;; Otherwise the load is PC-relative.
+;; The addressing mode for loading a constant. A constant in the separate
+;; buffer is too far for a literal load, so its page address comes from `adrp`.
 (attr constant_amode (tag amode_const))
 (decl constant_amode (VCodeConstant) AMode)
 (rule 1 (constant_amode c)
@@ -4456,7 +4454,7 @@
       (AMode.ConstPageOff (adrp_const c) c))
 (rule 0 (constant_amode c) (AMode.Const c))
 
-;; Emits an `adrp` that computes the address of the page holding `c`.
+;; Emits an `adrp` for the page that holds `c` and returns its register.
 (decl adrp_const (VCodeConstant) Reg)
 (rule (adrp_const c)
       (let ((dst WritableReg (temp_writable_reg $I64))

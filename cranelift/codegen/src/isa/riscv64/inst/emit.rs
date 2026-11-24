@@ -1034,9 +1034,9 @@ impl Inst {
                 let base = from.get_base_register();
                 let offset = from.get_offset_with_state(state);
                 let offset_imm12 = Imm12::maybe_from_i64(offset);
-                let label = from.get_label_with_sink(sink);
+                let target = from.pc_rel_target();
 
-                let (addr, imm12) = match (base, offset_imm12, label) {
+                let (addr, imm12) = match (base, offset_imm12, target) {
                     // When loading from a Reg+Offset, if the offset fits into an imm12 we can directly encode it.
                     (Some(base), Some(imm12), None) => (base, imm12),
 
@@ -1054,11 +1054,11 @@ impl Inst {
 
                     // If the AMode contains a label we can emit an internal relocation that gets
                     // resolved with the correct address later.
-                    (None, Some(imm), Some(label)) => {
+                    (None, Some(imm), Some(target)) => {
                         debug_assert_eq!(imm.as_i16(), 0);
 
                         // Get the current PC.
-                        sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelHi20);
+                        target.use_hi20(sink);
                         Inst::Auipc {
                             rd,
                             imm: Imm20::ZERO,
@@ -1066,7 +1066,7 @@ impl Inst {
                         .emit_uncompressed(sink, emit_info, state, start_off);
 
                         // Emit a relocation for the load. This patches the offset into the instruction.
-                        sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelLo12I);
+                        target.use_lo12(sink);
 
                         // Imm12 here is meaningless since it's going to get replaced.
                         (rd.to_reg(), Imm12::ZERO)
@@ -1234,7 +1234,8 @@ impl Inst {
                 }
 
                 if info.patchable {
-                    sink.add_patchable_call_site(sink.cur_offset() - start);
+                    let call_len = sink.cur_offset() - start;
+                    sink.add_patchable_call_site(call_len);
                 } else {
                     // Load any stack-carried return values.
                     info.emit_retval_loads::<Riscv64MachineDeps, _, _>(
@@ -1478,7 +1479,8 @@ impl Inst {
                 }
                 .emit(sink, emit_info, state);
 
-                sink.use_label_at_offset(sink.cur_offset(), default_target, LabelUse::PCRel32);
+                let use_offset = sink.cur_offset();
+                sink.use_label_at_offset(use_offset, default_target, LabelUse::PCRel32);
                 Inst::construct_auipc_and_jalr(None, tmp2, 0)
                     .iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
@@ -1533,7 +1535,8 @@ impl Inst {
 
                 // Emit the jumps back to back
                 for target in targets.iter() {
-                    sink.use_label_at_offset(sink.cur_offset(), *target, LabelUse::PCRel32);
+                    let use_offset = sink.cur_offset();
+                    sink.use_label_at_offset(use_offset, *target, LabelUse::PCRel32);
 
                     Inst::construct_auipc_and_jalr(None, tmp2, 0)
                         .iter()
@@ -1616,18 +1619,11 @@ impl Inst {
                             .into_iter()
                             .for_each(|inst| inst.emit(sink, emit_info, state));
                     }
-                    (AMode::Const(addr), None, _) => {
-                        // Get an address label for the constant and recurse.
-                        let label = sink.get_label_for_constant(addr);
-                        Inst::LoadAddr {
-                            rd,
-                            mem: AMode::Label(label),
-                        }
-                        .emit(sink, emit_info, state);
-                    }
-                    (AMode::Label(label), None, _) => {
+                    (AMode::Const(_) | AMode::Label(_), None, _) => {
+                        let target = mem.pc_rel_target().unwrap();
+
                         // Get the current PC.
-                        sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelHi20);
+                        target.use_hi20(sink);
                         let inst = Inst::Auipc {
                             rd,
                             imm: Imm20::ZERO,
@@ -1636,7 +1632,7 @@ impl Inst {
 
                         // Emit an add to the address with a relocation.
                         // This later gets patched up with the correct offset.
-                        sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelLo12I);
+                        target.use_lo12(sink);
                         Inst::AluRRImm12 {
                             alu_op: AluOPRRI::Addi,
                             rd,

@@ -445,7 +445,8 @@ pub(crate) fn emit(
             }
 
             if call_info.patchable {
-                sink.add_patchable_call_site(sink.cur_offset() - start);
+                let call_len = sink.cur_offset() - start;
+                sink.add_patchable_call_site(call_len);
             } else {
                 // Load any stack-carried return values.
                 call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(

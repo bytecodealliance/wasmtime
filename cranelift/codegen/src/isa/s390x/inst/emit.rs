@@ -274,12 +274,12 @@ pub fn mem_emit(
             );
         }
         &MemArg::Label { target } => {
-            sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::BranchRIL);
+            let use_offset = sink.cur_offset();
+            sink.use_label_at_offset(use_offset, target, LabelUse::BranchRIL);
             put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
         }
         &MemArg::Constant { constant } => {
-            let target = sink.get_label_for_constant(constant);
-            sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::BranchRIL);
+            sink.use_constant(sink.cur_offset() + 2, constant, Reloc::S390xPCRel32Dbl, 2);
             put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
         }
         &MemArg::Symbol {
@@ -2265,11 +2265,8 @@ impl Inst {
 
                             // If CC 1, branch to larger than
                             let opcode = 0xc04; // BCRL
-                            sink.use_label_at_offset(
-                                sink.cur_offset(),
-                                lg_label,
-                                LabelUse::BranchRIL,
-                            );
+                            let use_offset = sink.cur_offset();
+                            sink.use_label_at_offset(use_offset, lg_label, LabelUse::BranchRIL);
                             put(sink, &enc_ril_c(opcode, 4, 0));
 
                             // If CC not 1, write new value
@@ -2294,8 +2291,9 @@ impl Inst {
 
                             // Now jump past the other branch
                             let opcode = 0xc04; // BCRL
+                            let use_offset = sink.cur_offset();
                             sink.use_label_at_offset(
-                                sink.cur_offset(),
+                                use_offset,
                                 cmp_end_label,
                                 LabelUse::BranchRIL,
                             );
@@ -2359,7 +2357,8 @@ impl Inst {
 
                 // If the comparison was not equal, try again
                 let opcode = 0xc04; // BCRL
-                sink.use_label_at_offset(sink.cur_offset(), loop_label, LabelUse::BranchRIL);
+                let use_offset = sink.cur_offset();
+                sink.use_label_at_offset(use_offset, loop_label, LabelUse::BranchRIL);
                 put(sink, &enc_ril_c(opcode, 4, 0));
             }
             &Inst::Loop { ref body, cond } => {
@@ -2376,11 +2375,8 @@ impl Inst {
                         // Replace a CondBreak with a branch to done_label.
                         &Inst::CondBreak { cond } => {
                             let opcode = 0xc04; // BCRL
-                            sink.use_label_at_offset(
-                                sink.cur_offset(),
-                                done_label,
-                                LabelUse::BranchRIL,
-                            );
+                            let use_offset = sink.cur_offset();
+                            sink.use_label_at_offset(use_offset, done_label, LabelUse::BranchRIL);
                             put(sink, &enc_ril_c(opcode, cond.bits(), 0));
                         }
                         _ => inst.emit_with_alloc_consumer(sink, emit_info, state),
@@ -2388,7 +2384,8 @@ impl Inst {
                 }
 
                 let opcode = 0xc04; // BCRL
-                sink.use_label_at_offset(sink.cur_offset(), loop_label, LabelUse::BranchRIL);
+                let use_offset = sink.cur_offset();
+                sink.use_label_at_offset(use_offset, loop_label, LabelUse::BranchRIL);
                 put(sink, &enc_ril_c(opcode, cond.bits(), 0));
 
                 // Emit label at the end of the loop.
@@ -3794,7 +3791,8 @@ impl Inst {
                 assert_eq!(state.nominal_sp_offset, 0);
 
                 if info.patchable {
-                    sink.add_patchable_call_site(sink.cur_offset() - start);
+                    let call_len = sink.cur_offset() - start;
+                    sink.add_patchable_call_site(call_len);
                 } else {
                     state.outgoing_sp_offset = info.callee_pop_size;
                     for inst in S390xMachineDeps::gen_retval_loads(info) {
@@ -3929,7 +3927,8 @@ impl Inst {
 
                 // Branch to the default target if the given default condition is true.
                 let opcode = 0xc04; // BCRL
-                sink.use_label_at_offset(sink.cur_offset(), default, LabelUse::BranchRIL);
+                let use_offset = sink.cur_offset();
+                sink.use_label_at_offset(use_offset, default, LabelUse::BranchRIL);
                 put(sink, &enc_ril_c(opcode, default_cond.bits(), 0));
 
                 // Set temp register to address of jump table.
@@ -3996,7 +3995,8 @@ impl Inst {
 
                 // brct PROBE_COUNT, LOOP_START
                 let opcode = 0xa76; // BRCT
-                sink.use_label_at_offset(sink.cur_offset(), loop_start, LabelUse::BranchRI);
+                let use_offset = sink.cur_offset();
+                sink.use_label_at_offset(use_offset, loop_start, LabelUse::BranchRI);
                 put(sink, &enc_ri_b(opcode, probe_count.to_reg(), 0));
             }
 

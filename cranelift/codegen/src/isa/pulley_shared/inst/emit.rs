@@ -195,7 +195,8 @@ fn pulley_emit<P>(
             }
 
             if info.patchable {
-                sink.add_patchable_call_site(sink.cur_offset() - start);
+                let call_len = sink.cur_offset() - start;
+                sink.add_patchable_call_site(call_len);
             } else {
                 let adjust = -i32::try_from(info.callee_pop_size).unwrap();
                 for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {

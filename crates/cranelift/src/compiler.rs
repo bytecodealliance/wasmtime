@@ -2,7 +2,6 @@ use crate::TRAP_INTERNAL_ASSERT;
 use crate::alias_region::AliasRegions;
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
-use crate::obj::constant_offsets;
 use crate::translate::{FuncTranslator, VmctxLoadChain};
 use crate::{BuiltinFunctionSignatures, builder::LinkOptions, wasm_call_signature};
 use crate::{CompiledFunction, ModuleTextBuilder, array_call_signature};
@@ -700,11 +699,13 @@ impl wasmtime_environ::Compiler for Compiler {
             })
             .collect::<Vec<_>>();
 
-        // Separate constants are bodies of the text section after the functions.
+        // The text builder also holds the separate constants, after the
+        // functions, so that relocations can refer to them. They are written
+        // to `.wasmtime.constants`, not to `.text`.
         let num_constants: usize = funcs
             .iter()
             .filter_map(|(_, _, func)| func.constants.as_ref())
-            .map(|constants| constant_offsets(constants).len())
+            .map(|constants| constants.offsets.len())
             .sum();
         let mut builder = ModuleTextBuilder::new(
             obj,
