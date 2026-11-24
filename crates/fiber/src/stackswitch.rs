@@ -53,6 +53,11 @@ cfg_select! {
         pub(crate) use supported::*;
         pub(crate) use loongarch64::*;
     }
+    all(target_arch = "powerpc64", target_abi = "elfv2") => {
+        mod powerpc64;
+        pub(crate) use supported::*;
+        pub(crate) use powerpc64::*;
+    }
     feature = "custom" => {
         mod custom;
         pub(crate) use custom::*;
