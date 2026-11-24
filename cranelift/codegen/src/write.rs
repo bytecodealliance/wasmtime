@@ -6,7 +6,9 @@
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
 use crate::ir::immediates::Ieee128;
-use crate::ir::{Block, DataFlowGraph, Function, Inst, Opcode, SigRef, Type, Value, ValueDef};
+use crate::ir::{
+    Block, DataFlowGraph, Function, Inst, Opcode, SigRef, StackLimit, Type, Value, ValueDef,
+};
 use crate::packed_option::ReservedValue;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -96,9 +98,20 @@ pub trait FuncWriter {
             self.write_entity_definition(w, func, cref.into(), cval)?;
         }
 
-        if let Some(limit) = func.stack_limit {
-            any = true;
-            self.write_entity_definition(w, func, AnyEntity::StackLimit, &limit)?;
+        match func.stack_limit {
+            StackLimit::None => {}
+            StackLimit::Trap { limit } => {
+                any = true;
+                self.write_entity_definition(w, func, AnyEntity::StackLimit, &limit)?;
+            }
+            StackLimit::Call {
+                limit,
+                func: handler,
+            } => {
+                any = true;
+                let value = format!("{limit}, handler = {handler}");
+                self.write_entity_definition(w, func, AnyEntity::StackLimit, &value)?;
+            }
         }
 
         Ok(any)

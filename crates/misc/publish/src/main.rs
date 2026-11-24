@@ -9,7 +9,6 @@
 //! * `cargo run -p wasmtime-publish bump-drop-rc` - strip the pre-release suffix
 //! * `cargo run -p wasmtime-publish verify` - verify crates can be published to crates.io
 //! * `cargo run -p wasmtime-publish publish` - actually publish crates to crates.io
-//! * `cargo run -p wasmtime-publish yank-old-rcs` - yank superseded release candidates
 //! * `cargo run -p wasmtime-publish latest-release` - print the most recent release branch's version
 
 use semver::{Prerelease, Version};
@@ -228,13 +227,6 @@ fn main() {
             println!();
             println!("    $ git tag vX.Y.Z");
             println!("    $ git push git@github.com:bytecodealliance/wasmtime.git vX.Y.Z");
-        }
-
-        "yank-old-rcs" => {
-            assert!(
-                yank_old_rcs(&crates),
-                "failed to yank all superseded release candidates"
-            );
         }
 
         "verify" => {
@@ -576,7 +568,7 @@ fn publish(krate: &Crate) -> bool {
     let Some(versions) = published_versions(&krate.name) else {
         return false;
     };
-    if versions.iter().any(|(v, _)| *v == krate.version) {
+    if versions.contains(&krate.version) {
         println!(
             "skip publish {} because {} is already published",
             krate.name, krate.version,
@@ -596,92 +588,6 @@ fn publish(krate: &Crate) -> bool {
     }
 
     true
-}
-
-/// Yanks every release candidate which the version being released supersedes,
-/// returning whether everything was yanked successfully.
-fn yank_old_rcs(crates: &[Crate]) -> bool {
-    let Some(versions) = old_rcs(crates) else {
-        return false;
-    };
-
-    let mut todo = Vec::new();
-    for version in versions {
-        for krate in crates.iter().filter(|k| k.publish) {
-            todo.push((krate, version.clone()));
-        }
-    }
-
-    // Just like publishing there are enough crates here to run into crates.io
-    // rate limits, so work through the list in a loop and drop each yank from
-    // it once it succeeds. Failed yanks get another try on the next round.
-    for _ in 0..10 {
-        todo.retain(|(krate, version)| !yank(krate, version));
-
-        if todo.is_empty() {
-            break;
-        }
-
-        println!("{} yanks failed, waiting for a bit to retry", todo.len());
-        thread::sleep(Duration::from_secs(40));
-    }
-
-    todo.is_empty()
-}
-
-/// Yanks `version` of `krate`, returning whether it succeeded.
-fn yank(krate: &Crate, version: &Version) -> bool {
-    let status = cmd_status(
-        Command::new("cargo")
-            .arg("yank")
-            .arg("--version")
-            .arg(version.to_string())
-            .arg(&krate.name),
-    );
-    if !status.success() {
-        println!("FAIL: failed to yank `{} {version}`: {status}", krate.name);
-        return false;
-    }
-    true
-}
-
-/// Returns the release candidates which the version being released has
-/// superseded and which aren't yanked already, or `None` if that couldn't be
-/// determined.
-fn old_rcs(crates: &[Crate]) -> Option<Vec<Version>> {
-    let wasmtime = crates
-        .iter()
-        .find(|k| k.name == "wasmtime")
-        .expect("failed to find the `wasmtime` crate");
-    let current = &wasmtime.version;
-
-    let Some(versions) = published_versions(&wasmtime.name) else {
-        println!("FAIL: could not list versions of `{}`", wasmtime.name);
-        return None;
-    };
-
-    let mut ret = Vec::new();
-    for (version, already_yanked) in versions {
-        // Skip if already yanked
-        if already_yanked {
-            continue;
-        }
-
-        // Skip if this is for some other version track
-        if version.major != current.major
-            || version.minor != current.minor
-            || version.patch != current.patch
-        {
-            continue;
-        }
-
-        // Skip if this isn't actually a rc
-        if rc_number(&version).is_none() {
-            continue;
-        }
-        ret.push(version);
-    }
-    Some(ret)
 }
 
 /// Returns the version of the most recent `release-*` branch on `origin`.
@@ -722,12 +628,11 @@ struct VersionList {
 #[derive(Deserialize)]
 struct VersionEntry {
     num: String,
-    yanked: bool,
 }
 
-/// Returns every version of `name` published to crates.io along with whether
-/// each one is yanked, or `None` if the list couldn't be fetched.
-fn published_versions(name: &str) -> Option<Vec<(Version, bool)>> {
+/// Returns every version of `name` published to crates.io, or `None` if the
+/// list couldn't be fetched.
+fn published_versions(name: &str) -> Option<Vec<Version>> {
     let body = curl(&format!("https://crates.io/api/v1/crates/{name}/versions"))?;
     let list = match serde_json::from_str::<VersionList>(&body) {
         Ok(list) => list,
@@ -739,7 +644,7 @@ fn published_versions(name: &str) -> Option<Vec<(Version, bool)>> {
     Some(
         list.versions
             .into_iter()
-            .filter_map(|v| Some((Version::parse(&v.num).ok()?, v.yanked)))
+            .filter_map(|v| Version::parse(&v.num).ok())
             .collect(),
     )
 }

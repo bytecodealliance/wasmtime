@@ -5,7 +5,7 @@ RUN apk add libgcc
 
 # Use something glibc-based for the actual compile because the Rust toolchain
 # we're using is glibc-based in CI.
-FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289
 RUN apt-get update -y && apt-get install -y cmake musl-tools git ninja-build
 COPY --from=libgcc_s_src /usr/lib/libgcc_s.so.1 /usr/lib/x86_64-linux-musl
 RUN git config --global --add safe.directory '*'

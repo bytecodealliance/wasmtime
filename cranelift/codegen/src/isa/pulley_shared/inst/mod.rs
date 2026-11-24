@@ -341,6 +341,12 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
 
         Inst::SequencePoint { .. } => {}
+
+        Inst::StackLimitJump { .. } => {
+            // Only generated in the prologue, after register allocation, using
+            // fixed scratch registers that aren't visible to regalloc.
+            unreachable!("only generated after register allocation")
+        }
     }
 }
 
@@ -856,6 +862,11 @@ impl Inst {
 
             Inst::SequencePoint {} => {
                 format!("sequence_point")
+            }
+
+            Inst::StackLimitJump { limit, handler } => {
+                let cond = emit::stack_limit_cond::<P>(*limit);
+                format!("br_{cond}, {handler:?}")
             }
         }
     }

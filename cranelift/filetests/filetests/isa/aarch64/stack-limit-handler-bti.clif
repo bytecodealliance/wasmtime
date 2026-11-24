@@ -1,0 +1,127 @@
+test compile precise-output
+set unwind_info=false
+target aarch64 use_bti sign_return_address
+
+;; With BTI, the function must still begin with a landing pad even though the
+;; stack-limit check now precedes frame setup; and with pointer authentication
+;; the return address is only signed after the check, so that the handler sees
+;; the unsigned return address it was entered with.
+
+function %foo() {
+block0:
+    return
+}
+
+; VCode:
+;   bti c
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bti c
+; block1: ; offset 0x4
+;   ret
+
+function %handler_call_zero(i64 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    call fn0()
+    return
+}
+
+; VCode:
+;   bti c
+;   ldr x16, [x2]
+;   ldr x16, [x16, #8]
+;   add x16, x16, #32
+;   subs xzr, sp, x16, UXTX ; b.hs $ok ; b TestCase(%overflow) ; $ok:
+;   bti c
+;   paciaz
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name_far x0, TestCase(%foo)+0
+;   blr x0
+;   ldp fp, lr, [sp], #16
+;   autiaz ; ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bti c
+;   ldur x16, [x2]
+;   ldur x16, [x16, #8]
+;   add x16, x16, #0x20
+;   cmp sp, x16
+;   b.hs #0x1c
+;   b #0x18 ; reloc_external Call %overflow 0
+;   bti c
+;   paciaz
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x2c
+;   ldr x0, #0x34
+;   b #0x3c
+;   udf #0 ; reloc_external Abs8 %foo 0
+;   udf #0
+;   blr x0
+;   ldp x29, x30, [sp], #0x10
+;   autiaz
+;   ret
+
+function %handler_call_zero_tail(i64 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    call fn0()
+    return
+}
+
+; VCode:
+;   bti c
+;   ldr x16, [x2]
+;   ldr x16, [x16, #8]
+;   add x16, x16, #32
+;   subs xzr, sp, x16, UXTX ; b.hs $ok ; b TestCase(%overflow) ; $ok:
+;   bti c
+;   paciaz
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name_far x0, TestCase(%foo)+0
+;   blr x0
+;   ldp fp, lr, [sp], #16
+;   autiaz ; ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bti c
+;   ldur x16, [x2]
+;   ldur x16, [x16, #8]
+;   add x16, x16, #0x20
+;   cmp sp, x16
+;   b.hs #0x1c
+;   b #0x18 ; reloc_external Call %overflow 0
+;   bti c
+;   paciaz
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x2c
+;   ldr x0, #0x34
+;   b #0x3c
+;   udf #0 ; reloc_external Abs8 %foo 0
+;   udf #0
+;   blr x0
+;   ldp x29, x30, [sp], #0x10
+;   autiaz
+;   ret
+

@@ -185,7 +185,7 @@ jobs:
           cat > pr-body <<-EOF
           This is an [automated pull request][process] from CI which is intended to notify maintainers that it's time to release Wasmtime $cur. The [release branch][branch] was created roughly two weeks ago and it's now time for it to be published and released.
 
-          It's recommended that maintainers double-check that [RELEASES.md] is up-to-date and that there are no known issues before merging this PR. When this PR is merged a release tag will automatically created, crates will be published, CI artifacts will be produced, and the final release candidate will be yanked from crates.io.
+          It's recommended that maintainers double-check that [RELEASES.md] is up-to-date and that there are no known issues before merging this PR. When this PR is merged a release tag will automatically created, crates will be published, and CI artifacts will be produced.
 
           [RELEASES.md]: https://github.com/${{ github.repository }}/blob/release-$cur/RELEASES.md
           [process]: https://docs.wasmtime.dev/contributing-release-process.html
@@ -218,7 +218,7 @@ jobs:
           # Push the result to a branch and open a PR for it
           git push origin HEAD:ci/rc-$rc
           cat > pr-body <<-EOF
-          This is an [automated pull request][process] from CI to publish \`$rc\` as a new release candidate, requested by @${{ github.actor }}. When this PR is merged a \`v$rc\` tag will be created, the crates will be published to crates.io, a GitHub pre-release will be produced, and the previous release candidate will be yanked from crates.io.
+          This is an [automated pull request][process] from CI to publish \`$rc\` as a new release candidate, requested by @${{ github.actor }}. When this PR is merged a \`v$rc\` tag will be created, the crates will be published to crates.io, and a GitHub pre-release will be produced.
 
           [process]: https://docs.wasmtime.dev/contributing-release-process.html
           EOF

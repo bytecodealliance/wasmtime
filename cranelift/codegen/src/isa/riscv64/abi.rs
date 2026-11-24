@@ -110,7 +110,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // Stack space.
         let mut next_stack: u32 = 0;
 
-        let ret_area_ptr = if add_ret_area_ptr {
+        let is_tail = call_conv == isa::CallConv::Tail;
+        let ret_area_ptr = if add_ret_area_ptr && !is_tail {
             assert!(ArgsOrRets::Args == args_or_rets);
             next_x_reg += 1;
             Some(ABIArg::reg(
@@ -181,6 +182,30 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 purpose: param.purpose,
             });
         }
+
+        let ret_area_ptr = if add_ret_area_ptr && is_tail {
+            assert!(ArgsOrRets::Args == args_or_rets);
+            Some(if next_x_reg <= x_end {
+                ABIArg::reg(
+                    x_reg(next_x_reg).to_real_reg().unwrap(),
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                )
+            } else {
+                next_stack = align_to(next_stack, 8);
+                let offset = next_stack as i64;
+                next_stack += 8;
+                ABIArg::stack(
+                    offset,
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                )
+            })
+        } else {
+            ret_area_ptr
+        };
         let pos = if let Some(ret_area_ptr) = ret_area_ptr {
             args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
@@ -282,6 +307,13 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             trap_code: ir::TrapCode::STACK_OVERFLOW,
         });
         insts
+    }
+
+    fn gen_stack_lower_bound_jump(limit_reg: Reg, handler: &ExternalName) -> SmallInstVec<Inst> {
+        smallvec![Inst::StackLimitJump {
+            limit: limit_reg,
+            handler: Box::new(handler.clone()),
+        }]
     }
 
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Inst {

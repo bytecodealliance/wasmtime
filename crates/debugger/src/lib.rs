@@ -554,7 +554,9 @@ mod test {
         let mut debuggee = Debuggee::new(store, move |store| {
             Box::pin(async move {
                 let mut results = [Val::I32(0)];
-                store.edit_breakpoints().unwrap().single_step(true).unwrap();
+                store
+                    .edit_breakpoints(|edit| edit.single_step(true))
+                    .unwrap();
                 main.call_async(&mut *store, &[Val::I32(1), Val::I32(2)], &mut results[..])
                     .await?;
                 assert_eq!(results[0].unwrap_i32(), 3);
@@ -705,9 +707,7 @@ mod test {
         debuggee
             .with_store(|store| {
                 store
-                    .edit_breakpoints()
-                    .unwrap()
-                    .single_step(false)
+                    .edit_breakpoints(|edit| edit.single_step(false))
                     .unwrap();
             })
             .await?;
@@ -749,7 +749,7 @@ mod test {
         // Watch bytes [8, 12): the first store is just below the
         // range, the second overlaps it partially, the third is just
         // above it, and the fill covers all of it.
-        store.edit_breakpoints().unwrap().watch(memory, 8..12)?;
+        store.edit_breakpoints(|edit| edit.watch(memory, 8..12))?;
 
         let mut debuggee = Debuggee::new(store, move |store| {
             Box::pin(async move {
@@ -799,9 +799,7 @@ mod test {
                 assert_eq!(memory.data(&store)[12], 2);
                 // Stop watching; the rest of execution runs freely.
                 store
-                    .edit_breakpoints()
-                    .unwrap()
-                    .unwatch(memory, 0..16)
+                    .edit_breakpoints(|edit| edit.unwatch(memory, 0..16))
                     .unwrap();
             })
             .await?;
@@ -843,7 +841,9 @@ mod test {
         let mut debuggee = Debuggee::new(store, move |store| {
             Box::pin(async move {
                 let mut results = [Val::I32(0)];
-                store.edit_breakpoints().unwrap().single_step(true).unwrap();
+                store
+                    .edit_breakpoints(|edit| edit.single_step(true))
+                    .unwrap();
                 main.call_async(&mut *store, &[Val::I32(1), Val::I32(2)], &mut results[..])
                     .await?;
                 assert_eq!(results[0].unwrap_i32(), 3);
@@ -883,7 +883,9 @@ mod test {
         let mut debuggee = Debuggee::new(store, move |store| {
             Box::pin(async move {
                 let mut results = [Val::I32(0)];
-                store.edit_breakpoints().unwrap().single_step(true).unwrap();
+                store
+                    .edit_breakpoints(|edit| edit.single_step(true))
+                    .unwrap();
                 main.call_async(&mut *store, &[Val::I32(1), Val::I32(2)], &mut results[..])
                     .await?;
                 assert_eq!(results[0].unwrap_i32(), 3);

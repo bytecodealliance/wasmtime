@@ -199,13 +199,19 @@ impl ModuleRegistry {
 
     /// Fetches the base `StoreCodePC` for a given `EngineCode` with
     /// `Module`, registering the module if not already registered.
+    ///
+    /// Note that the module's code may be registered without the
+    /// module itself being registered: the modules within a component
+    /// share the component's code, which is registered when the
+    /// component is, while each module is registered only when
+    /// instantiated. So check for both.
     pub fn store_code_base_or_register(
         &mut self,
         module: &Module,
         breakpoint_state: RegisterBreakpointState,
     ) -> Result<StoreCodePC> {
         let key = module.engine_code().text_range().start;
-        if !self.store_code.contains_key(key) {
+        if !self.store_code.contains_key(key) || self.module_by_compiled_id(module.id()).is_none() {
             let engine = module.engine().clone();
             self.register_module(module, &engine, breakpoint_state)?;
         }

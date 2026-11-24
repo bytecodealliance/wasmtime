@@ -628,6 +628,14 @@ class Config {
     wasmtime_config_memory_init_cow_set(ptr.get(), enable);
   }
 
+  /// \brief Configures the size, in bytes, of the memory guaranteed dense image
+  /// size.
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_guaranteed_dense_image_size
+  void memory_guaranteed_dense_image_size(uint64_t bytes) {
+    wasmtime_config_memory_guaranteed_dense_image_size_set(ptr.get(), bytes);
+  }
+
   /// \brief Configures whether native unwind information is emitted.
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.native_unwind_info

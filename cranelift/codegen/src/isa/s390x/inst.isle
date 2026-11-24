@@ -1016,6 +1016,14 @@
       (probe_count WritableReg)
       (guard_size i16))
 
+    ;; A stack-limit check that, if `%r15` is at or below `limit`,
+    ;; jumps to the `colocated` function `handler`; otherwise falls
+    ;; through. See `ABIMachineSpec::gen_stack_lower_bound_jump`. This is only
+    ;; ever generated in the prologue, after register allocation.
+    (StackLimitJump
+      (limit Reg)
+      (handler BoxExternalName))
+
     ;; Load an inline symbol reference with relocation.
     (LoadSymbolReloc
       (rd WritableReg)

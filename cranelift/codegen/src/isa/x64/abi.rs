@@ -115,12 +115,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             next_stack = 32;
         }
 
-        let ret_area_ptr = if add_ret_area_ptr {
+        // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first
+        // argument, and for the Winch ABI we do the same for simplicity's sake. In the Tail
+        // ABI, it instead comes *after* all other arguments (see below).
+        let ret_area_ptr = if add_ret_area_ptr && !is_tail {
             debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             next_gpr += 1;
             next_param_idx += 1;
-            // In the SystemV and WindowsFastcall ABIs, the return area pointer is the first
-            // argument. For the Tail and Winch ABIs we do the same for simplicity sake.
             Some(ABIArg::reg(
                 get_intreg_for_arg(call_conv, 0, 0)
                     .unwrap()
@@ -398,6 +399,34 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 }
             }
         }
+        // In the Tail ABI, the return area pointer is passed after all other
+        // arguments.
+        let ret_area_ptr = if add_ret_area_ptr && is_tail {
+            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
+            Some(
+                match get_intreg_for_arg(call_conv, next_gpr, next_param_idx) {
+                    Some(reg) => ABIArg::reg(
+                        reg.to_real_reg().unwrap(),
+                        types::I64,
+                        ir::ArgumentExtension::None,
+                        ir::ArgumentPurpose::Normal,
+                    ),
+                    None => {
+                        next_stack = align_to(next_stack, 8);
+                        let offset = next_stack as i64;
+                        next_stack += 8;
+                        ABIArg::stack(
+                            offset,
+                            types::I64,
+                            ir::ArgumentExtension::None,
+                            ir::ArgumentPurpose::Normal,
+                        )
+                    }
+                },
+            )
+        } else {
+            ret_area_ptr
+        };
         let extra_arg_idx = if let Some(ret_area_ptr) = ret_area_ptr {
             args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
@@ -500,6 +529,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 trap_code: TrapCode::STACK_OVERFLOW,
             },
         ]
+    }
+
+    fn gen_stack_lower_bound_jump(limit_reg: Reg, handler: &ExternalName) -> SmallInstVec<Self::I> {
+        smallvec![Inst::StackLimitJump {
+            limit: limit_reg,
+            handler: Box::new(handler.clone()),
+        }]
     }
 
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Self::I {

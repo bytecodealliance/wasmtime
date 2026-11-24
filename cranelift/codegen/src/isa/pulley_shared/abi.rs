@@ -76,7 +76,10 @@ where
         let mut next_v_reg = 0;
         let mut next_stack: u32 = 0;
 
-        let ret_area_ptr = if add_ret_area_ptr {
+        // In the Tail ABI, the return area pointer is passed after all other
+        // arguments (see below); otherwise, it's the first argument.
+        let is_tail = call_conv == isa::CallConv::Tail;
+        let ret_area_ptr = if add_ret_area_ptr && !is_tail {
             debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
             next_x_reg += 1;
             Some(ABIArg::reg(
@@ -152,6 +155,29 @@ where
             });
         }
 
+        let ret_area_ptr = if add_ret_area_ptr && is_tail {
+            debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
+            Some(if next_x_reg <= x_end {
+                ABIArg::reg(
+                    x_reg(next_x_reg).to_real_reg().unwrap(),
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                )
+            } else {
+                next_stack = align_to(next_stack, 8);
+                let offset = i64::from(next_stack);
+                next_stack += 8;
+                ABIArg::stack(
+                    offset,
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                )
+            })
+        } else {
+            ret_area_ptr
+        };
         let pos = if let Some(ret_area_ptr) = ret_area_ptr {
             args.push_non_formal(ret_area_ptr);
             Some(args.args().len() - 1)
@@ -235,21 +261,31 @@ where
         from_reg: Reg,
         imm: u32,
     ) -> SmallInstVec<Self::I> {
+        // Note that `into_reg` and `from_reg` may be the same register.
         let dst = into_reg.try_into().unwrap();
-        let imm = imm as i32;
-        smallvec![
-            RawInst::Xconst32 { dst, imm }.into(),
-            RawInst::Xadd32 {
-                dst,
-                src1: from_reg.try_into().unwrap(),
-                src2: dst.to_reg(),
-            }
-            .into()
-        ]
+        let src1 = from_reg.try_into().unwrap();
+        let src2 = imm;
+        smallvec![match P::pointer_width() {
+            PointerWidth::PointerWidth32 => RawInst::Xadd32U32 { dst, src1, src2 }.into(),
+            PointerWidth::PointerWidth64 => RawInst::Xadd64U32 { dst, src1, src2 }.into(),
+        }]
     }
 
     fn gen_stack_lower_bound_trap(_limit_reg: Reg) -> SmallInstVec<Self::I> {
         unimplemented!("pulley shouldn't need stack bound checks")
+    }
+
+    fn gen_stack_lower_bound_jump(
+        limit_reg: Reg,
+        handler: &ir::ExternalName,
+    ) -> SmallInstVec<Self::I> {
+        smallvec![
+            Inst::StackLimitJump {
+                limit: XReg::new(limit_reg).unwrap(),
+                handler: Box::new(handler.clone()),
+            }
+            .into()
+        ]
     }
 
     fn gen_get_stack_addr(mem: StackAMode, dst: Writable<Reg>) -> Self::I {

@@ -1063,6 +1063,11 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(start);
             collector.reg_use(end);
         }
+        Inst::StackLimitJump { .. } => {
+            // Only generated in the prologue, after register allocation, using
+            // fixed scratch registers that aren't visible to regalloc.
+            unreachable!("only generated after register allocation")
+        }
         Inst::InterruptPoll {
             dst,
             load_ptr,
@@ -3175,6 +3180,10 @@ impl Inst {
             }
             &Inst::SequencePoint {} => {
                 format!("sequence_point")
+            }
+            &Inst::StackLimitJump { limit, ref handler } => {
+                let limit = pretty_print_reg(limit);
+                format!("subs xzr, sp, {limit}, UXTX ; b.hs $ok ; b {handler:?} ; $ok:")
             }
             &Inst::StackProbeLoop { start, end, step } => {
                 let start = pretty_print_reg(start.to_reg());

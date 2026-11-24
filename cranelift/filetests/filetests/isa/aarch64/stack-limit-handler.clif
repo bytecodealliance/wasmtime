@@ -1,0 +1,375 @@
+test compile precise-output
+set unwind_info=false
+set enable_multi_ret_implicit_sret
+target aarch64
+
+function %foo() {
+block0:
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+;; A leaf function with no frame needs no stack check at all, even with a
+;; handler.
+function %handler_leaf_zero(i64 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+; block0:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ret
+
+;; A function that makes calls: the check happens before any frame setup and
+;; tail-calls the handler on overflow.
+function %handler_call_zero(i64 vmctx) tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    call fn0()
+    return
+}
+
+; VCode:
+;   ldr x16, [x2]
+;   ldr x16, [x16, #8]
+;   add x16, x16, #32
+;   subs xzr, sp, x16, UXTX ; b.hs $ok ; b TestCase(%overflow) ; $ok:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name_far x0, TestCase(%foo)+0
+;   blr x0
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldur x16, [x2]
+;   ldur x16, [x16, #8]
+;   add x16, x16, #0x20
+;   cmp sp, x16
+;   b.hs #0x18
+;   b #0x14 ; reloc_external Call %overflow 0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x20
+;   ldr x0, #0x28
+;   b #0x30
+;   udf #0 ; reloc_external Abs8 %foo 0
+;   udf #0
+;   blr x0
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+;; The handler's parameters need only be a prefix of the function's, and the
+;; stack limit can be the vmctx itself.
+function %handler_prefix_params(i64 vmctx, i64, i64) -> i64 tail {
+    gv0 = vmctx
+    stack_limit = gv0, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64, v1: i64, v2: i64):
+    call fn0()
+    v3 = iadd v1, v2
+    return v3
+}
+
+; VCode:
+;   add x16, x2, #48
+;   subs xzr, sp, x16, UXTX ; b.hs $ok ; b TestCase(%overflow) ; $ok:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x19, x20, [sp, #-16]!
+; block0:
+;   mov x19, x4
+;   mov x20, x3
+;   load_ext_name_far x4, TestCase(%foo)+0
+;   blr x4
+;   mov x3, x20
+;   mov x4, x19
+;   add x2, x3, x4
+;   ldp x19, x20, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add x16, x2, #0x30
+;   cmp sp, x16
+;   b.hs #0x10
+;   b #0xc ; reloc_external Call %overflow 0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x19, x20, [sp, #-0x10]!
+; block1: ; offset 0x1c
+;   mov x19, x4
+;   mov x20, x3
+;   ldr x4, #0x2c
+;   b #0x34
+;   udf #0 ; reloc_external Abs8 %foo 0
+;   udf #0
+;   blr x4
+;   mov x3, x20
+;   mov x4, x19
+;   add x2, x3, x4
+;   ldp x19, x20, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+;; A small frame: the frame size (plus this function's own setup area) is added
+;; to the limit before comparing.
+function %handler_small_frame(i64 vmctx) tail {
+    ss0 = explicit_slot 168
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   ldr x16, [x2]
+;   ldr x16, [x16, #8]
+;   add x16, x16, #192
+;   subs xzr, sp, x16, UXTX ; b.hs $ok ; b TestCase(%overflow) ; $ok:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #176
+; block0:
+;   add sp, sp, #176
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldur x16, [x2]
+;   ldur x16, [x16, #8]
+;   add x16, x16, #0xc0
+;   cmp sp, x16
+;   b.hs #0x18
+;   b #0x14 ; reloc_external Call %overflow 0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0xb0
+; block1: ; offset 0x24
+;   add sp, sp, #0xb0
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+;; A huge frame: the limit is checked once directly (to guard against
+;; overflow in the addition) and then again with the frame size added.
+function %handler_huge_frame(i64 vmctx) tail {
+    ss0 = explicit_slot 400000
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    return
+}
+
+; VCode:
+;   ldr x16, [x2]
+;   ldr x16, [x16, #8]
+;   subs xzr, sp, x16, UXTX ; b.hs $ok ; b TestCase(%overflow) ; $ok:
+;   movz w17, #6800
+;   movk w17, w17, #6, LSL #16
+;   add x16, x16, x17, UXTX
+;   subs xzr, sp, x16, UXTX ; b.hs $ok ; b TestCase(%overflow) ; $ok:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   movz w16, #6784
+;   movk w16, w16, #6, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   movz w16, #6784
+;   movk w16, w16, #6, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldur x16, [x2]
+;   ldur x16, [x16, #8]
+;   cmp sp, x16
+;   b.hs #0x14
+;   b #0x10 ; reloc_external Call %overflow 0
+;   mov w17, #0x1a90
+;   movk w17, #6, lsl #16
+;   add x16, x16, x17, uxtx
+;   cmp sp, x16
+;   b.hs #0x2c
+;   b #0x28 ; reloc_external Call %overflow 0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   mov w16, #0x1a80
+;   movk w16, #6, lsl #16
+;   sub sp, sp, x16
+; block1: ; offset 0x40
+;   mov w16, #0x1a80
+;   movk w16, #6, lsl #16
+;   add sp, sp, x16
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+;; The `tail` calling convention, as used by Wasmtime, with stack arguments.
+function %handler_tail(i64 vmctx, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+    ss0 = explicit_slot 8
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn0
+    fn0 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64):
+    v11 = iadd v1, v10
+    v13 = stack_addr.i64 ss0
+    store v11, v13
+    v12 = load.i64 v13
+    return v12
+}
+
+; VCode:
+;   ldr x16, [x2]
+;   ldr x16, [x16, #8]
+;   add x16, x16, #32
+;   subs xzr, sp, x16, UXTX ; b.hs $ok ; b TestCase(%overflow) ; $ok:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   ldr x2, [sp, #64]
+;   add x5, x3, x2
+;   str x5, [sp]
+;   ldr x2, [sp]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   add sp, sp, #48
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldur x16, [x2]
+;   ldur x16, [x16, #8]
+;   add x16, x16, #0x20
+;   cmp sp, x16
+;   b.hs #0x18
+;   b #0x14 ; reloc_external Call %overflow 0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0x24
+;   ldur x2, [sp, #0x40]
+;   add x5, x3, x2
+;   stur x5, [sp] ; trap: heap_oob
+;   ldur x2, [sp] ; trap: heap_oob
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   add sp, sp, #0x30
+;   ret
+
+
+;; Many return values: the implicit return-area pointer must not perturb the
+;; location of the vmctx argument that the handler receives.
+function %handler_many_returns(i64 vmctx) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0
+    gv2 = load.i64 notrap aligned gv1+8
+    stack_limit = gv2, handler = fn1
+    fn0 = %foo()
+    fn1 = colocated %overflow(i64 vmctx) tail
+block0(v0: i64):
+    call fn0()
+    return v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0
+}
+
+; VCode:
+;   ldr x16, [x2]
+;   ldr x16, [x16, #8]
+;   add x16, x16, #48
+;   subs xzr, sp, x16, UXTX ; b.hs $ok ; b TestCase(%overflow) ; $ok:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x19, x20, [sp, #-16]!
+; block0:
+;   mov x19, x2
+;   mov x20, x8
+;   load_ext_name_far x3, TestCase(%foo)+0
+;   blr x3
+;   mov x2, x19
+;   mov x8, x20
+;   str x2, [x8]
+;   str x2, [x8, #8]
+;   str x2, [x8, #16]
+;   str x2, [x8, #24]
+;   str x2, [x8, #32]
+;   str x2, [x8, #40]
+;   mov x7, x2
+;   mov x3, x7
+;   mov x4, x7
+;   mov x5, x7
+;   mov x6, x7
+;   ldp x19, x20, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldur x16, [x2]
+;   ldur x16, [x16, #8]
+;   add x16, x16, #0x30
+;   cmp sp, x16
+;   b.hs #0x18
+;   b #0x14 ; reloc_external Call %overflow 0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x19, x20, [sp, #-0x10]!
+; block1: ; offset 0x24
+;   mov x19, x2
+;   mov x20, x8
+;   ldr x3, #0x34
+;   b #0x3c
+;   udf #0 ; reloc_external Abs8 %foo 0
+;   udf #0
+;   blr x3
+;   mov x2, x19
+;   mov x8, x20
+;   stur x2, [x8]
+;   stur x2, [x8, #8]
+;   stur x2, [x8, #0x10]
+;   stur x2, [x8, #0x18]
+;   stur x2, [x8, #0x20]
+;   stur x2, [x8, #0x28]
+;   mov x7, x2
+;   mov x3, x7
+;   mov x4, x7
+;   mov x5, x7
+;   mov x6, x7
+;   ldp x19, x20, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

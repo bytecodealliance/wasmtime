@@ -158,11 +158,7 @@ impl ComponentStoreData {
         let guest = instance.map(|i| {
             let i = i.id();
             i.assert_belongs_to(store_id);
-            self.instances[i.instance]
-                .as_mut()
-                .unwrap()
-                .get_mut()
-                .instance_states_and_published()
+            self.instances[i.instance].as_mut().unwrap().get_mut()
         });
         (
             vm::component::ResourceTables {
@@ -221,6 +217,10 @@ impl ComponentStoreData {
 
     #[cfg(feature = "component-model-async")]
     pub(crate) fn drop_fibers_and_futures(store: &mut dyn VMStore) {
+        // The store is being torn down, so don't allow anything run below,
+        // such as `Drop` impls using an `Accessor`, to enter guest code.
+        store.set_trapped();
+
         let mut fibers = Vec::new();
         let mut futures = Vec::new();
         store

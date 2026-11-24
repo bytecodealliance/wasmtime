@@ -511,6 +511,14 @@ pub extern "C" fn wasmtime_config_memory_init_cow_set(c: &mut wasm_config_t, ena
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_memory_guaranteed_dense_image_size_set(
+    c: &mut wasm_config_t,
+    bytes: u64,
+) {
+    c.config.memory_guaranteed_dense_image_size(bytes);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_config_wasm_wide_arithmetic_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_wide_arithmetic(enable);
 }

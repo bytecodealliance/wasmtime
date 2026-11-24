@@ -1101,6 +1101,13 @@
                        (end Reg)
                        (step Imm12))
 
+       ;; A stack-limit check that, if `sp` is below `limit`, jumps to the
+       ;; `colocated` function `handler`; otherwise falls through. See
+       ;; `ABIMachineSpec::gen_stack_lower_bound_jump`. This is only ever
+       ;; generated in the prologue, after register allocation.
+       (StackLimitJump (limit Reg)
+                       (handler BoxExternalName))
+
        ;; A load whose result is discarded; `context` is pinned to x0, `dst`
        ;; to x9, and `next_load_ptr` to x10.
        (InterruptPoll (dst WritableReg)

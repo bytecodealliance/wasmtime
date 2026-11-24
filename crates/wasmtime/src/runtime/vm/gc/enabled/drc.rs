@@ -45,7 +45,7 @@
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
 use super::VMArrayRef;
-use super::free_list::FreeList;
+use super::free_list::{ALIGN_U32, FreeList};
 use super::is_poisoned;
 use super::trace_infos::TraceInfos;
 use crate::hash_set::HashSet;
@@ -1075,7 +1075,9 @@ unsafe impl GcHeap for DrcHeap {
         let alloc_size = FreeList::aligned_size(object_size).ok_or(Trap::AllocationTooLarge)?;
 
         let gc_ref = match self.free_list.as_mut().unwrap().alloc_fast(alloc_size) {
-            None => return Ok(Err(u64::try_from(layout.size())?)),
+            // The free list rounds allocations up and never hands out its
+            // first `ALIGN_U32` bytes, so ask for room for both.
+            None => return Ok(Err(u64::from(alloc_size) + u64::from(ALIGN_U32))),
             Some(index) => match VMGcRef::from_heap_index(index) {
                 Some(r) => r,
                 None => {

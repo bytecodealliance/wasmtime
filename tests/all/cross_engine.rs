@@ -231,9 +231,7 @@ fn add_breakpoint_rejects_foreign_module() -> Result<()> {
     let foreign = Module::new(&b, r#"(module (func (export "f") (param f64)))"#)?;
 
     store
-        .edit_breakpoints()
-        .unwrap()
-        .add_breakpoint(&foreign, ModulePC::new(0))
+        .edit_breakpoints(|edit| edit.add_breakpoint(&foreign, ModulePC::new(0)))
         .unwrap_err()
         .assert_contains("cross-`Engine`");
 
@@ -250,9 +248,7 @@ fn remove_breakpoint_rejects_foreign_module() -> Result<()> {
     let foreign = Module::new(&b, r#"(module (func (export "f") (param f64)))"#)?;
 
     store
-        .edit_breakpoints()
-        .unwrap()
-        .remove_breakpoint(&foreign, ModulePC::new(0))
+        .edit_breakpoints(|edit| edit.remove_breakpoint(&foreign, ModulePC::new(0)))
         .unwrap_err()
         .assert_contains("cross-`Engine`");
 

@@ -21,7 +21,8 @@ use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, BlockArg, Constant, ConstantData,
     DynamicStackSlot, DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef,
     Function, GlobalValue, GlobalValueData, JumpTableData, MemFlagsData, MemFlagsSet, Opcode,
-    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, UserFuncName, Value, types,
+    SigRef, Signature, StackLimit, StackSlot, StackSlotData, StackSlotKind, UserFuncName, Value,
+    types,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -406,11 +407,11 @@ impl Context {
     }
 
     // Configure the stack limit of the current function.
-    fn add_stack_limit(&mut self, limit: GlobalValue, loc: Location) -> ParseResult<()> {
-        if self.function.stack_limit.is_some() {
+    fn add_stack_limit(&mut self, limit: StackLimit, loc: Location) -> ParseResult<()> {
+        if self.function.stack_limit != StackLimit::None {
             return err!(loc, "stack limit defined twice");
         }
-        self.function.stack_limit = Some(limit);
+        self.function.stack_limit = limit;
         Ok(())
     }
 
@@ -1512,7 +1513,7 @@ impl<'a> Parser<'a> {
                 Some(Token::Identifier("stack_limit")) => {
                     self.start_gathering_comments();
                     self.parse_stack_limit_decl()
-                        .and_then(|gv| ctx.add_stack_limit(gv, self.loc))
+                        .and_then(|limit| ctx.add_stack_limit(limit, self.loc))
                 }
                 Some(Token::AliasRegion(..)) => {
                     self.start_gathering_comments();
@@ -1977,24 +1978,32 @@ impl<'a> Parser<'a> {
 
     // Parse a stack limit decl
     //
-    // stack-limit-decl ::= * StackLimit "=" GlobalValue(gv)
-    fn parse_stack_limit_decl(&mut self) -> ParseResult<GlobalValue> {
+    // stack-limit-decl ::= * StackLimit "=" GlobalValue(gv) [ "," "handler" "=" FuncRef(fn) ]
+    fn parse_stack_limit_decl(&mut self) -> ParseResult<StackLimit> {
         self.match_stack_limit()?;
         self.match_token(Token::Equal, "expected '=' in stack limit decl")?;
-        let limit = match self.token() {
-            Some(Token::GlobalValue(base_num)) => match GlobalValue::with_number(base_num) {
-                Some(gv) => gv,
-                None => return err!(self.loc, "invalid global value number for stack limit"),
-            },
-            _ => return err!(self.loc, "expected global value"),
+        let limit = self.match_gv("expected global value for stack limit")?;
+
+        let stack_limit = if self.optional(Token::Comma) {
+            match self.token() {
+                Some(Token::Identifier("handler")) => self.consume(),
+                _ => return err!(self.loc, "expected `handler` in stack limit decl"),
+            };
+            self.match_token(
+                Token::Equal,
+                "expected '=' after `handler` in stack limit decl",
+            )?;
+            let func = self.match_fn("expected function reference for stack limit handler")?;
+            StackLimit::Call { limit, func }
+        } else {
+            StackLimit::Trap { limit }
         };
-        self.consume();
 
         // Collect any trailing comments.
         self.token();
         self.claim_gathered_comments(AnyEntity::StackLimit);
 
-        Ok(limit)
+        Ok(stack_limit)
     }
 
     // Parse a function body, add contents to `ctx`.
