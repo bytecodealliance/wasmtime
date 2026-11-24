@@ -44,11 +44,6 @@ use super::DataModel;
 
 const MAX_STRING_BYTE_LENGTH: u32 = (1 << 31) - 1;
 
-/// The tag that the `Utf16ToCompactProbablyUtf16` transcoder sets on its
-/// returned length to indicate utf16. This is always bit 31, regardless of
-/// memory width, and is not the guest-visible tag; see `ptr_utf16_tag`.
-const TRANSCODER_UTF16_TAG: u32 = 1 << 31;
-
 /// This value is arbitrarily chosen and should be fine to change at any time,
 /// it just seemed like a halfway reasonable starting point.
 const INITIAL_FUEL: usize = 1_000;
@@ -2234,29 +2229,12 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // source code unit length.
         if self.module.tunables.debug_adapter_modules {
             self.instruction(LocalGet(dst.len.idx));
-            self.ptr_uconst(dst_mem_opts, !TRANSCODER_UTF16_TAG);
+            self.ptr_utf16_untag_mask(dst_mem_opts);
             self.ptr_and(dst_mem_opts);
             self.convert_src_len_to_dst(src.len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
             self.ptr_ne(dst_mem_opts);
             self.instruction(If(BlockType::Empty));
             self.trap(Trap::DebugAssertEqualCodeUnits);
-            self.instruction(End);
-        }
-
-        // Move the transcoder's utf16 tag to the destination memory's tag.
-        if dst_mem_opts.memory64() {
-            self.instruction(LocalGet(dst.len.idx));
-            self.instruction(I64Const(TRANSCODER_UTF16_TAG.into()));
-            self.instruction(I64And);
-            self.instruction(I64Const(0));
-            self.instruction(I64Ne);
-            self.instruction(If(BlockType::Empty));
-            self.instruction(LocalGet(dst.len.idx));
-            self.instruction(I64Const(
-                (u64::from(TRANSCODER_UTF16_TAG) | (1 << 63)).cast_signed(),
-            ));
-            self.instruction(I64Xor);
-            self.instruction(LocalSet(dst.len.idx));
             self.instruction(End);
         }
 
@@ -4329,6 +4307,15 @@ impl<'a, 'b> Compiler<'a, 'b> {
             self.instruction(I64Const(i64::MIN));
         } else {
             self.instruction(I32Const(i32::MIN));
+        }
+    }
+
+    /// Pushes the mask that clears `ptr_utf16_tag` for `opts`'s memory.
+    fn ptr_utf16_untag_mask(&mut self, opts: &LinearMemoryOptions) {
+        if opts.memory64() {
+            self.instruction(I64Const(i64::MAX));
+        } else {
+            self.instruction(I32Const(i32::MAX));
         }
     }
 

@@ -15,7 +15,7 @@ use core::ptr::NonNull;
 use core::slice;
 use wasmtime_environ::component::*;
 
-const UTF16_TAG: usize = 1 << 31;
+const UTF16_TAG: usize = Transcode::UTF16_TO_COMPACT_PROBABLY_UTF16_TAG as usize;
 
 macro_rules! signature {
     (@ty size) => (usize);

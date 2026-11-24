@@ -633,6 +633,12 @@ pub enum Transcode {
 }
 
 impl Transcode {
+    /// The bit that the `Utf16ToCompactProbablyUtf16` host libcall sets in its
+    /// returned length to indicate utf16. The libcall's trampoline moves it to
+    /// the high bit of the destination memory's pointer width, which is the
+    /// guest-visible `latin1+utf16` tag.
+    pub const UTF16_TO_COMPACT_PROBABLY_UTF16_TAG: u32 = 1 << 31;
+
     /// Get this transcoding's symbol fragment.
     pub fn symbol_fragment(&self) -> &'static str {
         match self {

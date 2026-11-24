@@ -291,7 +291,7 @@
       ;; argument "AB" utf8 = 41 42
       (data (i32.const 16) "AB")
       ;; argument "a\u{2603}" utf8 = 61 E2 98 83
-      (data (i32.const 24) "\61\e2\98\83")
+      (data (i32.const 24) "a\u{2603}")
 
       (func (export "run") (result i32)
         (call $narrow (i32.const 16) (i32.const 2))
