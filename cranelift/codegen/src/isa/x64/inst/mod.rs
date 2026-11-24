@@ -573,7 +573,7 @@ impl PrettyPrint for Inst {
 
             Inst::StackLimitJump { limit, handler } => {
                 let limit = pretty_print_reg(*limit, 8);
-                format!("cmpq %rsp, {limit} ; jbe $ok ; jmp {handler:?} ; $ok:")
+                format!("cmpq %rsp, {limit} ; ja {handler:?}")
             }
 
             Inst::StackProbeLoop {

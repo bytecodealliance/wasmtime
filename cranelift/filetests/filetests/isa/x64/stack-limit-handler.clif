@@ -72,7 +72,7 @@ block0(v0: i64):
 ;   movq (%rdi), %r10
 ;   movq 8(%r10), %r10
 ;   addq $0x20, %r10
-;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   cmpq %rsp, %r10 ; ja TestCase(%overflow)
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
@@ -88,11 +88,10 @@ block0(v0: i64):
 ;   movq 8(%r10), %r10
 ;   addq $0x20, %r10
 ;   cmpq %rsp, %r10
-;   jbe 0x19
-;   jmp 0x19 ; reloc_external CallPCRel4 %overflow -4
+;   ja 0x14 ; reloc_external CallPCRel4 %overflow -4
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-; block1: ; offset 0x1d
+; block1: ; offset 0x18
 ;   movabsq $0, %rax ; reloc_external Abs8 %foo 0
 ;   callq *%rax
 ;   movq %rbp, %rsp
@@ -115,7 +114,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; VCode:
 ;   movq %rdi, %r10
 ;   addq $0x30, %r10
-;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   cmpq %rsp, %r10 ; ja TestCase(%overflow)
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
@@ -141,14 +140,13 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   movq %rdi, %r10
 ;   addq $0x30, %r10
 ;   cmpq %rsp, %r10
-;   jbe 0x15
-;   jmp 0x15 ; reloc_external CallPCRel4 %overflow -4
+;   ja 0x10 ; reloc_external CallPCRel4 %overflow -4
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ;   movq %r12, (%rsp)
 ;   movq %r13, 8(%rsp)
-; block1: ; offset 0x26
+; block1: ; offset 0x21
 ;   movq %rdx, %r12
 ;   movq %rsi, %r13
 ;   movabsq $0, %rsi ; reloc_external Abs8 %foo 0
@@ -180,7 +178,7 @@ block0(v0: i64):
 ;   movq (%rdi), %r10
 ;   movq 8(%r10), %r10
 ;   addq $0xc0, %r10
-;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   cmpq %rsp, %r10 ; ja TestCase(%overflow)
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0xb0, %rsp
@@ -196,12 +194,11 @@ block0(v0: i64):
 ;   movq 8(%r10), %r10
 ;   addq $0xc0, %r10
 ;   cmpq %rsp, %r10
-;   jbe 0x1c
-;   jmp 0x1c ; reloc_external CallPCRel4 %overflow -4
+;   ja 0x17 ; reloc_external CallPCRel4 %overflow -4
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0xb0, %rsp
-; block1: ; offset 0x27
+; block1: ; offset 0x22
 ;   addq $0xb0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -223,9 +220,9 @@ block0(v0: i64):
 ; VCode:
 ;   movq (%rdi), %r10
 ;   movq 8(%r10), %r10
-;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   cmpq %rsp, %r10 ; ja TestCase(%overflow)
 ;   addq $0x61a90, %r10
-;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   cmpq %rsp, %r10 ; ja TestCase(%overflow)
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x61a80, %rsp
@@ -240,16 +237,14 @@ block0(v0: i64):
 ;   movq (%rdi), %r10
 ;   movq 8(%r10), %r10
 ;   cmpq %rsp, %r10
-;   jbe 0x15
-;   jmp 0x15 ; reloc_external CallPCRel4 %overflow -4
+;   ja 0x10 ; reloc_external CallPCRel4 %overflow -4
 ;   addq $0x61a90, %r10
 ;   cmpq %rsp, %r10
-;   jbe 0x2a
-;   jmp 0x2a ; reloc_external CallPCRel4 %overflow -4
+;   ja 0x20 ; reloc_external CallPCRel4 %overflow -4
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x61a80, %rsp
-; block1: ; offset 0x35
+; block1: ; offset 0x2b
 ;   addq $0x61a80, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -275,7 +270,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   movq (%rdi), %r10
 ;   movq 8(%r10), %r10
 ;   addq $0x20, %r10
-;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   cmpq %rsp, %r10 ; ja TestCase(%overflow)
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
@@ -295,12 +290,11 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   movq 8(%r10), %r10
 ;   addq $0x20, %r10
 ;   cmpq %rsp, %r10
-;   jbe 0x19
-;   jmp 0x19 ; reloc_external CallPCRel4 %overflow -4
+;   ja 0x14 ; reloc_external CallPCRel4 %overflow -4
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
-; block1: ; offset 0x21
+; block1: ; offset 0x1c
 ;   movq 0x30(%rbp), %rdx
 ;   addq %rdx, %rsi
 ;   movq %rsi, (%rsp)
@@ -309,7 +303,6 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq $0x30
-
 
 ;; Many return values: the implicit return-area pointer must not perturb the
 ;; location of the vmctx argument that the handler receives.
@@ -329,7 +322,7 @@ block0(v0: i64):
 ;   movq (%rdi), %r10
 ;   movq 8(%r10), %r10
 ;   addq $0x30, %r10
-;   cmpq %rsp, %r10 ; jbe $ok ; jmp TestCase(%overflow) ; $ok:
+;   cmpq %rsp, %r10 ; ja TestCase(%overflow)
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
@@ -366,14 +359,13 @@ block0(v0: i64):
 ;   movq 8(%r10), %r10
 ;   addq $0x30, %r10
 ;   cmpq %rsp, %r10
-;   jbe 0x19
-;   jmp 0x19 ; reloc_external CallPCRel4 %overflow -4
+;   ja 0x14 ; reloc_external CallPCRel4 %overflow -4
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ;   movq %r12, (%rsp)
 ;   movq %r13, 8(%rsp)
-; block1: ; offset 0x2a
+; block1: ; offset 0x25
 ;   movq %rdi, %r12
 ;   movq %rsi, %r13
 ;   movabsq $0, %rsi ; reloc_external Abs8 %foo 0

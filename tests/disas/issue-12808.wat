@@ -15,9 +15,8 @@
 ;;       movq    0x10(%r10), %r10
 ;;       addq    $0x40, %r10
 ;;       cmpq    %rsp, %r10
-;;       jbe     0x1a
-;;       jmp     0x1bb
-;;   1a: pushq   %rbp
+;;       ja      0x1b6
+;;   15: pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, (%rsp)

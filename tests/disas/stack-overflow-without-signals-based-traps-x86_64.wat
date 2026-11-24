@@ -26,9 +26,8 @@
 ;;       movq    0x10(%r10), %r10
 ;;       addq    $0x30, %r10
 ;;       cmpq    %rsp, %r10
-;;       jbe     0x3a
-;;       jmp     0x140
-;;   3a: pushq   %rbp
+;;       ja      0x13b
+;;   35: pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       subq    $0x10, %rsp
 ;;       movq    %r12, (%rsp)
@@ -64,17 +63,17 @@
 ;;       movq    %rsi, %rbx
 ;;       callq   *%r8
 ;;       testb   %al, %al
-;;       je      0xbd
-;;   b0: movq    (%rsp), %rbx
+;;       je      0xb8
+;;   ab: movq    (%rsp), %rbx
 ;;       addq    $0x10, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   bd: movq    0x10(%rbx), %rax
-;;   c1: movq    0x140(%rax), %rax
-;;   c8: movq    %rbx, %rdi
-;;   cb: callq   *%rax
-;;   cd: ud2
+;;   b8: movq    0x10(%rbx), %rax
+;;   bc: movq    0x140(%rax), %rax
+;;   c3: movq    %rbx, %rdi
+;;   c6: callq   *%rax
+;;   c8: ud2
 ;;
 ;; signatures[1]::wasm_to_array_trampoline:
 ;;       pushq   %rbp
@@ -97,18 +96,18 @@
 ;;       movq    %rsi, %rbx
 ;;       callq   *%r8
 ;;       testb   %al, %al
-;;       je      0x12e
-;;  11c: movq    (%rsp), %rax
+;;       je      0x129
+;;  117: movq    (%rsp), %rax
 ;;       movq    0x20(%rsp), %rbx
 ;;       addq    $0x30, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  12e: movq    0x10(%rbx), %rax
-;;  132: movq    0x140(%rax), %rax
-;;  139: movq    %rbx, %rdi
-;;  13c: callq   *%rax
-;;  13e: ud2
+;;  129: movq    0x10(%rbx), %rax
+;;  12d: movq    0x140(%rax), %rax
+;;  134: movq    %rbx, %rdi
+;;  137: callq   *%rax
+;;  139: ud2
 ;;
 ;; wasmtime_builtin_stack_overflow:
 ;;       pushq   %rbp
@@ -127,14 +126,14 @@
 ;;       movq    0x148(%r12), %r11
 ;;       callq   *%r11
 ;;       testb   %al, %al
-;;       je      0x193
-;;  181: movq    (%rsp), %r12
+;;       je      0x18e
+;;  17c: movq    (%rsp), %r12
 ;;       movq    8(%rsp), %r13
 ;;       addq    $0x10, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  193: movq    0x140(%r12), %rax
-;;  19b: movq    %r13, %rdi
-;;  19e: callq   *%rax
-;;  1a0: ud2
+;;  18e: movq    0x140(%r12), %rax
+;;  196: movq    %r13, %rdi
+;;  199: callq   *%rax
+;;  19b: ud2
