@@ -7,8 +7,7 @@ use crate::prelude::*;
 use crate::runtime::vm::open_file_for_mmap;
 use crate::runtime::vm::{CompiledModuleId, VMArrayCallFunction, VMFuncRef, VMWasmCallFunction};
 use crate::{
-    Engine, Module, ResourcesRequired, code::EngineCode, code_memory::CodeMemory,
-    type_registry::TypeCollection,
+    Engine, Module, code::EngineCode, code_memory::CodeMemory, type_registry::TypeCollection,
 };
 use crate::{FuncType, ValType};
 use alloc::sync::Arc;
@@ -19,11 +18,11 @@ use core::ptr::NonNull;
 use std::path::Path;
 use wasmtime_environ::component::{
     CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export, ExportIndex,
-    GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
-    TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
+    NameMapNoIntern, OptionsIndex, StaticModuleIndex, TrampolineIndex, TypeComponentIndex,
+    TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
 };
 use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace, WasmChecksum};
-use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind};
+use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, ResourcesRequired};
 
 /// A compiled WebAssembly Component.
 ///
@@ -184,6 +183,7 @@ impl Component {
     /// let component = Component::new(&engine, "(component (core module))")?;
     /// # Ok(())
     /// # }
+    /// ```
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
         crate::CodeBuilder::new(engine)
@@ -694,8 +694,7 @@ impl Component {
     ///     )
     /// "#)?;
     ///
-    /// let resources = component.resources_required()
-    ///     .expect("this component does not import any core modules or instances");
+    /// let resources = component.resources_required();
     ///
     /// // Instantiating the component will require allocating two memories per
     /// // core instance, and there are three instances, so six total memories.
@@ -707,36 +706,14 @@ impl Component {
     /// assert_eq!(resources.max_initial_table_size, None);
     /// # Ok(()) }
     /// ```
-    pub fn resources_required(&self) -> Option<ResourcesRequired> {
-        let mut resources = ResourcesRequired {
-            num_memories: 0,
-            max_initial_memory_size: None,
-            num_tables: 0,
-            max_initial_table_size: None,
-        };
-        for init in &self.env_component().initializers {
-            match init {
-                GlobalInitializer::InstantiateModule(inst, _) => match inst {
-                    InstantiateModule::Static(index, _) => {
-                        let module = self.static_module(*index);
-                        resources.add(&module.resources_required());
-                    }
-                    InstantiateModule::Import(_, _) => {
-                        // We can't statically determine the resources required
-                        // to instantiate this component.
-                        return None;
-                    }
-                },
-                GlobalInitializer::LowerImport { .. }
-                | GlobalInitializer::ExtractMemory(_)
-                | GlobalInitializer::ExtractTable(_)
-                | GlobalInitializer::ExtractRealloc(_)
-                | GlobalInitializer::ExtractCallback(_)
-                | GlobalInitializer::ExtractPostReturn(_)
-                | GlobalInitializer::Resource(_) => {}
-            }
-        }
-        Some(resources)
+    pub fn resources_required(&self) -> ResourcesRequired {
+        // We skip calculating the aggregate size of core wasm modules.
+        let skip = |_module: &wasmtime_environ::Module| 0_usize;
+        let get_module = |index| self.static_module(index).env_module().as_ref();
+
+        self.env_component()
+            .resources_required(&get_module, &skip)
+            .module_resources
     }
 
     /// Returns the range, in the host's address space, that this module's
