@@ -144,9 +144,8 @@ pub const ELF_NAME_DATA: &'static str = ".name.wasm";
 /// metadata.
 pub const ELF_WASMTIME_DWARF: &str = ".wasmtime.dwarf";
 
-/// Section holding Cranelift's constant pools when they're kept out of
-/// `.text`. It starts on the page boundary right after `.text` and is never
-/// executable.
+/// Read-only section for the constants that are kept out of `.text`. It starts
+/// on the page after `.text`.
 pub const ELF_WASMTIME_CONSTANTS: &str = ".wasmtime.constants";
 
 /// This is the name of the section in the final ELF image which contains the

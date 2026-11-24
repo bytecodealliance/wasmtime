@@ -245,11 +245,11 @@ impl CodeMemory {
         #[cfg(not(has_host_compiler_backend))]
         let _ = &mut unwind;
 
-        // Code reaches its constants at a fixed offset from `.text`, and they
-        // must not share a page with code, which `publish` makes executable.
+        // The code reaches the constants by a fixed offset, so their section
+        // must directly follow `.text`.
         ensure!(
             constants.is_empty() || constants.start == text.end,
-            "constant pool section doesn't directly follow the text section",
+            "the constants section does not directly follow the text section",
         );
 
         // Ensure that the exception table is well-formed. This parser
