@@ -749,6 +749,8 @@ pub struct EmitState {
     ctrl_plane: ControlPlane,
 
     frame_layout: FrameLayout,
+
+    post_call_debug_tag_offset: Option<CodeOffset>,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -757,6 +759,7 @@ impl MachInstEmitState<Inst> for EmitState {
             stack_maps: StackMapEmitter::default(),
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
+            post_call_debug_tag_offset: None,
         }
     }
 
@@ -774,6 +777,10 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
+    }
+
+    fn post_call_debug_tag_offset_mut(&mut self) -> &mut Option<CodeOffset> {
+        &mut self.post_call_debug_tag_offset
     }
 }
 
@@ -3416,6 +3423,7 @@ impl MachInstEmit for Inst {
                 } else {
                     sink.add_call_site();
                 }
+                state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
                 if info.callee_pop_size > 0 {
                     let callee_pop_size =
@@ -3466,6 +3474,7 @@ impl MachInstEmit for Inst {
                 } else {
                     sink.add_call_site();
                 }
+                state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
                 if info.callee_pop_size > 0 {
                     let callee_pop_size =

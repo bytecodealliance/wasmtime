@@ -45,6 +45,7 @@ where
     /// Tracks user stack maps for safepoint instructions.
     stack_maps: StackMapEmitter<InstAndKind<P>>,
     frame_layout: FrameLayout,
+    post_call_debug_tag_offset: Option<CodeOffset>,
 }
 
 impl<P> MachInstEmitState<InstAndKind<P>> for EmitState<P>
@@ -57,6 +58,7 @@ where
             ctrl_plane,
             stack_maps: StackMapEmitter::default(),
             frame_layout: abi.frame_layout().clone(),
+            post_call_debug_tag_offset: None,
         }
     }
 
@@ -74,6 +76,10 @@ where
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
+    }
+
+    fn post_call_debug_tag_offset_mut(&mut self) -> &mut Option<CodeOffset> {
+        &mut self.post_call_debug_tag_offset
     }
 }
 
@@ -193,6 +199,7 @@ fn pulley_emit<P>(
             } else {
                 sink.add_call_site();
             }
+            state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
             if info.patchable {
                 sink.add_patchable_call_site(sink.cur_offset() - start);
@@ -240,6 +247,7 @@ fn pulley_emit<P>(
             } else {
                 sink.add_call_site();
             }
+            state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
             let adjust = -i32::try_from(info.callee_pop_size).unwrap();
             for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
@@ -309,6 +317,7 @@ fn pulley_emit<P>(
             } else {
                 sink.add_call_site();
             }
+            state.post_call_debug_tag_offset = Some(sink.cur_offset());
 
             // If a callee pop is happening here that means that something has
             // messed up, these are expected to be "very simple" signatures.

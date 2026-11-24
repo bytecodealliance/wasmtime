@@ -92,9 +92,9 @@
 ;;       ldur    x2, [sp, #0x10]
 ;;       bl      #0x540
 ;;       ├─╼ exception frame offset: SP = FP - 0xb0
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x10], handler=0x104
-;;       b       #0x1d4
+;;       ├─╼ exception handler: tag=0, context at [SP+0x10], handler=0x104
 ;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x42, slot at FP-0xb0, locals , stack I32 @ slot+0x8
+;;       b       #0x1d4
 ;;  104: mov     w10, w0
 ;;       mov     x11, #0x20
 ;;       adds    x10, x10, x11
