@@ -42,8 +42,8 @@ use wasmtime_environ::{
     CompiledFunctionBody, DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape,
     FrameStateSlotBuilder, FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, GetPtrSize,
     HostCall, InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder,
-    PtrSize, StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt,
-    Tunables, WasmFuncType, WasmValType, prelude::*,
+    PtrSize, RrCallKind, RrConfig, StackMapSection, StaticModuleIndex, TrapEncodingBuilder,
+    TrapSentinel, TripleExt, Tunables, WasmFuncType, WasmValType, prelude::*,
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
@@ -118,6 +118,13 @@ impl Drop for Compiler {
             );
         }
     }
+}
+
+/// Whether a trampoline records its calls into a record/replay trace.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TraceRecording {
+    Enabled,
+    Disabled,
 }
 
 impl Compiler {
@@ -200,16 +207,24 @@ impl Compiler {
         builder.ins().call_indirect(sig, addr, args)
     }
 
+    /// Whether trampolines across the host/Wasm boundary record their calls.
+    fn trace_recording(&self) -> TraceRecording {
+        match self.tunables.rr {
+            Some(RrConfig::Recording) => TraceRecording::Enabled,
+            Some(RrConfig::Replaying) | None => TraceRecording::Disabled,
+        }
+    }
+
     /// Compiles a Wasm-to-array trampoline: the `wasm_call` of host functions.
     ///
-    /// With `record`, a record/replay engine's trampoline records the call
-    /// while the store records.
+    /// With `TraceRecording::Enabled`, the trampoline records the call while
+    /// the store records.
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
         key: FuncKey,
         symbol: &str,
-        record: bool,
+        recording: TraceRecording,
     ) -> Result<CompiledFunctionBody, CompileError> {
         log::trace!("compiling wasm-to-array trampoline: {key:?} = {symbol:?}");
 
@@ -269,7 +284,7 @@ impl Compiler {
             .relative_to(func_ref_offset.into())
             .load(&mut builder.cursor(), callee_vmctx);
 
-        let rr_call = record.then(|| {
+        let rr_call = (recording == TraceRecording::Enabled).then(|| {
             let func = builder
                 .ins()
                 .iadd_imm_s(callee_vmctx, i64::from(func_ref_offset));
@@ -280,7 +295,7 @@ impl Compiler {
                 vm_store_context,
                 func,
                 args_base,
-                true,
+                RrCallKind::WasmToHost,
             );
             self.raise_if_host_trapped(&mut builder, &mut alias_regions, caller_vmctx, recorded);
             call
@@ -305,7 +320,7 @@ impl Compiler {
                 caller_vmctx,
                 rr_call,
                 args_base,
-                true,
+                RrCallKind::WasmToHost,
                 succeeded,
             );
             succeeded = builder.ins().band(succeeded, recorded);
@@ -642,7 +657,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 let sig = translation.module.functions[func_index]
                     .signature
                     .unwrap_module_type_index();
-                let record = self.tunables.recording.then(|| {
+                let record = (self.trace_recording() == TraceRecording::Enabled).then(|| {
                     let offsets = wasmtime_environ::VMOffsets::new(
                         self.isa.pointer_bytes(),
                         &translation.module,
@@ -665,14 +680,14 @@ impl wasmtime_environ::Compiler for Compiler {
 
             FuncKey::WasmToArrayTrampoline(ty) => {
                 let ty = types[ty].unwrap_func();
-                self.compile_wasm_to_array_trampoline(ty, key, symbol, self.tunables.recording)
+                self.compile_wasm_to_array_trampoline(ty, key, symbol, self.trace_recording())
             }
             // Host resource destructors run within the recorded host call of
             // their `resource.drop` trampoline.
             FuncKey::ResourceDropTrampoline => {
                 let ty = types.find_resource_drop_signature().unwrap();
                 let ty = types[ty].unwrap_func();
-                self.compile_wasm_to_array_trampoline(ty, key, symbol, false)
+                self.compile_wasm_to_array_trampoline(ty, key, symbol, TraceRecording::Disabled)
             }
 
             FuncKey::DefinedWasmFunction(..) => {
@@ -707,7 +722,7 @@ impl wasmtime_environ::Compiler for Compiler {
                         ty,
                         symbol,
                         wasmtime_environ::VMCONTEXT_MAGIC,
-                        self.tunables.recording.then(|| {
+                        (self.trace_recording() == TraceRecording::Enabled).then(|| {
                             wasmtime_environ::VMOffsets::new(
                                 self.isa.pointer_bytes(),
                                 &translation.module,
@@ -1423,8 +1438,7 @@ impl Compiler {
     }
 
     /// While the store records, calls the `rr_enter` builtin to record a call
-    /// to `func` (a `*const VMFuncRef`) with the arguments at `values`: from
-    /// Wasm to the host if `host`, otherwise from the host to Wasm.
+    /// to `func` (a `*const VMFuncRef`) with the arguments at `values`.
     ///
     /// Returns the call's ID as an `i32`, which is `-1` if the call is not
     /// recorded, and whether recording succeeded. A failed recording leaves
@@ -1437,7 +1451,7 @@ impl Compiler {
         vm_store_context: ir::Value,
         func: ir::Value,
         values: ir::Value,
-        host: bool,
+        kind: RrCallKind,
     ) -> (ir::Value, ir::Value)
     where
         O: GetPtrSize,
@@ -1463,14 +1477,14 @@ impl Compiler {
         builder.seal_block(record_block);
 
         builder.switch_to_block(record_block);
-        let host = builder.ins().iconst(ir::types::I8, i64::from(host));
+        let kind = builder.ins().iconst(ir::types::I8, i64::from(kind as u8));
         let sigs = BuiltinFunctionSignatures::new(self);
         let builtin = BuiltinFunctionIndex::rr_enter();
         let inst = self.call_builtin(
             builder,
             alias_regions,
             vmctx,
-            &[vmctx, func, values, host],
+            &[vmctx, func, values, kind],
             builtin,
             sigs.host_signature(builtin),
         );
@@ -1499,7 +1513,7 @@ impl Compiler {
         vmctx: ir::Value,
         call: ir::Value,
         values: ir::Value,
-        host: bool,
+        kind: RrCallKind,
         succeeded: ir::Value,
     ) -> ir::Value
     where
@@ -1517,14 +1531,14 @@ impl Compiler {
         builder.seal_block(record_block);
 
         builder.switch_to_block(record_block);
-        let host = builder.ins().iconst(ir::types::I8, i64::from(host));
+        let kind = builder.ins().iconst(ir::types::I8, i64::from(kind as u8));
         let sigs = BuiltinFunctionSignatures::new(self);
         let builtin = BuiltinFunctionIndex::rr_leave();
         let inst = self.call_builtin(
             builder,
             alias_regions,
             vmctx,
-            &[vmctx, call, values, host, succeeded],
+            &[vmctx, call, values, kind, succeeded],
             builtin,
             sigs.host_signature(builtin),
         );
@@ -1624,8 +1638,7 @@ impl Compiler {
     /// functions.
     ///
     /// With `record`, the offset in the callee's vmctx of the callee's
-    /// `VMFuncRef`, a record/replay engine's trampoline records the call while
-    /// the store records.
+    /// `VMFuncRef`, the trampoline records the call while the store records.
     fn array_to_wasm_trampoline(
         &self,
         trampoline_key: FuncKey,
@@ -1688,7 +1701,7 @@ impl Compiler {
                 vm_store_ctx,
                 func,
                 values_vec_ptr,
-                false,
+                RrCallKind::HostToWasm,
             );
             let failed_block = builder.create_block();
             builder.set_cold_block(failed_block);
@@ -1816,7 +1829,7 @@ impl Compiler {
                 vmctx,
                 rr_call,
                 values_vec_ptr,
-                false,
+                RrCallKind::HostToWasm,
                 succeeded,
             );
         }
@@ -1863,7 +1876,7 @@ impl Compiler {
                 vmctx,
                 rr_call,
                 values_vec_ptr,
-                false,
+                RrCallKind::HostToWasm,
                 false_return,
             );
         }

@@ -791,7 +791,28 @@ mod test_vmtag_definition {
 // `VmSafe` fields.
 unsafe impl VmSafe for VMFuncRef {}
 
+/// The identity of a function within its store; see [`VMFuncRef::hash_key`].
+#[cfg(feature = "rr")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct VMFuncRefHashKey {
+    vmctx: usize,
+    array_call: usize,
+}
+
 impl VMFuncRef {
+    /// Get a stable hash key for this function.
+    ///
+    /// This is consistent across all of the `VMFuncRef`s of a function: host
+    /// functions may have store-local copies with a filled-in `wasm_call`
+    /// trampoline, while the original `VMFuncRef` has none.
+    #[cfg(feature = "rr")]
+    pub(crate) fn hash_key(&self) -> VMFuncRefHashKey {
+        VMFuncRefHashKey {
+            vmctx: self.vmctx.addr().get(),
+            array_call: self.array_call.addr().get(),
+        }
+    }
+
     /// Invokes the `array_call` field of this `VMFuncRef` with the supplied
     /// arguments.
     ///

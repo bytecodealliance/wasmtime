@@ -233,6 +233,11 @@ const _: () = {
     assert!(core::mem::offset_of!(Memory, instance) == 0);
 };
 
+/// The identity of a memory within its store; see [`Memory::hash_key`].
+#[cfg(any(feature = "coredump", feature = "rr"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct MemoryHashKey(usize);
+
 impl Memory {
     /// Creates a new WebAssembly memory given the configuration of `ty`.
     ///
@@ -311,7 +316,6 @@ impl Memory {
             .await?
             .unshared()
             .unwrap();
-        #[cfg(feature = "rr")]
         store.rr_created_memory(memory)?;
         Ok(memory)
     }
@@ -395,24 +399,16 @@ impl Memory {
         offset: usize,
         buffer: &[u8],
     ) -> Result<(), MemoryAccessError> {
-        let mut context = store.as_context_mut();
-        #[cfg(feature = "rr")]
-        if context.0.rr.recording() {
-            let end = offset
-                .checked_add(buffer.len())
-                .ok_or(MemoryAccessError { _private: () })?;
-            self.rr_data(context.0)
-                .get(offset..end)
-                .ok_or(MemoryAccessError { _private: () })?;
-            context.0.rr_track_memory(*self, offset..end);
-            self.rr_data_mut(context.0)[offset..end].copy_from_slice(buffer);
-            return Ok(());
-        }
-        self.data_mut(&mut context)
-            .get_mut(offset..)
-            .and_then(|s| s.get_mut(..buffer.len()))
+        let store = store.as_context_mut().0;
+        let end = offset
+            .checked_add(buffer.len())
+            .ok_or(MemoryAccessError { _private: () })?;
+        self.data_mut_untracked(store)
+            .get_mut(offset..end)
             .ok_or(MemoryAccessError { _private: () })?
             .copy_from_slice(buffer);
+        // Unlike `Memory::data_mut`, only this range was written.
+        store.rr_track_memory(*self, offset..end);
         Ok(())
     }
 
@@ -452,18 +448,30 @@ impl Memory {
     ///
     /// Panics if this memory doesn't belong to `store`.
     pub fn data<'a, T: 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
-        unsafe {
-            let store = store.into();
-            let definition = store[self.instance].memory(self.index);
-            debug_assert!(!self.ty(store).is_shared());
-            slice::from_raw_parts(definition.base.as_ptr(), definition.current_length())
-        }
+        self.data_in_store(store.into().0)
+    }
+
+    /// Like [`Memory::data`], for a type-erased store.
+    pub(crate) fn data_in_store<'a>(&self, store: &'a StoreOpaque) -> &'a [u8] {
+        let definition = store[self.instance].memory(self.index);
+        debug_assert!(!self.wasmtime_ty(store).shared);
+        // SAFETY: the store, which owns this non-shared memory, is borrowed for
+        // the slice's lifetime.
+        unsafe { slice::from_raw_parts(definition.base.as_ptr(), definition.current_length()) }
     }
 
     /// Returns this memory as a native Rust mutable slice.
     ///
     /// Note that this method will consider the entire store context provided as
     /// borrowed for the duration of the lifetime of the returned slice.
+    ///
+    /// # Record/replay
+    ///
+    /// If the store is recording (see `Store::new_recording`) then the entire
+    /// memory is considered modified, and its contents are copied to the trace
+    /// the next time that Wasm may observe them. Use [`Memory::write`],
+    /// [`Memory::data_range_mut`], or [`MemoryRanges`] to modify only part of
+    /// a memory.
     ///
     /// # Panics
     ///
@@ -472,17 +480,21 @@ impl Memory {
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> &'a mut [u8] {
-        unsafe {
-            let store = store.into();
-            #[cfg(feature = "rr")]
-            {
-                let len = self.internal_data_size(store.0);
-                store.0.rr_track_memory(*self, 0..len);
-            }
-            let definition = store[self.instance].memory(self.index);
-            debug_assert!(!self.ty(store).is_shared());
-            slice::from_raw_parts_mut(definition.base.as_ptr(), definition.current_length())
-        }
+        let store = store.into().0;
+        let len = self.internal_data_size(store);
+        store.rr_track_memory(*self, 0..len);
+        self.data_mut_untracked(store)
+    }
+
+    /// Like [`Memory::data_mut`], but does not note that the memory may be
+    /// written if `store` is recording; the caller must do so for any range
+    /// that it writes.
+    fn data_mut_untracked<'a>(&self, store: &'a mut StoreOpaque) -> &'a mut [u8] {
+        let definition = store[self.instance].memory(self.index);
+        debug_assert!(!self.wasmtime_ty(store).shared);
+        // SAFETY: the store, which owns this non-shared memory, is exclusively
+        // borrowed for the slice's lifetime.
+        unsafe { slice::from_raw_parts_mut(definition.base.as_ptr(), definition.current_length()) }
     }
 
     /// Same as [`Memory::data_mut`], but also returns the `T` from the
@@ -493,6 +505,14 @@ impl Memory {
     /// [`Memory::data_mut`] would consider the entire store borrowed, whereas
     /// this method allows the Rust compiler to see that the borrow of this
     /// memory and the borrow of `T` are disjoint.
+    ///
+    /// # Record/replay
+    ///
+    /// If the store is recording (see `Store::new_recording`) then the entire
+    /// memory is considered modified, and its contents are copied to the trace
+    /// the next time that Wasm may observe them. Use [`Memory::write`],
+    /// [`Memory::data_range_mut`], or [`MemoryRanges`] to modify only part of
+    /// a memory.
     ///
     /// # Panics
     ///
@@ -796,10 +816,7 @@ impl Memory {
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         delta: u64,
     ) -> Result<u64> {
-        #[cfg(feature = "rr")]
         store.rr_flush()?;
-        #[cfg(feature = "rr")]
-        let old_size = self.internal_data_size(store);
         let result = self
             .instance
             .get_mut(store)
@@ -807,8 +824,7 @@ impl Memory {
             .await?;
         match result {
             Some(size) => {
-                #[cfg(feature = "rr")]
-                store.rr_memory_grown(*self, old_size)?;
+                store.rr_memory_grown(*self)?;
                 let page_size = self.wasmtime_ty(store).page_size();
                 Ok(u64::try_from(size).unwrap() / page_size)
             }
@@ -841,11 +857,6 @@ impl Memory {
         store.id() == self.instance.store_id()
     }
 
-    #[cfg(feature = "rr")]
-    pub(crate) fn rr_key(&self, store: &StoreOpaque) -> usize {
-        store[self.instance].memory_ptr(self.index).as_ptr().addr()
-    }
-
     /// This memory's watchpoint shadow, if compiled code checks it.
     pub(crate) fn vm_shadow<'a>(
         &self,
@@ -872,20 +883,6 @@ impl Memory {
         self.instance == other.instance && self.index == other.index
     }
 
-    #[cfg(feature = "rr")]
-    pub(crate) fn rr_data<'a>(&self, store: &'a StoreOpaque) -> &'a [u8] {
-        let definition = store[self.instance].memory(self.index);
-        // SAFETY: the store owns this non-shared memory for the borrow duration.
-        unsafe { slice::from_raw_parts(definition.base.as_ptr(), definition.current_length()) }
-    }
-
-    #[cfg(feature = "rr")]
-    pub(crate) fn rr_data_mut<'a>(&self, store: &'a mut StoreOpaque) -> &'a mut [u8] {
-        let definition = store[self.instance].memory(self.index);
-        // SAFETY: exclusive store access also excludes access to this memory.
-        unsafe { slice::from_raw_parts_mut(definition.base.as_ptr(), definition.current_length()) }
-    }
-
     /// Returns a stable identifier for this memory within its store.
     ///
     /// This allows distinguishing memories when introspecting them
@@ -900,9 +897,9 @@ impl Memory {
     /// Even if the same underlying memory definition is added to the
     /// `StoreData` multiple times and becomes multiple `wasmtime::Memory`s,
     /// this hash key will be consistent across all of these memories.
-    #[cfg(feature = "coredump")]
-    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
-        store[self.instance].memory_ptr(self.index).as_ptr().addr()
+    #[cfg(any(feature = "coredump", feature = "rr"))]
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> MemoryHashKey {
+        MemoryHashKey(store[self.instance].memory_ptr(self.index).as_ptr().addr())
     }
 }
 
@@ -1818,7 +1815,6 @@ impl<'a> MemoryRanges<'a> {
         if range.start > range.end || range.end > len {
             return Err(MemoryAccessError { _private: () });
         }
-        #[cfg(feature = "rr")]
         self.store.rr_track_memory(self.memory, range.clone());
         let definition = self.store[self.memory.instance].memory(self.memory.index);
         // SAFETY: the range is in bounds, and the store, which owns this

@@ -5,7 +5,7 @@ pub use crate::runtime::code_memory::CustomCodeMemory;
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
 use crate::runtime::vm::{GcRuntime, ModuleRuntimeInfo};
-use crate::{Config, RRConfig};
+use crate::{Config, RrConfig};
 use alloc::sync::Arc;
 use core::ptr::NonNull;
 #[cfg(target_has_atomic = "64")]
@@ -289,25 +289,13 @@ impl Engine {
     /// Returns whether the engine is configured to support execution recording
     #[inline]
     pub fn is_recording(&self) -> bool {
-        match self.config().rr_config {
-            #[cfg(feature = "rr")]
-            RRConfig::Recording => true,
-            #[cfg(feature = "rr")]
-            RRConfig::Replaying => false,
-            RRConfig::None => false,
-        }
+        self.tunables().rr == Some(RrConfig::Recording)
     }
 
     /// Returns whether the engine is configured to support execution replaying
     #[inline]
     pub fn is_replaying(&self) -> bool {
-        match self.config().rr_config {
-            #[cfg(feature = "rr")]
-            RRConfig::Replaying => true,
-            #[cfg(feature = "rr")]
-            RRConfig::Recording => false,
-            RRConfig::None => false,
-        }
+        self.tunables().rr == Some(RrConfig::Replaying)
     }
 
     /// Detects whether the bytes provided are a precompiled object produced by

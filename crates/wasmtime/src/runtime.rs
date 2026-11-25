@@ -57,6 +57,8 @@ pub(crate) mod native_debug;
 pub(crate) mod resources;
 #[cfg(feature = "rr")]
 pub mod rr;
+#[cfg(not(feature = "rr"))]
+pub(crate) mod rr;
 pub(crate) mod store;
 pub(crate) mod trampoline;
 pub(crate) mod trap;

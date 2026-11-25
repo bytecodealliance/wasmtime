@@ -43,6 +43,11 @@ const _: () = {
     assert!(core::mem::offset_of!(Global, store) == 0);
 };
 
+/// The identity of a global within its store; see [`Global::hash_key`].
+#[cfg(any(feature = "coredump", feature = "rr"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct GlobalHashKey(usize);
+
 impl Global {
     /// Creates a new WebAssembly `global` value with the provide type `ty` and
     /// initial value `val`.
@@ -105,7 +110,6 @@ impl Global {
             "type mismatch: initial value provided does not match the type of this global",
         )?;
         let global = generate_global_export(store, ty, val)?;
-        #[cfg(feature = "rr")]
         store.rr_created_global(global)?;
         Ok(global)
     }
@@ -262,7 +266,7 @@ impl Global {
     /// Panics if `store` does not own this global.
     pub fn set(&self, mut store: impl AsContextMut, val: Val) -> Result<()> {
         let store = store.as_context_mut().0;
-        #[cfg(feature = "rr")]
+        // The trace has no record for this store mutation.
         store.rr.reject("host global mutation")?;
         self._set(store, val)
     }
@@ -382,11 +386,6 @@ impl Global {
         }
     }
 
-    #[cfg(feature = "rr")]
-    pub(crate) fn rr_key(&self, store: &StoreOpaque) -> usize {
-        self.definition(store).as_ptr() as usize
-    }
-
     pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreOpaque) -> &'a wasmtime_environ::Global {
         self.store.assert_belongs_to(store.id());
         match self.kind {
@@ -456,9 +455,9 @@ impl Global {
     /// Even if the same underlying global definition is added to the
     /// `StoreData` multiple times and becomes multiple `wasmtime::Global`s,
     /// this hash key will be consistent across all of these globals.
-    #[cfg(feature = "coredump")]
-    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
-        self.definition(store).as_ptr().addr()
+    #[cfg(any(feature = "coredump", feature = "rr"))]
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> GlobalHashKey {
+        GlobalHashKey(self.definition(store).as_ptr().addr())
     }
 
     fn definition(&self, store: &StoreOpaque) -> NonNull<VMGlobalDefinition> {

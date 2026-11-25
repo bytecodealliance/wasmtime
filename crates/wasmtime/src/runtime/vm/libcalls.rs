@@ -69,7 +69,8 @@ use core::convert::Infallible;
 use core::time::Duration;
 use wasmtime_core::math::WasmFloat;
 use wasmtime_environ::{
-    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, PassiveElemIndex, TableIndex, Trap,
+    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, PassiveElemIndex, RrCallKind, TableIndex,
+    Trap,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -261,7 +262,8 @@ fn memory_grow(
             .await?
             .map(|size_in_bytes| AllocationSize(size_in_bytes >> page_size_log2));
 
-        #[cfg(feature = "rr")]
+        // Whether growth fails depends on the host, so replay must reproduce
+        // the failure, but the trace does not represent it yet.
         if result.is_none() {
             store.rr.poison("failed guest memory growth");
         }
@@ -323,7 +325,8 @@ unsafe fn table_grow(
             .defined_table_grow(defined_table_index, limiter, delta)
             .await?
             .map(AllocationSize);
-        #[cfg(feature = "rr")]
+        // Whether growth fails depends on the host, so replay must reproduce
+        // the failure, but the trace does not represent it yet.
         if result.is_none() {
             store.rr.poison("failed guest table growth");
         }
@@ -753,7 +756,6 @@ fn out_of_gas(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
     // Running out of fuel, or being cancelled while yielding, stops the guest
     // at a point between two of its calls to or returns from the host, which
     // the trace cannot represent.
-    #[cfg(feature = "rr")]
     if result.is_err() {
         store.rr.poison("guest execution stopping at a fuel check");
     }
@@ -815,7 +817,6 @@ fn new_epoch(store: &mut dyn VMStore, _instance: InstanceId) -> Result<NextEpoch
     // An epoch interruption trap, or cancellation while yielding, stops the
     // guest at a point between two of its calls to or returns from the host,
     // which the trace cannot represent.
-    #[cfg(feature = "rr")]
     if result.is_err() {
         store
             .rr
@@ -1356,20 +1357,15 @@ fn rr_enter(
     _instance: InstanceId,
     func: *mut u8,
     values: *mut u8,
-    host: u8,
+    kind: u8,
 ) -> Result<u32> {
-    #[cfg(feature = "rr")]
-    {
-        let func = core::ptr::NonNull::new(func.cast()).unwrap();
-        // SAFETY: trampolines pass the callee's live function reference and
-        // its initialized arguments.
-        unsafe { store.rr_enter(func, values.cast(), host != 0) }
-    }
-    #[cfg(not(feature = "rr"))]
-    {
-        let _ = (store, func, values, host);
-        bail_bug!("recording without record/replay support")
-    }
+    let func = core::ptr::NonNull::new(func.cast()).unwrap();
+    let Some(kind) = RrCallKind::from_u8(kind) else {
+        bail_bug!("invalid record/replay call kind");
+    };
+    // SAFETY: trampolines pass the callee's live function reference, which the
+    // store owns, and its initialized arguments.
+    unsafe { store.rr_enter(func, values.cast(), kind) }
 }
 
 /// Records the return of a call from `rr_enter`.
@@ -1378,20 +1374,16 @@ fn rr_leave(
     _instance: InstanceId,
     call: u32,
     values: *mut u8,
-    host: u8,
+    kind: u8,
     succeeded: u8,
 ) -> Result<()> {
-    #[cfg(feature = "rr")]
-    {
-        // SAFETY: trampolines pass the initialized results of successful
-        // calls, and the error of failed calls is pending in TLS.
-        unsafe { store.rr_leave(call, values.cast(), host != 0, succeeded != 0) }
-    }
-    #[cfg(not(feature = "rr"))]
-    {
-        let _ = (store, call, values, host, succeeded);
-        bail_bug!("recording without record/replay support")
-    }
+    let Some(kind) = RrCallKind::from_u8(kind) else {
+        bail_bug!("invalid record/replay call kind");
+    };
+    // SAFETY: trampolines pass the ID that `rr_enter` returned for this call
+    // and the initialized results of successful calls, and the error of failed
+    // calls is pending in TLS.
+    unsafe { store.rr_leave(call, values.cast(), kind, succeeded != 0) }
 }
 
 fn breakpoint(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {

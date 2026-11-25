@@ -204,14 +204,14 @@ macro_rules! foreach_builtin_function {
             // to a linear memory, before it, if any of the bytes are watched.
             memory_watch_range(vmctx: vmctx, memory: u32, addr: u64, len: u64) -> bool;
             // Records a call to `func` (a `VMFuncRef`) with the arguments in
-            // `values`: by Wasm to the host if `host` is nonzero, otherwise
-            // by the host to Wasm. Returns the call's ID for `rr_leave`, or
-            // `u32::MAX` if the call is not recorded.
-            rr_enter(vmctx: vmctx, func: pointer, values: pointer, host: u8) -> u64;
+            // `values`, where `kind` is a `RrCallKind`. Returns the call's
+            // 32-bit ID for `rr_leave`, zero-extended, which is `u32::MAX` if
+            // the call is not recorded; or `u64::MAX` if recording failed.
+            rr_enter(vmctx: vmctx, func: pointer, values: pointer, kind: u8) -> u64;
             // Records the return of call `call` from `rr_enter`, with the
             // results in `values` if `succeeded`, or otherwise the error
             // that is being raised.
-            rr_leave(vmctx: vmctx, call: u32, values: pointer, host: u8, succeeded: u8) -> bool;
+            rr_leave(vmctx: vmctx, call: u32, values: pointer, kind: u8, succeeded: u8) -> bool;
         }
     };
 }
@@ -425,7 +425,7 @@ impl BuiltinFunctionIndex {
             // Failure here indicates GC heap corruption.
             (@get get_interned_func_ref pointer) => (TrapSentinel::NegativeOne);
 
-            // Call IDs are 32-bit, so -1 indicates a failed recording.
+            // Call IDs are 32-bit, so a 64-bit -1 indicates a failed recording.
             (@get rr_enter u64) => (TrapSentinel::NegativeOne);
 
             // These libcalls can't trap
@@ -462,5 +462,27 @@ impl BuiltinFunctionIndex {
         }
 
         foreach_builtin_function!(trap_sentinel)
+    }
+}
+
+/// The kind of a call across the host/Wasm boundary that the `rr_enter` and
+/// `rr_leave` builtins record.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum RrCallKind {
+    /// The host calls a Wasm function.
+    HostToWasm = 0,
+    /// Wasm calls a host function.
+    WasmToHost = 1,
+}
+
+impl RrCallKind {
+    /// Decodes the representation that compiled code passes to builtins.
+    pub fn from_u8(kind: u8) -> Option<Self> {
+        match kind {
+            0 => Some(Self::HostToWasm),
+            1 => Some(Self::WasmToHost),
+            _ => None,
+        }
     }
 }

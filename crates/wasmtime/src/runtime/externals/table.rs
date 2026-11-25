@@ -42,6 +42,10 @@ const _: () = {
     assert!(core::mem::offset_of!(Table, instance) == 0);
 };
 
+/// The identity of a table within its store; see [`Table::hash_key`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct TableHashKey(usize);
+
 impl Table {
     /// Creates a new [`Table`] with the given parameters.
     ///
@@ -156,7 +160,6 @@ impl Table {
         } else {
             table._fill(store, 0, init.clone(), ty.minimum())?;
         }
-        #[cfg(feature = "rr")]
         store.rr_created_table(table, init)?;
         Ok(table)
     }
@@ -262,7 +265,7 @@ impl Table {
     /// Panics if `store` does not own this table.
     pub fn set(&self, mut store: impl AsContextMut, index: u64, val: Ref) -> Result<()> {
         let store = store.as_context_mut().0;
-        #[cfg(feature = "rr")]
+        // The trace has no record for this store mutation.
         store.rr.reject("host table mutation")?;
         self.set_(store, index, val)
     }
@@ -342,7 +345,7 @@ impl Table {
 
     async fn _grow<T>(&self, store: StoreContextMut<'_, T>, delta: u64, init: Ref) -> Result<u64> {
         let store = store.0;
-        #[cfg(feature = "rr")]
+        // The trace has no record for this store mutation.
         store.rr.reject("host table growth")?;
         let (mut limiter, store) = store.resource_limiter_and_store_opaque();
         let limiter = limiter.as_mut();
@@ -424,7 +427,7 @@ impl Table {
         len: u64,
     ) -> Result<()> {
         let store = store.as_context_mut().0;
-        #[cfg(feature = "rr")]
+        // The trace has no record for this store mutation.
         store.rr.reject("host table mutation")?;
 
         let src_range = src_index..src_index.checked_add(len).ok_or(Trap::TableOutOfBounds)?;
@@ -497,7 +500,7 @@ impl Table {
     /// Panics if `store` does not own either `dst_table` or `src_table`.
     pub fn fill(&self, mut store: impl AsContextMut, dst: u64, val: Ref, len: u64) -> Result<()> {
         let store = store.as_context_mut().0;
-        #[cfg(feature = "rr")]
+        // The trace has no record for this store mutation.
         store.rr.reject("host table mutation")?;
         self._fill(store, dst, val, len)
     }
@@ -547,11 +550,6 @@ impl Table {
         Table { instance, index }
     }
 
-    #[cfg(feature = "rr")]
-    pub(crate) fn rr_key(&self) -> (u32, u32) {
-        (self.instance.instance().as_u32(), self.index.as_u32())
-    }
-
     pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreOpaque) -> &'a wasmtime_environ::Table {
         let module = store[self.instance].env_module();
         let index = module.table_index(self.index);
@@ -586,11 +584,11 @@ impl Table {
     /// `StoreData` multiple times and becomes multiple `wasmtime::Table`s,
     /// this hash key will be consistent across all of these tables.
     #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Not used yet, but added for consistency")
+        not(any(test, feature = "rr")),
+        expect(dead_code, reason = "Only used by record/replay")
     )]
-    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<'_> {
-        store[self.instance].table_ptr(self.index).as_ptr().addr()
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> TableHashKey {
+        TableHashKey(store[self.instance].table_ptr(self.index).as_ptr().addr())
     }
 }
 

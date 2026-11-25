@@ -1280,7 +1280,7 @@ impl ModuleTranslation<'_> {
         // Record/replay records every instance's startup as an activation,
         // so whether a module has one must not depend on how its memories
         // are initialized, which differs between engine configurations.
-        if tunables.recording {
+        if tunables.rr.is_some() {
             self.require_startup_func(types);
         }
 

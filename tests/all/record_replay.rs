@@ -1,15 +1,14 @@
 use wasmtime::{rr::Trace, *};
 
-fn engine(mode: RRConfig) -> Result<Engine> {
+fn engine(mode: RrConfig) -> Result<Engine> {
     let mut config = Config::new();
-    config.rr(mode);
+    config.rr(Some(mode));
     Engine::new(&config)
 }
 
 fn identity() -> Result<(Store<()>, Func, Memory)> {
-    let engine = engine(RRConfig::Recording)?;
-    let mut store = Store::new(&engine, ());
-    store.start_recording()?;
+    let engine = engine(RrConfig::Recording)?;
+    let mut store = Store::new_recording(&engine, ())?;
     let module = Module::new(
         &engine,
         r#"(module
@@ -24,69 +23,83 @@ fn identity() -> Result<(Store<()>, Func, Memory)> {
 }
 
 #[test]
-fn framing_rejects_truncation_and_trailing_data() -> Result<()> {
+fn truncation_and_trailing_data_are_rejected() -> Result<()> {
+    // Creating a trace only checks its version; reading it checks its framing.
+    let read = |bytes: &[u8]| Trace::from_bytes(bytes.to_vec())?.module_checksums();
     let (mut store, _, _) = identity()?;
     let trace = store.finish_recording()?;
+    assert_eq!(read(trace.as_bytes())?.len(), 1);
     for len in 0..trace.as_bytes().len() {
-        assert!(Trace::from_bytes(trace.as_bytes()[..len].to_vec()).is_err());
+        assert!(read(&trace.as_bytes()[..len]).is_err());
     }
     let mut extra = trace.as_bytes().to_vec();
     extra.push(0);
-    assert!(Trace::from_bytes(extra).is_err());
+    assert!(read(&extra).is_err());
+    assert!(Trace::from_bytes(b"not a trace".to_vec()).is_err());
     Ok(())
 }
 
 #[test]
-fn recording_requires_an_empty_store() -> Result<()> {
-    // Application data and precompiled modules do not populate the store.
-    let record_engine = engine(RRConfig::Recording)?;
-    let mut record = Store::new(&record_engine, 123);
-    record.start_recording()?;
-    record.finish_recording()?;
+fn recording_requires_a_compatible_engine() -> Result<()> {
+    let store = Store::new_recording(&engine(RrConfig::Recording)?, 123)?;
+    assert_eq!(*store.data(), 123);
 
-    let constructors: &[fn(&mut Store<i32>) -> Result<()>] = &[
-        |store| {
-            Func::wrap(store, || ());
-            Ok(())
-        },
-        |store| {
-            Memory::new(store, MemoryType::new(0, None)?)?;
-            Ok(())
-        },
-        |store| {
-            Global::new(
-                store,
-                GlobalType::new(ValType::I32, Mutability::Const),
-                Val::I32(0),
-            )?;
-            Ok(())
-        },
-        |store| {
-            Table::new(
-                store,
-                TableType::new(RefType::FUNCREF, 0, None)?,
-                Ref::Func(None),
-            )?;
-            Ok(())
-        },
-        |store| {
-            let module = Module::new(store.engine(), "(module)")?;
-            Instance::new(store, &module, &[])?;
-            Ok(())
-        },
-    ];
-    for construct in constructors {
-        let mut record = Store::new(&record_engine, 123);
-        construct(&mut record)?;
-        assert!(
-            record
-                .start_recording()
-                .unwrap_err()
-                .to_string()
-                .contains("empty store")
-        );
-        assert_eq!(*record.data(), 123);
+    for engine in [Engine::default(), engine(RrConfig::Replaying)?] {
+        let err = Store::new_recording(&engine, ()).err().unwrap().to_string();
+        assert!(err.contains("RrConfig::Recording"), "{err}");
     }
+    Ok(())
+}
+
+#[test]
+fn artifacts_are_specific_to_the_rr_config() -> Result<()> {
+    let modes = [None, Some(RrConfig::Recording), Some(RrConfig::Replaying)];
+    for compile in modes {
+        let artifact =
+            Engine::new(Config::new().rr(compile))?.precompile_module(b"\0asm\x01\0\0\0")?;
+        for load in modes {
+            let engine = Engine::new(Config::new().rr(load))?;
+            // SAFETY: the artifact was just compiled by Wasmtime.
+            let result = unsafe { Module::deserialize(&engine, &artifact) };
+            assert_eq!(result.is_ok(), compile == load, "{compile:?} {load:?}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn non_nullable_function_references_cross_boundaries() -> Result<()> {
+    let mut config = Config::new();
+    config
+        .wasm_function_references(true)
+        .rr(Some(RrConfig::Recording));
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new_recording(&engine, ())?;
+    let ty = ValType::Ref(RefType::new(false, HeapType::Func));
+    let host = Func::new(
+        &mut store,
+        FuncType::new(&engine, [ty.clone()], [ty]),
+        |_, args, results| {
+            results[0] = args[0];
+            Ok(())
+        },
+    );
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "host" (func $host (param (ref func)) (result (ref func))))
+                (elem declare func $run)
+                (func $run (export "run") (result (ref func))
+                    (call $host (ref.func $run))))
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[host.into()])?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+    let mut results = [Val::I32(0)];
+    run.call(&mut store, &[], &mut results)?;
+    assert!(matches!(results[0], Val::FuncRef(Some(_))));
+    store.finish_recording()?;
     Ok(())
 }
 
@@ -114,16 +127,16 @@ fn forbidden_mutation_poisons_even_if_error_is_caught() -> Result<()> {
 
 #[test]
 fn rr_config_enables_determinism_but_rejects_explicit_conflicts() -> Result<()> {
-    engine(RRConfig::Recording)?;
-    engine(RRConfig::Replaying)?;
+    engine(RrConfig::Recording)?;
+    engine(RrConfig::Replaying)?;
     let mut config = Config::new();
     config
         .cranelift_nan_canonicalization(false)
-        .rr(RRConfig::Recording);
+        .rr(Some(RrConfig::Recording));
     assert!(Engine::new(&config).is_err());
     let mut config = Config::new();
     config
-        .rr(RRConfig::Replaying)
+        .rr(Some(RrConfig::Replaying))
         .relaxed_simd_deterministic(false);
     assert!(Engine::new(&config).is_err());
     Ok(())
@@ -161,7 +174,7 @@ fn nan_results(config: &Config) -> Result<[u32; 2]> {
 #[test]
 fn rr_config_canonicalizes_nans_regardless_of_option_order() -> Result<()> {
     let mut config = Config::new();
-    config.wasm_relaxed_simd(true).rr(RRConfig::Recording);
+    config.wasm_relaxed_simd(true).rr(Some(RrConfig::Recording));
     // Resetting the compiler configuration does not lose the setting.
     config.enable_compiler(false).enable_compiler(true);
     assert_eq!(nan_results(&config)?, [0x7fc0_0000; 2]);
@@ -172,7 +185,7 @@ fn rr_config_canonicalizes_nans_regardless_of_option_order() -> Result<()> {
 #[cfg(target_arch = "x86_64")]
 fn fma_builtin_results_match_native_fma() -> Result<()> {
     let mut config = Config::new();
-    config.wasm_relaxed_simd(true).rr(RRConfig::Recording);
+    config.wasm_relaxed_simd(true).rr(Some(RrConfig::Recording));
     // SAFETY: disabling a CPU feature only makes code use fallbacks.
     unsafe {
         config.cranelift_flag_set("has_fma", "false");
@@ -184,9 +197,8 @@ fn fma_builtin_results_match_native_fma() -> Result<()> {
 #[cfg(feature = "gc")]
 #[test]
 fn gc_reference_boundaries_are_rejected() -> Result<()> {
-    let engine = engine(RRConfig::Recording)?;
-    let mut store = Store::new(&engine, ());
-    store.start_recording()?;
+    let engine = engine(RrConfig::Recording)?;
+    let mut store = Store::new_recording(&engine, ())?;
     let host = Func::new(
         &mut store,
         FuncType::new(&engine, [ValType::EXTERNREF], []),
@@ -210,11 +222,10 @@ fn spinner(
     config: &mut Config,
     setup: impl FnOnce(&mut Store<()>) -> Result<()>,
 ) -> Result<(Store<()>, Module)> {
-    config.rr(RRConfig::Recording);
+    config.rr(Some(RrConfig::Recording));
     let engine = Engine::new(config)?;
-    let mut store = Store::new(&engine, ());
+    let mut store = Store::new_recording(&engine, ())?;
     setup(&mut store)?;
-    store.start_recording()?;
     let module = Module::new(
         &engine,
         r#"(module
@@ -318,16 +329,11 @@ async fn epoch_yields_are_recorded() -> Result<()> {
 #[test]
 fn epoch_deadline_callbacks_are_rejected() -> Result<()> {
     let mut config = Config::new();
-    config.epoch_interruption(true).rr(RRConfig::Recording);
+    config
+        .epoch_interruption(true)
+        .rr(Some(RrConfig::Recording));
     let engine = Engine::new(&config)?;
-    let mut store = Store::new(&engine, ());
-    store.epoch_deadline_callback(|_| Ok(UpdateDeadline::Continue(1)));
-    let err = store.start_recording().unwrap_err().to_string();
-    assert!(err.contains("epoch deadline callbacks"), "{err}");
-
-    // Going back to trapping makes the store recordable again.
-    store.epoch_deadline_trap();
-    store.start_recording()?;
+    let mut store = Store::new_recording(&engine, ())?;
     store.epoch_deadline_callback(|_| Ok(UpdateDeadline::Continue(1)));
     let err = store.finish_recording().err().unwrap().to_string();
     assert!(err.contains("epoch deadline callbacks"), "{err}");

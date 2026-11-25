@@ -235,6 +235,19 @@ impl<T> TryVec<T> {
         self.inner.retain_mut(f);
     }
 
+    /// Same as [`std::vec::Vec::dedup_by`].
+    pub fn dedup_by<F>(&mut self, same_bucket: F)
+    where
+        F: FnMut(&mut T, &mut T) -> bool,
+    {
+        self.inner.dedup_by(same_bucket);
+    }
+
+    /// Same as [`std::vec::Vec::swap_remove`].
+    pub fn swap_remove(&mut self, index: usize) -> T {
+        self.inner.swap_remove(index)
+    }
+
     /// Same as [`std::vec::Vec::into_raw_parts`].
     pub fn into_raw_parts(self) -> (*mut T, usize, usize) {
         self.inner.into_raw_parts()

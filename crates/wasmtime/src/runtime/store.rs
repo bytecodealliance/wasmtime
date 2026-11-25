@@ -454,58 +454,6 @@ impl<T> DerefMut for StoreInner<T> {
     }
 }
 
-#[cfg(feature = "rr")]
-impl<T> StoreInner<T> {
-    pub(crate) fn rr_validate(&self) -> Result<()> {
-        ensure!(
-            !self.rr.active(),
-            "store already has an active record/replay session"
-        );
-        // Every store owns one internal dummy instance for the default caller.
-        // Host memories/tables add further dummy instances; globals and host
-        // functions have separate storage. Store data T is unrestricted.
-        ensure!(
-            self.instances.len() == 1
-                && self.host_globals.is_empty()
-                && self.func_refs.rr_is_empty()
-                && self.gc_store.is_none(),
-            "record/replay requires an empty store"
-        );
-        #[cfg(feature = "component-model")]
-        ensure!(
-            self.component_data().rr_is_empty(),
-            "record/replay requires an empty store"
-        );
-        ensure!(
-            self.call_hook.is_none(),
-            "record/replay does not support call hooks"
-        );
-        ensure!(
-            self.signal_handler.is_none(),
-            "record/replay does not support custom signal handlers"
-        );
-        // An epoch deadline callback is host code that runs, and may change the
-        // store, at points in the guest's execution that the trace does not
-        // record.
-        #[cfg(target_has_atomic = "64")]
-        ensure!(
-            !matches!(
-                self.epoch_deadline_behavior,
-                EpochDeadlineBehavior::Callback(_)
-            ),
-            "record/replay does not support epoch deadline callbacks"
-        );
-        ensure!(
-            !self
-                .engine()
-                .features()
-                .contains(wasmparser::WasmFeatures::STACK_SWITCHING),
-            "record/replay does not support Wasm stack switching"
-        );
-        Ok(())
-    }
-}
-
 /// Monomorphic storage for a `Store<T>`.
 ///
 /// This structure contains the bulk of the metadata about a `Store`. This is
@@ -549,7 +497,6 @@ pub struct StoreOpaque {
     /// `StoreOpaque::on_wasm_to_host_transition`.
     wasm_state: EpochState<WasmState>,
 
-    #[cfg(feature = "rr")]
     pub(crate) rr: crate::rr::State,
 
     // Contains all continuations ever allocated throughout the lifetime of this
@@ -861,7 +808,6 @@ impl<T> Store<T> {
             engine: engine.clone(),
             vm_store_context: Default::default(),
             wasm_state,
-            #[cfg(feature = "rr")]
             rr: Default::default(),
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
@@ -1118,7 +1064,8 @@ impl<T> Store<T> {
         &mut self,
         hook: impl FnMut(StoreHookState<'_, T>, CallHook) -> Result<()> + Send + Sync + 'static,
     ) {
-        #[cfg(feature = "rr")]
+        // Call hooks may change the store as Wasm is entered and exited, at
+        // points that the trace does not represent.
         self.inner.rr.poison("installing a call hook");
         self.inner.call_hook = Some(CallHookInner::Sync(Box::new(hook)));
     }
@@ -2002,7 +1949,8 @@ impl StoreOpaque {
 
     #[cfg(all(feature = "std", any(unix, windows)))]
     pub fn set_signal_handler(&mut self, handler: Option<SignalHandler>) {
-        #[cfg(feature = "rr")]
+        // A signal handler may resume or change the guest at any faulting
+        // instruction, which the trace does not represent.
         self.rr.poison("installing a signal handler");
         self.signal_handler = handler;
     }
@@ -2713,7 +2661,8 @@ impl<T> StoreInner<T> {
         &mut self,
         callback: Box<dyn FnMut(StoreHookState<T>) -> Result<UpdateDeadline> + Send + Sync>,
     ) {
-        #[cfg(feature = "rr")]
+        // The callback is host code that runs, and may change the store, at
+        // points in the guest's execution that the trace does not represent.
         self.rr.poison("epoch deadline callbacks");
         self.epoch_deadline_behavior = EpochDeadlineBehavior::Callback(callback);
     }
