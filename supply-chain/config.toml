@@ -109,6 +109,9 @@ criteria = []
 [policy.wasmtime]
 audit-as-crates-io = true
 
+[policy.wasmtime-bench-util]
+criteria = "safe-to-run"
+
 [policy.wasmtime-c-api-impl]
 audit-as-crates-io = false
 

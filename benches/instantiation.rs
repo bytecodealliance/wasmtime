@@ -6,7 +6,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::thread;
 use wasmtime::*;
+use wasmtime_bench_util as bench;
 use wasmtime_wasi::{WasiCtx, p1::WasiP1Ctx};
+
+/// The most threads `parallel` instantiates at once. Also used for the number
+/// of memories in the pooling allocator. Larger values may prevent the pooling
+/// allocator from running under valgrind.
+const MAX_THREADS: usize = 10;
 
 fn store(engine: &Engine) -> Store<WasiP1Ctx> {
     let wasi = WasiCtx::builder().build_p1();
@@ -57,7 +63,7 @@ fn bench_sequential(c: &mut Criterion, path: &Path) {
 
         group.bench_function(id, |b| {
             let (engine, pre) = &*state;
-            b.iter(|| {
+            bench::iter(b, || {
                 instantiate(&pre, &engine).expect("failed to instantiate module");
             });
         });
@@ -91,7 +97,7 @@ fn bench_parallel(c: &mut Criterion, path: &Path) {
             (engine, pre)
         });
 
-        for threads in 1..=num_cpus::get_physical().min(16) {
+        for threads in 1..=num_cpus::get_physical().min(MAX_THREADS) {
             let name = format!(
                 "{}: with {} thread{}",
                 path.file_name().unwrap().to_str().unwrap(),
@@ -130,7 +136,7 @@ fn bench_parallel(c: &mut Criterion, path: &Path) {
                 // Now that our background work is configured we can
                 // benchmark the amount of time it takes to instantiate this
                 // module.
-                b.iter(|| {
+                bench::iter(b, || {
                     instantiate(&pre, &engine).expect("failed to instantiate module");
                 });
 
@@ -162,13 +168,13 @@ fn bench_deserialize_module(c: &mut Criterion, path: &Path) {
     });
     group.bench_function(BenchmarkId::new("deserialize", name), |b| {
         let (engine, bytes, _) = &*state;
-        b.iter(|| unsafe {
+        bench::iter(b, || unsafe {
             Module::deserialize(&engine, bytes).unwrap();
         });
     });
     group.bench_function(BenchmarkId::new("deserialize_file", name), |b| {
         let (engine, _, path) = &*state;
-        b.iter(|| unsafe {
+        bench::iter(b, || unsafe {
             Module::deserialize_file(&engine, path).unwrap();
         });
     });
@@ -220,6 +226,8 @@ fn strategies() -> impl Iterator<Item = InstanceAllocationStrategy> {
         InstanceAllocationStrategy::Pooling({
             let mut config = PoolingAllocationConfig::default();
             config.max_memory_size(10_000 << 16);
+            // Enough for an instance on each of `parallel`'s threads at once.
+            config.total_memories(MAX_THREADS as u32);
             config
         }),
     ]

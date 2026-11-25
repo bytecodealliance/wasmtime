@@ -1,0 +1,20 @@
+[package]
+name = "wasmtime-bench-util"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Utilities for Wasmtime's benchmarks"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+
+[lints]
+workspace = true
+
+[dependencies]
+criterion = { workspace = true }
+
+# Doesn't build on many other OSes.
+[target.'cfg(target_os = "linux")'.dependencies]
+valgrind-requests = { workspace = true }
