@@ -14,21 +14,28 @@ function %f(i64, i64, i64) -> i32, i32, i32 {
     region0 = 2 "vmctx"
 
 block0(v0: i64, v1: i64, v2: i64):
+    ;; Initialize region0 to `-1`.
     v3 = iconst.i64 -1
     store notrap region0 v3, v0
 
+    ;; Memory fence nop.
     v4 = atomic_cas v2, v0, v0
 
+    ;; Load with region (fills cache v5+4 -> v4).
     v5 = load.i32 region0 v0
     ; check: v5 = load.i32 region0 v0
 
+    ;; Load with region again (gets cached v4).
     v6 = load.i32 region0 v0
     ; check: v6 -> v5
 
-    ;; Regionless store to a different pointer: does not invalidate region0.
+    ;; Store without region, to a different pointer. Explicit no-region writes
+    ;; only the "other" bucket, so this does not clobber region0's cache.
     v7 = iconst.i32 42
     store notrap v7, v1
 
+    ;; Load with region (still gets the cached load; the regionless store did
+    ;; not clobber it).
     v8 = load.i32 region0 v0
     ; check: v8 -> v5
 

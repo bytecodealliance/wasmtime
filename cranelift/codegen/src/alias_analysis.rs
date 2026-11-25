@@ -514,7 +514,7 @@ impl LastStores {
                 if can_trap {
                     self.observe_others(func, observed, Some(region), inst);
                 } else {
-                    self.observe_trapping_others(func, observed, region, inst);
+                    self.observe_trapping_others(func, observed, Some(region), inst);
                 }
             }
 
@@ -523,7 +523,7 @@ impl LastStores {
                 if can_trap {
                     self.observe_others(func, observed, None, inst);
                 } else {
-                    self.observe_trapping_others_including_fence(func, observed, inst);
+                    self.observe_trapping_others(func, observed, None, inst);
                 }
             }
 
@@ -531,18 +531,26 @@ impl LastStores {
                 self.observe_others(func, observed, None, inst)
             }
             InstEffect::Observes(AliasRegionsObserved::Just(region)) => {
-                observe(func, observed, self.last_store_for_region(region), inst);
+                observe(
+                    func,
+                    observed,
+                    self.last_store_for_region(Some(region)),
+                    inst,
+                );
                 observe(func, observed, self.last_fence, inst);
             }
             InstEffect::Observes(AliasRegionsObserved::Other) => {
-                observe(func, observed, self.last_store_for_other(), inst);
+                observe(func, observed, self.last_store_for_region(None), inst);
             }
             InstEffect::Observes(AliasRegionsObserved::None) => {}
         }
     }
 
-    /// Mark the last store to every region except for `excluding` (if given), as
-    /// well as the last fence, as observed.
+    /// Mark the last store to every named region except for `excluding` (if
+    /// given), as well as the "other" region and the last fence, as observed.
+    ///
+    /// `None` excludes nothing. [`Self::observe_trapping_others`] uses the
+    /// other convention, where `None` means the "other" region.
     fn observe_others(
         &self,
         func: &Function,
@@ -559,34 +567,20 @@ impl LastStores {
         observe(func, observed_stores, self.last_fence, observer);
     }
 
-    fn observe_trapping_others_including_fence(
-        &self,
-        func: &Function,
-        observed_stores: &mut FxHashMap<Inst, Observer>,
-        observer: Inst,
-    ) {
-        let can_trap = |slot: LastStore| {
-            slot.inst()
-                .is_some_and(|s| func.dfg.insts[s].memflags_trap_code(&func.dfg).is_some())
-        };
-
-        for (_region, slot) in self.regions.iter() {
-            if can_trap(*slot) {
-                observe(func, observed_stores, *slot, observer);
-            }
-        }
-        if can_trap(self.last_fence) {
-            observe(func, observed_stores, self.last_fence, observer);
-        }
-    }
-
-    /// Mark the last store to every region whose last store can trap, except for
-    /// `excluding`, as observed.
+    /// Mark the last store to every region whose last store can trap, except
+    /// for `excluding`, as observed.
+    ///
+    /// `excluding == None` is the implicit "other" region: every named region
+    /// is considered and `other` is not. A `Some` region is skipped, and
+    /// `other` is still considered. The last fence is always considered.
+    ///
+    /// This is not the same convention as [`Self::observe_others`], where
+    /// `None` excludes nothing.
     fn observe_trapping_others(
         &self,
         func: &Function,
         observed_stores: &mut FxHashMap<Inst, Observer>,
-        excluding: AliasRegion,
+        excluding: Option<AliasRegion>,
         observer: Inst,
     ) {
         let can_trap = |slot: LastStore| {
@@ -595,11 +589,11 @@ impl LastStores {
         };
 
         for (region, slot) in self.regions.iter() {
-            if region != excluding && can_trap(*slot) {
+            if excluding.is_none_or(|r| r != region) && can_trap(*slot) {
                 observe(func, observed_stores, *slot, observer);
             }
         }
-        if can_trap(self.other) {
+        if excluding.is_some() && can_trap(self.other) {
             observe(func, observed_stores, self.other, observer);
         }
         if can_trap(self.last_fence) {
@@ -607,18 +601,19 @@ impl LastStores {
         }
     }
 
-    /// Get the last store to the given alias region.
-    fn last_store_for_region(&self, region: AliasRegion) -> LastStore {
-        match self.regions[region] {
+    /// Get the last store to `region`.
+    ///
+    /// `None` selects the implicit disjoint "other" region used by regionless
+    /// accesses. A slot that is still [`LastStore::NoStore`] falls back to the
+    /// last fence, which is what last (may have) written it.
+    fn last_store_for_region(&self, region: Option<AliasRegion>) -> LastStore {
+        let last_store = match region {
+            Some(r) => self.regions[r],
+            None => self.other,
+        };
+        match last_store {
             // Nothing has written this region since the last fence, so the
             // fence is what last (may have) written it.
-            LastStore::NoStore => self.last_fence,
-            slot => slot,
-        }
-    }
-
-    fn last_store_for_other(&self) -> LastStore {
-        match self.other {
             LastStore::NoStore => self.last_fence,
             slot => slot,
         }
@@ -667,10 +662,7 @@ impl LastStores {
     /// Get the last store to the given `inst`'s alias region.
     fn get_last_store(&self, func: &Function, inst: Inst) -> LastStore {
         if let Some(memflags) = func.dfg.insts[inst].memflags() {
-            return match func.dfg.mem_flags[memflags].alias_region() {
-                None => self.last_store_for_other(),
-                Some(region) => self.last_store_for_region(region),
-            };
+            return self.last_store_for_region(func.dfg.mem_flags[memflags].alias_region());
         }
 
         let opcode = func.dfg.insts[inst].opcode();
@@ -1284,8 +1276,8 @@ impl<'a> AliasAnalysis<'a> {
                     .max(stores.regions.keys().len());
                 for i in 0..len {
                     let region = AliasRegion::new(i);
-                    if parent_stores.last_store_for_region(region)
-                        != stores.last_store_for_region(region)
+                    if parent_stores.last_store_for_region(Some(region))
+                        != stores.last_store_for_region(Some(region))
                     {
                         region_extents[region] = extent;
                     }
