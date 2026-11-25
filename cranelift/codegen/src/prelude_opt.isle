@@ -65,6 +65,15 @@
 (decl pure block_call_block (BlockCall) Block)
 (extern constructor block_call_block block_call_block)
 
+;; The verifier does not model what a `FuncRef` contains.
+(model FuncRef (type !))
+
+;; Matches a reference to a function in the same compilation unit
+;; (`colocated`), whose address is computed relative to the program counter.
+(spec (colocated_func_ref func_ref) (provide (= result func_ref)))
+(decl colocated_func_ref (FuncRef) FuncRef)
+(extern extractor colocated_func_ref colocated_func_ref)
+
 ;; If `block` is a "just trap" block (its terminator is an unconditional `trap`
 ;; and all of its other instructions are pure) return the trap code of that
 ;; terminating `trap`.

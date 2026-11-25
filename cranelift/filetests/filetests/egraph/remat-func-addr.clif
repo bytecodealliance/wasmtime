@@ -1,0 +1,33 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+;; The address of the colocated function `%g` is recomputed in `block1`. The
+;; address of `%h`, which may need a load, is reused from `block0`.
+
+function %f(i64, i32) {
+    fn0 = colocated %g()
+    fn1 = %h()
+
+block0(v0: i64, v1: i32):
+    v2 = func_addr.i64 fn0
+    v3 = func_addr.i64 fn1
+    store v2, v0
+    store v3, v0+8
+    brif v1, block1, block2
+
+block1:
+    v4 = func_addr.i64 fn0
+    v5 = func_addr.i64 fn1
+    store v4, v0+16
+    store v5, v0+24
+    return
+
+block2:
+    return
+}
+
+; check:  block1:
+; nextln:     v6 = func_addr.i64 fn0
+; nextln:     store v6, v0+16
+; nextln:     store.i64 v3, v0+24

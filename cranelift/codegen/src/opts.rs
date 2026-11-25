@@ -285,6 +285,14 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         block_call.block(&self.ctx.func.dfg.value_lists)
     }
 
+    fn colocated_func_ref(&mut self, func_ref: FuncRef) -> Option<FuncRef> {
+        if self.ctx.func.dfg.ext_funcs[func_ref].colocated {
+            Some(func_ref)
+        } else {
+            None
+        }
+    }
+
     fn just_trap_block(&mut self, block: &Block) -> Option<TrapCode> {
         self.ctx
             .branch_to_trap_analysis

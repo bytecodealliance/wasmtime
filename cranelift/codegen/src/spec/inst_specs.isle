@@ -375,6 +375,11 @@
     (modifies clif_trap)
     (provide (= clif_trap (bv_is_zero! val))))
 
+;; The address of a function: only its width is known.
+(spec (func_addr ty func_ref)
+    (require (= (:lanes ty) 1))
+    (provide (= (:bits ty) (widthof result))))
+
 (spec (iconst ty arg)
     (require (= (:lanes ty) 1))
     (provide (= arg (zero_ext 64 result))
