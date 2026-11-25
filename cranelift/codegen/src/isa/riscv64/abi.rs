@@ -515,8 +515,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     MemFlagsData::trusted(),
                 ));
 
-                // Finally, sync the frame pointer with SP
+                // Finally, sync the frame pointer with SP and update the
+                // unwind rules to point to the relocated frame record.
                 insts.push(Inst::gen_move(writable_fp_reg(), stack_reg(), I64));
+                if flags.unwind_info() {
+                    insts.push(Inst::Unwind {
+                        inst: UnwindInst::FrameRecordMoved {
+                            size: incoming_args_diff,
+                        },
+                    });
+                }
             }
         }
 

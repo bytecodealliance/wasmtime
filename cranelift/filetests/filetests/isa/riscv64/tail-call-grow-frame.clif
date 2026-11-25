@@ -32,6 +32,7 @@ block0(v0: i64):
 ;   ld t6,16(sp)
 ;   sd t6,0(sp)
 ;   mv fp,sp
+;   unwind FrameRecordMoved { size: 16 }
 ;   addi sp,sp,-32
 ;   sd s2,24(sp)
 ;   unwind SaveReg { clobber_offset: 24, reg: p18i }
