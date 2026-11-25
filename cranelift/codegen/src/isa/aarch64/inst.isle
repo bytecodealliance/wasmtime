@@ -993,6 +993,12 @@
         (rd WritableReg)
         (off i32))
 
+       ;; Computes the address of the 4KB page that holds a constant in the
+       ;; separate constant buffer.
+       (AdrpConst
+        (rd WritableReg)
+        (constant VCodeConstant))
+
        ;; Raw 32-bit word, used for inline constants and jump-table entries.
        (Word4
         (data u32))
@@ -1582,6 +1588,12 @@
         ;; A reference to a constant which is placed outside of the function's
         ;; body, typically at the end.
         (Const
+          (addr VCodeConstant))
+
+        ;; A constant in the separate constant buffer. `rn` holds the page
+        ;; address that `AdrpConst` computes.
+        (ConstPageOff
+          (rn Reg)
           (addr VCodeConstant))
 
         ;; Offset from the beginning of the argument area to the argument
@@ -4411,7 +4423,7 @@
 (rule 1 (constant_f64 (u64_low32_bits_unset n))
         (mov_to_fpu (imm $I64 (ImmExtend.Zero) n) (ScalarSize.Size64)))
 (rule (constant_f64 n)
-      (fpu_load64 (AMode.Const (emit_u64_le_const n)) (mem_flags_trusted_data)))
+      (fpu_load64 (constant_amode (emit_u64_le_const n)) (mem_flags_trusted_data)))
 
 ;; Tests whether the low 32 bits in the input are all zero.
 (spec (u64_low32_bits_unset n)
@@ -4438,7 +4450,23 @@
 
 ;; Base case is to load the constant from memory.
 (rule (constant_f128 n)
-      (fpu_load128 (AMode.Const (emit_u128_le_const n)) (mem_flags_trusted_data)))
+      (fpu_load128 (constant_amode (emit_u128_le_const n)) (mem_flags_trusted_data)))
+
+;; The addressing mode for loading a constant. A literal load may not reach a
+;; constant in the separate buffer, so that case uses `adrp`.
+(attr constant_amode (tag amode_const))
+(decl constant_amode (VCodeConstant) AMode)
+(rule 1 (constant_amode c)
+      (if (separate_constant_pool))
+      (AMode.ConstPageOff (adrp_const c) c))
+(rule 0 (constant_amode c) (AMode.Const c))
+
+;; Computes the address of the page that holds `c`.
+(decl adrp_const (VCodeConstant) Reg)
+(rule (adrp_const c)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AdrpConst dst c))))
+        dst))
 
 ;; Lower a vector splat with a constant parameter.
 ;;

@@ -1,10 +1,10 @@
 //! Interface with the external assembler crate.
 
 use super::{
-    Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
+    Amode, Gpr, Inst, LabelUse, MachBuffers, MachLabel, OperandVisitor, OperandVisitorImpl,
     SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm, args::FromWritableReg,
 };
-use crate::{Reg, Writable, ir::TrapCode};
+use crate::{Reg, Writable, binemit::Reloc, ir::TrapCode};
 use alloc::string::String;
 use cranelift_assembler_x64 as asm;
 use regalloc2::{PReg, RegClass};
@@ -430,16 +430,16 @@ pub mod offsets {
 }
 
 /// Implementor of the [`asm::CodeSink`] trait.
-pub struct AsmCodeSink<'a> {
+pub struct AsmCodeSink<'a, 'b> {
     /// The buffer this is emitting into.
-    pub sink: &'a mut MachBuffer<Inst>,
+    pub sink: &'a mut MachBuffers<'b, Inst>,
     /// The value of `KEY_INCOMING_ARG`.
     pub incoming_arg_offset: i32,
     /// The value of `KEY_SLOT_OFFSET`.
     pub slot_offset: i32,
 }
 
-impl asm::CodeSink for AsmCodeSink<'_> {
+impl asm::CodeSink for AsmCodeSink<'_, '_> {
     fn put1(&mut self, value: u8) {
         self.sink.put1(value)
     }
@@ -468,9 +468,8 @@ impl asm::CodeSink for AsmCodeSink<'_> {
                     .use_label_at_offset(offset, label.into(), LabelUse::JmpRel32);
             }
             asm::DeferredTarget::Constant(constant) => {
-                let label = self.sink.get_label_for_constant(constant.into());
                 self.sink
-                    .use_label_at_offset(offset, label, LabelUse::JmpRel32);
+                    .use_constant(offset, constant.into(), Reloc::X86PCRel4, -4);
             }
             asm::DeferredTarget::None => {}
         }

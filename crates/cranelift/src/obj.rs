@@ -27,6 +27,21 @@ use wasmtime_environ::{Compiler as _, FuncKey, TripleExt, obj};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
+/// The alignment of the constants section and of its size. No constant needs a
+/// larger alignment.
+const CONSTANTS_ALIGN: usize = 16;
+
+/// The alignment that a constant has at `offset` in a buffer aligned to
+/// `buffer_align`.
+fn constant_align(offset: u32, buffer_align: u32) -> u32 {
+    assert!(buffer_align as usize <= CONSTANTS_ALIGN);
+    if offset == 0 {
+        buffer_align
+    } else {
+        (1 << offset.trailing_zeros()).min(buffer_align)
+    }
+}
+
 fn text_align(compiler: &Compiler) -> u64 {
     // text pages will not be made executable with pulley, so the section
     // doesn't need to be padded out to page alignment boundaries.
@@ -60,6 +75,13 @@ pub struct ModuleTextBuilder<'a> {
     /// build to resolve relocations (calls) between functions.
     text: Box<dyn TextSectionBuilder>,
 
+    /// The number of functions. `text` numbers the constants after the functions.
+    num_funcs: usize,
+
+    /// The alignment and bytes of each separate constant. `finish` writes the
+    /// constants to their own section.
+    constants: Vec<(u32, &'a [u8])>,
+
     ctrl_plane: ControlPlane,
 }
 
@@ -74,6 +96,7 @@ impl<'a> ModuleTextBuilder<'a> {
         obj: &'a mut Object<'static>,
         compiler: &'a Compiler,
         text: Box<dyn TextSectionBuilder>,
+        num_funcs: usize,
     ) -> Self {
         // Entire code (functions and trampolines) will be placed
         // in the ".text" section.
@@ -100,6 +123,8 @@ impl<'a> ModuleTextBuilder<'a> {
             text_section,
             unwind_info: Default::default(),
             text,
+            num_funcs,
+            constants: Vec::new(),
             ctrl_plane: ControlPlane::default(),
         }
     }
@@ -191,6 +216,32 @@ impl<'a> ModuleTextBuilder<'a> {
             panic!("failed to resolve relocation: {r:?} -> {target}");
         }
 
+        // Each constant gets its own label in `text`, numbered after the
+        // functions. A reference to a constant is resolved like a call.
+        if let Some(constants) = &compiled_func.constants {
+            let data = constants.buffer.data();
+            let first = self.num_funcs + self.constants.len();
+            let ends = constants.offsets[1..]
+                .iter()
+                .copied()
+                .chain([u32::try_from(data.len()).unwrap()]);
+            for (&start, end) in constants.offsets.iter().zip(ends) {
+                self.constants.push((
+                    constant_align(start, constants.buffer.min_alignment),
+                    &data[start as usize..end as usize],
+                ));
+            }
+            for r in &constants.refs {
+                let resolved = self.text.resolve_reloc(
+                    off + u64::from(r.offset),
+                    r.kind,
+                    r.addend,
+                    first + r.constant,
+                );
+                assert!(resolved, "failed to resolve constant relocation: {r:?}");
+            }
+        }
+
         (symbol_id, off..off + body_len)
     }
 
@@ -221,18 +272,61 @@ impl<'a> ModuleTextBuilder<'a> {
     /// Note that this will also write out the unwind information sections if
     /// necessary.
     pub fn finish(mut self, postprocess_text: impl FnOnce(&mut [u8])) {
+        let align = text_align(self.compiler);
+
+        // The constants are placed in `.wasmtime.constants`, which comes after
+        // `.text` and is page-aligned.
+        let mut constants_range = None;
+        if !self.constants.is_empty() {
+            let start = self.text.append(
+                false,
+                &[],
+                u32::try_from(align).unwrap(),
+                &mut self.ctrl_plane,
+            );
+            let mut end = start;
+            for (align, data) in &self.constants {
+                let offset = self.text.append(true, data, *align, &mut self.ctrl_plane);
+                end = offset + u64::try_from(data.len()).unwrap();
+            }
+            constants_range = Some(start..end);
+        }
+
         // Finish up the text section now that we're done adding functions.
         let mut text = self.text.finish(&mut self.ctrl_plane);
+        let constants = constants_range.map(|range| {
+            assert_eq!(u64::try_from(text.len()).unwrap(), range.end);
+            let mut constants = text.split_off(usize::try_from(range.start).unwrap());
+            constants.resize(constants.len().next_multiple_of(CONSTANTS_ALIGN), 0);
+            constants
+        });
 
         postprocess_text(&mut text[..]);
 
         self.obj
             .section_mut(self.text_section)
-            .set_data(text, text_align(self.compiler));
+            .set_data(text, align);
+
+        // Pad `.text` to a page boundary. The result is the padded size.
+        let mut text_section_size = self.obj.append_section_data(self.text_section, &[], align);
+
+        if let Some(constants) = constants {
+            let segment = self.obj.segment_name(StandardSegment::Data).to_vec();
+            let section = self.obj.add_section(
+                segment,
+                obj::ELF_WASMTIME_CONSTANTS.as_bytes().to_vec(),
+                SectionKind::ReadOnlyData,
+            );
+            self.obj
+                .append_section_data(section, &constants, CONSTANTS_ALIGN as u64);
+            // The unwind information comes after the constants. The constants
+            // do not have to end on a page boundary.
+            text_section_size += u64::try_from(constants.len()).unwrap();
+        }
 
         // Append the unwind information for all our functions, if necessary.
         self.unwind_info
-            .append_section(self.compiler, self.obj, self.text_section);
+            .append_section(self.compiler, self.obj, text_section_size);
     }
 }
 
@@ -373,16 +467,12 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// Appends the unwind information section, if any, to the `obj` specified.
     ///
     /// This function must be called immediately after the text section was
-    /// added to a builder. The unwind information section must trail the text
-    /// section immediately.
+    /// added to a builder. The unwind information section must directly follow
+    /// the text section, or the constants section if there is one.
     ///
-    /// The `text_section`'s section identifier is passed into this function.
-    fn append_section(&self, compiler: &Compiler, obj: &mut Object<'_>, text_section: SectionId) {
-        // This write will align the text section to a page boundary and then
-        // return the offset at that point. This gives us the full size of the
-        // text section at that point, after alignment.
-        let text_section_size = obj.append_section_data(text_section, &[], text_align(compiler));
-
+    /// `text_section_size` is the offset of the unwind information from the
+    /// start of `.text`.
+    fn append_section(&self, compiler: &Compiler, obj: &mut Object<'_>, text_section_size: u64) {
         if self.windows_xdata.len() > 0 {
             assert!(self.systemv_unwind_info.len() == 0);
             // The `.xdata` section must come first to be just-after the `.text`
@@ -491,9 +581,10 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// For now this assumes that all the code of functions will start at a
     /// page-aligned address when loaded into memory. The eh_frame encoded here
     /// then assumes that the text section is itself page aligned to its size
-    /// and the eh_frame will follow just after the text section. This means
-    /// that the relative offsets we're using here is the FDE going backwards
-    /// into the text section itself.
+    /// and the eh_frame will follow just after the text section, or after the
+    /// constants section if there is one. This means that the relative
+    /// offsets we're using here is the FDE going backwards into the text
+    /// section itself.
     ///
     /// Note that the library we're using to create the FDEs, `gimli`, doesn't
     /// actually encode addresses relative to the FDE itself. Instead the
@@ -501,10 +592,12 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// This makes it much easier for us where we provide the relative offset
     /// from the start of `.eh_frame` to the function in the text section, which
     /// given our layout basically means the offset of the function in the text
-    /// section from the end of the text section.
+    /// section from `text_section_size`, the offset of `.eh_frame` from the
+    /// start of the text section.
     ///
     /// A final note is that the reason we page-align the text section's size is
-    /// so the .eh_frame lives on a separate page from the text section itself.
+    /// so the .eh_frame, like the constants, lives on a separate page from the
+    /// text section itself.
     /// This allows `.eh_frame` to have different virtual memory permissions,
     /// such as being purely read-only instead of read/execute like the code
     /// bits.

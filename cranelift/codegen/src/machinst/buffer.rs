@@ -2608,7 +2608,7 @@ mod test {
     use crate::isa::aarch64;
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
     use crate::isa::aarch64::inst::{OperandSize, xreg};
-    use crate::machinst::{MachInst, MachInstEmit, MachInstEmitState};
+    use crate::machinst::{MachBuffers, MachInst, MachInstEmit, MachInstEmitState};
     use crate::settings;
 
     fn label(n: u32) -> MachLabel {
@@ -2634,7 +2634,7 @@ mod test {
         buf.reserve_labels_for_blocks(2);
         buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
         assert_eq!(0, buf.total_size());
@@ -2655,15 +2655,15 @@ mod test {
             taken: target(1),
             not_taken: target(2),
         };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
 
@@ -2686,17 +2686,17 @@ mod test {
             taken: target(1),
             not_taken: target(2),
         };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Udf {
             trap_code: TrapCode::STACK_OVERFLOW,
         };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
 
@@ -2708,9 +2708,9 @@ mod test {
             kind: CondBrKind::NotZero(xreg(0), OperandSize::Size64),
             trap_code: TrapCode::STACK_OVERFLOW,
         };
-        inst.emit(&mut buf2, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf2), &info, &mut state);
         let inst = Inst::Nop4;
-        inst.emit(&mut buf2, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf2), &info, &mut state);
 
         let buf2 = buf2.finish(&constants, state.ctrl_plane_mut());
 
@@ -2732,7 +2732,7 @@ mod test {
             taken: target(2),
             not_taken: target(3),
         };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         while buf.cur_offset() < 2000000 {
@@ -2740,16 +2740,16 @@ mod test {
                 buf.emit_island(0, state.ctrl_plane_mut());
             }
             let inst = Inst::Nop4;
-            inst.emit(&mut buf, &info, &mut state);
+            inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
         }
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
@@ -2779,7 +2779,7 @@ mod test {
             // go directly to the target.
             not_taken: BranchTarget::ResolvedOffset(2000000 + 4 - 4),
         };
-        inst.emit(&mut buf2, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf2), &info, &mut state);
 
         let buf2 = buf2.finish(&constants, state.ctrl_plane_mut());
 
@@ -2797,16 +2797,16 @@ mod test {
 
         buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         while buf.cur_offset() < 2000000 {
             let inst = Inst::Nop4;
-            inst.emit(&mut buf, &info, &mut state);
+            inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
         }
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
@@ -2815,7 +2815,7 @@ mod test {
             taken: target(0),
             not_taken: target(1),
         };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
@@ -2828,11 +2828,11 @@ mod test {
             taken: BranchTarget::ResolvedOffset(8),
             not_taken: BranchTarget::ResolvedOffset(4 - (2000000 + 4)),
         };
-        inst.emit(&mut buf2, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf2), &info, &mut state);
         let inst = Inst::Jump {
             dest: BranchTarget::ResolvedOffset(-(2000000 + 8)),
         };
-        inst.emit(&mut buf2, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf2), &info, &mut state);
 
         let buf2 = buf2.finish(&constants, state.ctrl_plane_mut());
 
@@ -2887,38 +2887,38 @@ mod test {
             taken: target(1),
             not_taken: target(2),
         };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&mut buf, &info, &mut state);
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
         let inst = Inst::Jump { dest: target(0) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(4) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(4), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(5) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(5), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(7) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(6), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(7), state.ctrl_plane_mut());
         let inst = Inst::Ret {};
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
@@ -2960,23 +2960,23 @@ mod test {
 
         buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(2) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(4) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         buf.bind_label(label(4), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
-        inst.emit(&mut buf, &info, &mut state);
+        inst.emit(&mut MachBuffers::text_only(&mut buf), &info, &mut state);
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
@@ -3071,7 +3071,7 @@ mod test {
         let lookahead = Inst::worst_case_size() + Inst::worst_case_island_growth();
         if buf.island_needed(lookahead) {
             let jump_around = buf.get_label();
-            Inst::gen_jump(jump_around).emit(buf, &emit_info(), state);
+            Inst::gen_jump(jump_around).emit(&mut MachBuffers::text_only(buf), &emit_info(), state);
             buf.emit_island(0, state.ctrl_plane_mut());
             buf.bind_label(jump_around, state.ctrl_plane_mut());
         }
@@ -3146,7 +3146,7 @@ mod test {
                 taken: target(1),
                 not_taken: target(0),
             };
-            inst.emit(buf, &emit_info(), state);
+            inst.emit(&mut MachBuffers::text_only(buf), &emit_info(), state);
         });
 
         for &handle in &handles {
@@ -3183,7 +3183,11 @@ mod test {
 
         let before = buf.cur_offset();
         let jump_around = buf.get_label();
-        Inst::gen_jump(jump_around).emit(&mut buf, &emit_info(), &mut state);
+        Inst::gen_jump(jump_around).emit(
+            &mut MachBuffers::text_only(&mut buf),
+            &emit_info(),
+            &mut state,
+        );
         buf.emit_island(0, state.ctrl_plane_mut());
         buf.bind_label(jump_around, state.ctrl_plane_mut());
         let after = buf.cur_offset();

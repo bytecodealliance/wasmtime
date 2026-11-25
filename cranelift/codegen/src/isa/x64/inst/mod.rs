@@ -1671,7 +1671,7 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, info: &Self::Info, state: &mut Self::State) {
+    fn emit(&self, sink: &mut MachBuffers<Inst>, info: &Self::Info, state: &mut Self::State) {
         emit::emit(self, sink, info, state);
     }
 

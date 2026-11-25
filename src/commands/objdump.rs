@@ -73,6 +73,10 @@ pub struct ObjdumpCommand {
     /// Whether or not to show information about frame tables.
     #[arg(long, require_equals = true, value_name = "true|false")]
     frame_tables: Option<Option<bool>>,
+
+    /// Whether or not to show the constants section.
+    #[arg(long, require_equals = true, value_name = "true|false")]
+    constants: Option<Option<bool>>,
 }
 
 fn optional_flag_with_default(flag: Option<Option<bool>>, default: bool) -> bool {
@@ -102,6 +106,10 @@ impl ObjdumpCommand {
 
     fn frame_tables(&self) -> bool {
         optional_flag_with_default(self.frame_tables, true)
+    }
+
+    fn constants(&self) -> bool {
+        optional_flag_with_default(self.constants, true)
     }
 
     /// Executes the command.
@@ -407,6 +415,36 @@ impl ObjdumpCommand {
                 }
 
                 print_decorations(&mut *stdout, post_decorations)?;
+            }
+        }
+
+        if self.constants() {
+            if let Some(section) = elf.section_by_name(obj::ELF_WASMTIME_CONSTANTS) {
+                if !first {
+                    writeln!(stdout)?;
+                }
+                stdout.set_color(ColorSpec::new().set_bold(true).set_fg(Some(Color::Green)))?;
+                write!(stdout, "{}", obj::ELF_WASMTIME_CONSTANTS)?;
+                stdout.reset()?;
+                writeln!(stdout, ":")?;
+
+                // The constants directly follow `.text`, so print their offsets
+                // from its start.
+                let width = self.address_width;
+                for (i, line) in section.data()?.chunks(16).enumerate() {
+                    stdout.set_color(&color_address)?;
+                    write!(stdout, "{:>width$x}: ", text.len() + i * 16)?;
+                    stdout.reset()?;
+                    stdout.set_color(&color_bytes)?;
+                    for (i, byte) in line.iter().enumerate() {
+                        if i > 0 {
+                            write!(stdout, " ")?;
+                        }
+                        write!(stdout, "{byte:02x}")?;
+                    }
+                    stdout.reset()?;
+                    writeln!(stdout)?;
+                }
             }
         }
         Ok(())

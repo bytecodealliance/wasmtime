@@ -98,6 +98,10 @@ pub enum Reloc {
     Aarch64AdrPrelPgHi21,
     /// Equivalent of `R_AARCH64_ADD_ABS_LO12_NC`.
     Aarch64AddAbsLo12Nc,
+    /// Equivalent of `R_AARCH64_LDST64_ABS_LO12_NC`.
+    Aarch64Ldst64AbsLo12Nc,
+    /// Equivalent of `R_AARCH64_LDST128_ABS_LO12_NC`.
+    Aarch64Ldst128AbsLo12Nc,
 
     /// AArch64 GOT Low bits
 
@@ -182,6 +186,8 @@ impl Reloc {
             | Self::Aarch64AdrGotPage21
             | Self::Aarch64AdrPrelPgHi21
             | Self::Aarch64AddAbsLo12Nc
+            | Self::Aarch64Ldst64AbsLo12Nc
+            | Self::Aarch64Ldst128AbsLo12Nc
             | Self::Aarch64Ld64GotLo12Nc
             | Self::RiscvTlsGdHi20
             | Self::RiscvPCRelLo12I
@@ -233,6 +239,8 @@ impl fmt::Display for Reloc {
             Self::Aarch64Ld64GotLo12Nc => write!(f, "Aarch64AdrGotLo12Nc"),
             Self::Aarch64AdrPrelPgHi21 => write!(f, "Aarch64AdrPrelPgHi21"),
             Self::Aarch64AddAbsLo12Nc => write!(f, "Aarch64AddAbsLo12Nc"),
+            Self::Aarch64Ldst64AbsLo12Nc => write!(f, "Aarch64Ldst64AbsLo12Nc"),
+            Self::Aarch64Ldst128AbsLo12Nc => write!(f, "Aarch64Ldst128AbsLo12Nc"),
             Self::S390xTlsGd64 => write!(f, "TlsGd64"),
             Self::S390xTlsGdCall => write!(f, "TlsGdCall"),
             Self::PulleyPcRel => write!(f, "PulleyPcRel"),

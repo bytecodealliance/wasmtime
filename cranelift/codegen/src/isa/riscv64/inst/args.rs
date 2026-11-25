@@ -156,16 +156,51 @@ impl AMode {
         }
     }
 
-    /// Retrieve a MachLabel that corresponds to this addressing mode, if it exists.
-    pub(crate) fn get_label_with_sink(&self, sink: &mut MachBuffer<Inst>) -> Option<MachLabel> {
+    /// The label or constant that this addressing mode refers to, if any.
+    pub(crate) fn pc_rel_target(&self) -> Option<PcRelTarget> {
         match self {
-            &AMode::Const(addr) => Some(sink.get_label_for_constant(addr)),
-            &AMode::Label(label) => Some(label),
+            &AMode::Const(constant) => Some(PcRelTarget::Constant(constant)),
+            &AMode::Label(label) => Some(PcRelTarget::Label(label)),
             &AMode::RegOffset(..)
             | &AMode::SPOffset(..)
             | &AMode::FPOffset(..)
             | &AMode::IncomingArg(..)
             | &AMode::SlotOffset(..) => None,
+        }
+    }
+}
+
+/// The label or constant that an `auipc` and the instruction after it refer to.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum PcRelTarget {
+    Label(MachLabel),
+    Constant(VCodeConstant),
+}
+
+impl PcRelTarget {
+    /// Makes the `auipc` at the current offset refer to the target.
+    pub(crate) fn use_hi20(self, sink: &mut MachBuffers<Inst>) {
+        let offset = sink.cur_offset();
+        match self {
+            PcRelTarget::Label(label) => {
+                sink.use_label_at_offset(offset, label, LabelUse::PCRelHi20)
+            }
+            PcRelTarget::Constant(constant) => {
+                sink.use_constant(offset, constant, Reloc::RiscvPCRelHi20, 0)
+            }
+        }
+    }
+
+    /// Makes the instruction after the `auipc`, at the current offset, refer to the target.
+    pub(crate) fn use_lo12(self, sink: &mut MachBuffers<Inst>) {
+        let offset = sink.cur_offset();
+        match self {
+            PcRelTarget::Label(label) => {
+                sink.use_label_at_offset(offset, label, LabelUse::PCRelLo12I)
+            }
+            PcRelTarget::Constant(constant) => {
+                sink.use_constant(offset, constant, Reloc::RiscvPCRelLo12I, 0)
+            }
         }
     }
 }

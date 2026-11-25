@@ -761,11 +761,6 @@ impl wasmtime_environ::Compiler for Compiler {
             funcs.iter().map(|(sym, _, _)| sym).collect::<Vec<_>>()
         );
 
-        let mut builder =
-            ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
-        if self.linkopts.force_jump_veneers {
-            builder.force_veneers();
-        }
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
         let mut stack_maps = StackMapSection::default();
@@ -781,6 +776,24 @@ impl wasmtime_environ::Compiler for Compiler {
                 (sym, *key, func)
             })
             .collect::<Vec<_>>();
+
+        // The text builder places the constants after the functions so that it
+        // can resolve relocations to them. `ModuleTextBuilder::finish` then
+        // moves the constants to `.wasmtime.constants`.
+        let num_constants: usize = funcs
+            .iter()
+            .filter_map(|(_, _, func)| func.constants.as_ref())
+            .map(|constants| constants.offsets.len())
+            .sum();
+        let mut builder = ModuleTextBuilder::new(
+            obj,
+            self,
+            self.isa.text_section_builder(funcs.len() + num_constants),
+            funcs.len(),
+        );
+        if self.linkopts.force_jump_veneers {
+            builder.force_veneers();
+        }
 
         let mut frame_descriptors = HashMap::new();
         if self.tunables.debug_guest {
@@ -1977,6 +1990,7 @@ impl FunctionCompiler<'_> {
             context.func.params.user_named_funcs().clone(),
             alignment,
         );
+        compiled_function.constants = compiled_code.constants.clone();
 
         if let Some((body, tunables)) = body_and_tunables {
             let data = body.get_binary_reader();

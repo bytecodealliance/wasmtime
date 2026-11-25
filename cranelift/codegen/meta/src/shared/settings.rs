@@ -164,6 +164,19 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
+        "separate_constant_pool",
+        "Emit a function's constants into a separate buffer instead of its code.",
+        r#"
+            The constants are in `CompiledCode::constants`. The embedder places
+            the constants and resolves the relocations that refer to them.
+
+            `cranelift-jit` and `cranelift-object` return an error for a
+            function that has constants. Jump tables stay in the code.
+        "#,
+        false,
+    );
+
+    settings.add_bool(
         "enable_llvm_abi_extensions",
         "Enable various ABI extensions defined by LLVM's behavior.",
         r#"

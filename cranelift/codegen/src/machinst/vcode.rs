@@ -213,6 +213,10 @@ pub struct EmitResult {
     /// The MachBuffer containing the machine code.
     pub buffer: MachBufferFinalized,
 
+    /// The constants of the function, if the `separate_constant_pool` setting is
+    /// on and the function has any.
+    pub constants: Option<MachConstantsFinalized>,
+
     /// Offset of each basic block, recorded during emission. Computed
     /// only if `machine_code_cfg_info` is enabled.
     pub bb_offsets: Vec<CodeOffset>,
@@ -744,17 +748,23 @@ impl<I: VCodeInst> VCode<I> {
         I: VCodeInst,
     {
         let _tt = timing::vcode_emit();
-        let mut buffer = MachBuffer::new();
-        buffer.set_log2_min_function_alignment(self.log2_min_function_alignment);
+        let mut text = MachBuffer::new();
+        text.set_log2_min_function_alignment(self.log2_min_function_alignment);
         let mut bb_starts: Vec<Option<CodeOffset>> = vec![];
 
         // The first M MachLabels are reserved for block indices.
-        buffer.reserve_labels_for_blocks(self.num_blocks());
+        text.reserve_labels_for_blocks(self.num_blocks());
 
         // Register all allocated constants with the `MachBuffer` to ensure that
         // any references to the constants during instructions can be handled
-        // correctly.
-        buffer.register_constants(&self.constants);
+        // correctly. With `separate_constant_pool` the constants go in a second
+        // buffer.
+        let mut rodata = flags.separate_constant_pool().then(MachBuffer::new);
+        match &mut rodata {
+            Some(rodata) => rodata.register_constants(&self.constants),
+            None => text.register_constants(&self.constants),
+        }
+        let mut buffer = MachBuffers::new(&mut text, rodata.as_mut());
 
         // Construct the final order we emit code in: cold blocks at the end.
         let mut final_order: SmallVec<[BlockIndex; 16]> = smallvec![];
@@ -839,7 +849,7 @@ impl<I: VCodeInst> VCode<I> {
             // after each instruction, ensure that the worst-case end of any
             // island the buffer might emit lies before the soonest deadline,
             // even after the next instruction.
-            let emit_island_if_needed = |buffer: &mut MachBuffer<I>, state: &mut I::State| {
+            let emit_island_if_needed = |buffer: &mut MachBuffers<I>, state: &mut I::State| {
                 let lookahead = I::worst_case_size() + I::worst_case_island_growth();
                 if buffer.island_needed(lookahead) {
                     let jump_around = buffer.get_label();
@@ -850,7 +860,7 @@ impl<I: VCodeInst> VCode<I> {
             };
             let emit_inst = |inst: &I,
                              disasm: &mut String,
-                             buffer: &mut MachBuffer<I>,
+                             buffer: &mut MachBuffers<I>,
                              state: &mut I::State| {
                 if want_disasm && !inst.is_args() {
                     let mut s = state.clone();
@@ -863,7 +873,7 @@ impl<I: VCodeInst> VCode<I> {
             };
             let do_aux_emit = |inst: &I,
                                disasm: &mut String,
-                               buffer: &mut MachBuffer<I>,
+                               buffer: &mut MachBuffers<I>,
                                state: &mut I::State| {
                 emit_inst(inst, disasm, buffer, state);
                 // Instructions emitted this way (prologue, epilogue,
@@ -1212,8 +1222,18 @@ impl<I: VCodeInst> VCode<I> {
         // Store metadata about frame layout in the MachBuffer.
         buffer.set_frame_layout(self.abi.frame_slot_metadata());
 
+        let (offsets, refs) = buffer.finish(ctrl_plane);
+        let constants = rodata
+            .filter(|_| !refs.is_empty())
+            .map(|rodata| MachConstantsFinalized {
+                buffer: rodata.finish(&self.constants, ctrl_plane),
+                offsets,
+                refs,
+            });
+
         Ok(EmitResult {
-            buffer: buffer.finish(&self.constants, ctrl_plane),
+            buffer: text.finish(&self.constants, ctrl_plane),
+            constants,
             bb_offsets,
             bb_edges,
             disasm: if want_disasm { Some(disasm) } else { None },

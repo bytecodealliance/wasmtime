@@ -1,0 +1,480 @@
+test compile precise-output
+set separate_constant_pool=true
+target aarch64
+
+;; The frame is too large for a scaled `ldr q`, so spill slots are addressed
+;; through x16. The constant loads must not use x16.
+function %spills() -> i8x16 {
+    ss0 = explicit_slot 70000
+block0:
+    v0 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    v1 = vconst.i8x16 [17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32]
+    v2 = vconst.i8x16 [33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48]
+    v3 = vconst.i8x16 [49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64]
+    v4 = vconst.i8x16 [65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80]
+    v5 = vconst.i8x16 [81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96]
+    v6 = vconst.i8x16 [97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112]
+    v7 = vconst.i8x16 [113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128]
+    v8 = vconst.i8x16 [129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144]
+    v9 = vconst.i8x16 [145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160]
+    v10 = vconst.i8x16 [161 162 163 164 165 166 167 168 169 170 171 172 173 174 175 176]
+    v11 = vconst.i8x16 [177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192]
+    v12 = vconst.i8x16 [193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208]
+    v13 = vconst.i8x16 [209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224]
+    v14 = vconst.i8x16 [225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240]
+    v15 = vconst.i8x16 [241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 0]
+    v16 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    v17 = vconst.i8x16 [17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32]
+    v18 = vconst.i8x16 [33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48]
+    v19 = vconst.i8x16 [49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64]
+    v20 = vconst.i8x16 [65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80]
+    v21 = vconst.i8x16 [81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96]
+    v22 = vconst.i8x16 [97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112]
+    v23 = vconst.i8x16 [113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128]
+    v24 = vconst.i8x16 [129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144]
+    v25 = vconst.i8x16 [145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160]
+    v26 = vconst.i8x16 [161 162 163 164 165 166 167 168 169 170 171 172 173 174 175 176]
+    v27 = vconst.i8x16 [177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192]
+    v28 = vconst.i8x16 [193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208]
+    v29 = vconst.i8x16 [209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224]
+    v30 = vconst.i8x16 [225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240]
+    v31 = vconst.i8x16 [241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 0]
+    v32 = vconst.i8x16 [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]
+    v33 = vconst.i8x16 [17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32]
+    v34 = vconst.i8x16 [33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48]
+    v35 = vconst.i8x16 [49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64]
+    v36 = iadd v35, v34
+    v37 = iadd v36, v33
+    v38 = iadd v37, v32
+    v39 = iadd v38, v31
+    v40 = iadd v39, v30
+    v41 = iadd v40, v29
+    v42 = iadd v41, v28
+    v43 = iadd v42, v27
+    v44 = iadd v43, v26
+    v45 = iadd v44, v25
+    v46 = iadd v45, v24
+    v47 = iadd v46, v23
+    v48 = iadd v47, v22
+    v49 = iadd v48, v21
+    v50 = iadd v49, v20
+    v51 = iadd v50, v19
+    v52 = iadd v51, v18
+    v53 = iadd v52, v17
+    v54 = iadd v53, v16
+    v55 = iadd v54, v15
+    v56 = iadd v55, v14
+    v57 = iadd v56, v13
+    v58 = iadd v57, v12
+    v59 = iadd v58, v11
+    v60 = iadd v59, v10
+    v61 = iadd v60, v9
+    v62 = iadd v61, v8
+    v63 = iadd v62, v7
+    v64 = iadd v63, v6
+    v65 = iadd v64, v5
+    v66 = iadd v65, v4
+    v67 = iadd v66, v3
+    v68 = iadd v67, v2
+    v69 = iadd v68, v1
+    v70 = iadd v69, v0
+    return v70
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+;   movz w16, #4528
+;   movk w16, w16, #1, LSL #16
+;   sub sp, sp, x16, UXTX
+; block0:
+;   adrp x0, const(35)@page
+;   ldr q1, [x0, const(35)@pageoff]
+;   movz w16, #4512 ; movk w16, w16, #1, LSL #16 ; str q1, [sp, x16, SXTX]
+;   adrp x0, const(34)@page
+;   ldr q2, [x0, const(34)@pageoff]
+;   movz w16, #4496 ; movk w16, w16, #1, LSL #16 ; str q2, [sp, x16, SXTX]
+;   adrp x0, const(33)@page
+;   ldr q3, [x0, const(33)@pageoff]
+;   movz w16, #4480 ; movk w16, w16, #1, LSL #16 ; str q3, [sp, x16, SXTX]
+;   adrp x0, const(32)@page
+;   ldr q4, [x0, const(32)@pageoff]
+;   movz w16, #4464 ; movk w16, w16, #1, LSL #16 ; str q4, [sp, x16, SXTX]
+;   adrp x0, const(31)@page
+;   ldr q4, [x0, const(31)@pageoff]
+;   adrp x0, const(30)@page
+;   ldr q5, [x0, const(30)@pageoff]
+;   adrp x0, const(29)@page
+;   ldr q6, [x0, const(29)@pageoff]
+;   adrp x0, const(28)@page
+;   ldr q7, [x0, const(28)@pageoff]
+;   adrp x0, const(27)@page
+;   ldr q16, [x0, const(27)@pageoff]
+;   adrp x0, const(26)@page
+;   ldr q17, [x0, const(26)@pageoff]
+;   adrp x0, const(25)@page
+;   ldr q18, [x0, const(25)@pageoff]
+;   adrp x0, const(24)@page
+;   ldr q19, [x0, const(24)@pageoff]
+;   adrp x0, const(23)@page
+;   ldr q20, [x0, const(23)@pageoff]
+;   adrp x0, const(22)@page
+;   ldr q21, [x0, const(22)@pageoff]
+;   adrp x0, const(21)@page
+;   ldr q22, [x0, const(21)@pageoff]
+;   adrp x0, const(20)@page
+;   ldr q23, [x0, const(20)@pageoff]
+;   adrp x0, const(19)@page
+;   ldr q24, [x0, const(19)@pageoff]
+;   adrp x0, const(18)@page
+;   ldr q25, [x0, const(18)@pageoff]
+;   adrp x0, const(17)@page
+;   ldr q26, [x0, const(17)@pageoff]
+;   adrp x0, const(16)@page
+;   ldr q27, [x0, const(16)@pageoff]
+;   adrp x0, const(15)@page
+;   ldr q28, [x0, const(15)@pageoff]
+;   adrp x0, const(14)@page
+;   ldr q29, [x0, const(14)@pageoff]
+;   adrp x0, const(13)@page
+;   ldr q30, [x0, const(13)@pageoff]
+;   adrp x0, const(12)@page
+;   ldr q31, [x0, const(12)@pageoff]
+;   adrp x0, const(11)@page
+;   ldr q8, [x0, const(11)@pageoff]
+;   adrp x0, const(10)@page
+;   ldr q9, [x0, const(10)@pageoff]
+;   adrp x0, const(9)@page
+;   ldr q10, [x0, const(9)@pageoff]
+;   adrp x0, const(8)@page
+;   ldr q11, [x0, const(8)@pageoff]
+;   adrp x0, const(7)@page
+;   ldr q12, [x0, const(7)@pageoff]
+;   adrp x0, const(6)@page
+;   ldr q13, [x0, const(6)@pageoff]
+;   adrp x0, const(5)@page
+;   ldr q14, [x0, const(5)@pageoff]
+;   adrp x0, const(4)@page
+;   ldr q15, [x0, const(4)@pageoff]
+;   adrp x0, const(3)@page
+;   ldr q0, [x0, const(3)@pageoff]
+;   adrp x0, const(2)@page
+;   ldr q1, [x0, const(2)@pageoff]
+;   adrp x0, const(1)@page
+;   ldr q2, [x0, const(1)@pageoff]
+;   adrp x0, const(0)@page
+;   ldr q3, [x0, const(0)@pageoff]
+;   add v2.16b, v3.16b, v2.16b
+;   add v1.16b, v2.16b, v1.16b
+;   add v0.16b, v1.16b, v0.16b
+;   add v0.16b, v0.16b, v15.16b
+;   add v0.16b, v0.16b, v14.16b
+;   add v0.16b, v0.16b, v13.16b
+;   add v0.16b, v0.16b, v12.16b
+;   add v0.16b, v0.16b, v11.16b
+;   add v0.16b, v0.16b, v10.16b
+;   add v0.16b, v0.16b, v9.16b
+;   add v0.16b, v0.16b, v8.16b
+;   add v0.16b, v0.16b, v31.16b
+;   add v0.16b, v0.16b, v30.16b
+;   add v0.16b, v0.16b, v29.16b
+;   add v0.16b, v0.16b, v28.16b
+;   add v0.16b, v0.16b, v27.16b
+;   add v0.16b, v0.16b, v26.16b
+;   add v0.16b, v0.16b, v25.16b
+;   add v0.16b, v0.16b, v24.16b
+;   add v0.16b, v0.16b, v23.16b
+;   add v0.16b, v0.16b, v22.16b
+;   add v0.16b, v0.16b, v21.16b
+;   add v0.16b, v0.16b, v20.16b
+;   add v0.16b, v0.16b, v19.16b
+;   add v0.16b, v0.16b, v18.16b
+;   add v0.16b, v0.16b, v17.16b
+;   add v0.16b, v0.16b, v16.16b
+;   add v0.16b, v0.16b, v7.16b
+;   add v0.16b, v0.16b, v6.16b
+;   add v0.16b, v0.16b, v5.16b
+;   add v0.16b, v0.16b, v4.16b
+;   movz w16, #4464 ; movk w16, w16, #1, LSL #16 ; ldr q4, [sp, x16, SXTX]
+;   add v0.16b, v0.16b, v4.16b
+;   movz w16, #4480 ; movk w16, w16, #1, LSL #16 ; ldr q3, [sp, x16, SXTX]
+;   add v0.16b, v0.16b, v3.16b
+;   movz w16, #4496 ; movk w16, w16, #1, LSL #16 ; ldr q2, [sp, x16, SXTX]
+;   add v0.16b, v0.16b, v2.16b
+;   movz w16, #4512 ; movk w16, w16, #1, LSL #16 ; ldr q1, [sp, x16, SXTX]
+;   add v0.16b, v0.16b, v1.16b
+;   movz w16, #4528
+;   movk w16, w16, #1, LSL #16
+;   add sp, sp, x16, UXTX
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
+;   mov w16, #0x11b0
+;   movk w16, #1, lsl #16
+;   sub sp, sp, x16
+; block1: ; offset 0x24
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant0 0
+;   ldr q1, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant0 0
+;   mov w16, #0x11a0
+;   movk w16, #1, lsl #16
+;   str q1, [sp, x16, sxtx]
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant1 0
+;   ldr q2, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant1 0
+;   mov w16, #0x1190
+;   movk w16, #1, lsl #16
+;   str q2, [sp, x16, sxtx]
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant2 0
+;   ldr q3, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant2 0
+;   mov w16, #0x1180
+;   movk w16, #1, lsl #16
+;   str q3, [sp, x16, sxtx]
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant3 0
+;   ldr q4, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant3 0
+;   mov w16, #0x1170
+;   movk w16, #1, lsl #16
+;   str q4, [sp, x16, sxtx]
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant4 0
+;   ldr q4, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant4 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant5 0
+;   ldr q5, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant5 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant6 0
+;   ldr q6, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant6 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant7 0
+;   ldr q7, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant7 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant8 0
+;   ldr q16, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant8 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant9 0
+;   ldr q17, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant9 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant10 0
+;   ldr q18, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant10 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant11 0
+;   ldr q19, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant11 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant12 0
+;   ldr q20, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant12 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant13 0
+;   ldr q21, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant13 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant14 0
+;   ldr q22, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant14 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant15 0
+;   ldr q23, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant15 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant16 0
+;   ldr q24, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant16 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant17 0
+;   ldr q25, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant17 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant18 0
+;   ldr q26, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant18 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant19 0
+;   ldr q27, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant19 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant20 0
+;   ldr q28, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant20 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant21 0
+;   ldr q29, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant21 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant22 0
+;   ldr q30, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant22 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant23 0
+;   ldr q31, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant23 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant24 0
+;   ldr q8, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant24 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant25 0
+;   ldr q9, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant25 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant26 0
+;   ldr q10, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant26 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant27 0
+;   ldr q11, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant27 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant28 0
+;   ldr q12, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant28 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant29 0
+;   ldr q13, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant29 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant30 0
+;   ldr q14, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant30 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant31 0
+;   ldr q15, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant31 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant32 0
+;   ldr q0, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant32 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant33 0
+;   ldr q1, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant33 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant34 0
+;   ldr q2, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant34 0
+;   adrp x0, #0 ; reloc_constant Aarch64AdrPrelPgHi21 constant35 0
+;   ldr q3, [x0] ; reloc_constant Aarch64Ldst128AbsLo12Nc constant35 0
+;   add v2.16b, v3.16b, v2.16b
+;   add v1.16b, v2.16b, v1.16b
+;   add v0.16b, v1.16b, v0.16b
+;   add v0.16b, v0.16b, v15.16b
+;   add v0.16b, v0.16b, v14.16b
+;   add v0.16b, v0.16b, v13.16b
+;   add v0.16b, v0.16b, v12.16b
+;   add v0.16b, v0.16b, v11.16b
+;   add v0.16b, v0.16b, v10.16b
+;   add v0.16b, v0.16b, v9.16b
+;   add v0.16b, v0.16b, v8.16b
+;   add v0.16b, v0.16b, v31.16b
+;   add v0.16b, v0.16b, v30.16b
+;   add v0.16b, v0.16b, v29.16b
+;   add v0.16b, v0.16b, v28.16b
+;   add v0.16b, v0.16b, v27.16b
+;   add v0.16b, v0.16b, v26.16b
+;   add v0.16b, v0.16b, v25.16b
+;   add v0.16b, v0.16b, v24.16b
+;   add v0.16b, v0.16b, v23.16b
+;   add v0.16b, v0.16b, v22.16b
+;   add v0.16b, v0.16b, v21.16b
+;   add v0.16b, v0.16b, v20.16b
+;   add v0.16b, v0.16b, v19.16b
+;   add v0.16b, v0.16b, v18.16b
+;   add v0.16b, v0.16b, v17.16b
+;   add v0.16b, v0.16b, v16.16b
+;   add v0.16b, v0.16b, v7.16b
+;   add v0.16b, v0.16b, v6.16b
+;   add v0.16b, v0.16b, v5.16b
+;   add v0.16b, v0.16b, v4.16b
+;   mov w16, #0x1170
+;   movk w16, #1, lsl #16
+;   ldr q4, [sp, x16, sxtx]
+;   add v0.16b, v0.16b, v4.16b
+;   mov w16, #0x1180
+;   movk w16, #1, lsl #16
+;   ldr q3, [sp, x16, sxtx]
+;   add v0.16b, v0.16b, v3.16b
+;   mov w16, #0x1190
+;   movk w16, #1, lsl #16
+;   ldr q2, [sp, x16, sxtx]
+;   add v0.16b, v0.16b, v2.16b
+;   mov w16, #0x11a0
+;   movk w16, #1, lsl #16
+;   ldr q1, [sp, x16, sxtx]
+;   add v0.16b, v0.16b, v1.16b
+;   mov w16, #0x11b0
+;   movk w16, #1, lsl #16
+;   add sp, sp, x16
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+; constant0: ; offset 0x0
+;   .byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+;   .byte 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
+; constant1: ; offset 0x10
+;   .byte 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18
+;   .byte 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20
+; constant2: ; offset 0x20
+;   .byte 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28
+;   .byte 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x30
+; constant3: ; offset 0x30
+;   .byte 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38
+;   .byte 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f, 0x40
+; constant4: ; offset 0x40
+;   .byte 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48
+;   .byte 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f, 0x50
+; constant5: ; offset 0x50
+;   .byte 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58
+;   .byte 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60
+; constant6: ; offset 0x60
+;   .byte 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68
+;   .byte 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70
+; constant7: ; offset 0x70
+;   .byte 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78
+;   .byte 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80
+; constant8: ; offset 0x80
+;   .byte 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88
+;   .byte 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f, 0x90
+; constant9: ; offset 0x90
+;   .byte 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98
+;   .byte 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f, 0xa0
+; constant10: ; offset 0xa0
+;   .byte 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8
+;   .byte 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf, 0xb0
+; constant11: ; offset 0xb0
+;   .byte 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8
+;   .byte 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf, 0xc0
+; constant12: ; offset 0xc0
+;   .byte 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8
+;   .byte 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf, 0xd0
+; constant13: ; offset 0xd0
+;   .byte 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8
+;   .byte 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf, 0xe0
+; constant14: ; offset 0xe0
+;   .byte 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7, 0xe8
+;   .byte 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef, 0xf0
+; constant15: ; offset 0xf0
+;   .byte 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8
+;   .byte 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff, 0x00
+; constant16: ; offset 0x100
+;   .byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+;   .byte 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
+; constant17: ; offset 0x110
+;   .byte 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18
+;   .byte 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20
+; constant18: ; offset 0x120
+;   .byte 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28
+;   .byte 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x30
+; constant19: ; offset 0x130
+;   .byte 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38
+;   .byte 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f, 0x40
+; constant20: ; offset 0x140
+;   .byte 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48
+;   .byte 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f, 0x50
+; constant21: ; offset 0x150
+;   .byte 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58
+;   .byte 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60
+; constant22: ; offset 0x160
+;   .byte 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68
+;   .byte 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70
+; constant23: ; offset 0x170
+;   .byte 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78
+;   .byte 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80
+; constant24: ; offset 0x180
+;   .byte 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88
+;   .byte 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f, 0x90
+; constant25: ; offset 0x190
+;   .byte 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98
+;   .byte 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f, 0xa0
+; constant26: ; offset 0x1a0
+;   .byte 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8
+;   .byte 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf, 0xb0
+; constant27: ; offset 0x1b0
+;   .byte 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8
+;   .byte 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf, 0xc0
+; constant28: ; offset 0x1c0
+;   .byte 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8
+;   .byte 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf, 0xd0
+; constant29: ; offset 0x1d0
+;   .byte 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8
+;   .byte 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf, 0xe0
+; constant30: ; offset 0x1e0
+;   .byte 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7, 0xe8
+;   .byte 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef, 0xf0
+; constant31: ; offset 0x1f0
+;   .byte 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8
+;   .byte 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff, 0x00
+; constant32: ; offset 0x200
+;   .byte 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+;   .byte 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10
+; constant33: ; offset 0x210
+;   .byte 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18
+;   .byte 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20
+; constant34: ; offset 0x220
+;   .byte 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28
+;   .byte 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x30
+; constant35: ; offset 0x230
+;   .byte 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38
+;   .byte 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f, 0x40
+

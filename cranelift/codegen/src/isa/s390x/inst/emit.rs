@@ -231,7 +231,7 @@ pub fn mem_emit(
     opcode_rxy: Option<u16>,
     opcode_ril: Option<u16>,
     add_trap: bool,
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
@@ -274,12 +274,12 @@ pub fn mem_emit(
             );
         }
         &MemArg::Label { target } => {
-            sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::BranchRIL);
+            let use_offset = sink.cur_offset();
+            sink.use_label_at_offset(use_offset, target, LabelUse::BranchRIL);
             put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
         }
         &MemArg::Constant { constant } => {
-            let target = sink.get_label_for_constant(constant);
-            sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::BranchRIL);
+            sink.use_constant(sink.cur_offset() + 2, constant, Reloc::S390xPCRel32Dbl, 2);
             put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
         }
         &MemArg::Symbol {
@@ -305,7 +305,7 @@ pub fn mem_rs_emit(
     opcode_rs: Option<u16>,
     opcode_rsy: Option<u16>,
     add_trap: bool,
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
@@ -356,7 +356,7 @@ pub fn mem_imm8_emit(
     opcode_si: u16,
     opcode_siy: u16,
     add_trap: bool,
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
@@ -403,7 +403,7 @@ pub fn mem_imm16_emit(
     mem: &MemArg,
     opcode_sil: u16,
     add_trap: bool,
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
@@ -445,7 +445,7 @@ pub fn mem_vrx_emit(
     opcode: u16,
     m3: u8,
     add_trap: bool,
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
@@ -1464,7 +1464,7 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
+    fn emit(&self, sink: &mut MachBuffers<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         self.emit_with_alloc_consumer(sink, emit_info, state)
     }
 
@@ -1476,7 +1476,7 @@ impl MachInstEmit for Inst {
 impl Inst {
     fn emit_with_alloc_consumer(
         &self,
-        sink: &mut MachBuffer<Inst>,
+        sink: &mut MachBuffers<Inst>,
         emit_info: &EmitInfo,
         state: &mut EmitState,
     ) {
@@ -2272,11 +2272,8 @@ impl Inst {
 
                             // If CC 1, branch to larger than
                             let opcode = 0xc04; // BCRL
-                            sink.use_label_at_offset(
-                                sink.cur_offset(),
-                                lg_label,
-                                LabelUse::BranchRIL,
-                            );
+                            let use_offset = sink.cur_offset();
+                            sink.use_label_at_offset(use_offset, lg_label, LabelUse::BranchRIL);
                             put(sink, &enc_ril_c(opcode, 4, 0));
 
                             // If CC not 1, write new value
@@ -2301,8 +2298,9 @@ impl Inst {
 
                             // Now jump past the other branch
                             let opcode = 0xc04; // BCRL
+                            let use_offset = sink.cur_offset();
                             sink.use_label_at_offset(
-                                sink.cur_offset(),
+                                use_offset,
                                 cmp_end_label,
                                 LabelUse::BranchRIL,
                             );
@@ -2366,7 +2364,8 @@ impl Inst {
 
                 // If the comparison was not equal, try again
                 let opcode = 0xc04; // BCRL
-                sink.use_label_at_offset(sink.cur_offset(), loop_label, LabelUse::BranchRIL);
+                let use_offset = sink.cur_offset();
+                sink.use_label_at_offset(use_offset, loop_label, LabelUse::BranchRIL);
                 put(sink, &enc_ril_c(opcode, 4, 0));
             }
             &Inst::Loop { ref body, cond } => {
@@ -2383,11 +2382,8 @@ impl Inst {
                         // Replace a CondBreak with a branch to done_label.
                         &Inst::CondBreak { cond } => {
                             let opcode = 0xc04; // BCRL
-                            sink.use_label_at_offset(
-                                sink.cur_offset(),
-                                done_label,
-                                LabelUse::BranchRIL,
-                            );
+                            let use_offset = sink.cur_offset();
+                            sink.use_label_at_offset(use_offset, done_label, LabelUse::BranchRIL);
                             put(sink, &enc_ril_c(opcode, cond.bits(), 0));
                         }
                         _ => inst.emit_with_alloc_consumer(sink, emit_info, state),
@@ -2395,7 +2391,8 @@ impl Inst {
                 }
 
                 let opcode = 0xc04; // BCRL
-                sink.use_label_at_offset(sink.cur_offset(), loop_label, LabelUse::BranchRIL);
+                let use_offset = sink.cur_offset();
+                sink.use_label_at_offset(use_offset, loop_label, LabelUse::BranchRIL);
                 put(sink, &enc_ril_c(opcode, cond.bits(), 0));
 
                 // Emit label at the end of the loop.
@@ -2739,7 +2736,7 @@ impl Inst {
             } => {
                 // Helper: emit  BRAS %r1, 12 ; .8byte <reloc> ; LG rd, 0(%r1)
                 let mut emit_bras_literal =
-                    |sink: &mut MachBuffer<Inst>,
+                    |sink: &mut MachBuffers<Inst>,
                      reloc: Reloc,
                      name: &ExternalName,
                      addend: i64| {
@@ -3802,7 +3799,8 @@ impl Inst {
                 assert_eq!(state.nominal_sp_offset, 0);
 
                 if info.patchable {
-                    sink.add_patchable_call_site(sink.cur_offset() - start);
+                    let call_len = sink.cur_offset() - start;
+                    sink.add_patchable_call_site(call_len);
                 } else {
                     state.outgoing_sp_offset = info.callee_pop_size;
                     for inst in S390xMachineDeps::gen_retval_loads(info) {
@@ -3938,7 +3936,8 @@ impl Inst {
 
                 // Branch to the default target if the given default condition is true.
                 let opcode = 0xc04; // BCRL
-                sink.use_label_at_offset(sink.cur_offset(), default, LabelUse::BranchRIL);
+                let use_offset = sink.cur_offset();
+                sink.use_label_at_offset(use_offset, default, LabelUse::BranchRIL);
                 put(sink, &enc_ril_c(opcode, default_cond.bits(), 0));
 
                 // Set temp register to address of jump table.
@@ -4021,7 +4020,8 @@ impl Inst {
 
                 // brct PROBE_COUNT, LOOP_START
                 let opcode = 0xa76; // BRCT
-                sink.use_label_at_offset(sink.cur_offset(), loop_start, LabelUse::BranchRI);
+                let use_offset = sink.cur_offset();
+                sink.use_label_at_offset(use_offset, loop_start, LabelUse::BranchRI);
                 put(sink, &enc_ri_b(opcode, probe_count.to_reg(), 0));
             }
 

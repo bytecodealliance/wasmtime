@@ -19,8 +19,8 @@ use cranelift_codegen::isa::aarch64::inst::{
     VecRRNarrowOp, VecRRPairLongOp, VecRRRLongModOp, VecRRRLongOp, VecShiftImmOp,
 };
 use cranelift_codegen::{
-    MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
-    Writable,
+    MachBuffer, MachBufferFinalized, MachBuffers, MachInst, MachInstEmit, MachInstEmitState,
+    MachLabel, Writable,
     ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
         self, ALUOp, ALUOp3, AMode, BitOp, BranchTarget, Cond, CondBrKind, ExtendOp,
@@ -144,13 +144,21 @@ impl Assembler {
             let jmp = Inst::Jump {
                 dest: BranchTarget::Label(label),
             };
-            jmp.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
+            jmp.emit(
+                &mut MachBuffers::text_only(&mut self.buffer),
+                &self.emit_info,
+                &mut self.emit_state,
+            );
             self.buffer
                 .emit_island(needed_space, self.emit_state.ctrl_plane_mut());
             self.buffer
                 .bind_label(label, self.emit_state.ctrl_plane_mut());
         }
-        inst.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
+        inst.emit(
+            &mut MachBuffers::text_only(&mut self.buffer),
+            &self.emit_info,
+            &mut self.emit_state,
+        );
     }
 
     /// Adds a constant to the constant pool, returning its address.

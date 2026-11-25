@@ -370,7 +370,11 @@ fn test_x64_emit() {
         assert_eq!(expected_printing, actual_printing.trim());
         let mut buffer = MachBuffer::new();
 
-        insn.emit(&mut buffer, &emit_info, &mut Default::default());
+        insn.emit(
+            &mut MachBuffers::text_only(&mut buffer),
+            &emit_info,
+            &mut Default::default(),
+        );
 
         // Allow one label just after the instruction (so the offset is 0).
         let label = buffer.get_label();

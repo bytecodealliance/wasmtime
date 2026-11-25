@@ -107,6 +107,7 @@ impl TargetIsa for X64Backend {
 
         Ok(CompiledCodeStencil(CompiledCode {
             buffer,
+            constants: emit_result.constants,
             vcode: emit_result.disasm,
             value_labels_ranges,
             bb_starts: emit_result.bb_offsets,

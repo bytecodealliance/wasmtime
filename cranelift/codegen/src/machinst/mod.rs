@@ -284,6 +284,8 @@ pub mod abi;
 pub use abi::*;
 pub mod buffer;
 pub use buffer::*;
+pub mod buffers;
+pub use buffers::*;
 pub mod helpers;
 pub use helpers::*;
 pub mod valueregs;
@@ -565,7 +567,7 @@ pub trait MachInstEmit: MachInst {
     type Info;
 
     /// Emit the instruction.
-    fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
+    fn emit(&self, code: &mut MachBuffers<Self>, info: &Self::Info, state: &mut Self::State);
 
     /// Pretty-print the instruction.
     fn pretty_print_inst(&self, state: &mut Self::State) -> String;
@@ -735,6 +737,9 @@ impl<I: VCodeInst> StackMapEmitter<I> {
 pub struct CompiledCode {
     /// Machine code.
     pub buffer: MachBufferFinalized,
+    /// The constants of the function, if the `separate_constant_pool` setting is
+    /// on and the function has any.
+    pub constants: Option<MachConstantsFinalized>,
     /// Disassembly, if requested.
     pub vcode: Option<String>,
     /// Debug info: value labels to registers/stackslots at code offsets.
@@ -793,6 +798,7 @@ impl CompiledCode {
         let mut buf = String::new();
 
         let relocs = self.buffer.relocs();
+        let constant_refs = self.constants.as_ref().map_or(&[][..], |c| &c.refs[..]);
         let traps = self.buffer.traps();
         let mut patchables = self.buffer.patchable_call_sites().peekable();
 
@@ -837,6 +843,14 @@ impl CompiledCode {
                         reloc.kind,
                         reloc.target.display(params),
                         reloc.addend,
+                    )?;
+                }
+
+                for r in constant_refs.iter().filter(|r| contains(r.offset as u64)) {
+                    write!(
+                        buf,
+                        " ; reloc_constant {} constant{} {}",
+                        r.kind, r.constant, r.addend,
                     )?;
                 }
 
@@ -889,11 +903,41 @@ impl CompiledCode {
                     )?;
                 }
 
+                for r in constant_refs.iter().filter(|r| contains(r.offset as u64)) {
+                    write!(
+                        buf,
+                        " ; reloc_constant {} constant{} {}",
+                        r.kind, r.constant, r.addend,
+                    )?;
+                }
+
                 if let Some(trap) = traps.iter().find(|trap| contains(trap.offset as u64)) {
                     write!(buf, " ; trap: {}", trap.code)?;
                 }
 
                 writeln!(buf)?;
+            }
+        }
+
+        // Print the separate constants, each under its own label.
+        if let Some(constants) = &self.constants {
+            let data = constants.buffer.data();
+            let ends = constants.offsets[1..]
+                .iter()
+                .copied()
+                .chain([data.len() as u32]);
+            for (n, (&start, end)) in constants.offsets.iter().zip(ends).enumerate() {
+                writeln!(buf, "constant{n}: ; offset 0x{start:x}")?;
+                for chunk in data[start as usize..end as usize].chunks(8) {
+                    write!(buf, "  .byte ")?;
+                    for (i, byte) in chunk.iter().enumerate() {
+                        if i > 0 {
+                            write!(buf, ", ")?;
+                        }
+                        write!(buf, "{byte:#04x}")?;
+                    }
+                    writeln!(buf)?;
+                }
             }
         }
 

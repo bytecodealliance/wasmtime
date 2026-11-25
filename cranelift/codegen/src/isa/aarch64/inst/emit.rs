@@ -12,7 +12,7 @@ use crate::trace;
 /// emitting some helper instructions that come immediately before the use
 /// of this amode.
 pub fn mem_finalize(
-    sink: Option<&mut MachBuffer<Inst>>,
+    sink: Option<&mut MachBuffers<Inst>>,
     mem: &AMode,
     access_ty: Type,
     state: &EmitState,
@@ -801,7 +801,7 @@ impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
+    fn emit(&self, sink: &mut MachBuffers<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
@@ -1115,6 +1115,17 @@ impl MachInstEmit for Inst {
                             rd,
                         ));
                     }
+                    &AMode::ConstPageOff { rn, addr } => {
+                        // The relocation fills in the constant's offset within its page.
+                        let kind = match access_ty.bytes() {
+                            8 => Reloc::Aarch64Ldst64AbsLo12Nc,
+                            16 => Reloc::Aarch64Ldst128AbsLo12Nc,
+                            n => panic!("no relocation for a constant load of {n} bytes"),
+                        };
+                        sink.use_constant(sink.cur_offset(), addr, kind, 0);
+                        let zero = UImm12Scaled::maybe_from_i64(0, access_ty).unwrap();
+                        sink.put4(enc_ldst_uimm12(op, zero, rn, rd));
+                    }
                     &AMode::Label { ref label } => {
                         let offset = match label {
                             // cast i32 to u32 (two's-complement)
@@ -1124,11 +1135,8 @@ impl MachInstEmit for Inst {
                             // encode an address of 0 in its place which will
                             // get filled in by relocation resolution later on.
                             MemLabel::Mach(label) => {
-                                sink.use_label_at_offset(
-                                    sink.cur_offset(),
-                                    *label,
-                                    LabelUse::Ldr19,
-                                );
+                                let use_offset = sink.cur_offset();
+                                sink.use_label_at_offset(use_offset, *label, LabelUse::Ldr19);
                                 0
                             }
                         } / 4;
@@ -1265,6 +1273,7 @@ impl MachInstEmit for Inst {
                     | &AMode::IncomingArg { .. }
                     | &AMode::SlotOffset { .. }
                     | &AMode::Const { .. }
+                    | &AMode::ConstPageOff { .. }
                     | &AMode::RegOffset { .. } => {
                         panic!("Should not see {mem:?} here!")
                     }
@@ -3434,7 +3443,8 @@ impl MachInstEmit for Inst {
                 }
 
                 if info.patchable {
-                    sink.add_patchable_call_site(sink.cur_offset() - start);
+                    let call_len = sink.cur_offset() - start;
+                    sink.add_patchable_call_site(call_len);
                 } else {
                     // Load any stack-carried return values.
                     info.emit_retval_loads::<AArch64MachineDeps, _, _>(
@@ -3634,6 +3644,11 @@ impl MachInstEmit for Inst {
                 assert!(off > -(1 << 20));
                 assert!(off < (1 << 20));
                 sink.put4(enc_adrp(off, rd));
+            }
+            &Inst::AdrpConst { rd, constant } => {
+                // The relocation fills in the page address.
+                sink.use_constant(sink.cur_offset(), constant, Reloc::Aarch64AdrPrelPgHi21, 0);
+                sink.put4(enc_adrp(0, rd));
             }
             &Inst::Word4 { data } => {
                 sink.put4(data);
@@ -4198,7 +4213,7 @@ impl MachInstEmit for Inst {
 }
 
 fn emit_return_call_common_sequence<T>(
-    sink: &mut MachBuffer<Inst>,
+    sink: &mut MachBuffers<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
     info: &ReturnCallInfo<T>,

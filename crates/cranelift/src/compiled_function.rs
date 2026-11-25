@@ -2,8 +2,8 @@ use std::ops::Range;
 
 use crate::{Relocation, mach_reloc_to_reloc, mach_trap_to_trap};
 use cranelift_codegen::{
-    MachBufferFinalized, MachBufferFrameLayout, MachSrcLoc, RelocTarget, ValueLabelsRanges,
-    binemit::Reloc, ir, isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo,
+    MachBufferFinalized, MachBufferFrameLayout, MachConstantsFinalized, MachSrcLoc, RelocTarget,
+    ValueLabelsRanges, binemit::Reloc, ir, isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo,
 };
 use wasmtime_environ::{
     FilePos, FrameStateSlotBuilder, FuncKey, InstructionAddressMap, ModulePC, PrimaryMap,
@@ -59,6 +59,9 @@ pub struct CompiledFunctionMetadata {
 pub struct CompiledFunction {
     /// The machine code buffer for this function.
     pub buffer: MachBufferFinalized,
+    /// The constants of the function, if the `separate_constant_pool` setting is
+    /// on and the function has any.
+    pub constants: Option<MachConstantsFinalized>,
     /// What names each name ref corresponds to.
     name_map: PrimaryMap<ir::UserExternalNameRef, ir::UserExternalName>,
     /// The alignment for the compiled function.
@@ -85,6 +88,7 @@ impl CompiledFunction {
     ) -> Self {
         let mut this = Self {
             buffer,
+            constants: None,
             name_map,
             alignment,
             metadata: Default::default(),

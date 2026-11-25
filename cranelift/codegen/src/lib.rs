@@ -73,6 +73,7 @@ pub use crate::machinst::buffer::{
     ExceptionContextLoc, MachCallSite, MachCallSiteItem, MachExceptionHandler, MachReloc,
     MachSrcLoc, MachTextSectionBuilder, MachTrap, OpenPatchRegion, PatchRegion, RelocTarget,
 };
+pub use crate::machinst::buffers::{MachBuffers, MachConstantRef, MachConstantsFinalized};
 pub use crate::machinst::{
     CallInfo, CompiledCode, CompiledCodeStencil, FrameLayout, LabelOrOffset, MachBuffer,
     MachBufferDebugTagList, MachBufferFinalized, MachBufferFrameLayout, MachDebugTagPos, MachInst,
