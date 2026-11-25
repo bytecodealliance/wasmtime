@@ -54,32 +54,28 @@
 ;;     region4 = 100 ""
 ;;     region5 = 160 ""
 ;;     region6 = 116 ""
-;;     sig0 = (i64 vmctx, i32) -> i64 tail
-;;     sig1 = (i64 vmctx, i64) tail
-;;     sig2 = (i64 vmctx, i64, i64, i64) -> i8 system_v
-;;     sig3 = (i64 vmctx, i64, i64, i64) -> i8 system_v
-;;     sig4 = (i64 vmctx, i64, i64, i64) -> i8 system_v
-;;     fn0 = colocated u805306368:4 sig0
-;;     fn1 = colocated u0:0 sig1
-;;     fn2 = colocated u268435456:0 sig2
-;;     fn3 = colocated u268435456:0 sig3
-;;     fn4 = colocated u268435456:0 sig4
+;;     sig0 = (i64 vmctx, i64) tail
+;;     sig1 = (i64 vmctx, i64, i64, i64) -> i8 system_v
+;;     sig2 = (i64 vmctx, i32) -> i64 tail
+;;     fn0 = colocated u0:0 sig0
+;;     fn1 = colocated u268435456:0 sig1
+;;     fn2 = colocated u805306368:4 sig2
 ;;
 ;; block0(v0: i64, v1: i64):
-;;     v2 = iconst.i32 0
-;;     v3 = call fn0(v0, v2)  ; v2 = 0
-;;     v8 = iconst.i64 48
-;;     v9 = iadd v0, v8  ; v8 = 48
-;;     store notrap aligned little region6 v9, v3
-;;     store notrap aligned little region6 v9, v3+16
-;;     v17 = func_addr.i64 fn4
-;;     store notrap aligned region2 v17, v0+48
-;;     v4 = func_addr.i64 fn1
-;;     store notrap aligned region3 v4, v0+56
+;;     v3 = func_addr.i64 fn1
+;;     store notrap aligned region2 v3, v0+48
+;;     v2 = func_addr.i64 fn0
+;;     store notrap aligned region3 v2, v0+56
 ;;     store notrap aligned region4 v0, v0+72
-;;     v6 = load.i64 notrap aligned readonly can_move region0 v0+40
-;;     v7 = load.i32 notrap aligned readonly can_move region1 v6
-;;     store notrap aligned region5 v7, v0+64
-;;     store notrap aligned little region6 v9, v3+32
+;;     v4 = load.i64 notrap aligned readonly can_move region0 v0+40
+;;     v5 = load.i32 notrap aligned readonly can_move region1 v4
+;;     store notrap aligned region5 v5, v0+64
+;;     v8 = iconst.i32 0
+;;     v9 = call fn2(v0, v8)  ; v8 = 0
+;;     v6 = iconst.i64 48
+;;     v7 = iadd v0, v6  ; v6 = 48
+;;     store notrap aligned little region6 v7, v9
+;;     store notrap aligned little region6 v7, v9+16
+;;     store notrap aligned little region6 v7, v9+32
 ;;     return
 ;; }
