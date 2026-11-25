@@ -793,14 +793,6 @@ impl WastTest {
             return true;
         }
 
-        // Temporarily disabled pending https://github.com/WebAssembly/component-model/pull/770
-        if self
-            .path
-            .ends_with("component-model/test/async/during-sync-call-no-sibling-resume.wast")
-        {
-            return true;
-        }
-
         false
     }
 }

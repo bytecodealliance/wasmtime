@@ -149,3 +149,38 @@
 
 (assert_trap (invoke "foo")
   "invalid `task.return` signature and/or options for current task")
+
+;; Host calls to a task which is never resolved report an error, while guest
+;; callers can leave such a task unresolved and keep going.
+(component definition $Tester
+  (component $inner
+    (core module $m
+      (func (export "exit") (result i32)
+        (i32.const 0 (; EXIT ;)))
+      (func (export "cb") (param i32 i32 i32) (result i32)
+        unreachable))
+    (core instance $i (instantiate $m))
+    (func (export "exit") async
+      (canon lift (core func $i "exit") async (callback (core func $i "cb")))))
+  (instance $inner (instantiate $inner))
+
+  (core func $exit (canon lower (func $inner "exit") async))
+  (core module $m
+    (import "" "exit" (func $exit (result i32)))
+    (func (export "no-wait") (result i32)
+      (if (i32.ne (i32.and (call $exit) (i32.const 0xf))
+                  (i32.const 1 (; STARTED ;)))
+        (then unreachable))
+      (i32.const 42)))
+  (core instance $i (instantiate $m
+    (with "" (instance (export "exit" (func $exit))))))
+  (func (export "no-wait") (result u32)
+    (canon lift (core func $i "no-wait")))
+  (func (export "exit") (alias export $inner "exit"))
+)
+
+(component instance $i $Tester)
+(assert_trap (invoke "exit") "async-lifted export failed to produce a result")
+
+(component instance $i $Tester)
+(assert_return (invoke "no-wait") (u32.const 42))
