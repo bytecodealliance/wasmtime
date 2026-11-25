@@ -26,10 +26,10 @@ block0(v0: i64):
 ;   mov fp, sp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 32 }
 ;   sub sp, sp, #32
-;   unwind StackAlloc { size: 32 }
 ;   ldr x16, [sp, #32]
 ;   stp x16, lr, [sp]
 ;   mov fp, sp
+;   unwind FrameRecordMoved { size: 32 }
 ;   stp x21, x22, [sp, #-16]!
 ;   unwind SaveReg { clobber_offset: 16, reg: p21i }
 ;   unwind SaveReg { clobber_offset: 24, reg: p22i }

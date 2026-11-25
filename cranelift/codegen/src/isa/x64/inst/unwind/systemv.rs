@@ -89,6 +89,9 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
     fn fp(&self) -> Option<u16> {
         Some(X86_64::RBP.0)
     }
+    fn frame_move_lr_and_offset(&self) -> Option<(u16, i32)> {
+        Some((X86_64::RA.0, 8))
+    }
 }
 
 #[cfg(test)]

@@ -62,6 +62,9 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
     fn lr_offset(&self) -> Option<u32> {
         Some(8)
     }
+    fn frame_move_lr_and_offset(&self) -> Option<(u16, i32)> {
+        Some((self.lr()?, self.lr_offset()? as i32))
+    }
 }
 
 #[cfg(test)]

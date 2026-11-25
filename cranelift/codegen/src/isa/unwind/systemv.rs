@@ -146,6 +146,10 @@ pub(crate) trait RegisterMapper<Reg> {
     fn lr_offset(&self) -> Option<u32> {
         None
     }
+    /// Gets the return-address register and its slot offset from the moved FP, if any.
+    fn frame_move_lr_and_offset(&self) -> Option<(Register, i32)> {
+        None
+    }
 }
 
 /// Represents unwind information for a single System V ABI function.
@@ -269,13 +273,16 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<Reg>>(
                     (instruction_offset, CallFrameInstruction::CfaOffset(offset)),
                     (
                         instruction_offset,
-                        CallFrameInstruction::Offset(gimli::X86_64::RBP.0, -offset),
-                    ),
-                    (
-                        instruction_offset,
-                        CallFrameInstruction::Offset(gimli::X86_64::RA.0, 8 - offset),
+                        CallFrameInstruction::Offset(mr.fp().unwrap(), -offset),
                     ),
                 ]);
+                let (lr, lr_offset) = mr
+                    .frame_move_lr_and_offset()
+                    .expect("FrameRecordMoved requires a return-address slot");
+                instructions.push((
+                    instruction_offset,
+                    CallFrameInstruction::Offset(lr, lr_offset - offset),
+                ));
             }
             &UnwindInst::Aarch64SetPointerAuth { return_addresses } => {
                 instructions.push((

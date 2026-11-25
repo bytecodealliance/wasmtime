@@ -856,13 +856,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         if incoming_args_diff > 0 {
             // Decrement SP to account for the additional space required by a tail call.
             insts.extend(Self::gen_sp_reg_adjust(-(incoming_args_diff as i32)));
-            if flags.unwind_info() {
-                insts.push(Inst::Unwind {
-                    inst: UnwindInst::StackAlloc {
-                        size: incoming_args_diff,
-                    },
-                });
-            }
 
             // Move fp and lr down.
             if setup_frame {
@@ -894,6 +887,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     regs::stack_reg(),
                     types::I64,
                 ));
+                if flags.unwind_info() {
+                    insts.push(Inst::Unwind {
+                        inst: UnwindInst::FrameRecordMoved {
+                            size: incoming_args_diff,
+                        },
+                    });
+                }
             }
         }
 
