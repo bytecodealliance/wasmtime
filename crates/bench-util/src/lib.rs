@@ -40,13 +40,20 @@ pub const DUMP_LABEL: &CStr = c"wasmtime-bench";
 /// first [`DUMP_LABEL`] dump, and so on.
 pub const MARKER: &str = "wasmtime-bench dump ";
 
-/// Whether this process is running under Valgrind, with any tool.
-///
-/// Benchmarks also use this to fit in the address space Valgrind gives a
-/// process, which is far smaller than the pooling allocator's defaults reserve.
+/// Whether this process is running under Valgrind. May produce false negatives
+/// if valgrind headers weren't available at build time.
 pub fn on_valgrind() -> bool {
     static ON_VALGRIND: OnceLock<bool> = OnceLock::new();
-    *ON_VALGRIND.get_or_init(|| valgrind::running_on_valgrind() > 0)
+    *ON_VALGRIND.get_or_init(|| {
+        // This constant was set at build time based on available valgrind
+        // headers. It needs to be checked first because if it's none then
+        // `running_on_valgrind` will panic.
+        if valgrind_requests::VALGRIND_VERSION.is_some() {
+            valgrind::running_on_valgrind() > 0
+        } else {
+            false
+        }
+    })
 }
 
 /// Times a region of a benchmark, and under Valgrind measures it with
