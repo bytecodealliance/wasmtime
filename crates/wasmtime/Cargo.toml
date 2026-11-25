@@ -102,6 +102,9 @@ cranelift-native = { workspace = true }
 wasmtime-test-util = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync", "rt-multi-thread"] }
 
+[target.'cfg(unix)'.dev-dependencies]
+rustix = { workspace = true, features = ["process"] }
+
 [build-dependencies]
 cc = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true, optional = true }

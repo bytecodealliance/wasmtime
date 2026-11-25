@@ -222,45 +222,60 @@ impl WorkerThread {
         }
     }
 
-    #[cfg(target_os = "fuchsia")]
     fn lower_thread_priority() {
-        // TODO This needs to use Fuchsia thread profiles
-        // https://fuchsia.dev/fuchsia-src/reference/kernel_objects/profile
-        warn!(
-            "Lowering thread priority on Fuchsia is currently a noop. It might affect application performance."
-        );
-    }
+        cfg_select! {
+            // On Linux the nice value is per thread, so this only lowers the
+            // priority of the worker thread. On other Unix platforms `nice`
+            // applies to the whole process, so it is not used there.
+            // http://man7.org/linux/man-pages/man7/sched.7.html
+            any(target_os = "linux", target_os = "android") => {
+                const NICE_DELTA_FOR_BACKGROUND_TASKS: i32 = 3;
 
-    #[cfg(target_os = "windows")]
-    fn lower_thread_priority() {
-        use windows_sys::Win32::System::Threading::*;
-
-        // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority
-        // https://docs.microsoft.com/en-us/windows/win32/procthread/scheduling-priorities
-
-        if unsafe { SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN) } == 0 {
-            warn!(
-                "Failed to lower worker thread priority. It might affect application performance."
-            );
-        }
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "fuchsia")))]
-    fn lower_thread_priority() {
-        // http://man7.org/linux/man-pages/man7/sched.7.html
-
-        const NICE_DELTA_FOR_BACKGROUND_TASKS: i32 = 3;
-
-        match rustix::process::nice(NICE_DELTA_FOR_BACKGROUND_TASKS) {
-            Ok(current_nice) => {
-                debug!("New nice value of worker thread: {current_nice}");
+                match rustix::process::nice(NICE_DELTA_FOR_BACKGROUND_TASKS) {
+                    Ok(current_nice) => {
+                        debug!("New nice value of worker thread: {current_nice}");
+                    }
+                    Err(err) => {
+                        warn!(
+                            "Failed to lower worker thread priority ({err:?}). It might affect application performance."
+                        );
+                    }
+                };
             }
-            Err(err) => {
+            // https://github.com/apple-oss-distributions/libpthread/blob/main/include/pthread/qos.h
+            target_os = "macos" => {
+                let qos = libc::qos_class_t::QOS_CLASS_BACKGROUND;
+                if unsafe { libc::pthread_set_qos_class_self_np(qos, 0) } != 0 {
+                    warn!(
+                        "Failed to lower worker thread priority. It might affect application performance."
+                    );
+                }
+            }
+            target_os = "windows" => {
+                use windows_sys::Win32::System::Threading::*;
+
+                // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority
+                // https://docs.microsoft.com/en-us/windows/win32/procthread/scheduling-priorities
+
+                let ret =
+                    unsafe { SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN) };
+                if ret == 0 {
+                    warn!(
+                        "Failed to lower worker thread priority. It might affect application performance."
+                    );
+                }
+            }
+            target_os = "fuchsia" => {
+                // TODO This needs to use Fuchsia thread profiles
+                // https://fuchsia.dev/fuchsia-src/reference/kernel_objects/profile
                 warn!(
-                    "Failed to lower worker thread priority ({err:?}). It might affect application performance."
+                    "Lowering thread priority on Fuchsia is currently a noop. It might affect application performance."
                 );
             }
-        };
+            _ => {
+                debug!("Lowering the worker thread priority is not supported on this platform.");
+            }
+        }
     }
 
     /// Increases the usage counter and recompresses the file
