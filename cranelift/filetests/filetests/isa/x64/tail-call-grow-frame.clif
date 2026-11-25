@@ -31,6 +31,7 @@ block0(v0: i64):
 ;   movq 0x28(%rsp), %r11
 ;   movq %r11, 8(%rsp)
 ;   movq %rsp, %rbp
+;   unwind FrameRecordMoved { size: 32 }
 ;   subq $0x30, %rsp
 ;   movq %rbx, (%rsp)
 ;   unwind SaveReg { clobber_offset: 0, reg: p3i }

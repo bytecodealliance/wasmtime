@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
+use crate::CodegenError;
 use crate::binemit::CodeOffset;
 use crate::isa::unwind::UnwindInst;
 use crate::result::CodegenResult;
@@ -300,7 +301,15 @@ pub(crate) fn create_unwind_info_from_insts(
                     }
                 }
             }
-            &UnwindInst::FrameRecordMoved { .. } => todo!(),
+            // TODO:
+            // On Windows ARM64, FrameRecordMoved can be represented with two unwind ranges: one for PCs in the prologue,
+            // where the original frame record is still intact, and one for the body, where tail-call argument stores can overwrite it.
+            // The change will require a bigger refactoring of the current unwind info emission code.
+            &UnwindInst::FrameRecordMoved { .. } => {
+                return Err(CodegenError::Unsupported(
+                    "moving the frame record with Windows arm64 unwind info".into(),
+                ));
+            }
             &UnwindInst::RegStackOffset { .. } => {
                 unreachable!("only supported with DWARF");
             }
