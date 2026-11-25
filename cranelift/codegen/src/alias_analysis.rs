@@ -18,9 +18,15 @@
 //! `S` to access the same memory location `L`. This invariant must be
 //! provided by the CLIF-producing frontend.
 //!
+//! Accesses with no alias region use an implicit disjoint "other"
+//! bucket (explicit no-region). That bucket is separate from every
+//! named region for both loads and stores. True fences (atomics,
+//! calls, `fence`, ...) still touch every bucket.
+//!
 //! Given that this non-aliasing property is provided by the CLIF
 //! producer, we can compute a *may-alias* property: one load or store
-//! may-alias another load or store if both access the same region.
+//! may-alias another load or store if both access the same region
+//! (including both being regionless / "other").
 //!
 //! The "last store" pass helps to compute this aliasing: it scans the
 //! code, finding at each program point the last instruction that
@@ -112,6 +118,7 @@ fn has_memory_fence_semantics(op: Opcode) -> bool {
         | Opcode::AtomicLoad
         | Opcode::AtomicStore
         | Opcode::Fence
+        | Opcode::StackSwitch
         | Opcode::Debugtrap
         | Opcode::SequencePoint => true,
         Opcode::Call | Opcode::CallIndirect | Opcode::TryCall | Opcode::TryCallIndirect => true,
@@ -125,7 +132,7 @@ enum AliasRegionsObserved {
     All,
     /// Just the given alias region.
     Just(AliasRegion),
-    /// Just the "other" / missing alias region.
+    /// The implicit disjoint "other" region used by regionless accesses.
     Other,
     /// No alias regions observed.
     None,
@@ -313,13 +320,13 @@ struct LastStores {
     /// The last store to each named alias region.
     regions: SecondaryMap<AliasRegion, LastStore>,
 
-    /// The store created by the last instruction with fence semantics.
+    /// The last store to the implicit disjoint "other" region (regionless
+    /// accesses).
+    other: LastStore,
+
+    /// The last true fence (atomics, calls, explicit `fence`, ...).
     ///
-    /// This applies to ALL regions, including ones not yet in the `regions`
-    /// map.
-    ///
-    /// This is also the last store for memory accesses that have no alias
-    /// region: such a store may alias any region, and so is treated as a fence.
+    /// Applies to every named region and to `other`.
     last_fence: LastStore,
 }
 
@@ -335,10 +342,17 @@ enum InstEffect {
     /// clobbers none of them.
     Trap,
 
-    /// A store to a particular alias region.
+    /// A store to a particular named alias region.
     Store {
         /// The alias region this store writes.
         region: AliasRegion,
+        /// Whether this store can trap.
+        can_trap: bool,
+    },
+
+    /// A store with no alias region: writes only the implicit disjoint
+    /// "other" bucket.
+    StoreOther {
         /// Whether this store can trap.
         can_trap: bool,
     },
@@ -374,21 +388,22 @@ fn classify(func: &Function, inst: Inst) -> InstEffect {
     // look them up.
 
     // Store instructions: update the last-store information for this
-    // instruction's alias region, or, if it has no alias region, treat it as a
-    // fence.
+    // instruction's alias region, or the implicit "other" bucket when none is
+    // set (explicit no-region).
     if opcode.can_store() {
-        // A store with no memflags, and therefore no alias region, may alias
-        // any region, so treat it like a fence. Ditto for a store whose
-        // memflags name no alias region, and for a volatile store.
+        // A non-volatile store with no memflags / no alias region writes only
+        // "other". Volatile accesses remain fences over every region.
         let Some(memflags) = func.dfg.insts[inst].memflags() else {
-            return InstEffect::Fence;
+            return InstEffect::StoreOther { can_trap: false };
         };
         let memflags = func.dfg.mem_flags[memflags];
         if memflags.volatile() {
             return InstEffect::Fence;
         }
         let Some(region) = memflags.alias_region() else {
-            return InstEffect::Fence;
+            return InstEffect::StoreOther {
+                can_trap: memflags.trap_code().is_some(),
+            };
         };
 
         return InstEffect::Store {
@@ -413,6 +428,7 @@ impl LastStores {
         match classify(func, inst) {
             InstEffect::Fence => {
                 self.regions.clear();
+                self.other = LastStore::NoStore;
 
                 // NB: unlike every region slot, `self.last_fence` is *not*
                 // observed by a fence; see `observe_inst`.
@@ -428,6 +444,10 @@ impl LastStores {
             } => {
                 self.regions[region] = inst.into();
             }
+
+            InstEffect::StoreOther { can_trap: _ } => {
+                self.other = inst.into();
+            }
         }
     }
 
@@ -440,14 +460,13 @@ impl LastStores {
         match classify(func, inst) {
             InstEffect::Fence => {
                 // A fence can observe every region, so every store we are
-                // currently tracking for a region becomes observed.
+                // currently tracking becomes observed.
                 for (_region, slot) in self.regions.iter() {
                     observe(func, observed, *slot, inst);
                 }
+                observe(func, observed, self.other, inst);
 
-                // NB: `self.last_fence` is *not* observed here. Marking it
-                // observed would, for example, prevent eliminating the first of
-                // two adjacent stores that have no alias region.
+                // NB: `self.last_fence` is *not* observed here.
             }
 
             InstEffect::Trap => self.observe_others(func, observed, None, inst),
@@ -496,7 +515,16 @@ impl LastStores {
                 if can_trap {
                     self.observe_others(func, observed, Some(region), inst);
                 } else {
-                    self.observe_trapping_others(func, observed, region, inst);
+                    self.observe_trapping_others(func, observed, Some(region), inst);
+                }
+            }
+
+            InstEffect::StoreOther { can_trap } => {
+                observe(func, observed, self.other, inst);
+                if can_trap {
+                    self.observe_others(func, observed, None, inst);
+                } else {
+                    self.observe_trapping_others(func, observed, None, inst);
                 }
             }
 
@@ -504,21 +532,26 @@ impl LastStores {
                 self.observe_others(func, observed, None, inst)
             }
             InstEffect::Observes(AliasRegionsObserved::Just(region)) => {
-                observe(func, observed, self.last_store_for_region(region), inst);
-                // NB: Because stores without regions may alias any other
-                // region, we have also observed the last such store, which
-                // `self.last_fence` tracks.
+                observe(
+                    func,
+                    observed,
+                    self.last_store_for_region(Some(region)),
+                    inst,
+                );
                 observe(func, observed, self.last_fence, inst);
             }
             InstEffect::Observes(AliasRegionsObserved::Other) => {
-                observe(func, observed, self.last_fence, inst)
+                observe(func, observed, self.last_store_for_region(None), inst);
             }
             InstEffect::Observes(AliasRegionsObserved::None) => {}
         }
     }
 
-    /// Mark the last store to every region except for `excluding` (if given), as
-    /// well as the last fence, as observed.
+    /// Mark the last store to every named region except for `excluding` (if
+    /// given), as well as the "other" region and the last fence, as observed.
+    ///
+    /// `None` excludes nothing. [`Self::observe_trapping_others`] uses the
+    /// other convention, where `None` means the "other" region.
     fn observe_others(
         &self,
         func: &Function,
@@ -531,16 +564,24 @@ impl LastStores {
                 observe(func, observed_stores, *slot, observer);
             }
         }
+        observe(func, observed_stores, self.other, observer);
         observe(func, observed_stores, self.last_fence, observer);
     }
 
-    /// Mark the last store to every region whose last store can trap, except for
-    /// `excluding`, as observed.
+    /// Mark the last store to every region whose last store can trap, except
+    /// for `excluding`, as observed.
+    ///
+    /// `excluding == None` is the implicit "other" region: every named region
+    /// is considered and `other` is not. A `Some` region is skipped, and
+    /// `other` is still considered. The last fence is always considered.
+    ///
+    /// This is not the same convention as [`Self::observe_others`], where
+    /// `None` excludes nothing.
     fn observe_trapping_others(
         &self,
         func: &Function,
         observed_stores: &mut FxHashMap<Inst, Observer>,
-        excluding: AliasRegion,
+        excluding: Option<AliasRegion>,
         observer: Inst,
     ) {
         let can_trap = |slot: LastStore| {
@@ -549,19 +590,29 @@ impl LastStores {
         };
 
         for (region, slot) in self.regions.iter() {
-            if region != excluding && can_trap(*slot) {
+            if excluding.is_none_or(|r| r != region) && can_trap(*slot) {
                 observe(func, observed_stores, *slot, observer);
             }
         }
-
+        if excluding.is_some() && can_trap(self.other) {
+            observe(func, observed_stores, self.other, observer);
+        }
         if can_trap(self.last_fence) {
             observe(func, observed_stores, self.last_fence, observer);
         }
     }
 
-    /// Get the last store to the given alias region.
-    fn last_store_for_region(&self, region: AliasRegion) -> LastStore {
-        match self.regions[region] {
+    /// Get the last store to `region`.
+    ///
+    /// `None` selects the implicit disjoint "other" region used by regionless
+    /// accesses. A slot that is still [`LastStore::NoStore`] falls back to the
+    /// last fence, which is what last (may have) written it.
+    fn last_store_for_region(&self, region: Option<AliasRegion>) -> LastStore {
+        let last_store = match region {
+            Some(r) => self.regions[r],
+            None => self.other,
+        };
+        match last_store {
             // Nothing has written this region since the last fence, so the
             // fence is what last (may have) written it.
             LastStore::NoStore => self.last_fence,
@@ -572,10 +623,16 @@ impl LastStores {
     /// Get the contents of `inst`'s own alias region's slot, without falling
     /// back to the last fence.
     ///
-    /// Returns `None` when `inst` has no alias region.
+    /// Regionless stores use the implicit `other` slot. Returns `None` for
+    /// instructions with neither a named region nor a regionless store slot.
     fn raw_region_slot(&self, func: &Function, inst: Inst) -> Option<LastStore> {
-        let region = func.dfg.insts[inst].alias_region(&func.dfg)?;
-        Some(self.regions[region])
+        if let Some(region) = func.dfg.insts[inst].alias_region(&func.dfg) {
+            return Some(self.regions[region]);
+        }
+        if func.dfg.insts[inst].opcode().can_store() {
+            return Some(self.other);
+        }
+        None
     }
 
     /// Roll this state back to the last-store information from just before
@@ -587,32 +644,26 @@ impl LastStores {
     /// `raw_region_slot` when `dead` itself was processed (that is, it must not
     /// be the last-fence fallback).
     ///
-    /// Only `dead`'s own alias-region slot is restored. A store with no alias
-    /// region is treated as a fence by `update`, which clears *every* region
-    /// slot, and we do not undo that; in that case, we leave this state
-    /// alone. Similarly, stores marked observed while processing `dead` stay
-    /// observed.
+    /// Restores `dead`'s own slot (named region or disjoint `other`).
     fn undo_store(&mut self, func: &Function, dead: Inst, prev_region_slot: LastStore) {
         debug_assert!(func.dfg.insts[dead].opcode().can_store());
 
-        let Some(region) = func.dfg.insts[dead].alias_region(&func.dfg) else {
+        if let Some(region) = func.dfg.insts[dead].alias_region(&func.dfg) {
+            if self.regions[region] == dead.into() {
+                self.regions[region] = prev_region_slot;
+            }
             return;
-        };
+        }
 
-        // Only roll back if `dead` really is the current last store to its
-        // region.
-        if self.regions[region] == dead.into() {
-            self.regions[region] = prev_region_slot;
+        if self.other == dead.into() {
+            self.other = prev_region_slot;
         }
     }
 
     /// Get the last store to the given `inst`'s alias region.
     fn get_last_store(&self, func: &Function, inst: Inst) -> LastStore {
         if let Some(memflags) = func.dfg.insts[inst].memflags() {
-            return match func.dfg.mem_flags[memflags].alias_region() {
-                None => self.last_fence,
-                Some(region) => self.last_store_for_region(region),
-            };
+            return self.last_store_for_region(func.dfg.mem_flags[memflags].alias_region());
         }
 
         let opcode = func.dfg.insts[inst].opcode();
@@ -631,6 +682,7 @@ impl LastStores {
         // field.
         let LastStores {
             regions,
+            other,
             last_fence,
         } = self;
 
@@ -648,6 +700,7 @@ impl LastStores {
             meet(&mut regions[region], rhs.regions[region]);
         }
 
+        meet(other, rhs.other);
         meet(last_fence, rhs.last_fence);
 
         changed
@@ -1224,8 +1277,8 @@ impl<'a> AliasAnalysis<'a> {
                     .max(stores.regions.keys().len());
                 for i in 0..len {
                     let region = AliasRegion::new(i);
-                    if parent_stores.last_store_for_region(region)
-                        != stores.last_store_for_region(region)
+                    if parent_stores.last_store_for_region(Some(region))
+                        != stores.last_store_for_region(Some(region))
                     {
                         region_extents[region] = extent;
                     }
@@ -1454,8 +1507,7 @@ impl<'a> AliasAnalysis<'a> {
                         // roll back to, and simply don't: either we never
                         // processed the dead store as a store in this pass (it
                         // can come from a precomputed `block_input` snapshot,
-                        // for a predecessor block we have not walked yet) or it
-                        // has no alias region and therefore no slot of its own.
+                        // for a predecessor block we have not walked yet).
                         if let Some(prev) = dead_entry
                             .filter(|e| self.domtree.dominates(e.def_inst, inst, &func.layout))
                             .and_then(|e| e.prev_region_slot)
