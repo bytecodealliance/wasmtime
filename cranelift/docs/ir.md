@@ -346,6 +346,8 @@ convention:
 
 ```
 signature    : "(" [paramlist] ")" ["->" retlist] [call_conv]
+               ["notrap"] ["nothrow"] ["reads" "(" regionset ")"]
+               ["writes" "(" regionset ")"]
 paramlist    : param { "," param }
 retlist      : paramlist
 param        : type [paramext] [paramspecial]
@@ -353,7 +355,18 @@ paramext     : "uext" | "sext"
 paramspecial : "sarg" ( num ) | "sret" | "vmctx" | "stack_limit"
 callconv     : "fast" | "cold" | "system_v" | "windows_fastcall"
              | "apple_aarch64" | "probestack" | "winch"
+regionset    : "none" | "all" | "all" "except" regionlist | regionlist
+regionlist   : region { "," region }
+region       : AliasRegion(region) | "other"
 ```
+
+A signature also declares the effects that functions with that signature may
+have. By default, they may trap, throw, and read and write every alias region.
+`notrap` and `nothrow` promise that they do not trap or throw, and `reads` and
+`writes` restrict the alias regions that they may read and write, where `other`
+is the implicit region of accesses without a named region. The verifier checks
+that a function's instructions stay within its own signature's effects, and
+alias analysis uses a call's signature to optimize memory accesses across it.
 
 A function's calling convention determines exactly how arguments and return
 values are passed, and how stack frames are managed. Since all of these details

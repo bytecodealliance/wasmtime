@@ -1,0 +1,46 @@
+test inline precise-output
+target x86_64
+
+;; The callee's `sig0` names the callee's regions, which are remapped to the
+;; caller's regions with the same `user_id` when inlined.
+
+function %callee(i64) -> i64 notrap nothrow reads(region1) writes(region0) {
+    region0 = 100 "A"
+    region1 = 200 "B"
+    sig0 = (i64) notrap nothrow reads(none) writes(region0)
+block0(v0: i64):
+    v1 = load.i64 notrap aligned region1 v0
+    call_indirect sig0, v0(v0)
+    return v1
+}
+
+; (no functions inlined into %callee)
+
+function %caller(i64) -> i64 {
+    region0 = 200 "B"
+    fn0 = %callee(i64) -> i64 notrap nothrow reads(region0) writes(all)
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; function %caller(i64) -> i64 fast {
+;     region0 = 200 "B"
+;     region1 = 100 "A"
+;     sig0 = (i64) -> i64 fast notrap nothrow reads(region0)
+;     sig1 = (i64) fast notrap nothrow reads(none) writes(region1)
+;     fn0 = %callee sig0
+;
+; block0(v0: i64):
+;     jump block1
+;
+; block1:
+;     v3 = load.i64 notrap aligned region0 v0
+;     call_indirect.i64 sig1, v0(v0)
+;     jump block2(v3)
+;
+; block2(v2: i64):
+;     v1 -> v2
+;     return v1
+; }
+

@@ -4,6 +4,22 @@ use crate::ir::{
     self, Block, DataFlowGraph, Function, Inst, InstructionData, MemFlagsData, Opcode, Type, Value,
 };
 
+/// Determine whether this opcode behaves as a memory fence, i.e.,
+/// prohibits any moving of memory accesses across it.
+pub(crate) fn has_memory_fence_semantics(op: Opcode) -> bool {
+    match op {
+        Opcode::AtomicRmw
+        | Opcode::AtomicCas
+        | Opcode::AtomicLoad
+        | Opcode::AtomicStore
+        | Opcode::Fence
+        | Opcode::StackSwitch
+        | Opcode::Debugtrap
+        | Opcode::SequencePoint => true,
+        _ => false,
+    }
+}
+
 /// Test whether the given opcode is unsafe to even consider as side-effect-free.
 #[inline(always)]
 fn trivially_has_side_effects(opcode: Opcode) -> bool {

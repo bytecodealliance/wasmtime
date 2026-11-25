@@ -2428,7 +2428,7 @@ mod host {
         let mut sig = ir::Signature {
             params: params.iter().map(|ty| AbiParam::new(*ty)).collect(),
             returns: returns.iter().map(|ty| AbiParam::new(*ty)).collect(),
-            call_conv: CallConv::triple_default(isa.triple()),
+            ..ir::Signature::new(CallConv::triple_default(isa.triple()))
         };
 
         // Once we're declaring the signature of a host function we must respect

@@ -452,7 +452,7 @@ impl BuiltinFunctionSignatures {
                         return Signature {
                             params: vec![ $( self.$param() ),* ],
                             returns: vec![ $( self.$result() )? ],
-                            call_conv: self.wasm_call_conv,
+                            ..Signature::new(self.wasm_call_conv)
                         };
                     }
                     _cur += 1;

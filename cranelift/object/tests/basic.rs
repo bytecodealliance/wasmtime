@@ -19,7 +19,7 @@ fn error_on_incompatible_sig_in_declare_function() {
     let mut sig = Signature {
         params: vec![AbiParam::new(types::I64)],
         returns: vec![],
-        call_conv: CallConv::SystemV,
+        ..Signature::new(CallConv::SystemV)
     };
     module
         .declare_function("abc", Linkage::Local, &sig)
@@ -35,7 +35,7 @@ fn define_simple_function(module: &mut ObjectModule) -> FuncId {
     let sig = Signature {
         params: vec![],
         returns: vec![],
-        call_conv: CallConv::SystemV,
+        ..Signature::new(CallConv::SystemV)
     };
 
     let func_id = module
@@ -98,7 +98,7 @@ fn switch_error() {
     let sig = Signature {
         params: vec![AbiParam::new(types::I32)],
         returns: vec![AbiParam::new(types::I32)],
-        call_conv: CallConv::SystemV,
+        ..Signature::new(CallConv::SystemV)
     };
 
     let mut func = Function::with_name_signature(UserFuncName::default(), sig);
@@ -180,7 +180,7 @@ fn libcall_function() {
     let sig = Signature {
         params: vec![],
         returns: vec![],
-        call_conv: CallConv::SystemV,
+        ..Signature::new(CallConv::SystemV)
     };
 
     let func_id = module
@@ -234,7 +234,7 @@ fn reject_nul_byte_symbol_for_func() {
     let sig = Signature {
         params: vec![],
         returns: vec![],
-        call_conv: CallConv::SystemV,
+        ..Signature::new(CallConv::SystemV)
     };
 
     let _ = module
@@ -284,7 +284,7 @@ fn aarch64_colocated_data_symbol_reloc() {
     let sig = Signature {
         params: vec![],
         returns: vec![AbiParam::new(types::I64)],
-        call_conv: CallConv::SystemV,
+        ..Signature::new(CallConv::SystemV)
     };
 
     let func_id = module
@@ -350,7 +350,7 @@ fn x86_64_colocated_symbol_address_uses_non_branch_relocation() {
         let sig = Signature {
             params: vec![],
             returns: vec![AbiParam::new(types::I64)],
-            call_conv: module.target_config().default_call_conv,
+            ..Signature::new(module.target_config().default_call_conv)
         };
         let func_id = module
             .declare_function("data_address", Linkage::Local, &sig)
@@ -446,7 +446,7 @@ mod eh_frame {
         let sig = Signature {
             params: vec![],
             returns: vec![],
-            call_conv: CallConv::SystemV,
+            ..Signature::new(CallConv::SystemV)
         };
         let func_id = module.declare_function(name, Linkage::Local, &sig).unwrap();
         let mut ctx = Context::new();
@@ -638,7 +638,7 @@ mod eh_frame {
         let sig = Signature {
             params: vec![],
             returns: vec![],
-            call_conv: CallConv::WindowsFastcall,
+            ..Signature::new(CallConv::WindowsFastcall)
         };
         let func_id = module
             .declare_function("leaf", Linkage::Local, &sig)

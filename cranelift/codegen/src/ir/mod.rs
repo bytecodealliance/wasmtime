@@ -1,5 +1,6 @@
 //! Representation of Cranelift IR functions.
 
+mod alias_regions;
 mod atomic_rmw_op;
 mod builder;
 pub mod condcodes;
@@ -30,6 +31,10 @@ mod user_stack_maps;
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
+pub use crate::ir::alias_regions::{
+    AliasRegion, AliasRegionData, AliasRegionSet, AliasRegionSetIter, AliasRegionSetRef,
+    AliasRegionTable,
+};
 pub use crate::ir::atomic_rmw_op::AtomicRmwOp;
 pub use crate::ir::builder::{
     InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase, ReplaceBuilder,
@@ -56,10 +61,7 @@ pub use crate::ir::jumptable::JumpTableData;
 pub use crate::ir::known_symbol::KnownSymbol;
 pub use crate::ir::layout::Layout;
 pub use crate::ir::libcall::{LibCall, get_probestack_funcref};
-pub use crate::ir::memflags::{
-    AliasRegion, AliasRegionData, AliasRegionSet, Endianness, MachMemFlags, MemFlags, MemFlagsData,
-    MemFlagsSet,
-};
+pub use crate::ir::memflags::{Endianness, MachMemFlags, MemFlags, MemFlagsData, MemFlagsSet};
 pub use crate::ir::progpoint::ProgramPoint;
 pub use crate::ir::sourceloc::MaybeRelSourceLoc;
 pub use crate::ir::sourceloc::RelSourceLoc;

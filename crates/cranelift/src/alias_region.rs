@@ -362,7 +362,7 @@ pub enum GcAccess {
 /// Alias region bookkeeping and load/store helper type.
 ///
 /// This is scoped to a single function: it hands out `ir::AliasRegion`s, which
-/// are indices into one function's `ir::AliasRegionSet`, so a given
+/// are indices into one function's `ir::AliasRegionTable`, so a given
 /// `AliasRegions` must not be reused across functions.
 pub struct AliasRegions<Offsets> {
     pointer_type: ir::Type,
@@ -381,7 +381,7 @@ impl<Offsets> AliasRegions<Offsets> {
 
     /// Make the alias region for a stack map.
     pub fn stack_map_region(
-        regions: &mut ir::AliasRegionSet,
+        regions: &mut ir::AliasRegionTable,
         _ty: ir::Type,
         slot: ir::StackSlot,
         _offset: u32,
@@ -404,7 +404,7 @@ impl<Offsets> AliasRegions<Offsets> {
     }
 
     /// Get or create the alias region for the given key.
-    fn insert_region(regions: &mut ir::AliasRegionSet, key: AliasRegionKey) -> ir::AliasRegion {
+    fn insert_region(regions: &mut ir::AliasRegionTable, key: AliasRegionKey) -> ir::AliasRegion {
         let user_id = key.into_raw();
         let region = regions.insert(ir::AliasRegionData {
             user_id,

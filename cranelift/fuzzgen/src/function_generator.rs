@@ -9,7 +9,7 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    AliasRegionData, AliasRegionSet, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness,
+    AliasRegionData, AliasRegionTable, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness,
     ExternalName, FuncRef, Function, LibCall, Opcode, SigRef, Signature, StackSlot,
     UserExternalName, UserFuncName, Value, types::*,
 };
@@ -1092,7 +1092,7 @@ impl AACategory {
         ]
     }
 
-    pub fn update_memflags(&self, flags: &mut MemFlagsData, alias_regions: &mut AliasRegionSet) {
+    pub fn update_memflags(&self, flags: &mut MemFlagsData, alias_regions: &mut AliasRegionTable) {
         flags.set_alias_region(match self {
             AACategory::Other => None,
             AACategory::Heap => Some(alias_regions.insert(AliasRegionData {

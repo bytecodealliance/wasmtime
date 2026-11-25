@@ -1,0 +1,71 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; The call does not write region0, so the store is forwarded to the load.
+function %forward_across_call(i64, i64) -> i64 {
+    region0 = 0 "A"
+    region1 = 1 "B"
+    sig0 = (i64) notrap nothrow reads(region1) writes(region1, other)
+block0(v0: i64, v1: i64):
+    store notrap aligned region0 v1, v0
+    call_indirect sig0, v0(v0)
+    v2 = load.i64 notrap aligned region0 v0
+    return v2
+}
+
+; function %forward_across_call(i64, i64) -> i64 fast {
+;     region0 = 0 "A"
+;     region1 = 1 "B"
+;     sig0 = (i64) fast notrap nothrow reads(region1) writes(region1, other)
+;
+; block0(v0: i64, v1: i64):
+;     store notrap aligned region0 v1, v0
+;     call_indirect sig0, v0(v0)
+;     return v1
+; }
+
+;; The call writes region0, so the load is kept.
+function %call_writes_region(i64, i64) -> i64 {
+    region0 = 0 "A"
+    sig0 = (i64) notrap nothrow reads(none) writes(region0)
+block0(v0: i64, v1: i64):
+    store notrap aligned region0 v1, v0
+    call_indirect sig0, v0(v0)
+    v2 = load.i64 notrap aligned region0 v0
+    return v2
+}
+
+; function %call_writes_region(i64, i64) -> i64 fast {
+;     region0 = 0 "A"
+;     sig0 = (i64) fast notrap nothrow reads(none) writes(region0)
+;
+; block0(v0: i64, v1: i64):
+;     store notrap aligned region0 v1, v0
+;     call_indirect sig0, v0(v0)
+;     v2 = load.i64 notrap aligned region0 v0
+;     return v2
+; }
+
+;; A call with default effects writes every region, so the load is kept.
+function %default_call(i64, i64) -> i64 {
+    region0 = 0 "A"
+    sig0 = (i64)
+block0(v0: i64, v1: i64):
+    store notrap aligned region0 v1, v0
+    call_indirect sig0, v0(v0)
+    v2 = load.i64 notrap aligned region0 v0
+    return v2
+}
+
+; function %default_call(i64, i64) -> i64 fast {
+;     region0 = 0 "A"
+;     sig0 = (i64) fast
+;
+; block0(v0: i64, v1: i64):
+;     store notrap aligned region0 v1, v0
+;     call_indirect sig0, v0(v0)
+;     v2 = load.i64 notrap aligned region0 v0
+;     return v2
+; }
+

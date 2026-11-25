@@ -1,0 +1,33 @@
+; Parser tests for signature traps, throws, reads, and writes.
+test cat
+test verifier
+
+function %defaults() {
+    sig0 = () reads(all) writes(all)
+block0:
+    return
+}
+; sameln: function %defaults() fast {
+; check: sig0 = () fast
+; not: reads
+; not: writes
+; check: block0:
+
+function %effects(i64) -> i64 notrap nothrow reads(region0, other) writes(none) {
+    region0 = 0 "A"
+    region1 = 1 "B"
+    sig0 = () notrap
+    sig1 = () nothrow
+    sig2 = () reads(none)
+    sig3 = () system_v writes(region1, other)
+    sig4 = () notrap nothrow reads(all except other) writes(all except region1, other)
+block0(v0: i64):
+    v1 = load.i64 notrap region0 v0
+    return v1
+}
+; sameln: function %effects(i64) -> i64 fast notrap nothrow reads(region0, other) writes(none) {
+; check: sig0 = () fast notrap
+; nextln: sig1 = () fast nothrow
+; nextln: sig2 = () fast reads(none)
+; nextln: sig3 = () system_v writes(region1, other)
+; nextln: sig4 = () fast notrap nothrow reads(all except other) writes(all except region1, other)

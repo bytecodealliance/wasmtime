@@ -1,0 +1,98 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; The call neither reads region0 nor can trap or throw, so the first store is
+;; dead.
+function %dead_store_across_call(i64, i64, i64) {
+    region0 = 0 "A"
+    region1 = 1 "B"
+    sig0 = (i64) notrap nothrow reads(region1, other) writes(region1)
+block0(v0: i64, v1: i64, v2: i64):
+    store notrap aligned region0 v1, v0
+    call_indirect sig0, v0(v0)
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %dead_store_across_call(i64, i64, i64) fast {
+;     region0 = 0 "A"
+;     region1 = 1 "B"
+;     sig0 = (i64) fast notrap nothrow reads(region1, other) writes(region1)
+;
+; block0(v0: i64, v1: i64, v2: i64):
+;     call_indirect sig0, v0(v0)
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+;; The call reads region0, so the first store is kept.
+function %call_reads_region(i64, i64, i64) {
+    region0 = 0 "A"
+    sig0 = (i64) notrap nothrow reads(region0) writes(none)
+block0(v0: i64, v1: i64, v2: i64):
+    store notrap aligned region0 v1, v0
+    call_indirect sig0, v0(v0)
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %call_reads_region(i64, i64, i64) fast {
+;     region0 = 0 "A"
+;     sig0 = (i64) fast notrap nothrow reads(region0) writes(none)
+;
+; block0(v0: i64, v1: i64, v2: i64):
+;     store notrap aligned region0 v1, v0
+;     call_indirect sig0, v0(v0)
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+;; The call can trap, which observes region0, so the first store is kept.
+function %call_can_trap(i64, i64, i64) {
+    region0 = 0 "A"
+    region1 = 1 "B"
+    sig0 = (i64) nothrow reads(region1) writes(none)
+block0(v0: i64, v1: i64, v2: i64):
+    store notrap aligned region0 v1, v0
+    call_indirect sig0, v0(v0)
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %call_can_trap(i64, i64, i64) fast {
+;     region0 = 0 "A"
+;     region1 = 1 "B"
+;     sig0 = (i64) fast nothrow reads(region1) writes(none)
+;
+; block0(v0: i64, v1: i64, v2: i64):
+;     store notrap aligned region0 v1, v0
+;     call_indirect sig0, v0(v0)
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+
+;; The call can throw, which observes region0, so the first store is kept.
+function %call_can_throw(i64, i64, i64) {
+    region0 = 0 "A"
+    region1 = 1 "B"
+    sig0 = (i64) notrap reads(region1) writes(none)
+block0(v0: i64, v1: i64, v2: i64):
+    store notrap aligned region0 v1, v0
+    call_indirect sig0, v0(v0)
+    store notrap aligned region0 v2, v0
+    return
+}
+
+; function %call_can_throw(i64, i64, i64) fast {
+;     region0 = 0 "A"
+;     region1 = 1 "B"
+;     sig0 = (i64) fast notrap reads(region1) writes(none)
+;
+; block0(v0: i64, v1: i64, v2: i64):
+;     store notrap aligned region0 v1, v0
+;     call_indirect sig0, v0(v0)
+;     store notrap aligned region0 v2, v0
+;     return
+; }
+

@@ -776,6 +776,7 @@ name = "cranelift-entity"
 version = "0.139.0-dev"
 dependencies = [
  "cranelift-bitset",
+ "mutatis",
  "serde",
  "serde_derive",
  "wasmtime-internal-core",

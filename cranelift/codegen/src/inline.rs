@@ -407,7 +407,10 @@ fn inline_one(
     // Type check callee signature.
     let expected_callee_sig = func.dfg.ext_funcs[callee_func_ref].signature;
     let expected_callee_sig = &func.dfg.signatures[expected_callee_sig];
-    assert_eq!(expected_callee_sig, &callee.signature);
+    assert_eq!(expected_callee_sig.params, callee.signature.params);
+    assert_eq!(expected_callee_sig.returns, callee.signature.returns);
+    assert_eq!(expected_callee_sig.call_conv, callee.signature.call_conv);
+    debug_assert_callee_effects_within(func, expected_callee_sig, callee);
 
     allocs.reset(callee);
 
@@ -1556,10 +1559,54 @@ fn create_sig_refs(func: &mut ir::Function, callee: &ir::Function) -> u32 {
 
     func.dfg.signatures.reserve(callee.dfg.signatures.len());
     for sig in callee.dfg.signatures.values() {
-        func.dfg.signatures.push(sig.clone());
+        let mut map_region = |callee_region: ir::AliasRegion| {
+            let region_data = callee.dfg.alias_regions[callee_region].clone();
+            func.dfg.alias_regions.insert(region_data)
+        };
+        let reads = sig.reads.map(&mut map_region);
+        let writes = sig.writes.map(&mut map_region);
+        func.dfg.signatures.push(ir::Signature {
+            reads,
+            writes,
+            ..sig.clone()
+        });
     }
 
     offset
+}
+
+/// Debug assert that the callee's own signature does not read, write, trap, or
+/// throw beyond what the caller declared for it.
+fn debug_assert_callee_effects_within(
+    func: &ir::Function,
+    expected: &ir::Signature,
+    callee: &ir::Function,
+) {
+    if !cfg!(debug_assertions) {
+        return;
+    }
+
+    debug_assert!(expected.traps || !callee.signature.traps);
+    debug_assert!(expected.throws || !callee.signature.throws);
+
+    // Regions are matched up by `user_id`, without inserting any into the
+    // caller, so that debug and release builds produce the same function.
+    let within = |callee_set: &ir::AliasRegionSet, expected_set: &ir::AliasRegionSet| {
+        callee_set
+            .iter(&callee.dfg)
+            .all(|callee_region| match callee_region {
+                None => expected_set.contains(None),
+                Some(r) => {
+                    let user_id = callee.dfg.alias_regions[r].user_id;
+                    match func.dfg.alias_regions.get(user_id) {
+                        Some(caller_region) => expected_set.contains(Some(caller_region)),
+                        None => expected_set.contains_unnamed(),
+                    }
+                }
+            })
+    };
+    debug_assert!(within(&callee.signature.reads, &expected.reads));
+    debug_assert!(within(&callee.signature.writes, &expected.writes));
 }
 
 fn create_user_external_name_refs(

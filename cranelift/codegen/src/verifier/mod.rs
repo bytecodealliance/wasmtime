@@ -434,6 +434,100 @@ impl<'a> Verifier<'a> {
                 seen_user_ids.insert(ar_data.user_id, ar);
             }
         }
+
+        let sigs = core::iter::once((AnyEntity::Function, &self.func.signature)).chain(
+            self.func
+                .dfg
+                .signatures
+                .iter()
+                .map(|(sig_ref, sig)| (sig_ref.into(), sig)),
+        );
+        for (entity, sig) in sigs {
+            for region in sig
+                .reads
+                .listed_regions()
+                .chain(sig.writes.listed_regions())
+            {
+                if !self.func.dfg.alias_regions.is_valid(region) {
+                    errors.report((entity, format!("undefined alias region {region}")));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check that the given instruction's effects are within those declared by
+    /// the function's signature.
+    fn verify_effects(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult {
+        let dfg = &self.func.dfg;
+        let sig = &self.func.signature;
+        let display = |region: Option<ir::AliasRegion>| match region {
+            Some(r) => r.to_string(),
+            None => "the `other` region".to_string(),
+        };
+
+        let mut check =
+            |verb: &str, set: ir::AliasRegionSetRef<'_>, sig_set: &ir::AliasRegionSet| {
+                if sig_set.is_all() {
+                    return;
+                }
+                if let Some(region) = set.iter(dfg).find(|r| !sig_set.contains(*r)) {
+                    errors.report((
+                        inst,
+                        self.context(inst),
+                        format!(
+                            "instruction {verb} {}, which is not in the function signature's \
+                         `{verb}` set",
+                            display(region)
+                        ),
+                    ));
+                }
+            };
+
+        // `AllInSig` is within the signature by definition, but it can hide
+        // other effects that we still need to check: a call that can trap or
+        // throw still reads its callee's regions, and a trapping or volatile
+        // memory access still accesses its own region.
+        let callee = dfg.call_signature(inst).map(|s| &dfg.signatures[s]);
+        let data = &dfg.insts[inst];
+        let own_region = data.memflags_data(dfg).map(|f| f.alias_region());
+        let opcode = data.opcode();
+
+        let reads = match dfg.inst_reads_regions(inst) {
+            ir::AliasRegionSetRef::AllInSig => match (callee, own_region) {
+                (Some(callee), _) => (&callee.reads).into(),
+                (None, Some(region)) if opcode.can_load() => ir::AliasRegionSetRef::Just(region),
+                _ => ir::AliasRegionSetRef::None,
+            },
+            reads => reads,
+        };
+        check("reads", reads, &sig.reads);
+
+        let writes = match dfg.inst_writes_regions(inst) {
+            ir::AliasRegionSetRef::AllInSig => match own_region {
+                Some(region) if opcode.can_store() => ir::AliasRegionSetRef::Just(region),
+                _ => ir::AliasRegionSetRef::None,
+            },
+            writes => writes,
+        };
+        check("writes", writes, &sig.writes);
+
+        if !sig.traps && dfg.inst_can_trap(inst) {
+            errors.report((
+                inst,
+                self.context(inst),
+                "instruction can trap, but the function signature is `notrap`",
+            ));
+        }
+        if !sig.throws && dfg.inst_can_throw(inst) {
+            errors.report((
+                inst,
+                self.context(inst),
+                "instruction can throw, but the function signature is `nothrow`",
+            ));
+        }
+
         Ok(())
     }
 
@@ -2264,6 +2358,7 @@ impl<'a> Verifier<'a> {
                 self.immediate_constraints(inst, errors)?;
                 self.iconst_bounds(inst, errors)?;
                 self.debug_tags(inst, errors)?;
+                self.verify_effects(inst, errors)?;
             }
 
             self.encodable_as_bb(block, errors)?;
