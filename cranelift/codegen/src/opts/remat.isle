@@ -29,3 +29,11 @@
       (remat x))
 (rule (simplify x @ (f64const _ _))
       (remat x))
+
+;; Rematerialize the addresses of colocated functions in each block where
+;; they're used. They are computed relative to the program counter in one or
+;; two instructions, and a single address used throughout a large function
+;; would otherwise be live across all of it. Other function addresses may need
+;; a load (from the GOT, for instance), so they are left alone.
+(rule (simplify x @ (func_addr _ (colocated_func_ref _)))
+      (remat x))
