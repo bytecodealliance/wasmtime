@@ -1727,25 +1727,53 @@ enum SocketServer {
     Platform(PlatformListener),
 }
 
+/// How long to wait before accepting again after an error that isn't specific
+/// to one connection, such as running out of file descriptors.
+const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_secs(1);
+
 impl SocketServer {
     async fn accept(&self) -> Result<ClientSocket> {
-        Ok(match self {
-            SocketServer::Tcp(listener) => {
-                let (stream, _) = listener.accept().await?;
-                // The Nagle algorithm can impose a significant latency penalty
-                // (e.g. 40ms on Linux) on guests which write small, intermittent
-                // response body chunks (e.g. SSE streams).  Here we disable that
-                // algorithm and rely on the guest to buffer if appropriate to avoid
-                // TCP fragmentation.
-                stream.set_nodelay(true)?;
-
-                ClientSocket::Tcp(stream)
+        loop {
+            let result = match self {
+                SocketServer::Tcp(listener) => listener.accept().await.map(|(stream, _)| {
+                    // The Nagle algorithm can impose a significant latency penalty
+                    // (e.g. 40ms on Linux) on guests which write small, intermittent
+                    // response body chunks (e.g. SSE streams).  Here we disable that
+                    // algorithm and rely on the guest to buffer if appropriate to avoid
+                    // TCP fragmentation.
+                    if let Err(e) = stream.set_nodelay(true) {
+                        log::debug!("failed to set TCP_NODELAY on accepted connection: {e}");
+                    }
+                    ClientSocket::Tcp(stream)
+                }),
+                SocketServer::Platform(listener) => listener
+                    .accept()
+                    .await
+                    .map(|(stream, _)| ClientSocket::Platform(stream)),
+            };
+            let e = match result {
+                Ok(socket) => return Ok(socket),
+                Err(e) => e,
+            };
+            match e.kind() {
+                // This connection failed before it was accepted, the next one may be fine.
+                io::ErrorKind::ConnectionAborted
+                | io::ErrorKind::ConnectionReset
+                | io::ErrorKind::ConnectionRefused => {
+                    log::debug!("accepted connection already failed: {e}");
+                }
+                // The socket isn't listening (e.g. a misconfigured inherited socket).
+                io::ErrorKind::InvalidInput => return Err(e.into()),
+                // Most likely out of file descriptors or memory, which finishing
+                // connections give back, so wait and try again.
+                _ => {
+                    eprintln!(
+                        "failed to accept connection, retrying in {ACCEPT_ERROR_BACKOFF:?}: {e}"
+                    );
+                    tokio::time::sleep(ACCEPT_ERROR_BACKOFF).await;
+                }
             }
-            SocketServer::Platform(listener) => {
-                let (stream, _) = listener.accept().await?;
-                ClientSocket::Platform(stream)
-            }
-        })
+        }
     }
 }
 
@@ -1993,7 +2021,7 @@ mod not_unix {
     pub enum PlatformListener {}
 
     impl PlatformListener {
-        pub async fn accept(&self) -> Result<(PlatformStream, ())> {
+        pub async fn accept(&self) -> std::io::Result<(PlatformStream, ())> {
             match *self {}
         }
     }
