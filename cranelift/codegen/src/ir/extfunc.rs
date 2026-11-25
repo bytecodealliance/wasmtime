@@ -5,7 +5,7 @@
 //!
 //! This module declares the data types used to represent external functions and call signatures.
 
-use crate::ir::{ExternalName, SigRef, Type};
+use crate::ir::{AliasRegionSet, ExternalName, SigRef, Type};
 use crate::isa::CallConv;
 use alloc::vec::Vec;
 use core::fmt;
@@ -32,6 +32,34 @@ pub struct Signature {
 
     /// Calling convention.
     pub call_conv: CallConv,
+
+    /// Whether functions with this signature may trap.
+    ///
+    /// Defaults to `true`.
+    pub traps: bool,
+
+    /// Whether functions with this signature may throw an exception.
+    ///
+    /// Defaults to `true`.
+    pub throws: bool,
+
+    /// The set of alias regions that functions with this signature may read
+    /// from.
+    ///
+    /// The regions are those of the function containing this signature: either
+    /// the function's own signature or one of the signatures it declares for
+    /// calls.
+    ///
+    /// Defaults to all regions.
+    pub reads: AliasRegionSet,
+
+    /// The set of alias regions that functions with this signature may write
+    /// to.
+    ///
+    /// The regions are interpreted the same way as for `reads`.
+    ///
+    /// Defaults to all regions.
+    pub writes: AliasRegionSet,
 }
 
 impl Signature {
@@ -41,6 +69,10 @@ impl Signature {
             params: Vec::new(),
             returns: Vec::new(),
             call_conv,
+            traps: true,
+            throws: true,
+            reads: AliasRegionSet::all(),
+            writes: AliasRegionSet::all(),
         }
     }
 
@@ -49,6 +81,10 @@ impl Signature {
         self.params.clear();
         self.returns.clear();
         self.call_conv = call_conv;
+        self.traps = true;
+        self.throws = true;
+        self.reads = AliasRegionSet::all();
+        self.writes = AliasRegionSet::all();
     }
 
     /// Find the index of a presumed unique special-purpose parameter.
@@ -126,7 +162,20 @@ impl fmt::Display for Signature {
             write!(f, " -> ")?;
             write_list(f, &self.returns)?;
         }
-        write!(f, " {}", self.call_conv)
+        write!(f, " {}", self.call_conv)?;
+        if !self.traps {
+            write!(f, " notrap")?;
+        }
+        if !self.throws {
+            write!(f, " nothrow")?;
+        }
+        if !self.reads.is_all() {
+            write!(f, " reads({})", self.reads)?;
+        }
+        if !self.writes.is_all() {
+            write!(f, " writes({})", self.writes)?;
+        }
+        Ok(())
     }
 }
 
@@ -416,5 +465,16 @@ mod tests {
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32 windows_fastcall");
         sig.returns.push(AbiParam::new(I8));
         assert_eq!(sig.to_string(), "(i32, i32x4) -> f32, i8 windows_fastcall");
+
+        sig.traps = false;
+        sig.throws = false;
+        sig.reads = AliasRegionSet::new([None]);
+        sig.writes = AliasRegionSet::none();
+        assert_eq!(
+            sig.to_string(),
+            "(i32, i32x4) -> f32, i8 windows_fastcall notrap nothrow reads(other) writes(none)"
+        );
+        sig.clear(CallConv::Fast);
+        assert_eq!(sig, Signature::new(CallConv::Fast));
     }
 }

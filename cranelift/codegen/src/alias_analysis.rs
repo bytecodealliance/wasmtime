@@ -21,7 +21,13 @@
 //! Accesses with no alias region use an implicit disjoint "other"
 //! bucket (explicit no-region). That bucket is separate from every
 //! named region for both loads and stores. True fences (atomics,
-//! calls, `fence`, ...) still touch every bucket.
+//! `fence`, calls that may write every region, ...) still touch every
+//! bucket.
+//!
+//! Calls read and write the regions that their signature declares (see
+//! `ir::Signature::reads` and `ir::Signature::writes`), so we can, for
+//! example, forward a store to a load across a call that does not write
+//! the store's region.
 //!
 //! Given that this non-aliasing property is provided by the CLIF
 //! producer, we can compute a *may-alias* property: one load or store
@@ -261,7 +267,8 @@ struct LastStores {
     /// accesses).
     other: LastStore,
 
-    /// The last true fence (atomics, calls, explicit `fence`, ...).
+    /// The last true fence (atomics, calls that may write every region,
+    /// explicit `fence`, ...).
     ///
     /// Applies to every named region and to `other`.
     last_fence: LastStore,

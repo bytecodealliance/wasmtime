@@ -256,6 +256,14 @@ impl AliasRegionSet {
         matches!(self.named_regions, AliasRegionSetInner::Excluding(_))
     }
 
+    /// Iterate over the named regions that this set explicitly lists, whether
+    /// it includes or excludes them.
+    pub fn listed_regions(&self) -> impl Iterator<Item = AliasRegion> + '_ {
+        match &self.named_regions {
+            AliasRegionSetInner::Including(set) | AliasRegionSetInner::Excluding(set) => set.iter(),
+        }
+    }
+
     /// Create a new set by mapping each of this set's explicitly listed named
     /// regions through `f`.
     pub fn map(&self, mut f: impl FnMut(AliasRegion) -> AliasRegion) -> Self {
@@ -333,8 +341,13 @@ pub enum AliasRegionSetRef<'a> {
     /// A reference to the given set of alias regions.
     Set(&'a AliasRegionSet),
 
-    /// A reference to the set of all regions.
-    All,
+    /// A reference to the set of all regions that the enclosing function's
+    /// signature reads (for an instruction's reads) or writes (for its
+    /// writes).
+    ///
+    /// Without the signature at hand, this conservatively behaves like the set
+    /// of all regions.
+    AllInSig,
 }
 
 impl<'a> From<&'a AliasRegionSet> for AliasRegionSetRef<'a> {
@@ -352,7 +365,7 @@ impl<'a> AliasRegionSetRef<'a> {
             Self::None => false,
             Self::Just(r) => *r == region,
             Self::Set(set) => set.contains(region),
-            Self::All => true,
+            Self::AllInSig => true,
         }
     }
 
@@ -360,7 +373,7 @@ impl<'a> AliasRegionSetRef<'a> {
     #[inline]
     pub fn is_all(&self) -> bool {
         match self {
-            Self::All => true,
+            Self::AllInSig => true,
             Self::Set(set) => set.is_all(),
             Self::None | Self::Just(_) => false,
         }
@@ -372,7 +385,7 @@ impl<'a> AliasRegionSetRef<'a> {
         match self {
             Self::None => true,
             Self::Set(set) => set.is_none(),
-            Self::Just(_) | Self::All => false,
+            Self::Just(_) | Self::AllInSig => false,
         }
     }
 
@@ -386,7 +399,7 @@ impl<'a> AliasRegionSetRef<'a> {
             Self::None => AliasRegionSetIter::new(false, NamedIter::Just(None)),
             Self::Just(r) => AliasRegionSetIter::new(r.is_none(), NamedIter::Just(r)),
             Self::Set(set) => set.iter(dfg),
-            Self::All => AliasRegionSetIter::new(true, NamedIter::excluding(dfg, None)),
+            Self::AllInSig => AliasRegionSetIter::new(true, NamedIter::excluding(dfg, None)),
         }
     }
 }
@@ -588,7 +601,7 @@ mod tests {
             (AliasRegionSetRef::Just(None), vec![None]),
             (AliasRegionSetRef::Just(r(2)), vec![r(2)]),
             (AliasRegionSetRef::from(&set), vec![r(1)]),
-            (AliasRegionSetRef::All, vec![None, r(0), r(1), r(2)]),
+            (AliasRegionSetRef::AllInSig, vec![None, r(0), r(1), r(2)]),
         ];
         for (set_ref, expected) in cases {
             check_iter(set_ref.iter(&dfg), &expected);

@@ -32,7 +32,7 @@ fn error_on_incompatible_sig_in_declare_function() {
     let mut sig = Signature {
         params: vec![AbiParam::new(types::I64)],
         returns: vec![],
-        call_conv: CallConv::SystemV,
+        ..Signature::new(CallConv::SystemV)
     };
     module
         .declare_function("abc", Linkage::Local, &sig)
@@ -48,7 +48,7 @@ fn define_simple_function(module: &mut JITModule) -> Result<FuncId, ModuleError>
     let sig = Signature {
         params: vec![],
         returns: vec![],
-        call_conv: CallConv::SystemV,
+        ..Signature::new(CallConv::SystemV)
     };
 
     let func_id = module.declare_function("abc", Linkage::Local, &sig)?;
@@ -86,7 +86,7 @@ fn switch_error() {
     let sig = Signature {
         params: vec![AbiParam::new(types::I32)],
         returns: vec![AbiParam::new(types::I32)],
-        call_conv: CallConv::SystemV,
+        ..Signature::new(CallConv::SystemV)
     };
 
     let mut func = Function::with_name_signature(UserFuncName::default(), sig);
@@ -166,7 +166,7 @@ fn libcall_function() {
     let sig = Signature {
         params: vec![],
         returns: vec![],
-        call_conv: CallConv::SystemV,
+        ..Signature::new(CallConv::SystemV)
     };
 
     let func_id = module

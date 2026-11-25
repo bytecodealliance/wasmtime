@@ -1117,20 +1117,22 @@ impl DataFlowGraph {
 
     /// Get the set of alias regions that the given instruction may read from.
     ///
-    /// Instructions that can trap read every region, because memory is
-    /// observable after a trap. So do returns, because the caller can observe
-    /// all of memory.
+    /// Instructions that can trap or throw read every region in the function's
+    /// signature, because memory is observable after a trap or throw. So do
+    /// returns, because the caller can observe that memory.
     pub fn inst_reads_regions(&self, inst: Inst) -> AliasRegionSetRef<'_> {
         let data = &self.insts[inst];
         let opcode = data.opcode();
         let memflags = data.memflags_data(self);
         if has_memory_fence_semantics(opcode)
             || opcode.is_return()
-            || opcode.is_call()
             || memflags.is_some_and(|f| f.volatile())
             || self.inst_can_trap(inst)
+            || self.inst_can_throw(inst)
         {
-            AliasRegionSetRef::All
+            AliasRegionSetRef::AllInSig
+        } else if let Some(sig) = self.call_signature(inst) {
+            (&self.signatures[sig].reads).into()
         } else if opcode.can_load() {
             AliasRegionSetRef::Just(memflags.and_then(|f| f.alias_region()))
         } else {
@@ -1143,11 +1145,10 @@ impl DataFlowGraph {
         let data = &self.insts[inst];
         let opcode = data.opcode();
         let memflags = data.memflags_data(self);
-        if has_memory_fence_semantics(opcode)
-            || opcode.is_call()
-            || memflags.is_some_and(|f| f.volatile())
-        {
-            AliasRegionSetRef::All
+        if has_memory_fence_semantics(opcode) || memflags.is_some_and(|f| f.volatile()) {
+            AliasRegionSetRef::AllInSig
+        } else if let Some(sig) = self.call_signature(inst) {
+            (&self.signatures[sig].writes).into()
         } else if opcode.can_store() {
             AliasRegionSetRef::Just(memflags.and_then(|f| f.alias_region()))
         } else {
@@ -1162,6 +1163,15 @@ impl DataFlowGraph {
         opcode.can_trap()
             || opcode == ir::Opcode::InterruptPoll
             || data.memflags_trap_code(self).is_some()
+            || self
+                .call_signature(inst)
+                .is_some_and(|sig| self.signatures[sig].traps)
+    }
+
+    /// Can the given instruction throw an exception?
+    pub fn inst_can_throw(&self, inst: Inst) -> bool {
+        self.call_signature(inst)
+            .is_some_and(|sig| self.signatures[sig].throws)
     }
 
     /// Like `call_signature` but returns none for tail call
@@ -1657,6 +1667,7 @@ mod tests {
     #[test]
     fn inst_regions() {
         use crate::ir::{AliasRegionData, AliasRegionSet, InstBuilder, MemFlagsData};
+        use crate::isa::CallConv;
 
         let mut func = Function::new();
         let r0 = func.dfg.alias_regions.push(AliasRegionData {
@@ -1683,11 +1694,19 @@ mod tests {
         pos.ins().udiv(p, p);
         let udiv = pos.func.layout.last_inst(block).unwrap();
         let fence = pos.ins().fence();
+        let default_sig = pos.func.import_signature(Signature::new(CallConv::Fast));
+        let default_call = pos.ins().call_indirect(default_sig, p, &[]);
+        let mut sig = Signature::new(CallConv::Fast);
+        sig.traps = false;
+        sig.throws = false;
+        sig.reads = AliasRegionSet::new([Some(r0)]);
+        sig.writes = AliasRegionSet::none();
+        let sig = pos.func.import_signature(sig);
+        let call = pos.ins().call_indirect(sig, p, &[]);
         let ret = pos.ins().return_(&[]);
 
         let dfg = &pos.func.dfg;
-        let all = AliasRegionSet::all();
-        let all = AliasRegionSetRef::from(&all);
+        let all = AliasRegionSetRef::AllInSig;
         let r0 = Some(r0);
         let cases = [
             (
@@ -1719,6 +1738,13 @@ mod tests {
             (volatile_load, all, all, false),
             (udiv, all, AliasRegionSetRef::None, true),
             (fence, all, all, false),
+            (default_call, all, all, true),
+            (
+                call,
+                AliasRegionSetRef::Just(r0),
+                AliasRegionSetRef::None,
+                false,
+            ),
             (ret, all, AliasRegionSetRef::None, false),
         ];
         for (inst, reads, writes, can_trap) in cases {
@@ -1734,6 +1760,7 @@ mod tests {
                 "{inst}"
             );
             assert_eq!(dfg.inst_can_trap(inst), can_trap, "{inst}");
+            assert_eq!(dfg.inst_can_throw(inst), inst == default_call, "{inst}");
         }
     }
 

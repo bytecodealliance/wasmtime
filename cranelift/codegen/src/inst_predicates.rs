@@ -16,7 +16,6 @@ pub(crate) fn has_memory_fence_semantics(op: Opcode) -> bool {
         | Opcode::StackSwitch
         | Opcode::Debugtrap
         | Opcode::SequencePoint => true,
-        Opcode::Call | Opcode::CallIndirect | Opcode::TryCall | Opcode::TryCallIndirect => true,
         _ => false,
     }
 }

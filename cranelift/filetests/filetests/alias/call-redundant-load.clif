@@ -1,0 +1,55 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+;; The call does not write region0, so the second load is redundant.
+function %redundant_load_across_call(i64) -> i64 {
+    region0 = 0 "A"
+    region1 = 1 "B"
+    sig0 = (i64) notrap nothrow reads(all) writes(all except region0)
+block0(v0: i64):
+    v1 = load.i64 notrap aligned region0 v0
+    call_indirect sig0, v0(v0)
+    v2 = load.i64 notrap aligned region0 v0
+    v3 = iadd v1, v2
+    return v3
+}
+
+; function %redundant_load_across_call(i64) -> i64 fast {
+;     region0 = 0 "A"
+;     region1 = 1 "B"
+;     sig0 = (i64) fast notrap nothrow writes(all except region0)
+;
+; block0(v0: i64):
+;     v1 = load.i64 notrap aligned region0 v0
+;     call_indirect sig0, v0(v0)
+;     v3 = iadd v1, v1
+;     return v3
+; }
+
+;; The call writes every region except region1, so the second load is kept.
+function %call_writes_region(i64) -> i64 {
+    region0 = 0 "A"
+    region1 = 1 "B"
+    sig0 = (i64) notrap nothrow reads(all) writes(all except region1)
+block0(v0: i64):
+    v1 = load.i64 notrap aligned region0 v0
+    call_indirect sig0, v0(v0)
+    v2 = load.i64 notrap aligned region0 v0
+    v3 = iadd v1, v2
+    return v3
+}
+
+; function %call_writes_region(i64) -> i64 fast {
+;     region0 = 0 "A"
+;     region1 = 1 "B"
+;     sig0 = (i64) fast notrap nothrow writes(all except region1)
+;
+; block0(v0: i64):
+;     v1 = load.i64 notrap aligned region0 v0
+;     call_indirect sig0, v0(v0)
+;     v2 = load.i64 notrap aligned region0 v0
+;     v3 = iadd v1, v2
+;     return v3
+; }
+

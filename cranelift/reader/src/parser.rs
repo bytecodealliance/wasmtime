@@ -1377,6 +1377,8 @@ impl<'a> Parser<'a> {
     // Parse a function signature.
     //
     // signature ::=  * "(" [paramlist] ")" ["->" retlist] [callconv]
+    //                  ["notrap"] ["nothrow"] ["reads" "(" regionset ")"]
+    //                  ["writes" "(" regionset ")"]
     //
     fn parse_signature(&mut self) -> ParseResult<Signature> {
         // Calling convention defaults to `fast`, but can be changed.
@@ -1394,6 +1396,7 @@ impl<'a> Parser<'a> {
 
         // The calling convention is optional.
         match self.token() {
+            Some(Token::Identifier("notrap" | "nothrow" | "reads" | "writes")) => {}
             Some(Token::Identifier(text)) => match text.parse() {
                 Ok(cc) => {
                     self.consume();
@@ -1404,7 +1407,68 @@ impl<'a> Parser<'a> {
             _ => {}
         }
 
+        if self.optional(Token::Identifier("notrap")) {
+            sig.traps = false;
+        }
+        if self.optional(Token::Identifier("nothrow")) {
+            sig.throws = false;
+        }
+        if self.optional(Token::Identifier("reads")) {
+            sig.reads = self.parse_alias_region_set()?;
+        }
+        if self.optional(Token::Identifier("writes")) {
+            sig.writes = self.parse_alias_region_set()?;
+        }
+
         Ok(sig)
+    }
+
+    // Parse a parenthesized set of alias regions.
+    //
+    // regionset ::= "(" "none" ")"
+    //             | "(" "all" ")"
+    //             | "(" "all" "except" regionlist ")"
+    //             | "(" regionlist ")"
+    // regionlist ::= region { "," region }
+    // region ::= AliasRegion(region) | "other"
+    //
+    fn parse_alias_region_set(&mut self) -> ParseResult<ir::AliasRegionSet> {
+        self.match_token(Token::LPar, "expected '(' before alias region set")?;
+        let set = if self.optional(Token::Identifier("none")) {
+            ir::AliasRegionSet::none()
+        } else if self.optional(Token::Identifier("all")) {
+            if self.optional(Token::Identifier("except")) {
+                ir::AliasRegionSet::new_excluding(self.parse_alias_region_list()?)
+            } else {
+                ir::AliasRegionSet::all()
+            }
+        } else {
+            ir::AliasRegionSet::new(self.parse_alias_region_list()?)
+        };
+        self.match_token(Token::RPar, "expected ')' after alias region set")?;
+        Ok(set)
+    }
+
+    // Parse a non-empty, comma-separated list of alias regions, where `None` is
+    // the "other" region.
+    fn parse_alias_region_list(&mut self) -> ParseResult<Vec<Option<ir::AliasRegion>>> {
+        let mut regions = Vec::new();
+        loop {
+            match self.token() {
+                Some(Token::AliasRegion(n)) => {
+                    self.consume();
+                    regions.push(Some(ir::AliasRegion::from_u32(n)));
+                }
+                Some(Token::Identifier("other")) => {
+                    self.consume();
+                    regions.push(None);
+                }
+                _ => return err!(self.loc, "expected alias region or 'other'"),
+            }
+            if !self.optional(Token::Comma) {
+                return Ok(regions);
+            }
+        }
     }
 
     // Parse list of function parameter / return value types.
@@ -3133,6 +3197,39 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             "1: unknown calling convention: notacc"
+        );
+
+        // Effects.
+        for text in [
+            "() fast notrap",
+            "() fast nothrow",
+            "() fast reads(none)",
+            "() fast writes(region0, region2, other)",
+            "() fast notrap nothrow reads(all except other) writes(all except region1, other)",
+        ] {
+            assert_eq!(
+                Parser::new(text).parse_signature().unwrap().to_string(),
+                text
+            );
+        }
+        let sig = Parser::new("() reads(all) writes(region1)")
+            .parse_signature()
+            .unwrap();
+        assert!(sig.traps && sig.throws && sig.reads.is_all());
+        assert!(sig.writes.contains(Some(ir::AliasRegion::from_u32(1))));
+        assert_eq!(
+            Parser::new("() reads()")
+                .parse_signature()
+                .unwrap_err()
+                .to_string(),
+            "1: expected alias region or 'other'"
+        );
+        assert_eq!(
+            Parser::new("() writes(region0")
+                .parse_signature()
+                .unwrap_err()
+                .to_string(),
+            "1: expected ')' after alias region set"
         );
 
         // `void` is not recognized as a type by the lexer. It should not appear in files.

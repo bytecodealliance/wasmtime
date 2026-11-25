@@ -1,0 +1,92 @@
+test verifier
+
+function %ok(i64) notrap nothrow reads(region0) writes(region0) {
+    region0 = 0 "A"
+    sig0 = (i64) notrap nothrow reads(region0) writes(none)
+block0(v0: i64):
+    v1 = load.i64 notrap region0 v0
+    store notrap region0 v1, v0
+    call_indirect sig0, v0(v0)
+    return
+}
+
+;; A trap reads only the regions the signature declares.
+function %trap_ok(i64) reads(region0) writes(none) {
+    region0 = 0 "A"
+block0(v0: i64):
+    v1 = load.i64 region0 v0
+    trapz v1, user1
+    return
+}
+
+;; A trapping store reads only the other regions the signature declares.
+function %trapping_store_ok(i64) reads(none) writes(region0) {
+    region0 = 0 "A"
+block0(v0: i64):
+    store region0 v0, v0
+    return
+}
+
+function %reads(i64) reads(none) {
+    region0 = 0 "A"
+block0(v0: i64):
+    v1 = load.i64 notrap region0 v0 ; error: instruction reads region0, which is not in the function signature's `reads` set
+    return
+}
+
+function %writes(i64) writes(region0) {
+    region0 = 0 "A"
+    region1 = 1 "B"
+block0(v0: i64):
+    store notrap region1 v0, v0 ; error: instruction writes region1, which is not in the function signature's `writes` set
+    return
+}
+
+function %writes_other(i64) writes(none) {
+block0(v0: i64):
+    store notrap v0, v0 ; error: instruction writes the `other` region, which is not in the function signature's `writes` set
+    return
+}
+
+function %volatile_writes(i64) writes(region0) {
+    region0 = 0 "A"
+    region1 = 1 "B"
+block0(v0: i64):
+    store notrap volatile region1 v0, v0 ; error: instruction writes region1, which is not in the function signature's `writes` set
+    return
+}
+
+function %callee_reads(i64) reads(region0) {
+    region0 = 0 "A"
+    region1 = 1 "B"
+    sig0 = (i64) reads(region1)
+block0(v0: i64):
+    call_indirect sig0, v0(v0) ; error: instruction reads region1, which is not in the function signature's `reads` set
+    return
+}
+
+function %trapping_load(i64) notrap {
+block0(v0: i64):
+    v1 = load.i64 v0 ; error: instruction can trap, but the function signature is `notrap`
+    return
+}
+
+function %trapping_call(i64) notrap {
+    sig0 = (i64) nothrow
+block0(v0: i64):
+    call_indirect sig0, v0(v0) ; error: instruction can trap, but the function signature is `notrap`
+    return
+}
+
+function %throwing_call(i64) nothrow {
+    sig0 = (i64) notrap
+block0(v0: i64):
+    call_indirect sig0, v0(v0) ; error: instruction can throw, but the function signature is `nothrow`
+    return
+}
+
+function %undefined_region() reads(region3) { ; error: undefined alias region region3
+    sig0 = () writes(all except region7) ; error: undefined alias region region7
+block0:
+    return
+}
