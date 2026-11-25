@@ -37,6 +37,16 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasip1::Fd) {
     assert_eq!(nread, 4, "nread bytes check");
     assert_eq!(contents, &[0u8, 1, 2, 3], "written bytes equal read bytes");
 
+    // zero-length reads
+    nread = wasip1::fd_pread(file_fd, &[], 0).expect("zero-length read with no iovecs");
+    assert_eq!(nread, 0, "nread bytes check");
+    let iovec = wasip1::Iovec {
+        buf: contents.as_mut_ptr() as *mut _,
+        buf_len: 0,
+    };
+    nread = wasip1::fd_pread(file_fd, &[iovec], 0).expect("zero-length read with empty iovec");
+    assert_eq!(nread, 0, "nread bytes check");
+
     // Write all the data through multiple iovecs.
     //
     // Note that this needs to be done with a loop, because some
