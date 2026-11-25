@@ -1,14 +1,16 @@
 //! Data flow graph tracking Instructions, Values, and blocks.
 
 use crate::entity::{self, PrimaryMap, SecondaryMap};
+use crate::inst_predicates::has_memory_fence_semantics;
 use crate::ir;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::user_stack_maps::{UserStackMapEntry, UserStackMapEntryVec};
 use crate::ir::{
-    AliasRegionTable, Block, BlockArg, BlockCall, ConstantData, ConstantPool, DynamicType,
-    ExceptionTables, ExtFuncData, FuncRef, Immediate, Inst, JumpTables, MemFlagsSet, RelSourceLoc,
-    SigRef, Signature, Type, Value, ValueLabelAssignments, ValueList, ValueListPool, types,
+    AliasRegionSetRef, AliasRegionTable, Block, BlockArg, BlockCall, ConstantData, ConstantPool,
+    DynamicType, ExceptionTables, ExtFuncData, FuncRef, Immediate, Inst, JumpTables, MemFlagsSet,
+    RelSourceLoc, SigRef, Signature, Type, Value, ValueLabelAssignments, ValueList, ValueListPool,
+    types,
 };
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
@@ -1113,6 +1115,55 @@ impl DataFlowGraph {
         }
     }
 
+    /// Get the set of alias regions that the given instruction may read from.
+    ///
+    /// Instructions that can trap read every region, because memory is
+    /// observable after a trap. So do returns, because the caller can observe
+    /// all of memory.
+    pub fn inst_reads_regions(&self, inst: Inst) -> AliasRegionSetRef<'_> {
+        let data = &self.insts[inst];
+        let opcode = data.opcode();
+        let memflags = data.memflags_data(self);
+        if has_memory_fence_semantics(opcode)
+            || opcode.is_return()
+            || opcode.is_call()
+            || memflags.is_some_and(|f| f.volatile())
+            || self.inst_can_trap(inst)
+        {
+            AliasRegionSetRef::All
+        } else if opcode.can_load() {
+            AliasRegionSetRef::Just(memflags.and_then(|f| f.alias_region()))
+        } else {
+            AliasRegionSetRef::None
+        }
+    }
+
+    /// Get the set of alias regions that the given instruction may write to.
+    pub fn inst_writes_regions(&self, inst: Inst) -> AliasRegionSetRef<'_> {
+        let data = &self.insts[inst];
+        let opcode = data.opcode();
+        let memflags = data.memflags_data(self);
+        if has_memory_fence_semantics(opcode)
+            || opcode.is_call()
+            || memflags.is_some_and(|f| f.volatile())
+        {
+            AliasRegionSetRef::All
+        } else if opcode.can_store() {
+            AliasRegionSetRef::Just(memflags.and_then(|f| f.alias_region()))
+        } else {
+            AliasRegionSetRef::None
+        }
+    }
+
+    /// Can the given instruction trap?
+    pub fn inst_can_trap(&self, inst: Inst) -> bool {
+        let data = &self.insts[inst];
+        let opcode = data.opcode();
+        opcode.can_trap()
+            || opcode == ir::Opcode::InterruptPoll
+            || data.memflags_trap_code(self).is_some()
+    }
+
     /// Like `call_signature` but returns none for tail call
     /// instructions and try-call (exception-handling invoke)
     /// instructions.
@@ -1602,6 +1653,89 @@ mod tests {
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{Function, Opcode, TrapCode};
     use alloc::string::ToString;
+
+    #[test]
+    fn inst_regions() {
+        use crate::ir::{AliasRegionData, AliasRegionSet, InstBuilder, MemFlagsData};
+
+        let mut func = Function::new();
+        let r0 = func.dfg.alias_regions.push(AliasRegionData {
+            user_id: 0,
+            description: "".into(),
+        });
+        let block = func.dfg.make_block();
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(block);
+
+        let notrap = MemFlagsData::trusted().with_alias_region(Some(r0));
+        let trap = MemFlagsData::new().with_alias_region(Some(r0));
+        let p = pos.ins().iconst(types::I64, 0);
+        let iconst = pos.func.layout.last_inst(block).unwrap();
+        pos.ins().load(types::I64, notrap, p, 0);
+        let load = pos.func.layout.last_inst(block).unwrap();
+        pos.ins().load(types::I64, trap, p, 0);
+        let trapping_load = pos.func.layout.last_inst(block).unwrap();
+        let store = pos.ins().store(notrap, p, p, 0);
+        let trapping_store = pos.ins().store(trap, p, p, 0);
+        let other_store = pos.ins().store(MemFlagsData::trusted(), p, p, 0);
+        pos.ins().load(types::I64, notrap.with_volatile(true), p, 0);
+        let volatile_load = pos.func.layout.last_inst(block).unwrap();
+        pos.ins().udiv(p, p);
+        let udiv = pos.func.layout.last_inst(block).unwrap();
+        let fence = pos.ins().fence();
+        let ret = pos.ins().return_(&[]);
+
+        let dfg = &pos.func.dfg;
+        let all = AliasRegionSet::all();
+        let all = AliasRegionSetRef::from(&all);
+        let r0 = Some(r0);
+        let cases = [
+            (
+                iconst,
+                AliasRegionSetRef::None,
+                AliasRegionSetRef::None,
+                false,
+            ),
+            (
+                load,
+                AliasRegionSetRef::Just(r0),
+                AliasRegionSetRef::None,
+                false,
+            ),
+            (trapping_load, all, AliasRegionSetRef::None, true),
+            (
+                store,
+                AliasRegionSetRef::None,
+                AliasRegionSetRef::Just(r0),
+                false,
+            ),
+            (trapping_store, all, AliasRegionSetRef::Just(r0), true),
+            (
+                other_store,
+                AliasRegionSetRef::None,
+                AliasRegionSetRef::Just(None),
+                false,
+            ),
+            (volatile_load, all, all, false),
+            (udiv, all, AliasRegionSetRef::None, true),
+            (fence, all, all, false),
+            (ret, all, AliasRegionSetRef::None, false),
+        ];
+        for (inst, reads, writes, can_trap) in cases {
+            let to_vec = |s: AliasRegionSetRef<'_>| s.iter(dfg).collect::<alloc::vec::Vec<_>>();
+            assert_eq!(
+                to_vec(dfg.inst_reads_regions(inst)),
+                to_vec(reads),
+                "{inst}"
+            );
+            assert_eq!(
+                to_vec(dfg.inst_writes_regions(inst)),
+                to_vec(writes),
+                "{inst}"
+            );
+            assert_eq!(dfg.inst_can_trap(inst), can_trap, "{inst}");
+        }
+    }
 
     #[test]
     fn make_inst() {

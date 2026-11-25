@@ -96,7 +96,8 @@ use crate::{
     dominator_tree::DominatorTree,
     flowgraph::ControlFlowGraph,
     inst_predicates::{
-        inst_addr_offset_type, inst_store_data, is_volatile_access, visit_block_succs,
+        has_memory_fence_semantics, inst_addr_offset_type, inst_store_data, is_volatile_access,
+        visit_block_succs,
     },
     ir::{
         AliasRegion, Block, Endianness, Function, Inst, MemFlagsData, Opcode, Type, Value,
@@ -108,23 +109,6 @@ use crate::{
 use core::cmp::Ordering;
 use cranelift_entity::{EntityRef, SecondaryMap};
 use smallvec::SmallVec;
-
-/// Determine whether this opcode behaves as a memory fence, i.e.,
-/// prohibits any moving of memory accesses across it.
-fn has_memory_fence_semantics(op: Opcode) -> bool {
-    match op {
-        Opcode::AtomicRmw
-        | Opcode::AtomicCas
-        | Opcode::AtomicLoad
-        | Opcode::AtomicStore
-        | Opcode::Fence
-        | Opcode::StackSwitch
-        | Opcode::Debugtrap
-        | Opcode::SequencePoint => true,
-        Opcode::Call | Opcode::CallIndirect | Opcode::TryCall | Opcode::TryCallIndirect => true,
-        _ => false,
-    }
-}
 
 /// A description of which alias region(s) can an instruction observe.
 enum AliasRegionsObserved {
