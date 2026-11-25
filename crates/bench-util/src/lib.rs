@@ -29,7 +29,31 @@ use std::ffi::CStr;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
-use valgrind_requests::{callgrind, valgrind};
+
+#[cfg(target_os = "linux")]
+mod callgrind {
+    pub use valgrind_requests::callgrind::{dump_stats_at, start_instrumentation, zero_stats};
+
+    pub fn on_valgrind() -> bool {
+        // This constant was set at build time based on available valgrind
+        // headers. It needs to be checked first because if it's none then
+        // `running_on_valgrind` will panic.
+        valgrind_requests::VALGRIND_VERSION.is_some()
+            && valgrind_requests::valgrind::running_on_valgrind() > 0
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+mod callgrind {
+    use std::ffi::CStr;
+
+    pub fn on_valgrind() -> bool {
+        false
+    }
+    pub fn start_instrumentation() {}
+    pub fn zero_stats() {}
+    pub fn dump_stats_at(_: &CStr) {}
+}
 
 /// The label of each dump a [`Timer`] makes, which Callgrind records as
 /// `Client Request: wasmtime-bench` in the dump's `desc: Trigger:` line.
@@ -44,16 +68,7 @@ pub const MARKER: &str = "wasmtime-bench dump ";
 /// if valgrind headers weren't available at build time.
 pub fn on_valgrind() -> bool {
     static ON_VALGRIND: OnceLock<bool> = OnceLock::new();
-    *ON_VALGRIND.get_or_init(|| {
-        // This constant was set at build time based on available valgrind
-        // headers. It needs to be checked first because if it's none then
-        // `running_on_valgrind` will panic.
-        if valgrind_requests::VALGRIND_VERSION.is_some() {
-            valgrind::running_on_valgrind() > 0
-        } else {
-            false
-        }
-    })
+    *ON_VALGRIND.get_or_init(callgrind::on_valgrind)
 }
 
 /// Times a region of a benchmark, and under Valgrind measures it with
