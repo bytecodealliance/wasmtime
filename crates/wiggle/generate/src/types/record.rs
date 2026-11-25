@@ -24,6 +24,8 @@ pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenS
                     let pointee_type = names::type_ref(&pointee, quote!('a));
                     quote!(wiggle::GuestPtr<#pointee_type>)
                 }
+                // Anonymous lists (witx `(array T)` / `(list T)`) — issue #2055.
+                witx::Type::List(_) => names::type_ref(&m.tref, quote!('a)),
                 _ => unimplemented!("other anonymous struct members: {:?}", m.tref),
             },
         };
@@ -63,6 +65,12 @@ pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenS
                     let pointee_type = names::type_ref(&pointee, anon_lifetime());
                     quote! {
                         let #name = <wiggle::GuestPtr::<#pointee_type> as wiggle::GuestType>::read(mem, #location)?;
+                    }
+                }
+                witx::Type::List(_) => {
+                    let type_ = names::type_ref(&ml.member.tref, anon_lifetime());
+                    quote! {
+                        let #name = <#type_ as wiggle::GuestType>::read(mem, #location)?;
                     }
                 }
                 _ => unimplemented!("other anonymous struct members: {:?}", ty),
