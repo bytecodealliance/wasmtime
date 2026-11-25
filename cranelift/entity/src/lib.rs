@@ -276,6 +276,7 @@ mod list;
 mod map;
 mod primary;
 mod set;
+mod small_set;
 mod sparse;
 
 pub use self::iter::{IntoIter, Iter, IterMut};
@@ -284,6 +285,7 @@ pub use self::list::{EntityList, ListPool};
 pub use self::map::SecondaryMap;
 pub use self::primary::PrimaryMap;
 pub use self::set::{EntitySet, SetIter};
+pub use self::small_set::{SmallEntitySet, SmallSetIter};
 pub use self::sparse::{SparseMap, SparseMapValue, SparseSet};
 
 /// A collection of tests to ensure that use of the different `entity_impl!` forms will generate

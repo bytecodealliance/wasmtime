@@ -93,6 +93,11 @@ where
         self.bitset.contains(index)
     }
 
+    /// Get the number of elements in this set.
+    pub fn len(&self) -> usize {
+        self.bitset.len()
+    }
+
     /// Is this set completely empty?
     pub fn is_empty(&self) -> bool {
         self.bitset.is_empty()
