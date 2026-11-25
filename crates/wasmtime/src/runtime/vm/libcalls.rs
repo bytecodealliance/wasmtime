@@ -69,7 +69,8 @@ use core::convert::Infallible;
 use core::time::Duration;
 use wasmtime_core::math::WasmFloat;
 use wasmtime_environ::{
-    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, PassiveElemIndex, TableIndex, Trap,
+    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, PassiveElemIndex, RrCallKind, TableIndex,
+    Trap,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -261,6 +262,12 @@ fn memory_grow(
             .await?
             .map(|size_in_bytes| AllocationSize(size_in_bytes >> page_size_log2));
 
+        // Whether growth fails depends on the host, so replay must reproduce
+        // the failure, but the trace does not represent it yet.
+        if result.is_none() {
+            store.rr.poison("failed guest memory growth");
+        }
+
         Ok(result)
     })?
 }
@@ -318,6 +325,11 @@ unsafe fn table_grow(
             .defined_table_grow(defined_table_index, limiter, delta)
             .await?
             .map(AllocationSize);
+        // Whether growth fails depends on the host, so replay must reproduce
+        // the failure, but the trace does not represent it yet.
+        if result.is_none() {
+            store.rr.poison("failed guest table growth");
+        }
         Ok(result)
     })?
 }
@@ -730,7 +742,7 @@ fn memory_atomic_wait64(
 
 // Hook for when an instance runs out of fuel.
 fn out_of_gas(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
-    block_on!(store, async |store, _| {
+    let result = block_on!(store, async |store, _| {
         if !store.refuel() {
             return Err(Trap::OutOfFuel.into());
         }
@@ -739,7 +751,15 @@ fn out_of_gas(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
             store.yield_now().await;
         }
         Ok(())
-    })?
+    })
+    .and_then(|r| r);
+    // Running out of fuel, or being cancelled while yielding, stops the guest
+    // at a point between two of its calls to or returns from the host, which
+    // the trace cannot represent.
+    if result.is_err() {
+        store.rr.poison("guest execution stopping at a fuel check");
+    }
+    result
 }
 
 // Hook for when an instance observes that the epoch has changed.
@@ -753,7 +773,7 @@ fn new_epoch(store: &mut dyn VMStore, _instance: InstanceId) -> Result<NextEpoch
     }
 
     let update_deadline = store.new_epoch_updated_deadline()?;
-    block_on!(store, async move |store, asyncness| {
+    let result = block_on!(store, async move |store, asyncness| {
         #[cfg(not(feature = "async"))]
         let _ = asyncness;
 
@@ -792,7 +812,17 @@ fn new_epoch(store: &mut dyn VMStore, _instance: InstanceId) -> Result<NextEpoch
         // the Wasm code doesn't have to reload it.
         store.set_epoch_deadline(delta);
         Ok(NextEpoch(store.get_epoch_deadline()))
-    })?
+    })
+    .and_then(|r| r);
+    // An epoch interruption trap, or cancellation while yielding, stops the
+    // guest at a point between two of its calls to or returns from the host,
+    // which the trace cannot represent.
+    if result.is_err() {
+        store
+            .rr
+            .poison("guest execution stopping at an epoch check");
+    }
+    result
 }
 
 struct NextEpoch(u64);
@@ -1092,6 +1122,11 @@ fn i8x16_shuffle(
     unreachable!()
 }
 
+// The FMA intrinsics are used when the target has no native FMA, to provide
+// the deterministic semantics of relaxed SIMD's `madd`/`nmadd`. NaN results
+// are canonical, like those of the rounding intrinsics above, so that they
+// match the native lowering's under NaN canonicalization, as record/replay
+// requires.
 fn fma_f32x4(
     _store: &mut dyn VMStore,
     _instance: InstanceId,
@@ -1111,10 +1146,10 @@ fn fma_f32x4(
 
         U {
             mem: [
-                x[0].wasm_mul_add(y[0], z[0]),
-                x[1].wasm_mul_add(y[1], z[1]),
-                x[2].wasm_mul_add(y[2], z[2]),
-                x[3].wasm_mul_add(y[3], z[3]),
+                canonical_f32(x[0].wasm_mul_add(y[0], z[0])),
+                canonical_f32(x[1].wasm_mul_add(y[1], z[1])),
+                canonical_f32(x[2].wasm_mul_add(y[2], z[2])),
+                canonical_f32(x[3].wasm_mul_add(y[3], z[3])),
             ],
         }
         .reg
@@ -1139,10 +1174,21 @@ fn fma_f64x2(
         let z = U { reg: z }.mem;
 
         U {
-            mem: [x[0].wasm_mul_add(y[0], z[0]), x[1].wasm_mul_add(y[1], z[1])],
+            mem: [
+                canonical_f64(x[0].wasm_mul_add(y[0], z[0])),
+                canonical_f64(x[1].wasm_mul_add(y[1], z[1])),
+            ],
         }
         .reg
     }
+}
+
+fn canonical_f32(val: f32) -> f32 {
+    if val.is_nan() { f32::NAN } else { val }
+}
+
+fn canonical_f64(val: f64) -> f64 {
+    if val.is_nan() { f64::NAN } else { val }
 }
 
 /// This intrinsic is just used to record trap information.
@@ -1309,6 +1355,42 @@ fn watched_write(
     }
     let _ = (bits, value);
     Ok(())
+}
+
+/// Records a call across the guest boundary, for the trampolines of
+/// record/replay engines while their store records.
+fn rr_enter(
+    store: &mut dyn VMStore,
+    _instance: InstanceId,
+    func: *mut u8,
+    values: *mut u8,
+    kind: u8,
+) -> Result<u32> {
+    let func = core::ptr::NonNull::new(func.cast()).unwrap();
+    let Some(kind) = RrCallKind::from_u8(kind) else {
+        bail_bug!("invalid record/replay call kind");
+    };
+    // SAFETY: trampolines pass the callee's live function reference, which the
+    // store owns, and its initialized arguments.
+    unsafe { store.rr_enter(func, values.cast(), kind) }
+}
+
+/// Records the return of a call from `rr_enter`.
+fn rr_leave(
+    store: &mut dyn VMStore,
+    _instance: InstanceId,
+    call: u32,
+    values: *mut u8,
+    kind: u8,
+    succeeded: u8,
+) -> Result<()> {
+    let Some(kind) = RrCallKind::from_u8(kind) else {
+        bail_bug!("invalid record/replay call kind");
+    };
+    // SAFETY: trampolines pass the ID that `rr_enter` returned for this call
+    // and the initialized results of successful calls, and the error of failed
+    // calls is pending in TLS.
+    unsafe { store.rr_leave(call, values.cast(), kind, succeeded != 0) }
 }
 
 fn breakpoint(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {

@@ -193,7 +193,7 @@ impl<'a> ObjectBuilder<'a> {
                 has_wasm_debuginfo: self.tunables.parse_wasm_debuginfo,
                 dwarf: dwarf.into(),
             },
-            checksum: WasmChecksum::from_binary(wasm, self.tunables.recording),
+            checksum: WasmChecksum::from_binary(wasm, self.tunables.rr.is_some()),
         })
     }
 

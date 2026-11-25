@@ -30,7 +30,7 @@ pub use crate::runtime::code_memory::CustomCodeMemory;
 pub use wasmtime_cache::{Cache, CacheConfig};
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
-pub use wasmtime_environ::Inlining;
+pub use wasmtime_environ::{Inlining, RrConfig};
 
 pub(crate) const DEFAULT_WASM_BACKTRACE_MAX_FRAMES: NonZeroUsize = NonZeroUsize::new(20).unwrap();
 
@@ -124,20 +124,6 @@ impl ModuleVersionStrategy {
     }
 }
 
-/// Configuration for record/replay
-#[derive(Clone)]
-#[non_exhaustive]
-pub enum RRConfig {
-    #[cfg(feature = "rr")]
-    /// Recording on store is enabled
-    Recording,
-    #[cfg(feature = "rr")]
-    /// Replaying on store is enabled
-    Replaying,
-    /// No record/replay is enabled
-    None,
-}
-
 /// Global configuration options used to create an [`Engine`]
 /// and customize its behavior.
 ///
@@ -201,7 +187,6 @@ pub struct Config {
     pub(crate) detect_host_feature: Option<fn(&str) -> Option<bool>>,
     pub(crate) x86_float_abi_ok: Option<bool>,
     pub(crate) shared_memory: bool,
-    pub(crate) rr_config: RRConfig,
 }
 
 /// User-provided configuration for the compiler.
@@ -321,7 +306,6 @@ impl Config {
             detect_host_feature: None,
             x86_float_abi_ok: None,
             shared_memory: false,
-            rr_config: RRConfig::None,
         };
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         ret
@@ -2844,13 +2828,13 @@ impl Config {
             bail!("support for stack switching was disabled at compile time")
         }
 
-        match &self.rr_config {
-            #[cfg(feature = "rr")]
-            RRConfig::Recording | RRConfig::Replaying => {
-                self.validate_rr_determinism_conflicts()?;
+        let rr = self.tunables.rr.flatten();
+        if rr.is_some() {
+            if !cfg!(feature = "rr") {
+                bail!("support for record/replay was disabled at compile time");
             }
-            RRConfig::None => {}
-        };
+            self.validate_rr_determinism_conflicts()?;
+        }
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
 
@@ -2865,9 +2849,10 @@ impl Config {
         // is missing this is disabled.
         tunables.concurrency_support = cfg!(feature = "component-model-async");
 
-        #[cfg(feature = "rr")]
-        {
-            tunables.recording = matches!(self.rr_config, RRConfig::Recording);
+        // Record/replay requires deterministic relaxed SIMD by default;
+        // `validate_rr_determinism_conflicts` rejects disabling it.
+        if rr.is_some() {
+            tunables.relaxed_simd_deterministic = true;
         }
 
         // If no target is explicitly specified then further refine `tunables`
@@ -3262,6 +3247,16 @@ impl Config {
             {
                 bail!("`native_unwind_info` cannot be disabled on Windows");
             }
+        }
+
+        // Record/replay requires that floating-point results not depend on the
+        // host, so that a trace replays the same on another architecture.
+        if tunables.rr.is_some()
+            && !self
+                .compiler_config_mut()
+                .ensure_setting_unset_or_given("enable_nan_canonicalization", "true")
+        {
+            bail!("NaN canonicalization cannot be disabled when determinism is enforced");
         }
 
         // We require frame pointers for correct stack walking, which is safety
@@ -3673,38 +3668,31 @@ impl Config {
     /// Validate if the current configuration has conflicting overrides that prevent
     /// execution determinism. Returns an error if a conflict exists.
     ///
-    /// Note: Keep this in sync with [`Config::enforce_determinism`].
+    /// NaN canonicalization is a compiler setting, so `build_compiler`
+    /// enforces it instead.
     #[inline]
-    #[cfg(feature = "rr")]
     pub(crate) fn validate_rr_determinism_conflicts(&self) -> Result<()> {
         if let Some(v) = self.tunables.relaxed_simd_deterministic {
             if v == false {
                 bail!("Relaxed deterministic SIMD cannot be disabled when determinism is enforced");
             }
         }
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
-        if let Some((v, _)) = self
-            .compiler_config
-            .as_ref()
-            .and_then(|c| c.settings.get("enable_nan_canonicalization"))
-        {
-            if v != "true" {
-                bail!("NaN canonicalization cannot be disabled when determinism is enforced");
-            }
-        }
         Ok(())
     }
 
-    /// Enable execution trace recording or replaying to the configuration.
+    /// Enables recording (`Store::new_recording`) or replay, or with `None`
+    /// (the default) neither.
     ///
-    /// When either recording/replaying are enabled, validation fails if settings
-    /// that control determinism are not set appropriately. In particular, RR requires
-    /// doing the following:
-    /// * Enabling NaN canonicalization with [`Config::cranelift_nan_canonicalization`].
-    /// * Enabling deterministic relaxed SIMD with [`Config::relaxed_simd_deterministic`].
+    /// Compiled artifacts are specific to this setting: for example, a module
+    /// that was compiled for recording cannot be loaded for replay.
+    ///
+    /// This feature is experimental, and requires the `rr` Cargo feature.
+    /// Unless explicitly configured otherwise,
+    /// this enables NaN canonicalization and deterministic relaxed SIMD;
+    /// explicitly disabling either makes engine creation fail.
     #[inline]
-    pub fn rr(&mut self, cfg: RRConfig) -> &mut Self {
-        self.rr_config = cfg;
+    pub fn rr(&mut self, cfg: Option<RrConfig>) -> &mut Self {
+        self.tunables.rr = Some(cfg);
         self
     }
 

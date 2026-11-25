@@ -5,7 +5,7 @@ use crate::prelude::*;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMStore;
 use crate::store::{AsContextMut, Asyncness, ResourceLimiterInner, StoreInner, StoreOpaque};
-use crate::{Store, StoreContextMut, UpdateDeadline};
+use crate::{Store, StoreContextMut};
 
 /// An object that can take callbacks when the runtime enters or exits hostcalls.
 #[cfg(feature = "call-hook")]
@@ -94,6 +94,9 @@ impl<T> Store<T> {
     /// [`Trap`]: crate::Trap
     #[cfg(feature = "call-hook")]
     pub fn call_hook_async(&mut self, hook: impl CallHookHandler<T> + Send + Sync + 'static) {
+        // Call hooks may change the store as Wasm is entered and exited, at
+        // points that the trace does not represent.
+        self.inner.rr.poison("installing a call hook");
         self.inner.call_hook = Some(crate::store::CallHookInner::Async(Box::new(hook)));
         self.inner.set_async_required(Asyncness::Yes);
     }
@@ -237,8 +240,7 @@ impl<T> StoreInner<T> {
         // changes and a yield is required.
         self.set_async_required(Asyncness::Yes);
 
-        self.epoch_deadline_behavior =
-            Some(Box::new(move |_store| Ok(UpdateDeadline::Yield(delta))));
+        self.epoch_deadline_behavior = super::EpochDeadlineBehavior::YieldAndUpdate(delta);
     }
 }
 

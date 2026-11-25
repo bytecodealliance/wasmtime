@@ -158,9 +158,9 @@ define_tunables! {
         /// store, for watchpoints.
         pub memory_watchpoints: bool,
 
-        /// Whether recording in RR is enabled or not. This is used primarily
-        /// to signal checksum computation for compiled artifacts.
-        pub recording: bool,
+        /// Whether compiled code is for recording, for replaying, or for
+        /// neither.
+        pub rr: Option<RrConfig>,
 
         /// Whether compiled stack-switching instructions must emit the
         /// AddressSanitizer fiber-switch handshake expected by this runtime.
@@ -295,7 +295,7 @@ impl Tunables {
             debug_guest: false,
             concurrency_support: true,
             memory_watchpoints: false,
-            recording: false,
+            rr: None,
             asan_stack_switching: false,
             gc_zeal_alloc_counter: None,
             gc_heap_reservation: 0,
@@ -454,6 +454,24 @@ impl<'a> MemoryTunables<'a> {
     /// linear-memory flavor and a GC-heap flavor.
     pub fn tunables(&self) -> &'a Tunables {
         self.tunables
+    }
+}
+
+/// Configuration for record/replay.
+#[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum RrConfig {
+    /// Stores can record, when they are created with `Store::new_recording`.
+    Recording,
+    /// Stores can replay recordings.
+    Replaying,
+}
+
+impl fmt::Display for RrConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RrConfig::Recording => write!(f, "recording"),
+            RrConfig::Replaying => write!(f, "replaying"),
+        }
     }
 }
 

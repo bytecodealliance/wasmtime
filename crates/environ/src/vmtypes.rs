@@ -487,6 +487,14 @@ macro_rules! for_each_vm_type {
                 ///
                 /// NB: `UnsafeCell` because JIT code writes to this field.
                 pub lazy_lenders_len: UnsafeCell<usize>,
+
+                /// Nonzero while the store records its execution.
+                ///
+                /// Trampolines compiled for record/replay engines check it
+                /// before calling the `rr_enter` and `rr_leave` builtins. Like
+                /// `component_context` it is present even without the `rr`
+                /// feature to keep `VMOffsets` unconditional.
+                pub recording: u32,
             }
 
             /// JIT-visible representation of the store's current thread for the component

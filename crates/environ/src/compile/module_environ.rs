@@ -1277,6 +1277,13 @@ impl ModuleTranslation<'_> {
             self.try_static_init(page_size, max_image_size_always_allowed);
         }
 
+        // Record/replay records every instance's startup as an activation,
+        // so whether a module has one must not depend on how its memories
+        // are initialized, which differs between engine configurations.
+        if tunables.rr.is_some() {
+            self.require_startup_func(types);
+        }
+
         // If any memory is statically initialized, and if that memory has an
         // initial data segment, then a startup function is at least
         // conditionally needed if the memory needs initialization. Flag as such

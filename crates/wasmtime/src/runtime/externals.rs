@@ -6,7 +6,11 @@ mod table;
 mod tag;
 
 pub use global::Global;
+#[cfg(feature = "rr")]
+pub(crate) use global::GlobalHashKey;
 pub use table::Table;
+#[cfg(feature = "rr")]
+pub(crate) use table::TableHashKey;
 pub use tag::Tag;
 
 // Externals

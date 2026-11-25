@@ -253,8 +253,7 @@ pub struct StoreInner<T: 'static> {
     limiter: Option<ResourceLimiterInner<T>>,
     call_hook: Option<CallHookInner<T>>,
     #[cfg(target_has_atomic = "64")]
-    epoch_deadline_behavior:
-        Option<Box<dyn FnMut(StoreHookState<T>) -> Result<UpdateDeadline> + Send + Sync>>,
+    epoch_deadline_behavior: EpochDeadlineBehavior<T>,
 
     /// The user's `T` data.
     ///
@@ -394,6 +393,19 @@ enum CallHookInner<T: 'static> {
     },
 }
 
+/// What happens when Wasm reaches the epoch deadline.
+#[cfg(target_has_atomic = "64")]
+enum EpochDeadlineBehavior<T: 'static> {
+    /// Trap with [`Trap::Interrupt`]; see [`Store::epoch_deadline_trap`].
+    Trap,
+    /// Yield to the async executor, then extend the deadline by this many
+    /// ticks; see [`Store::epoch_deadline_async_yield_and_update`].
+    #[cfg(feature = "async")]
+    YieldAndUpdate(u64),
+    /// Run an embedder callback; see [`Store::epoch_deadline_callback`].
+    Callback(Box<dyn FnMut(StoreHookState<T>) -> Result<UpdateDeadline> + Send + Sync>),
+}
+
 /// What to do after returning from a callback when the engine epoch reaches
 /// the deadline for a Store during execution of a function using that store.
 #[non_exhaustive]
@@ -484,6 +496,8 @@ pub struct StoreOpaque {
     /// transfer of control from Wasm to the host; see
     /// `StoreOpaque::on_wasm_to_host_transition`.
     wasm_state: EpochState<WasmState>,
+
+    pub(crate) rr: crate::rr::State,
 
     // Contains all continuations ever allocated throughout the lifetime of this
     // store.
@@ -794,6 +808,7 @@ impl<T> Store<T> {
             engine: engine.clone(),
             vm_store_context: Default::default(),
             wasm_state,
+            rr: Default::default(),
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
             instances: TryPrimaryMap::new(),
@@ -832,7 +847,7 @@ impl<T> Store<T> {
             limiter: None,
             call_hook: None,
             #[cfg(target_has_atomic = "64")]
-            epoch_deadline_behavior: None,
+            epoch_deadline_behavior: EpochDeadlineBehavior::Trap,
             data_no_provenance: ManuallyDrop::new(data),
             #[cfg(feature = "debug")]
             debug_handler: None,
@@ -1049,6 +1064,9 @@ impl<T> Store<T> {
         &mut self,
         hook: impl FnMut(StoreHookState<'_, T>, CallHook) -> Result<()> + Send + Sync + 'static,
     ) {
+        // Call hooks may change the store as Wasm is entered and exited, at
+        // points that the trace does not represent.
+        self.inner.rr.poison("installing a call hook");
         self.inner.call_hook = Some(CallHookInner::Sync(Box::new(hook)));
     }
 
@@ -1931,6 +1949,9 @@ impl StoreOpaque {
 
     #[cfg(all(feature = "std", any(unix, windows)))]
     pub fn set_signal_handler(&mut self, handler: Option<SignalHandler>) {
+        // A signal handler may resume or change the guest at any faulting
+        // instruction, which the trace does not represent.
+        self.rr.poison("installing a signal handler");
         self.signal_handler = handler;
     }
 
@@ -2589,17 +2610,28 @@ unsafe impl<T> VMStore for StoreInner<T> {
 
     #[cfg(target_has_atomic = "64")]
     fn new_epoch_updated_deadline(&mut self) -> Result<UpdateDeadline> {
-        // Temporarily take the configured behavior to avoid mutably borrowing
-        // multiple times.
-        let behavior = self.epoch_deadline_behavior.take();
+        match self.epoch_deadline_behavior {
+            EpochDeadlineBehavior::Trap => return Ok(UpdateDeadline::Interrupt),
+            #[cfg(feature = "async")]
+            EpochDeadlineBehavior::YieldAndUpdate(delta) => {
+                return Ok(UpdateDeadline::Yield(delta));
+            }
+            EpochDeadlineBehavior::Callback(_) => {}
+        }
+        // Temporarily take the callback to avoid mutably borrowing multiple
+        // times.
+        let behavior = mem::replace(
+            &mut self.epoch_deadline_behavior,
+            EpochDeadlineBehavior::Trap,
+        );
         let mut undo = Undo::new((self, behavior), |(store, behavior)| {
             store.epoch_deadline_behavior = behavior;
         });
         let (store, behavior) = &mut *undo;
-        match behavior {
-            Some(callback) => callback(StoreHookState::new((&mut **store).as_context_mut())),
-            None => Ok(UpdateDeadline::Interrupt),
-        }
+        let EpochDeadlineBehavior::Callback(callback) = behavior else {
+            unreachable!()
+        };
+        callback(StoreHookState::new((&mut **store).as_context_mut()))
     }
 
     #[cfg(feature = "debug")]
@@ -2621,7 +2653,7 @@ unsafe impl<T> VMStore for StoreInner<T> {
 impl<T> StoreInner<T> {
     #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_trap(&mut self) {
-        self.epoch_deadline_behavior = None;
+        self.epoch_deadline_behavior = EpochDeadlineBehavior::Trap;
     }
 
     #[cfg(target_has_atomic = "64")]
@@ -2629,7 +2661,10 @@ impl<T> StoreInner<T> {
         &mut self,
         callback: Box<dyn FnMut(StoreHookState<T>) -> Result<UpdateDeadline> + Send + Sync>,
     ) {
-        self.epoch_deadline_behavior = Some(callback);
+        // The callback is host code that runs, and may change the store, at
+        // points in the guest's execution that the trace does not represent.
+        self.rr.poison("epoch deadline callbacks");
+        self.epoch_deadline_behavior = EpochDeadlineBehavior::Callback(callback);
     }
 }
 

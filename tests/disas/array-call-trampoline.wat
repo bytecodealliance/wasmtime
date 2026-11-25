@@ -20,12 +20,12 @@
 ;;     fn0 = colocated u0:0 sig0
 ;;
 ;; block0(v0: i64, v1: i64, v2: i64, v3: i64):
+;;     v4 = iconst.i64 2
+;;     v5 = icmp uge v3, v4  ; v4 = 2
+;;     trapz v5, user1
 ;;     jump block1
 ;;
 ;; block1:
-;;     v4 = iconst.i64 2
-;;     v5 = icmp.i64 uge v3, v4  ; v4 = 2
-;;     trapz v5, user1
 ;;     v6 = load.i32 notrap little region0 v2
 ;;     v7 = load.i64 notrap little region0 v2+16
 ;;     v9 = get_frame_pointer.i64 

@@ -315,7 +315,7 @@ impl Metadata<'_> {
             inlining_small_callee_size,
             inlining_sum_size_threshold,
             concurrency_support,
-            recording,
+            rr,
             asan_stack_switching,
             memory_watchpoints,
 
@@ -426,7 +426,7 @@ impl Metadata<'_> {
             other.concurrency_support,
             "concurrency support",
         )?;
-        Self::check_bool(recording, other.recording, "RR recording support")?;
+        Self::check_rr(rr, other.rr)?;
         Self::check_bool(
             asan_stack_switching,
             other.asan_stack_switching,
@@ -492,6 +492,24 @@ impl Metadata<'_> {
                 )
             }
         }
+    }
+
+    fn check_rr(
+        module: Option<wasmtime_environ::RrConfig>,
+        host: Option<wasmtime_environ::RrConfig>,
+    ) -> Result<()> {
+        if module == host {
+            return Ok(());
+        }
+        let desc = |rr: Option<wasmtime_environ::RrConfig>| match rr {
+            Some(rr) => format!("for {rr}"),
+            None => "without record/replay".to_string(),
+        };
+        bail!(
+            "module was compiled {} but the host is configured {}",
+            desc(module),
+            desc(host)
+        )
     }
 
     fn check_inlining(

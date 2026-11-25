@@ -298,6 +298,15 @@ impl Instance {
         module: &Module,
         imports: Imports<'_>,
     ) -> Result<(Instance, bool)> {
+        // The trace cannot yet represent GC references.
+        if module.env_module().needs_gc_heap {
+            store.rr.reject("GC or exception-using modules")?;
+        }
+        // Other threads may write to shared memories at any time, which the
+        // trace cannot represent.
+        if module.env_module().memories.values().any(|m| m.shared) {
+            store.rr.reject("shared memories")?;
+        }
         if !Engine::same(store.engine(), module.engine()) {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
@@ -339,6 +348,7 @@ impl Instance {
         // completed (e.g. active data/element segments) and the `start`
         // function additionally has not yet been invoked. That's the
         // responsibility of the caller to handle, however.
+        store.rr_created_instance(instance, module)?;
         Ok((instance, needs_startup))
     }
 

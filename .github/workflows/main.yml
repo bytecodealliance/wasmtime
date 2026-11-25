@@ -390,6 +390,9 @@ jobs:
               -p wasmtime --no-default-features --features runtime,stack-switching
               -p wasmtime --no-default-features --features debug
               -p wasmtime --no-default-features --features debug,gc
+              -p wasmtime --no-default-features --features rr
+              -p wasmtime --no-default-features --features runtime,rr
+              -p wasmtime --no-default-features --features cranelift,rr
               -p wasmtime --no-default-features --features runtime,cache
               -p wasmtime --no-default-features --features runtime,pooling-allocator,custom-virtual-memory --target wasm32-wasip1
               -p wasmtime --features incremental-cache
