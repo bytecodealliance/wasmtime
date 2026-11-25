@@ -437,7 +437,7 @@ pub(crate) fn define() -> TargetIsa {
     let x86_64_v3 = settings.add_preset(
         "x86-64-v3",
         "Generic x86-64 (V3) microarchitecture.",
-        preset!(x86_64_v2 && has_bmi1 && has_bmi2 && has_fma && has_lzcnt && has_avx2),
+        preset!(x86_64_v2 && has_bmi1 && has_bmi2 && has_fma && has_lzcnt && has_avx && has_avx2),
     );
     settings.add_preset(
         "x86-64-v4",
