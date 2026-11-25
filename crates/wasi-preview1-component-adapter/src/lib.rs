@@ -2184,28 +2184,38 @@ pub unsafe extern "C" fn poll_oneoff(
                         CLOCKID_REALTIME => {
                             let timeout = if absolute {
                                 // Convert `clock.timeout` to `Datetime`.
-                                let mut datetime = wall_clock::Datetime {
+                                let datetime = wall_clock::Datetime {
                                     seconds: clock.timeout / 1_000_000_000,
                                     nanoseconds: (clock.timeout % 1_000_000_000) as _,
                                 };
 
-                                // Subtract `now`.
+                                // Subtract `now`. An already-expired absolute
+                                // timeout must complete immediately (duration 0);
+                                // unsigned wrap would otherwise surface as
+                                // EOVERFLOW (issue #15425).
                                 let now = wall_clock::now();
-                                datetime.seconds -= now.seconds;
-                                if datetime.nanoseconds < now.nanoseconds {
-                                    datetime.seconds -= 1;
-                                    datetime.nanoseconds += 1_000_000_000;
-                                }
-                                datetime.nanoseconds -= now.nanoseconds;
+                                if datetime.seconds < now.seconds
+                                    || (datetime.seconds == now.seconds
+                                        && datetime.nanoseconds <= now.nanoseconds)
+                                {
+                                    0
+                                } else {
+                                    let mut seconds = datetime.seconds - now.seconds;
+                                    let mut nanoseconds = datetime.nanoseconds;
+                                    if nanoseconds < now.nanoseconds {
+                                        seconds -= 1;
+                                        nanoseconds += 1_000_000_000;
+                                    }
+                                    nanoseconds -= now.nanoseconds;
 
-                                // Convert to nanoseconds.
-                                let nanos = datetime
-                                    .seconds
-                                    .checked_mul(1_000_000_000)
-                                    .ok_or(ERRNO_OVERFLOW)?;
-                                nanos
-                                    .checked_add(datetime.nanoseconds.into())
-                                    .ok_or(ERRNO_OVERFLOW)?
+                                    // Convert to nanoseconds.
+                                    let nanos = seconds
+                                        .checked_mul(1_000_000_000)
+                                        .ok_or(ERRNO_OVERFLOW)?;
+                                    nanos
+                                        .checked_add(nanoseconds.into())
+                                        .ok_or(ERRNO_OVERFLOW)?
+                                }
                             } else {
                                 clock.timeout
                             };
