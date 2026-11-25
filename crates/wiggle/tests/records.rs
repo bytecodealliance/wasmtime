@@ -87,6 +87,31 @@ impl<'a> records::Records for WasiCtx<'a> {
             }
         }
     }
+
+    fn sum_anon_array(
+        &mut self,
+        memory: &mut GuestMemory<'_>,
+        record_of_list: &types::RecordOfAnonList,
+    ) -> Result<u16, types::Errno> {
+        fn aux(
+            memory: &mut GuestMemory<'_>,
+            record_of_list: &types::RecordOfAnonList,
+        ) -> Result<u16, wiggle::GuestError> {
+            let mut s = 0;
+            for elem in record_of_list.data.iter() {
+                let v = memory.read(elem?)?;
+                s += v as u16;
+            }
+            Ok(s)
+        }
+        match aux(memory, record_of_list) {
+            Ok(s) => Ok(s),
+            Err(guest_err) => {
+                eprintln!("guest error summing anon array: {guest_err:?}");
+                Err(types::Errno::PicketLine)
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -570,6 +595,57 @@ proptest! {
     }
 }
 
+impl SumArrayExercise {
+    pub fn test_anon(&self) {
+        let mut ctx = WasiCtx::new();
+        let mut host_memory = HostMemory::new();
+        let mut memory = host_memory.guest_memory();
+
+        for (ix, val) in self.inputs.iter().enumerate() {
+            let ix = ix as u32;
+            memory
+                .write(GuestPtr::new(self.input_array_loc.ptr + ix), *val)
+                .expect("write val to array memory");
+        }
+
+        memory
+            .write(
+                GuestPtr::new(self.input_struct_loc.ptr),
+                self.input_array_loc.ptr,
+            )
+            .expect("write ptr to struct memory");
+        memory
+            .write(
+                GuestPtr::new(self.input_struct_loc.ptr + 4),
+                self.inputs.len() as u32,
+            )
+            .expect("write len to struct memory");
+
+        let res = records::sum_anon_array(
+            &mut ctx,
+            &mut memory,
+            self.input_struct_loc.ptr as i32,
+            self.output_loc.ptr as i32,
+        )
+        .unwrap();
+
+        assert_eq!(res, types::Errno::Ok as i32, "sum anon array errno");
+
+        let expected: u16 = self.inputs.iter().map(|v| *v as u16).sum();
+        let given: u16 = memory
+            .read(GuestPtr::new(self.output_loc.ptr))
+            .expect("deref ptr to returned value");
+        assert_eq!(expected, given, "sum_anon_array return val");
+    }
+}
+
+proptest! {
+    #[test]
+    fn sum_of_anon_array(e in SumArrayExercise::strat()) {
+        e.test_anon()
+    }
+}
+
 #[test]
 fn pair_ints_offsets() {
     assert_eq!(types::PairInts::offset_of_first(), 0);
@@ -599,4 +675,9 @@ fn pair_int_and_ptr_offsets() {
 #[test]
 fn pair_record_of_list_offset() {
     assert_eq!(types::RecordOfList::offset_of_arr(), 0);
+}
+
+#[test]
+fn pair_record_of_anon_list_offset() {
+    assert_eq!(types::RecordOfAnonList::offset_of_data(), 0);
 }

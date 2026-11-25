@@ -29,6 +29,12 @@
   (record
     (field $arr $some_bytes)))
 
+;; Anonymous list member (issue #2055) — same layout as $record_of_list but
+;; without a named `$some_bytes` intermediate typename.
+(typename $record_of_anon_list
+  (record
+    (field $data (list u8))))
+
 (typename $s64 s64)
 (typename $u16 u16)
 
@@ -50,5 +56,8 @@
     (result $error (expected $pair_int_ptrs (error $errno))))
   (@interface func (export "sum_array")
     (param $a_list $record_of_list)
+    (result $error (expected $u16 (error $errno))))
+  (@interface func (export "sum_anon_array")
+    (param $a_list $record_of_anon_list)
     (result $error (expected $u16 (error $errno))))
 )
