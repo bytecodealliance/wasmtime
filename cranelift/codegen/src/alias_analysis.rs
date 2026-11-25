@@ -100,8 +100,7 @@ use crate::{
         visit_block_succs,
     },
     ir::{
-        AliasRegion, Block, Endianness, Function, Inst, MemFlagsData, Opcode, Type, Value,
-        immediates::Offset32,
+        AliasRegion, Block, Endianness, Function, Inst, Opcode, Type, Value, immediates::Offset32,
     },
     post_dominator_tree::PostDominatorTree,
     trace,
@@ -109,52 +108,6 @@ use crate::{
 use core::cmp::Ordering;
 use cranelift_entity::{EntityRef, SecondaryMap};
 use smallvec::SmallVec;
-
-/// A description of which alias region(s) can an instruction observe.
-enum AliasRegionsObserved {
-    /// All alias regions.
-    All,
-    /// Just the given alias region.
-    Just(AliasRegion),
-    /// The implicit disjoint "other" region used by regionless accesses.
-    Other,
-    /// No alias regions observed.
-    None,
-}
-
-/// Which alias region(s) can an instruction observe?
-///
-/// `memflags` must be the instruction's memflags, if it has any.
-fn alias_regions_observed(
-    func: &Function,
-    inst: Inst,
-    opcode: Opcode,
-    memflags: Option<MemFlagsData>,
-) -> AliasRegionsObserved {
-    debug_assert_eq!(func.dfg.insts[inst].opcode(), opcode);
-    debug_assert_eq!(func.dfg.insts[inst].memflags_data(&func.dfg), memflags);
-    if opcode.is_return()
-        || opcode.is_call()
-        || opcode == Opcode::InterruptPoll
-        || opcode.can_trap()
-        // NB: the `opcode.can_trap()` check above only covers explicitly
-        // trapping instructions (like `trap` and `trapz`), not loads/stores
-        // that can implicitly trap; we check those via their memflags.
-        || memflags.and_then(|flags| flags.trap_code()).is_some()
-    {
-        return AliasRegionsObserved::All;
-    }
-
-    if opcode.can_load() {
-        if let Some(region) = memflags.and_then(|flags| flags.alias_region()) {
-            AliasRegionsObserved::Just(region)
-        } else {
-            AliasRegionsObserved::Other
-        }
-    } else {
-        AliasRegionsObserved::None
-    }
-}
 
 /// Who was the observer of some store instruction?
 ///
@@ -314,123 +267,21 @@ struct LastStores {
     last_fence: LastStore,
 }
 
-/// What effect does an instruction have on the last-store state?
-///
-/// This factors out the shared logic between `LastStores::update` and
-/// `LastStores::observe_inst` so they can't drift apart from each other.
-enum InstEffect {
-    /// A memory fence: it observes every region and then clobbers all of them.
-    Fence,
-
-    /// An explicitly-trapping instruction: it observes every region, but
-    /// clobbers none of them.
-    Trap,
-
-    /// A store to a particular named alias region.
-    Store {
-        /// The alias region this store writes.
-        region: AliasRegion,
-        /// Whether this store can trap.
-        can_trap: bool,
-    },
-
-    /// A store with no alias region: writes only the implicit disjoint
-    /// "other" bucket.
-    StoreOther {
-        /// Whether this store can trap.
-        can_trap: bool,
-    },
-
-    /// An instruction that clobbers nothing and observes the given regions.
-    Observes(AliasRegionsObserved),
-}
-
-/// Determine what effect the given instruction has on the last-store state.
-fn classify(func: &Function, inst: Inst) -> InstEffect {
-    let opcode = func.dfg.insts[inst].opcode();
-
-    if has_memory_fence_semantics(opcode) {
-        return InstEffect::Fence;
-    }
-
-    // Explicitly trapping instructions (`trap`, `trapz`, `udiv`,
-    // `uadd_overflow_trap`, etc... but not loads/stores that can implicitly
-    // trap): allow store-to-load forwarding across these instructions, but do
-    // not eliminate dead stores across them, as that would change the state of
-    // memory on trap. We do this by marking every last-store as observed, but
-    // not clearing our last-store information.
-    if opcode.can_trap() {
-        return InstEffect::Trap;
-    }
-
-    // A volatile access must stay as written, in order with the accesses
-    // around it: treat it as a fence, which observes every earlier store (so
-    // that none of them is removed as dead across it) and forgets everything
-    // known about memory (so that nothing is forwarded across it). Only loads
-    // and stores can be volatile, so rather than looking up every
-    // instruction's memflags up here, we check for it below, where we already
-    // look them up.
-
-    // Store instructions: update the last-store information for this
-    // instruction's alias region, or the implicit "other" bucket when none is
-    // set (explicit no-region).
-    if opcode.can_store() {
-        // A non-volatile store with no memflags / no alias region writes only
-        // "other". Volatile accesses remain fences over every region.
-        let Some(memflags) = func.dfg.insts[inst].memflags() else {
-            return InstEffect::StoreOther { can_trap: false };
-        };
-        let memflags = func.dfg.mem_flags[memflags];
-        if memflags.volatile() {
-            return InstEffect::Fence;
-        }
-        let Some(region) = memflags.alias_region() else {
-            return InstEffect::StoreOther {
-                can_trap: memflags.trap_code().is_some(),
-            };
-        };
-
-        return InstEffect::Store {
-            region,
-            can_trap: memflags.trap_code().is_some(),
-        };
-    }
-
-    // Everything else, loads included. Look up the memflags once: a volatile
-    // load is a fence too, and otherwise they tell us which, if any, alias
-    // regions this instruction observes.
-    let memflags = func.dfg.insts[inst].memflags_data(&func.dfg);
-    if memflags.is_some_and(|flags| flags.volatile()) {
-        return InstEffect::Fence;
-    }
-    InstEffect::Observes(alias_regions_observed(func, inst, opcode, memflags))
-}
-
 impl LastStores {
     /// Advance this state across the given instruction.
     fn update(&mut self, func: &Function, inst: Inst) {
-        match classify(func, inst) {
-            InstEffect::Fence => {
-                self.regions.clear();
-                self.other = LastStore::NoStore;
+        let writes = func.dfg.inst_writes_regions(inst);
+        if writes.is_all() {
+            self.regions.clear();
+            self.other = LastStore::NoStore;
+            self.last_fence = inst.into();
+            return;
+        }
 
-                // NB: unlike every region slot, `self.last_fence` is *not*
-                // observed by a fence; see `observe_inst`.
-                self.last_fence = inst.into();
-            }
-
-            // Trapping instructions and pure observers leave every slot alone.
-            InstEffect::Trap | InstEffect::Observes(_) => {}
-
-            InstEffect::Store {
-                region,
-                can_trap: _,
-            } => {
-                self.regions[region] = inst.into();
-            }
-
-            InstEffect::StoreOther { can_trap: _ } => {
-                self.other = inst.into();
+        for region in writes.iter(&func.dfg) {
+            match region {
+                Some(r) => self.regions[r] = inst.into(),
+                None => self.other = inst.into(),
             }
         }
     }
@@ -441,131 +292,72 @@ impl LastStores {
     /// This reads the state as of just before the instruction, so it must be
     /// called before `update` for the given instruction.
     fn observe_inst(&self, func: &Function, inst: Inst, observed: &mut FxHashMap<Inst, Observer>) {
-        match classify(func, inst) {
-            InstEffect::Fence => {
-                // A fence can observe every region, so every store we are
-                // currently tracking becomes observed.
-                for (_region, slot) in self.regions.iter() {
-                    observe(func, observed, *slot, inst);
-                }
-                observe(func, observed, self.other, inst);
-
-                // NB: `self.last_fence` is *not* observed here.
+        let reads = func.dfg.inst_reads_regions(inst);
+        if reads.is_all() {
+            // Equivalent to the loop below, but faster for this common case.
+            self.observe_all(func, observed, inst);
+        } else {
+            for region in reads.iter(&func.dfg) {
+                observe(func, observed, self.last_store_for_region(region), inst);
             }
-
-            InstEffect::Trap => self.observe_others(func, observed, None, inst),
-
-            InstEffect::Store { region, can_trap } => {
-                observe(func, observed, self.regions[region], inst);
-
-                // If this store can trap, then we need to observe all other
-                // alias regions, to ensure that their state is preserved in the
-                // case that this store traps (similar to the `InstEffect::Trap`
-                // handling above).
-                //
-                // This prevents removing the first store in the following
-                // snippet, for example:
-                //
-                //     store notrap region0 v0, v3+8
-                //     store user42 region1 v1, v4+16
-                //     store notrap region0 v2, v3+8
-                //
-                //     ==/==>
-                //
-                //     store user42 region1 v1, v4+16
-                //     store notrap region0 v2, v3+8
-                //
-                // Removing it would be invalid because it drops a memory store
-                // to `v3+8` that would otherwise have been performed when
-                // writing to `v4+16` traps.
-                //
-                // On the other hand, if it cannot trap, then we need to observe
-                // all the regions whose last-store *can* trap so that we don't
-                // allow a non-trapping store to effectively be moved ahead of a
-                // trapping store:
-                //
-                //     store user42 region0 v0, v3+8
-                //     store notrap region1 v1, v4+16
-                //     store user42 region0 v2, v3+8
-                //
-                //     ==/==>
-                //
-                //     store notrap region1 v1, v4+16
-                //     store user42 region0 v2, v3+8
-                //
-                // In this case, removing the first store would mean that when
-                // writing to `v3+8` traps, we would incorrectly store to
-                // `v4+16`, when we otherwise wouldn't have.
-                if can_trap {
-                    self.observe_others(func, observed, Some(region), inst);
-                } else {
-                    self.observe_trapping_others(func, observed, Some(region), inst);
-                }
-            }
-
-            InstEffect::StoreOther { can_trap } => {
-                observe(func, observed, self.other, inst);
-                if can_trap {
-                    self.observe_others(func, observed, None, inst);
-                } else {
-                    self.observe_trapping_others(func, observed, None, inst);
-                }
-            }
-
-            InstEffect::Observes(AliasRegionsObserved::All) => {
-                self.observe_others(func, observed, None, inst)
-            }
-            InstEffect::Observes(AliasRegionsObserved::Just(region)) => {
-                observe(
-                    func,
-                    observed,
-                    self.last_store_for_region(Some(region)),
-                    inst,
-                );
-                observe(func, observed, self.last_fence, inst);
-            }
-            InstEffect::Observes(AliasRegionsObserved::Other) => {
-                observe(func, observed, self.last_store_for_region(None), inst);
-            }
-            InstEffect::Observes(AliasRegionsObserved::None) => {}
         }
+
+        let writes = func.dfg.inst_writes_regions(inst);
+        if writes.is_none() {
+            return;
+        }
+
+        // A write observes the last store to each region it writes. For a
+        // store, that is the store it might make dead, which dead-store
+        // elimination allows. For a fence, that is every region.
+        for region in writes.iter(&func.dfg) {
+            observe(func, observed, self.slot(region), inst);
+        }
+
+        // A write must also observe every other region's last store if that
+        // store can trap, so that we don't allow the write to effectively be
+        // moved ahead of the trapping store:
+        //
+        //     store user42 region0 v0, v3+8
+        //     store notrap region1 v1, v4+16
+        //     store user42 region0 v2, v3+8
+        //
+        //     ==/==>
+        //
+        //     store notrap region1 v1, v4+16
+        //     store user42 region0 v2, v3+8
+        //
+        // Removing the first store would mean that when writing to `v3+8`
+        // traps, we would incorrectly store to `v4+16`, when we otherwise
+        // wouldn't have.
+        //
+        // Conversely, a write that can itself trap reads every region (see
+        // `DataFlowGraph::inst_reads_regions`), ensuring their state is
+        // preserved in case it traps.
+        self.observe_trapping(func, observed, inst);
     }
 
-    /// Mark the last store to every named region except for `excluding` (if
-    /// given), as well as the "other" region and the last fence, as observed.
-    ///
-    /// `None` excludes nothing. [`Self::observe_trapping_others`] uses the
-    /// other convention, where `None` means the "other" region.
-    fn observe_others(
+    /// Mark the last store to every named region, the "other" region, and the
+    /// last fence as observed.
+    fn observe_all(
         &self,
         func: &Function,
         observed_stores: &mut FxHashMap<Inst, Observer>,
-        excluding: Option<AliasRegion>,
         observer: Inst,
     ) {
-        for (region, slot) in self.regions.iter() {
-            if excluding.is_none_or(|r| r != region) {
-                observe(func, observed_stores, *slot, observer);
-            }
+        for (_region, slot) in self.regions.iter() {
+            observe(func, observed_stores, *slot, observer);
         }
         observe(func, observed_stores, self.other, observer);
         observe(func, observed_stores, self.last_fence, observer);
     }
 
-    /// Mark the last store to every region whose last store can trap, except
-    /// for `excluding`, as observed.
-    ///
-    /// `excluding == None` is the implicit "other" region: every named region
-    /// is considered and `other` is not. A `Some` region is skipped, and
-    /// `other` is still considered. The last fence is always considered.
-    ///
-    /// This is not the same convention as [`Self::observe_others`], where
-    /// `None` excludes nothing.
-    fn observe_trapping_others(
+    /// Mark the last store to every region (including "other") and the last
+    /// fence as observed, when that store can trap.
+    fn observe_trapping(
         &self,
         func: &Function,
         observed_stores: &mut FxHashMap<Inst, Observer>,
-        excluding: Option<AliasRegion>,
         observer: Inst,
     ) {
         let can_trap = |slot: LastStore| {
@@ -573,16 +365,22 @@ impl LastStores {
                 .is_some_and(|s| func.dfg.insts[s].memflags_trap_code(&func.dfg).is_some())
         };
 
-        for (region, slot) in self.regions.iter() {
-            if excluding.is_none_or(|r| r != region) && can_trap(*slot) {
+        let slots = self.regions.values().chain([&self.other, &self.last_fence]);
+        for slot in slots {
+            if can_trap(*slot) {
                 observe(func, observed_stores, *slot, observer);
             }
         }
-        if excluding.is_some() && can_trap(self.other) {
-            observe(func, observed_stores, self.other, observer);
-        }
-        if can_trap(self.last_fence) {
-            observe(func, observed_stores, self.last_fence, observer);
+    }
+
+    /// Get the raw contents of `region`'s slot, without falling back to the
+    /// last fence.
+    ///
+    /// `None` selects the implicit disjoint "other" region.
+    fn slot(&self, region: Option<AliasRegion>) -> LastStore {
+        match region {
+            Some(r) => self.regions[r],
+            None => self.other,
         }
     }
 
@@ -592,11 +390,7 @@ impl LastStores {
     /// accesses. A slot that is still [`LastStore::NoStore`] falls back to the
     /// last fence, which is what last (may have) written it.
     fn last_store_for_region(&self, region: Option<AliasRegion>) -> LastStore {
-        let last_store = match region {
-            Some(r) => self.regions[r],
-            None => self.other,
-        };
-        match last_store {
+        match self.slot(region) {
             // Nothing has written this region since the last fence, so the
             // fence is what last (may have) written it.
             LastStore::NoStore => self.last_fence,
@@ -909,13 +703,11 @@ impl<'a> AliasAnalysis<'a> {
             .map(|block| {
                 let mut regions = FxHashSet::default();
                 for inst in func.layout.block_insts(block) {
-                    match classify(func, inst) {
-                        InstEffect::Fence => return (block, None),
-                        InstEffect::Store { region, .. } => {
-                            regions.insert(region);
-                        }
-                        _ => {}
+                    let writes = func.dfg.inst_writes_regions(inst);
+                    if writes.is_all() {
+                        return (block, None);
                     }
+                    regions.extend(writes.iter(&func.dfg).flatten());
                 }
                 (block, Some(regions))
             })
@@ -1123,7 +915,7 @@ impl<'a> AliasAnalysis<'a> {
                 // infinite loop. Therefore, we observe every store in
                 // `LastStores` on retreating edges.
                 if self.domtree.is_retreating_edge(block, succ) {
-                    state.observe_others(func, &mut observed_stores, None, branch);
+                    state.observe_all(func, &mut observed_stores, branch);
                     return;
                 }
 
