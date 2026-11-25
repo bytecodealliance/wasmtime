@@ -57,8 +57,8 @@ pub use crate::ir::known_symbol::KnownSymbol;
 pub use crate::ir::layout::Layout;
 pub use crate::ir::libcall::{LibCall, get_probestack_funcref};
 pub use crate::ir::memflags::{
-    AliasRegion, AliasRegionData, AliasRegionSet, Endianness, MachMemFlags, MemFlags, MemFlagsData,
-    MemFlagsSet,
+    AliasRegion, AliasRegionData, AliasRegionTable, Endianness, MachMemFlags, MemFlags,
+    MemFlagsData, MemFlagsSet,
 };
 pub use crate::ir::progpoint::ProgramPoint;
 pub use crate::ir::sourceloc::MaybeRelSourceLoc;

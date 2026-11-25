@@ -648,7 +648,12 @@ pub(super) struct SafepointSpiller {
     /// across safepoints.
     pub(super) make_alias_region: Option<
         Box<
-            dyn Fn(&mut ir::AliasRegionSet, ir::Type, ir::StackSlot, u32) -> Option<ir::AliasRegion>
+            dyn Fn(
+                    &mut ir::AliasRegionTable,
+                    ir::Type,
+                    ir::StackSlot,
+                    u32,
+                ) -> Option<ir::AliasRegion>
                 + Send
                 + Sync,
         >,

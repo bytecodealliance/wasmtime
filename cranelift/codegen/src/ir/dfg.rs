@@ -6,7 +6,7 @@ use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::user_stack_maps::{UserStackMapEntry, UserStackMapEntryVec};
 use crate::ir::{
-    AliasRegionSet, Block, BlockArg, BlockCall, ConstantData, ConstantPool, DynamicType,
+    AliasRegionTable, Block, BlockArg, BlockCall, ConstantData, ConstantPool, DynamicType,
     ExceptionTables, ExtFuncData, FuncRef, Immediate, Inst, JumpTables, MemFlagsSet, RelSourceLoc,
     SigRef, Signature, Type, Value, ValueLabelAssignments, ValueList, ValueListPool, types,
 };
@@ -167,7 +167,7 @@ pub struct DataFlowGraph {
     pub mem_flags: MemFlagsSet,
 
     /// Alias regions used in this function.
-    pub alias_regions: AliasRegionSet,
+    pub alias_regions: AliasRegionTable,
 }
 
 impl DataFlowGraph {
@@ -189,7 +189,7 @@ impl DataFlowGraph {
             jump_tables: JumpTables::new(),
             exception_tables: ExceptionTables::new(),
             mem_flags: MemFlagsSet::new(),
-            alias_regions: AliasRegionSet::new(),
+            alias_regions: AliasRegionTable::new(),
         }
     }
 

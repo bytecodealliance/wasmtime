@@ -682,14 +682,19 @@ impl<'a> FunctionBuilder<'a> {
     /// stores inserted when spilling and reloading values that are live across
     /// safepoints.
     ///
-    /// The callback is given the function's [`ir::AliasRegionSet`] (so it can
+    /// The callback is given the function's [`ir::AliasRegionTable`] (so it can
     /// intern a region), along with the type, stack slot, and offset of the
     /// spill/reload being emitted, and returns the alias region to attach to
     /// that load or store (or `None` to leave it unannotated).
     pub fn make_stack_map_alias_region(
         &mut self,
         make_alias_region: Box<
-            dyn Fn(&mut ir::AliasRegionSet, ir::Type, ir::StackSlot, u32) -> Option<ir::AliasRegion>
+            dyn Fn(
+                    &mut ir::AliasRegionTable,
+                    ir::Type,
+                    ir::StackSlot,
+                    u32,
+                ) -> Option<ir::AliasRegion>
                 + Send
                 + Sync,
         >,

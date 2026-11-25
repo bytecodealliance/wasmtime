@@ -527,25 +527,25 @@ impl Index<MemFlags> for MemFlagsSet {
     }
 }
 
-/// A deduplicated set of alias regions.
+/// A deduplicated table of alias region declarations.
 ///
 /// Deduplication is based on `user_id`; the description string is not
 /// considered.
 #[derive(Clone, PartialEq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct AliasRegionSet {
+pub struct AliasRegionTable {
     alias_regions: PrimaryMap<AliasRegion, AliasRegionData>,
     dedupe_map: HashMap<u32, AliasRegion>,
 }
 
-impl Hash for AliasRegionSet {
+impl Hash for AliasRegionTable {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.alias_regions.hash(state);
     }
 }
 
-impl AliasRegionSet {
-    /// Create a new empty set.
+impl AliasRegionTable {
+    /// Create a new empty table.
     pub fn new() -> Self {
         Self {
             alias_regions: PrimaryMap::new(),
@@ -553,7 +553,7 @@ impl AliasRegionSet {
         }
     }
 
-    /// Insert a new alias region into this set.
+    /// Insert a new alias region into this table.
     ///
     /// Returns an existing `AliasRegion` if one with the same `user_id`
     /// already exists.
@@ -578,7 +578,7 @@ impl AliasRegionSet {
         key
     }
 
-    /// Returns `true` if this set already contains a region with the given
+    /// Returns `true` if this table already contains a region with the given
     /// `user_id`.
     pub fn contains(&self, user_id: u32) -> bool {
         self.dedupe_map.contains_key(&user_id)
@@ -594,7 +594,7 @@ impl AliasRegionSet {
         self.alias_regions.is_valid(ar)
     }
 
-    /// Return the number of alias regions in the set.
+    /// Return the number of alias regions in the table.
     pub fn len(&self) -> usize {
         self.alias_regions.len()
     }
@@ -604,7 +604,7 @@ impl AliasRegionSet {
         self.alias_regions.iter()
     }
 
-    /// Clear the set.
+    /// Clear the table.
     pub fn clear(&mut self) {
         self.alias_regions.clear();
         self.dedupe_map.clear();
@@ -613,7 +613,7 @@ impl AliasRegionSet {
 
 // NB: Do not implement `IndexMut` because alias region data is deduped and
 // shared by many mem flags.
-impl Index<AliasRegion> for AliasRegionSet {
+impl Index<AliasRegion> for AliasRegionTable {
     type Output = AliasRegionData;
 
     fn index(&self, ar: AliasRegion) -> &AliasRegionData {
