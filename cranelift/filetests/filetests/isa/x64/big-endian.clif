@@ -1,6 +1,6 @@
 test compile expect-fail
 set enable_llvm_abi_extensions=true
-target x86_64
+target x86_64 has_cmpxchg16b
 
 ;; Technically this could succeed (little- and big-endian treatment of
 ;; a single byte is the same) but we have a blanket exclusion on all
@@ -284,4 +284,16 @@ function %f(i64, i64) -> i64 {
     block0(v0: i64, v1: i64):
         v2 = atomic_rmw.i64 big umax v1, v0
         return v2
+}
+
+function %f(i64, i64, i64) -> i64 {
+    block0(v0: i64, v1: i64, v2: i64):
+        v3 = atomic_cas.i64 big v0, v1, v2
+        return v3
+}
+
+function %f(i64, i128, i128) -> i128 {
+    block0(v0: i64, v1: i128, v2: i128):
+        v3 = atomic_cas.i128 big v0, v1, v2
+        return v3
 }

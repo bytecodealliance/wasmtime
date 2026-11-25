@@ -3610,7 +3610,7 @@
 
 (rule (lower (atomic_cas (and (fits_in_64 ty) (ty_int _)) (little_or_native_endian flags) address expected replacement))
       (x64_cmpxchg ty expected replacement (to_amode flags address (zero_offset))))
-(rule 1 (lower (atomic_cas $I128 (mem_flags_data flags) address expected replacement))
+(rule 1 (lower (atomic_cas $I128 (little_or_native_endian flags) address expected replacement))
         (if-let true (has_cmpxchg16b))
         (x64_cmpxchg16b expected replacement (to_amode flags address (zero_offset))))
 
