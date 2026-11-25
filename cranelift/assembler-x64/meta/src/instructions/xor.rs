@@ -24,6 +24,7 @@ pub fn list() -> Vec<Inst> {
         inst("xorq", fmt("RM", [rw(r64), r(rm64)]), rex(0x33).w().r(), _64b),
         // APX: NDD form of `XOR`, promoted into EVEX map 4.
         inst("xorq", fmt("RVM", [r(r64b), w(r64a), r(rm64)]), evex(L128, Full).map4().w1().nd().op(0x31).r(), _64b & apx),
+        inst("xorl", fmt("RVM", [r(r32b), w(r32a), r(rm32)]), evex(L128, Full).map4().w0().nd().op(0x31).r(), _64b & apx),
         // `LOCK`-prefixed memory-writing instructions.
         inst("lock_xorb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(6).ib(), _64b | compat).custom(Mnemonic),
         inst("lock_xorw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(6).iw(), _64b | compat).custom(Mnemonic),
