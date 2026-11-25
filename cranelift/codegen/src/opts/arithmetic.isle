@@ -138,6 +138,33 @@
       (if-let false (i64_is_any_sign_power_of_two (i32_into_i64 d)))
       (ireduce ty (apply_div_const_magic_s32 (Opcode.Sdiv) (sextend $I32 x) d)))
 
+;; If all consumers only test zero, a non-divisibility flag can replace the
+;; remainder. Keep these in the skeleton so zero divisors retain their trap.
+(rule (simplify_skeleton inst @ (urem x (iconst_u $I32 (u64_extract_non_zero (u32_from_u64 d)))))
+      (if-let true (remainder_zero_tests inst))
+      (if-let false (u32_is_power_of_two d))
+      (uextend $I32 (apply_div_const_test_u $I32 (IntCC.NotEqual) x (div_const_test_u32 d))))
+(rule (simplify_skeleton inst @ (urem x (iconst_u $I64 (u64_extract_non_zero d))))
+      (if-let true (remainder_zero_tests inst))
+      (if-let false (u64_is_power_of_two d))
+      (uextend $I64 (apply_div_const_test_u $I64 (IntCC.NotEqual) x (div_const_test_u64 d))))
+(rule (simplify_skeleton inst @ (urem x (iconst_u (ty_int (fits_in_16 ty)) (u64_extract_non_zero (u32_from_u64 d)))))
+      (if-let true (remainder_zero_tests inst))
+      (if-let false (u32_is_power_of_two d))
+      (uextend_maybe ty (apply_div_const_test_u $I32 (IntCC.NotEqual) (uextend $I32 x) (div_const_test_u32 d))))
+(rule (simplify_skeleton inst @ (srem x (iconst_s $I32 (i64_extract_non_zero (i32_from_i64 d)))))
+      (if-let true (remainder_zero_tests inst))
+      (if-let false (i64_is_any_sign_power_of_two d))
+      (uextend $I32 (apply_div_const_test_s $I32 (IntCC.NotEqual) x (div_const_test_s32 d))))
+(rule (simplify_skeleton inst @ (srem x (iconst_s $I64 (i64_extract_non_zero d))))
+      (if-let true (remainder_zero_tests inst))
+      (if-let false (i64_is_any_sign_power_of_two d))
+      (uextend $I64 (apply_div_const_test_s $I64 (IntCC.NotEqual) x (div_const_test_s64 d))))
+(rule (simplify_skeleton inst @ (srem x (iconst_s (ty_int (fits_in_16 ty)) (i64_extract_non_zero (i32_from_i64 d)))))
+      (if-let true (remainder_zero_tests inst))
+      (if-let false (i64_is_any_sign_power_of_two (i32_into_i64 d)))
+      (uextend_maybe ty (apply_div_const_test_s $I32 (IntCC.NotEqual) (sextend $I32 x) (div_const_test_s32 d))))
+
 ;; x % 1 == 0
 (rule (simplify_skeleton (urem x (iconst_u ty 1))) (all_zero ty))
 (rule (simplify_skeleton (srem x (iconst_u ty 1))) (all_zero ty))
@@ -166,18 +193,22 @@
         t5))
 
 ;; General cases for `urem` with constant divisors
-(rule (simplify_skeleton (urem x (iconst_u $I32 (u64_extract_non_zero (u32_from_u64 d)))))
+(rule (simplify_skeleton inst @ (urem x (iconst_u $I32 (u64_extract_non_zero (u32_from_u64 d)))))
+      (if-let false (remainder_zero_tests inst))
       (if-let false (u32_is_power_of_two d))
       (apply_div_const_magic_u32 (Opcode.Urem) x d))
-(rule (simplify_skeleton (urem x (iconst_u $I64 (u64_extract_non_zero d))))
+(rule (simplify_skeleton inst @ (urem x (iconst_u $I64 (u64_extract_non_zero d))))
+      (if-let false (remainder_zero_tests inst))
       (if-let false (u64_is_power_of_two d))
       (apply_div_const_magic_u64 (Opcode.Urem) x d))
 
 ;; General cases for `srem` with constant divisors
-(rule (simplify_skeleton (srem x (iconst_s $I32 (i64_extract_non_zero (i32_from_i64 d)))))
+(rule (simplify_skeleton inst @ (srem x (iconst_s $I32 (i64_extract_non_zero (i32_from_i64 d)))))
+      (if-let false (remainder_zero_tests inst))
       (if-let false (i64_is_any_sign_power_of_two d))
       (apply_div_const_magic_s32 (Opcode.Srem) x d))
-(rule (simplify_skeleton (srem x (iconst_s $I64 (i64_extract_non_zero d))))
+(rule (simplify_skeleton inst @ (srem x (iconst_s $I64 (i64_extract_non_zero d))))
+      (if-let false (remainder_zero_tests inst))
       (if-let false (i64_is_any_sign_power_of_two d))
       (apply_div_const_magic_s64 (Opcode.Srem) x d))
 

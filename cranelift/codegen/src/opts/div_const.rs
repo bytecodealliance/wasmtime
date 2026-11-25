@@ -216,10 +216,134 @@ pub fn magic_s64(d: i64) -> MS64 {
     }
 }
 
+// Magic numbers for divisibility tests. For unsigned `x`, `x % d == 0` iff
+// `x.wrapping_mul(mul_by).rotate_right(shift_by) <= threshold`.
+// For signed `x`, use its unsigned bit pattern `u`: the test is
+// `u.wrapping_mul(mul_by).wrapping_add(bias) <= threshold`, with the low
+// `shift_by` bits of `u` also zero.
+#[derive(PartialEq, Debug)]
+pub struct MU32Test {
+    pub mul_by: u32,
+    pub threshold: u32,
+    pub shift_by: u32,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct MU64Test {
+    pub mul_by: u64,
+    pub threshold: u64,
+    pub shift_by: u32,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct MS32Test {
+    pub mul_by: u32,
+    pub bias: u32,
+    pub threshold: u32,
+    pub shift_by: u32,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct MS64Test {
+    pub mul_by: u64,
+    pub bias: u64,
+    pub threshold: u64,
+    pub shift_by: u32,
+}
+
+/// The multiplicative inverse of the odd number `d`, modulo 2^32.
+fn inverse_mod_2_32(d: u32) -> u32 {
+    debug_assert_eq!(d & 1, 1);
+    // Newton's iteration doubles the number of correct low-order bits on each
+    // step, and `1` is already correct modulo 2 for every odd `d`, so five steps
+    // suffice for 32 bits.
+    let mut inverse: u32 = 1;
+    for _ in 0..5 {
+        inverse = inverse.wrapping_mul(2u32.wrapping_sub(d.wrapping_mul(inverse)));
+    }
+    debug_assert_eq!(d.wrapping_mul(inverse), 1);
+    inverse
+}
+
+/// The multiplicative inverse of the odd number `d`, modulo 2^64.
+fn inverse_mod_2_64(d: u64) -> u64 {
+    debug_assert_eq!(d & 1, 1);
+    // As above, but six steps for 64 bits.
+    let mut inverse: u64 = 1;
+    for _ in 0..6 {
+        inverse = inverse.wrapping_mul(2u64.wrapping_sub(d.wrapping_mul(inverse)));
+    }
+    debug_assert_eq!(d.wrapping_mul(inverse), 1);
+    inverse
+}
+
+/// Compute the magic values for testing whether an unsigned value is a
+/// multiple of `d`.  `d` must not be zero.
+pub fn magic_test_u32(d: u32) -> MU32Test {
+    debug_assert_ne!(d, 0);
+    let shift_by = d.trailing_zeros();
+    let odd = d >> shift_by;
+    MU32Test {
+        mul_by: inverse_mod_2_32(odd),
+        threshold: (u32::MAX >> shift_by) / odd,
+        shift_by,
+    }
+}
+
+/// Compute the magic values for testing whether an unsigned value is a
+/// multiple of `d`.  `d` must not be zero.
+pub fn magic_test_u64(d: u64) -> MU64Test {
+    debug_assert_ne!(d, 0);
+    let shift_by = d.trailing_zeros();
+    let odd = d >> shift_by;
+    MU64Test {
+        mul_by: inverse_mod_2_64(odd),
+        threshold: (u64::MAX >> shift_by) / odd,
+        shift_by,
+    }
+}
+
+/// Compute the magic values for testing whether a signed value is a multiple
+/// of `d`.  `d` must not be zero; only its magnitude is used.
+pub fn magic_test_s32(d: i32) -> MS32Test {
+    debug_assert_ne!(d, 0);
+    let ad: u32 = d.wrapping_abs() as u32;
+    let shift_by = ad.trailing_zeros();
+    let odd = ad >> shift_by;
+    let bias = 0x80000000u32 / odd;
+    MS32Test {
+        mul_by: inverse_mod_2_32(odd),
+        bias,
+        // Saturates only when `d` is a power of two, where the threshold has to
+        // accept every value that survived the mask test instead.
+        threshold: bias.saturating_mul(2),
+        shift_by,
+    }
+}
+
+/// Compute the magic values for testing whether a signed value is a multiple
+/// of `d`.  `d` must not be zero; only its magnitude is used.
+pub fn magic_test_s64(d: i64) -> MS64Test {
+    debug_assert_ne!(d, 0);
+    let ad: u64 = d.wrapping_abs() as u64;
+    let shift_by = ad.trailing_zeros();
+    let odd = ad >> shift_by;
+    let bias = 0x8000000000000000u64 / odd;
+    MS64Test {
+        mul_by: inverse_mod_2_64(odd),
+        bias,
+        threshold: bias.saturating_mul(2),
+        shift_by,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{MS32, MS64, MU32, MU64};
-    use super::{magic_s32, magic_s64, magic_u32, magic_u64};
+    use super::{MS32, MS32Test, MS64, MS64Test, MU32, MU32Test, MU64, MU64Test};
+    use super::{
+        magic_s32, magic_s64, magic_test_s32, magic_test_s64, magic_test_u32, magic_test_u64,
+        magic_u32, magic_u64,
+    };
     use proptest::strategy::Strategy;
 
     fn make_mu32(mul_by: u32, do_add: bool, shift_by: i32) -> MU32 {
@@ -828,6 +952,30 @@ mod tests {
         n.wrapping_sub(tt)
     }
 
+    /// Compute whether `n` is a multiple of the divisor that produced `magic`.
+    fn eval_test_u32(n: u32, magic: &MU32Test) -> bool {
+        n.wrapping_mul(magic.mul_by).rotate_right(magic.shift_by) <= magic.threshold
+    }
+
+    /// Compute whether `n` is a multiple of the divisor that produced `magic`.
+    fn eval_test_u64(n: u64, magic: &MU64Test) -> bool {
+        n.wrapping_mul(magic.mul_by).rotate_right(magic.shift_by) <= magic.threshold
+    }
+
+    /// Compute whether `n` is a multiple of the divisor that produced `magic`.
+    fn eval_test_s32(n: i32, magic: &MS32Test) -> bool {
+        let x = n as u32;
+        let biased = x.wrapping_mul(magic.mul_by).wrapping_add(magic.bias);
+        (x & ((1u32 << magic.shift_by) - 1)) == 0 && biased <= magic.threshold
+    }
+
+    /// Compute whether `n` is a multiple of the divisor that produced `magic`.
+    fn eval_test_s64(n: i64, magic: &MS64Test) -> bool {
+        let x = n as u64;
+        let biased = x.wrapping_mul(magic.mul_by).wrapping_add(magic.bias);
+        (x & ((1u64 << magic.shift_by) - 1)) == 0 && biased <= magic.threshold
+    }
+
     #[test]
     fn test_magic_generators_give_correct_numbers() {
         // For a variety of values for both `n` and `d`, compute the magic
@@ -1159,7 +1307,238 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_magic_test_generators_give_correct_answers() {
+        // For a variety of values of `d`, check that tests built from the magic
+        // numbers for divisibility agree with `n % d == 0` for a spread of
+        // values of `n` around the interesting points.
+
+        fn check_u32(d: u32) -> i32 {
+            let magic = magic_test_u32(d);
+            let mut count = 0;
+            let mut check = |n: u32| {
+                assert_eq!(
+                    eval_test_u32(n, &magic),
+                    n % d == 0,
+                    "unsigned 32 bit test disagrees for d == {d}, n == {n}"
+                );
+                count += 1;
+            };
+            for n in 0..64 {
+                check(n);
+            }
+            for n in [
+                d - 1,
+                d,
+                d + 1,
+                d.wrapping_mul(2),
+                d.wrapping_mul(3),
+                d.wrapping_mul(1000),
+            ] {
+                check(n);
+            }
+            for n in [u32::MAX, u32::MAX - 1, 0x8000_0000, 0x7FFF_FFFF] {
+                check(n);
+            }
+            let mut n: u32 = 0x9E37_79B9;
+            for _ in 0..64 {
+                check(n);
+                n = n.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            }
+            count
+        }
+
+        fn check_u64(d: u64) -> i32 {
+            let magic = magic_test_u64(d);
+            let mut count = 0;
+            let mut check = |n: u64| {
+                assert_eq!(
+                    eval_test_u64(n, &magic),
+                    n % d == 0,
+                    "unsigned 64 bit test disagrees for d == {d}, n == {n}"
+                );
+                count += 1;
+            };
+            for n in 0..64 {
+                check(n);
+            }
+            for n in [
+                d - 1,
+                d,
+                d + 1,
+                d.wrapping_mul(2),
+                d.wrapping_mul(3),
+                d.wrapping_mul(1000),
+            ] {
+                check(n);
+            }
+            for n in [
+                u64::MAX,
+                u64::MAX - 1,
+                0x8000_0000_0000_0000,
+                0x7FFF_FFFF_FFFF_FFFF,
+            ] {
+                check(n);
+            }
+            let mut n: u64 = 0x9E37_79B9_7F4A_7C15;
+            for _ in 0..64 {
+                check(n);
+                n = n
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+            }
+            count
+        }
+
+        fn check_s32(d: i32) -> i32 {
+            let magic = magic_test_s32(d);
+            let mut count = 0;
+            let mut check = |n: i32| {
+                assert_eq!(
+                    eval_test_s32(n, &magic),
+                    n.wrapping_rem(d) == 0,
+                    "signed 32 bit test disagrees for d == {d}, n == {n}"
+                );
+                count += 1;
+            };
+            for n in 0..64 {
+                check(n);
+            }
+            for n in [d.wrapping_sub(1), d, d.wrapping_add(1)] {
+                check(n);
+            }
+            for m in 1..8 {
+                check(d.wrapping_mul(m));
+                check(d.wrapping_mul(m).wrapping_neg());
+            }
+            for n in [i32::MAX, i32::MIN, i32::MAX - 1, i32::MIN + 1] {
+                check(n);
+            }
+            let mut n: i32 = 0x9E37_79B9u32 as i32;
+            for _ in 0..64 {
+                check(n);
+                n = n.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            }
+            count
+        }
+
+        fn check_s64(d: i64) -> i32 {
+            let magic = magic_test_s64(d);
+            let mut count = 0;
+            let mut check = |n: i64| {
+                assert_eq!(
+                    eval_test_s64(n, &magic),
+                    n.wrapping_rem(d) == 0,
+                    "signed 64 bit test disagrees for d == {d}, n == {n}"
+                );
+                count += 1;
+            };
+            for n in 0..64 {
+                check(n);
+            }
+            for n in [d.wrapping_sub(1), d, d.wrapping_add(1)] {
+                check(n);
+            }
+            for m in 1..8 {
+                check(d.wrapping_mul(m));
+                check(d.wrapping_mul(m).wrapping_neg());
+            }
+            for n in [i64::MAX, i64::MIN, i64::MAX - 1, i64::MIN + 1] {
+                check(n);
+            }
+            let mut n: i64 = 0x9E37_79B9_7F4A_7C15u64 as i64;
+            for _ in 0..64 {
+                check(n);
+                n = n
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+            }
+            count
+        }
+
+        let mut n_tests_done: i32 = 0;
+
+        for d in [1, -1, i32::MIN] {
+            n_tests_done += check_s32(d);
+        }
+        for d in [1, -1, i64::MIN] {
+            n_tests_done += check_s64(d);
+        }
+
+        // Divisors around zero, the midpoint, and the top of the range, for
+        // each of the four cases.
+        for base in [2u32, 0x8000_0000, u32::MAX - 2000] {
+            for offset in 0..2000 {
+                n_tests_done += check_u32(base.wrapping_add(offset));
+            }
+        }
+        for base in [2u64, 0x8000_0000_0000_0000, u64::MAX - 2000] {
+            for offset in 0..2000 {
+                n_tests_done += check_u64(base.wrapping_add(offset));
+            }
+        }
+        for base in [2i32, -2000, i32::MAX - 2000] {
+            for offset in 0..2000 {
+                n_tests_done += check_s32(base.wrapping_add(offset));
+            }
+        }
+        for base in [2i64, -2000, i64::MAX - 2000] {
+            for offset in 0..2000 {
+                n_tests_done += check_s64(base.wrapping_add(offset));
+            }
+        }
+
+        assert!(
+            n_tests_done >= 1_000_000,
+            "unexpected test count: {n_tests_done}"
+        );
+    }
+
     proptest::proptest! {
+        #[test]
+        fn proptest_magic_test_u32(
+            numerator in 0..u32::MAX,
+            divisor in (1..u32::MAX).prop_filter("avoid divide-by-zero", |d| *d != 0),
+        ) {
+            let magic = magic_test_u32(divisor);
+            assert_eq!(eval_test_u32(numerator, &magic), numerator % divisor == 0);
+        }
+
+        #[test]
+        fn proptest_magic_test_u64(
+            numerator in 0..u64::MAX,
+            divisor in (1..u64::MAX).prop_filter("avoid divide-by-zero", |d| *d != 0),
+        ) {
+            let magic = magic_test_u64(divisor);
+            assert_eq!(eval_test_u64(numerator, &magic), numerator % divisor == 0);
+        }
+
+        #[test]
+        fn proptest_magic_test_s32(
+            numerator in i32::MIN..i32::MAX,
+            divisor in (i32::MIN..i32::MAX)
+                .prop_filter("avoid divide-by-zero", |d| *d != 0),
+        ) {
+            let magic = magic_test_s32(divisor);
+            assert_eq!(
+                eval_test_s32(numerator, &magic),
+                numerator.wrapping_rem(divisor) == 0
+            );
+        }
+
+        #[test]
+        fn proptest_magic_test_s64(
+            numerator in i64::MIN..i64::MAX,
+            divisor in (i64::MIN..i64::MAX)
+                .prop_filter("avoid divide-by-zero", |d| *d != 0),
+        ) {
+            let magic = magic_test_s64(divisor);
+            assert_eq!(
+                eval_test_s64(numerator, &magic),
+                numerator.wrapping_rem(divisor) == 0
+            );
+        }
+
         #[test]
         fn proptest_magic_u32(numerator in 0..u32::MAX, divisor in 1..u32::MAX) {
             let expected_div = numerator.wrapping_div(divisor);
