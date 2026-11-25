@@ -2209,9 +2209,8 @@ pub unsafe extern "C" fn poll_oneoff(
                                     nanoseconds -= now.nanoseconds;
 
                                     // Convert to nanoseconds.
-                                    let nanos = seconds
-                                        .checked_mul(1_000_000_000)
-                                        .ok_or(ERRNO_OVERFLOW)?;
+                                    let nanos =
+                                        seconds.checked_mul(1_000_000_000).ok_or(ERRNO_OVERFLOW)?;
                                     nanos
                                         .checked_add(nanoseconds.into())
                                         .ok_or(ERRNO_OVERFLOW)?
