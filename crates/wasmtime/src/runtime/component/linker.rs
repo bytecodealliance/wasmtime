@@ -622,6 +622,7 @@ fn drop_val<T>(mut store: StoreContextMut<'_, T>, val: &Val) -> Result<()> {
         | Val::Float64(_)
         | Val::Char(_)
         | Val::String(_)
+        | Val::ListU8(_)
         | Val::Enum(_)
         | Val::Flags(_)
         | Val::Variant(_, None)

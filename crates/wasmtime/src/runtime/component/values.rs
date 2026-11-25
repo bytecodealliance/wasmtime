@@ -1,7 +1,9 @@
 use crate::ValRaw;
 use crate::component::ResourceAny;
 use crate::component::concurrent::{self, ErrorContext, FutureAny, StreamAny};
-use crate::component::func::{Lift, LiftContext, Lower, LowerContext, desc};
+use crate::component::func::{
+    Lift, LiftContext, Lower, LowerContext, desc, lower_list as lower_typed_list,
+};
 use crate::prelude::*;
 use core::mem::MaybeUninit;
 use core::slice::{Iter, IterMut};
@@ -92,6 +94,9 @@ pub enum Val {
     Char(char),
     String(String),
     List(Vec<Val>),
+    /// A packed `list<u8>` for arguments to component functions and results
+    /// from host imports. Dynamic lifting still produces [`Val::List`].
+    ListU8(Vec<u8>),
     /// A map type represented as a list of key-value pairs.
     ///
     /// Entries are kept exactly as they appear in the canonical ABI list, in
@@ -483,14 +488,12 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::String, _) => unexpected(ty, self),
-            (InterfaceType::List(ty), Val::List(values)) => {
-                let ty = &cx.types[ty];
-                let (ptr, len) = lower_list(cx, ty.element, values)?;
+            (InterfaceType::List(list), _) => {
+                let (ptr, len) = lower_list(cx, list, self)?;
                 next_mut(dst).write(ValRaw::i64(ptr as i64));
                 next_mut(dst).write(ValRaw::i64(len as i64));
                 Ok(())
             }
-            (InterfaceType::List(_), _) => unexpected(ty, self),
             (InterfaceType::Map(ty), Val::Map(pairs)) => {
                 let map_ty = &cx.types[ty];
                 let (ptr, len) = lower_map(cx, map_ty, pairs)?;
@@ -629,15 +632,13 @@ impl Val {
                 value.linear_lower_to_memory(cx, ty, offset)
             }
             (InterfaceType::Borrow(_) | InterfaceType::Own(_), _) => unexpected(ty, self),
-            (InterfaceType::List(ty), Val::List(values)) => {
-                let ty = &cx.types[ty];
-                let (ptr, len) = lower_list(cx, ty.element, values)?;
+            (InterfaceType::List(list), _) => {
+                let (ptr, len) = lower_list(cx, list, self)?;
                 // FIXME(#4311): needs memory64 handling
                 *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
                 *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
                 Ok(())
             }
-            (InterfaceType::List(_), _) => unexpected(ty, self),
             (InterfaceType::Map(ty_idx), Val::Map(values)) => {
                 let map_ty = &cx.types[ty_idx];
                 let (ptr, len) = lower_map(cx, map_ty, values)?;
@@ -770,6 +771,7 @@ impl Val {
             Val::Float64(_) => "f64",
             Val::Char(_) => "char",
             Val::List(_) => "list",
+            Val::ListU8(_) => "list<u8>",
             Val::Map(_) => "map",
             Val::String(_) => "string",
             Val::Record(_) => "record",
@@ -845,7 +847,16 @@ impl PartialEq for Val {
             (Self::String(l), Self::String(r)) => l == r,
             (Self::String(_), _) => false,
             (Self::List(l), Self::List(r)) => l == r,
-            (Self::List(_), _) => false,
+            (Self::ListU8(l), Self::ListU8(r)) => l == r,
+            (Self::List(values), Self::ListU8(bytes))
+            | (Self::ListU8(bytes), Self::List(values)) => {
+                values.len() == bytes.len()
+                    && values
+                        .iter()
+                        .zip(bytes)
+                        .all(|(value, byte)| matches!(value, Self::U8(n) if n == byte))
+            }
+            (Self::List(_) | Self::ListU8(_), _) => false,
             (Self::Map(l), Self::Map(r)) => l == r,
             (Self::Map(_), _) => false,
             (Self::Record(l), Self::Record(r)) => l == r,
@@ -1176,12 +1187,20 @@ fn lift_variant(
     Ok((discriminant, value))
 }
 
-/// Lower a list with the specified element type and values.
+/// Lower a list with the specified component type.
 fn lower_list<T>(
     cx: &mut LowerContext<'_, T>,
-    element_type: InterfaceType,
-    items: &[Val],
+    ty: TypeListIndex,
+    value: &Val,
 ) -> Result<(usize, usize)> {
+    let element_type = cx.types[ty].element;
+    let items = match value {
+        Val::List(items) => items,
+        Val::ListU8(bytes) if matches!(element_type, InterfaceType::U8) => {
+            return lower_typed_list(cx, element_type, bytes);
+        }
+        _ => return unexpected(InterfaceType::List(ty), value),
+    };
     let abi = cx.types.canonical_abi(&element_type);
     let elt_size = usize::try_from(abi.size32)?;
     let elt_align = abi.align32;

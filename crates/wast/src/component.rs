@@ -310,6 +310,7 @@ fn mismatch(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
         Val::Char(..) => "char",
         Val::String(..) => "string",
         Val::List(..) => "list",
+        Val::ListU8(..) => "list<u8>",
         Val::Record(..) => "record",
         Val::Tuple(..) => "tuple",
         Val::Enum(..) => "enum",
