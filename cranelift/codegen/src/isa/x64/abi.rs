@@ -716,9 +716,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // This is emitted before the incoming argument area is resized below so
         // that the CFA is defined in terms of RBP while the saved RBP and return
         // address are being moved: RBP keeps pointing at the original copies
-        // until both have been moved, and then points at the new copies. In both
-        // cases the caller's frame is `setup_area_size` above RBP, and the
-        // clobbers are just below RBP.
+        // until both have been moved. Once RBP points at the new copies, the
+        // distance from RBP to the caller's stack pointer increases.
         if flags.unwind_info() && frame_layout.setup_area_size > 0 {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::DefineNewFrame {
@@ -764,6 +763,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             insts.push(Inst::External {
                 inst: asm::inst::movq_mr::new(Writable::from_reg(rbp), rsp).into(),
             });
+            if flags.unwind_info() {
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::FrameRecordMoved {
+                        size: incoming_args_diff as u32,
+                    },
+                });
+            }
         }
 
         // Adjust the stack pointer downward for clobbers and the function fixed

@@ -319,6 +319,15 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<crate::machinst::
             &UnwindInst::RegStackOffset { .. } => {
                 unreachable!("only supported with DWARF");
             }
+            // The x64 exception-handling instructions cannot describe moving the return
+            // address independently of the caller's SP. Either UWOP_ALLOC_SMALL or
+            // UWOP_ALLOC_LARGE, followed by UWOP_SET_FPREG, can describe the stack
+            // allocation and the establishment of the new RBP.
+            &UnwindInst::FrameRecordMoved { .. } => {
+                return Err(CodegenError::Unsupported(
+                    "moving the frame record with Windows x64 unwind info".into(),
+                ));
+            }
             &UnwindInst::Aarch64SetPointerAuth { .. } => {
                 unreachable!("no aarch64 on x64");
             }

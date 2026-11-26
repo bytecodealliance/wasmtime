@@ -206,6 +206,13 @@ pub enum UnwindInst {
         /// The register whose value is to be set.
         reg: RealReg,
     },
+    /// Allocating extra tail-call argument space moves the stack pointer,
+    /// frame pointer, and frame record down, leaving the caller's stack
+    /// pointer unchanged.
+    FrameRecordMoved {
+        /// Distance by which the frame record moved down.
+        size: u32,
+    },
     /// Defines if the aarch64-specific pointer authentication available for ARM v8.3+ devices
     /// is enabled for certain pointers or not.
     Aarch64SetPointerAuth {

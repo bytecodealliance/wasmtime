@@ -325,6 +325,7 @@ fn test_trap_stack_overflow_mutual_recursion(config: &mut Config) -> Result<()> 
 }
 
 #[wasmtime_test(wasm_features(tail_call))]
+#[cfg_attr(target_os = "windows", ignore)]
 fn test_trap_stack_overflow_before_frame_setup(config: &mut Config) -> Result<()> {
     let params = "i32 ".repeat(40);
     let args = "(i32.const 0) ".repeat(40);

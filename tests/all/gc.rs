@@ -481,7 +481,7 @@ fn no_gc_middle_of_args() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(miri, ignore)]
+#[cfg_attr(any(miri, target_os = "windows"), ignore)]
 fn gc_and_tail_calls_and_stack_arguments() -> Result<()> {
     // Test that GC refs in tail-calls' stack arguments get properly accounted
     // for in stack maps.

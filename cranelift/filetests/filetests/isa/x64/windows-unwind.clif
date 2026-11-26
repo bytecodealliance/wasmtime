@@ -4,6 +4,9 @@
 ; area. The `SmallStackAlloc` at the same prologue offset as
 ; `SetFramePointer` compensates for the frame register offset so that
 ; unwinding `SetFramePointer` still recovers RSP == RBP.
+;
+; Windows x64 unwind info cannot describe a frame record moved to grow the
+; tail-call argument area.
 test unwind
 set unwind_info=true
 set preserve_frame_pointers=true
@@ -231,58 +234,3 @@ block0(v0: i64, v1: i64):
 ; nextln:                    op: SaveXmm128
 ; nextln:                  info: 15
 ; nextln:                 value: 13 (u16)
-
-; A tail function that grows its incoming argument area for a
-; return_call: the clobbers are still just below the (moved) frame pointer.
-function %tail_grow(i64, i64, i64) -> i64 tail {
-    sig0 = () windows_fastcall
-    sig1 = (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
-block0(v0: i64, v1: i64, v2: i64):
-    v11 = load.i64 notrap aligned v1+0
-    v12 = load.i64 notrap aligned v1+8
-    v13 = load.i64 notrap aligned v1+16
-    v14 = load.i64 notrap aligned v1+24
-    v15 = load.i64 notrap aligned v1+32
-    call_indirect sig0, v0()
-    v16 = iadd v11, v12
-    v17 = iadd v16, v13
-    v18 = iadd v17, v14
-    v19 = iadd v18, v15
-    return_call_indirect sig1, v2(v19, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
-}
-
-; sameln:               version: 1
-; nextln:                 flags: 0
-; nextln:         prologue size: 59
-; nextln:        frame register: 5
-; nextln: frame register offset: 3
-; nextln:          unwind codes: 8
-; check:                offset: 1
-; nextln:                    op: PushNonvolatileRegister
-; nextln:                  info: 5
-; check:                offset: 4
-; nextln:                    op: SmallStackAlloc
-; nextln:                  info: 5
-; check:                offset: 4
-; nextln:                    op: SetFramePointer
-; nextln:                  info: 0
-; check:                offset: 39
-; nextln:                    op: SaveNonvolatileRegister
-; nextln:                  info: 3
-; nextln:                 value: 0 (u16)
-; check:                offset: 44
-; nextln:                    op: SaveNonvolatileRegister
-; nextln:                  info: 12
-; nextln:                 value: 1 (u16)
-; check:                offset: 49
-; nextln:                    op: SaveNonvolatileRegister
-; nextln:                  info: 13
-; nextln:                 value: 2 (u16)
-; check:                offset: 54
-; nextln:                    op: SaveNonvolatileRegister
-; nextln:                  info: 14
-; nextln:                 value: 3 (u16)
-; check:                offset: 59
-; nextln:                    op: SaveNonvolatileRegister
-; nextln:                  info: 15
-; nextln:                 value: 4 (u16)
