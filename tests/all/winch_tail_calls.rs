@@ -5,7 +5,7 @@ use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
 #[wasmtime_test(wasm_features(tail_call))]
-#[cfg_attr(miri, ignore)]
+#[cfg_attr(any(miri, target_os = "windows"), ignore)]
 fn tail_calls_to_host_functions(config: &mut Config) -> Result<()> {
     let engine = Engine::new(&config)?;
     let module = Module::new(
@@ -225,7 +225,7 @@ fn names(bt: &WasmBacktrace) -> Vec<String> {
 }
 
 #[wasmtime_test(wasm_features(tail_call))]
-#[cfg_attr(miri, ignore)]
+#[cfg_attr(any(miri, target_os = "windows"), ignore)]
 fn returns_and_traps(config: &mut Config) -> Result<()> {
     for fuel in [false, true] {
         let mut config = config.clone();

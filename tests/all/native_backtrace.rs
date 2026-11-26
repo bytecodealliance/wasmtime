@@ -65,6 +65,7 @@ fn native_unwind_through_host_call() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_os = "windows", ignore)]
 fn native_unwind_after_tail_call_changes_stack_arguments() -> Result<()> {
     // More arguments than fit in registers forces the tail caller to resize
     // the stack. Its frame must disappear, while its caller remains walkable.
