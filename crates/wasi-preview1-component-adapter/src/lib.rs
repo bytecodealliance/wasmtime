@@ -1300,8 +1300,8 @@ pub unsafe extern "C" fn fd_read(
     };
 
     State::with(|state| {
-        let ds = state.descriptors();
-        match ds.get(fd)? {
+        let mut ds = state.descriptors_mut();
+        match ds.get_mut(fd)? {
             Descriptor::Streams(streams) => {
                 #[cfg(not(feature = "proxy"))]
                 let blocking_mode = if let StreamType::File(file) = &streams.type_ {
@@ -1326,6 +1326,7 @@ pub unsafe extern "C" fn fd_read(
                 if let StreamType::File(file) = &streams.type_ {
                     file.position
                         .set(file.position.get() + data.len() as filesystem::Filesize);
+                    drop(streams.output.take());
                 }
 
                 *nread = data.len();
@@ -1728,8 +1729,8 @@ pub unsafe extern "C" fn fd_write(
     };
 
     State::with(|state| {
-        let ds = state.descriptors();
-        match ds.get(fd)? {
+        let mut ds = state.descriptors_mut();
+        match ds.get_mut(fd)? {
             Descriptor::Streams(streams) => {
                 let wasi_stream = streams.get_write_stream()?;
 
@@ -1753,12 +1754,13 @@ pub unsafe extern "C" fn fd_write(
                 // for concurrent writes, but there's not much that can be
                 // done about that.
                 #[cfg(not(feature = "proxy"))]
-                if let StreamType::File(file) = &streams.type_ {
+                if let StreamType::File(file) = &mut streams.type_ {
                     if file.append {
                         file.position.set(file.fd.stat()?.size);
                     } else {
                         file.position.set(file.position.get() + nbytes as u64);
                     }
+                    drop(streams.input.take());
                 }
 
                 *nwritten = nbytes;
