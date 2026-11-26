@@ -196,6 +196,10 @@ pub struct FuncEnvironment<'module_environment> {
 
     translation: &'module_environment ModuleTranslation<'module_environment>,
 
+    /// In the module startup function, the defined functions whose `VMFuncRef`
+    /// has already been initialized by an earlier `ref.func`.
+    func_refs_initialized: std::collections::HashSet<DefinedFuncIndex>,
+
     /// Heaps implementing WebAssembly linear memories.
     heaps: PrimaryMap<Heap, HeapData>,
 
@@ -318,6 +322,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             offsets,
             tunables,
             fuel_var: Variable::reserved_value(),
+            func_refs_initialized: Default::default(),
             epoch_deadline_var: Variable::reserved_value(),
             epoch_ptr_var: Variable::reserved_value(),
 
@@ -3751,6 +3756,19 @@ impl FuncEnvironment<'_> {
         let func = &self.module.functions[func_index];
         assert!(func.is_escaping());
         let func_ref_offset = self.offsets.func_refs().at(func.func_ref);
+
+        // In the module startup function, only the first `ref.func` of a
+        // function initializes its `VMFuncRef`; later ones only need its
+        // address. This relies on the startup function evaluating constant
+        // expressions in order, never in conditional code, so that the first
+        // `ref.func` of a function comes before all the others.
+        if matches!(self.key, FuncKey::ModuleStartup(..))
+            && !self.func_refs_initialized.insert(def_index)
+        {
+            let vmctx = self.vmctx_val(pos);
+            return pos.ins().iadd_imm_s(vmctx, i64::from(func_ref_offset));
+        }
+
         let sig = func.signature.unwrap_module_type_index();
 
         let wasm_func = self.get_or_create_defined_func_ref(pos.func, def_index);
