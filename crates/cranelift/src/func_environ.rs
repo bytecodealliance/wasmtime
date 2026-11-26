@@ -196,9 +196,9 @@ pub struct FuncEnvironment<'module_environment> {
 
     translation: &'module_environment ModuleTranslation<'module_environment>,
 
-    /// Defined functions whose `VMFuncRef` is initialized at the start of the
-    /// module startup function. Empty when compiling any other function.
-    func_refs_initialized_up_front: std::collections::BTreeSet<DefinedFuncIndex>,
+    /// In the module startup function, the defined functions whose `VMFuncRef`
+    /// has already been initialized by an earlier `ref.func`.
+    func_refs_initialized: std::collections::HashSet<DefinedFuncIndex>,
 
     /// Heaps implementing WebAssembly linear memories.
     heaps: PrimaryMap<Heap, HeapData>,
@@ -322,7 +322,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             offsets,
             tunables,
             fuel_var: Variable::reserved_value(),
-            func_refs_initialized_up_front: Default::default(),
+            func_refs_initialized: Default::default(),
             epoch_deadline_var: Variable::reserved_value(),
             epoch_ptr_var: Variable::reserved_value(),
 
@@ -3757,10 +3757,14 @@ impl FuncEnvironment<'_> {
         assert!(func.is_escaping());
         let func_ref_offset = self.offsets.func_refs().at(func.func_ref);
 
-        // If the `VMFuncRef` was initialized at the start of the module startup
-        // function, only its address is needed. Otherwise, it is initialized
-        // here; this is also correct in the startup function, only slower.
-        if self.func_refs_initialized_up_front.contains(&def_index) {
+        // In the module startup function, only the first `ref.func` of a
+        // function initializes its `VMFuncRef`; later ones only need its
+        // address. This relies on the startup function evaluating constant
+        // expressions in order, never in conditional code, so that the first
+        // `ref.func` of a function comes before all the others.
+        if matches!(self.key, FuncKey::ModuleStartup(..))
+            && !self.func_refs_initialized.insert(def_index)
+        {
             let vmctx = self.vmctx_val(pos);
             return pos.ins().iadd_imm_s(vmctx, i64::from(func_ref_offset));
         }
@@ -6504,7 +6508,6 @@ impl FuncEnvironment<'_> {
     /// module itself starts executing. This will, for example, execute all
     /// constant expressions for global initializers.
     pub fn translate_module_startup(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
-        self.initialize_func_refs_up_front(builder);
         for (i, expr) in self.translation.global_initializers.iter() {
             self.module_initialize_global(builder, *i, expr)?;
         }
@@ -6534,67 +6537,6 @@ impl FuncEnvironment<'_> {
             self.module_start(builder, i)?;
         }
         Ok(())
-    }
-
-    /// Initializes, at the start of the module startup function, the
-    /// `VMFuncRef` of each defined function referenced by `ref.func` in a
-    /// global initializer, an element segment or a table initializer.
-    ///
-    /// Without this, each `ref.func` would initialize the `VMFuncRef` again,
-    /// and modules that reference the same functions from many constant
-    /// expressions would write the same fields many times.
-    fn initialize_func_refs_up_front(&mut self, builder: &mut FunctionBuilder) {
-        use std::collections::BTreeSet;
-
-        fn add_expr(funcs: &mut BTreeSet<FuncIndex>, expr: &ConstExpr) {
-            for op in expr.ops() {
-                if let ConstOp::RefFunc(f) = op {
-                    funcs.insert(*f);
-                }
-            }
-        }
-        fn add_elements(funcs: &mut BTreeSet<FuncIndex>, elements: &TableSegmentElements) {
-            match elements {
-                TableSegmentElements::Functions(indices) => {
-                    // These segments are not expected to contain null
-                    // elements (the reserved value), but skip them anyway.
-                    funcs.extend(indices.iter().filter(|f| !f.is_reserved_value()));
-                }
-                TableSegmentElements::Expressions { exprs, .. } => {
-                    for expr in exprs.iter() {
-                        add_expr(funcs, expr);
-                    }
-                }
-            }
-        }
-
-        let translation = self.translation;
-        let mut funcs = BTreeSet::new();
-        for (_, expr) in translation.global_initializers.iter() {
-            add_expr(&mut funcs, expr);
-        }
-        for (_, elements) in translation.passive_elements.iter() {
-            add_elements(&mut funcs, elements);
-        }
-        for (_, init) in translation.table_initialization.initial_values.iter() {
-            if let TableInitialValue::Expr(expr) = init {
-                add_expr(&mut funcs, expr);
-            }
-        }
-        for segment in translation.table_initialization.segments.iter() {
-            // The elements of staged segments are in `passive_elements`.
-            if let TableSegmentInit::Direct(elements) = &segment.init {
-                add_elements(&mut funcs, elements);
-            }
-        }
-
-        for def_index in funcs
-            .into_iter()
-            .filter_map(|f| self.module.defined_func_index(f))
-        {
-            self.translate_ref_defined_func(&mut builder.cursor(), def_index);
-            self.func_refs_initialized_up_front.insert(def_index);
-        }
     }
 
     /// Initializes all "complicated" globals in a module.

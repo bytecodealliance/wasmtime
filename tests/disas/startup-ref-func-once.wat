@@ -3,9 +3,9 @@
 ;;! filter = 'module_start'
 
 ;; `$f` is referenced by a global initializer and by a passive element
-;; segment. Its `VMFuncRef` is written only once, at the start of the module
-;; startup function, even though the call that sets up the passive segment
-;; separates the two references.
+;; segment. Its `VMFuncRef` is written only once, by the first reference, even
+;; though the call that sets up the passive segment separates the two
+;; references.
 
 (module
   (func $f)
@@ -76,8 +76,8 @@
 ;;     v6 = iconst.i64 64
 ;;     v7 = iadd v0, v6  ; v6 = 64
 ;;     store notrap aligned region6 v7, v0+48
-;;     v10 = iconst.i32 0
-;;     v11 = call fn2(v0, v10)  ; v10 = 0
-;;     store notrap aligned little region7 v7, v11
+;;     v8 = iconst.i32 0
+;;     v9 = call fn2(v0, v8)  ; v8 = 0
+;;     store notrap aligned little region7 v7, v9
 ;;     return
 ;; }
