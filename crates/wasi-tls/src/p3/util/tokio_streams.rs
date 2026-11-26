@@ -86,6 +86,9 @@ where
 
 /// A [StreamConsumer] for an [AsyncWrite] stream.
 ///
+/// Every consume is followed by a flush, since the inner `AsyncWrite` (e.g. a
+/// TLS stream) may hold on to written data until it is flushed.
+///
 /// Once the inner `AsyncWrite` returns an error, the consumer will be dropped
 /// and the final result is submitted to the `dropped` channel.
 pub(crate) struct AsyncWriteConsumer<IO>(Option<(IO, oneshot::Sender<std::io::Result<IO>>)>);
@@ -127,28 +130,29 @@ where
         let mut src = src.as_direct(store);
         let remaining = src.remaining()?;
 
-        if remaining.is_empty() {
-            // Zero-length consume = readiness check. AsyncWrite has no
-            // dedicated readiness API so we report ready; the next poll will
-            // perform the actual write.
-            //
-            // See WebAssembly/component-model#561 for background.
-            return Poll::Ready(Ok(if finish {
-                StreamResult::Cancelled
-            } else {
-                StreamResult::Completed
-            }));
+        // A zero-length consume is a readiness check rather than a write. There
+        // is nothing to write in that case, but the flush below still runs, so
+        // anything a previous write left buffered gets sent out.
+        //
+        // See WebAssembly/component-model#561 for background.
+        if !remaining.is_empty() {
+            match Pin::new(&mut *io).poll_write(cx, remaining) {
+                Poll::Ready(Ok(0)) => {
+                    self.notify_dropped(Err(std::io::ErrorKind::WriteZero.into()));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
+                Poll::Ready(Ok(n)) => src.mark_read(n),
+                Poll::Ready(Err(e)) => {
+                    self.notify_dropped(Err(e));
+                    return Poll::Ready(Ok(StreamResult::Dropped));
+                }
+                Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+                Poll::Pending => return Poll::Pending,
+            }
         }
 
-        match Pin::new(io).poll_write(cx, remaining) {
-            Poll::Ready(Ok(0)) => {
-                self.notify_dropped(Err(std::io::ErrorKind::WriteZero.into()));
-                Poll::Ready(Ok(StreamResult::Dropped))
-            }
-            Poll::Ready(Ok(n)) => {
-                src.mark_read(n);
-                Poll::Ready(Ok(StreamResult::Completed))
-            }
+        match Pin::new(io).poll_flush(cx) {
+            Poll::Ready(Ok(())) => Poll::Ready(Ok(StreamResult::Completed)),
             Poll::Ready(Err(e)) => {
                 self.notify_dropped(Err(e));
                 Poll::Ready(Ok(StreamResult::Dropped))
@@ -156,5 +160,33 @@ where
             Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
             Poll::Pending => Poll::Pending,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::BufWriter;
+    use wasmtime::component::StreamReader;
+    use wasmtime::{Config, Engine, Store};
+
+    /// `BufWriter` holds written bytes back until it is flushed, like a TLS
+    /// stream does, so the bytes only reach the inner `Vec` if the consumer
+    /// flushed before reporting the write complete.
+    #[tokio::test]
+    async fn write_is_flushed_before_completing() -> wasmtime::Result<()> {
+        let mut config = Config::default();
+        config.wasm_component_model_async(true);
+        let engine = Engine::new(&config)?;
+        let mut store = Store::new(&engine, ());
+
+        let (tx, rx) = oneshot::channel();
+        let consumer = AsyncWriteConsumer::new(BufWriter::new(Vec::default()), tx);
+        StreamReader::new(&mut store, b"hello".to_vec())?.pipe(&mut store, consumer)?;
+        let io = store.run_concurrent(async |_| rx.await).await??;
+        let io = io?;
+
+        assert_eq!(io.get_ref(), b"hello");
+        Ok(())
     }
 }
