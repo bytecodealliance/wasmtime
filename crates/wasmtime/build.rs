@@ -33,6 +33,7 @@ fn main() {
             .split(',')
             .find(|&feat| matches!(feat, "f" | "v"))
             .is_none(),
+        "powerpc64" => std::env::var("CARGO_CFG_TARGET_ABI").is_ok_and(|abi| abi == "elfv2"),
         _ => false,
     };
 
