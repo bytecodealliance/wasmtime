@@ -140,13 +140,13 @@ block0:
 ;   c.sdsp ra, 8(sp)
 ;   c.sdsp s0, 0(sp)
 ;   c.mv s0, sp
-;   c.lui t6, 0x18
 ;   c.lui t3, 1
-;   bgeu t3, t6, 0x12
-;   sub t5, sp, t6
+;   c.lui t6, 0x18
+;   sub t6, sp, t6
+;   c.mv t5, sp
+;   sub t5, t5, t3
 ;   sb zero, 0(t5) ; trap: heap_oob
-;   sub t6, t6, t3
-;   c.j -0x10
+;   bne t5, t6, -8
 ;   c.lui t6, 0xfffe8
 ;   addi t6, t6, -0x6a0
 ;   c.add sp, t6

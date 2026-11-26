@@ -2571,52 +2571,54 @@ impl Inst {
                 probe_count,
                 tmp: guard_size_tmp,
             } => {
-                let step = writable_spilltmp_reg();
-                Inst::load_constant_u64(step, (guard_size as u64) * (probe_count as u64))
-                    .iter()
-                    .for_each(|i| i.emit(sink, emit_info, state));
                 Inst::load_constant_u64(guard_size_tmp, guard_size as u64)
                     .iter()
                     .for_each(|i| i.emit(sink, emit_info, state));
 
-                let loop_start = sink.get_label();
-                let label_done = sink.get_label();
-                sink.bind_label(loop_start, &mut state.ctrl_plane);
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_done),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::UnsignedLessThanOrEqual,
-                        rs1: step.to_reg(),
-                        rs2: guard_size_tmp.to_reg(),
-                    },
-                }
-                .emit(sink, emit_info, state);
-                // compute address.
+                let end = writable_spilltmp_reg();
+                Inst::load_constant_u64(end, (guard_size as u64) * (probe_count as u64))
+                    .iter()
+                    .for_each(|i| i.emit(sink, emit_info, state));
                 Inst::AluRRR {
                     alu_op: AluOPRRR::Sub,
-                    rd: writable_spilltmp_reg2(),
+                    rd: end,
                     rs1: stack_reg(),
-                    rs2: step.to_reg(),
+                    rs2: end.to_reg(),
                 }
                 .emit(sink, emit_info, state);
+
+                let addr = writable_spilltmp_reg2();
+                Inst::gen_move(addr, stack_reg(), I64).emit(sink, emit_info, state);
+
+                let loop_start = sink.get_label();
+                sink.bind_label(loop_start, &mut state.ctrl_plane);
+
+                Inst::AluRRR {
+                    alu_op: AluOPRRR::Sub,
+                    rd: addr,
+                    rs1: addr.to_reg(),
+                    rs2: guard_size_tmp.to_reg(),
+                }
+                .emit(sink, emit_info, state);
+
                 Inst::Store {
-                    to: AMode::RegOffset(spilltmp_reg2(), 0),
+                    to: AMode::RegOffset(addr.to_reg(), 0),
                     op: StoreOP::Sb,
                     flags: MemFlagsData::new(),
                     src: zero_reg(),
                 }
                 .emit(sink, emit_info, state);
-                // reset step.
-                Inst::AluRRR {
-                    alu_op: AluOPRRR::Sub,
-                    rd: step,
-                    rs1: step.to_reg(),
-                    rs2: guard_size_tmp.to_reg(),
+
+                Inst::CondBr {
+                    taken: CondBrTarget::Label(loop_start),
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: IntegerCompare {
+                        kind: IntCC::NotEqual,
+                        rs1: addr.to_reg(),
+                        rs2: end.to_reg(),
+                    },
                 }
                 .emit(sink, emit_info, state);
-                Inst::gen_jump(loop_start).emit(sink, emit_info, state);
-                sink.bind_label(label_done, &mut state.ctrl_plane);
             }
             &Inst::VecAluRRRImm5 {
                 op,
