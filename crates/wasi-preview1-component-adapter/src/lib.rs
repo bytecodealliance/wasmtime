@@ -1619,7 +1619,17 @@ pub unsafe extern "C" fn fd_readdir(
 /// would disappear if `dup2()` were to be removed entirely.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_renumber(fd: Fd, to: Fd) -> Errno {
-    State::with(|state| state.descriptors_mut().renumber(fd, to))
+    State::with(|state| {
+        // A cached directory stream belongs to the descriptor it was created
+        // for. Renumbering either endpoint can leave it attached to the wrong
+        // descriptor, so drop it before the descriptors are rearranged.
+        #[cfg(not(feature = "proxy"))]
+        if fd == state.dirent_cache.for_fd.get() || to == state.dirent_cache.for_fd.get() {
+            drop(state.dirent_cache.stream.replace(None));
+        }
+
+        state.descriptors_mut().renumber(fd, to)
+    })
 }
 
 /// Move the offset of a file descriptor.

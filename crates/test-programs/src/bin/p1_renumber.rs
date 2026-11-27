@@ -1,6 +1,6 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
-use std::{env, process};
+use std::{env, mem, process, slice, str};
 use test_programs::preview1::{assert_errno, open_scratch_directory};
 
 unsafe fn test_renumber(dir_fd: wasip1::Fd) {
@@ -141,6 +141,68 @@ unsafe fn test_renumber_loop(dir_fd: wasip1::Fd) {
     wasip1::fd_close(cur).unwrap();
 }
 
+/// Renumbering a directory must not leave the `dirent_cache` attached to the
+/// old descriptor. See #15327.
+unsafe fn test_renumber_dirent_cache(dir_fd: wasip1::Fd) {
+    for (dir, file) in [("cache-a", "from-a.txt"), ("cache-b", "from-b.txt")] {
+        wasip1::path_create_directory(dir_fd, dir).expect("create a directory");
+        let path = format!("{dir}/{file}");
+        let fd = wasip1::path_open(
+            dir_fd,
+            0,
+            &path,
+            wasip1::OFLAGS_CREAT,
+            wasip1::RIGHTS_FD_WRITE,
+            0,
+            0,
+        )
+        .expect("create a file");
+        wasip1::fd_close(fd).expect("close a file");
+    }
+
+    let a = wasip1::path_open(dir_fd, 0, "cache-a", 0, 0, 0, 0).expect("open cache-a");
+    let b = wasip1::path_open(dir_fd, 0, "cache-b", 0, 0, 0, 0).expect("open cache-b");
+
+    // A small buffer leaves a partial entry in the adapter's global dirent
+    // cache, associated with `a`.
+    let mut small = [0u8; 23];
+    wasip1::fd_readdir(a, small.as_mut_ptr(), small.len(), 0).expect("prime dirent cache");
+
+    wasip1::fd_renumber(b, a).expect("renumber directories");
+
+    let mut large = [0u8; 4096];
+    let used =
+        wasip1::fd_readdir(a, large.as_mut_ptr(), large.len(), 0).expect("readdir after renumber");
+
+    let mut names = Vec::new();
+    let mut off = 0;
+    while off + mem::size_of::<wasip1::Dirent>() <= used {
+        let dirent = (large.as_ptr().add(off) as *const wasip1::Dirent).read_unaligned();
+        let name_off = off + mem::size_of::<wasip1::Dirent>();
+        if name_off + dirent.d_namlen as usize > used {
+            break;
+        }
+        let name = str::from_utf8(slice::from_raw_parts(
+            large.as_ptr().add(name_off),
+            dirent.d_namlen as usize,
+        ))
+        .expect("utf8 name");
+        names.push(name.to_owned());
+        off = name_off + dirent.d_namlen as usize;
+    }
+
+    assert!(
+        names.iter().any(|name| name == "from-b.txt"),
+        "expected entries from the renumbered directory, got {names:?}"
+    );
+    assert!(
+        !names.iter().any(|name| name == "from-a.txt"),
+        "stale directory stream from the old descriptor, got {names:?}"
+    );
+
+    wasip1::fd_close(a).expect("close a directory");
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -163,4 +225,5 @@ fn main() {
     // Run the tests.
     unsafe { test_renumber(dir_fd) }
     unsafe { test_renumber_loop(dir_fd) }
+    unsafe { test_renumber_dirent_cache(dir_fd) }
 }
