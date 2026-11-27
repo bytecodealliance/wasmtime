@@ -1,9 +1,9 @@
-package wasi:sockets@0.3.0;
+package wasi:sockets@0.3.2;
 
 @since(version = 0.3.0)
 interface types {
   @since(version = 0.3.0)
-  use wasi:clocks/types@0.3.0.{duration};
+  use wasi:clocks/types@0.3.2.{duration};
 
   /// Error codes.
   ///
@@ -831,7 +831,7 @@ interface ip-name-lookup {
 @since(version = 0.3.0)
 world imports {
   @since(version = 0.3.0)
-  import wasi:clocks/types@0.3.0;
+  import wasi:clocks/types@0.3.2;
   @since(version = 0.3.0)
   import types;
   @since(version = 0.3.0)
